@@ -25,7 +25,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'kubernetes',
         platformData: { kubernetes: { clusterName: 'prod-cluster' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=prod-cluster');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=prod-cluster');
     });
 
     it('falls back to kubernetes.context when clusterName is missing', () => {
@@ -34,7 +34,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'kubernetes',
         platformData: { kubernetes: { context: 'my-context' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=my-context');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=my-context');
     });
 
     it('falls back to kubernetes.clusterId when clusterName and context are missing', () => {
@@ -43,7 +43,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'kubernetes',
         platformData: { kubernetes: { clusterId: 'cid-123' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=cid-123');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=cid-123');
     });
 
     it('falls back to resource.clusterId when platformData has no useful fields', () => {
@@ -53,7 +53,7 @@ describe('buildWorkloadsHref', () => {
         clusterId: 'resource-cluster',
         platformData: { kubernetes: {} },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=resource-cluster');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=resource-cluster');
     });
 
     it('falls back to resource.displayName then resource.name for k8s-cluster', () => {
@@ -63,7 +63,7 @@ describe('buildWorkloadsHref', () => {
         name: 'fallback-name',
         displayName: 'Fallback Display',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=Fallback+Display');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=Fallback+Display');
     });
 
     it('falls back to resource.name when displayName is empty for k8s-cluster', () => {
@@ -73,7 +73,7 @@ describe('buildWorkloadsHref', () => {
         name: 'last-resort',
         displayName: '',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=last-resort');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=last-resort');
     });
 
     it('returns path without context when all k8s-cluster fields are empty', () => {
@@ -84,7 +84,7 @@ describe('buildWorkloadsHref', () => {
         displayName: '',
         clusterId: undefined,
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod');
     });
 
     it('skips whitespace-only values in k8s-cluster resolution', () => {
@@ -93,7 +93,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'kubernetes',
         platformData: { kubernetes: { clusterName: '   ', context: 'valid-context' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=valid-context');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=valid-context');
     });
   });
 
@@ -106,7 +106,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'kubernetes',
         platformData: { kubernetes: { clusterName: 'node-cluster' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=node-cluster');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=node-cluster');
     });
 
     it('falls back to kubernetes.context for k8s-node', () => {
@@ -115,7 +115,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'kubernetes',
         platformData: { kubernetes: { context: 'node-ctx' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=node-ctx');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=node-ctx');
     });
 
     it('falls back to kubernetes.clusterId for k8s-node', () => {
@@ -124,7 +124,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'kubernetes',
         platformData: { kubernetes: { clusterId: 'k-cid' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=k-cid');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=k-cid');
     });
 
     it('falls back to resource.clusterId for k8s-node', () => {
@@ -134,7 +134,7 @@ describe('buildWorkloadsHref', () => {
         clusterId: 'res-cluster-id',
         platformData: { kubernetes: {} },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=res-cluster-id');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=res-cluster-id');
     });
 
     it('does NOT fall back to displayName/name for k8s-node (unlike k8s-cluster)', () => {
@@ -146,7 +146,7 @@ describe('buildWorkloadsHref', () => {
         clusterId: undefined,
       });
       // k8s-node has no displayName/name fallback — context should be undefined
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod');
     });
   });
 
@@ -159,7 +159,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         platformData: { docker: { hostname: 'docker-box' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=docker-box');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=docker-box');
     });
 
     it('falls back to agent.hostname when docker.hostname is missing', () => {
@@ -168,7 +168,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         platformData: { agent: { hostname: 'agent-host' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=agent-host');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=agent-host');
     });
 
     it('falls back to identity.hostname', () => {
@@ -177,7 +177,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         identity: { hostname: 'identity-host' },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=identity-host');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=identity-host');
     });
 
     it('falls back through name → displayName → platformId → id', () => {
@@ -189,7 +189,7 @@ describe('buildWorkloadsHref', () => {
         platformId: 'docker-plat',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=docker-name');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=docker-name');
     });
 
     it('falls back to displayName when name is empty for docker-host', () => {
@@ -201,7 +201,7 @@ describe('buildWorkloadsHref', () => {
         platformId: 'plat-id',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=Docker+Display');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=Docker+Display');
     });
 
     it('falls back to platformId when name and displayName are empty for docker-host', () => {
@@ -213,7 +213,7 @@ describe('buildWorkloadsHref', () => {
         platformId: 'docker-plat-id',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=docker-plat-id');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=docker-plat-id');
     });
 
     it('falls back to resource.id as last resort for docker-host', () => {
@@ -225,7 +225,7 @@ describe('buildWorkloadsHref', () => {
         platformId: '',
         id: 'last-resort-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=last-resort-id');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=last-resort-id');
     });
   });
 
@@ -303,7 +303,7 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         platformData: { docker: { hostname: '  trimmed-host  ' } },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=docker&agent=trimmed-host');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=trimmed-host');
     });
 
     it('skips null values in the resolution chain', () => {
@@ -313,7 +313,7 @@ describe('buildWorkloadsHref', () => {
         platformData: { kubernetes: { clusterName: null as unknown as string } },
         clusterId: 'real-value',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=real-value');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=real-value');
     });
 
     it('skips undefined values in the resolution chain', () => {
@@ -323,7 +323,7 @@ describe('buildWorkloadsHref', () => {
         platformData: { kubernetes: { clusterName: undefined, context: undefined } },
         clusterId: 'cluster-fallback',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=k8s&context=cluster-fallback');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=cluster-fallback');
     });
   });
 });

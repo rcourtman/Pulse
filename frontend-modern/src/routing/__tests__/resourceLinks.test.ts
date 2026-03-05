@@ -24,12 +24,12 @@ describe('resource link routing contract', () => {
       resource: 'cluster-a:worker-1:101',
     });
     expect(href).toBe(
-      '/workloads?type=k8s&context=cluster-a&agent=worker-1&resource=cluster-a%3Aworker-1%3A101',
+      '/workloads?type=pod&context=cluster-a&agent=worker-1&resource=cluster-a%3Aworker-1%3A101',
     );
 
     const parsed = parseWorkloadsLinkSearch(href.slice('/workloads'.length));
     expect(parsed).toEqual({
-      type: 'k8s',
+      type: 'pod',
       runtime: '',
       context: 'cluster-a',
       namespace: '',
@@ -43,6 +43,15 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
     expect(WORKLOADS_QUERY_PARAMS.agent).toBe('agent');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
+  });
+
+  it('canonicalizes legacy workloads type aliases when building links', () => {
+    expect(buildWorkloadsPath({ type: 'docker', agent: 'runtime-1' })).toBe(
+      '/workloads?type=app-container&agent=runtime-1',
+    );
+    expect(buildWorkloadsPath({ type: 'kubernetes', context: 'cluster-a' })).toBe(
+      '/workloads?type=pod&context=cluster-a',
+    );
   });
 
   it('builds and parses infrastructure query params', () => {

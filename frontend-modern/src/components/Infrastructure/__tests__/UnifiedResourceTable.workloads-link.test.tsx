@@ -87,7 +87,7 @@ describe('UnifiedResourceTable workloads links', () => {
       .map((link) => link.getAttribute('href'))
       .filter((href): href is string => typeof href === 'string');
     expect(hrefs).toContain('/workloads?agent=pve1');
-    expect(hrefs).toContain('/workloads?type=k8s&context=cluster-a');
+    expect(hrefs).toContain('/workloads?type=pod&context=cluster-a');
 
     const hostLink = links.find((link) => link.getAttribute('href') === '/workloads?agent=pve1');
     expect(hostLink).toBeDefined();

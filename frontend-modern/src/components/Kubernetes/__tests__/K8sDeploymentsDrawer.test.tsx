@@ -755,7 +755,7 @@ describe('K8sDeploymentsDrawer', () => {
       expect(navigateMock).toHaveBeenCalledTimes(1);
       const path = navigateMock.mock.calls[0][0] as string;
       expect(path).toContain('/workloads');
-      expect(path).toContain('type=k8s');
+      expect(path).toContain('type=pod');
       expect(path).toContain('context=my-cluster');
     });
 

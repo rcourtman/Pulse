@@ -165,7 +165,7 @@ export const K8sDeploymentsDrawer: Component<{
     if (!cluster) return;
     navigate(
       buildWorkloadsPath({
-        type: 'k8s',
+        type: 'pod',
         context: cluster,
         namespace: normalize(ns) || null,
       }),

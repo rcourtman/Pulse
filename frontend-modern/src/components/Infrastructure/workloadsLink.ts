@@ -89,12 +89,12 @@ const resolveHostHint = (resource: Resource): string | undefined => {
 export const buildWorkloadsHref = (resource: Resource): string | null => {
   if (resource.type === 'k8s-cluster' || resource.type === 'k8s-node') {
     const context = resolveKubernetesContext(resource);
-    return buildWorkloadsPath({ type: 'k8s', context });
+    return buildWorkloadsPath({ type: 'pod', context });
   }
 
   if (resource.type === 'docker-host') {
     const agent = resolveHostHint(resource);
-    return buildWorkloadsPath({ type: 'docker', agent });
+    return buildWorkloadsPath({ type: 'app-container', agent });
   }
 
   if (resource.type === 'node') {

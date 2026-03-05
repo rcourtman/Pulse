@@ -5,7 +5,7 @@ describe('navigation routing helpers', () => {
   it('maps paths to the correct primary tab', () => {
     expect(getActiveTabForPath('/dashboard')).toBe('dashboard');
     expect(getActiveTabForPath('/infrastructure')).toBe('infrastructure');
-    expect(getActiveTabForPath('/workloads?type=k8s')).toBe('workloads');
+    expect(getActiveTabForPath('/workloads?type=pod')).toBe('workloads');
     expect(getActiveTabForPath('/storage')).toBe('storage');
     expect(getActiveTabForPath('/ceph')).toBe('storage');
     expect(getActiveTabForPath('/recovery')).toBe('recovery');

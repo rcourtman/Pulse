@@ -52,6 +52,13 @@ export const RECOVERY_QUERY_PARAMS = {
 
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
 
+const normalizeWorkloadsType = (value: string | null | undefined): string => {
+  const normalized = normalizeQueryValue(value).toLowerCase();
+  if (normalized === 'docker') return 'app-container';
+  if (normalized === 'k8s' || normalized === 'kubernetes') return 'pod';
+  return normalized;
+};
+
 type WorkloadsLinkOptions = {
   type?: string | null;
   runtime?: string | null;
@@ -107,7 +114,7 @@ export const parseWorkloadsLinkSearch = (search: string) => {
 
 export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string => {
   const params = new URLSearchParams();
-  const type = normalizeQueryValue(options.type);
+  const type = normalizeWorkloadsType(options.type);
   const runtime = normalizeQueryValue(options.runtime);
   const context = normalizeQueryValue(options.context);
   const namespace = normalizeQueryValue(options.namespace);
