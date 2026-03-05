@@ -215,9 +215,6 @@ func canonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTarget
 	}
 	targetID := strings.TrimSpace(discovery.TargetID)
 	if targetID == "" {
-		targetID = strings.TrimSpace(discovery.HostID)
-	}
-	if targetID == "" {
 		targetID = strings.TrimSpace(fallbackTargetID)
 	}
 	return targetID

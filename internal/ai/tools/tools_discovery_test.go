@@ -111,7 +111,6 @@ func TestExecuteGetDiscovery_UsesTargetID(t *testing.T) {
 			ResourceType: "vm",
 			ResourceID:   "101",
 			TargetID:     "node1",
-			HostID:       "node1",
 			Hostname:     "vm-101",
 		},
 	}
@@ -154,7 +153,6 @@ func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 				ResourceType: "vm",
 				ResourceID:   "102",
 				TargetID:     "node2",
-				HostID:       "node2",
 				Hostname:     "vm-102",
 			},
 		},

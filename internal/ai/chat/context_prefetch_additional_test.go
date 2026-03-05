@@ -55,7 +55,6 @@ func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceTy
 	return &tools.ResourceDiscoveryInfo{
 		ResourceType: resourceType,
 		TargetID:     targetID,
-		HostID:       targetID,
 		ResourceID:   resourceID,
 		Hostname:     targetID,
 		ServiceType:  "nginx",
@@ -222,7 +221,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 
 	provider.existing[provider.key("vm", "node1", "101")] = &tools.ResourceDiscoveryInfo{
 		ResourceType: "vm",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ResourceID:   "101",
 	}
 
@@ -275,14 +274,14 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 
 	discoveries := []*tools.ResourceDiscoveryInfo{{
 		ResourceType: "docker",
-		HostID:       "dock1",
+		TargetID:     "dock1",
 		ResourceID:   "cid1",
 		Hostname:     "dock1",
 		ConfigPaths:  []string{"/etc/homepage/config"},
 		LogPaths:     []string{"/var/log/homepage.log"},
 	}, {
 		ResourceType: "lxc",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ResourceID:   "201",
 		Hostname:     "node1",
 		LogPaths:     []string{"journalctl -u service"},
@@ -327,7 +326,7 @@ func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{
 		"vm:node1:101": {
 			ResourceType: "vm",
-			HostID:       "node1",
+			TargetID:     "node1",
 			ResourceID:   "101",
 			Hostname:     "node1",
 			ServiceType:  "nginx",

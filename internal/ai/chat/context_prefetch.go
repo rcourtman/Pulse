@@ -613,9 +613,6 @@ func canonicalDiscoveryTargetID(discovery *tools.ResourceDiscoveryInfo) string {
 		return ""
 	}
 	targetID := strings.TrimSpace(discovery.TargetID)
-	if targetID == "" {
-		targetID = strings.TrimSpace(discovery.HostID)
-	}
 	return targetID
 }
 
