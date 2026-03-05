@@ -780,8 +780,12 @@ func (m *Monitor) AcknowledgeDockerHostCommand(commandID, hostID, status, messag
 
 // ApplyDockerReport ingests a docker agent report into the shared state.
 func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *config.APITokenRecord) (models.DockerHost, error) {
-	hostsSnapshot := m.state.GetDockerHosts()
-	identifier, legacyIDs, previous, hasPrevious := resolveDockerHostIdentifier(report, tokenRecord, hostsSnapshot)
+	readState := m.snapshotBackedUnifiedReadState()
+	var dockerHosts []*unifiedresources.DockerHostView
+	if readState != nil {
+		dockerHosts = readState.DockerHosts()
+	}
+	identifier, legacyIDs, previous, hasPrevious := resolveDockerHostIdentifier(report, tokenRecord, dockerHosts)
 	if strings.TrimSpace(identifier) == "" {
 		return models.DockerHost{}, fmt.Errorf("docker report missing agent identifier")
 	}
@@ -825,13 +829,15 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				m.mu.Unlock()
 				// Find the conflicting host to provide helpful error message
 				conflictingHostname := "unknown"
-				for _, host := range hostsSnapshot {
-					if host.AgentID == boundAgentID || host.ID == boundAgentID {
-						conflictingHostname = host.Hostname
-						if host.CustomDisplayName != "" {
-							conflictingHostname = host.CustomDisplayName
-						} else if host.DisplayName != "" {
-							conflictingHostname = host.DisplayName
+				for _, host := range dockerHosts {
+					if host == nil {
+						continue
+					}
+					hostSourceID := strings.TrimSpace(host.HostSourceID())
+					if host.AgentID() == boundAgentID || hostSourceID == boundAgentID || host.ID() == boundAgentID {
+						conflictingHostname = strings.TrimSpace(host.Name())
+						if conflictingHostname == "" {
+							conflictingHostname = strings.TrimSpace(host.Hostname())
 						}
 						break
 					}
@@ -1109,7 +1115,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 
 	agentVersion := normalizeAgentVersion(report.Agent.Version)
 	if agentVersion == "" && hasPrevious {
-		agentVersion = normalizeAgentVersion(previous.AgentVersion)
+		agentVersion = normalizeAgentVersion(previous.AgentVersion())
 	}
 
 	host := models.DockerHost{
@@ -1155,10 +1161,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			host.TokenLastUsedAt = &t
 		}
 	} else if hasPrevious {
-		host.TokenID = previous.TokenID
-		host.TokenName = previous.TokenName
-		host.TokenHint = previous.TokenHint
-		host.TokenLastUsedAt = previous.TokenLastUsedAt
+		host.TokenID = previous.TokenID()
+		host.TokenName = previous.TokenName()
+		host.TokenHint = previous.TokenHint()
+		host.TokenLastUsedAt = previous.TokenLastUsedAt()
 	}
 
 	// Load custom display name from metadata store if not already set
@@ -1172,7 +1178,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	m.state.SetConnectionHealth(dockerConnectionPrefix+host.ID, true)
 
 	// Check if the host was previously hidden and is now visible again
-	if hasPrevious && previous.Hidden && !host.Hidden {
+	if hasPrevious && previous.Hidden() && !host.Hidden {
 		log.Info().
 			Str("dockerHost", host.Hostname).
 			Str("dockerHostID", host.ID).
@@ -1180,7 +1186,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	}
 
 	// Check if the host was pending uninstall - if so, log a warning that uninstall failed and clear the flag
-	if hasPrevious && previous.PendingUninstall {
+	if hasPrevious && previous.PendingUninstall() {
 		log.Warn().
 			Str("dockerHost", host.Hostname).
 			Str("dockerHostID", host.ID).

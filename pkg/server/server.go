@@ -27,7 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
-	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
@@ -247,8 +247,8 @@ func Run(ctx context.Context, version string) error {
 
 	log.Info().Msg("Starting Pulse monitoring server")
 
-	// Validate agent binaries are available for download
-	updates.EnsureHostAgentBinaries(version)
+	// TODO: Validate agent binaries are available for download
+	// updates.EnsureHostAgentBinaries(version)
 
 	// Create derived context that cancels on interrupt
 	ctx, cancel := context.WithCancel(ctx)
@@ -481,7 +481,9 @@ func Run(ctx context.Context, version string) error {
 			}
 
 			// SSO/OIDC status.
-			snap.SSOEnabled = currentCfg.OIDC != nil && currentCfg.OIDC.Enabled
+			if ssoCfg, err := telemetryPersistence.LoadSSOConfig(); err == nil && ssoCfg != nil {
+				snap.SSOEnabled = ssoCfg.HasEnabledProviders()
+			}
 
 			// License tier.
 			if router != nil && router.GetLicenseHandlers() != nil {

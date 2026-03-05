@@ -964,6 +964,13 @@ func (v DockerHostView) Hostname() string {
 	return v.r.Docker.Hostname
 }
 
+func (v DockerHostView) MachineID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.MachineID
+}
+
 func (v DockerHostView) AgentID() string {
 	if v.r == nil || v.r.Docker == nil {
 		return ""
@@ -1141,6 +1148,10 @@ func (v DockerHostView) ChildCount() int {
 
 func (v DockerHostView) PendingUninstall() bool {
 	return v.r != nil && v.r.Docker != nil && v.r.Docker.PendingUninstall
+}
+
+func (v DockerHostView) Hidden() bool {
+	return v.r != nil && v.r.Docker != nil && v.r.Docker.Hidden
 }
 
 func (v DockerHostView) IsLegacy() bool {

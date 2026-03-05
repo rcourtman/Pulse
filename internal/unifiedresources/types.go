@@ -530,6 +530,7 @@ type DockerData struct {
 	AgentID        string   `json:"agentId,omitempty"`
 	ContainerID    string   `json:"containerId,omitempty"`
 	Hostname       string   `json:"hostname,omitempty"`
+	MachineID      string   `json:"machineId,omitempty"`
 	Image          string   `json:"image,omitempty"`
 	Temperature    *float64 `json:"temperature,omitempty"`
 	Runtime        string   `json:"runtime,omitempty"`
@@ -549,6 +550,7 @@ type DockerData struct {
 	TokenName             string                          `json:"tokenName,omitempty"`
 	TokenHint             string                          `json:"tokenHint,omitempty"`
 	TokenLastUsedAt       *time.Time                      `json:"tokenLastUsedAt,omitempty"`
+	Hidden                bool                            `json:"hidden,omitempty"`
 	PendingUninstall      bool                            `json:"pendingUninstall,omitempty"`
 	IsLegacy              bool                            `json:"isLegacy,omitempty"`
 	Command               *models.DockerHostCommandStatus `json:"command,omitempty"`

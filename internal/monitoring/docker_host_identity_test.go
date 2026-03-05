@@ -5,8 +5,15 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
+
+func dockerHostViewsForTest(hosts []models.DockerHost) []*unifiedresources.DockerHostView {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{DockerHosts: hosts})
+	return registry.DockerHosts()
+}
 
 func TestUniqueNonEmptyStrings(t *testing.T) {
 	t.Parallel()
@@ -288,7 +295,7 @@ func TestDockerHostIDExists(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := dockerHostIDExists(tt.id, tt.hosts)
+			result := dockerHostIDExists(tt.id, dockerHostViewsForTest(tt.hosts))
 			if result != tt.expected {
 				t.Errorf("got %v, want %v", result, tt.expected)
 			}
@@ -646,12 +653,18 @@ func TestFindMatchingDockerHost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result, found := findMatchingDockerHost(tt.hosts, tt.report, tt.tokenRecord)
+			result, found := findMatchingDockerHost(dockerHostViewsForTest(tt.hosts), tt.report, tt.tokenRecord)
 			if found != tt.expectMatch {
 				t.Errorf("found mismatch: got %v, want %v", found, tt.expectMatch)
 			}
-			if tt.expectMatch && result.ID != tt.expectedID {
-				t.Errorf("ID mismatch: got %q, want %q", result.ID, tt.expectedID)
+			if tt.expectMatch {
+				gotID := result.HostSourceID()
+				if gotID == "" {
+					gotID = result.ID()
+				}
+				if gotID != tt.expectedID {
+					t.Errorf("ID mismatch: got %q, want %q", gotID, tt.expectedID)
+				}
 			}
 		})
 	}
@@ -770,7 +783,7 @@ func TestGenerateDockerHostIdentifier(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := generateDockerHostIdentifier(tt.base, tt.report, tt.token, tt.hosts)
+			result := generateDockerHostIdentifier(tt.base, tt.report, tt.token, dockerHostViewsForTest(tt.hosts))
 			if result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
 			}
@@ -869,15 +882,21 @@ func TestResolveDockerHostIdentifier(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			id, fallbacks, existing, found := resolveDockerHostIdentifier(tt.report, tt.tokenRecord, tt.hosts)
+			id, fallbacks, existing, found := resolveDockerHostIdentifier(tt.report, tt.tokenRecord, dockerHostViewsForTest(tt.hosts))
 			if found != tt.expectMatch {
 				t.Errorf("found mismatch: got %v, want %v", found, tt.expectMatch)
 			}
-			if tt.expectMatch && existing.ID != tt.expectedID {
-				t.Errorf("existing ID mismatch: got %q, want %q", existing.ID, tt.expectedID)
+			if tt.expectMatch {
+				gotID := existing.HostSourceID()
+				if gotID == "" {
+					gotID = existing.ID()
+				}
+				if gotID != tt.expectedID {
+					t.Errorf("existing ID mismatch: got %q, want %q", gotID, tt.expectedID)
+				}
 			}
-			if !tt.expectMatch && existing.ID != "" {
-				t.Errorf("expected empty existing host, got %q", existing.ID)
+			if !tt.expectMatch && existing != nil {
+				t.Errorf("expected empty existing host, got %q", existing.ID())
 			}
 			if tt.expectedID != "" && !tt.checkIDFormat && id != tt.expectedID {
 				t.Errorf("ID mismatch: got %q, want %q", id, tt.expectedID)
