@@ -428,12 +428,9 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 		// "docker:hostId:containerId", "agent:id", "node:instance:name"
 		parts := strings.Split(sm.ID, ":")
 
-		// Normalize supported frontend type aliases to canonical types.
+		// Enforce canonical v6 frontend mention types only.
 		resourceType := strings.TrimSpace(strings.ToLower(sm.Type))
-		if resourceType == "container" {
-			resourceType = "system-container"
-		}
-		if resourceType == "lxc" {
+		if resourceType == "container" || resourceType == "lxc" {
 			log.Warn().
 				Str("name", sm.Name).
 				Str("id", sm.ID).

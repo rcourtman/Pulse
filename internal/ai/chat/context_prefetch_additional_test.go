@@ -164,7 +164,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	structured := []StructuredMention{
 		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "docker"},
 		{ID: "agent:host1", Name: "host1", Type: "agent"},
-		{ID: "container:node1:201", Name: "beta", Type: "container", Node: "node1"},
+		{ID: "system-container:node1:201", Name: "beta", Type: "system-container", Node: "node1"},
 		{ID: "docker:resource:docker:abc:cid-simple", Name: "homepage2", Type: "docker"},
 	}
 	state.DockerHosts = append(state.DockerHosts, models.DockerHost{
@@ -195,7 +195,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 		t.Fatalf("expected agent mention, got %q", mentions[1].ResourceType)
 	}
 	if mentions[2].ResourceType != "system-container" {
-		t.Fatalf("expected container type normalized to system-container, got %q", mentions[2].ResourceType)
+		t.Fatalf("expected system-container mention type, got %q", mentions[2].ResourceType)
 	}
 	if mentions[3].TargetID != "resource:docker:abc" {
 		t.Fatalf("expected docker target ID with colons preserved, got %q", mentions[3].TargetID)
@@ -215,18 +215,26 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	}
 }
 
-func TestContextPrefetcher_ResolveStructuredMentions_IgnoresLegacyLXCType(t *testing.T) {
+func TestContextPrefetcher_ResolveStructuredMentions_IgnoresLegacyContainerAliases(t *testing.T) {
 	rs := newTestReadState(models.StateSnapshot{})
 	prefetcher := NewContextPrefetcher(rs, nil)
 
-	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
-		ID:   "lxc:node1:201",
-		Name: "beta",
-		Type: "lxc",
-		Node: "node1",
-	}})
+	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{
+		{
+			ID:   "lxc:node1:201",
+			Name: "beta",
+			Type: "lxc",
+			Node: "node1",
+		},
+		{
+			ID:   "container:node1:202",
+			Name: "gamma",
+			Type: "container",
+			Node: "node1",
+		},
+	})
 	if len(mentions) != 0 {
-		t.Fatalf("expected legacy lxc mention to be ignored, got %#v", mentions)
+		t.Fatalf("expected legacy container aliases to be ignored, got %#v", mentions)
 	}
 }
 
