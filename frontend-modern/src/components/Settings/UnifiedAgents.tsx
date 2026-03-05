@@ -2115,7 +2115,9 @@ export const UnifiedAgents: Component = () => {
                 const canRemove = () => {
                   const needsAgent = row.capabilities.includes('agent') && !row.agentActionId;
                   const needsDocker =
-                    row.capabilities.includes('docker') && !row.dockerActionId && !row.agentActionId;
+                    row.capabilities.includes('docker') &&
+                    !row.dockerActionId &&
+                    !row.agentActionId;
                   return !needsAgent && !needsDocker;
                 };
                 return (

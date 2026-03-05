@@ -323,7 +323,9 @@ describe('InfrastructureSummary range behavior', () => {
     mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
 
     const [hosts, setHosts] = createSignal<Resource[]>([makeHost()]);
-    const { container } = render(() => <InfrastructureSummary resources={hosts()} timeRange="1h" />);
+    const { container } = render(() => (
+      <InfrastructureSummary resources={hosts()} timeRange="1h" />
+    ));
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');

@@ -417,9 +417,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     const agentUsage = agentTokenUsage().get(record.id);
     const displayName = tokenNameForDialog(record);
 
-    const affectedRuntimeIds = dockerUsage
-      ? dockerUsage.runtimes.map((runtime) => runtime.id)
-      : [];
+    const affectedRuntimeIds = dockerUsage ? dockerUsage.runtimes.map((runtime) => runtime.id) : [];
     const affectedAgentIds = agentUsage ? agentUsage.agents.map((agent) => agent.id) : [];
     let revokeMessage: string | undefined;
     const messageChunks: string[] = [];
@@ -432,9 +430,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       const usageSummary =
         extraCount > 0 ? `${runtimeListPreview}, +${extraCount} more` : runtimeListPreview;
       const runtimeCountLabel =
-        dockerUsage.count === 1
-          ? 'container runtime'
-          : `${dockerUsage.count} container runtimes`;
+        dockerUsage.count === 1 ? 'container runtime' : `${dockerUsage.count} container runtimes`;
       messageChunks.push(`${runtimeCountLabel}: ${usageSummary}`);
     }
     if (agentUsage) {

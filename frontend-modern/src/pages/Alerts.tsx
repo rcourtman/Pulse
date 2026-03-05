@@ -447,10 +447,7 @@ export function Alerts() {
     if (Object.keys(rawConfig).length > 0 && byType('node').length > 0) {
       const nodeResources = byType('node');
       const vmResources = byType('vm');
-      const containerResources = [
-        ...byType('system-container'),
-        ...byType('oci-container'),
-      ];
+      const containerResources = [...byType('system-container'), ...byType('oci-container')];
       const storageResources = allResources().filter(
         (r) => r.type === 'storage' || r.type === 'datastore',
       );
@@ -485,9 +482,7 @@ export function Alerts() {
         dockerHostOverrideIdCandidates(host).forEach((id) => {
           dockerHostMap.set(id, host);
         });
-        const containers = children(host.id).filter(
-          (r) => r.type === 'app-container',
-        );
+        const containers = children(host.id).filter((r) => r.type === 'app-container');
         containers.forEach((container) => {
           const shortId = container.id.includes('/')
             ? container.id.split('/').pop()!
@@ -595,8 +590,7 @@ export function Alerts() {
             name: displayName,
             type: 'agentDisk',
             resourceType: 'Agent Disk',
-            node:
-              agent?.displayName?.trim() || agent?.identity?.hostname || agent?.name || agentId,
+            node: agent?.displayName?.trim() || agent?.identity?.hostname || agent?.name || agentId,
             disabled: thresholds.disabled || false,
             thresholds: extractTriggerValues(thresholds),
           });
@@ -1229,11 +1223,7 @@ export function Alerts() {
 
   // Get all guests from alert resource selectors - memoize to prevent unnecessary updates
   const allGuests = createMemo(
-    () => [
-      ...byType('vm'),
-      ...byType('system-container'),
-      ...byType('oci-container'),
-    ],
+    () => [...byType('vm'), ...byType('system-container'), ...byType('oci-container')],
     [],
     {
       equals: (prev, next) => {

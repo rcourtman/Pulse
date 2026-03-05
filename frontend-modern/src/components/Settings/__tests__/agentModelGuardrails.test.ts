@@ -50,7 +50,9 @@ describe('agent model guardrails', () => {
 
   it('keeps APITokenManager runtime/agent usage mapped from unified resources', () => {
     expect(apiTokenManagerSource).toContain('const agentCapableResources = createMemo(() =>');
-    expect(apiTokenManagerSource).toContain("const dockerRuntimeResources = createMemo(() => byType('docker-host'))");
+    expect(apiTokenManagerSource).toContain(
+      "const dockerRuntimeResources = createMemo(() => byType('docker-host'))",
+    );
     expect(apiTokenManagerSource).toContain('const hasAgentScopeResource = (resource: Resource)');
     expect(apiTokenManagerSource).toContain("resource.type === 'node'");
     expect(apiTokenManagerSource).toContain("resource.type === 'pbs'");
@@ -93,7 +95,9 @@ describe('agent model guardrails', () => {
     expect(discoveryTypesSource).not.toContain("| 'lxc'");
     expect(discoveryTypesSource).not.toContain("| 'docker_lxc'");
     expect(discoveryTargetUtilsSource).toContain('discoveryTarget.agentId');
-    expect(unifiedResourcesHookSource).toContain('const discoveryAgentId = v2.discoveryTarget?.agentId;');
+    expect(unifiedResourcesHookSource).toContain(
+      'const discoveryAgentId = v2.discoveryTarget?.agentId;',
+    );
     expect(apiTypesSource).toContain("export type GuestType = 'vm' | 'system-container';");
     expect(apiTypesSource).not.toContain("'qemu'");
     expect(apiTypesSource).not.toContain("'lxc'");
@@ -134,7 +138,9 @@ describe('agent model guardrails', () => {
   it('keeps discovery mapping on canonical agentId only', () => {
     expect(resourceDetailMappersSource).toContain('agentId: explicitDiscoveryAgentId');
     expect(resourceDetailMappersSource).not.toContain('hostId: explicitDiscoveryAgentId');
-    expect(unifiedResourcesHookSource).toContain('const discoveryAgentId = v2.discoveryTarget?.agentId;');
+    expect(unifiedResourcesHookSource).toContain(
+      'const discoveryAgentId = v2.discoveryTarget?.agentId;',
+    );
   });
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {
@@ -143,7 +149,9 @@ describe('agent model guardrails', () => {
     expect(aiChatSource).not.toContain("resource.type === 'host'");
     expect(aiChatSource).toContain("type: 'agent'");
     expect(aiChatSource).not.toContain("mention.type === 'agent'");
-    expect(aiChatSource).toContain('const mentionsForAPI = mentions.length > 0 ? mentions : undefined;');
+    expect(aiChatSource).toContain(
+      'const mentionsForAPI = mentions.length > 0 ? mentions : undefined;',
+    );
     expect(mentionAutocompleteSource).toContain("| 'agent'");
     expect(mentionAutocompleteSource).toContain("| 'system-container'");
     expect(mentionAutocompleteSource).not.toContain("| 'container'");
@@ -216,8 +224,12 @@ describe('agent model guardrails', () => {
     expect(monitoringApiSource).toContain('allowDockerRuntimeReenroll');
     expect(monitoringApiSource).not.toContain('deleteDockerHost');
     expect(monitoringApiSource).not.toContain('allowDockerHostReenroll');
-    expect(monitoringApiSource).toContain('body: JSON.stringify({ agentId, containerId, containerName })');
-    expect(monitoringApiSource).not.toContain('body: JSON.stringify({ hostId, containerId, containerName })');
+    expect(monitoringApiSource).toContain(
+      'body: JSON.stringify({ agentId, containerId, containerName })',
+    );
+    expect(monitoringApiSource).not.toContain(
+      'body: JSON.stringify({ hostId, containerId, containerName })',
+    );
     expect(monitoringApiSource).toContain('agentId?: string;');
     expect(monitoringApiSource).not.toContain('hostId?: string;');
     expect(monitoringApiSource).toContain('/agents/docker/runtimes/');
@@ -285,7 +297,9 @@ describe('agent model guardrails', () => {
   it('keeps node link IDs on canonical linkedAgentId only', () => {
     expect(apiTypesSource).toContain('linkedAgentId?: string');
     expect(apiTypesSource).not.toContain('linkedHostAgentId');
-    expect(resourceStateAdaptersSource).toContain('linkedAgentId: asString(platform?.linkedAgentId)');
+    expect(resourceStateAdaptersSource).toContain(
+      'linkedAgentId: asString(platform?.linkedAgentId)',
+    );
     expect(resourceStateAdaptersSource).not.toContain('linkedHostAgentId');
   });
 });

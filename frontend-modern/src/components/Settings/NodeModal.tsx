@@ -533,8 +533,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           class={controlClass()}
                         />
                         <p class={formHelpText}>
-                          Required and must be unique. We can auto-fill it from the Endpoint URL if you
-                          leave it blank.
+                          Required and must be unique. We can auto-fill it from the Endpoint URL if
+                          you leave it blank.
                         </p>
                       </div>
 

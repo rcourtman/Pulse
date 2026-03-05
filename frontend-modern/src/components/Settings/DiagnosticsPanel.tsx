@@ -698,9 +698,7 @@ export const DiagnosticsPanel: Component = () => {
                   <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <h4 class="text-sm font-semibold text-base-content">
-                    Container Runtime Agents
-                  </h4>
+                  <h4 class="text-sm font-semibold text-base-content">Container Runtime Agents</h4>
                   <p class="text-xs text-muted">Agent-backed container runtime monitoring</p>
                 </div>
                 <div class="ml-auto text-right">

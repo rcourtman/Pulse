@@ -57,6 +57,10 @@ describe('WebInterfaceUrlField', () => {
   it('defaults guest metadata labels to workload wording', async () => {
     render(() => <WebInterfaceUrlField metadataKind="guest" metadataId="guest-1" customUrl="" />);
 
-    expect(await screen.findByText("Add a URL to quickly access this workload's web interface from the dashboard.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "Add a URL to quickly access this workload's web interface from the dashboard.",
+      ),
+    ).toBeInTheDocument();
   });
 });

@@ -104,7 +104,11 @@ export function markContainerUpdating(
 /**
  * Mark a container update as queued (command sent, waiting for agent)
  */
-export function markContainerQueued(agentId: string, containerId: string, commandId?: string): void {
+export function markContainerQueued(
+  agentId: string,
+  containerId: string,
+  commandId?: string,
+): void {
   const key = `${agentId}:${containerId}`;
   clearPendingAutoClearTimer(key);
   setUpdateStates((prev) => ({

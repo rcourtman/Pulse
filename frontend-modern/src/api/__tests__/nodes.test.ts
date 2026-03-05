@@ -50,8 +50,9 @@ describe('NodesAPI', () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockNodes);
 
       const result = await NodesAPI.getNodes();
-      const endpoint = (result[0] as NodeConfig & { clusterEndpoints: Array<Record<string, unknown>> })
-        .clusterEndpoints[0];
+      const endpoint = (
+        result[0] as NodeConfig & { clusterEndpoints: Array<Record<string, unknown>> }
+      ).clusterEndpoints[0];
 
       expect(endpoint).toMatchObject({
         nodeId: 'node-1',

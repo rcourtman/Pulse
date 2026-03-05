@@ -100,7 +100,10 @@ const formatRate = (bytesPerSec: number): string => {
 
 // Combine a resource's net in/out into a single throughput series.
 // Buckets points into 30-second windows and sums rates from both directions.
-function combineResourceThroughputSeries(inSeries: MetricPoint[], outSeries: MetricPoint[]): MetricPoint[] {
+function combineResourceThroughputSeries(
+  inSeries: MetricPoint[],
+  outSeries: MetricPoint[],
+): MetricPoint[] {
   const bucketSize = 30_000; // 30 seconds
   const buckets = new Map<number, number>();
   for (const p of inSeries) {
@@ -519,7 +522,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   const hasDiskIOData = () => displaySeries().some((s) => s.diskio.length >= 1);
 
   const avgDiskCapacity = createMemo(() => {
-    const diskResources = props.resources.filter((resource) => resource.disk && resource.disk.total);
+    const diskResources = props.resources.filter(
+      (resource) => resource.disk && resource.disk.total,
+    );
     if (diskResources.length === 0) return null;
     const avg =
       diskResources.reduce((sum, resource) => sum + getDiskPercent(resource), 0) /

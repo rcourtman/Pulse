@@ -137,10 +137,7 @@ export function useInfrastructureSettingsState({
       byType('truenas').length,
   );
   const orgGuestUsage = createMemo(
-    () =>
-      byType('vm').length +
-      byType('system-container').length +
-      byType('oci-container').length,
+    () => byType('vm').length + byType('system-container').length + byType('oci-container').length,
   );
 
   const matchStateNode = (

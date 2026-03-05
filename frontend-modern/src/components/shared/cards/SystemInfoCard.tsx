@@ -51,7 +51,10 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
       <div class="space-y-1.5 text-[11px]">
         <div class="flex items-center justify-between gap-2 min-w-0">
           <span class="text-muted shrink-0">Hostname</span>
-          <span class="font-medium text-base-content select-all truncate" title={agentInfo.hostname}>
+          <span
+            class="font-medium text-base-content select-all truncate"
+            title={agentInfo.hostname}
+          >
             {agentInfo.hostname}
           </span>
         </div>

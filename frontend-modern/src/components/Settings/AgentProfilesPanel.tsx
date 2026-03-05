@@ -47,8 +47,7 @@ export const AgentProfilesPanel: Component = () => {
   const getActionableAgentId = (resource: Resource): string | undefined => {
     const discoveryType = resource.discoveryTarget?.resourceType;
     const discoveryTargetAgentId =
-      getAgentDiscoveryResourceId(resource.discoveryTarget) ||
-      resource.discoveryTarget?.agentId;
+      getAgentDiscoveryResourceId(resource.discoveryTarget) || resource.discoveryTarget?.agentId;
     const discoveryResourceId =
       discoveryType === 'docker' || discoveryType === 'k8s'
         ? resource.discoveryTarget?.resourceId

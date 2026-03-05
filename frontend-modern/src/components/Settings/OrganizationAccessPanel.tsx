@@ -201,9 +201,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                         <select
                           value={inviteRole()}
                           onChange={(event) =>
-                            setInviteRole(
-                              event.currentTarget.value as OrganizationRole,
-                            )
+                            setInviteRole(event.currentTarget.value as OrganizationRole)
                           }
                           class="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
