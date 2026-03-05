@@ -7,7 +7,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // AlertManagerAdapter adapts the alerts.Manager to the AI's AlertProvider interface
@@ -183,7 +182,7 @@ func normalizeAlertResourceType(raw string) string {
 	if resourceType == "" {
 		return ""
 	}
-	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(resourceType) {
+	if isUnsupportedLegacyAIResourceTypeToken(resourceType) || resourceType == "docker-service" {
 		return ""
 	}
 	switch resourceType {
@@ -201,8 +200,6 @@ func normalizeAlertResourceType(raw string) string {
 		return "node"
 	case "k8s-cluster":
 		return "k8s-cluster"
-	case "guest", "qemu", "container", "lxc", "docker", "docker-service", "docker-container", "kubernetes", "k8s", "kubernetes-cluster", "docker_service", "dockerhost":
-		return ""
 	default:
 		return resourceType
 	}
