@@ -451,6 +451,9 @@ type AgentData struct {
 	AgentID           string             `json:"agentId,omitempty"`
 	AgentVersion      string             `json:"agentVersion,omitempty"`
 	Hostname          string             `json:"hostname,omitempty"`
+	TokenID           string             `json:"tokenId,omitempty"`
+	TokenName         string             `json:"tokenName,omitempty"`
+	TokenHint         string             `json:"tokenHint,omitempty"`
 	Platform          string             `json:"platform,omitempty"`
 	OSName            string             `json:"osName,omitempty"`
 	OSVersion         string             `json:"osVersion,omitempty"`

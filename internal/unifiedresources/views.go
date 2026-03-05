@@ -712,6 +712,27 @@ func (v HostView) Hostname() string {
 	return v.r.Agent.Hostname
 }
 
+func (v HostView) TokenID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.TokenID
+}
+
+func (v HostView) TokenName() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.TokenName
+}
+
+func (v HostView) TokenHint() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.TokenHint
+}
+
 func (v HostView) Platform() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""

@@ -481,6 +481,9 @@ func TestView_HostViewAccessors(t *testing.T) {
 			AgentID:       "agent-1",
 			AgentVersion:  "1.2.3",
 			Hostname:      "agent-host-1",
+			TokenID:       "token-1",
+			TokenName:     "Agent Token",
+			TokenHint:     "agt_1234",
 			Platform:      "linux",
 			OSName:        "Ubuntu",
 			OSVersion:     "24.04",
@@ -528,6 +531,9 @@ func TestView_HostViewAccessors(t *testing.T) {
 	if v.Hostname() != "agent-host-1" || v.Platform() != "linux" || v.OSName() != "Ubuntu" || v.OSVersion() != "24.04" || v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" {
 		t.Fatalf("expected agent OS accessors to match, got hostname=%q platform=%q os=%q %q kernel=%q arch=%q",
 			v.Hostname(), v.Platform(), v.OSName(), v.OSVersion(), v.KernelVersion(), v.Architecture())
+	}
+	if v.TokenID() != "token-1" || v.TokenName() != "Agent Token" || v.TokenHint() != "agt_1234" {
+		t.Fatalf("expected token accessors to match, got id=%q name=%q hint=%q", v.TokenID(), v.TokenName(), v.TokenHint())
 	}
 	if v.AgentVersion() != "1.2.3" || v.AgentID() != "agent-1" {
 		t.Fatalf("expected AgentVersion/AgentID to match, got version=%q id=%q", v.AgentVersion(), v.AgentID())

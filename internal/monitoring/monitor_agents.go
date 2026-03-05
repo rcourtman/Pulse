@@ -569,12 +569,13 @@ func (m *Monitor) GetDockerHosts() []models.DockerHost {
 // are reloaded from disk to ensure bindings remain consistent with the new token set.
 // It preserves bindings for tokens that still exist and removes orphaned entries.
 func (m *Monitor) RebuildTokenBindings() {
-	if m == nil || m.state == nil || m.config == nil {
+	if m == nil || m.config == nil {
 		return
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return
+	}
 
 	// Build a set of valid token IDs from the current config
 	validTokens := make(map[string]struct{})
@@ -586,9 +587,11 @@ func (m *Monitor) RebuildTokenBindings() {
 
 	// Rebuild Docker token bindings
 	newDockerBindings := make(map[string]string)
-	dockerHosts := m.state.GetDockerHosts()
-	for _, host := range dockerHosts {
-		tokenID := strings.TrimSpace(host.TokenID)
+	for _, host := range readState.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		tokenID := strings.TrimSpace(host.TokenID())
 		if tokenID == "" {
 			continue
 		}
@@ -597,9 +600,12 @@ func (m *Monitor) RebuildTokenBindings() {
 			continue
 		}
 		// Use AgentID if available, otherwise fall back to host ID
-		agentID := strings.TrimSpace(host.AgentID)
+		agentID := strings.TrimSpace(host.AgentID())
 		if agentID == "" {
-			agentID = host.ID
+			agentID = strings.TrimSpace(host.HostSourceID())
+		}
+		if agentID == "" {
+			agentID = strings.TrimSpace(host.ID())
 		}
 		if agentID != "" {
 			newDockerBindings[tokenID] = agentID
@@ -608,9 +614,11 @@ func (m *Monitor) RebuildTokenBindings() {
 
 	// Rebuild Host agent token bindings
 	newHostBindings := make(map[string]string)
-	hosts := m.state.GetHosts()
-	for _, host := range hosts {
-		tokenID := strings.TrimSpace(host.TokenID)
+	for _, host := range readState.Hosts() {
+		if host == nil {
+			continue
+		}
+		tokenID := strings.TrimSpace(host.TokenID())
 		if tokenID == "" {
 			continue
 		}
@@ -618,14 +626,17 @@ func (m *Monitor) RebuildTokenBindings() {
 		if _, valid := validTokens[tokenID]; !valid {
 			continue
 		}
-		hostname := strings.TrimSpace(host.Hostname)
-		if hostname == "" || host.ID == "" {
+		hostname := strings.TrimSpace(host.Hostname())
+		agentID := strings.TrimSpace(host.AgentID())
+		if hostname == "" || agentID == "" {
 			continue
 		}
-		newHostBindings[fmt.Sprintf("%s:%s", tokenID, hostname)] = host.ID
+		newHostBindings[fmt.Sprintf("%s:%s", tokenID, hostname)] = agentID
 	}
 
 	// Log what changed
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	oldDockerCount := len(m.dockerTokenBindings)
 	oldHostCount := len(m.hostTokenBindings)
 	m.dockerTokenBindings = newDockerBindings

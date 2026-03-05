@@ -402,6 +402,56 @@ func TestMonitor_TokenBindings_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_TokenBindings_UseUnifiedReadState(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID:        "docker-source-1",
+				AgentID:   "docker-agent-1",
+				Hostname:  "docker-host-1",
+				Status:    "online",
+				TokenID:   "docker-token",
+				TokenName: "Docker Token",
+				TokenHint: "dock_1234",
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:        "host-agent-1",
+				Hostname:  "host-1",
+				Status:    "online",
+				TokenID:   "host-token",
+				TokenName: "Host Token",
+				TokenHint: "host_1234",
+			},
+		},
+	})
+
+	m := &Monitor{
+		state:               models.NewState(),
+		resourceStore:       unifiedresources.NewMonitorAdapter(registry),
+		config:              &config.Config{APITokens: []config.APITokenRecord{{ID: "docker-token"}, {ID: "host-token"}}},
+		dockerTokenBindings: map[string]string{"stale": "old-agent"},
+		hostTokenBindings:   map[string]string{"stale:host": "old-host"},
+	}
+
+	m.RebuildTokenBindings()
+
+	if got := m.dockerTokenBindings["docker-token"]; got != "docker-agent-1" {
+		t.Fatalf("expected docker binding from unified read-state, got %q", got)
+	}
+	if got := m.hostTokenBindings["host-token:host-1"]; got != "host-agent-1" {
+		t.Fatalf("expected host binding from unified read-state, got %q", got)
+	}
+	if _, ok := m.dockerTokenBindings["stale"]; ok {
+		t.Fatal("expected stale docker binding to be removed")
+	}
+	if _, ok := m.hostTokenBindings["stale:host"]; ok {
+		t.Fatal("expected stale host binding to be removed")
+	}
+}
+
 func TestMonitor_StorageBackups_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),
