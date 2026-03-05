@@ -89,7 +89,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
   // Example prompts for inspiration
   const examplePrompts = [
     'Create a profile for production servers with minimal logging',
-    'Profile for Docker hosts that need container monitoring',
+    'Profile for Docker or Podman runtimes that need container monitoring',
     'Kubernetes monitoring profile with all pods visible',
     'Development environment profile with debug logging',
   ];

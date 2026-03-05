@@ -40,7 +40,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         label: 'Go to Infrastructure',
         description: infrastructurePath,
         shortcut: 'g i',
-        keywords: ['infra', 'agents', 'hosts', 'nodes'],
+        keywords: ['infra', 'agents', 'nodes', 'resources'],
         action: () => navigate(infrastructurePath),
       },
       {

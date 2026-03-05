@@ -9,7 +9,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   docker: {
     title: 'Docker Workloads',
     description:
-      'Configure Docker-specific workload controls and update behavior across monitored hosts.',
+      'Configure Docker-specific workload controls and update behavior across monitored resources.',
   },
   agents: {
     title: 'Unified Agents',

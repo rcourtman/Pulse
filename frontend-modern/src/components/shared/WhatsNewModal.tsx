@@ -61,7 +61,7 @@ export function WhatsNewModal() {
                   Infrastructure
                 </div>
                 <p class="mt-1.5 sm:mt-2 text-xs text-blue-900 dark:text-blue-100">
-                  Proxmox nodes, Agents, and container hosts live together in one unified view.
+                  Proxmox nodes, agents, and container runtimes live together in one unified view.
                 </p>
               </div>
 

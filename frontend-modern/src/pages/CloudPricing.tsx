@@ -195,7 +195,7 @@ export default function CloudPricing() {
           <li>Sign up with your email. No credit card required for trial.</li>
           <li>Your isolated Pulse workspace is provisioned in under 60 seconds.</li>
           <li>
-            Install the Pulse agent on any Linux host with one command. It connects back securely
+            Install the Pulse agent on any Linux machine with one command. It connects back securely
             over Relay — no inbound firewall rules needed.
           </li>
           <li>Monitor, get AI findings, and set up alerts. No maintenance ever.</li>

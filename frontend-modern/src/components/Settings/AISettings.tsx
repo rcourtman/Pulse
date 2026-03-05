@@ -2107,7 +2107,7 @@ export const AISettings: Component = () => {
                           inline={{
                             title: 'What is Discovery?',
                             description:
-                              'Discovery scans your VMs, containers, and Docker hosts to identify what services are running (databases, web servers, etc.), their versions, and how to access them. This information helps Pulse AI give you accurate troubleshooting commands and understand your infrastructure.',
+                              'Discovery scans your VMs, containers, and container runtimes to identify what services are running (databases, web servers, etc.), their versions, and how to access them. This information helps Pulse AI give you accurate troubleshooting commands and understand your infrastructure.',
                           }}
                           size="xs"
                         />
