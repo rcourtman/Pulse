@@ -3,7 +3,7 @@ import { createSignal, createEffect, For, Show, onCleanup } from 'solid-js';
 export interface MentionResource {
   id: string;
   name: string;
-  type: 'vm' | 'container' | 'node' | 'storage' | 'docker' | 'agent';
+  type: 'vm' | 'system-container' | 'node' | 'storage' | 'docker' | 'agent';
   status?: string;
   node?: string;
 }
@@ -85,7 +85,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
             />
           </svg>
         );
-      case 'container':
+      case 'system-container':
         return (
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

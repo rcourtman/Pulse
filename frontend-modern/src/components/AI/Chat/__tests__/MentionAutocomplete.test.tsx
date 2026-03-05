@@ -21,7 +21,7 @@ const defaultResources: MentionResource[] = [
   makeResource({
     id: 'ct-200',
     name: 'db-container',
-    type: 'container',
+    type: 'system-container',
     status: 'running',
     node: 'pve2',
   }),

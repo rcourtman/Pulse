@@ -144,6 +144,8 @@ describe('agent model guardrails', () => {
     expect(aiChatSource).not.toContain("mention.type === 'agent'");
     expect(aiChatSource).toContain('const mentionsForAPI = mentions.length > 0 ? mentions : undefined;');
     expect(mentionAutocompleteSource).toContain("| 'agent'");
+    expect(mentionAutocompleteSource).toContain("| 'system-container'");
+    expect(mentionAutocompleteSource).not.toContain("| 'container'");
     expect(mentionAutocompleteSource).not.toContain("| 'host'");
   });
 

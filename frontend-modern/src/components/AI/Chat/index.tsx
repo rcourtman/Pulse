@@ -482,7 +482,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       mentionCandidates.push({
         id: `system-container:${node}:${vmid}`,
         name: container.name,
-        type: 'container',
+        type: 'system-container',
         status: container.status === 'running' ? 'running' : 'stopped',
         node,
       });
