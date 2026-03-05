@@ -155,9 +155,6 @@ func TestResolveResource_Host(t *testing.T) {
 	if loc.Platform != "linux" {
 		t.Fatalf("expected linux platform, got %q", loc.Platform)
 	}
-	if loc.HostID != "host1" {
-		t.Fatalf("expected HostID=host1 (source agent ID), got %q", loc.HostID)
-	}
 	if loc.TargetID != "host1" {
 		t.Fatalf("expected TargetID=host1 (canonical target ID), got %q", loc.TargetID)
 	}

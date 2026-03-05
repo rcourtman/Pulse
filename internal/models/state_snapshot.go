@@ -131,7 +131,6 @@ type ResourceLocation struct {
 
 	// For generic hosts (Windows/Linux via Pulse Unified Agent)
 	TargetID string // Canonical target ID (agent ID for host resources)
-	HostID   string // Deprecated legacy alias of TargetID
 	Platform string // "linux", "windows", etc.
 
 	// The key output: where to route commands
@@ -268,7 +267,6 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				Name:         host.Hostname,
 				ResourceType: "agent",
 				TargetID:     host.ID,
-				HostID:       host.ID,
 				Platform:     host.Platform,
 				TargetHost:   host.Hostname,
 			}

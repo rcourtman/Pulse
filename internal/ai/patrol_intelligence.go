@@ -80,13 +80,9 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 			log.Warn().Err(err).Msg("AI Patrol: Failed to list discoveries for guest intelligence")
 		} else {
 			for _, d := range discoveries {
-				targetID := d.TargetID
-				if targetID == "" {
-					targetID = d.HostID
-				}
 				key := discoveryKey{
 					resourceType: d.ResourceType,
-					targetID:     targetID,
+					targetID:     d.TargetID,
 					resourceID:   d.ResourceID,
 				}
 				discoveryIndex[key] = d

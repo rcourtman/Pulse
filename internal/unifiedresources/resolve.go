@@ -126,7 +126,6 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 				Name:         host.Hostname(),
 				ResourceType: "agent",
 				TargetID:     agentID,
-				HostID:       agentID,
 				Platform:     host.Platform(),
 				TargetHost:   host.Hostname(),
 			}
