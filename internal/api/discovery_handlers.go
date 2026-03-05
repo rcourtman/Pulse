@@ -233,10 +233,6 @@ func ensureDiscoveryCanonicalIDs(d *servicediscovery.ResourceDiscovery) *service
 
 	enriched := *d
 	changed := false
-	if strings.TrimSpace(enriched.HostID) == "" && strings.TrimSpace(enriched.TargetID) != "" {
-		enriched.HostID = enriched.TargetID
-		changed = true
-	}
 	if strings.TrimSpace(enriched.TargetID) == "" && strings.TrimSpace(enriched.HostID) != "" {
 		enriched.TargetID = enriched.HostID
 		changed = true
