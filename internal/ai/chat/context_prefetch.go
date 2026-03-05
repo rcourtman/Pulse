@@ -433,6 +433,13 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 		if resourceType == "container" {
 			resourceType = "system-container"
 		}
+		if resourceType == "lxc" {
+			log.Warn().
+				Str("name", sm.Name).
+				Str("id", sm.ID).
+				Msg("[ContextPrefetch] Ignoring unsupported legacy structured mention type")
+			continue
+		}
 
 		// Use ResolveResource for full routing info (target_host, Docker chain, etc.)
 		loc := unifiedresources.ResolveResource(rs, sm.Name)

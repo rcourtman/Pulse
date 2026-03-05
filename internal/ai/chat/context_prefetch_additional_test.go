@@ -215,7 +215,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	}
 }
 
-func TestContextPrefetcher_ResolveStructuredMentions_DoesNotNormalizeLegacyLXCType(t *testing.T) {
+func TestContextPrefetcher_ResolveStructuredMentions_IgnoresLegacyLXCType(t *testing.T) {
 	rs := newTestReadState(models.StateSnapshot{})
 	prefetcher := NewContextPrefetcher(rs, nil)
 
@@ -225,11 +225,8 @@ func TestContextPrefetcher_ResolveStructuredMentions_DoesNotNormalizeLegacyLXCTy
 		Type: "lxc",
 		Node: "node1",
 	}})
-	if len(mentions) != 1 {
-		t.Fatalf("expected one mention, got %d", len(mentions))
-	}
-	if mentions[0].ResourceType != "lxc" {
-		t.Fatalf("expected legacy lxc type to remain unnormalized, got %q", mentions[0].ResourceType)
+	if len(mentions) != 0 {
+		t.Fatalf("expected legacy lxc mention to be ignored, got %#v", mentions)
 	}
 }
 
