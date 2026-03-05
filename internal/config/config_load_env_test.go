@@ -21,7 +21,7 @@ func TestLoad_EnvOverrides_Detailed(t *testing.T) {
 
 		"DISCOVERY_ENABLED":              "true",
 		"DISCOVERY_SUBNET":               "192.168.1.0/24",
-		"DISCOVERY_ENVIRONMENT_OVERRIDE": "docker_host",
+		"DISCOVERY_ENVIRONMENT_OVERRIDE": "docker-host",
 		"DISCOVERY_SUBNET_ALLOWLIST":     "10.0.0.0/8,192.168.0.0/16",
 		"DISCOVERY_SUBNET_BLOCKLIST":     "10.1.0.0/16",
 		"DISCOVERY_MAX_HOSTS_PER_SCAN":   "50",
@@ -57,7 +57,7 @@ func TestLoad_EnvOverrides_Detailed(t *testing.T) {
 	// Discovery
 	assert.True(t, cfg.DiscoveryEnabled)
 	assert.Equal(t, "192.168.1.0/24", cfg.DiscoverySubnet)
-	assert.Equal(t, "docker_host", cfg.Discovery.EnvironmentOverride)
+	assert.Equal(t, "docker-host", cfg.Discovery.EnvironmentOverride)
 	assert.Len(t, cfg.Discovery.SubnetAllowlist, 2)
 	assert.Len(t, cfg.Discovery.SubnetBlocklist, 1)
 	assert.Equal(t, 50, cfg.Discovery.MaxHostsPerScan)

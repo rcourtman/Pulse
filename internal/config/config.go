@@ -277,10 +277,9 @@ func NormalizeDiscoveryConfig(cfg DiscoveryConfig) DiscoveryConfig {
 	normalized := CloneDiscoveryConfig(cfg)
 
 	// Normalize environment override and ensure it's valid.
-	normalized.EnvironmentOverride = strings.TrimSpace(normalized.EnvironmentOverride)
-	if normalized.EnvironmentOverride == "" {
-		normalized.EnvironmentOverride = defaults.EnvironmentOverride
-	} else if !IsValidDiscoveryEnvironment(normalized.EnvironmentOverride) {
+	if canonicalEnv, ok := CanonicalDiscoveryEnvironment(normalized.EnvironmentOverride); ok {
+		normalized.EnvironmentOverride = canonicalEnv
+	} else {
 		log.Warn().
 			Str("environment", normalized.EnvironmentOverride).
 			Msg("Unknown discovery environment override detected; falling back to auto")
@@ -404,11 +403,23 @@ func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
 
 // IsValidDiscoveryEnvironment reports whether the supplied override is recognised.
 func IsValidDiscoveryEnvironment(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "auto", "native", "docker_host", "docker_bridge", "lxc_privileged", "lxc_unprivileged":
-		return true
+	_, ok := CanonicalDiscoveryEnvironment(value)
+	return ok
+}
+
+// CanonicalDiscoveryEnvironment returns the canonical discovery environment token.
+// Underscore aliases are accepted for backward compatibility but normalized to
+// hyphen-separated v6 tokens.
+func CanonicalDiscoveryEnvironment(value string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "_", "-")
+	switch normalized {
+	case "", "auto":
+		return "auto", true
+	case "native", "docker-host", "docker-bridge", "lxc-privileged", "lxc-unprivileged":
+		return normalized, true
 	default:
-		return false
+		return "", false
 	}
 }
 
@@ -1348,8 +1359,8 @@ func Load() (*Config, error) {
 		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet overridden by DISCOVERY_SUBNET env var")
 	}
 	if envOverride := utils.GetenvTrim("DISCOVERY_ENVIRONMENT_OVERRIDE"); envOverride != "" {
-		if IsValidDiscoveryEnvironment(envOverride) {
-			cfg.Discovery.EnvironmentOverride = strings.ToLower(envOverride)
+		if canonicalEnv, ok := CanonicalDiscoveryEnvironment(envOverride); ok {
+			cfg.Discovery.EnvironmentOverride = canonicalEnv
 			cfg.EnvOverrides["discoveryEnvironmentOverride"] = true
 			log.Info().Str("environment", cfg.Discovery.EnvironmentOverride).Msg("Discovery environment override set by DISCOVERY_ENVIRONMENT_OVERRIDE")
 		} else {

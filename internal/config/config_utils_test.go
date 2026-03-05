@@ -69,14 +69,18 @@ func TestIsValidDiscoveryEnvironment(t *testing.T) {
 		{"Auto mixed", "Auto", true},
 		{"native", "native", true},
 		{"NATIVE", "NATIVE", true},
-		{"docker_host", "docker_host", true},
-		{"DOCKER_HOST", "DOCKER_HOST", true},
-		{"docker_bridge", "docker_bridge", true},
-		{"DOCKER_BRIDGE", "DOCKER_BRIDGE", true},
-		{"lxc_privileged", "lxc_privileged", true},
-		{"LXC_PRIVILEGED", "LXC_PRIVILEGED", true},
-		{"lxc_unprivileged", "lxc_unprivileged", true},
-		{"LXC_UNPRIVILEGED", "LXC_UNPRIVILEGED", true},
+		{"docker-host", "docker-host", true},
+		{"DOCKER-HOST", "DOCKER-HOST", true},
+		{"docker-bridge", "docker-bridge", true},
+		{"DOCKER-BRIDGE", "DOCKER-BRIDGE", true},
+		{"lxc-privileged", "lxc-privileged", true},
+		{"LXC-PRIVILEGED", "LXC-PRIVILEGED", true},
+		{"lxc-unprivileged", "lxc-unprivileged", true},
+		{"LXC-UNPRIVILEGED", "LXC-UNPRIVILEGED", true},
+		{"docker_host alias", "docker_host", true},
+		{"docker_bridge alias", "docker_bridge", true},
+		{"lxc_privileged alias", "lxc_privileged", true},
+		{"lxc_unprivileged alias", "lxc_unprivileged", true},
 
 		// Valid with whitespace trimming
 		{"auto with leading space", " auto", true},
@@ -87,7 +91,7 @@ func TestIsValidDiscoveryEnvironment(t *testing.T) {
 		// Invalid values
 		{"unknown value", "unknown", false},
 		{"typo dockerhost", "dockerhost", false},
-		{"typo docker-host", "docker-host", false},
+		{"typo docker-hosted", "docker-hosted", false},
 		{"kubernetes", "kubernetes", false},
 		{"vm", "vm", false},
 		{"baremetal", "baremetal", false},
@@ -105,6 +109,36 @@ func TestIsValidDiscoveryEnvironment(t *testing.T) {
 			result := IsValidDiscoveryEnvironment(tt.value)
 			if result != tt.expected {
 				t.Errorf("IsValidDiscoveryEnvironment(%q) = %v, want %v", tt.value, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCanonicalDiscoveryEnvironment(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected string
+		ok       bool
+	}{
+		{name: "empty becomes auto", value: "", expected: "auto", ok: true},
+		{name: "auto preserved", value: "auto", expected: "auto", ok: true},
+		{name: "native preserved", value: "native", expected: "native", ok: true},
+		{name: "hyphenated canonical", value: "docker-host", expected: "docker-host", ok: true},
+		{name: "underscore alias canonicalized", value: "docker_host", expected: "docker-host", ok: true},
+		{name: "uppercase underscore alias canonicalized", value: "DOCKER_HOST", expected: "docker-host", ok: true},
+		{name: "lxc privileged alias canonicalized", value: "lxc_privileged", expected: "lxc-privileged", ok: true},
+		{name: "invalid value rejected", value: "dockerhost", expected: "", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := CanonicalDiscoveryEnvironment(tt.value)
+			if ok != tt.ok {
+				t.Fatalf("CanonicalDiscoveryEnvironment(%q) ok = %v, want %v", tt.value, ok, tt.ok)
+			}
+			if got != tt.expected {
+				t.Fatalf("CanonicalDiscoveryEnvironment(%q) = %q, want %q", tt.value, got, tt.expected)
 			}
 		})
 	}
@@ -178,7 +212,7 @@ func TestCloneDiscoveryConfig(t *testing.T) {
 		{
 			name: "full config with all fields",
 			cfg: DiscoveryConfig{
-				EnvironmentOverride: "docker_host",
+				EnvironmentOverride: "docker-host",
 				SubnetAllowlist:     []string{"10.0.0.0/8", "192.168.0.0/16"},
 				SubnetBlocklist:     []string{"172.16.0.0/12"},
 				MaxHostsPerScan:     512,
@@ -337,10 +371,10 @@ func TestNormalizeDiscoveryConfig(t *testing.T) {
 		{
 			name: "valid environment preserved",
 			cfg: DiscoveryConfig{
-				EnvironmentOverride: "docker_host",
+				EnvironmentOverride: "docker-host",
 			},
 			expected: DiscoveryConfig{
-				EnvironmentOverride: "docker_host",
+				EnvironmentOverride: "docker-host",
 				SubnetAllowlist:     []string{},
 				SubnetBlocklist:     defaults.SubnetBlocklist,
 				MaxHostsPerScan:     defaults.MaxHostsPerScan,
@@ -514,10 +548,10 @@ func TestNormalizeDiscoveryConfig(t *testing.T) {
 		{
 			name: "all valid environments",
 			cfg: DiscoveryConfig{
-				EnvironmentOverride: "lxc_privileged",
+				EnvironmentOverride: "lxc-privileged",
 			},
 			expected: DiscoveryConfig{
-				EnvironmentOverride: "lxc_privileged",
+				EnvironmentOverride: "lxc-privileged",
 				SubnetAllowlist:     []string{},
 				SubnetBlocklist:     defaults.SubnetBlocklist,
 				MaxHostsPerScan:     defaults.MaxHostsPerScan,
@@ -581,7 +615,7 @@ func TestNormalizeDiscoveryConfig(t *testing.T) {
 // TestNormalizeDiscoveryConfig_DoesNotModifyInput verifies the original config is not mutated.
 func TestNormalizeDiscoveryConfig_DoesNotModifyInput(t *testing.T) {
 	original := DiscoveryConfig{
-		EnvironmentOverride: "  docker_host  ",
+		EnvironmentOverride: "  docker-host  ",
 		SubnetAllowlist:     []string{" 10.0.0.0/8 ", "192.168.0.0/16"},
 		SubnetBlocklist:     []string{" 172.16.0.0/12 "},
 		MaxHostsPerScan:     -1,
@@ -719,7 +753,7 @@ func TestDiscoveryConfigUnmarshalJSON_InvalidJSON(t *testing.T) {
 func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
 	var cfg DiscoveryConfig
 	data := `{
-		"environment_override": "docker_host",
+		"environment_override": "docker-host",
 		"subnet_allowlist": ["192.168.1.0/24"],
 		"subnet_blocklist": ["10.0.0.0/8"],
 		"max_hosts_per_scan": 100,
@@ -735,8 +769,8 @@ func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.EnvironmentOverride != "docker_host" {
-		t.Errorf("EnvironmentOverride = %q, want 'docker_host'", cfg.EnvironmentOverride)
+	if cfg.EnvironmentOverride != "docker-host" {
+		t.Errorf("EnvironmentOverride = %q, want 'docker-host'", cfg.EnvironmentOverride)
 	}
 	if len(cfg.SubnetAllowlist) != 1 || cfg.SubnetAllowlist[0] != "192.168.1.0/24" {
 		t.Errorf("SubnetAllowlist = %v, want ['192.168.1.0/24']", cfg.SubnetAllowlist)
@@ -749,7 +783,7 @@ func TestDiscoveryConfigUnmarshalJSON_ModernFields(t *testing.T) {
 func TestDiscoveryConfigUnmarshalJSON_LegacyFieldsIgnored(t *testing.T) {
 	var cfg DiscoveryConfig
 	data := `{
-		"environmentOverride": "lxc_privileged",
+		"environmentOverride": "lxc-privileged",
 		"subnetAllowlist": ["172.16.0.0/12"],
 		"maxHostsPerScan": 50,
 		"enableReverseDns": false
@@ -818,7 +852,7 @@ func TestConfigDeepCopy_IndependentMutableState(t *testing.T) {
 			"PULSE_AUTH_USER": true,
 		},
 		Discovery: DiscoveryConfig{
-			EnvironmentOverride: "docker_host",
+			EnvironmentOverride: "docker-host",
 			SubnetAllowlist:     []string{"10.0.0.0/8"},
 			SubnetBlocklist:     []string{"169.254.0.0/16"},
 			IPBlocklist:         []string{"10.0.0.99"},

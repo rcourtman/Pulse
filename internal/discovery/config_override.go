@@ -209,19 +209,22 @@ func parseCIDRMap(values []string, warnings *[]string) map[string]struct{} {
 }
 
 func environmentFromOverride(value string) (envdetect.Environment, bool) {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	switch normalized {
+	canonical, ok := config.CanonicalDiscoveryEnvironment(value)
+	if !ok {
+		return envdetect.Unknown, false
+	}
+	switch canonical {
 	case "", "auto":
 		return envdetect.Unknown, false
 	case "native":
 		return envdetect.Native, true
-	case "docker_host":
+	case "docker-host":
 		return envdetect.DockerHost, true
-	case "docker_bridge":
+	case "docker-bridge":
 		return envdetect.DockerBridge, true
-	case "lxc_privileged":
+	case "lxc-privileged":
 		return envdetect.LXCPrivileged, true
-	case "lxc_unprivileged":
+	case "lxc-unprivileged":
 		return envdetect.LXCUnprivileged, true
 	default:
 		return envdetect.Unknown, false
