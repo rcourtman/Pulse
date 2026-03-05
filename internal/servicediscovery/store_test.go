@@ -185,6 +185,44 @@ func TestStore_SaveCanonicalizesAgentAndTargetIDs(t *testing.T) {
 	}
 }
 
+func TestStore_GetLegacyHostIDOnlyPayloadBackfillsCanonicalTarget(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	id := MakeResourceID(ResourceTypeDocker, "legacy-host", "web")
+	legacyPayload := map[string]any{
+		"id":            id,
+		"resource_type": ResourceTypeDocker,
+		"resource_id":   "web",
+		"host_id":       "legacy-host",
+		"service_name":  "Legacy Web",
+	}
+	data, err := json.Marshal(legacyPayload)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	if err := os.WriteFile(store.getFilePath(id), data, 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	got, err := store.Get(id)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected discovery, got nil")
+	}
+	if got.TargetID != "legacy-host" {
+		t.Fatalf("expected TargetID legacy-host, got %q", got.TargetID)
+	}
+	if got.HostID != "legacy-host" {
+		t.Fatalf("expected HostID legacy-host, got %q", got.HostID)
+	}
+}
+
 func TestStore_CryptoRoundTripAndPaths(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {

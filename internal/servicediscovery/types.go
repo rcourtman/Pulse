@@ -60,7 +60,7 @@ type ResourceDiscovery struct {
 	ResourceID   string       `json:"resource_id"`   // 101, container-name, etc.
 	TargetID     string       `json:"target_id,omitempty"`
 	AgentID      string       `json:"agent_id,omitempty"`
-	HostID       string       `json:"host_id"`  // Compatibility mirror of target_id
+	HostID       string       `json:"-"`        // Internal legacy mirror of target_id
 	Hostname     string       `json:"hostname"` // Human-readable host name
 
 	// AI-discovered info

@@ -144,6 +144,28 @@ func normalizeDiscovery(d *ResourceDiscovery) {
 	}
 }
 
+// unmarshalStoredDiscovery reads discovery data from disk while supporting
+// legacy host_id-only payloads from pre-target_id persistence.
+func unmarshalStoredDiscovery(data []byte, discovery *ResourceDiscovery) error {
+	if discovery == nil {
+		return fmt.Errorf("discovery output is required")
+	}
+
+	var stored struct {
+		ResourceDiscovery
+		LegacyHostID string `json:"host_id,omitempty"`
+	}
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return err
+	}
+
+	*discovery = stored.ResourceDiscovery
+	if strings.TrimSpace(discovery.HostID) == "" && strings.TrimSpace(stored.LegacyHostID) != "" {
+		discovery.HostID = strings.TrimSpace(stored.LegacyHostID)
+	}
+	return nil
+}
+
 // toLegacyID converts a normalized resource ID back to its legacy form for file lookup.
 func toLegacyID(id string) string {
 	if strings.HasPrefix(id, "system-container:") {
@@ -374,7 +396,7 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	}
 
 	var discovery ResourceDiscovery
-	if err := json.Unmarshal(data, &discovery); err != nil {
+	if err := unmarshalStoredDiscovery(data, &discovery); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal discovery: %w", err)
 	}
 
@@ -455,7 +477,7 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 		}
 
 		var discovery ResourceDiscovery
-		if err := json.Unmarshal(data, &discovery); err != nil {
+		if err := unmarshalStoredDiscovery(data, &discovery); err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal discovery")
 			continue
 		}
