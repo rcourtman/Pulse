@@ -121,8 +121,6 @@ func normalizeTarget(targetType, targetID string) (string, string, error) {
 	case "agent":
 		// Agent-level execution ignores target ID.
 		return "agent", "", nil
-	case "host":
-		return "", "", fmt.Errorf(`unsupported target type %q; use "agent"`, normalizedType)
 	case "container", "vm":
 		if normalizedTargetID == "" {
 			return "", "", fmt.Errorf("target id is required for target type %q", normalizedType)

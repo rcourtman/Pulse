@@ -58,13 +58,13 @@ func TestExecuteCommandSecurityValidation(t *testing.T) {
 			wantErr: "invalid target type",
 		},
 		{
-			name: "legacy host target type rejected",
+			name: "unsupported host target type rejected",
 			payload: ExecuteCommandPayload{
 				RequestID:  "r1",
 				Command:    "echo ok",
 				TargetType: "host",
 			},
-			wantErr: `unsupported target type "host"; use "agent"`,
+			wantErr: `invalid target type "host"`,
 		},
 		{
 			name: "container requires target id",
@@ -174,13 +174,13 @@ func TestReadFileSecurityValidation(t *testing.T) {
 			wantErr: "invalid target type",
 		},
 		{
-			name: "legacy host target type rejected",
+			name: "unsupported host target type rejected",
 			payload: ReadFilePayload{
 				RequestID:  "r1",
 				Path:       "/etc/passwd",
 				TargetType: "host",
 			},
-			wantErr: `unsupported target type "host"; use "agent"`,
+			wantErr: `invalid target type "host"`,
 		},
 		{
 			name: "container requires target id",
