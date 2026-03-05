@@ -42,7 +42,7 @@ function formatType(type: string): string {
   const labels: Record<string, string> = {
     node: 'Node',
     agent: 'Agent',
-    'docker-host': 'Container Host',
+    'docker-host': 'Container Runtime',
     'k8s-cluster': 'K8s Cluster',
     'k8s-node': 'K8s Node',
     vm: 'VM',

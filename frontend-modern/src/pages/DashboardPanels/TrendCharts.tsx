@@ -11,7 +11,7 @@ import {
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
 import type { HistoryTimeRange, MetricPoint } from '@/api/charts';
-import { HOST_COLORS } from './hostColors';
+import { RESOURCE_COLORS } from './resourceColors';
 import TrendingUpIcon from 'lucide-solid/icons/trending-up';
 
 interface TrendChartsProps {
@@ -38,12 +38,12 @@ export function TrendCharts(props: TrendChartsProps) {
   const selectedRange = createMemo(() => normalizeRange(props.trendRange()));
 
   const cpuSeries = createMemo<InteractiveSparklineSeries[]>(() => {
-    const hosts = props.overview.infrastructure.topCPU.slice(0, 5);
+    const resources = props.overview.infrastructure.topCPU.slice(0, 5);
     const series: InteractiveSparklineSeries[] = [];
 
-    for (let i = 0; i < hosts.length; i++) {
-      const host = hosts[i];
-      const trend = props.trends.infrastructure.cpu.get(host.id);
+    for (let i = 0; i < resources.length; i++) {
+      const resource = resources[i];
+      const trend = props.trends.infrastructure.cpu.get(resource.id);
       if (!trend) continue;
 
       const data = trend.points.map(
@@ -51,10 +51,10 @@ export function TrendCharts(props: TrendChartsProps) {
       );
 
       series.push({
-        id: host.id,
+        id: resource.id,
         data,
-        color: HOST_COLORS[i % HOST_COLORS.length],
-        name: host.name,
+        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        name: resource.name,
       });
     }
 
@@ -62,12 +62,12 @@ export function TrendCharts(props: TrendChartsProps) {
   });
 
   const memorySeries = createMemo<InteractiveSparklineSeries[]>(() => {
-    const hosts = props.overview.infrastructure.topMemory.slice(0, 5);
+    const resources = props.overview.infrastructure.topMemory.slice(0, 5);
     const series: InteractiveSparklineSeries[] = [];
 
-    for (let i = 0; i < hosts.length; i++) {
-      const host = hosts[i];
-      const trend = props.trends.infrastructure.memory.get(host.id);
+    for (let i = 0; i < resources.length; i++) {
+      const resource = resources[i];
+      const trend = props.trends.infrastructure.memory.get(resource.id);
       if (!trend) continue;
 
       const data = trend.points.map(
@@ -75,10 +75,10 @@ export function TrendCharts(props: TrendChartsProps) {
       );
 
       series.push({
-        id: host.id,
+        id: resource.id,
         data,
-        color: HOST_COLORS[i % HOST_COLORS.length],
-        name: host.name,
+        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        name: resource.name,
       });
     }
 
