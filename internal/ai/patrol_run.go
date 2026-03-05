@@ -960,7 +960,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		}
 		// Normalize to semantic type names; expand subtypes for group matching.
 		switch trimmed {
-		case "docker", "docker_host", "docker_container", "app-container", "app_container":
+		case "docker", "docker_host", "docker_container", "app-container":
 			typeSet["docker"] = true
 			typeSet["docker_host"] = true
 			typeSet["docker_container"] = true
@@ -968,9 +968,9 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 			typeSet["k8s"] = true
 			typeSet["kubernetes"] = true
 			typeSet["kubernetes_cluster"] = true
-		case "lxc", "container", "system-container", "system_container":
+		case "system-container":
 			typeSet["system-container"] = true
-		case "vm", "qemu":
+		case "vm":
 			typeSet["vm"] = true
 		case "agent", "agent_raid", "agent_sensor":
 			typeSet["agent"] = true

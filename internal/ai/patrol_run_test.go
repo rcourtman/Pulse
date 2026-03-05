@@ -96,39 +96,39 @@ func TestFilterStateByScope_ByType_VM(t *testing.T) {
 	}
 }
 
-func TestFilterStateByScope_TypeAliases(t *testing.T) {
+func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		VMs:        []models.VM{{ID: "vm1", Name: "vm-1"}},
 		Containers: []models.Container{{ID: "ct1", Name: "ct-1"}},
 	}
 
-	// "qemu" should match VMs
+	// Legacy alias should not match canonical VM resources.
 	scope := PatrolScope{ResourceTypes: []string{"qemu"}}
 	filtered := ps.filterStateByScope(state, scope)
-	if len(filtered.VMs) != 1 {
-		t.Errorf("expected 'qemu' alias to match VMs, got %d", len(filtered.VMs))
+	if len(filtered.VMs) != 0 {
+		t.Errorf("expected legacy 'qemu' alias to be rejected, got %d VMs", len(filtered.VMs))
 	}
 
-	// "container" should match LXC containers
+	// Legacy alias should not match canonical system-container resources.
 	scope = PatrolScope{ResourceTypes: []string{"container"}}
 	filtered = ps.filterStateByScope(state, scope)
-	if len(filtered.Containers) != 1 {
-		t.Errorf("expected 'container' alias to match LXC, got %d", len(filtered.Containers))
+	if len(filtered.Containers) != 0 {
+		t.Errorf("expected legacy 'container' alias to be rejected, got %d containers", len(filtered.Containers))
 	}
 
-	// "system-container" (semantic name) should match LXC containers
+	// Canonical v6 type should match containers.
 	scope = PatrolScope{ResourceTypes: []string{"system-container"}}
 	filtered = ps.filterStateByScope(state, scope)
 	if len(filtered.Containers) != 1 {
 		t.Errorf("expected 'system-container' to match LXC containers, got %d", len(filtered.Containers))
 	}
 
-	// "system_container" (underscore variant) should also match
+	// Underscore alias should be rejected; hyphenated canonical type is required.
 	scope = PatrolScope{ResourceTypes: []string{"system_container"}}
 	filtered = ps.filterStateByScope(state, scope)
-	if len(filtered.Containers) != 1 {
-		t.Errorf("expected 'system_container' to match LXC containers, got %d", len(filtered.Containers))
+	if len(filtered.Containers) != 0 {
+		t.Errorf("expected legacy 'system_container' alias to be rejected, got %d containers", len(filtered.Containers))
 	}
 }
 
@@ -146,18 +146,18 @@ func TestFilterStateByScope_AppContainerAlias(t *testing.T) {
 		},
 	}
 
-	// "app-container" (semantic name) should match Docker resources
+	// Canonical semantic name should match Docker resources.
 	scope := PatrolScope{ResourceTypes: []string{"app-container"}}
 	filtered := ps.filterStateByScope(state, scope)
 	if len(filtered.DockerHosts) != 1 {
 		t.Errorf("expected 'app-container' to match Docker hosts, got %d", len(filtered.DockerHosts))
 	}
 
-	// "app_container" (underscore variant) should also match
+	// Underscore alias should be rejected.
 	scope = PatrolScope{ResourceTypes: []string{"app_container"}}
 	filtered = ps.filterStateByScope(state, scope)
-	if len(filtered.DockerHosts) != 1 {
-		t.Errorf("expected 'app_container' to match Docker hosts, got %d", len(filtered.DockerHosts))
+	if len(filtered.DockerHosts) != 0 {
+		t.Errorf("expected legacy 'app_container' alias to be rejected, got %d docker hosts", len(filtered.DockerHosts))
 	}
 }
 
