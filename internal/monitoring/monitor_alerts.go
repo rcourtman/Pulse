@@ -152,10 +152,7 @@ func (m *Monitor) broadcastStateUpdate() {
 		return
 	}
 
-	state := m.GetState()
-	frontendState := state.ToFrontend()
-	m.updateResourceStore(state)
-	frontendState.Resources = m.getResourcesForBroadcast()
+	frontendState := m.BuildBroadcastFrontendState()
 	// Use tenant-aware broadcast method
 	m.broadcastState(hub, frontendState)
 }

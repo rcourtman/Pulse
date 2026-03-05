@@ -1654,11 +1654,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("pbsBackups", len(state.Backups.PBS)).
 				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
-			// Convert to frontend format before broadcasting (converts time.Time to int64, etc.)
-			frontendState := state.ToFrontend()
-			// Update and inject unified resources if resource store is available
-			m.updateResourceStore(state)
-			frontendState.Resources = m.getResourcesForBroadcast()
+			frontendState := m.BuildBroadcastFrontendState()
 			// Use tenant-aware broadcast method
 			m.broadcastState(wsHub, frontendState)
 
@@ -2558,6 +2554,17 @@ func (m *Monitor) BuildFrontendState() models.StateFrontend {
 	return frontendState
 }
 
+// BuildBroadcastFrontendState returns frontend state ready for websocket
+// broadcasts, including the unified resource payload when a resource store is
+// configured.
+func (m *Monitor) BuildBroadcastFrontendState() models.StateFrontend {
+	snap := m.GetState()
+	frontendState := snap.ToFrontend()
+	m.updateResourceStore(snap)
+	frontendState.Resources = m.getResourcesForBroadcast()
+	return frontendState
+}
+
 // GetLiveStateSnapshot returns the underlying monitor state snapshot without
 // applying global mock mode overrides.
 //
@@ -2656,10 +2663,7 @@ func (m *Monitor) SetMockMode(enable bool) {
 	m.mu.RUnlock()
 
 	if hub != nil {
-		state := m.GetState()
-		frontendState := state.ToFrontend()
-		m.updateResourceStore(state)
-		frontendState.Resources = m.getResourcesForBroadcast()
+		frontendState := m.BuildBroadcastFrontendState()
 		// Use tenant-aware broadcast method
 		m.broadcastState(hub, frontendState)
 	}

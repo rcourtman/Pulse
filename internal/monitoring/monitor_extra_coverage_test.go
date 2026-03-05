@@ -556,10 +556,15 @@ func TestMonitor_BackupTimeout_Extra(t *testing.T) {
 type mockResourceStoreExtra struct {
 	ResourceStoreInterface
 	resources []unifiedresources.Resource
+	snapshots []models.StateSnapshot
 }
 
 func (m *mockResourceStoreExtra) GetAll() []unifiedresources.Resource {
 	return m.resources
+}
+
+func (m *mockResourceStoreExtra) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	m.snapshots = append(m.snapshots, snapshot)
 }
 
 func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
@@ -621,6 +626,49 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	}
 	if res[0].Identity == nil || res[0].Identity.Hostname != "node1" {
 		t.Fatalf("expected identity payload to be preserved, got %#v", res[0].Identity)
+	}
+}
+
+func TestMonitor_BuildBroadcastFrontendState_Extra(t *testing.T) {
+	m := &Monitor{
+		state: models.NewState(),
+	}
+	m.state.UpdateNodes([]models.Node{{ID: "node-1", Name: "Node One", Status: "online"}})
+
+	store := &mockResourceStoreExtra{
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "node-1",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "Node One",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: time.Now().UTC(),
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName: "node1",
+					Instance: "p1",
+				},
+			},
+		},
+	}
+	m.resourceStore = store
+
+	frontendState := m.BuildBroadcastFrontendState()
+
+	if len(store.snapshots) != 1 {
+		t.Fatalf("expected resource store population once, got %d", len(store.snapshots))
+	}
+	if len(store.snapshots[0].Nodes) != 1 {
+		t.Fatalf("expected snapshot nodes to be populated, got %#v", store.snapshots[0].Nodes)
+	}
+	if len(frontendState.Nodes) != 1 {
+		t.Fatalf("expected frontend nodes to be populated, got %#v", frontendState.Nodes)
+	}
+	if len(frontendState.Resources) != 1 {
+		t.Fatalf("expected frontend resources to be populated, got %#v", frontendState.Resources)
+	}
+	if frontendState.Resources[0].ID != "node-1" {
+		t.Fatalf("expected broadcast resource node-1, got %#v", frontendState.Resources[0])
 	}
 }
 
