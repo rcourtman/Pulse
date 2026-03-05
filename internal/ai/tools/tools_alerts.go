@@ -195,7 +195,7 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		switch normalized {
 		case "docker container", "docker-container", "docker_container":
 			return "docker"
-		case "system-container", "lxc", "lxc container", "lxc-container", "lxc_container", "container":
+		case "system-container", "container":
 			return "system-container"
 		default:
 			return normalized

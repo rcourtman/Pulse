@@ -432,3 +432,29 @@ func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
 		t.Fatalf("unexpected pagination: %+v", resp.Pagination)
 	}
 }
+
+func TestExecuteListFindings_SystemContainerFilterDoesNotMatchLegacyLXCLabel(t *testing.T) {
+	findingsProv := &mockFindingsProvider{}
+	findingsProv.On("GetActiveFindings").Return([]Finding{
+		{ID: "f1", Severity: "warning", ResourceType: "system-container", ResourceID: "ct1"},
+		{ID: "f2", Severity: "warning", ResourceType: "lxc container", ResourceID: "ct2"},
+	})
+	findingsProv.On("GetDismissedFindings").Return([]Finding{})
+
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	executor.findingsProvider = findingsProv
+
+	result, _ := executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "system-container",
+	})
+	var resp FindingsResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("decode findings response: %v", err)
+	}
+	if len(resp.Active) != 1 {
+		t.Fatalf("expected exactly one system-container finding, got %d (%+v)", len(resp.Active), resp.Active)
+	}
+	if resp.Active[0].ID != "f1" {
+		t.Fatalf("expected finding f1, got %+v", resp.Active[0])
+	}
+}
