@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func TestPersistHostID_WritesFile(t *testing.T) {
+func TestPersistAgentID_WritesFile(t *testing.T) {
 	mc := &mockCollector{}
 	var writtenPath string
 	var writtenData []byte
@@ -30,9 +30,9 @@ func TestPersistHostID_WritesFile(t *testing.T) {
 		collector: mc,
 	}
 
-	a.persistHostID("abc-123")
+	a.persistAgentID("abc-123")
 
-	expected := filepath.Join("/tmp/test-state", "host-id")
+	expected := filepath.Join("/tmp/test-state", "agent-id")
 	if writtenPath != expected {
 		t.Fatalf("wrote to %q, want %q", writtenPath, expected)
 	}
@@ -41,7 +41,7 @@ func TestPersistHostID_WritesFile(t *testing.T) {
 	}
 }
 
-func TestPersistHostID_EmptyHostID(t *testing.T) {
+func TestPersistAgentID_EmptyAgentID(t *testing.T) {
 	mc := &mockCollector{}
 
 	a := &Agent{
@@ -50,12 +50,12 @@ func TestPersistHostID_EmptyHostID(t *testing.T) {
 		collector: mc,
 	}
 
-	// persistHostID is only called when hostID != "" (guard is in sendReport).
+	// persistAgentID is only called when agentID != "" (guard is in sendReport).
 	// Calling directly with empty string is safe — mkdirAll + write of empty content.
-	a.persistHostID("")
+	a.persistAgentID("")
 }
 
-func TestPersistHostID_EmptyStateDir(t *testing.T) {
+func TestPersistAgentID_EmptyStateDir(t *testing.T) {
 	mc := &mockCollector{}
 	mkdirCalled := false
 	mc.mkdirAllFn = func(path string, perm os.FileMode) error {
@@ -69,14 +69,14 @@ func TestPersistHostID_EmptyStateDir(t *testing.T) {
 		collector: mc,
 	}
 
-	a.persistHostID("abc-123")
+	a.persistAgentID("abc-123")
 
 	if mkdirCalled {
 		t.Fatal("expected no MkdirAll call when stateDir is empty")
 	}
 }
 
-func TestPersistHostID_MkdirFails(t *testing.T) {
+func TestPersistAgentID_MkdirFails(t *testing.T) {
 	mc := &mockCollector{}
 	writeCalled := false
 
@@ -95,14 +95,14 @@ func TestPersistHostID_MkdirFails(t *testing.T) {
 	}
 
 	// Should not panic, just debug-log and return
-	a.persistHostID("abc-123")
+	a.persistAgentID("abc-123")
 
 	if writeCalled {
 		t.Fatal("expected WriteFile not called when MkdirAll fails")
 	}
 }
 
-func TestPersistHostID_WriteFileFails(t *testing.T) {
+func TestPersistAgentID_WriteFileFails(t *testing.T) {
 	mc := &mockCollector{}
 
 	mc.mkdirAllFn = func(path string, perm os.FileMode) error { return nil }
@@ -117,10 +117,10 @@ func TestPersistHostID_WriteFileFails(t *testing.T) {
 	}
 
 	// Should not panic, just debug-log
-	a.persistHostID("abc-123")
+	a.persistAgentID("abc-123")
 }
 
-func TestPersistHostID_MkdirAllPermissions(t *testing.T) {
+func TestPersistAgentID_MkdirAllPermissions(t *testing.T) {
 	mc := &mockCollector{}
 	var gotPerm os.FileMode
 
@@ -136,7 +136,7 @@ func TestPersistHostID_MkdirAllPermissions(t *testing.T) {
 		collector: mc,
 	}
 
-	a.persistHostID("abc-123")
+	a.persistAgentID("abc-123")
 
 	if gotPerm != 0700 {
 		t.Fatalf("MkdirAll perm = %o, want %o", gotPerm, 0700)

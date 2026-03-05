@@ -37,7 +37,6 @@ type enrollPayload struct {
 // enrollResponse is the JSON body returned by the enrollment endpoint.
 type enrollResponse struct {
 	AgentID        string `json:"agentId"`
-	HostID         string `json:"hostId"` // Deprecated alias for older servers.
 	RuntimeToken   string `json:"runtimeToken"`
 	RuntimeTokenID string `json:"runtimeTokenId"`
 	ReportInterval string `json:"reportInterval"`
@@ -77,11 +76,8 @@ func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
 			a.cfg.APIToken = result.RuntimeToken
 			a.persistRuntimeToken(result.RuntimeToken)
 			canonicalID := strings.TrimSpace(result.AgentID)
-			if canonicalID == "" {
-				canonicalID = strings.TrimSpace(result.HostID)
-			}
 			if canonicalID != "" {
-				a.persistHostID(canonicalID)
+				a.persistAgentID(canonicalID)
 			}
 			a.logger.Info().
 				Str("agentId", canonicalID).

@@ -57,7 +57,7 @@ type Config struct {
 	// Disk filtering
 	DiskExclude []string // Mount points or path prefixes to exclude from disk monitoring
 
-	// State directory for persistent files (host-id, proxmox registration, etc.)
+	// State directory for persistent files (agent-id, proxmox registration, etc.)
 	StateDir string // Default: /var/lib/pulse-agent
 
 	// Network configuration
@@ -727,7 +727,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 	// Parse response to check for server-side config overrides
 	var reportResp struct {
 		Success bool   `json:"success"`
-		HostID  string `json:"hostId"`
+		AgentID string `json:"agentId"`
 		Config  *struct {
 			CommandsEnabled *bool `json:"commandsEnabled"`
 		} `json:"config,omitempty"`
@@ -738,9 +738,10 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return nil
 	}
 
-	// Persist the server-acknowledged host ID so uninstall can deregister.
-	if reportResp.HostID != "" {
-		a.persistHostID(reportResp.HostID)
+	// Persist the server-acknowledged agent ID so uninstall can deregister.
+	canonicalAgentID := strings.TrimSpace(reportResp.AgentID)
+	if canonicalAgentID != "" {
+		a.persistAgentID(canonicalAgentID)
 	}
 
 	// Apply server config overrides
@@ -751,24 +752,24 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 	return nil
 }
 
-// persistHostID writes the server-assigned host ID to the state directory.
+// persistAgentID writes the server-assigned agent ID to the state directory.
 // This file is read by the uninstall script to deregister the agent from the server.
 // Errors are debug-logged, never fatal — same resilience pattern as proxmox_setup.go.
-func (a *Agent) persistHostID(hostID string) {
+func (a *Agent) persistAgentID(agentID string) {
 	if a.stateDir == "" {
 		return
 	}
 	if err := a.collector.MkdirAll(a.stateDir, 0700); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to create state directory for host-id")
+		a.logger.Debug().Err(err).Msg("Failed to create state directory for agent-id")
 		return
 	}
-	hostIDPath := filepath.Join(a.stateDir, "host-id")
-	if err := a.collector.WriteFile(hostIDPath, []byte(hostID), 0600); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to persist host-id")
+	agentIDPath := filepath.Join(a.stateDir, "agent-id")
+	if err := a.collector.WriteFile(agentIDPath, []byte(agentID), 0600); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to persist agent-id")
 		return
 	}
-	if err := a.collector.Chmod(hostIDPath, 0600); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to enforce host-id file permissions")
+	if err := a.collector.Chmod(agentIDPath, 0600); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to enforce agent-id file permissions")
 	}
 }
 

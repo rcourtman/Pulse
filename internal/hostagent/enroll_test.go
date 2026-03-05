@@ -48,7 +48,7 @@ func TestEnroll_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(enrollResponse{
-			HostID:         "host-test-host",
+			AgentID:        "host-test-host",
 			RuntimeToken:   "runtime-tok-123",
 			RuntimeTokenID: "tok-id-456",
 			ReportInterval: "30s",
@@ -96,14 +96,14 @@ func TestEnroll_Success(t *testing.T) {
 		t.Errorf("expected persisted token runtime-tok-123, got %s", string(data))
 	}
 
-	// Verify host-id was persisted.
-	hostIDPath := filepath.Join(stateDir, "host-id")
-	data, err = os.ReadFile(hostIDPath)
+	// Verify agent-id was persisted.
+	agentIDPath := filepath.Join(stateDir, "agent-id")
+	data, err = os.ReadFile(agentIDPath)
 	if err != nil {
-		t.Fatalf("read host-id file: %v", err)
+		t.Fatalf("read agent-id file: %v", err)
 	}
 	if string(data) != "host-test-host" {
-		t.Errorf("expected host-id host-test-host, got %s", string(data))
+		t.Errorf("expected agent-id host-test-host, got %s", string(data))
 	}
 }
 
@@ -112,7 +112,6 @@ func TestEnroll_PrefersAgentIDFromResponse(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(enrollResponse{
 			AgentID:      "agent-canonical",
-			HostID:       "host-legacy",
 			RuntimeToken: "runtime-tok-123",
 		})
 	}))
@@ -141,13 +140,13 @@ func TestEnroll_PrefersAgentIDFromResponse(t *testing.T) {
 		t.Fatalf("enrollment failed: %v", err)
 	}
 
-	hostIDPath := filepath.Join(stateDir, "host-id")
-	data, err := os.ReadFile(hostIDPath)
+	agentIDPath := filepath.Join(stateDir, "agent-id")
+	data, err := os.ReadFile(agentIDPath)
 	if err != nil {
-		t.Fatalf("read host-id file: %v", err)
+		t.Fatalf("read agent-id file: %v", err)
 	}
 	if got := string(data); got != "agent-canonical" {
-		t.Fatalf("expected persisted host-id agent-canonical, got %s", got)
+		t.Fatalf("expected persisted agent-id agent-canonical, got %s", got)
 	}
 }
 
@@ -240,7 +239,7 @@ func TestEnroll_RetryThenSuccess(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(enrollResponse{
-			HostID:       "host-retry",
+			AgentID:      "host-retry",
 			RuntimeToken: "runtime-after-retry",
 		})
 	}))
@@ -384,7 +383,7 @@ func TestEnroll_MissingRuntimeToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// Return a response missing runtimeToken.
-		fmt.Fprint(w, `{"hostId":"host-1"}`)
+		fmt.Fprint(w, `{"agentId":"agent-1"}`)
 	}))
 	defer server.Close()
 
