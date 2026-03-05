@@ -47,7 +47,7 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 	// Header with service info
 	sb.WriteString(fmt.Sprintf("### %s (%s)\n", d.ServiceName, d.ID))
 	sb.WriteString(fmt.Sprintf("- **Type:** %s\n", d.ResourceType))
-	sb.WriteString(fmt.Sprintf("- **Host:** %s\n", d.Hostname))
+	sb.WriteString(fmt.Sprintf("- **Host:** %s\n", firstNonEmpty(d.Hostname, d.TargetID, d.HostID)))
 
 	if d.ServiceVersion != "" {
 		sb.WriteString(fmt.Sprintf("- **Version:** %s\n", d.ServiceVersion))
@@ -453,6 +453,8 @@ func discoveryMatchesTokens(d *ResourceDiscovery, tokens map[string]struct{}) bo
 
 func discoveryTokens(d *ResourceDiscovery) []string {
 	var tokens []string
+	targetID := firstNonEmpty(d.TargetID, d.HostID)
+
 	add := func(value string) {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
@@ -463,9 +465,9 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 
 	add(d.ResourceID)
 	add(d.ID)
-	add(d.HostID)
-	if d.HostID != "" {
-		add("agent:" + d.HostID)
+	add(targetID)
+	if targetID != "" {
+		add("agent:" + targetID)
 	}
 
 	switch d.ResourceType {
@@ -479,9 +481,9 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 		add("ct-" + d.ResourceID)
 		add("system-container/" + d.ResourceID)
 	case ResourceTypeDocker:
-		if d.HostID != "" {
-			add("docker:" + d.HostID)
-			add("docker:" + d.HostID + "/" + d.ResourceID)
+		if targetID != "" {
+			add("docker:" + targetID)
+			add("docker:" + targetID + "/" + d.ResourceID)
 		}
 	case ResourceTypeAgent:
 		add("agent:" + d.ResourceID)
@@ -573,6 +575,8 @@ func ToJSON(d *ResourceDiscovery) map[string]any {
 		"id":                          d.ID,
 		"resource_type":               d.ResourceType,
 		"resource_id":                 d.ResourceID,
+		"target_id":                   firstNonEmpty(d.TargetID, d.HostID),
+		"agent_id":                    d.AgentID,
 		"host_id":                     d.HostID,
 		"hostname":                    d.Hostname,
 		"service_type":                d.ServiceType,

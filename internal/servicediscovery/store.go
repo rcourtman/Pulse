@@ -510,7 +510,11 @@ func (s *Store) ListByTarget(targetID string) ([]*ResourceDiscovery, error) {
 
 	var filtered []*ResourceDiscovery
 	for _, d := range all {
-		if d.HostID == targetID {
+		discoveryTargetID := strings.TrimSpace(d.TargetID)
+		if discoveryTargetID == "" {
+			discoveryTargetID = strings.TrimSpace(d.HostID)
+		}
+		if discoveryTargetID == targetID {
 			filtered = append(filtered, d)
 		}
 	}

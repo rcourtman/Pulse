@@ -15,6 +15,8 @@ func TestFormattersAndTables(t *testing.T) {
 		ID:             MakeResourceID(ResourceTypeDocker, "host1", "app"),
 		ResourceType:   ResourceTypeDocker,
 		ResourceID:     "app",
+		TargetID:       "host1",
+		AgentID:        "agent-1",
 		HostID:         "host1",
 		Hostname:       "host1",
 		ServiceType:    "app",
@@ -76,6 +78,12 @@ func TestFormattersAndTables(t *testing.T) {
 	jsonMap := ToJSON(discovery)
 	if jsonMap["service_name"] != "App Service" || jsonMap["resource_id"] != "app" {
 		t.Fatalf("unexpected json map: %#v", jsonMap)
+	}
+	if jsonMap["target_id"] != "host1" {
+		t.Fatalf("expected target_id=host1, got %#v", jsonMap["target_id"])
+	}
+	if jsonMap["agent_id"] != "agent-1" {
+		t.Fatalf("expected agent_id=agent-1, got %#v", jsonMap["agent_id"])
 	}
 	if ToJSON(nil) != nil {
 		t.Fatalf("expected nil json map for nil discovery")
