@@ -26,6 +26,27 @@ func (m *mockGuestConfigProvider) GetGuestConfig(guestType, instance, node strin
 	return m.config, nil
 }
 
+func TestCanonicalQueryListType_StrictV6Tokens(t *testing.T) {
+	if got := canonicalQueryListType("k8s-pods"); got != "k8s-pods" {
+		t.Fatalf("canonicalQueryListType(k8s-pods) = %q, want k8s-pods", got)
+	}
+	if got := canonicalQueryListType("k8s_pods"); got != "k8s_pods" {
+		t.Fatalf("canonicalQueryListType(k8s_pods) = %q, want k8s_pods", got)
+	}
+	if got := canonicalQueryListType("kubernetes-clusters"); got != "kubernetes-clusters" {
+		t.Fatalf("canonicalQueryListType(kubernetes-clusters) = %q, want kubernetes-clusters", got)
+	}
+}
+
+func TestCanonicalQueryTopologyInclude_StrictV6Tokens(t *testing.T) {
+	if got := canonicalQueryTopologyInclude("app-container"); got != "app-containers" {
+		t.Fatalf("canonicalQueryTopologyInclude(app-container) = %q, want app-containers", got)
+	}
+	if got := canonicalQueryTopologyInclude("app_container"); got != "app_container" {
+		t.Fatalf("canonicalQueryTopologyInclude(app_container) = %q, want app_container", got)
+	}
+}
+
 func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{{ID: "node1", Name: "node1", Status: "online"}},
@@ -567,7 +588,7 @@ func TestExecuteListInfrastructure_KubernetesFilters(t *testing.T) {
 	}
 
 	result, err = executor.executeListInfrastructure(context.Background(), map[string]interface{}{
-		"type":         "k8s_pods",
+		"type":         "k8s-pods",
 		"status":       "running",
 		"cluster_name": "prod-cluster",
 		"namespace":    "default",
@@ -584,7 +605,7 @@ func TestExecuteListInfrastructure_KubernetesFilters(t *testing.T) {
 	}
 
 	result, err = executor.executeListInfrastructure(context.Background(), map[string]interface{}{
-		"type":      "k8s_deployments",
+		"type":      "k8s-deployments",
 		"namespace": "default",
 	})
 	if err != nil {

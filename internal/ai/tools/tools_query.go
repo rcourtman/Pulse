@@ -2110,9 +2110,9 @@ func (e *PulseToolExecutor) registerQueryTools() {
 
 func canonicalQueryResourceType(resourceType string) string {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
-	case "container", "system_container", "system-container":
+	case "container", "system-container":
 		return "system-container"
-	case "docker", "docker-container", "docker_container", "app_container", "app-container":
+	case "docker", "docker-container", "app-container":
 		return "app-container"
 	default:
 		return strings.ToLower(strings.TrimSpace(resourceType))
@@ -2125,17 +2125,17 @@ func canonicalQueryListType(filterType string) string {
 		return "nodes"
 	case "vm":
 		return "vms"
-	case "container", "containers", "system-container", "system_container", "system-containers", "system_containers":
+	case "container", "containers", "system-container", "system-containers":
 		return "system-containers"
-	case "docker", "docker-container", "docker_container", "app-container", "app_container", "app-containers", "app_containers":
+	case "docker", "docker-container", "app-container", "app-containers":
 		return "app-containers"
-	case "k8s-cluster", "k8s_cluster", "k8s-clusters", "k8s_clusters", "kubernetes-cluster", "kubernetes_cluster", "kubernetes-clusters", "kubernetes_clusters":
+	case "k8s-cluster", "k8s-clusters":
 		return "k8s-clusters"
-	case "k8s-node", "k8s_node", "k8s-nodes", "k8s_nodes", "kubernetes-node", "kubernetes_node", "kubernetes-nodes", "kubernetes_nodes":
+	case "k8s-node", "k8s-nodes":
 		return "k8s-nodes"
-	case "k8s-pod", "k8s_pod", "k8s-pods", "k8s_pods", "pod", "pods", "kubernetes-pod", "kubernetes_pod", "kubernetes-pods", "kubernetes_pods":
+	case "k8s-pod", "k8s-pods", "pod", "pods":
 		return "k8s-pods"
-	case "k8s-deployment", "k8s_deployment", "k8s-deployments", "k8s_deployments", "deployment", "deployments", "kubernetes-deployment", "kubernetes_deployment", "kubernetes-deployments", "kubernetes_deployments":
+	case "k8s-deployment", "k8s-deployments", "deployment", "deployments":
 		return "k8s-deployments"
 	default:
 		return strings.ToLower(strings.TrimSpace(filterType))
@@ -2144,7 +2144,7 @@ func canonicalQueryListType(filterType string) string {
 
 func canonicalQueryTopologyInclude(include string) string {
 	switch strings.ToLower(strings.TrimSpace(include)) {
-	case "docker", "app_container", "app-container", "app_containers":
+	case "docker", "app-container":
 		return "app-containers"
 	default:
 		return strings.ToLower(strings.TrimSpace(include))
@@ -2153,11 +2153,11 @@ func canonicalQueryTopologyInclude(include string) string {
 
 func canonicalQuerySearchType(typeFilter string) string {
 	switch strings.ToLower(strings.TrimSpace(typeFilter)) {
-	case "container", "system_container", "system-containers", "system_containers":
+	case "container", "system-containers":
 		return "system-container"
-	case "docker", "docker-container", "docker_container", "app_container", "app-containers", "app_containers":
+	case "docker", "docker-container", "app-containers":
 		return "app-container"
-	case "docker-host", "docker_host":
+	case "docker-host":
 		return "docker_host"
 	default:
 		return strings.ToLower(strings.TrimSpace(typeFilter))
