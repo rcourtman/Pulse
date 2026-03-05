@@ -47,6 +47,15 @@ func TestCanonicalQueryTopologyInclude_StrictV6Tokens(t *testing.T) {
 	}
 }
 
+func TestCanonicalQuerySearchType_StrictV6Tokens(t *testing.T) {
+	if got := canonicalQuerySearchType("docker-host"); got != "docker-host" {
+		t.Fatalf("canonicalQuerySearchType(docker-host) = %q, want docker-host", got)
+	}
+	if got := canonicalQuerySearchType("docker_host"); got != "docker_host" {
+		t.Fatalf("canonicalQuerySearchType(docker_host) = %q, want docker_host", got)
+	}
+}
+
 func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{{ID: "node1", Name: "node1", Status: "online"}},
@@ -292,6 +301,21 @@ func TestExecuteSearchResources(t *testing.T) {
 	}
 	if len(response.Matches) != 1 || response.Matches[0].Type != "vm" || response.Matches[0].Name != "web-vm" {
 		t.Fatalf("unexpected search response: %+v", response)
+	}
+
+	result, err = executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "dock",
+		"type":  "docker-host",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	response = ResourceSearchResponse{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Matches) != 1 || response.Matches[0].Type != "docker-host" || response.Matches[0].Name != "Dock 1" {
+		t.Fatalf("unexpected docker-host search response: %+v", response)
 	}
 
 	// Proxmox-style type+VMID patterns: "LXC200", "VM100", "CT200"

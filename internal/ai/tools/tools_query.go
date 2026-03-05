@@ -2158,7 +2158,7 @@ func canonicalQuerySearchType(typeFilter string) string {
 	case "docker", "docker-container", "app-containers":
 		return "app-container"
 	case "docker-host":
-		return "docker_host"
+		return "docker-host"
 	default:
 		return strings.ToLower(strings.TrimSpace(typeFilter))
 	}
@@ -3611,10 +3611,10 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		"vm":               true,
 		"system-container": true,
 		"app-container":    true,
-		"docker_host":      true,
+		"docker-host":      true,
 	}
 	if !allowedTypes[typeFilter] {
-		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, system-container, app-container, or docker_host", typeFilter)), nil
+		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, system-container, app-container, or docker-host", typeFilter)), nil
 	}
 
 	// normalizeForSearch replaces common separators with spaces and splits at
@@ -3786,7 +3786,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 	}
 
-	if typeFilter == "" || typeFilter == "docker_host" {
+	if typeFilter == "" || typeFilter == "docker-host" {
 		for _, host := range rs.DockerHosts() {
 			if host == nil {
 				continue
@@ -3812,7 +3812,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				hostName = displayName
 			}
 			addMatch(ResourceMatch{
-				Type:   "docker_host",
+				Type:   "docker-host",
 				ID:     hostID,
 				Name:   displayName,
 				Status: status,
@@ -3944,9 +3944,9 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 					Priority:   10,
 				}},
 			}
-		case "docker_host":
+		case "docker-host":
 			reg = ResourceRegistration{
-				Kind:          "docker_host",
+				Kind:          "docker-host",
 				ProviderUID:   match.ID,
 				Name:          match.Name,
 				Aliases:       []string{match.Name, match.ID, match.Host},

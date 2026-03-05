@@ -152,7 +152,7 @@ type ResourceSearchResponse struct {
 
 // ResourceMatch is a compact match result for pulse_search_resources
 type ResourceMatch struct {
-	Type           string `json:"type"` // "node", "vm", "system-container", "app-container", "docker_host"
+	Type           string `json:"type"` // "node", "vm", "system-container", "app-container", "docker-host"
 	ID             string `json:"id,omitempty"`
 	Name           string `json:"name"`
 	Status         string `json:"status,omitempty"`
