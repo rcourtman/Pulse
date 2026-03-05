@@ -53,10 +53,22 @@ const CANONICAL_RESOURCE_TYPES = [
   'k8s-node',
   'truenas',
   'vm',
-  'container',
+  'system-container',
+  'app-container',
+  'oci-container',
+  'pod',
+  'jail',
+  'docker-service',
+  'k8s-deployment',
+  'k8s-service',
   'storage',
+  'datastore',
+  'pool',
+  'dataset',
   'pbs',
   'pmg',
+  'physical_disk',
+  'ceph',
 ] as const;
 const INVALID_RESOURCE_TYPE_ERROR = `Invalid resource type. Valid types: ${CANONICAL_RESOURCE_TYPES.join(', ')}`;
 

@@ -26,6 +26,7 @@ import discoveryTypesSource from '@/types/discovery.ts?raw';
 import discoveryTargetUtilsSource from '@/utils/discoveryTarget.ts?raw';
 import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.tsx?raw';
 import commandPaletteSource from '@/components/shared/CommandPaletteModal.tsx?raw';
+import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import alertsApiSource from '@/api/alerts.ts?raw';
 import licenseApiSource from '@/api/license.ts?raw';
@@ -96,6 +97,9 @@ describe('agent model guardrails', () => {
     expect(apiTypesSource).not.toContain("'qemu'");
     expect(apiTypesSource).not.toContain("'lxc'");
     expect(commandPaletteSource).not.toContain("'lxc'");
+    expect(organizationSharingPanelSource).toContain("'system-container'");
+    expect(organizationSharingPanelSource).toContain("'app-container'");
+    expect(organizationSharingPanelSource).not.toContain("'container',");
   });
 
   it('keeps alerts agent thresholds sourced from unified agent resources', () => {

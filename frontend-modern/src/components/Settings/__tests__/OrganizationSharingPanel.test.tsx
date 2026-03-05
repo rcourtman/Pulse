@@ -211,20 +211,16 @@ describe('OrganizationSharingPanel', () => {
     const resourceTypeInput = screen.getByLabelText('Resource Type');
     fireEvent.input(resourceTypeInput, { target: { value: 'invalid-type' } });
 
-    expect(
-      screen.getByText(
-        'Invalid resource type. Valid types: agent, node, docker-host, k8s-cluster, k8s-node, truenas, vm, container, storage, pbs, pmg',
-      ),
-    ).toBeInTheDocument();
+    const invalidTypeError = screen.getByText(/Invalid resource type\. Valid types:/);
+    expect(invalidTypeError).toBeInTheDocument();
+    expect(invalidTypeError.textContent || '').toContain('system-container');
+    expect(invalidTypeError.textContent || '').toContain('app-container');
+    expect(invalidTypeError.textContent || '').not.toContain(', container,');
 
     fireEvent.input(resourceTypeInput, { target: { value: 'vm' } });
 
     await waitFor(() => {
-      expect(
-        screen.queryByText(
-          'Invalid resource type. Valid types: agent, node, docker-host, k8s-cluster, k8s-node, truenas, vm, container, storage, pbs, pmg',
-        ),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/Invalid resource type\. Valid types:/)).not.toBeInTheDocument();
     });
   });
 
@@ -243,11 +239,7 @@ describe('OrganizationSharingPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create Share' }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText(
-          'Invalid resource type. Valid types: agent, node, docker-host, k8s-cluster, k8s-node, truenas, vm, container, storage, pbs, pmg',
-        ),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Invalid resource type\. Valid types:/)).toBeInTheDocument();
     });
     expect(createShareMock).not.toHaveBeenCalled();
   });
