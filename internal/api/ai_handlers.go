@@ -2932,13 +2932,23 @@ type AIConversationMessage struct {
 
 type AIExecuteRequest struct {
 	Prompt     string                  `json:"prompt"`
-	TargetType string                  `json:"target_type,omitempty"` // "agent", "container", "vm", "node"
+	TargetType string                  `json:"target_type,omitempty"` // "agent", "system-container", "container", "vm", "node"
 	TargetID   string                  `json:"target_id,omitempty"`
 	Context    map[string]interface{}  `json:"context,omitempty"` // Current metrics, state, etc.
 	History    []AIConversationMessage `json:"history,omitempty"` // Previous conversation messages
 	FindingID  string                  `json:"finding_id,omitempty"`
 	Model      string                  `json:"model,omitempty"`
 	UseCase    string                  `json:"use_case,omitempty"` // "chat" or "patrol"
+}
+
+func normalizeAIExecuteTargetType(raw string) string {
+	targetType := strings.ToLower(strings.TrimSpace(raw))
+	switch targetType {
+	case "system-container", "system_container":
+		return "container"
+	default:
+		return targetType
+	}
 }
 
 // AIExecuteResponse is the response from POST /api/ai/execute
@@ -3000,13 +3010,13 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	}
 
 	// Validate and normalize target_type if provided
-	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
+	targetType := normalizeAIExecuteTargetType(req.TargetType)
 	if targetType != "" {
 		switch targetType {
 		case "agent", "container", "vm", "node":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, system-container, container, vm, node)", http.StatusBadRequest)
 			return
 		}
 	}
@@ -3186,13 +3196,13 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	}
 
 	// Validate and normalize target_type if provided
-	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
+	targetType := normalizeAIExecuteTargetType(req.TargetType)
 	if targetType != "" {
 		switch targetType {
 		case "agent", "container", "vm", "node":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, system-container, container, vm, node)", http.StatusBadRequest)
 			return
 		}
 	}
@@ -3509,7 +3519,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 }
 
 func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string, error) {
-	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
+	targetType := normalizeAIExecuteTargetType(req.TargetType)
 	targetID := strings.TrimSpace(req.TargetID)
 	targetHost := strings.ToLower(strings.TrimSpace(req.TargetHost))
 

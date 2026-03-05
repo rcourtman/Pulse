@@ -1212,6 +1212,15 @@ func TestNormalizeRunCommandApprovalTarget_CanonicalizesAgentTarget(t *testing.T
 			wantID:  "pve-a",
 		},
 		{
+			name: "system-container alias maps to container target",
+			req: AIRunCommandRequest{
+				TargetType: "system-container",
+				TargetID:   "201",
+			},
+			wantTyp: "container",
+			wantID:  "201",
+		},
+		{
 			name: "missing target host when run_on_host",
 			req: AIRunCommandRequest{
 				RunOnHost: true,
