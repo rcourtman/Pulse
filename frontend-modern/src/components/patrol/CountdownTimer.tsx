@@ -3,7 +3,7 @@ import { createSignal, onCleanup, onMount, createEffect } from 'solid-js';
 interface CountdownTimerProps {
     targetDate: string;
     prefix?: string;
-    className?: string;
+    class?: string;
 }
 
 export function CountdownTimer(props: CountdownTimerProps) {
@@ -53,7 +53,7 @@ export function CountdownTimer(props: CountdownTimerProps) {
     });
 
     return (
-        <span class={props.className}>
+        <span class={props.class}>
             {props.prefix}{timeLeft()}
         </span>
     );

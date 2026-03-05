@@ -595,7 +595,7 @@ export function AIIntelligence() {
                   <CountdownTimer
                     targetDate={patrolStatus()!.next_patrol_at!}
                     prefix="Next run: "
-                    className="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
+                    class="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
                   />
                 </Show>
               </div>
