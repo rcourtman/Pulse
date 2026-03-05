@@ -592,6 +592,20 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "api", "resources_test.go"),
+			requiredSnippets: []string{
+				`/api/resources?type=host`,
+				`unsupported type filter token(s): host`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "resources_frontend_types_test.go"),
+			requiredSnippets: []string{
+				`unsupported host ignored by parser`,
+				`TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
 			requiredSnippets: []string{
 				`TestNormalizeReportResourceType_RejectsLegacyAliases`,
