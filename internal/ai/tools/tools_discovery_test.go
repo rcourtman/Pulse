@@ -147,19 +147,46 @@ func TestExecuteGetDiscovery_TargetIDRequired(t *testing.T) {
 	assert.Contains(t, result.Content[0].Text, "target_id is required")
 }
 
+func TestIsUnsupportedDiscoveryLegacyResourceTypeToken(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "host rejected", in: "host", want: true},
+		{name: "mixed case host rejected", in: " HoSt ", want: true},
+		{name: "docker rejected", in: "docker", want: true},
+		{name: "docker container rejected", in: "docker-container", want: true},
+		{name: "lxc deferred to supported-type check", in: "lxc", want: false},
+		{name: "agent allowed", in: "agent", want: false},
+		{name: "vm allowed", in: "vm", want: false},
+		{name: "app container allowed", in: "app-container", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isUnsupportedDiscoveryLegacyResourceTypeToken(tt.in))
+		})
+	}
+}
+
 func TestExecuteGetDiscovery_RejectsLegacyResourceTypeAlias(t *testing.T) {
 	provider := &stubDiscoveryProvider{}
 	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
 
-	result, err := exec.executeGetDiscovery(context.Background(), map[string]interface{}{
-		"resource_type": "lxc",
-		"resource_id":   "101",
-		"target_id":     "node1",
-	})
-	assert.NoError(t, err)
-	assert.True(t, result.IsError)
-	assert.Contains(t, result.Content[0].Text, "unsupported resource_type")
-	assert.Equal(t, "", provider.lastGetResourceType)
+	for _, alias := range []string{"host", "lxc"} {
+		t.Run(alias, func(t *testing.T) {
+			result, err := exec.executeGetDiscovery(context.Background(), map[string]interface{}{
+				"resource_type": alias,
+				"resource_id":   "101",
+				"target_id":     "node1",
+			})
+			assert.NoError(t, err)
+			assert.True(t, result.IsError)
+			assert.Contains(t, result.Content[0].Text, "unsupported resource_type")
+			assert.Equal(t, "", provider.lastGetResourceType)
+		})
+	}
 }
 
 func TestExecuteGetDiscovery_RejectsLegacyUnderscoreAppContainerAlias(t *testing.T) {
@@ -260,12 +287,16 @@ func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 func TestExecuteListDiscoveries_RejectsLegacyTypeAlias(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: &stubDiscoveryProvider{}})
 
-	result, err := exec.executeListDiscoveries(context.Background(), map[string]interface{}{
-		"type": "lxc",
-	})
-	assert.NoError(t, err)
-	assert.True(t, result.IsError)
-	assert.Contains(t, result.Content[0].Text, "unsupported type")
+	for _, alias := range []string{"host", "lxc"} {
+		t.Run(alias, func(t *testing.T) {
+			result, err := exec.executeListDiscoveries(context.Background(), map[string]interface{}{
+				"type": alias,
+			})
+			assert.NoError(t, err)
+			assert.True(t, result.IsError)
+			assert.Contains(t, result.Content[0].Text, "unsupported type")
+		})
+	}
 }
 
 func TestExecuteListDiscoveries_RejectsLegacyUnderscoreAppContainerAlias(t *testing.T) {
