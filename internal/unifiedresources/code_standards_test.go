@@ -473,6 +473,79 @@ func TestV6AlertConfigAliasesStayStripped(t *testing.T) {
 	}
 }
 
+// TestV6BroadLegacyAliasCoverage keeps the broader removed alias set pinned in
+// central API, AI, and alerts tests so coverage does not regress back to host-only.
+func TestV6BroadLegacyAliasCoverage(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	artifacts := []struct {
+		path             string
+		requiredSnippets []string
+	}{
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "ai_handlers_test.go"),
+			requiredSnippets: []string{
+				`legacy guest rejected`,
+				`legacy docker rejected`,
+				`legacy container rejected`,
+				`legacy k8s alias rejected`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "alert_adapter_test.go"),
+			requiredSnippets: []string{
+				`vm qemu rejected`,
+				`system container lxc rejected`,
+				`legacy system_container alias rejected`,
+				`legacy docker_container alias rejected`,
+				`legacy docker_service alias rejected`,
+				`legacy kubernetes_cluster alias rejected`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "patrol_run_test.go"),
+			requiredSnippets: []string{
+				`expected legacy 'qemu' alias to be rejected`,
+				`expected legacy 'container' alias to be rejected`,
+				`expected legacy 'system_container' alias to be rejected`,
+				`expected legacy 'docker_container' alias to be rejected`,
+				`expected legacy 'kubernetes_cluster' alias to be rejected`,
+				`expected legacy 'app_container' alias to be rejected`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_metrics_alerts_test.go"),
+			requiredSnippets: []string{
+				`expected error for legacy system_container resource_type`,
+				`expected error for legacy container resource_type`,
+				`expected error for legacy app_container resource_type`,
+				`expected error for legacy docker resource_type`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "alerts", "utility_test.go"),
+			requiredSnippets: []string{
+				`legacy host alias type key is dropped`,
+				`legacy docker alias type key is dropped`,
+			},
+		},
+	}
+
+	for _, artifact := range artifacts {
+		data, err := os.ReadFile(artifact.path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", artifact.path, err)
+		}
+		content := string(data)
+		normalizedPath := filepath.ToSlash(artifact.path)
+
+		for _, snippet := range artifact.requiredSnippets {
+			if !strings.Contains(content, snippet) {
+				t.Errorf("%s: missing required broad legacy-alias coverage snippet %q", normalizedPath, snippet)
+			}
+		}
+	}
+}
+
 // TestV6ReleaseFacingAPITestsCoverLegacyHostRejection keeps release-facing API
 // contract tests pinned on strict v6 behavior for removed host aliases.
 func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
