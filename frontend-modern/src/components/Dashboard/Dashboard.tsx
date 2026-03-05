@@ -532,8 +532,6 @@ export function Dashboard(props: DashboardProps) {
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
     deserialize: (raw) => {
-      // Normalize older saved 'lxc' preference to the canonical system-container value.
-      if (raw === 'lxc') return 'system-container' as ViewMode;
       return raw === 'all' ||
         raw === 'vm' ||
         raw === 'system-container' ||
@@ -594,15 +592,9 @@ export function Dashboard(props: DashboardProps) {
   const normalizeTypeParam = (value: string): ViewMode | null => {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'all') return 'all';
-    if (normalized === 'vm' || normalized === 'qemu') return 'vm';
-    if (normalized === 'lxc' || normalized === 'system-container') return 'system-container';
-    if (
-      normalized === 'docker' ||
-      normalized === 'app-container' ||
-      normalized === 'container' ||
-      normalized === 'containers'
-    )
-      return 'docker';
+    if (normalized === 'vm') return 'vm';
+    if (normalized === 'system-container') return 'system-container';
+    if (normalized === 'docker' || normalized === 'app-container') return 'docker';
     if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'k8s';
     return null;
   };

@@ -10,9 +10,10 @@ describe('workloadTypeBadges', () => {
         expect(result.title).toBe('Virtual Machine');
       });
 
-      it('returns VM badge for qemu', () => {
+      it('does not normalize legacy qemu alias', () => {
         const result = getWorkloadTypeBadge('qemu');
-        expect(result.label).toBe('VM');
+        expect(result.label).toBe('Qemu');
+        expect(result.title).toBe('Qemu');
       });
 
       it('returns VM badge for VM (case insensitive)', () => {
@@ -22,20 +23,22 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('System container types', () => {
-      it('returns Container badge for lxc', () => {
-        const result = getWorkloadTypeBadge('lxc');
+      it('returns Container badge for system-container', () => {
+        const result = getWorkloadTypeBadge('system-container');
         expect(result.label).toBe('Container');
         expect(result.title).toBe('System Container');
       });
 
-      it('returns Container badge for ct', () => {
+      it('does not normalize legacy ct alias', () => {
         const result = getWorkloadTypeBadge('ct');
-        expect(result.label).toBe('Container');
+        expect(result.label).toBe('Ct');
+        expect(result.title).toBe('Ct');
       });
 
-      it('returns Container badge for container', () => {
+      it('does not normalize legacy container alias', () => {
         const result = getWorkloadTypeBadge('container');
         expect(result.label).toBe('Container');
+        expect(result.title).toBe('Container');
       });
     });
 

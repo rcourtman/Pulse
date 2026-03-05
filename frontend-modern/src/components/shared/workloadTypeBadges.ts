@@ -8,7 +8,6 @@ export interface WorkloadTypeBadge {
 
 type WorkloadTypeBadgeKey =
   | WorkloadType
-  | 'container'
   | 'system-container'
   | 'app-container'
   | 'agent'
@@ -23,11 +22,6 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
   },
   'system-container': {
     label: 'Container',
-    title: 'System Container',
-    className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-  },
-  container: {
-    label: 'CT',
     title: 'System Container',
     className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
   },
@@ -79,14 +73,8 @@ const toTitleCase = (value: string): string =>
 const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | null => {
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized === 'qemu' || normalized === 'vm') return 'vm';
-  if (
-    normalized === 'lxc' ||
-    normalized === 'ct' ||
-    normalized === 'container' ||
-    normalized === 'system-container'
-  )
-    return 'system-container';
+  if (normalized === 'vm') return 'vm';
+  if (normalized === 'system-container') return 'system-container';
   if (
     normalized === 'docker' ||
     normalized === 'docker-container' ||

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveWorkloadType,
+  resolveWorkloadTypeFromString,
   getWorkloadMetricsKind,
   getCanonicalWorkloadId,
 } from '@/utils/workloads';
@@ -12,9 +13,9 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
-  it('returns vm for qemu type', () => {
+  it('defaults to system-container for legacy qemu type', () => {
     const guest = { type: 'qemu' };
-    expect(resolveWorkloadType(guest)).toBe('vm');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
   it('returns vm for VM type (case insensitive)', () => {
@@ -22,7 +23,7 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
-  it('returns system-container for lxc type', () => {
+  it('defaults to system-container for legacy lxc type', () => {
     const guest = { type: 'lxc' };
     expect(resolveWorkloadType(guest)).toBe('system-container');
   });
@@ -80,6 +81,20 @@ describe('resolveWorkloadType', () => {
   it('defaults to system-container for undefined type', () => {
     const guest = { type: undefined } as unknown as WorkloadGuest;
     expect(resolveWorkloadType(guest)).toBe('system-container');
+  });
+});
+
+describe('resolveWorkloadTypeFromString', () => {
+  it('does not normalize qemu alias', () => {
+    expect(resolveWorkloadTypeFromString('qemu')).toBeNull();
+  });
+
+  it('does not normalize lxc alias', () => {
+    expect(resolveWorkloadTypeFromString('lxc')).toBeNull();
+  });
+
+  it('does not normalize container alias', () => {
+    expect(resolveWorkloadTypeFromString('container')).toBeNull();
   });
 });
 
