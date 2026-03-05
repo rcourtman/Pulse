@@ -16,8 +16,10 @@ describe('discoveryTarget utils', () => {
   it('uses canonical app-container discovery type only', () => {
     expect(isAppContainerDiscoveryResourceType('app-container')).toBe(true);
     expect(isAppContainerDiscoveryResourceType('docker')).toBe(false);
-    expect(canonicalDiscoveryResourceType('docker')).toBe('docker');
+    expect(canonicalDiscoveryResourceType('docker')).toBe('app-container');
     expect(canonicalDiscoveryResourceType('app-container')).toBe('app-container');
+    expect(canonicalDiscoveryResourceType('k8s')).toBe('pod');
+    expect(canonicalDiscoveryResourceType('pod')).toBe('pod');
   });
 
   it('prefers resourceId for agent-like discovery targets', () => {

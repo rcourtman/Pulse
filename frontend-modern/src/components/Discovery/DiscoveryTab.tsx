@@ -19,6 +19,7 @@ import {
   getConfidenceLevel,
   getConnectedAgents,
 } from '../../api/discovery';
+import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 import { eventBus } from '../../stores/events';
 
 interface DiscoveryTabProps {
@@ -32,7 +33,7 @@ interface DiscoveryTabProps {
 
 // Construct the resource ID in the same format the backend uses
 const makeResourceId = (type: ResourceType, agentId: string, resourceId: string) => {
-  return `${type}:${agentId}:${resourceId}`;
+  return `${toDiscoveryAPIResourceType(type) || type}:${agentId}:${resourceId}`;
 };
 
 const getURLSuggestionSourceLabel = (code?: string): string => {

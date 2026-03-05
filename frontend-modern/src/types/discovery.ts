@@ -4,6 +4,13 @@ export type ResourceType =
   | 'vm'
   | 'system-container'
   | 'app-container'
+  | 'pod'
+  | 'agent';
+
+export type APIResourceType =
+  | 'vm'
+  | 'system-container'
+  | 'app-container'
   | 'k8s'
   | 'agent';
 
@@ -53,7 +60,7 @@ export interface PortInfo {
 
 export interface ResourceDiscovery {
   id: string;
-  resource_type: ResourceType;
+  resource_type: APIResourceType;
   resource_id: string;
   /** Canonical v6 target identifier (agent ID / node ID / cluster ID). */
   target_id?: string;
@@ -91,7 +98,7 @@ export interface ResourceDiscovery {
 
 export interface DiscoverySummary {
   id: string;
-  resource_type: ResourceType;
+  resource_type: APIResourceType;
   resource_id: string;
   /** Canonical v6 target identifier (agent ID / node ID / cluster ID). */
   target_id?: string;

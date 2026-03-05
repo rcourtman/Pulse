@@ -111,7 +111,7 @@ export interface ResourceDiscoveryTarget {
     | 'vm'
     | 'system-container'
     | 'app-container'
-    | 'k8s'
+    | 'pod'
     | 'disk'
     | 'ceph';
   agentId: string;

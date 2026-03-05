@@ -187,7 +187,7 @@ describe('toDiscoveryConfig', () => {
 
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
-      resourceType: 'k8s',
+      resourceType: 'pod',
       agentId: 'cluster-a',
       resourceId: 'pod-uid-1',
       hostname: 'stale-hostname',
@@ -221,7 +221,7 @@ describe('toDiscoveryConfig', () => {
 
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
-      resourceType: 'k8s',
+      resourceType: 'pod',
       agentId: 'k8s-agent-1',
       resourceId: 'pod-uid-2',
       hostname: 'stale-hostname',

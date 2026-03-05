@@ -23,9 +23,9 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('returns docker for docker type', () => {
+  it('returns app-container for docker type', () => {
     const guest = { type: 'docker' };
-    expect(resolveWorkloadType(guest)).toBe('docker');
+    expect(resolveWorkloadType(guest)).toBe('app-container');
   });
 
   it('does not map removed docker-container type alias', () => {
@@ -38,19 +38,19 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('returns k8s for k8s type', () => {
+  it('returns pod for k8s type', () => {
     const guest = { type: 'k8s' };
-    expect(resolveWorkloadType(guest)).toBe('k8s');
+    expect(resolveWorkloadType(guest)).toBe('pod');
   });
 
-  it('returns k8s for pod type', () => {
+  it('returns pod for pod type', () => {
     const guest = { type: 'pod' };
-    expect(resolveWorkloadType(guest)).toBe('k8s');
+    expect(resolveWorkloadType(guest)).toBe('pod');
   });
 
-  it('returns k8s for kubernetes type', () => {
+  it('returns pod for kubernetes type', () => {
     const guest = { type: 'kubernetes' };
-    expect(resolveWorkloadType(guest)).toBe('k8s');
+    expect(resolveWorkloadType(guest)).toBe('pod');
   });
 
   it('defaults to system-container for unknown type', () => {
@@ -82,12 +82,12 @@ describe('resolveWorkloadTypeFromString', () => {
     expect(resolveWorkloadTypeFromString('oci-container')).toBe('system-container');
   });
 
-  it('does not normalize removed qemu alias', () => {
-    expect(resolveWorkloadTypeFromString('qemu')).toBeNull();
+  it('normalizes qemu to vm', () => {
+    expect(resolveWorkloadTypeFromString('qemu')).toBe('vm');
   });
 
-  it('does not normalize removed lxc alias', () => {
-    expect(resolveWorkloadTypeFromString('lxc')).toBeNull();
+  it('normalizes lxc to system-container', () => {
+    expect(resolveWorkloadTypeFromString('lxc')).toBe('system-container');
   });
 
   it('does not normalize removed container alias', () => {
@@ -114,13 +114,13 @@ describe('getWorkloadMetricsKind', () => {
     expect(getWorkloadMetricsKind(guest)).toBe('container');
   });
 
-  it('returns dockerContainer for docker workload', () => {
-    const guest = { workloadType: 'docker' as const, type: 'docker' };
+  it('returns dockerContainer for app-container workload', () => {
+    const guest = { workloadType: 'app-container' as const, type: 'docker' };
     expect(getWorkloadMetricsKind(guest)).toBe('dockerContainer');
   });
 
-  it('returns k8s for k8s workload', () => {
-    const guest = { workloadType: 'k8s' as const, type: 'k8s-pod' };
+  it('returns k8s for pod workload', () => {
+    const guest = { workloadType: 'pod' as const, type: 'k8s-pod' };
     expect(getWorkloadMetricsKind(guest)).toBe('k8s');
   });
 
@@ -147,11 +147,11 @@ describe('getCanonicalWorkloadId', () => {
     expect(getCanonicalWorkloadId(guest)).toBe('homelab:node2:200');
   });
 
-  it('returns id for docker (no instance/node/vmid)', () => {
+  it('returns id for app-container workloads (no instance/node/vmid)', () => {
     const guest = {
       id: 'docker-123',
       type: 'docker',
-      workloadType: 'docker' as const,
+      workloadType: 'app-container' as const,
       instance: '',
       node: '',
       vmid: 0,
@@ -159,11 +159,11 @@ describe('getCanonicalWorkloadId', () => {
     expect(getCanonicalWorkloadId(guest)).toBe('docker-123');
   });
 
-  it('returns id for k8s (no instance/node/vmid)', () => {
+  it('returns id for pod workloads (no instance/node/vmid)', () => {
     const guest = {
       id: 'pod-456',
       type: 'pod',
-      workloadType: 'k8s' as const,
+      workloadType: 'pod' as const,
       instance: '',
       node: '',
       vmid: 0,

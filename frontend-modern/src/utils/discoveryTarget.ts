@@ -17,7 +17,17 @@ const normalizeDiscoveryResourceType = (resourceType: unknown): string | undefin
 export const canonicalDiscoveryResourceType = (resourceType: unknown): string | undefined => {
   const normalized = normalizeDiscoveryResourceType(resourceType);
   if (!normalized) return undefined;
+  if (normalized === 'host') return 'agent';
+  if (normalized === 'docker' || normalized === 'app-container') return 'app-container';
+  if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'pod';
   return normalized;
+};
+
+export const toDiscoveryAPIResourceType = (resourceType: unknown): string | undefined => {
+  const canonical = canonicalDiscoveryResourceType(resourceType);
+  if (!canonical) return undefined;
+  if (canonical === 'pod') return 'k8s';
+  return canonical;
 };
 
 export const isAgentDiscoveryResourceType = (resourceType: unknown): boolean => {

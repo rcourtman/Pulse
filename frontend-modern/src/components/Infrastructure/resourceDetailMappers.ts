@@ -197,7 +197,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         case 'vm':
         case 'system-container':
         case 'app-container':
-        case 'k8s':
+        case 'pod':
           return explicitResourceType;
         default:
           return null;
@@ -216,7 +216,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         ? 'agent'
         : resourceType === 'app-container'
           ? 'container'
-          : resourceType === 'k8s'
+          : resourceType === 'pod'
             ? 'workload'
             : 'guest';
       return {
@@ -341,7 +341,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'k8s-deployment':
     case 'k8s-service':
       return {
-        resourceType: 'k8s',
+        resourceType: 'pod',
         agentId: workloadAgentId,
         resourceId: kubernetesResourceId || resource.id,
         hostname,

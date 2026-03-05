@@ -10,10 +10,13 @@ import type {
   UpdateNotesRequest,
   DiscoveryInfo,
 } from '../types/discovery';
+import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 
 const API_BASE = '/api/discovery';
 const isAgentResourceType = (resourceType: ResourceType): boolean => resourceType === 'agent';
 const agentCollectionBasePath = (): string => `${API_BASE}/agent`;
+const resolveAPIResourceType = (resourceType: ResourceType): string =>
+  toDiscoveryAPIResourceType(resourceType) || resourceType;
 const resolveDiscoveryAgentId = (discovery: {
   target_id?: string;
   agent_id?: string;
@@ -37,7 +40,9 @@ export async function listDiscoveries(): Promise<DiscoveryListResponse> {
 export async function listDiscoveriesByType(
   resourceType: ResourceType,
 ): Promise<DiscoveryListResponse> {
-  const response = await apiFetch(`${API_BASE}/type/${encodeURIComponent(resourceType)}`);
+  const response = await apiFetch(
+    `${API_BASE}/type/${encodeURIComponent(resolveAPIResourceType(resourceType))}`,
+  );
   if (!response.ok) {
     throw new Error(
       await readAPIErrorMessage(response, `Failed to list discoveries for type ${resourceType}`),
@@ -115,8 +120,9 @@ export async function getDiscovery(
     return response.json();
   }
 
+  const apiResourceType = resolveAPIResourceType(resourceType);
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
+    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
   );
   if (response.status === 404) {
     return null;
@@ -136,8 +142,9 @@ export async function triggerDiscovery(
   resourceId: string,
   options?: TriggerDiscoveryRequest,
 ): Promise<ResourceDiscovery> {
+  const apiResourceType = resolveAPIResourceType(resourceType);
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
+    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
     {
       method: 'POST',
       headers: {
@@ -160,8 +167,9 @@ export async function getDiscoveryProgress(
   targetId: string,
   resourceId: string,
 ): Promise<DiscoveryProgress> {
+  const apiResourceType = resolveAPIResourceType(resourceType);
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/progress`,
+    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/progress`,
   );
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery progress'));
@@ -178,8 +186,9 @@ export async function updateDiscoveryNotes(
   resourceId: string,
   notes: UpdateNotesRequest,
 ): Promise<ResourceDiscovery> {
+  const apiResourceType = resolveAPIResourceType(resourceType);
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/notes`,
+    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/notes`,
     {
       method: 'PUT',
       headers: {
@@ -202,8 +211,9 @@ export async function deleteDiscovery(
   targetId: string,
   resourceId: string,
 ): Promise<void> {
+  const apiResourceType = resolveAPIResourceType(resourceType);
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
+    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
     {
       method: 'DELETE',
     },
@@ -228,7 +238,9 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
  * Get discovery info for a resource type (AI provider info, commands that will run)
  */
 export async function getDiscoveryInfo(resourceType: ResourceType): Promise<DiscoveryInfo> {
-  const response = await apiFetch(`${API_BASE}/info/${encodeURIComponent(resourceType)}`);
+  const response = await apiFetch(
+    `${API_BASE}/info/${encodeURIComponent(resolveAPIResourceType(resourceType))}`,
+  );
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery info'));
   }

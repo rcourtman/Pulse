@@ -106,7 +106,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     const type = resolveWorkloadType(props.guest);
     if (type === 'vm') return 'vm';
     if (type === 'app-container') return 'app-container';
-    if (type === 'pod') return 'k8s';
+    if (type === 'pod') return 'pod';
     return 'system-container';
   };
   const discoveryAgentId = () => {

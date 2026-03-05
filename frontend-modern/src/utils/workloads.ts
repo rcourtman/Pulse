@@ -7,8 +7,14 @@ import type { MetricResourceKind } from '@/utils/metricsKeys';
  */
 export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadType | null => {
   const normalized = (value || '').trim().toLowerCase();
-  if (normalized === 'vm') return 'vm';
-  if (normalized === 'system-container' || normalized === 'oci-container') {
+  if (normalized === 'vm' || normalized === 'qemu') return 'vm';
+  if (
+    normalized === 'system-container' ||
+    normalized === 'oci-container' ||
+    normalized === 'lxc' ||
+    normalized === 'incus' ||
+    normalized === 'jail'
+  ) {
     return 'system-container';
   }
   if (normalized === 'docker' || normalized === 'app-container') {

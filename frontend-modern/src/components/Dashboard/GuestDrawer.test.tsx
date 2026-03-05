@@ -148,10 +148,10 @@ describe('GuestDrawer', () => {
       expect(path).toContain('source=docker');
     });
 
-    it('navigates to kubernetes infrastructure for a k8s workload', async () => {
+    it('navigates to kubernetes infrastructure for a pod workload', async () => {
       render(() => (
         <GuestDrawer
-          guest={makeGuest({ workloadType: 'k8s', contextLabel: 'my-cluster' })}
+          guest={makeGuest({ workloadType: 'pod', contextLabel: 'my-cluster' })}
           onClose={vi.fn()}
         />
       ));
@@ -359,9 +359,7 @@ describe('GuestDrawer', () => {
 
     it('applies warning color for backups older than 7 days', () => {
       const tenDaysAgo = new Date('2026-02-20T12:00:00Z').getTime();
-      const { container } = render(() => (
-        <GuestDrawer guest={makeGuest({ lastBackup: tenDaysAgo })} onClose={vi.fn()} />
-      ));
+      render(() => <GuestDrawer guest={makeGuest({ lastBackup: tenDaysAgo })} onClose={vi.fn()} />);
       expect(screen.getByText('10d ago')).toBeInTheDocument();
       const ageEl = screen.getByText('10d ago');
       expect(ageEl.className).toContain('amber');
@@ -529,8 +527,8 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('url-label').textContent).toBe('container');
     });
 
-    it('labels k8s guests as "workload"', () => {
-      render(() => <GuestDrawer guest={makeGuest({ workloadType: 'k8s' })} onClose={vi.fn()} />);
+    it('labels pod guests as "workload"', () => {
+      render(() => <GuestDrawer guest={makeGuest({ workloadType: 'pod' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-label').textContent).toBe('workload');
     });
 
@@ -586,18 +584,18 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc');
     });
 
-    it('passes correct resourceType for k8s', () => {
+    it('passes canonical pod resourceType for pod workloads', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({
-            workloadType: 'k8s',
+            workloadType: 'pod',
             kubernetesAgentId: 'k8s-agent-1',
             id: 'k8s:ctx:pod:my-pod',
           })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('k8s');
+      expect(screen.getByTestId('disc-resource-type').textContent).toBe('pod');
       expect(screen.getByTestId('disc-agent-id').textContent).toBe('k8s-agent-1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('my-pod');
     });

@@ -4,7 +4,12 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetch: vi.fn(),
 }));
 
-import { getDiscovery, getDiscoveryInfo, listDiscoveriesByType } from '@/api/discovery';
+import {
+  getDiscovery,
+  getDiscoveryInfo,
+  listDiscoveriesByType,
+  triggerDiscovery,
+} from '@/api/discovery';
 import { apiFetch } from '@/utils/apiClient';
 
 describe('discovery api', () => {
@@ -323,6 +328,101 @@ describe('discovery api', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/vm/node-1/100');
   });
 
+  it('maps canonical pod discovery lookups onto the backend k8s endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 'k8s:cluster-a:default/api',
+          resource_type: 'k8s',
+          resource_id: 'default/api',
+          target_id: 'cluster-a',
+          hostname: 'api-pod',
+          service_type: 'nginx',
+          service_name: 'API Pod',
+          service_version: '',
+          category: 'web_server',
+          cli_access: '',
+          facts: [],
+          config_paths: [],
+          data_paths: [],
+          log_paths: [],
+          ports: [],
+          user_notes: '',
+          user_secrets: {},
+          confidence: 0.7,
+          ai_reasoning: '',
+          discovered_at: '2026-02-06T00:00:00Z',
+          updated_at: '2026-02-06T00:00:00Z',
+          scan_duration: 1,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await getDiscovery('pod', 'cluster-a', 'default/api');
+
+    expect(result?.id).toBe('k8s:cluster-a:default/api');
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/k8s/cluster-a/default%2Fapi');
+  });
+
+  it('maps canonical pod discovery writes onto the backend k8s endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 'k8s:cluster-a:default/api',
+          resource_type: 'k8s',
+          resource_id: 'default/api',
+          target_id: 'cluster-a',
+          hostname: 'api-pod',
+          service_type: 'nginx',
+          service_name: 'API Pod',
+          service_version: '',
+          category: 'web_server',
+          cli_access: '',
+          facts: [],
+          config_paths: [],
+          data_paths: [],
+          log_paths: [],
+          ports: [],
+          user_notes: '',
+          user_secrets: {},
+          confidence: 0.7,
+          ai_reasoning: '',
+          discovered_at: '2026-02-06T00:00:00Z',
+          updated_at: '2026-02-06T00:00:00Z',
+          scan_duration: 1,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await triggerDiscovery('pod', 'cluster-a', 'default/api', { force: true });
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/k8s/cluster-a/default%2Fapi', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ force: true }),
+    });
+  });
+
+  it('maps canonical pod discovery type queries onto the backend k8s endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          discoveries: [],
+          total: 0,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await listDiscoveriesByType('pod');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/type/k8s');
+  });
+
   it('encodes dynamic resource type segments', async () => {
     apiFetchMock.mockResolvedValue(
       new Response(
@@ -349,5 +449,18 @@ describe('discovery api', () => {
     );
     await getDiscoveryInfo('host/root' as any);
     expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/info/host%2Froot');
+
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          commands: [],
+          ai_provider: '',
+          notes: '',
+        }),
+        { status: 200 },
+      ),
+    );
+    await getDiscoveryInfo('pod');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/info/k8s');
   });
 });
