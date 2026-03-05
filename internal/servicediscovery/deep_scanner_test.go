@@ -412,7 +412,7 @@ func TestDeepScanner_ScanLogsStructuredContextWhenExecutorMissing(t *testing.T) 
 		`"reason":"executor_missing"`,
 		`"resource_id":"agent:host1:host1"`,
 		`"resource_type":"agent"`,
-		`"host_id":"host1"`,
+		`"target_id":"host1"`,
 		`"message":"Deep scan unavailable"`,
 	} {
 		if !strings.Contains(logOutput.String(), expected) {
@@ -450,7 +450,7 @@ func TestDeepScanner_ScanLogsStructuredContextOnCommandResultFailure(t *testing.
 		`"command_error":"boom"`,
 		`"resource_id":"docker_vm:host1:101:web"`,
 		`"resource_type":"docker_vm"`,
-		`"host_id":"host1"`,
+		`"target_id":"host1"`,
 		`"message":"Deep scan command reported failure"`,
 	} {
 		if !strings.Contains(logOutput.String(), expected) {

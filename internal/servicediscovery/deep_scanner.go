@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -139,13 +140,17 @@ type ScanResult struct {
 
 // Scan runs discovery commands on a resource and returns the outputs.
 func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResult, error) {
-	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
+	requestTargetID := strings.TrimSpace(req.TargetID)
+	if requestTargetID == "" {
+		requestTargetID = strings.TrimSpace(req.HostID)
+	}
+	resourceID := MakeResourceID(req.ResourceType, requestTargetID, req.ResourceID)
 	startTime := time.Now()
 	scanLog := log.With().
 		Str("component", "service_discovery_scanner").
 		Str("resource_id", resourceID).
 		Str("resource_type", string(req.ResourceType)).
-		Str("host_id", req.HostID).
+		Str("target_id", requestTargetID).
 		Str("hostname", req.Hostname).
 		Logger()
 
@@ -172,7 +177,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	result := &ScanResult{
 		ResourceType:   req.ResourceType,
 		ResourceID:     req.ResourceID,
-		HostID:         req.HostID,
+		HostID:         requestTargetID,
 		Hostname:       req.Hostname,
 		CommandOutputs: make(map[string]string),
 		Errors:         make(map[string]string),
@@ -189,13 +194,13 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	}
 
 	// Find the agent for this host
-	agentID := s.findAgentForHost(req.HostID, req.Hostname)
+	agentID := s.findAgentForHost(requestTargetID, req.Hostname)
 	if agentID == "" {
 		scanLog.Warn().
 			Str("action", "scan_precondition_failed").
 			Str("reason", "agent_not_connected").
 			Msg("Deep scan unavailable")
-		return nil, fmt.Errorf("no connected agent for host %s (%s)", req.HostID, req.Hostname)
+		return nil, fmt.Errorf("no connected agent for target %s (%s)", requestTargetID, req.Hostname)
 	}
 
 	// Get commands for this resource type
