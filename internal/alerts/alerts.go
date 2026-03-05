@@ -1868,7 +1868,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			continue
 		}
 
-		if resourceTypeMeta == "dockerhost" {
+		if resourceTypeMeta == "docker-host" {
 			// Check if all Docker host alerts are disabled
 			if m.config.DisableAllDockerHosts {
 				alertsToResolve = append(alertsToResolve, alertID)
@@ -1877,7 +1877,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			// No threshold evaluation for Docker hosts (connectivity handled separately)
 			continue
 		}
-		if resourceTypeMeta == "docker container" {
+		if resourceTypeMeta == "app-container" {
 			// Check if all Docker container alerts are disabled
 			if m.config.DisableAllDockerContainers {
 				alertsToResolve = append(alertsToResolve, alertID)
@@ -2734,7 +2734,7 @@ func (m *Manager) CheckNode(node models.Node) {
 						temp = node.Temperature.CPUMax
 					}
 				}
-				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature, nil)
+				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "node", "temperature", temp, thresholds.Temperature, nil)
 			}
 		}
 	}
@@ -2954,7 +2954,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	instanceName := hostInstanceName(host)
 
 	baseMetadata := map[string]interface{}{
-		"resourceType": "Agent",
+		"resourceType": "agent",
 		"hostId":       host.ID,
 		"hostname":     host.Hostname,
 		"displayName":  host.DisplayName,
@@ -2975,7 +2975,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if host.CPUCount > 0 {
 			cpuMetadata["cpuCount"] = host.CPUCount
 		}
-		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Agent", "cpu", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "agent", "cpu", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
 	} else {
 		m.clearHostMetricAlerts(host.ID, "cpu")
 	}
@@ -2989,7 +2989,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			memMetadata["memoryUsedBytes"] = host.Memory.Used
 			memMetadata["memoryFreeBytes"] = host.Memory.Free
 		}
-		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "Agent", "memory", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "agent", "memory", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
 	} else {
 		m.clearHostMetricAlerts(host.ID, "memory")
 	}
@@ -3008,7 +3008,7 @@ func (m *Manager) CheckHost(host models.Host) {
 					diskTempMetadata["temperature"] = disk.Temperature
 					diskTempMetadata["model"] = disk.Model
 
-					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "Agent", "diskTemperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
+					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "agent", "diskTemperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
 				}
 			}
 		}
@@ -3065,7 +3065,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			diskMetadata["diskFreeBytes"] = disk.Free
 		}
 
-		m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "Agent Disk", "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+		m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "agent-disk", "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
 	}
 
 	// Clear all disk alerts if host-level disk alerting is completely disabled and no disk-specific overrides
@@ -3383,7 +3383,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
-			"resourceType": "Agent",
+			"resourceType": "agent",
 			"hostId":       host.ID,
 			"hostname":     host.Hostname,
 			"displayName":  host.DisplayName,
@@ -4012,7 +4012,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	containerName := dockerContainerDisplayName(container)
 	nodeName := strings.TrimSpace(host.Hostname)
 	instanceName := dockerInstanceName(host)
-	resourceType := "Docker Container"
+	resourceType := "app-container"
 
 	m.mu.RLock()
 	overrideConfig, hasOverride := m.config.Overrides[resourceID]
@@ -4209,7 +4209,7 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 	}
 
 	metadata := map[string]interface{}{
-		"resourceType":   "Docker Service",
+		"resourceType":   "docker-service",
 		"hostId":         host.ID,
 		"hostName":       host.DisplayName,
 		"hostHostname":   host.Hostname,
@@ -4414,7 +4414,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
-			"resourceType": "DockerHost",
+			"resourceType": "docker-host",
 			"hostId":       host.ID,
 			"hostname":     host.Hostname,
 			"agentId":      host.AgentID,
@@ -4534,7 +4534,7 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
-			"resourceType":  "Docker Container",
+			"resourceType":  "app-container",
 			"hostId":        host.ID,
 			"hostName":      host.DisplayName,
 			"hostHostname":  host.Hostname,
@@ -4595,7 +4595,7 @@ func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container m
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
-			"resourceType":  "Docker Container",
+			"resourceType":  "app-container",
 			"hostId":        host.ID,
 			"hostName":      host.DisplayName,
 			"hostHostname":  host.Hostname,
@@ -4995,7 +4995,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 		StartTime:    firstSeen,
 		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
-			"resourceType":   "Docker Container",
+			"resourceType":   "app-container",
 			"hostId":         host.ID,
 			"hostName":       host.DisplayName,
 			"hostHostname":   host.Hostname,

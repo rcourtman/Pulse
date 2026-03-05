@@ -3314,7 +3314,7 @@ func TestReevaluateClearsDockerContainerAlertWhenIgnoredPrefixAdded(t *testing.T
 		ResourceName: "qbittorrentvpn",
 		Instance:     "Docker",
 		Metadata: map[string]interface{}{
-			"resourceType":  "Docker Container",
+			"resourceType":  "app-container",
 			"containerId":   "abc123",
 			"containerName": "qbittorrentvpn",
 		},
@@ -6404,13 +6404,13 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
-		// Add dockerhost metric alert
-		m.activeAlerts["dockerhost-1-cpu"] = &Alert{
-			ID:    "dockerhost-1-cpu",
+		// Add docker-host metric alert
+		m.activeAlerts["docker-host-1-cpu"] = &Alert{
+			ID:    "docker-host-1-cpu",
 			Type:  "cpu",
 			Value: 90,
 			Metadata: map[string]interface{}{
-				"resourceType": "dockerhost",
+				"resourceType": "docker-host",
 			},
 		}
 
@@ -6421,7 +6421,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Dockerhost alert should be resolved
-		if _, exists := m.activeAlerts["dockerhost-1-cpu"]; exists {
+		if _, exists := m.activeAlerts["docker-host-1-cpu"]; exists {
 			t.Error("expected dockerhost alert to be resolved")
 		}
 	})
@@ -7205,8 +7205,8 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		if alert.Node != "docker-server.local" {
 			t.Errorf("expected node docker-server.local, got %s", alert.Node)
 		}
-		if alert.Metadata["resourceType"] != "DockerHost" {
-			t.Errorf("expected metadata resourceType DockerHost, got %v", alert.Metadata["resourceType"])
+		if alert.Metadata["resourceType"] != "docker-host" {
+			t.Errorf("expected metadata resourceType docker-host, got %v", alert.Metadata["resourceType"])
 		}
 		if alert.Metadata["hostId"] != "docker1" {
 			t.Errorf("expected metadata hostId docker1, got %v", alert.Metadata["hostId"])
