@@ -2827,18 +2827,18 @@ func (s *Service) getTools() []providers.Tool {
 		},
 		{
 			Name:        "set_resource_url",
-			Description: "Set the web URL for a resource in Pulse after discovering a web service. Use this when you've found a web server running on a guest/container/host and want to save it for quick access. The URL will appear as a clickable link in the Pulse dashboard.",
+			Description: "Set the web URL for a resource in Pulse after discovering a web service. Use this when you've found a web server running on a VM/container/host and want to save it for quick access. The URL will appear as a clickable link in the Pulse dashboard.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"resource_type": map[string]interface{}{
 						"type":        "string",
-						"description": "Type of resource: 'guest' for VMs/LXC containers, 'docker' for Docker containers/services, or 'agent' for standalone agents",
-						"enum":        []string{"guest", "docker", "agent"},
+						"description": "Canonical v6 resource type: 'vm', 'system-container', 'oci-container', 'app-container', 'agent', 'node', or 'docker-host'",
+						"enum":        []string{"vm", "system-container", "oci-container", "app-container", "agent", "node", "docker-host"},
 					},
 					"resource_id": map[string]interface{}{
 						"type":        "string",
-						"description": "The resource ID from the context. For Proxmox guests, use format 'instance-VMID' (e.g., 'delly-150' where 'delly' is the PVE instance name and '150' is the VMID). For Docker, use format 'hostid:container:containerid'. Use the ID shown in the current context.",
+						"description": "The resource ID from context. For VMs/LXC, use the canonical resource ID shown by Pulse (for example 'delly:minipc:150'). For app containers, use the container resource ID (for example 'hostid:container:containerid').",
 					},
 					"url": map[string]interface{}{
 						"type":        "string",
@@ -3057,7 +3057,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, resourceURL)
 
 		if resourceType == "" {
-			execution.Output = "Error: resource_type is required (use 'guest', 'docker', or 'agent')"
+			execution.Output = "Error: resource_type is required (use canonical v6 types: vm, system-container, oci-container, app-container, agent, node, docker-host)"
 			return execution.Output, execution
 		}
 		if resourceID == "" {

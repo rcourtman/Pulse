@@ -64,11 +64,11 @@ func TestService_GetToolInputDisplay(t *testing.T) {
 			tc: providers.ToolCall{
 				Name: "set_resource_url",
 				Input: map[string]interface{}{
-					"resource_type": "guest",
+					"resource_type": "vm",
 					"url":           "http://1.2.3.4",
 				},
 			},
-			expected: "Set guest URL: http://1.2.3.4",
+			expected: "Set vm URL: http://1.2.3.4",
 		},
 		{
 			name: "unknown tool",
@@ -152,8 +152,8 @@ func TestService_SetResourceURL(t *testing.T) {
 	mockMP := &mockMetadataProvider{}
 	svc.SetMetadataProvider(mockMP)
 
-	// Valid guest URL
-	err := svc.SetResourceURL("guest", "delly-150", "http://192.168.1.10")
+	// Valid VM URL
+	err := svc.SetResourceURL("vm", "delly-150", "http://192.168.1.10")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestService_SetResourceURL(t *testing.T) {
 	}
 
 	// URL without scheme (should auto-add http://)
-	err = svc.SetResourceURL("docker", "host:ct:123", "192.168.1.20:8080")
+	err = svc.SetResourceURL("app-container", "host:ct:123", "192.168.1.20:8080")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
@@ -723,7 +723,7 @@ func TestService_ExecuteTool_SetResourceURL(t *testing.T) {
 	tc := providers.ToolCall{
 		Name: "set_resource_url",
 		Input: map[string]interface{}{
-			"resource_type": "guest",
+			"resource_type": "vm",
 			"resource_id":   "instance-101",
 			"url":           "http://example.com:8080",
 		},
@@ -1051,7 +1051,7 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	tc2 := providers.ToolCall{
 		Name: "set_resource_url",
 		Input: map[string]interface{}{
-			"resource_type": "guest",
+			"resource_type": "vm",
 			"url":           "http://example.com:8080",
 		},
 	}
@@ -1068,7 +1068,7 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	tc3 := providers.ToolCall{
 		Name: "set_resource_url",
 		Input: map[string]interface{}{
-			"resource_type": "guest",
+			"resource_type": "vm",
 			"url":           "http://example.com",
 		},
 	}
@@ -2607,12 +2607,12 @@ func TestService_ListModelsWithCache_ConfigErrors(t *testing.T) {
 // SetResourceURL Tests - Extended
 // ============================================================================
 
-func TestService_SetResourceURL_DockerType(t *testing.T) {
+func TestService_SetResourceURL_AppContainerType(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
 
-	err := svc.SetResourceURL("docker", "host:container:abc123", "http://example.com:8080")
+	err := svc.SetResourceURL("app-container", "host:container:abc123", "http://example.com:8080")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
@@ -2650,7 +2650,7 @@ func TestService_SetResourceURL_NoMetadataProvider(t *testing.T) {
 	svc := NewService(nil, nil)
 	svc.metadataProvider = nil
 
-	err := svc.SetResourceURL("guest", "vm-100", "http://example.com")
+	err := svc.SetResourceURL("vm", "vm-100", "http://example.com")
 	if err == nil {
 		t.Error("Expected error when metadata provider not available")
 	}

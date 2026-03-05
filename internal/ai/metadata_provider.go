@@ -29,8 +29,8 @@ func (s *Service) SetMetadataProvider(mp MetadataProvider) {
 	log.Info().Msg("AI service: metadata provider configured for URL discovery")
 }
 
-// SetResourceURL updates the URL for a resource in Pulse
-// This is called by the AI when it discovers a web service
+// SetResourceURL updates the URL for a resource in Pulse.
+// Public callers must use canonical v6 resource types.
 func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) error {
 	s.mu.RLock()
 	mp := s.metadataProvider
@@ -66,7 +66,7 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 
 	// Route to the appropriate metadata store based on resource type
 	switch strings.ToLower(resourceType) {
-	case "guest", "vm", "system-container":
+	case "vm", "system-container", "oci-container":
 		if err := mp.SetGuestURL(resourceID, customURL); err != nil {
 			return fmt.Errorf("failed to set guest URL: %w", err)
 		}
@@ -76,7 +76,7 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 			Str("url", customURL).
 			Msg("AI set guest URL")
 
-	case "docker", "docker_container", "docker_service":
+	case "app-container":
 		if err := mp.SetDockerURL(resourceID, customURL); err != nil {
 			return fmt.Errorf("failed to set Docker URL: %w", err)
 		}
@@ -86,7 +86,7 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 			Str("url", customURL).
 			Msg("AI set Docker URL")
 
-	case "agent":
+	case "agent", "node", "docker-host":
 		if err := mp.SetHostURL(resourceID, customURL); err != nil {
 			return fmt.Errorf("failed to set host URL: %w", err)
 		}
@@ -97,7 +97,7 @@ func (s *Service) SetResourceURL(resourceType, resourceID, customURL string) err
 			Msg("AI set host URL")
 
 	default:
-		return fmt.Errorf("unknown resource type: %s (use 'guest', 'vm', 'system-container', 'docker', or 'agent')", resourceType)
+		return fmt.Errorf("unknown resource type: %s (use 'vm', 'system-container', 'oci-container', 'app-container', 'agent', 'node', or 'docker-host')", resourceType)
 	}
 
 	return nil
