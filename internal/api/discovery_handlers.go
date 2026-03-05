@@ -297,12 +297,12 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hostID := parts[1]
+	targetID := parts[1]
 	resourceID := parts[2]
 
-	discovery, err := h.service.GetDiscoveryByResource(resourceType, hostID, resourceID)
+	discovery, err := h.service.GetDiscoveryByResource(resourceType, targetID, resourceID)
 	if err != nil {
-		log.Error().Err(err).Str("type", string(resourceType)).Str("host", hostID).Str("id", resourceID).Msg("Failed to get discovery")
+		log.Error().Err(err).Str("type", string(resourceType)).Str("target", targetID).Str("id", resourceID).Msg("Failed to get discovery")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to get discovery")
 		return
 	}
@@ -644,7 +644,7 @@ func (h *DiscoveryHandlers) HandleListByAgent(w http.ResponseWriter, r *http.Req
 	// Parse path
 	agentID := strings.TrimPrefix(r.URL.Path, "/api/discovery/agent/")
 
-	discoveries, err := h.service.ListDiscoveriesByHost(agentID)
+	discoveries, err := h.service.ListDiscoveriesByTarget(agentID)
 	if err != nil {
 		log.Error().Err(err).Str("agentId", agentID).Msg("Failed to list discoveries by agent")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to list discoveries")

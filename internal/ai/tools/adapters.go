@@ -839,13 +839,13 @@ func trimContainerName(name string) string {
 // DiscoverySource provides access to AI-powered infrastructure discovery data
 type DiscoverySource interface {
 	GetDiscovery(id string) (DiscoverySourceData, error)
-	GetDiscoveryByResource(resourceType, hostID, resourceID string) (DiscoverySourceData, error)
+	GetDiscoveryByResource(resourceType, targetID, resourceID string) (DiscoverySourceData, error)
 	ListDiscoveries() ([]DiscoverySourceData, error)
 	ListDiscoveriesByType(resourceType string) ([]DiscoverySourceData, error)
-	ListDiscoveriesByHost(hostID string) ([]DiscoverySourceData, error)
+	ListDiscoveriesByTarget(targetID string) ([]DiscoverySourceData, error)
 	FormatForAIContext(discoveries []DiscoverySourceData) string
 	// TriggerDiscovery initiates discovery for a resource, returning discovered data
-	TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (DiscoverySourceData, error)
+	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (DiscoverySourceData, error)
 }
 
 // DiscoverySourceData represents discovery data from the source
@@ -929,12 +929,12 @@ func (a *DiscoveryMCPAdapter) GetDiscovery(id string) (*ResourceDiscoveryInfo, e
 }
 
 // GetDiscoveryByResource implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) GetDiscoveryByResource(resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryMCPAdapter) GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
 
-	data, err := a.source.GetDiscoveryByResource(resourceType, hostID, resourceID)
+	data, err := a.source.GetDiscoveryByResource(resourceType, targetID, resourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -970,13 +970,13 @@ func (a *DiscoveryMCPAdapter) ListDiscoveriesByType(resourceType string) ([]*Res
 	return a.convertList(dataList), nil
 }
 
-// ListDiscoveriesByHost implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscoveryInfo, error) {
+// ListDiscoveriesByTarget implements tools.DiscoveryProvider
+func (a *DiscoveryMCPAdapter) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
 
-	dataList, err := a.source.ListDiscoveriesByHost(hostID)
+	dataList, err := a.source.ListDiscoveriesByTarget(targetID)
 	if err != nil {
 		return nil, err
 	}
@@ -1055,12 +1055,12 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 }
 
 // TriggerDiscovery implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryMCPAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
 
-	data, err := a.source.TriggerDiscovery(ctx, resourceType, hostID, resourceID)
+	data, err := a.source.TriggerDiscovery(ctx, resourceType, targetID, resourceID)
 	if err != nil {
 		return nil, err
 	}

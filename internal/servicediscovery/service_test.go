@@ -716,8 +716,8 @@ func TestService_FingerprintCollectionAndDiscoveryWrappers(t *testing.T) {
 	if list, err := service.ListDiscoveriesByType(ResourceTypeDocker); err != nil || len(list) != 1 {
 		t.Fatalf("ListDiscoveriesByType unexpected: %v len=%d", err, len(list))
 	}
-	if list, err := service.ListDiscoveriesByHost("host1"); err != nil || len(list) != 1 {
-		t.Fatalf("ListDiscoveriesByHost unexpected: %v len=%d", err, len(list))
+	if list, err := service.ListDiscoveriesByTarget("host1"); err != nil || len(list) != 1 {
+		t.Fatalf("ListDiscoveriesByTarget unexpected: %v len=%d", err, len(list))
 	}
 
 	if err := service.UpdateNotes(id, "note", map[string]string{"k": "v"}); err != nil {

@@ -181,7 +181,7 @@ func TestPredictFactKeys_BackupTasks(t *testing.T) {
 
 func TestExtractFacts_Discovery(t *testing.T) {
 	input := map[string]interface{}{"host": "delly", "resource_id": "106"}
-	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","host_id":"delly","resource_id":"106","ports":[{"port":25},{"port":22}]}`
+	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","target_id":"delly","resource_id":"106","ports":[{"port":25},{"port":22}]}`
 
 	facts := ExtractFacts("pulse_discovery", input, result)
 	require.Len(t, facts, 1)
@@ -303,20 +303,19 @@ func TestExtractFacts_Finding_MissingFields(t *testing.T) {
 
 func TestPredictFactKeys_Discovery(t *testing.T) {
 	keys := PredictFactKeys("pulse_discovery", map[string]interface{}{
-		"host_id":     "delly",
+		"target_id":   "delly",
 		"resource_id": "106",
 	})
 	require.Len(t, keys, 1)
 	assert.Equal(t, "discovery:delly:106", keys[0])
 }
 
-func TestPredictFactKeys_DiscoveryAltFields(t *testing.T) {
+func TestPredictFactKeys_DiscoveryLegacyHostIDRejected(t *testing.T) {
 	keys := PredictFactKeys("pulse_discovery", map[string]interface{}{
-		"host":        "minipc",
+		"host_id":     "minipc",
 		"resource_id": "pbs-minipc",
 	})
-	require.Len(t, keys, 1)
-	assert.Equal(t, "discovery:minipc:pbs-minipc", keys[0])
+	assert.Nil(t, keys)
 }
 
 func TestPredictFactKeys_Exec(t *testing.T) {
@@ -345,7 +344,7 @@ func TestPredictFactKeys_UnpredictableTools(t *testing.T) {
 }
 
 func TestPredictFactKeys_MissingFields(t *testing.T) {
-	// Discovery without host_id should return nil
+	// Discovery without target_id should return nil
 	assert.Nil(t, PredictFactKeys("pulse_discovery", map[string]interface{}{"resource_id": "106"}))
 	// Exec without command should return nil
 	assert.Nil(t, PredictFactKeys("pulse_read", map[string]interface{}{"target_host": "delly"}))

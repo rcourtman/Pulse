@@ -14,7 +14,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_discovery",
-			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, target_id; legacy host_id alias accepted). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
+			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, target_id). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -36,18 +36,10 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 						Type:        "string",
 						Description: "For get/list: canonical target identifier (agent ID, node ID, or cluster ID)",
 					},
-					"host_id": {
-						Type:        "string",
-						Description: "For get/list: legacy alias of target_id (kept for compatibility)",
-					},
 					"type": {
 						Type:        "string",
 						Description: "For list: filter by resource type",
 						Enum:        []string{"vm", "system-container", "docker", "agent"},
-					},
-					"host": {
-						Type:        "string",
-						Description: "For list: legacy alias of target_id",
 					},
 					"service_type": {
 						Type:        "string",
@@ -95,16 +87,16 @@ type CommandContext struct {
 
 // getCLIAccessPattern returns context about the resource type.
 // Does NOT prescribe how to access - the AI should determine that based on available agents.
-func getCLIAccessPattern(resourceType, hostID, resourceID string) string {
+func getCLIAccessPattern(resourceType, targetID, resourceID string) string {
 	switch resourceType {
 	case "system-container", "lxc":
-		return fmt.Sprintf("System container on node '%s' (VMID %s)", hostID, resourceID)
+		return fmt.Sprintf("System container on node '%s' (VMID %s)", targetID, resourceID)
 	case "vm":
-		return fmt.Sprintf("VM on node '%s' (VMID %s)", hostID, resourceID)
+		return fmt.Sprintf("VM on node '%s' (VMID %s)", targetID, resourceID)
 	case "docker":
-		return fmt.Sprintf("Docker container '%s' on host '%s'", resourceID, hostID)
+		return fmt.Sprintf("Docker container '%s' on target '%s'", resourceID, targetID)
 	case "agent":
-		return fmt.Sprintf("Host '%s'", hostID)
+		return fmt.Sprintf("Agent '%s'", targetID)
 	default:
 		return ""
 	}
@@ -225,9 +217,6 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	resourceType, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	targetID, _ := args["target_id"].(string)
-	if strings.TrimSpace(targetID) == "" {
-		targetID, _ = args["host_id"].(string)
-	}
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	targetID = strings.TrimSpace(targetID)
 
@@ -263,7 +252,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			if err == nil {
 				if resourceType == "system-container" {
 					for _, c := range rs.Containers() {
-						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesHostID(c.Node(), targetID) {
+						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesTargetID(c.Node(), targetID) {
 							resourceID = fmt.Sprintf("%d", c.VMID())
 							resolved = true
 							break
@@ -271,7 +260,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 					}
 				} else if resourceType == "vm" {
 					for _, vm := range rs.VMs() {
-						if strings.EqualFold(vm.Name(), resourceID) && nodeMatchesHostID(vm.Node(), targetID) {
+						if strings.EqualFold(vm.Name(), resourceID) && nodeMatchesTargetID(vm.Node(), targetID) {
 							resourceID = fmt.Sprintf("%d", vm.VMID())
 							resolved = true
 							break
@@ -317,7 +306,6 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 				"resource_type": responseType,
 				"resource_id":   resourceID,
 				"target_id":     targetID,
-				"host_id":       targetID,
 				"cli_access":    cliAccess,
 				"message":       fmt.Sprintf("Discovery failed: %v", err),
 				"hint":          "Use pulse_control with type='command' to investigate. Try checking /var/log/ for logs.",
@@ -332,7 +320,6 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			"resource_type": responseType,
 			"resource_id":   resourceID,
 			"target_id":     targetID,
-			"host_id":       targetID,
 			"cli_access":    cliAccess,
 			"message":       "Discovery returned no data. The resource may not be accessible.",
 			"hint":          "Use pulse_control with type='command' to investigate. Try listing /var/log/ or checking running processes.",
@@ -363,7 +350,10 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		}
 	}
 
-	discoveryTargetID := strings.TrimSpace(discovery.HostID)
+	discoveryTargetID := strings.TrimSpace(discovery.TargetID)
+	if discoveryTargetID == "" {
+		discoveryTargetID = strings.TrimSpace(discovery.HostID)
+	}
 	if discoveryTargetID == "" {
 		discoveryTargetID = targetID
 	}
@@ -375,7 +365,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		"resource_type":   discovery.ResourceType,
 		"resource_id":     discovery.ResourceID,
 		"target_id":       discoveryTargetID,
-		"host_id":         discoveryTargetID,
+		"agent_id":        discovery.AgentID,
 		"hostname":        discovery.Hostname,
 		"service_type":    discovery.ServiceType,
 		"service_name":    discovery.ServiceName,
@@ -476,14 +466,14 @@ func isTransientError(err error) bool {
 	return false
 }
 
-// nodeMatchesHostID checks if a node name matches a host_id which may be
+// nodeMatchesTargetID checks if a node name matches a target ID which may be
 // a plain node name ("delly") or a composite instance-node ID ("homelab-delly").
-func nodeMatchesHostID(nodeName, hostID string) bool {
-	if strings.EqualFold(nodeName, hostID) {
+func nodeMatchesTargetID(nodeName, targetID string) bool {
+	if strings.EqualFold(nodeName, targetID) {
 		return true
 	}
-	// Check if hostID is a composite "instance-node" format ending with the node name
-	if strings.HasSuffix(strings.ToLower(hostID), "-"+strings.ToLower(nodeName)) {
+	// Check if target ID is a composite "instance-node" format ending with the node name.
+	if strings.HasSuffix(strings.ToLower(targetID), "-"+strings.ToLower(nodeName)) {
 		return true
 	}
 	return false
@@ -500,12 +490,6 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 
 	filterType, _ := args["type"].(string)
 	filterTargetID, _ := args["target_id"].(string)
-	if strings.TrimSpace(filterTargetID) == "" {
-		filterTargetID, _ = args["host_id"].(string)
-	}
-	if strings.TrimSpace(filterTargetID) == "" {
-		filterTargetID, _ = args["host"].(string)
-	}
 	filterServiceType, _ := args["service_type"].(string)
 	limit := intArg(args, "limit", 50)
 	filterType = strings.ToLower(strings.TrimSpace(filterType))
@@ -529,7 +513,7 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	if filterType != "" {
 		discoveries, err = e.discoveryProvider.ListDiscoveriesByType(filterType)
 	} else if filterTargetID != "" {
-		discoveries, err = e.discoveryProvider.ListDiscoveriesByHost(filterTargetID)
+		discoveries, err = e.discoveryProvider.ListDiscoveriesByTarget(filterTargetID)
 	} else {
 		discoveries, err = e.discoveryProvider.ListDiscoveries()
 	}
@@ -559,12 +543,16 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	// Build response
 	results := make([]map[string]interface{}, 0, len(discoveries))
 	for _, d := range discoveries {
+		discoveryTargetID := strings.TrimSpace(d.TargetID)
+		if discoveryTargetID == "" {
+			discoveryTargetID = strings.TrimSpace(d.HostID)
+		}
 		result := map[string]interface{}{
 			"id":              d.ID,
 			"resource_type":   d.ResourceType,
 			"resource_id":     d.ResourceID,
-			"target_id":       d.HostID,
-			"host_id":         d.HostID,
+			"target_id":       discoveryTargetID,
+			"agent_id":        d.AgentID,
 			"hostname":        d.Hostname,
 			"service_type":    d.ServiceType,
 			"service_name":    d.ServiceName,
@@ -598,7 +586,6 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	}
 	if filterTargetID != "" {
 		response["filter_target_id"] = filterTargetID
-		response["filter_host"] = filterTargetID
 	}
 	if filterServiceType != "" {
 		response["filter_service_type"] = filterServiceType

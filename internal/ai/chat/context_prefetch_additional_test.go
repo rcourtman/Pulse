@@ -16,19 +16,19 @@ type mockDiscoveryProvider struct {
 	triggerErr   error
 }
 
-func (m *mockDiscoveryProvider) key(resourceType, hostID, resourceID string) string {
-	return resourceType + ":" + hostID + ":" + resourceID
+func (m *mockDiscoveryProvider) key(resourceType, targetID, resourceID string) string {
+	return resourceType + ":" + targetID + ":" + resourceID
 }
 
 func (m *mockDiscoveryProvider) GetDiscovery(id string) (*tools.ResourceDiscoveryInfo, error) {
 	return nil, nil
 }
 
-func (m *mockDiscoveryProvider) GetDiscoveryByResource(resourceType, hostID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
+func (m *mockDiscoveryProvider) GetDiscoveryByResource(resourceType, targetID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
 	if m.existing == nil {
 		return nil, nil
 	}
-	return m.existing[m.key(resourceType, hostID, resourceID)], nil
+	return m.existing[m.key(resourceType, targetID, resourceID)], nil
 }
 
 func (m *mockDiscoveryProvider) ListDiscoveries() ([]*tools.ResourceDiscoveryInfo, error) {
@@ -39,7 +39,7 @@ func (m *mockDiscoveryProvider) ListDiscoveriesByType(resourceType string) ([]*t
 	return nil, nil
 }
 
-func (m *mockDiscoveryProvider) ListDiscoveriesByHost(hostID string) ([]*tools.ResourceDiscoveryInfo, error) {
+func (m *mockDiscoveryProvider) ListDiscoveriesByTarget(targetID string) ([]*tools.ResourceDiscoveryInfo, error) {
 	return nil, nil
 }
 
@@ -47,16 +47,17 @@ func (m *mockDiscoveryProvider) FormatForAIContext(discoveries []*tools.Resource
 	return ""
 }
 
-func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
-	m.triggeredKey = append(m.triggeredKey, m.key(resourceType, hostID, resourceID))
+func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
+	m.triggeredKey = append(m.triggeredKey, m.key(resourceType, targetID, resourceID))
 	if m.triggerErr != nil {
 		return nil, m.triggerErr
 	}
 	return &tools.ResourceDiscoveryInfo{
 		ResourceType: resourceType,
-		HostID:       hostID,
+		TargetID:     targetID,
+		HostID:       targetID,
 		ResourceID:   resourceID,
-		Hostname:     hostID,
+		Hostname:     targetID,
 		ServiceType:  "nginx",
 		ServiceName:  "nginx",
 		ConfigPaths:  []string{"/etc/nginx/nginx.conf"},

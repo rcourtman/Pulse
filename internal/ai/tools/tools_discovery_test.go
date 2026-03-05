@@ -25,9 +25,9 @@ func (s *stubDiscoveryProvider) GetDiscovery(_ string) (*ResourceDiscoveryInfo, 
 	return nil, nil
 }
 
-func (s *stubDiscoveryProvider) GetDiscoveryByResource(resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error) {
+func (s *stubDiscoveryProvider) GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error) {
 	s.lastGetResourceType = resourceType
-	s.lastGetTargetID = hostID
+	s.lastGetTargetID = targetID
 	s.lastGetResourceID = resourceID
 	return s.getResp, s.getErr
 }
@@ -40,8 +40,8 @@ func (s *stubDiscoveryProvider) ListDiscoveriesByType(_ string) ([]*ResourceDisc
 	return nil, nil
 }
 
-func (s *stubDiscoveryProvider) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscoveryInfo, error) {
-	s.lastListTargetID = hostID
+func (s *stubDiscoveryProvider) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error) {
+	s.lastListTargetID = targetID
 	return s.listResp, s.listErr
 }
 
@@ -110,6 +110,7 @@ func TestExecuteGetDiscovery_UsesTargetID(t *testing.T) {
 			ID:           "vm:node1:101",
 			ResourceType: "vm",
 			ResourceID:   "101",
+			TargetID:     "node1",
 			HostID:       "node1",
 			Hostname:     "vm-101",
 		},
@@ -130,7 +131,6 @@ func TestExecuteGetDiscovery_UsesTargetID(t *testing.T) {
 	var payload map[string]interface{}
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "node1", payload["target_id"])
-	assert.Equal(t, "node1", payload["host_id"])
 }
 
 func TestExecuteGetDiscovery_TargetIDRequired(t *testing.T) {
@@ -152,6 +152,7 @@ func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 				ID:           "vm:node2:102",
 				ResourceType: "vm",
 				ResourceID:   "102",
+				TargetID:     "node2",
 				HostID:       "node2",
 				Hostname:     "vm-102",
 			},
@@ -169,5 +170,4 @@ func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 	var payload map[string]interface{}
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "node2", payload["filter_target_id"])
-	assert.Equal(t, "node2", payload["filter_host"])
 }

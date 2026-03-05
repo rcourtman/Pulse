@@ -20,8 +20,8 @@ func (m *MockDiscoverySource) GetDiscovery(id string) (DiscoverySourceData, erro
 	return args.Get(0).(DiscoverySourceData), args.Error(1)
 }
 
-func (m *MockDiscoverySource) GetDiscoveryByResource(resourceType, hostID, resourceID string) (DiscoverySourceData, error) {
-	args := m.Called(resourceType, hostID, resourceID)
+func (m *MockDiscoverySource) GetDiscoveryByResource(resourceType, targetID, resourceID string) (DiscoverySourceData, error) {
+	args := m.Called(resourceType, targetID, resourceID)
 	return args.Get(0).(DiscoverySourceData), args.Error(1)
 }
 
@@ -35,8 +35,8 @@ func (m *MockDiscoverySource) ListDiscoveriesByType(resourceType string) ([]Disc
 	return args.Get(0).([]DiscoverySourceData), args.Error(1)
 }
 
-func (m *MockDiscoverySource) ListDiscoveriesByHost(hostID string) ([]DiscoverySourceData, error) {
-	args := m.Called(hostID)
+func (m *MockDiscoverySource) ListDiscoveriesByTarget(targetID string) ([]DiscoverySourceData, error) {
+	args := m.Called(targetID)
 	return args.Get(0).([]DiscoverySourceData), args.Error(1)
 }
 
@@ -45,8 +45,8 @@ func (m *MockDiscoverySource) FormatForAIContext(discoveries []DiscoverySourceDa
 	return args.String(0)
 }
 
-func (m *MockDiscoverySource) TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (DiscoverySourceData, error) {
-	args := m.Called(ctx, resourceType, hostID, resourceID)
+func (m *MockDiscoverySource) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (DiscoverySourceData, error) {
+	args := m.Called(ctx, resourceType, targetID, resourceID)
 	return args.Get(0).(DiscoverySourceData), args.Error(1)
 }
 
@@ -171,14 +171,14 @@ func TestDiscoveryMCPAdapter_ListDiscoveriesByType(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_ListDiscoveriesByHost(t *testing.T) {
+func TestDiscoveryMCPAdapter_ListDiscoveriesByTarget(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
 	adapter := NewDiscoveryMCPAdapter(mockSource)
 
 	list := []DiscoverySourceData{{ID: "d1", HostID: "h1"}}
-	mockSource.On("ListDiscoveriesByHost", "h1").Return(list, nil)
+	mockSource.On("ListDiscoveriesByTarget", "h1").Return(list, nil)
 
-	results, err := adapter.ListDiscoveriesByHost("h1")
+	results, err := adapter.ListDiscoveriesByTarget("h1")
 	assert.NoError(t, err)
 	assert.Len(t, results, 1)
 

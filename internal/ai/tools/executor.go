@@ -168,13 +168,13 @@ type UpdatesProvider interface {
 // DiscoveryProvider provides AI-powered infrastructure discovery
 type DiscoveryProvider interface {
 	GetDiscovery(id string) (*ResourceDiscoveryInfo, error)
-	GetDiscoveryByResource(resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error)
+	GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error)
 	ListDiscoveries() ([]*ResourceDiscoveryInfo, error)
 	ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error)
-	ListDiscoveriesByHost(hostID string) ([]*ResourceDiscoveryInfo, error)
+	ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error)
 	FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string
 	// TriggerDiscovery initiates discovery for a resource and returns the result
-	TriggerDiscovery(ctx context.Context, resourceType, hostID, resourceID string) (*ResourceDiscoveryInfo, error)
+	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error)
 }
 
 // ResolvedResourceInfo contains the minimal information needed for tool validation.

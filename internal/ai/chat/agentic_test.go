@@ -457,7 +457,7 @@ func TestHasPhantomExecution(t *testing.T) {
 
 func TestToolCallKey(t *testing.T) {
 	t.Run("same name and input produce same key", func(t *testing.T) {
-		input := map[string]interface{}{"action": "get", "resource_type": "lxc", "host_id": "node1"}
+		input := map[string]interface{}{"action": "get", "resource_type": "lxc", "target_id": "node1"}
 		k1 := toolCallKey("pulse_discovery", input)
 		k2 := toolCallKey("pulse_discovery", input)
 		assert.Equal(t, k1, k2)
@@ -584,7 +584,7 @@ func TestLoopDetectionIntegration(t *testing.T) {
 							"action":        "get",
 							"resource_type": "lxc",
 							"resource_id":   "100",
-							"host_id":       "node1",
+							"target_id":     "node1",
 						},
 					},
 				},

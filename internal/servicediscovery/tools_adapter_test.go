@@ -173,12 +173,12 @@ func TestToolsAdapter_ListDiscoveries(t *testing.T) {
 		assert.Equal(t, "d1", list[0].ID)
 	})
 
-	t.Run("ListDiscoveriesByHost filters correctly", func(t *testing.T) {
+	t.Run("ListDiscoveriesByTarget filters correctly", func(t *testing.T) {
 		// Add one on another host
 		d3 := &ResourceDiscovery{ID: "d3", ResourceType: ResourceTypeDocker, HostID: "h2", ResourceID: "r3"}
 		require.NoError(t, store.Save(d3))
 
-		list, err := adapter.ListDiscoveriesByHost("h1")
+		list, err := adapter.ListDiscoveriesByTarget("h1")
 		require.NoError(t, err)
 		assert.Len(t, list, 2) // d1 and d2
 	})

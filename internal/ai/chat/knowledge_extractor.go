@@ -715,6 +715,7 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 	var disc struct {
 		ServiceType string `json:"service_type"`
 		Hostname    string `json:"hostname"`
+		TargetID    string `json:"target_id"`
 		HostID      string `json:"host_id"`
 		ResourceID  string `json:"resource_id"`
 		Ports       []struct {
@@ -725,9 +726,12 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 		return nil
 	}
 
-	host := disc.HostID
-	if host == "" {
-		host = strFromMap(input, "host")
+	target := disc.TargetID
+	if target == "" {
+		target = strFromMap(input, "target_id")
+	}
+	if target == "" {
+		target = disc.HostID
 	}
 	id := disc.ResourceID
 	if id == "" {
@@ -755,7 +759,7 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 
 	return []FactEntry{{
 		Category: FactCategoryDiscovery,
-		Key:      fmt.Sprintf("discovery:%s:%s", host, id),
+		Key:      fmt.Sprintf("discovery:%s:%s", target, id),
 		Value:    truncateValue(strings.Join(parts, ", ")),
 	}}
 }
@@ -2063,13 +2067,10 @@ func PredictFactKeys(toolName string, toolInput map[string]interface{}) []string
 			}
 		}
 	case "pulse_discovery":
-		host := strFromMap(toolInput, "host_id")
-		if host == "" {
-			host = strFromMap(toolInput, "host")
-		}
+		target := strFromMap(toolInput, "target_id")
 		id := strFromMap(toolInput, "resource_id")
-		if host != "" && id != "" {
-			return []string{fmt.Sprintf("discovery:%s:%s", host, id)}
+		if target != "" && id != "" {
+			return []string{fmt.Sprintf("discovery:%s:%s", target, id)}
 		}
 	case "pulse_read", "pulse_run_command":
 		host := strFromMap(toolInput, "target_host")

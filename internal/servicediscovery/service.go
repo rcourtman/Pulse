@@ -2491,13 +2491,13 @@ func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 	return d, nil
 }
 
-func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
+func (s *Service) GetDiscoveryByResource(resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
 	req := DiscoveryRequest{
 		ResourceType: resourceType,
-		HostID:       hostID,
+		HostID:       targetID,
 		ResourceID:   resourceID,
 	}
-	aliasIDs := []string{MakeResourceID(resourceType, hostID, resourceID)}
+	aliasIDs := []string{MakeResourceID(resourceType, targetID, resourceID)}
 	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
 	d, err := s.store.GetByResource(resourceType, req.HostID, req.ResourceID)
@@ -2548,11 +2548,11 @@ func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceD
 	return discoveries, nil
 }
 
-// ListDiscoveriesByHost returns discoveries for a specific host.
-func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, error) {
-	discoveries, err := s.store.ListByHost(hostID)
+// ListDiscoveriesByTarget returns discoveries for a specific target ID.
+func (s *Service) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscovery, error) {
+	discoveries, err := s.store.ListByHost(targetID)
 	if err != nil {
-		return nil, fmt.Errorf("list discoveries by host %q: %w", hostID, err)
+		return nil, fmt.Errorf("list discoveries by target %q: %w", targetID, err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
