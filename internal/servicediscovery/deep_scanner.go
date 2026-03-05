@@ -3,7 +3,6 @@ package servicediscovery
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -140,10 +139,7 @@ type ScanResult struct {
 
 // Scan runs discovery commands on a resource and returns the outputs.
 func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResult, error) {
-	requestTargetID := strings.TrimSpace(req.TargetID)
-	if requestTargetID == "" {
-		requestTargetID = strings.TrimSpace(req.HostID)
-	}
+	requestTargetID := canonicalRequestTargetID(req)
 	resourceID := MakeResourceID(req.ResourceType, requestTargetID, req.ResourceID)
 	startTime := time.Now()
 	scanLog := log.With().

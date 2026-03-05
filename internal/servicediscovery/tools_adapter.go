@@ -134,10 +134,7 @@ func (a *ToolsAdapter) convertToSourceData(d *ResourceDiscovery) tools.Discovery
 		})
 	}
 
-	targetID := strings.TrimSpace(d.TargetID)
-	if targetID == "" {
-		targetID = strings.TrimSpace(d.HostID)
-	}
+	targetID := canonicalDiscoveryTargetID(d)
 	agentID := strings.TrimSpace(d.AgentID)
 	if agentID == "" && d.ResourceType == ResourceTypeAgent {
 		agentID = targetID
