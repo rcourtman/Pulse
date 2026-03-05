@@ -35,8 +35,8 @@ describe('Resource Type Guards', () => {
     const infrastructureTypes: ResourceType[] = ['node', 'docker-host', 'k8s-node', 'truenas'];
     const nonInfrastructureTypes: ResourceType[] = [
       'vm',
-      'container',
-      'docker-container',
+      'system-container',
+      'app-container',
       'pod',
       'jail',
       'storage',
@@ -54,7 +54,13 @@ describe('Resource Type Guards', () => {
   });
 
   describe('isWorkload', () => {
-    const workloadTypes: ResourceType[] = ['vm', 'container', 'docker-container', 'pod', 'jail'];
+    const workloadTypes: ResourceType[] = [
+      'vm',
+      'system-container',
+      'app-container',
+      'pod',
+      'jail',
+    ];
     const nonWorkloadTypes: ResourceType[] = ['node', 'docker-host', 'storage', 'pbs'];
 
     it.each(workloadTypes)('returns true for %s', (type) => {
@@ -70,7 +76,7 @@ describe('Resource Type Guards', () => {
 
   describe('isStorage', () => {
     const storageTypes: ResourceType[] = ['storage', 'datastore', 'pool', 'dataset'];
-    const nonStorageTypes: ResourceType[] = ['vm', 'node', 'container', 'docker-host'];
+    const nonStorageTypes: ResourceType[] = ['vm', 'node', 'system-container', 'docker-host'];
 
     it.each(storageTypes)('returns true for %s', (type) => {
       const resource = createResource({ type });
@@ -181,9 +187,9 @@ describe('Resource Interface', () => {
       'k8s-node',
       'truenas',
       'vm',
+      'system-container',
       'app-container',
-      'container',
-      'docker-container',
+      'oci-container',
       'pod',
       'jail',
       'docker-service',
@@ -259,7 +265,7 @@ describe('Resource Interface', () => {
 
   it('supports platformData for type-specific data', () => {
     const dockerContainer = createResource({
-      type: 'docker-container',
+      type: 'app-container',
       platformData: {
         image: 'nginx:latest',
         health: 'healthy',

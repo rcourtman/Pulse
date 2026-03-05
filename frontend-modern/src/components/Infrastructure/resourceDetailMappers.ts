@@ -313,7 +313,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         targetLabel: 'guest',
       };
     case 'system-container':
-    case 'container':
     case 'oci-container':
       return {
         resourceType: 'system-container',
@@ -325,7 +324,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         targetLabel: 'guest',
       };
     case 'app-container':
-    case 'docker-container':
       return {
         resourceType: 'docker',
         agentId: workloadAgentId,

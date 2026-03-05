@@ -137,11 +137,11 @@ describe('toDiscoveryConfig', () => {
     });
   });
 
-  it('prefers docker hostSourceId for docker-container fallback agentId', () => {
+  it('prefers docker hostSourceId for app-container fallback agentId', () => {
     const resource: Resource = {
       ...baseResource(),
-      id: 'resource:docker-container:hash-1',
-      type: 'docker-container',
+      id: 'resource:app-container:hash-1',
+      type: 'app-container',
       platformType: 'docker',
       platformData: {
         sources: ['docker'],
@@ -159,7 +159,7 @@ describe('toDiscoveryConfig', () => {
       resourceId: 'container-abc123',
       hostname: 'stale-hostname',
       metadataKind: 'guest',
-      metadataId: 'resource:docker-container:hash-1',
+      metadataId: 'resource:app-container:hash-1',
       targetLabel: 'container',
     });
   });

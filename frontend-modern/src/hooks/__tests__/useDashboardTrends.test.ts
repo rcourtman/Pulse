@@ -57,13 +57,14 @@ describe('mapUnifiedTypeToHistoryType', () => {
     expect(mapUnifiedTypeToHistoryType('k8s-cluster')).toBe('k8s');
     expect(mapUnifiedTypeToHistoryType('truenas')).toBe('node');
     expect(mapUnifiedTypeToHistoryType('vm')).toBe('guest');
-    expect(mapUnifiedTypeToHistoryType('container')).toBe('guest');
-    expect(mapUnifiedTypeToHistoryType('docker-container')).toBe('docker');
+    expect(mapUnifiedTypeToHistoryType('system-container')).toBe('guest');
+    expect(mapUnifiedTypeToHistoryType('oci-container')).toBe('guest');
+    expect(mapUnifiedTypeToHistoryType('app-container')).toBe('docker');
     expect(mapUnifiedTypeToHistoryType('pod')).toBe('k8s');
   });
 
   it('returns null for unmapped unified types', () => {
-    expect(mapUnifiedTypeToHistoryType('oci-container')).toBeNull();
+    expect(mapUnifiedTypeToHistoryType('container')).toBeNull();
   });
 });
 

@@ -226,9 +226,10 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
     case 'truenas':
       return 'node';
     case 'vm':
-    case 'container':
+    case 'system-container':
+    case 'oci-container':
       return 'guest';
-    case 'docker-container':
+    case 'app-container':
       return 'docker';
     case 'pod':
       return 'k8s';

@@ -275,13 +275,13 @@ describe('unifiedTypeToAlertDisplayType', () => {
     expect(unifiedTypeToAlertDisplayType('vm')).toBe('VM');
   });
 
-  it('maps container and oci-container to Container', () => {
-    expect(unifiedTypeToAlertDisplayType('container')).toBe('Container');
+  it('maps system-container and oci-container to Container', () => {
+    expect(unifiedTypeToAlertDisplayType('system-container')).toBe('Container');
     expect(unifiedTypeToAlertDisplayType('oci-container')).toBe('Container');
   });
 
-  it('maps docker-container to Container', () => {
-    expect(unifiedTypeToAlertDisplayType('docker-container')).toBe('Container');
+  it('maps app-container to Container', () => {
+    expect(unifiedTypeToAlertDisplayType('app-container')).toBe('Container');
   });
 
   it('maps node to Node', () => {
@@ -323,9 +323,9 @@ describe('Unified selector parity', () => {
       ['k8s-node', 'k8s-node'],
       ['truenas', 'truenas'],
       ['vm', 'VM'],
-      ['container', 'Container'],
+      ['system-container', 'Container'],
       ['oci-container', 'Container'],
-      ['docker-container', 'Container'],
+      ['app-container', 'Container'],
       ['pod', 'pod'],
       ['jail', 'jail'],
       ['docker-service', 'docker-service'],
@@ -382,7 +382,7 @@ describe('Unified selector parity', () => {
     });
 
     const buildUnifiedGuestOverride = (
-      resourceType: 'vm' | 'container' | 'oci-container',
+      resourceType: 'vm' | 'system-container' | 'oci-container',
       id: string,
       name: string,
       vmid: number,
@@ -416,7 +416,14 @@ describe('Unified selector parity', () => {
     );
 
     expect(
-      buildUnifiedGuestOverride('container', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
+      buildUnifiedGuestOverride(
+        'system-container',
+        'ct-pve1-200',
+        'ct-200',
+        200,
+        'pve1',
+        'pve1/lxc/200',
+      ),
     ).toEqual(
       buildLegacyGuestOverride('lxc', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
     );

@@ -39,9 +39,7 @@ const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
   'vm',
   'system-container',
   'app-container',
-  'container',
   'oci-container',
-  'docker-container',
   'pod',
   'storage',
   'datastore',
@@ -64,9 +62,7 @@ const WORKLOAD_TYPES = new Set<ResourceType>([
   'vm',
   'system-container',
   'app-container',
-  'container',
   'oci-container',
-  'docker-container',
   'pod',
 ]);
 
@@ -75,9 +71,8 @@ const STORAGE_TYPES = new Set<ResourceType>(['storage', 'datastore', 'pool', 'da
 const RECOVERY_TYPES = new Set<ResourceType>(['pbs', 'datastore']);
 
 function normalizeType(type: ResourceType): string {
-  if (type === 'system-container' || type === 'oci-container' || type === 'container')
-    return 'container';
-  if (type === 'app-container' || type === 'docker-container') return 'docker';
+  if (type === 'system-container' || type === 'oci-container') return 'container';
+  if (type === 'app-container') return 'docker';
   if (type === 'docker-host') return 'agent';
   if (type === 'k8s-node') return 'node';
   if (type === 'k8s-cluster') return 'cluster';
@@ -85,9 +80,8 @@ function normalizeType(type: ResourceType): string {
 }
 
 function toReportResourceType(type: ResourceType): string {
-  if (type === 'system-container' || type === 'oci-container' || type === 'container')
-    return 'container';
-  if (type === 'app-container' || type === 'docker-container') return 'dockerContainer';
+  if (type === 'system-container' || type === 'oci-container') return 'container';
+  if (type === 'app-container') return 'dockerContainer';
   if (type === 'docker-host') return 'dockerHost';
   return type;
 }
@@ -130,11 +124,9 @@ function getTypeBadge(type: ResourceType): { label: string; classes: string } {
     case 'vm':
       return { label: 'VM', classes: 'bg-slate-500 text-slate-300' };
     case 'system-container':
-    case 'container':
     case 'oci-container':
       return { label: 'Container', classes: 'bg-blue-500 text-blue-300' };
     case 'app-container':
-    case 'docker-container':
       return { label: 'App Container', classes: 'bg-blue-500 text-blue-300' };
     case 'pod':
       return { label: 'Pod', classes: 'bg-slate-500 text-slate-300' };
