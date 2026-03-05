@@ -1,6 +1,6 @@
 import type {
   Disk,
-  Host,
+  Agent,
   HostNetworkInterface,
   HostRAIDArray,
   HostSensorSummary,
@@ -118,7 +118,7 @@ export type PlatformData = {
   matches?: unknown;
 };
 
-export type DockerHostCommand = {
+export type DockerRuntimeCommand = {
   id?: string;
   type?: string;
   status?: string;
@@ -156,7 +156,7 @@ export type DockerPlatformData = {
   containerCount?: number;
   updatesAvailableCount?: number;
   updatesLastCheckedAt?: string;
-  command?: DockerHostCommand;
+  command?: DockerRuntimeCommand;
 };
 
 export type DiscoveryConfig = {
@@ -377,7 +377,7 @@ export const buildDisk = (metric?: ResourceMetric, fallback?: Partial<Disk>): Di
   };
 };
 
-export const toHostDisks = (disks?: AgentDiskInfo[]): Disk[] | undefined => {
+export const toAgentDisks = (disks?: AgentDiskInfo[]): Disk[] | undefined => {
   if (!disks || disks.length === 0) return undefined;
   return disks.map((disk) => {
     const total = disk.total ?? 0;
@@ -433,10 +433,10 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
   } as Node;
 };
 
-export const toHostFromAgent = (
+export const toAgentFromResource = (
   resource: Resource,
   explicitAgent?: AgentPlatformData,
-): Host | null => {
+): Agent | null => {
   const platformData = resource.platformData as PlatformData | undefined;
   const agent = explicitAgent ?? platformData?.agent;
   if (!agent) return null;
@@ -462,7 +462,7 @@ export const toHostFromAgent = (
     architecture: agent.architecture ?? 'Unknown',
     cpuCount,
     memory: buildMemory(resource.memory, agent.memory),
-    disks: toHostDisks(agent.disks),
+    disks: toAgentDisks(agent.disks),
     networkInterfaces: agent.networkInterfaces,
     sensors: agent.sensors,
     raid: agent.raid,
@@ -471,7 +471,7 @@ export const toHostFromAgent = (
     lastSeen: resource.lastSeen,
     agentVersion: agent.agentVersion,
     tags: resource.tags,
-  } as Host;
+  } as Agent;
 };
 
 export const formatSensorName = (name: string) => {

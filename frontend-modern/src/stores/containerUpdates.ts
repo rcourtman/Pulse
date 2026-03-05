@@ -5,7 +5,7 @@
  * This ensures the UI shows consistent "updating" state until the update completes.
  */
 import { createSignal } from 'solid-js';
-import type { DockerHostCommand } from '@/types/api';
+import type { DockerRuntimeCommand } from '@/types/api';
 
 export type ContainerUpdateState = 'queued' | 'updating' | 'success' | 'error';
 
@@ -121,7 +121,10 @@ export function markContainerQueued(agentId: string, containerId: string, comman
  * Sync container update state with backend command status from WebSocket.
  * This provides real-time progress tracking.
  */
-export function syncWithAgentCommand(agentId: string, command: DockerHostCommand | undefined): void {
+export function syncWithAgentCommand(
+  agentId: string,
+  command: DockerRuntimeCommand | undefined,
+): void {
   if (!command) return;
 
   // Only update if we have a matching entry or if the command is for update_container

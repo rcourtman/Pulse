@@ -252,11 +252,11 @@ export interface DockerHost {
   tokenRevokedAt?: number;
   hidden?: boolean;
   pendingUninstall?: boolean;
-  command?: DockerHostCommand;
+  command?: DockerRuntimeCommand;
   isLegacy?: boolean;
 }
 
-export interface DockerHostCommand {
+export interface DockerRuntimeCommand {
   id: string;
   type: string;
   status: string;
@@ -414,7 +414,7 @@ export interface PodmanContainerMetadata {
   userNamespace?: string;
 }
 
-export interface Host {
+export interface Agent {
   id: string;
   hostname: string;
   displayName: string;
@@ -512,17 +512,19 @@ export interface HostDiskIO {
   ioTimeMs?: number;
 }
 
+export interface AgentLookupIdentity {
+  id: string;
+  hostname: string;
+  displayName?: string;
+  status: string;
+  connected: boolean;
+  lastSeen: number;
+  agentVersion?: string;
+}
+
 export interface AgentLookupResponse {
   success: boolean;
-  host: {
-    id: string;
-    hostname: string;
-    displayName?: string;
-    status: string;
-    connected: boolean;
-    lastSeen: number;
-    agentVersion?: string;
-  };
+  agent?: AgentLookupIdentity;
 }
 
 export interface ReplicationJob {

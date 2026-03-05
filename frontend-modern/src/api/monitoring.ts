@@ -2,7 +2,7 @@ import type {
   State,
   Performance,
   Stats,
-  DockerHostCommand,
+  DockerRuntimeCommand,
   AgentLookupResponse,
 } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
@@ -401,7 +401,7 @@ export interface DeleteDockerHostResponse {
   success?: boolean;
   agentId?: string;
   message?: string;
-  command?: DockerHostCommand;
+  command?: DockerRuntimeCommand;
 }
 
 export interface DeleteKubernetesClusterResponse {
