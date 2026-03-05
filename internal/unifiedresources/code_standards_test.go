@@ -551,6 +551,22 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "ai", "adapters", "adapters_additional_test.go"),
+			requiredSnippets: []string{
+				`expected unsupported host resource ID to be rejected`,
+				`expected unsupported host query alias to be rejected`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "knowledge", "store_extended_test.go"),
+			requiredSnippets: []string{
+				`expected unsupported host guest ID to be rejected`,
+				`expected unsupported host guest ID query to be rejected`,
+				`expected unsupported host guest type to be rejected`,
+				`expected unsupported host file to remain unchanged`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
 			requiredSnippets: []string{
 				`TestNormalizeReportResourceType_RejectsLegacyAliases`,
