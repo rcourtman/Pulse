@@ -75,3 +75,14 @@ func TestService_SetResourceURL_ProviderErrors(t *testing.T) {
 		t.Fatalf("expected wrapped host error, got %v", err)
 	}
 }
+
+func TestService_SetResourceURL_RejectsLegacyGuestTypeAliases(t *testing.T) {
+	svc := &Service{metadataProvider: &mockMetadataProvider{}}
+
+	for _, legacyType := range []string{"container", "lxc", "qemu"} {
+		err := svc.SetResourceURL(legacyType, "guest-1", "https://example.com")
+		if err == nil || !strings.Contains(err.Error(), "unknown resource type") {
+			t.Fatalf("expected unknown resource type error for %q, got %v", legacyType, err)
+		}
+	}
+}
