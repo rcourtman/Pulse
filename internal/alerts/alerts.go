@@ -3420,7 +3420,9 @@ func (m *Manager) clearHostMetricAlerts(hostID string, metrics ...string) {
 	if hostID == "" {
 		return
 	}
-	resourceIDs := []string{hostResourceID(hostID)}
+	resourceIDs := []string{
+		hostResourceID(hostID),
+	}
 	if len(metrics) == 0 {
 		metrics = []string{"cpu", "memory"}
 	}

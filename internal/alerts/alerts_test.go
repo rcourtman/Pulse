@@ -4713,13 +4713,13 @@ func TestClearHostMetricAlerts(t *testing.T) {
 
 		// Create an alert that should not be touched
 		m.mu.Lock()
-		m.activeAlerts["host:unknown-cpu"] = &Alert{ID: "host:unknown-cpu"}
+		m.activeAlerts["agent:unknown-cpu"] = &Alert{ID: "agent:unknown-cpu"}
 		m.mu.Unlock()
 
 		m.clearHostMetricAlerts("", "cpu")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host:unknown-cpu"]
+		_, exists := m.activeAlerts["agent:unknown-cpu"]
 		m.mu.RUnlock()
 
 		if !exists {
@@ -4781,7 +4781,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m.mu.Lock()
 		m.activeAlerts["disk-alert"] = &Alert{
 			ID:         "disk-alert",
-			ResourceID: "host:unknown/disk:sda",
+			ResourceID: "agent:unknown/disk:sda",
 		}
 		m.mu.Unlock()
 
@@ -4830,7 +4830,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m.mu.Lock()
 		m.activeAlerts["other-alert"] = &Alert{
 			ID:         "other-alert",
-			ResourceID: "host:other-host/disk:sda",
+			ResourceID: "agent:other-host/disk:sda",
 		}
 		m.mu.Unlock()
 
@@ -4904,7 +4904,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m.mu.Lock()
 		m.activeAlerts["disk-alert"] = &Alert{
 			ID:         "disk-alert",
-			ResourceID: "host:unknown/disk:sda",
+			ResourceID: "agent:unknown/disk:sda",
 		}
 		m.mu.Unlock()
 
@@ -5420,7 +5420,7 @@ func TestHandleHostOnline(t *testing.T) {
 
 		host := models.Host{ID: "host-1", Hostname: "my-host"}
 		alertID := fmt.Sprintf("host-offline-%s", host.ID)
-		resourceKey := fmt.Sprintf("host:%s", host.ID)
+		resourceKey := hostResourceID(host.ID)
 
 		// Set up offline alert and tracking
 		m.mu.Lock()
@@ -5448,7 +5448,7 @@ func TestHandleHostOnline(t *testing.T) {
 		m := newTestManager(t)
 
 		host := models.Host{ID: "host-2"}
-		resourceKey := fmt.Sprintf("host:%s", host.ID)
+		resourceKey := hostResourceID(host.ID)
 
 		// Only tracking, no alert
 		m.mu.Lock()
@@ -5473,7 +5473,7 @@ func TestHandleHostOnline(t *testing.T) {
 		// Create data that should not be touched
 		m.mu.Lock()
 		m.activeAlerts["host-offline-other"] = &Alert{ID: "host-offline-other"}
-		m.offlineConfirmations["host:other"] = 3
+		m.offlineConfirmations[hostResourceID("other")] = 3
 		m.mu.Unlock()
 
 		host := models.Host{ID: ""}
@@ -5481,7 +5481,7 @@ func TestHandleHostOnline(t *testing.T) {
 
 		m.mu.RLock()
 		_, alertExists := m.activeAlerts["host-offline-other"]
-		_, confirmExists := m.offlineConfirmations["host:other"]
+		_, confirmExists := m.offlineConfirmations[hostResourceID("other")]
 		m.mu.RUnlock()
 
 		if !alertExists {
@@ -6146,7 +6146,7 @@ func TestHandleHostOffline(t *testing.T) {
 		// Pre-create an alert and confirmation
 		alertID := "host-offline-host1"
 		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
-		m.offlineConfirmations["host:host1"] = 5
+		m.offlineConfirmations[hostResourceID("host1")] = 5
 
 		host := models.Host{ID: "host1", Hostname: "test-host"}
 		m.HandleHostOffline(host)
@@ -6155,7 +6155,7 @@ func TestHandleHostOffline(t *testing.T) {
 		if _, exists := m.activeAlerts[alertID]; exists {
 			t.Error("expected alert to be cleared")
 		}
-		if _, exists := m.offlineConfirmations["host:host1"]; exists {
+		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
 			t.Error("expected offlineConfirmations to be cleared")
 		}
 	})
@@ -6171,7 +6171,7 @@ func TestHandleHostOffline(t *testing.T) {
 		// Pre-create an alert and confirmation
 		alertID := "host-offline-host1"
 		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
-		m.offlineConfirmations["host:host1"] = 5
+		m.offlineConfirmations[hostResourceID("host1")] = 5
 
 		host := models.Host{ID: "host1", Hostname: "test-host"}
 		m.HandleHostOffline(host)
@@ -6180,7 +6180,7 @@ func TestHandleHostOffline(t *testing.T) {
 		if _, exists := m.activeAlerts[alertID]; exists {
 			t.Error("expected alert to be cleared")
 		}
-		if _, exists := m.offlineConfirmations["host:host1"]; exists {
+		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
 			t.Error("expected offlineConfirmations to be cleared")
 		}
 	})
@@ -6339,17 +6339,17 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		}
 	})
 
-	t.Run("DisableAllAgents resolves Host alerts", func(t *testing.T) {
+	t.Run("DisableAllAgents resolves Agent alerts", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
-		// Add host alert with resourceType metadata
+		// Add agent alert with resourceType metadata
 		m.activeAlerts["host-1-cpu"] = &Alert{
 			ID:    "host-1-cpu",
 			Type:  "cpu",
 			Value: 90,
 			Metadata: map[string]interface{}{
-				"resourceType": "Host",
+				"resourceType": "Agent",
 			},
 		}
 
@@ -6359,9 +6359,9 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.reevaluateActiveAlertsLocked()
 		m.mu.Unlock()
 
-		// Host alert should be resolved
+		// Agent alert should be resolved
 		if _, exists := m.activeAlerts["host-1-cpu"]; exists {
-			t.Error("expected Host alert to be resolved")
+			t.Error("expected Agent alert to be resolved")
 		}
 	})
 
@@ -6615,16 +6615,16 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.config.Enabled = true
 		m.activeAlerts["host-offline-host1"] = &Alert{
 			ID:         "host-offline-host1",
-			ResourceID: "host:host1",
+			ResourceID: hostResourceID("host1"),
 		}
-		m.offlineConfirmations["host:host1"] = 5
+		m.offlineConfirmations[hostResourceID("host1")] = 5
 		m.mu.Unlock()
 
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
 
 		m.mu.RLock()
 		_, alertExists := m.activeAlerts["host-offline-host1"]
-		_, confirmExists := m.offlineConfirmations["host:host1"]
+		_, confirmExists := m.offlineConfirmations[hostResourceID("host1")]
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -6641,21 +6641,21 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.mu.Lock()
 		m.config.Enabled = true
 		// Add CPU and memory alerts for host
-		m.activeAlerts["host:host1-cpu"] = &Alert{
-			ID:         "host:host1-cpu",
-			ResourceID: "host:host1",
+		m.activeAlerts["agent:host1-cpu"] = &Alert{
+			ID:         "agent:host1-cpu",
+			ResourceID: hostResourceID("host1"),
 		}
-		m.activeAlerts["host:host1-memory"] = &Alert{
-			ID:         "host:host1-memory",
-			ResourceID: "host:host1",
+		m.activeAlerts["agent:host1-memory"] = &Alert{
+			ID:         "agent:host1-memory",
+			ResourceID: hostResourceID("host1"),
 		}
 		m.mu.Unlock()
 
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["host:host1-cpu"]
-		_, memExists := m.activeAlerts["host:host1-memory"]
+		_, cpuExists := m.activeAlerts["agent:host1-cpu"]
+		_, memExists := m.activeAlerts["agent:host1-memory"]
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -6672,21 +6672,21 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.mu.Lock()
 		m.config.Enabled = true
 		// Add disk alerts for host
-		m.activeAlerts["host:host1/disk:sda-usage"] = &Alert{
-			ID:         "host:host1/disk:sda-usage",
-			ResourceID: "host:host1/disk:sda",
+		m.activeAlerts["agent:host1/disk:sda-usage"] = &Alert{
+			ID:         "agent:host1/disk:sda-usage",
+			ResourceID: fmt.Sprintf("%s/disk:sda", hostResourceID("host1")),
 		}
-		m.activeAlerts["host:host1/disk:sdb-usage"] = &Alert{
-			ID:         "host:host1/disk:sdb-usage",
-			ResourceID: "host:host1/disk:sdb",
+		m.activeAlerts["agent:host1/disk:sdb-usage"] = &Alert{
+			ID:         "agent:host1/disk:sdb-usage",
+			ResourceID: fmt.Sprintf("%s/disk:sdb", hostResourceID("host1")),
 		}
 		m.mu.Unlock()
 
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
 
 		m.mu.RLock()
-		_, sda := m.activeAlerts["host:host1/disk:sda-usage"]
-		_, sdb := m.activeAlerts["host:host1/disk:sdb-usage"]
+		_, sda := m.activeAlerts["agent:host1/disk:sda-usage"]
+		_, sdb := m.activeAlerts["agent:host1/disk:sdb-usage"]
 		m.mu.RUnlock()
 
 		if sda {
@@ -6703,11 +6703,11 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.mu.Lock()
 		m.config.Enabled = true
 		// Add multiple alert types
-		m.activeAlerts["host-offline-host1"] = &Alert{ID: "host-offline-host1", ResourceID: "host:host1"}
-		m.activeAlerts["host:host1-cpu"] = &Alert{ID: "host:host1-cpu", ResourceID: "host:host1"}
-		m.activeAlerts["host:host1-memory"] = &Alert{ID: "host:host1-memory", ResourceID: "host:host1"}
-		m.activeAlerts["host:host1/disk:sda-usage"] = &Alert{ID: "host:host1/disk:sda-usage", ResourceID: "host:host1/disk:sda"}
-		m.offlineConfirmations["host:host1"] = 3
+		m.activeAlerts["host-offline-host1"] = &Alert{ID: "host-offline-host1", ResourceID: hostResourceID("host1")}
+		m.activeAlerts["agent:host1-cpu"] = &Alert{ID: "agent:host1-cpu", ResourceID: hostResourceID("host1")}
+		m.activeAlerts["agent:host1-memory"] = &Alert{ID: "agent:host1-memory", ResourceID: hostResourceID("host1")}
+		m.activeAlerts["agent:host1/disk:sda-usage"] = &Alert{ID: "agent:host1/disk:sda-usage", ResourceID: fmt.Sprintf("%s/disk:sda", hostResourceID("host1"))}
+		m.offlineConfirmations[hostResourceID("host1")] = 3
 		m.mu.Unlock()
 
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
@@ -6719,7 +6719,7 @@ func TestHandleHostRemoved(t *testing.T) {
 				alertCount++
 			}
 		}
-		_, confirmExists := m.offlineConfirmations["host:host1"]
+		_, confirmExists := m.offlineConfirmations[hostResourceID("host1")]
 		m.mu.RUnlock()
 
 		if alertCount > 0 {
@@ -14115,7 +14115,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host:host1-cpu"]
+		_, exists := m.activeAlerts["agent:host1-cpu"]
 		m.mu.RUnlock()
 
 		if exists {

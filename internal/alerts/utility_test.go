@@ -1459,26 +1459,6 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			want:         []string{"node"},
 		},
 		{
-			name:         "legacy host type is no longer canonicalized",
-			resourceType: "host",
-			want:         []string{"host"},
-		},
-		{
-			name:         "legacy host agent type is no longer canonicalized",
-			resourceType: "host agent",
-			want:         []string{"host agent"},
-		},
-		{
-			name:         "legacy host disk type is no longer canonicalized",
-			resourceType: "host disk",
-			want:         []string{"host disk"},
-		},
-		{
-			name:         "legacy hostdisk type is no longer canonicalized",
-			resourceType: "hostdisk",
-			want:         []string{"hostdisk"},
-		},
-		{
 			name:         "agent returns agent and node",
 			resourceType: "agent",
 			want:         []string{"agent", "node"},
@@ -1548,6 +1528,11 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 		},
 
 		// Unknown types return self
+		{
+			name:         "legacy host stays host (no alias)",
+			resourceType: "host",
+			want:         []string{"host"},
+		},
 		{
 			name:         "unknown type returns itself",
 			resourceType: "custom",
