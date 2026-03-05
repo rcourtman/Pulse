@@ -64,7 +64,7 @@ type InstallProfile = 'auto' | 'docker' | 'kubernetes' | 'proxmox-pve' | 'proxmo
 type UnifiedAgentRow = {
   rowKey: string;
   id: string;
-  hostActionId?: string;
+  agentActionId?: string;
   dockerActionId?: string;
   kubernetesActionId?: string;
   name: string;
@@ -103,12 +103,12 @@ const INSTALL_PROFILE_OPTIONS: {
     value: 'auto',
     label: 'Auto-detect (recommended)',
     description:
-      'Let the installer detect Docker, Kubernetes, Proxmox, and host features automatically.',
+      'Let the installer detect Docker, Kubernetes, Proxmox, and agent capabilities automatically.',
     flags: [],
   },
   {
     value: 'docker',
-    label: 'Docker / Podman host',
+    label: 'Docker / Podman runtime',
     description: 'Force container runtime monitoring even when detection is restricted.',
     flags: ['--enable-docker'],
   },
@@ -132,7 +132,7 @@ const INSTALL_PROFILE_OPTIONS: {
   },
   {
     value: 'truenas',
-    label: 'TrueNAS SCALE host',
+    label: 'TrueNAS SCALE agent',
     description:
       'Use default auto-detection; installer applies TrueNAS-safe service handling automatically.',
     flags: [],
@@ -261,7 +261,7 @@ export const UnifiedAgents: Component = () => {
     );
   };
 
-  const getHostActionId = (r: Resource) => {
+  const getAgentActionId = (r: Resource) => {
     const discoveryAgentId = getAgentDiscoveryResourceId(r.discoveryTarget);
     if (discoveryAgentId) return discoveryAgentId;
     if (r.discoveryTarget?.hostId) {
@@ -351,7 +351,7 @@ export const UnifiedAgents: Component = () => {
   const [customAgentUrl, setCustomAgentUrl] = createSignal('');
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
   const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
-  // Track pending command config changes: hostId -> { desired value, timestamp }
+  // Track pending command config changes: agentId -> { desired value, timestamp }
   const [pendingCommandConfig, setPendingCommandConfig] = createSignal<
     Record<string, { enabled: boolean; timestamp: number }>
   >({});
@@ -588,13 +588,13 @@ export const UnifiedAgents: Component = () => {
       );
   });
 
-  const hostByActionId = createMemo(() => {
+  const agentByActionId = createMemo(() => {
     const map = new Map<string, Resource>();
     // Only include resources with an agent facet (not docker-only resources)
     // to avoid polluting the command config sync lookup.
     for (const host of agentResources()) {
       if (!host.agent) continue;
-      const actionId = getHostActionId(host);
+      const actionId = getAgentActionId(host);
       if (!actionId || map.has(actionId)) continue;
       map.set(actionId, host);
     }
@@ -798,12 +798,12 @@ export const UnifiedAgents: Component = () => {
     agentResources().forEach((r) => {
       const hostname = r.identity?.hostname || r.name || 'Unknown';
       const agentId = getAgentId(r);
-      const resolvedAgentId = agentId || getHostActionId(r);
+      const resolvedAgentId = agentId || getAgentActionId(r);
       const scopeInfo = getScopeInfo(resolvedAgentId);
-      const hostActionId = getHostActionId(r);
+      const agentActionId = getAgentActionId(r);
       const dockerActionId = hasDockerSource(r) ? getDockerActionId(r) : undefined;
       const name = r.displayName || hostname;
-      const searchText = [name, hostname, r.id, resolvedAgentId, hostActionId, dockerActionId]
+      const searchText = [name, hostname, r.id, resolvedAgentId, agentActionId, dockerActionId]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -811,7 +811,7 @@ export const UnifiedAgents: Component = () => {
       rows.push({
         rowKey: `agent-${r.id}`,
         id: r.id,
-        hostActionId,
+        agentActionId,
         dockerActionId,
         name,
         hostname,
@@ -956,7 +956,7 @@ export const UnifiedAgents: Component = () => {
   };
 
   const handleRemoveAgent = async (
-    ids: { hostId?: string; dockerId?: string },
+    ids: { agentId?: string; dockerId?: string },
     capabilities: AgentCapability[],
   ) => {
     if (
@@ -969,13 +969,13 @@ export const UnifiedAgents: Component = () => {
     try {
       let removed = false;
       // Remove the agent registration
-      if (capabilities.includes('agent') && ids.hostId) {
-        await MonitoringAPI.deleteAgent(ids.hostId);
+      if (capabilities.includes('agent') && ids.agentId) {
+        await MonitoringAPI.deleteAgent(ids.agentId);
         removed = true;
       }
-      // Remove docker host registration if present
+      // Remove docker runtime registration if present
       if (capabilities.includes('docker') && ids.dockerId) {
-        await MonitoringAPI.deleteDockerHost(ids.dockerId);
+        await MonitoringAPI.deleteDockerRuntime(ids.dockerId);
         removed = true;
       }
       if (removed) {
@@ -989,11 +989,11 @@ export const UnifiedAgents: Component = () => {
     }
   };
 
-  const handleAllowReenroll = async (hostId: string, hostname?: string) => {
+  const handleAllowReenroll = async (agentId: string, hostname?: string) => {
     try {
-      await MonitoringAPI.allowDockerHostReenroll(hostId);
+      await MonitoringAPI.allowDockerRuntimeReenroll(agentId);
       notificationStore.success(
-        `Re-enrollment allowed for ${hostname || hostId}. Restart the agent to reconnect.`,
+        `Re-enrollment allowed for ${hostname || agentId}. Restart the agent to reconnect.`,
       );
     } catch (err) {
       logger.error('Failed to allow re-enrollment', err);
@@ -1030,19 +1030,19 @@ export const UnifiedAgents: Component = () => {
     }
   };
 
-  const handleToggleCommands = async (hostId: string | undefined, enabled: boolean) => {
-    if (!hostId) {
+  const handleToggleCommands = async (agentId: string | undefined, enabled: boolean) => {
+    if (!agentId) {
       notificationStore.error('Agent ID unavailable for command configuration');
       return;
     }
     // Set optimistic/pending state immediately with timestamp
     setPendingCommandConfig((prev) => ({
       ...prev,
-      [hostId]: { enabled, timestamp: Date.now() },
+      [agentId]: { enabled, timestamp: Date.now() },
     }));
 
     try {
-      await MonitoringAPI.updateAgentConfig(hostId, { commandsEnabled: enabled });
+      await MonitoringAPI.updateAgentConfig(agentId, { commandsEnabled: enabled });
       notificationStore.success(
         `Pulse command execution ${enabled ? 'enabled' : 'disabled'}. Syncing with agent...`,
       );
@@ -1050,7 +1050,7 @@ export const UnifiedAgents: Component = () => {
       // On error, clear the pending state so toggle reverts
       setPendingCommandConfig((prev) => {
         const next = { ...prev };
-        delete next[hostId];
+        delete next[agentId];
         return next;
       });
       logger.error('Failed to toggle AI commands', err);
@@ -1061,7 +1061,7 @@ export const UnifiedAgents: Component = () => {
   // Clear pending state when agent reports matching the expected value, or after timeout
   createEffect(() => {
     const pending = pendingCommandConfig();
-    const hosts = hostByActionId();
+    const agents = agentByActionId();
     const now = Date.now();
     const TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
@@ -1070,24 +1070,24 @@ export const UnifiedAgents: Component = () => {
     const newPending = { ...pending };
     const timedOut: string[] = [];
 
-    for (const hostId of Object.keys(pending)) {
-      const entry = pending[hostId];
-      const host = hosts.get(hostId);
+    for (const agentId of Object.keys(pending)) {
+      const entry = pending[agentId];
+      const agent = agents.get(agentId);
 
-      const hostCommandsEnabled = host ? getCommandsEnabled(host) : undefined;
+      const agentCommandsEnabled = agent ? getCommandsEnabled(agent) : undefined;
       if (
-        host &&
-        typeof hostCommandsEnabled === 'boolean' &&
-        hostCommandsEnabled === entry.enabled
+        agent &&
+        typeof agentCommandsEnabled === 'boolean' &&
+        agentCommandsEnabled === entry.enabled
       ) {
         // Agent confirmed the change
-        delete newPending[hostId];
+        delete newPending[agentId];
         updated = true;
       } else if (now - entry.timestamp > TIMEOUT_MS) {
         // Timed out waiting for agent
-        delete newPending[hostId];
-        const hostLabel = host ? host.identity?.hostname || host.name || hostId : hostId;
-        timedOut.push(hostLabel);
+        delete newPending[agentId];
+        const agentLabel = agent ? agent.identity?.hostname || agent.name || agentId : agentId;
+        timedOut.push(agentLabel);
         updated = true;
       }
     }
@@ -1504,35 +1504,35 @@ export const UnifiedAgents: Component = () => {
                 </Show>
                 <Show when={lookupResult()}>
                   {(result) => {
-                    const host = () => result().host;
+                    const agent = () => result().agent!;
                     const statusBadgeClasses = () =>
-                      host().connected
+                      agent().connected
                         ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                         : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
                     return (
                       <div class="space-y-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
                         <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                           <div class="text-sm font-semibold">
-                            {host().displayName || host().hostname}
+                            {agent().displayName || agent().hostname}
                           </div>
                           <div class="flex items-center gap-2">
                             <span
                               class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}
                             >
-                              {host().connected ? 'Connected' : 'Not reporting yet'}
+                              {agent().connected ? 'Connected' : 'Not reporting yet'}
                             </span>
                             <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                              {host().status || 'unknown'}
+                              {agent().status || 'unknown'}
                             </span>
                           </div>
                         </div>
                         <div>
-                          Last seen {formatRelativeTime(host().lastSeen)} (
-                          {formatAbsoluteTime(host().lastSeen)})
+                          Last seen {formatRelativeTime(agent().lastSeen)} (
+                          {formatAbsoluteTime(agent().lastSeen)})
                         </div>
-                        <Show when={host().agentVersion}>
+                        <Show when={agent().agentVersion}>
                           <div class="text-xs text-blue-700 dark:text-blue-200">
-                            Agent version {host().agentVersion}
+                            Agent version {agent().agentVersion}
                           </div>
                         </Show>
                       </div>
@@ -1586,7 +1586,7 @@ export const UnifiedAgents: Component = () => {
             <div class="space-y-3">
               <h4 class="text-sm font-semibold text-base-content">Uninstall agent</h4>
               <p class="text-xs text-muted">
-                Run the appropriate command on your host to remove the Pulse agent:
+                Run the appropriate command on your machine to remove the Pulse agent:
               </p>
               {/* Linux/macOS uninstall */}
               <div class="space-y-1">
@@ -1623,7 +1623,7 @@ export const UnifiedAgents: Component = () => {
                 </div>
               </div>
               <p class="text-xs text-muted italic">
-                If the agent can't reach this server, run directly on the host:{' '}
+                If the agent can't reach this server, run directly on the machine:{' '}
                 <code class="bg-surface-hover px-1 rounded not-italic">
                   sudo bash /var/lib/pulse-agent/install.sh --uninstall
                 </code>{' '}
@@ -2007,25 +2007,25 @@ export const UnifiedAgents: Component = () => {
               label: 'Pulse Cmds',
               render: (row: UnifiedAgentRow) => {
                 const isActive = () => row.status === 'active';
-                const configHostId = row.hostActionId;
+                const configAgentId = row.agentActionId;
 
                 return (
                   <Show
-                    when={isActive() && row.capabilities.includes('agent') && configHostId}
+                    when={isActive() && row.capabilities.includes('agent') && configAgentId}
                     fallback={<span class="text-xs text-muted">N/A</span>}
                   >
                     {(() => {
                       const pending = pendingCommandConfig();
-                      const isPending = Boolean(configHostId && configHostId in pending);
+                      const isPending = Boolean(configAgentId && configAgentId in pending);
                       const effectiveEnabled =
-                        configHostId && isPending
-                          ? pending[configHostId].enabled
+                        configAgentId && isPending
+                          ? pending[configAgentId].enabled
                           : Boolean(row.commandsEnabled);
 
                       return (
                         <div class="flex items-center gap-2">
                           <button
-                            onClick={() => handleToggleCommands(configHostId, !effectiveEnabled)}
+                            onClick={() => handleToggleCommands(configAgentId, !effectiveEnabled)}
                             disabled={isPending}
                             class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                               isPending ? 'opacity-60 cursor-wait' : ''
@@ -2107,9 +2107,9 @@ export const UnifiedAgents: Component = () => {
                 const isKubernetes = () =>
                   row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
                 const canRemove = () => {
-                  const needsAgent = row.capabilities.includes('agent') && !row.hostActionId;
+                  const needsAgent = row.capabilities.includes('agent') && !row.agentActionId;
                   const needsDocker =
-                    row.capabilities.includes('docker') && !row.dockerActionId && !row.hostActionId;
+                    row.capabilities.includes('docker') && !row.dockerActionId && !row.agentActionId;
                   return !needsAgent && !needsDocker;
                 };
                 return (
@@ -2122,7 +2122,7 @@ export const UnifiedAgents: Component = () => {
                           <button
                             onClick={() =>
                               handleRemoveAgent(
-                                { hostId: row.hostActionId, dockerId: row.dockerActionId },
+                                { agentId: row.agentActionId, dockerId: row.dockerActionId },
                                 row.capabilities,
                               )
                             }
@@ -2237,10 +2237,10 @@ export const UnifiedAgents: Component = () => {
                     <div class="text-xs text-muted">
                       ID: <span class="font-mono text-base-content">{row.id}</span>
                     </div>
-                    <Show when={row.hostActionId && row.hostActionId !== row.id}>
+                    <Show when={row.agentActionId && row.agentActionId !== row.id}>
                       <div class="text-xs text-muted">
                         Agent ID:{' '}
-                        <span class="font-mono text-base-content">{row.hostActionId}</span>
+                        <span class="font-mono text-base-content">{row.agentActionId}</span>
                       </div>
                     </Show>
                     <Show when={row.dockerActionId && row.dockerActionId !== row.id}>

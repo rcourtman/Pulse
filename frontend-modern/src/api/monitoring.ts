@@ -28,10 +28,10 @@ export class MonitoringAPI {
     return response.blob();
   }
 
-  static async deleteDockerHost(
+  static async deleteDockerRuntime(
     agentId: string,
     options: { hide?: boolean; force?: boolean } = {},
-  ): Promise<DeleteDockerHostResponse> {
+  ): Promise<DeleteDockerRuntimeResponse> {
     const params = new URLSearchParams();
     if (options.hide) params.set('hide', 'true');
     if (options.force) params.set('force', 'true');
@@ -54,10 +54,10 @@ export class MonitoringAPI {
       return {};
     }
 
-    return parseOptionalJSON(response, {}, 'Failed to parse delete docker host response');
+    return parseOptionalJSON(response, {}, 'Failed to parse delete container runtime response');
   }
 
-  static async unhideDockerHost(agentId: string): Promise<void> {
+  static async unhideDockerRuntime(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/unhide`;
 
     const response = await apiFetch(url, {
@@ -74,7 +74,7 @@ export class MonitoringAPI {
     }
   }
 
-  static async markDockerHostPendingUninstall(agentId: string): Promise<void> {
+  static async markDockerRuntimePendingUninstall(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/pending-uninstall`;
 
     const response = await apiFetch(url, {
@@ -91,7 +91,7 @@ export class MonitoringAPI {
     }
   }
 
-  static async setDockerHostDisplayName(agentId: string, displayName: string): Promise<void> {
+  static async setDockerRuntimeDisplayName(agentId: string, displayName: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/display-name`;
 
     const response = await apiFetch(url, {
@@ -111,7 +111,7 @@ export class MonitoringAPI {
     }
   }
 
-  static async allowDockerHostReenroll(agentId: string): Promise<void> {
+  static async allowDockerRuntimeReenroll(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/allow-reenroll`;
 
     const response = await apiFetch(url, {
@@ -397,7 +397,7 @@ export class MonitoringAPI {
   }
 }
 
-export interface DeleteDockerHostResponse {
+export interface DeleteDockerRuntimeResponse {
   success?: boolean;
   agentId?: string;
   message?: string;

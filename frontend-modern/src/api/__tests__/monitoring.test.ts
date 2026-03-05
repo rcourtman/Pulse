@@ -58,14 +58,14 @@ describe('MonitoringAPI', () => {
     });
   });
 
-  describe('deleteDockerHost', () => {
-    it('deletes docker host', async () => {
+  describe('deleteDockerRuntime', () => {
+    it('deletes docker runtime', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true, status: 204 } as unknown as Response);
 
-      await MonitoringAPI.deleteDockerHost('host-1');
+      await MonitoringAPI.deleteDockerRuntime('agent-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/runtimes/host-1',
+        '/api/agents/docker/runtimes/agent-1',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
@@ -73,10 +73,10 @@ describe('MonitoringAPI', () => {
     it('handles hide option', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true, status: 204 } as unknown as Response);
 
-      await MonitoringAPI.deleteDockerHost('host-1', { hide: true });
+      await MonitoringAPI.deleteDockerRuntime('agent-1', { hide: true });
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/runtimes/host-1?hide=true',
+        '/api/agents/docker/runtimes/agent-1?hide=true',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
@@ -84,10 +84,10 @@ describe('MonitoringAPI', () => {
     it('handles force option', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true, status: 204 } as unknown as Response);
 
-      await MonitoringAPI.deleteDockerHost('host-1', { force: true });
+      await MonitoringAPI.deleteDockerRuntime('agent-1', { force: true });
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/runtimes/host-1?force=true',
+        '/api/agents/docker/runtimes/agent-1?force=true',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
@@ -95,46 +95,46 @@ describe('MonitoringAPI', () => {
     it('returns empty object on 404', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
 
-      const result = await MonitoringAPI.deleteDockerHost('host-1');
+      const result = await MonitoringAPI.deleteDockerRuntime('agent-1');
 
       expect(result).toEqual({});
     });
   });
 
-  describe('unhideDockerHost', () => {
-    it('unhides docker host', async () => {
+  describe('unhideDockerRuntime', () => {
+    it('unhides docker runtime', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
 
-      await MonitoringAPI.unhideDockerHost('host-1');
+      await MonitoringAPI.unhideDockerRuntime('agent-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/runtimes/host-1/unhide',
+        '/api/agents/docker/runtimes/agent-1/unhide',
         expect.objectContaining({ method: 'PUT' }),
       );
     });
   });
 
-  describe('markDockerHostPendingUninstall', () => {
-    it('marks host for uninstall', async () => {
+  describe('markDockerRuntimePendingUninstall', () => {
+    it('marks runtime for uninstall', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
 
-      await MonitoringAPI.markDockerHostPendingUninstall('host-1');
+      await MonitoringAPI.markDockerRuntimePendingUninstall('agent-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/runtimes/host-1/pending-uninstall',
+        '/api/agents/docker/runtimes/agent-1/pending-uninstall',
         expect.objectContaining({ method: 'PUT' }),
       );
     });
   });
 
-  describe('setDockerHostDisplayName', () => {
+  describe('setDockerRuntimeDisplayName', () => {
     it('sets display name', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
 
-      await MonitoringAPI.setDockerHostDisplayName('host-1', 'New Name');
+      await MonitoringAPI.setDockerRuntimeDisplayName('agent-1', 'New Name');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/runtimes/host-1/display-name',
+        '/api/agents/docker/runtimes/agent-1/display-name',
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ displayName: 'New Name' }),

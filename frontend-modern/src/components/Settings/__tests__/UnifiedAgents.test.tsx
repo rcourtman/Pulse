@@ -4,7 +4,7 @@ import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
 import type {
-  Host,
+  Agent,
   DockerHost,
   KubernetesCluster,
   RemovedDockerHost,
@@ -13,7 +13,7 @@ import type {
 
 let mockWsStore: {
   state: {
-    hosts: Host[];
+    hosts: Agent[];
     dockerHosts: DockerHost[];
     kubernetesClusters?: KubernetesCluster[];
     removedDockerHosts?: RemovedDockerHost[];
@@ -28,7 +28,7 @@ const lookupMock = vi.fn();
 const createTokenMock = vi.fn();
 const deleteAgentMock = vi.fn();
 const updateAgentConfigMock = vi.fn();
-const deleteDockerHostMock = vi.fn();
+const deleteDockerRuntimeMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const notificationInfoMock = vi.fn();
@@ -51,7 +51,7 @@ vi.mock('@/api/monitoring', () => ({
     deleteAgent: (...args: unknown[]) => deleteAgentMock(...args),
     deleteHostAgent: (...args: unknown[]) => deleteAgentMock(...args),
     updateAgentConfig: (...args: unknown[]) => updateAgentConfigMock(...args),
-    deleteDockerHost: (...args: unknown[]) => deleteDockerHostMock(...args),
+    deleteDockerRuntime: (...args: unknown[]) => deleteDockerRuntimeMock(...args),
   },
 }));
 
@@ -204,7 +204,7 @@ vi.mock('@/utils/upgradeMetrics', () => ({
     trackAgentInstallProfileSelectedMock(...args),
 }));
 
-const createHost = (overrides?: Partial<Host>): Host => ({
+const createHost = (overrides?: Partial<Agent>): Agent => ({
   id: 'host-1',
   hostname: 'host-1.local',
   displayName: 'Host One',
@@ -275,7 +275,7 @@ const createRemovedDockerHost = (overrides?: Partial<RemovedDockerHost>): Remove
 });
 
 const setupComponent = (
-  hosts: Host[] = [],
+  hosts: Agent[] = [],
   dockerHosts: DockerHost[] = [],
   kubernetesClusters: KubernetesCluster[] = [],
   removedDockerHosts: RemovedDockerHost[] = [],
@@ -308,7 +308,7 @@ beforeEach(() => {
   createTokenMock.mockReset();
   deleteAgentMock.mockReset();
   updateAgentConfigMock.mockReset();
-  deleteDockerHostMock.mockReset();
+  deleteDockerRuntimeMock.mockReset();
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   notificationInfoMock.mockReset();
@@ -383,8 +383,8 @@ describe('UnifiedAgents token generation', () => {
   });
 });
 
-describe('UnifiedAgents host lookup', () => {
-  it('performs host lookup and displays results', async () => {
+describe('UnifiedAgents agent lookup', () => {
+  it('performs agent lookup and displays results', async () => {
     createTokenMock.mockResolvedValue({
       token: 'token-123',
       record: {
@@ -416,7 +416,7 @@ describe('UnifiedAgents host lookup', () => {
 
     lookupMock.mockResolvedValue({
       success: true,
-      host: {
+      agent: {
         id: host.id,
         hostname: host.hostname,
         displayName: host.displayName,
@@ -437,7 +437,7 @@ describe('UnifiedAgents host lookup', () => {
     await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument(), { interval: 0 });
   });
 
-  it('shows error message when host is not found', async () => {
+  it('shows error message when agent is not found', async () => {
     createTokenMock.mockResolvedValue({
       token: 'token-456',
       record: {

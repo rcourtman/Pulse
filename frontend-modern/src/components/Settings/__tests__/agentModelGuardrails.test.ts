@@ -181,6 +181,10 @@ describe('agent model guardrails', () => {
     expect(monitoringApiSource).not.toContain('Docker host not found');
     expect(apiTypesSource).toContain('export interface DockerRuntimeCommand');
     expect(apiTypesSource).not.toContain('export interface DockerHostCommand');
+    expect(monitoringApiSource).toContain('deleteDockerRuntime');
+    expect(monitoringApiSource).toContain('allowDockerRuntimeReenroll');
+    expect(monitoringApiSource).not.toContain('deleteDockerHost');
+    expect(monitoringApiSource).not.toContain('allowDockerHostReenroll');
     expect(monitoringApiSource).toContain('body: JSON.stringify({ agentId, containerId, containerName })');
     expect(monitoringApiSource).not.toContain('body: JSON.stringify({ hostId, containerId, containerName })');
     expect(monitoringApiSource).toContain('agentId?: string;');
