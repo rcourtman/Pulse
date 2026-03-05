@@ -689,10 +689,14 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 		{
 			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_query_test.go"),
 			requiredSnippets: []string{
+				`TestExecuteGetTopology_RejectsLegacyDockerIncludeAlias`,
+				`expected error for legacy include alias`,
+				`invalid include`,
 				`"type":  "host"`,
 				`invalid type: host`,
 				`"resource_type": "host"`,
 				`invalid resource_type: host`,
+				`[]string{"lxc", "host"}`,
 				`TestExecuteGetGuestConfig_RejectsLegacyResourceTypes`,
 			},
 		},
