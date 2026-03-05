@@ -146,19 +146,19 @@ func TestDeepScanner_FindAgentAndTargetType(t *testing.T) {
 	}
 	scanner := NewDeepScanner(exec)
 
-	if got := scanner.findAgentForHost("a2", ""); got != "a2" {
+	if got := scanner.findAgentForTarget("a2", ""); got != "a2" {
 		t.Fatalf("expected direct agent match, got %s", got)
 	}
-	if got := scanner.findAgentForHost("node1", "node1"); got != "a1" {
+	if got := scanner.findAgentForTarget("node1", "node1"); got != "a1" {
 		t.Fatalf("expected hostname match, got %s", got)
 	}
 
 	exec.agents = []ConnectedAgent{{AgentID: "solo", Hostname: "only"}}
-	if got := scanner.findAgentForHost("missing", "missing"); got != "solo" {
+	if got := scanner.findAgentForTarget("missing", "missing"); got != "solo" {
 		t.Fatalf("expected single agent fallback, got %s", got)
 	}
 	exec.agents = nil
-	if got := scanner.findAgentForHost("missing", "missing"); got != "" {
+	if got := scanner.findAgentForTarget("missing", "missing"); got != "" {
 		t.Fatalf("expected no agent, got %s", got)
 	}
 

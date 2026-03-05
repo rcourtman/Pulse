@@ -194,7 +194,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	}
 
 	// Find the agent for this host
-	agentID := s.findAgentForHost(requestTargetID, req.Hostname)
+	agentID := s.findAgentForTarget(requestTargetID, req.Hostname)
 	if agentID == "" {
 		scanLog.Warn().
 			Str("action", "scan_precondition_failed").
@@ -438,23 +438,23 @@ func (s *DeepScanner) getTargetID(resourceType ResourceType, resourceID string) 
 	}
 }
 
-// findAgentForHost finds the agent ID for a given host.
-func (s *DeepScanner) findAgentForHost(hostID, hostname string) string {
+// findAgentForTarget finds the agent ID for a given canonical target.
+func (s *DeepScanner) findAgentForTarget(targetID, hostname string) string {
 	agents := s.executor.GetConnectedAgents()
 
 	log.Debug().
 		Str("component", "service_discovery_scanner").
-		Str("action", "find_agent_for_host").
-		Str("host_id", hostID).
+		Str("action", "find_agent_for_target").
+		Str("target_id", targetID).
 		Str("hostname", hostname).
 		Int("connected_agents", len(agents)).
-		Msg("Finding agent for host")
+		Msg("Finding agent for target")
 
 	// Log connected agents for debugging
 	for _, agent := range agents {
 		log.Debug().
 			Str("component", "service_discovery_scanner").
-			Str("action", "find_agent_for_host").
+			Str("action", "find_agent_for_target").
 			Str("agent_id", agent.AgentID).
 			Str("agent_hostname", agent.Hostname).
 			Msg("Connected agent")
@@ -462,14 +462,14 @@ func (s *DeepScanner) findAgentForHost(hostID, hostname string) string {
 
 	// First try exact match on agent ID
 	for _, agent := range agents {
-		if agent.AgentID == hostID {
+		if agent.AgentID == targetID {
 			return agent.AgentID
 		}
 	}
 
 	// Then try hostname match
 	for _, agent := range agents {
-		if agent.Hostname == hostname || agent.Hostname == hostID {
+		if agent.Hostname == hostname || agent.Hostname == targetID {
 			return agent.AgentID
 		}
 	}
