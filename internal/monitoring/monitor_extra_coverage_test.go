@@ -664,6 +664,35 @@ func TestMonitor_PruneDockerAlerts_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_PruneDockerAlerts_UsesUnifiedReadState(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{ID: "live-host", DisplayName: "Live Host", Hostname: "live-host", Status: "online"},
+		},
+	})
+
+	m := &Monitor{
+		state:         models.NewState(),
+		alertManager:  alerts.NewManager(),
+		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+	}
+	defer m.alertManager.Stop()
+
+	host := models.DockerHost{ID: "live-host", DisplayName: "Live Host"}
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+
+	if m.pruneStaleDockerAlerts() {
+		t.Fatal("expected alert pruning to keep hosts present in unified read-state")
+	}
+
+	if len(m.alertManager.GetActiveAlerts()) == 0 {
+		t.Fatal("expected docker offline alert to remain active")
+	}
+}
+
 func TestMonitor_AllowExecution_Extra(t *testing.T) {
 	m := &Monitor{}
 	if !m.allowExecution(ScheduledTask{InstanceType: "pve", InstanceName: "pve1"}) {

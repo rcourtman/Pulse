@@ -286,11 +286,15 @@ type HostSensorMeta struct {
 
 // HostSMARTMeta describes a disk's SMART data.
 type HostSMARTMeta struct {
-	Device      string `json:"device"`
-	Model       string `json:"model,omitempty"`
-	Serial      string `json:"serial,omitempty"`
-	Temperature int    `json:"temperature"`
-	Health      string `json:"health"`
+	Device      string                  `json:"device"`
+	Model       string                  `json:"model,omitempty"`
+	Serial      string                  `json:"serial,omitempty"`
+	WWN         string                  `json:"wwn,omitempty"`
+	Type        string                  `json:"type,omitempty"`
+	Temperature int                     `json:"temperature"`
+	Health      string                  `json:"health"`
+	Standby     bool                    `json:"standby,omitempty"`
+	Attributes  *models.SMARTAttributes `json:"attributes,omitempty"`
 }
 
 // HostRAIDDeviceMeta describes a device in a RAID array.

@@ -341,8 +341,19 @@ func cloneHostSMARTMetaSlice(in []HostSMARTMeta) []HostSMARTMeta {
 		return nil
 	}
 	out := make([]HostSMARTMeta, len(in))
-	copy(out, in)
+	for i := range in {
+		out[i] = in[i]
+		out[i].Attributes = cloneSMARTAttributes(in[i].Attributes)
+	}
 	return out
+}
+
+func cloneSMARTAttributes(in *models.SMARTAttributes) *models.SMARTAttributes {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func cloneHostRAIDMetaSlice(in []HostRAIDMeta) []HostRAIDMeta {

@@ -62,12 +62,20 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 		return false
 	}
 
-	hosts := m.state.GetDockerHosts()
-	knownHosts := make(map[string]struct{}, len(hosts))
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return false
+	}
+
+	hosts := readState.DockerHosts()
+	knownHosts := make(map[string]struct{}, len(hosts)*2)
 	for _, host := range hosts {
-		hostID := strings.TrimSpace(host.ID)
+		hostID := strings.TrimSpace(host.ID())
 		if hostID != "" {
 			knownHosts[hostID] = struct{}{}
+		}
+		if sourceID := strings.TrimSpace(host.HostSourceID()); sourceID != "" {
+			knownHosts[sourceID] = struct{}{}
 		}
 	}
 

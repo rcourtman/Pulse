@@ -128,8 +128,12 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 					Device:      s.Device,
 					Model:       s.Model,
 					Serial:      s.Serial,
+					WWN:         s.WWN,
+					Type:        s.Type,
 					Temperature: s.Temperature,
 					Health:      s.Health,
+					Standby:     s.Standby,
+					Attributes:  cloneSMARTAttributes(s.Attributes),
 				}
 			}
 		}

@@ -494,6 +494,22 @@ func TestView_HostViewAccessors(t *testing.T) {
 			Disks: []DiskInfo{
 				{Device: "/dev/sda1", Mountpoint: "/", Filesystem: "ext4", Total: 100, Used: 60, Free: 40},
 			},
+			Sensors: &HostSensorMeta{
+				TemperatureCelsius: map[string]float64{"cpu_package": 55.5},
+				SMART: []HostSMARTMeta{
+					{
+						Device:      "sda",
+						Model:       "Samsung",
+						Serial:      "serial-1",
+						WWN:         "wwn-1",
+						Type:        "nvme",
+						Temperature: 39,
+						Health:      "PASSED",
+						Standby:     true,
+						Attributes:  &models.SMARTAttributes{},
+					},
+				},
+			},
 			LinkedNodeID:      "node-99",
 			LinkedVMID:        "vm-99",
 			LinkedContainerID: "ct-99",
@@ -527,6 +543,9 @@ func TestView_HostViewAccessors(t *testing.T) {
 	}
 	if len(v.Disks()) != 1 || v.Disks()[0].Device != "/dev/sda1" {
 		t.Fatalf("expected disk data, got %+v", v.Disks())
+	}
+	if sensors := v.Sensors(); sensors == nil || len(sensors.SMART) != 1 || sensors.SMART[0].WWN != "wwn-1" || sensors.SMART[0].Type != "nvme" || !sensors.SMART[0].Standby || sensors.SMART[0].Attributes == nil {
+		t.Fatalf("expected sensor SMART metadata to be preserved, got %+v", sensors)
 	}
 	if v.LinkedNodeID() != "node-99" || v.LinkedVMID() != "vm-99" || v.LinkedContainerID() != "ct-99" {
 		t.Fatalf("expected linked IDs to match, got node=%q vm=%q ct=%q", v.LinkedNodeID(), v.LinkedVMID(), v.LinkedContainerID())

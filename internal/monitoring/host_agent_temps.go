@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,29 +26,30 @@ func (m *Monitor) getHostAgentTemperature(nodeName string) *models.Temperature {
 // then falls back to hostname matching. This correctly handles clusters where
 // multiple nodes may have the same hostname (e.g., "px1" on different IPs).
 func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.Temperature {
-	if m.state == nil {
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
 		return nil
 	}
 
-	hosts := m.state.GetHosts()
+	hosts := readState.Hosts()
 	if len(hosts) == 0 {
 		// No host agents at all — check cluster sensor cache as fallback
 		return m.getClusterSensorTemperature(nodeName)
 	}
 
-	var matchedHost *models.Host
+	var matchedHost *unifiedresources.HostView
 
 	// First, try to find a host agent that is explicitly linked to this node
 	// via LinkedNodeID. This is the most reliable method and handles duplicate
 	// hostnames correctly.
 	if nodeID != "" {
 		for i := range hosts {
-			if hosts[i].LinkedNodeID == nodeID {
-				matchedHost = &hosts[i]
+			if hosts[i].LinkedNodeID() == nodeID {
+				matchedHost = hosts[i]
 				log.Debug().
 					Str("nodeID", nodeID).
-					Str("hostAgentID", hosts[i].ID).
-					Str("hostname", hosts[i].Hostname).
+					Str("hostAgentID", hosts[i].ID()).
+					Str("hostname", hosts[i].Hostname()).
 					Msg("Matched host agent to node via LinkedNodeID")
 				break
 			}
@@ -59,9 +61,9 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 	if matchedHost == nil {
 		nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
 		for i := range hosts {
-			hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname))
+			hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname()))
 			if hostnameLower == nodeLower {
-				matchedHost = &hosts[i]
+				matchedHost = hosts[i]
 				break
 			}
 		}
@@ -73,13 +75,57 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 	}
 
 	// Check if the host agent has temperature data
-	if len(matchedHost.Sensors.TemperatureCelsius) == 0 {
+	sensors := matchedHost.Sensors()
+	if sensors == nil || len(sensors.TemperatureCelsius) == 0 {
 		// Host agent exists but has no temperature data — try cluster cache
 		return m.getClusterSensorTemperature(nodeName)
 	}
 
 	// Convert host agent sensor data to Temperature model
-	return convertHostSensorsToTemperature(matchedHost.Sensors, matchedHost.LastSeen)
+	return convertUnifiedHostSensorsToTemperature(sensors, matchedHost.LastSeen())
+}
+
+func convertUnifiedHostSensorsToTemperature(sensors *unifiedresources.HostSensorMeta, lastSeen time.Time) *models.Temperature {
+	if sensors == nil {
+		return nil
+	}
+
+	return convertHostSensorsToTemperature(models.HostSensorSummary{
+		TemperatureCelsius: cloneStringFloatMap(sensors.TemperatureCelsius),
+		FanRPM:             cloneStringFloatMap(sensors.FanRPM),
+		Additional:         cloneStringFloatMap(sensors.Additional),
+		SMART:              convertUnifiedHostSMART(sensors.SMART),
+	}, lastSeen)
+}
+
+func convertUnifiedHostSMART(smart []unifiedresources.HostSMARTMeta) []models.HostDiskSMART {
+	if len(smart) == 0 {
+		return nil
+	}
+
+	result := make([]models.HostDiskSMART, len(smart))
+	for i, disk := range smart {
+		result[i] = models.HostDiskSMART{
+			Device:      disk.Device,
+			Model:       disk.Model,
+			Serial:      disk.Serial,
+			WWN:         disk.WWN,
+			Type:        disk.Type,
+			Temperature: disk.Temperature,
+			Health:      disk.Health,
+			Standby:     disk.Standby,
+			Attributes:  cloneSMARTAttributesModel(disk.Attributes),
+		}
+	}
+	return result
+}
+
+func cloneSMARTAttributesModel(src *models.SMARTAttributes) *models.SMARTAttributes {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	return &dest
 }
 
 // getClusterSensorTemperature looks up cached temperature data that was collected

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -497,6 +498,42 @@ func TestGetHostAgentTemperatureByID_LocalAgentTakesPriority(t *testing.T) {
 	result := m.getHostAgentTemperatureByID("", "shared-node")
 	assert.NotNil(t, result)
 	assert.Equal(t, 70.0, result.CPUPackage, "local agent data should take priority over cluster cache")
+}
+
+func TestGetHostAgentTemperatureByID_UsesUnifiedReadState(t *testing.T) {
+	now := time.Now().UTC()
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:           "host-readstate",
+				Hostname:     "readstate-node",
+				LinkedNodeID: "node-readstate",
+				LastSeen:     now,
+				Sensors: models.HostSensorSummary{
+					TemperatureCelsius: map[string]float64{
+						"cpu_package": 71.0,
+					},
+					SMART: []models.HostDiskSMART{
+						{Device: "sda", Temperature: 35, Standby: true},
+						{Device: "sdb", Temperature: 37},
+					},
+				},
+			},
+		},
+	})
+
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+	}
+
+	result := m.getHostAgentTemperatureByID("node-readstate", "ignored")
+	assert.NotNil(t, result)
+	assert.Equal(t, 71.0, result.CPUPackage)
+	if assert.Len(t, result.SMART, 1) {
+		assert.Equal(t, "/dev/sdb", result.SMART[0].Device)
+	}
 }
 
 func TestMergeTemperatureData_HistoricalOverrides(t *testing.T) {
