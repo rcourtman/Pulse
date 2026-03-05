@@ -15,7 +15,7 @@ import { NodesAPI } from '@/api/nodes';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
 import type { Temperature } from '@/types/api';
-import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
+import type { ClusterEndpoint, NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { SettingsTab } from './settingsTypes';
 
@@ -37,11 +37,6 @@ type RawDiscoveredServer = {
   name?: string;
   release?: string;
 };
-
-interface ClusterEndpoint {
-  Host?: string;
-  IP?: string;
-}
 
 interface DiscoveryScanStatus {
   scanning: boolean;
@@ -254,11 +249,11 @@ export function useInfrastructureSettingsState({
         n.clusterEndpoints
       ) {
         n.clusterEndpoints.forEach((endpoint: ClusterEndpoint) => {
-          if (endpoint.IP) {
-            clusterMemberIPs.add(endpoint.IP.toLowerCase());
+          if (endpoint.ip) {
+            clusterMemberIPs.add(endpoint.ip.toLowerCase());
           }
-          if (endpoint.Host) {
-            clusterMemberIPs.add(endpoint.Host.toLowerCase());
+          if (endpoint.host) {
+            clusterMemberIPs.add(endpoint.host.toLowerCase());
           }
         });
       }

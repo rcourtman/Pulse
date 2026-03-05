@@ -73,8 +73,8 @@ vi.mock('@/components/Infrastructure/UnifiedResourceTable', () => ({
 }));
 
 vi.mock('@/components/Infrastructure/InfrastructureSummary', () => ({
-  InfrastructureSummary: (props: { hosts: Resource[] }) => (
-    <div data-testid="infra-summary">{props.hosts.length} resources</div>
+  InfrastructureSummary: (props: { resources: Resource[] }) => (
+    <div data-testid="infra-summary">{props.resources.length} resources</div>
   ),
 }));
 

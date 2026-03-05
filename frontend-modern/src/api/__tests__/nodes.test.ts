@@ -22,6 +22,52 @@ describe('NodesAPI', () => {
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/config/nodes');
       expect(result).toEqual(mockNodes);
     });
+
+    it('normalizes canonical cluster endpoint fields', async () => {
+      const mockNodes = [
+        {
+          id: 'pve-1',
+          type: 'pve',
+          name: 'PVE 1',
+          clusterEndpoints: [
+            {
+              nodeId: ' node-1 ',
+              nodeName: ' pve-1 ',
+              host: ' https://pve-1.local:8006 ',
+              guestURL: ' https://guest.local ',
+              ip: ' 10.0.0.1 ',
+              ipOverride: ' 10.0.0.10 ',
+              fingerprint: ' fp ',
+              online: true,
+              lastSeen: ' 2026-03-04T00:00:00Z ',
+              pulseReachable: null,
+              lastPulseCheck: ' 2026-03-04T00:00:01Z ',
+              pulseError: ' timeout ',
+            },
+          ],
+        } as NodeConfig,
+      ];
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockNodes);
+
+      const result = await NodesAPI.getNodes();
+      const endpoint = (result[0] as NodeConfig & { clusterEndpoints: Array<Record<string, unknown>> })
+        .clusterEndpoints[0];
+
+      expect(endpoint).toMatchObject({
+        nodeId: 'node-1',
+        nodeName: 'pve-1',
+        host: 'https://pve-1.local:8006',
+        guestURL: 'https://guest.local',
+        ip: '10.0.0.1',
+        ipOverride: '10.0.0.10',
+        fingerprint: 'fp',
+        online: true,
+        lastSeen: '2026-03-04T00:00:00Z',
+        lastPulseCheck: '2026-03-04T00:00:01Z',
+        pulseError: 'timeout',
+      });
+      expect(endpoint.pulseReachable).toBeUndefined();
+    });
   });
 
   describe('addNode', () => {

@@ -12,7 +12,7 @@
  * // Get all resources
  * <For each={resources()}>{r => <div>{r.name}</div>}</For>
  *
- * // Get only infrastructure (nodes, hosts)
+ * // Get only infrastructure resources (nodes, agents, container runtimes)
  * <For each={infra()}>{r => <div>{r.name}</div>}</For>
  *
  * // Get filtered workloads
@@ -45,7 +45,7 @@ export interface UseResourcesReturn {
   /** All unified resources */
   resources: Accessor<Resource[]>;
 
-  /** Infrastructure resources only (nodes, hosts, docker-hosts) */
+  /** Infrastructure resources only (nodes, agents, docker-hosts) */
   infra: Accessor<Resource[]>;
 
   /** Workload resources only (vms, containers, docker-containers) */

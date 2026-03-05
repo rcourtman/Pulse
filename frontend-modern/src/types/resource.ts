@@ -2,7 +2,7 @@
  * Unified Resource Types
  *
  * These types define the unified resource model that normalizes all monitored
- * entities (VMs, containers, hosts, etc.) into a common structure.
+ * entities (VMs, containers, agents, etc.) into a common structure.
  *
  * The frontend receives these via WebSocket state.resources[].
  */

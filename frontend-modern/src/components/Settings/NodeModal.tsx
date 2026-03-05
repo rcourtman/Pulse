@@ -402,7 +402,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
     // Validate required fields for new nodes or when new credentials are provided
     if (!data.host) {
-      setTestResult({ status: 'error', message: 'Host is required' });
+      setTestResult({ status: 'error', message: 'Endpoint URL is required' });
       return;
     }
 
@@ -533,14 +533,14 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           class={controlClass()}
                         />
                         <p class={formHelpText}>
-                          Required and must be unique. We can auto-fill it from the Host URL if you
+                          Required and must be unique. We can auto-fill it from the Endpoint URL if you
                           leave it blank.
                         </p>
                       </div>
 
                       <div class={formField}>
                         <label class={labelClass('flex items-center gap-1')}>
-                          Host URL <span class="text-red-500">*</span>
+                          Endpoint URL <span class="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -588,7 +588,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         />
                         <p class={formHelpText}>
                           Optional guest-accessible URL for navigation. If specified, this URL will
-                          be used when opening the web UI instead of the Host URL.
+                          be used when opening the web UI instead of the Endpoint URL.
                         </p>
                       </div>
                     </div>
@@ -923,7 +923,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           if (!formData().host || formData().host.trim() === '') {
                                             logger.debug('[Quick Setup] No host entered');
                                             notificationStore.error(
-                                              'Please enter the Host URL first',
+                                              'Please enter the Endpoint URL first',
                                             );
                                             return;
                                           }
@@ -1022,7 +1022,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <code class="text-blue-400">
                                           {formData().host
                                             ? 'Click the copy button to generate the setup command'
-                                            : 'Please enter the Host URL above first'}
+                                            : 'Please enter the Endpoint URL above first'}
                                         </code>
                                       }
                                     >
@@ -1371,7 +1371,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <strong>Token Value:</strong> [The value from step 2]
                                       </li>
                                       <li>
-                                        <strong>Host URL:</strong>{' '}
+                                        <strong>Endpoint URL:</strong>{' '}
                                         {formData().host || 'https://your-server:8006'}
                                       </li>
                                     </ul>
@@ -1583,7 +1583,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             // Check if host is populated
                                             if (!formData().host || formData().host.trim() === '') {
                                               notificationStore.error(
-                                                'Please enter the Host URL first',
+                                                'Please enter the Endpoint URL first',
                                               );
                                               return;
                                             }
@@ -1656,7 +1656,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <code class="text-blue-400">
                                           {formData().host
                                             ? 'Click the copy button to generate the setup command'
-                                            : '⚠️ Please enter the Host URL above first'}
+                                            : '⚠️ Please enter the Endpoint URL above first'}
                                         </code>
                                       }
                                     >
@@ -1996,7 +1996,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <strong>Token Value:</strong> [The value from step 2]
                                       </li>
                                       <li>
-                                        <strong>Host URL:</strong>{' '}
+                                        <strong>Endpoint URL:</strong>{' '}
                                         {formData().host || 'https://your-server:8007'}
                                       </li>
                                     </ul>
@@ -2419,7 +2419,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   </div>
                 </Show>
 
-                {/* Host limit warning with trial prompt */}
+                {/* Endpoint limit warning with trial prompt */}
                 <Show when={hostLimitReached()}>
                   <div class="mx-6 mb-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/30 px-4 py-3">
                     <p class="text-sm font-medium text-amber-800 dark:text-amber-200">

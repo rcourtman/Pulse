@@ -75,7 +75,7 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Terminal from 'lucide-solid/icons/terminal';
 import Container from 'lucide-solid/icons/container';
 import Search from 'lucide-solid/icons/search';
-import type { NodeConfig } from '@/types/nodes';
+import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
@@ -107,11 +107,6 @@ type RawDiscoveredServer = {
   name?: string;
   release?: string;
 };
-
-interface ClusterEndpoint {
-  Host?: string;
-  IP?: string;
-}
 
 interface DiscoveryScanStatus {
   scanning: boolean;
@@ -151,7 +146,7 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
   docker: {
     title: 'Docker',
     description:
-      'Monitor Docker hosts, containers, images, and volumes across your infrastructure.',
+      'Monitor Docker and Podman runtimes, containers, images, and volumes across your infrastructure.',
   },
   agents: {
     title: 'Agents',
@@ -1012,11 +1007,11 @@ const Settings: Component<SettingsProps> = (props) => {
         n.clusterEndpoints
       ) {
         n.clusterEndpoints.forEach((endpoint: ClusterEndpoint) => {
-          if (endpoint.IP) {
-            clusterMemberIPs.add(endpoint.IP.toLowerCase());
+          if (endpoint.ip) {
+            clusterMemberIPs.add(endpoint.ip.toLowerCase());
           }
-          if (endpoint.Host) {
-            clusterMemberIPs.add(endpoint.Host.toLowerCase());
+          if (endpoint.host) {
+            clusterMemberIPs.add(endpoint.host.toLowerCase());
           }
         });
       }

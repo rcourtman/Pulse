@@ -1,5 +1,42 @@
-import { NodeConfig } from '../types/nodes';
+import type { ClusterEndpoint, NodeConfig } from '../types/nodes';
 import { apiFetchJSON } from '@/utils/apiClient';
+
+type RawClusterEndpoint = Partial<ClusterEndpoint>;
+
+const asString = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : value == null ? '' : String(value).trim();
+
+const asOptionalString = (value: unknown): string | undefined => {
+  const normalized = asString(value);
+  return normalized.length > 0 ? normalized : undefined;
+};
+
+const asBoolean = (value: unknown): boolean => value === true;
+
+const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint => ({
+  nodeId: asString(endpoint.nodeId),
+  nodeName: asString(endpoint.nodeName),
+  host: asString(endpoint.host),
+  guestURL: asOptionalString(endpoint.guestURL),
+  ip: asString(endpoint.ip),
+  ipOverride: asOptionalString(endpoint.ipOverride),
+  fingerprint: asOptionalString(endpoint.fingerprint),
+  online: asBoolean(endpoint.online),
+  lastSeen: asString(endpoint.lastSeen),
+  pulseReachable: endpoint.pulseReachable ?? undefined,
+  lastPulseCheck: asOptionalString(endpoint.lastPulseCheck),
+  pulseError: asOptionalString(endpoint.pulseError),
+});
+
+const normalizeNodeConfig = (node: NodeConfig): NodeConfig => {
+  if (!('clusterEndpoints' in node) || !Array.isArray(node.clusterEndpoints)) return node;
+  return {
+    ...node,
+    clusterEndpoints: node.clusterEndpoints.map((endpoint) =>
+      normalizeClusterEndpoint(endpoint as RawClusterEndpoint),
+    ),
+  };
+};
 
 export class NodesAPI {
   private static readonly baseUrl = '/api/config/nodes';
@@ -7,7 +44,7 @@ export class NodesAPI {
   static async getNodes(): Promise<NodeConfig[]> {
     // The API returns an array of nodes directly
     const nodes: NodeConfig[] = await apiFetchJSON(this.baseUrl);
-    return nodes;
+    return nodes.map(normalizeNodeConfig);
   }
 
   static async addNode(node: NodeConfig): Promise<{ success: boolean; message?: string }> {

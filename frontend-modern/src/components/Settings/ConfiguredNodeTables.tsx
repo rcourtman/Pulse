@@ -164,19 +164,19 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                 <For each={clusterEndpoints()}>
                                   {(endpoint) => {
                                     const pulseStatus =
-                                      endpoint.PulseReachable === null ||
-                                      endpoint.PulseReachable === undefined
+                                      endpoint.pulseReachable === null ||
+                                      endpoint.pulseReachable === undefined
                                         ? 'unknown'
-                                        : endpoint.PulseReachable
+                                        : endpoint.pulseReachable
                                           ? 'reachable'
                                           : 'unreachable';
 
                                     const statusColor =
-                                      endpoint.Online && pulseStatus === 'reachable'
+                                      endpoint.online && pulseStatus === 'reachable'
                                         ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900 dark:text-green-300'
                                         : pulseStatus === 'unreachable'
                                           ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                                          : endpoint.Online
+                                          : endpoint.online
                                             ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-300'
                                             : 'border-border bg-surface-alt text-muted';
 
@@ -185,15 +185,15 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                         class={`rounded border px-3 py-2 text-[0.7rem] ${statusColor}`}
                                       >
                                         <div class="flex items-center gap-2 mb-1">
-                                          <span class="font-semibold">{endpoint.NodeName}</span>
+                                          <span class="font-semibold">{endpoint.nodeName}</span>
                                           <span class="text-[0.65rem] opacity-75">
-                                            {endpoint.IP}
+                                            {endpoint.ip}
                                           </span>
                                         </div>
                                         <div class="flex flex-col gap-0.5 text-[0.65rem] opacity-90">
                                           <div class="flex items-center gap-1.5">
                                             <span class="w-16 font-medium">Proxmox:</span>
-                                            <span>{endpoint.Online ? 'Online' : 'Offline'}</span>
+                                            <span>{endpoint.online ? 'Online' : 'Offline'}</span>
                                           </div>
                                           <div class="flex items-center gap-1.5">
                                             <span class="w-16 font-medium">Pulse:</span>
@@ -207,12 +207,12 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                           </div>
                                           <Show
                                             when={
-                                              pulseStatus === 'unreachable' && endpoint.PulseError
+                                              pulseStatus === 'unreachable' && endpoint.pulseError
                                             }
                                           >
                                             <div class="mt-1 pt-1 border-t border-current opacity-20">
                                               <span class="font-medium">Error: </span>
-                                              <span class="opacity-80">{endpoint.PulseError}</span>
+                                              <span class="opacity-80">{endpoint.pulseError}</span>
                                             </div>
                                           </Show>
                                         </div>

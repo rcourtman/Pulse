@@ -59,14 +59,16 @@ export async function listDiscoveriesByAgent(agentId: string): Promise<Discovery
  */
 export async function getDiscovery(
   resourceType: ResourceType,
-  hostId: string,
+  targetId: string,
   resourceId: string,
 ): Promise<ResourceDiscovery | null> {
   if (isAgentResourceType(resourceType)) {
     // Agent discovery is frequently absent before first scan. Resolve via list endpoint
     // first to avoid noisy 404s for expected "not discovered yet" states.
     const collectionBasePath = agentCollectionBasePath();
-    const agentListResponse = await apiFetch(`${collectionBasePath}/${encodeURIComponent(hostId)}`);
+    const agentListResponse = await apiFetch(
+      `${collectionBasePath}/${encodeURIComponent(targetId)}`,
+    );
     if (!agentListResponse.ok) {
       throw new Error(
         await readAPIErrorMessage(agentListResponse, 'Failed to list agent discoveries'),
@@ -82,7 +84,7 @@ export async function getDiscovery(
       agentList.discoveries.find(
         (d) =>
           d.resource_type === 'agent' &&
-          (d.resource_id === resourceId || d.resource_id === hostId || d.host_id === hostId),
+          (d.resource_id === resourceId || d.resource_id === targetId || d.host_id === targetId),
       ) ?? agentList.discoveries.find((d) => d.resource_type === 'agent');
 
     if (!resolvedAgentDiscovery) {
@@ -102,7 +104,7 @@ export async function getDiscovery(
   }
 
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
+    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
   );
   if (response.status === 404) {
     return null;
@@ -118,12 +120,12 @@ export async function getDiscovery(
  */
 export async function triggerDiscovery(
   resourceType: ResourceType,
-  hostId: string,
+  targetId: string,
   resourceId: string,
   options?: TriggerDiscoveryRequest,
 ): Promise<ResourceDiscovery> {
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
+    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
     {
       method: 'POST',
       headers: {
@@ -143,11 +145,11 @@ export async function triggerDiscovery(
  */
 export async function getDiscoveryProgress(
   resourceType: ResourceType,
-  hostId: string,
+  targetId: string,
   resourceId: string,
 ): Promise<DiscoveryProgress> {
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/progress`,
+    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/progress`,
   );
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery progress'));
@@ -160,12 +162,12 @@ export async function getDiscoveryProgress(
  */
 export async function updateDiscoveryNotes(
   resourceType: ResourceType,
-  hostId: string,
+  targetId: string,
   resourceId: string,
   notes: UpdateNotesRequest,
 ): Promise<ResourceDiscovery> {
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/notes`,
+    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/notes`,
     {
       method: 'PUT',
       headers: {
@@ -185,11 +187,11 @@ export async function updateDiscoveryNotes(
  */
 export async function deleteDiscovery(
   resourceType: ResourceType,
-  hostId: string,
+  targetId: string,
   resourceId: string,
 ): Promise<void> {
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
+    `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
     {
       method: 'DELETE',
     },
