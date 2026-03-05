@@ -2531,6 +2531,14 @@ func (m *Monitor) DockerHostsSnapshot() []models.DockerHost {
 	return m.GetState().DockerHosts
 }
 
+// StorageSnapshot returns the current storage pools.
+func (m *Monitor) StorageSnapshot() []models.Storage {
+	if m == nil {
+		return nil
+	}
+	return m.GetState().Storage
+}
+
 // ActiveAlertsSnapshot returns the current active alerts.
 func (m *Monitor) ActiveAlertsSnapshot() []models.Alert {
 	return m.GetState().ActiveAlerts

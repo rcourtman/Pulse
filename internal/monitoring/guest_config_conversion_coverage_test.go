@@ -642,6 +642,30 @@ func TestMonitorGetLiveHostsSnapshot(t *testing.T) {
 	})
 }
 
+func TestMonitorStorageSnapshot(t *testing.T) {
+	t.Run("nil monitor", func(t *testing.T) {
+		var m *Monitor
+		storage := m.StorageSnapshot()
+		if len(storage) != 0 {
+			t.Fatalf("expected empty storage for nil monitor, got %#v", storage)
+		}
+	})
+
+	t.Run("returns current storage snapshot", func(t *testing.T) {
+		state := models.NewState()
+		state.Storage = []models.Storage{{ID: "store-1", Name: "Store One"}}
+		m := &Monitor{state: state}
+
+		storage := m.StorageSnapshot()
+		if len(storage) != 1 {
+			t.Fatalf("expected one storage entry, got %d", len(storage))
+		}
+		if storage[0].ID != "store-1" {
+			t.Fatalf("unexpected storage id: %q", storage[0].ID)
+		}
+	})
+}
+
 func decodePlatformDataPayload(t *testing.T, raw json.RawMessage) map[string]interface{} {
 	t.Helper()
 	if len(raw) == 0 {

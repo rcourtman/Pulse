@@ -4699,11 +4699,9 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 		writeErrorResponse(w, http.StatusInternalServerError, "tenant_unavailable", "Tenant monitor is not available", nil)
 		return
 	}
-	snap := monitor.ReadSnapshot()
-
 	// Find the storage by ID
 	var storageDetail *models.Storage
-	for _, storage := range snap.Storage {
+	for _, storage := range monitor.StorageSnapshot() {
 		if storage.ID == path {
 			storageDetail = &storage
 			break
