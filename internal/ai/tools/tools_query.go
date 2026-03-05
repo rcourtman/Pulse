@@ -3759,7 +3759,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			}
 			// Build searchable candidates: name, ID, VMID, canonical type-prefixed VMID, IPs, tags
 			vmidStr := fmt.Sprintf("%d", ct.VMID())
-			candidates := []string{ct.Name(), ct.ID(), vmidStr, "ct" + vmidStr, "system-container" + vmidStr}
+			candidates := []string{ct.Name(), ct.ID(), vmidStr, "system-container" + vmidStr}
 			candidates = append(candidates, ct.IPAddresses()...)
 			candidates = append(candidates, ct.Tags()...)
 

@@ -349,13 +349,12 @@ func TestExecuteSearchResources(t *testing.T) {
 		t.Fatalf("unexpected docker-host search response: %+v", response)
 	}
 
-	// Canonical type+VMID patterns: "VM100", "CT200", "system-container200"
+	// Canonical type+VMID patterns: "VM100", "system-container200"
 	for _, tc := range []struct {
 		query    string
 		wantType string
 		wantName string
 	}{
-		{"CT200", "system-container", "db-ct"},
 		{"system-container200", "system-container", "db-ct"},
 		{"VM100", "vm", "web-vm"},
 		{"vm100", "vm", "web-vm"},
@@ -375,7 +374,7 @@ func TestExecuteSearchResources(t *testing.T) {
 		}
 	}
 
-	for _, legacyQuery := range []string{"LXC200", "qemu100"} {
+	for _, legacyQuery := range []string{"LXC200", "qemu100", "CT200"} {
 		result, err = executor.executeSearchResources(context.Background(), map[string]interface{}{
 			"query": legacyQuery,
 		})
