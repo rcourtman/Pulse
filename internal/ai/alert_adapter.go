@@ -180,14 +180,16 @@ func normalizeAlertResourceType(raw string) string {
 	switch resourceType {
 	case "guest", "vm", "qemu":
 		return "vm"
-	case "container", "lxc", "system-container", "oci-container":
+	case "container", "lxc", "system-container", "system_container", "oci-container":
 		return "system-container"
-	case "docker", "docker-service", "app-container":
+	case "docker", "docker-service", "docker_service", "docker-container", "docker_container", "app-container", "app_container":
 		return "app-container"
-	case "agent", "docker-host", "node":
+	case "docker-host", "docker_host", "dockerhost":
+		return "docker-host"
+	case "agent", "node", "host":
 		return "agent"
-	case "kubernetes", "k8s-cluster", "k8s":
-		return "k8s"
+	case "kubernetes", "k8s-cluster", "k8s_cluster", "kubernetes_cluster", "kubernetes-cluster", "k8s":
+		return "k8s-cluster"
 	default:
 		return resourceType
 	}
