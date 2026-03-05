@@ -766,7 +766,7 @@ func TestService_PromptsAndDiscoveryLoop(t *testing.T) {
 	deepPrompt := service.buildDeepAnalysisPrompt(AIAnalysisRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 		Metadata:     map[string]any{"image": "nginx"},
 		CommandOutputs: map[string]string{

@@ -100,7 +100,7 @@ func TestDeepScanner_Scan_NestedDockerCommands(t *testing.T) {
 	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {
@@ -321,7 +321,7 @@ func TestDeepScanner_ScanErrors(t *testing.T) {
 	if _, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceType("unknown"),
 		ResourceID:   "id",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	}); err == nil {
 		t.Fatalf("expected error for unknown resource type")
@@ -331,7 +331,7 @@ func TestDeepScanner_ScanErrors(t *testing.T) {
 	if _, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	}); err == nil {
 		t.Fatalf("expected error for missing agent")
@@ -346,7 +346,7 @@ func TestDeepScanner_OutputHandling(t *testing.T) {
 	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {
@@ -367,7 +367,7 @@ func TestDeepScanner_CommandErrorHandling(t *testing.T) {
 	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {
@@ -391,7 +391,7 @@ func TestDeepScanner_ScanCanceledContext(t *testing.T) {
 	if _, err := scanner.Scan(ctx, DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	}); err != nil {
 		t.Fatalf("Scan error: %v", err)
@@ -432,7 +432,7 @@ func TestDeepScanner_ScanLogsStructuredContextOnCommandResultFailure(t *testing.
 	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDockerVM,
 		ResourceID:   "101:web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {

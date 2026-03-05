@@ -269,7 +269,7 @@ func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
 type AIAnalysisRequest struct {
 	ResourceType   ResourceType      `json:"resource_type"`
 	ResourceID     string            `json:"resource_id"`
-	HostID         string            `json:"host_id"`
+	TargetID       string            `json:"target_id"`
 	Hostname       string            `json:"hostname"`
 	CommandOutputs map[string]string `json:"command_outputs"`
 	ExistingFacts  []DiscoveryFact   `json:"existing_facts,omitempty"`

@@ -130,7 +130,7 @@ func (s *DeepScanner) notifyProgress(progress *DiscoveryProgress) {
 type ScanResult struct {
 	ResourceType   ResourceType
 	ResourceID     string
-	HostID         string
+	TargetID       string
 	Hostname       string
 	CommandOutputs map[string]string
 	Errors         map[string]string
@@ -177,7 +177,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	result := &ScanResult{
 		ResourceType:   req.ResourceType,
 		ResourceID:     req.ResourceID,
-		HostID:         requestTargetID,
+		TargetID:       requestTargetID,
 		Hostname:       req.Hostname,
 		CommandOutputs: make(map[string]string),
 		Errors:         make(map[string]string),
@@ -520,45 +520,45 @@ func splitResourceID(id string) []string {
 	return parts
 }
 
-// ScanDocker runs discovery on Docker containers via the host.
-func (s *DeepScanner) ScanDocker(ctx context.Context, hostID, hostname, containerName string) (*ScanResult, error) {
+// ScanDocker runs discovery on Docker containers via the target agent.
+func (s *DeepScanner) ScanDocker(ctx context.Context, targetID, hostname, containerName string) (*ScanResult, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   containerName,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)
 }
 
 // ScanSystemContainer runs discovery on a system container (LXC).
-func (s *DeepScanner) ScanSystemContainer(ctx context.Context, hostID, hostname, vmid string) (*ScanResult, error) {
+func (s *DeepScanner) ScanSystemContainer(ctx context.Context, targetID, hostname, vmid string) (*ScanResult, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeSystemContainer,
 		ResourceID:   vmid,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)
 }
 
 // ScanVM runs discovery on a VM via QEMU guest agent.
-func (s *DeepScanner) ScanVM(ctx context.Context, hostID, hostname, vmid string) (*ScanResult, error) {
+func (s *DeepScanner) ScanVM(ctx context.Context, targetID, hostname, vmid string) (*ScanResult, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeVM,
 		ResourceID:   vmid,
-		HostID:       hostID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)
 }
 
-// ScanHost runs discovery on a host system.
-func (s *DeepScanner) ScanHost(ctx context.Context, hostID, hostname string) (*ScanResult, error) {
+// ScanHost runs discovery on an agent target system.
+func (s *DeepScanner) ScanHost(ctx context.Context, targetID, hostname string) (*ScanResult, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
-		ResourceID:   hostID,
-		HostID:       hostID,
+		ResourceID:   targetID,
+		TargetID:     targetID,
 		Hostname:     hostname,
 	}
 	return s.Scan(ctx, req)

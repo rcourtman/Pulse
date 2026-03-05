@@ -1270,7 +1270,6 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 		ResourceType: discovery.ResourceType,
 		ResourceID:   discovery.ResourceID,
 		TargetID:     discovery.TargetID,
-		HostID:       discovery.HostID,
 		Hostname:     discovery.Hostname,
 	}
 
@@ -1285,10 +1284,14 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	}
 
 	// Build analysis request with command outputs
+	targetID := strings.TrimSpace(discovery.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(discovery.HostID)
+	}
 	analysisReq := AIAnalysisRequest{
 		ResourceType:   discovery.ResourceType,
 		ResourceID:     discovery.ResourceID,
-		HostID:         discovery.HostID,
+		TargetID:       targetID,
 		Hostname:       discovery.Hostname,
 		CommandOutputs: scanResult.CommandOutputs,
 	}
@@ -1611,7 +1614,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	analysisReq := AIAnalysisRequest{
 		ResourceType: req.ResourceType,
 		ResourceID:   req.ResourceID,
-		HostID:       req.HostID,
+		TargetID:     req.TargetID,
 		Hostname:     req.Hostname,
 	}
 
@@ -2302,7 +2305,7 @@ func (s *Service) buildDeepAnalysisPrompt(req AIAnalysisRequest) string {
 
 	sections = append(sections, fmt.Sprintf(`Resource Type: %s
 Resource ID: %s
-Host: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.HostID))
+Target: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.TargetID))
 
 	if len(req.Metadata) > 0 {
 		metaJSON, err := json.MarshalIndent(req.Metadata, "", "  ")

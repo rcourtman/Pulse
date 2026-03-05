@@ -87,7 +87,6 @@ func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, targe
 	req := DiscoveryRequest{
 		ResourceType: ResourceType(resourceType),
 		TargetID:     targetID,
-		HostID:       targetID,
 		ResourceID:   resourceID,
 		Force:        false, // Don't force if recently discovered
 	}
