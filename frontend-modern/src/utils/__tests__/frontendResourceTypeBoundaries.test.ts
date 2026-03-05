@@ -3,6 +3,7 @@ import resourceTypeCompatSource from '@/utils/resourceTypeCompat.ts?raw';
 import discoveryTypesSource from '@/types/discovery.ts?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import reportingResourceTypesSource from '@/components/Settings/reportingResourceTypes.ts?raw';
+import chartsApiSource from '@/api/charts.ts?raw';
 import investigateAlertButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -38,6 +39,14 @@ describe('frontend resource type boundaries', () => {
     expect(reportingResourceTypesSource).toContain("case 'k8s-cluster'");
     expect(reportingResourceTypesSource).toContain("return 'k8s';");
     expect(reportingResourceTypesSource).not.toContain("case 'host'");
+
+    expect(chartsApiSource).toContain('export function toMetricsHistoryAPIResourceType');
+    expect(chartsApiSource).toContain("| 'k8s-cluster'");
+    expect(chartsApiSource).toContain("| 'k8s-node'");
+    expect(chartsApiSource).toContain("| 'pod'");
+    expect(chartsApiSource).toContain("case 'k8s-cluster'");
+    expect(chartsApiSource).toContain("return 'k8s';");
+    expect(chartsApiSource).toContain("guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>");
 
     expect(investigateAlertButtonSource).toContain('canonicalizeFrontendResourceType');
     expect(resourceBadgesSource).toContain('canonicalizeFrontendResourceType');
