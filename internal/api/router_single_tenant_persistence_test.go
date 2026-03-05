@@ -8,7 +8,8 @@ import (
 )
 
 func TestNewRouter_V5SingleTenantConfigHandlersUseLegacyPersistence(t *testing.T) {
-	prevSingleTenant := setV5SingleTenantModeForTests(true)
+	prevSingleTenant := isV5SingleTenantMode()
+	setV5SingleTenantModeForTests(true)
 	t.Cleanup(func() { setV5SingleTenantModeForTests(prevSingleTenant) })
 
 	cfg := &config.Config{DataPath: t.TempDir()}
