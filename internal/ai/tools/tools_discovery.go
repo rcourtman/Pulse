@@ -89,7 +89,7 @@ type CommandContext struct {
 // Does NOT prescribe how to access - the AI should determine that based on available agents.
 func getCLIAccessPattern(resourceType, targetID, resourceID string) string {
 	switch resourceType {
-	case "system-container", "lxc":
+	case "system-container":
 		return fmt.Sprintf("System container on node '%s' (VMID %s)", targetID, resourceID)
 	case "vm":
 		return fmt.Sprintf("VM on node '%s' (VMID %s)", targetID, resourceID)
@@ -231,19 +231,11 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	targetID = strings.TrimSpace(targetID)
 
-	// Silently normalize legacy "lxc" from in-flight LLM conversations.
-	if resourceType == "lxc" {
-		resourceType = "system-container"
-	}
-	if isUnsupportedLegacyResourceTypeToken(resourceType) {
-		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", resourceType)), nil
-	}
-
-	// Preserve the caller's type for response fields.
-	responseType := resourceType
-
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
+	}
+	if isUnsupportedLegacyResourceTypeToken(resourceType) || !isSupportedDiscoveryResourceType(resourceType) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", resourceType)), nil
 	}
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
@@ -314,7 +306,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			// Genuine failure (e.g. resource doesn't exist) — keep existing behavior
 			return NewJSONResult(map[string]interface{}{
 				"found":         false,
-				"resource_type": responseType,
+				"resource_type": resourceType,
 				"resource_id":   resourceID,
 				"target_id":     targetID,
 				"cli_access":    cliAccess,
@@ -328,7 +320,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		// No discovery but provide cli_access for manual investigation
 		return NewJSONResult(map[string]interface{}{
 			"found":         false,
-			"resource_type": responseType,
+			"resource_type": resourceType,
 			"resource_id":   resourceID,
 			"target_id":     targetID,
 			"cli_access":    cliAccess,
@@ -488,6 +480,15 @@ func isUnsupportedLegacyResourceTypeToken(value string) bool {
 	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(value)
 }
 
+func isSupportedDiscoveryResourceType(value string) bool {
+	switch value {
+	case "vm", "system-container", "docker", "agent":
+		return true
+	default:
+		return false
+	}
+}
+
 func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.discoveryProvider == nil {
 		return NewTextResult("Discovery service not available."), nil
@@ -500,16 +501,9 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	filterType = strings.ToLower(strings.TrimSpace(filterType))
 	filterTargetID = strings.TrimSpace(filterTargetID)
 
-	// Silently normalize legacy "lxc" from in-flight LLM conversations.
-	if filterType == "lxc" {
-		filterType = "system-container"
-	}
-	if isUnsupportedLegacyResourceTypeToken(filterType) {
+	if filterType != "" && (isUnsupportedLegacyResourceTypeToken(filterType) || !isSupportedDiscoveryResourceType(filterType)) {
 		return NewErrorResult(fmt.Errorf("unsupported type %q", filterType)), nil
 	}
-
-	// Preserve caller's type for the response echo.
-	responseFilterType := filterType
 
 	var discoveries []*ResourceDiscoveryInfo
 	var err error
@@ -583,8 +577,8 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 		"total":       len(results),
 	}
 
-	if responseFilterType != "" {
-		response["filter_type"] = responseFilterType
+	if filterType != "" {
+		response["filter_type"] = filterType
 	}
 	if filterTargetID != "" {
 		response["filter_target_id"] = filterTargetID

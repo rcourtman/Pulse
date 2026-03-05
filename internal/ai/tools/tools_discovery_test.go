@@ -145,6 +145,21 @@ func TestExecuteGetDiscovery_TargetIDRequired(t *testing.T) {
 	assert.Contains(t, result.Content[0].Text, "target_id is required")
 }
 
+func TestExecuteGetDiscovery_RejectsLegacyResourceTypeAlias(t *testing.T) {
+	provider := &stubDiscoveryProvider{}
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
+
+	result, err := exec.executeGetDiscovery(context.Background(), map[string]interface{}{
+		"resource_type": "lxc",
+		"resource_id":   "101",
+		"target_id":     "node1",
+	})
+	assert.NoError(t, err)
+	assert.True(t, result.IsError)
+	assert.Contains(t, result.Content[0].Text, "unsupported resource_type")
+	assert.Equal(t, "", provider.lastGetResourceType)
+}
+
 func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 	provider := &stubDiscoveryProvider{
 		listResp: []*ResourceDiscoveryInfo{
@@ -176,4 +191,15 @@ func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 		assert.True(t, castOK)
 		assert.NotContains(t, first, "host_id")
 	}
+}
+
+func TestExecuteListDiscoveries_RejectsLegacyTypeAlias(t *testing.T) {
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: &stubDiscoveryProvider{}})
+
+	result, err := exec.executeListDiscoveries(context.Background(), map[string]interface{}{
+		"type": "lxc",
+	})
+	assert.NoError(t, err)
+	assert.True(t, result.IsError)
+	assert.Contains(t, result.Content[0].Text, "unsupported type")
 }
