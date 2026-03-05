@@ -633,7 +633,7 @@ fi
 
 # Summary of what will be monitored
 log_info "Monitoring configuration:"
-log_info "  Host metrics: $ENABLE_HOST"
+log_info "  Agent metrics: $ENABLE_HOST"
 log_info "  Docker/Podman: $ENABLE_DOCKER"
 log_info "  Kubernetes: $ENABLE_KUBERNETES"
 log_info "  Proxmox: $ENABLE_PROXMOX"
@@ -670,26 +670,16 @@ if [[ "$UNINSTALL" == "true" ]]; then
     fi
 
     # Try to notify the Pulse server about uninstallation if we have connection details
-    # This ensures the host record is removed and any linked PVE nodes are updated immediately.
+    # This ensures the agent record is removed and any linked PVE nodes are updated immediately.
     if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then
         # Try to recover agent ID if not provided.
-        # Priority: host-id file (new) > agent-id file (legacy) > hostname API lookup (fallback)
+        # Priority: agent-id file (canonical) > hostname API lookup (fallback)
         if [[ -z "$AGENT_ID" ]]; then
-            # Primary: host-id file (written by agent from server-assigned hostId)
-            for hid_path in /var/lib/pulse-agent/host-id /boot/config/plugins/pulse-agent/host-id "$TRUENAS_STATE_DIR/host-id"; do
-                if [[ -f "$hid_path" ]]; then
-                    AGENT_ID=$(cat "$hid_path")
-                    log_info "Recovered host ID from ${hid_path}"
-                    break
-                fi
-            done
-        fi
-        if [[ -z "$AGENT_ID" ]]; then
-            # Legacy fallback: agent-id file
+            # Primary: canonical agent-id file
             for aid_path in /var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id"; do
                 if [[ -f "$aid_path" ]]; then
                     AGENT_ID=$(cat "$aid_path")
-                    log_info "Recovered host ID from legacy ${aid_path}"
+                    log_info "Recovered agent ID from ${aid_path}"
                     break
                 fi
             done
@@ -703,10 +693,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
                 if [[ -n "$CURL_CA_BUNDLE" ]]; then LOOKUP_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
                 LOOKUP_RESP=$(curl "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=${LOOKUP_HOSTNAME}" 2>/dev/null || true)
                 if [[ -n "$LOOKUP_RESP" ]]; then
-                    # Extract .host.id from JSON (portable, no jq dependency)
+                    # Extract .agent.id from JSON (portable, no jq dependency)
                     AGENT_ID=$(echo "$LOOKUP_RESP" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"//; s/"$//' || true)
                     if [[ -n "$AGENT_ID" ]]; then
-                        log_info "Recovered host ID via server lookup: ${AGENT_ID}"
+                        log_info "Recovered agent ID via server lookup: ${AGENT_ID}"
                     fi
                 fi
             fi
@@ -719,7 +709,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
             if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
             # Send unregistration request (ignore errors as we are uninstalling anyway)
-            curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
+            curl "${CURL_ARGS[@]}" -d "{\"agentId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
         fi
     fi
 

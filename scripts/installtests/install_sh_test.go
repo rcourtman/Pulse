@@ -90,9 +90,9 @@ func TestConnectionEnvRecovery(t *testing.T) {
 	}
 }
 
-// TestHostIDFileRecovery verifies the host-id file lookup priority:
-// /var/lib/pulse-agent/host-id > /boot/config/plugins/pulse-agent/host-id
-func TestHostIDFileRecovery(t *testing.T) {
+// TestAgentIDFileRecovery verifies the agent-id file lookup priority:
+// /var/lib/pulse-agent/agent-id > /boot/config/plugins/pulse-agent/agent-id
+func TestAgentIDFileRecovery(t *testing.T) {
 	cases := []struct {
 		name   string
 		files  map[string]string // relative path -> content
@@ -101,22 +101,22 @@ func TestHostIDFileRecovery(t *testing.T) {
 		{
 			name: "primary location",
 			files: map[string]string{
-				"var/lib/pulse-agent/host-id": "uuid-primary",
+				"var/lib/pulse-agent/agent-id": "uuid-primary",
 			},
 			wantID: "uuid-primary",
 		},
 		{
 			name: "secondary location (Unraid)",
 			files: map[string]string{
-				"boot/config/plugins/pulse-agent/host-id": "uuid-unraid",
+				"boot/config/plugins/pulse-agent/agent-id": "uuid-unraid",
 			},
 			wantID: "uuid-unraid",
 		},
 		{
 			name: "primary takes precedence",
 			files: map[string]string{
-				"var/lib/pulse-agent/host-id":             "uuid-primary",
-				"boot/config/plugins/pulse-agent/host-id": "uuid-unraid",
+				"var/lib/pulse-agent/agent-id":             "uuid-primary",
+				"boot/config/plugins/pulse-agent/agent-id": "uuid-unraid",
 			},
 			wantID: "uuid-primary",
 		},
@@ -141,12 +141,12 @@ func TestHostIDFileRecovery(t *testing.T) {
 				}
 			}
 
-			// Replicate the install.sh host-id recovery loop
+			// Replicate the install.sh agent-id recovery loop
 			script := `
 				AGENT_ID=""
-				for hid_path in "` + root + `/var/lib/pulse-agent/host-id" "` + root + `/boot/config/plugins/pulse-agent/host-id"; do
-					if [[ -f "$hid_path" ]]; then
-						AGENT_ID=$(cat "$hid_path")
+				for aid_path in "` + root + `/var/lib/pulse-agent/agent-id" "` + root + `/boot/config/plugins/pulse-agent/agent-id"; do
+					if [[ -f "$aid_path" ]]; then
+						AGENT_ID=$(cat "$aid_path")
 						break
 					fi
 				done
@@ -159,7 +159,7 @@ func TestHostIDFileRecovery(t *testing.T) {
 
 			got := strings.TrimSpace(string(out))
 			if got != tc.wantID {
-				t.Errorf("host-id = %q, want %q", got, tc.wantID)
+				t.Errorf("agent-id = %q, want %q", got, tc.wantID)
 			}
 		})
 	}
@@ -301,7 +301,7 @@ func TestAPIDeregistrationCurl(t *testing.T) {
 		PULSE_TOKEN="` + token + `"
 		AGENT_ID="` + agentID + `"
 		CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
-		curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
+		curl "${CURL_ARGS[@]}" -d "{\"agentId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
 	`
 
 	out, err := exec.Command("bash", "-c", script).CombinedOutput()
@@ -318,8 +318,8 @@ func TestAPIDeregistrationCurl(t *testing.T) {
 	if gotPath != "/api/agents/agent/uninstall" {
 		t.Errorf("path = %q, want /api/agents/agent/uninstall", gotPath)
 	}
-	if gotBody["hostId"] != agentID {
-		t.Errorf("body hostId = %q, want %q", gotBody["hostId"], agentID)
+	if gotBody["agentId"] != agentID {
+		t.Errorf("body agentId = %q, want %q", gotBody["agentId"], agentID)
 	}
 	if got := gotHeaders.Get("X-API-Token"); got != token {
 		t.Errorf("X-API-Token = %q, want %q", got, token)

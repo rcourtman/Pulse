@@ -176,7 +176,7 @@ if ($Uninstall) {
         if (-not [string]::IsNullOrWhiteSpace($detectedAgentId)) {
             Write-Host "Notifying Pulse server to unregister agent ID: $detectedAgentId..." -ForegroundColor Gray
             try {
-                $body = @{ hostId = $detectedAgentId } | ConvertTo-Json
+                $body = @{ agentId = $detectedAgentId } | ConvertTo-Json
                 $headers = @{ "X-API-Token" = $Token }
 
                 Invoke-RestMethod -Uri "$Url/api/agents/agent/uninstall" `

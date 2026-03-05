@@ -533,7 +533,7 @@ type Config struct {
 	Enroll bool // Exchange bootstrap token for runtime token on startup
 
 	// State directory
-	StateDir string // Persistent state directory for host-id, proxmox registration, etc.
+	StateDir string // Persistent state directory for agent-id, proxmox registration, etc.
 
 	// Disk filtering
 	DiskExclude []string // Mount points or patterns to exclude from disk monitoring
