@@ -215,7 +215,7 @@ export interface Container {
   osTemplate?: string; // Template or OCI image used (e.g., "oci:docker.io/library/alpine:latest")
 }
 
-export interface DockerHost {
+export interface DockerRuntime {
   id: string;
   agentId: string;
   hostname: string;
@@ -255,6 +255,9 @@ export interface DockerHost {
   command?: DockerRuntimeCommand;
   isLegacy?: boolean;
 }
+
+// Legacy alias kept while remaining frontend references migrate.
+export type DockerHost = DockerRuntime;
 
 export interface DockerRuntimeCommand {
   id: string;

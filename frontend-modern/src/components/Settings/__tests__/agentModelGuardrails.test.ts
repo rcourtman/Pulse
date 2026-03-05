@@ -78,6 +78,8 @@ describe('agent model guardrails', () => {
     expect(apiTypesSource).not.toContain('pbs: PBSInstance[]');
     expect(apiTypesSource).not.toContain('pmg: PMGInstance[]');
     expect(apiTypesSource).not.toContain('replicationJobs: ReplicationJob[]');
+    expect(apiTypesSource).toContain('export interface DockerRuntime');
+    expect(apiTypesSource).not.toContain('export interface DockerHost');
   });
 
   it('keeps discovery resource types on canonical v6 names', () => {

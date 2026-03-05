@@ -5,7 +5,7 @@ import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
 import type {
   Agent,
-  DockerHost,
+  DockerRuntime,
   KubernetesCluster,
   RemovedDockerHost,
   RemovedKubernetesCluster,
@@ -14,7 +14,7 @@ import type {
 let mockWsStore: {
   state: {
     hosts: Agent[];
-    dockerHosts: DockerHost[];
+    dockerHosts: DockerRuntime[];
     kubernetesClusters?: KubernetesCluster[];
     removedDockerHosts?: RemovedDockerHost[];
     removedKubernetesClusters?: RemovedKubernetesCluster[];
@@ -241,7 +241,7 @@ const createHost = (overrides?: Partial<Agent>): Agent => ({
   ...overrides,
 });
 
-const createDockerHost = (overrides?: Partial<DockerHost>): DockerHost => ({
+const createDockerHost = (overrides?: Partial<DockerRuntime>): DockerRuntime => ({
   id: 'docker-host-1',
   agentId: 'agent-1',
   hostname: 'docker-host-1.local',
@@ -276,7 +276,7 @@ const createRemovedDockerHost = (overrides?: Partial<RemovedDockerHost>): Remove
 
 const setupComponent = (
   hosts: Agent[] = [],
-  dockerHosts: DockerHost[] = [],
+  dockerHosts: DockerRuntime[] = [],
   kubernetesClusters: KubernetesCluster[] = [],
   removedDockerHosts: RemovedDockerHost[] = [],
   removedKubernetesClusters: RemovedKubernetesCluster[] = [],
