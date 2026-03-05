@@ -441,6 +441,18 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 			label: "podman rootless socket",
 		})
 
+		// Discover rootless Podman sockets for other users (e.g. agent runs as root
+		// but Podman rootless is installed for uid 1000)
+		if matches, err := filepath.Glob("/run/user/*/podman/podman.sock"); err == nil {
+			for _, match := range matches {
+				sockURI := "unix://" + match
+				add(runtimeCandidate{
+					host:  sockURI,
+					label: fmt.Sprintf("podman rootless socket (%s)", match),
+				})
+			}
+		}
+
 		add(runtimeCandidate{
 			host:  "unix:///run/podman/podman.sock",
 			label: "podman system socket",
@@ -489,6 +501,17 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 			label: "podman rootless socket",
 		})
 
+		// Discover rootless Podman sockets for other users
+		if matches, err := filepath.Glob("/run/user/*/podman/podman.sock"); err == nil {
+			for _, match := range matches {
+				sockURI := "unix://" + match
+				add(runtimeCandidate{
+					host:  sockURI,
+					label: fmt.Sprintf("podman rootless socket (%s)", match),
+				})
+			}
+		}
+
 		add(runtimeCandidate{
 			host:  "unix:///run/podman/podman.sock",
 			label: "podman system socket",
@@ -508,6 +531,18 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 			host:  rootlessDocker,
 			label: "docker rootless socket",
 		})
+
+		// Discover rootless Docker sockets for other users (e.g. agent runs as root
+		// but Docker rootless is installed for uid 1000)
+		if matches, err := filepath.Glob("/run/user/*/docker.sock"); err == nil {
+			for _, match := range matches {
+				sockURI := "unix://" + match
+				add(runtimeCandidate{
+					host:  sockURI,
+					label: fmt.Sprintf("docker rootless socket (%s)", match),
+				})
+			}
+		}
 
 		// macOS Docker Desktop socket
 		if home := os.Getenv("HOME"); home != "" {
