@@ -144,7 +144,7 @@ func TestInferResourceType(t *testing.T) {
 		{"snapshot_age", "snapshot_age", nil, "snapshot"},
 		{"unknown_type", "unknown_type", nil, "vm"},
 		{"with_metadata", "unknown", map[string]interface{}{"resourceType": "custom"}, "custom"},
-		{"with_metadata_host", "unknown", map[string]interface{}{"resourceType": "host"}, "agent"},
+		{"with_metadata_host", "unknown", map[string]interface{}{"resourceType": "host"}, "host"},
 	}
 
 	for _, tt := range tests {
@@ -166,12 +166,16 @@ func TestNormalizeAlertResourceType(t *testing.T) {
 		{name: "vm legacy guest", input: "guest", expected: "vm"},
 		{name: "vm qemu", input: "qemu", expected: "vm"},
 		{name: "system container lxc", input: "lxc", expected: "system-container"},
-		{name: "system container oci", input: "oci_container", expected: "system-container"},
+		{name: "system container oci", input: "oci-container", expected: "system-container"},
 		{name: "app container docker", input: "docker", expected: "app-container"},
-		{name: "app container docker service", input: "docker_service", expected: "app-container"},
-		{name: "agent host", input: "host", expected: "agent"},
+		{name: "app container docker service", input: "docker-service", expected: "app-container"},
+		{name: "agent host passthrough", input: "host", expected: "host"},
 		{name: "agent node", input: "node", expected: "agent"},
-		{name: "k8s alias", input: "kubernetes_cluster", expected: "k8s"},
+		{name: "k8s alias", input: "k8s-cluster", expected: "k8s"},
+		{name: "legacy system_container passthrough", input: "system_container", expected: "system_container"},
+		{name: "legacy docker_container passthrough", input: "docker_container", expected: "docker_container"},
+		{name: "legacy docker_service passthrough", input: "docker_service", expected: "docker_service"},
+		{name: "legacy kubernetes_cluster passthrough", input: "kubernetes_cluster", expected: "kubernetes_cluster"},
 		{name: "trim and case normalize", input: "  DOCKER-SERVICE  ", expected: "app-container"},
 		{name: "unknown passthrough", input: "storage", expected: "storage"},
 	}
