@@ -463,7 +463,7 @@ type CommandRoutingResult struct {
 
 	// Provenance info
 	AgentHostname string // Hostname of the agent
-	ResolvedKind  string // Technology/transport kind: "node", "system-container", "vm", "docker", "agent" (drives routing decisions)
+	ResolvedKind  string // Technology/transport kind: "node", "system-container", "vm", "app-container", "docker-host", "agent" (drives routing decisions)
 	ResolvedNode  string // Hypervisor node name (if applicable)
 	Transport     string // How command will be executed: "direct", "pct_exec", "qm_guest_exec"
 }
@@ -1072,7 +1072,7 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 	// STEP 2: Docker host is not an LXC/VM — use direct agent routing
 	agentID := e.findAgentForDockerHost(dockerHost)
 	result.AgentID = agentID
-	result.ResolvedKind = "dockerhost"
+	result.ResolvedKind = "docker-host"
 	if agentID != "" {
 		// Try to get agent hostname
 		agents := e.agentServer.GetConnectedAgents()

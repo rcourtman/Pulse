@@ -113,7 +113,7 @@ type ResourceLocation struct {
 	// What was found
 	Found        bool   // True if the resource was found
 	Name         string // The resource name
-	ResourceType string // "node", "vm", "system-container", "dockerhost", "docker", "agent", "k8s_cluster", "k8s_pod", "k8s_deployment"
+	ResourceType string // "node", "vm", "system-container", "docker-host", "app-container", "agent", "k8s-cluster", "k8s-pod", "k8s-deployment"
 
 	// For VMs and system containers (guest resources on a hypervisor node)
 	VMID int    // Guest ID (VMID) if this is a VM or system container
@@ -188,7 +188,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 			loc := ResourceLocation{
 				Found:          true,
 				Name:           dh.Hostname,
-				ResourceType:   "dockerhost",
+				ResourceType:   "docker-host",
 				DockerHostName: dh.Hostname,
 				TargetHost:     dh.Hostname,
 			}
@@ -226,7 +226,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				loc := ResourceLocation{
 					Found:          true,
 					Name:           name,
-					ResourceType:   "docker",
+					ResourceType:   "app-container",
 					DockerHostName: dh.Hostname,
 					TargetHost:     dh.Hostname, // Route to the Docker host, not the container
 				}
@@ -279,7 +279,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 			return ResourceLocation{
 				Found:          true,
 				Name:           cluster.Name,
-				ResourceType:   "k8s_cluster",
+				ResourceType:   "k8s-cluster",
 				K8sClusterName: cluster.Name,
 				K8sAgentID:     cluster.AgentID,
 				TargetHost:     cluster.Name,
@@ -293,7 +293,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				return ResourceLocation{
 					Found:          true,
 					Name:           pod.Name,
-					ResourceType:   "k8s_pod",
+					ResourceType:   "k8s-pod",
 					K8sClusterName: cluster.Name,
 					K8sNamespace:   pod.Namespace,
 					K8sAgentID:     cluster.AgentID,
@@ -309,7 +309,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				return ResourceLocation{
 					Found:          true,
 					Name:           deploy.Name,
-					ResourceType:   "k8s_deployment",
+					ResourceType:   "k8s-deployment",
 					K8sClusterName: cluster.Name,
 					K8sNamespace:   deploy.Namespace,
 					K8sAgentID:     cluster.AgentID,

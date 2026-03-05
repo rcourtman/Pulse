@@ -73,8 +73,8 @@ func TestResolveResource_DockerContainer(t *testing.T) {
 		}},
 	})
 	loc := ResolveResource(rr, "homepage")
-	if !loc.Found || loc.ResourceType != "docker" {
-		t.Fatalf("expected docker, got found=%v type=%q", loc.Found, loc.ResourceType)
+	if !loc.Found || loc.ResourceType != "app-container" {
+		t.Fatalf("expected app-container, got found=%v type=%q", loc.Found, loc.ResourceType)
 	}
 	if loc.DockerHostName != "dock1" {
 		t.Fatalf("expected docker host dock1, got %q", loc.DockerHostName)
@@ -108,8 +108,8 @@ func TestResolveResource_DockerContainerTargetHostRewrite(t *testing.T) {
 		}},
 	})
 	loc := ResolveResource(rr, "myapp")
-	if !loc.Found || loc.ResourceType != "docker" {
-		t.Fatalf("expected docker, got found=%v type=%q", loc.Found, loc.ResourceType)
+	if !loc.Found || loc.ResourceType != "app-container" {
+		t.Fatalf("expected app-container, got found=%v type=%q", loc.Found, loc.ResourceType)
 	}
 	if loc.TargetHost != "docker-host-lxc" {
 		t.Fatalf("expected target_host rewritten to LXC name, got %q", loc.TargetHost)
@@ -135,8 +135,8 @@ func TestResolveResource_DockerHost(t *testing.T) {
 		}},
 	})
 	loc := ResolveResource(rr, "standalone1")
-	if !loc.Found || loc.ResourceType != "dockerhost" {
-		t.Fatalf("expected dockerhost, got found=%v type=%q", loc.Found, loc.ResourceType)
+	if !loc.Found || loc.ResourceType != "docker-host" {
+		t.Fatalf("expected docker-host, got found=%v type=%q", loc.Found, loc.ResourceType)
 	}
 	if loc.DockerHostType != "standalone" {
 		t.Fatalf("expected standalone, got %q", loc.DockerHostType)
@@ -176,8 +176,8 @@ func TestResolveResource_K8sCluster(t *testing.T) {
 		}},
 	})
 	loc := ResolveResource(rr, "prod")
-	if !loc.Found || loc.ResourceType != "k8s_cluster" {
-		t.Fatalf("expected k8s_cluster, got found=%v type=%q", loc.Found, loc.ResourceType)
+	if !loc.Found || loc.ResourceType != "k8s-cluster" {
+		t.Fatalf("expected k8s-cluster, got found=%v type=%q", loc.Found, loc.ResourceType)
 	}
 	if loc.K8sAgentID != "agent-1" {
 		t.Fatalf("expected agent-1, got %q", loc.K8sAgentID)
@@ -198,8 +198,8 @@ func TestResolveResource_K8sPod(t *testing.T) {
 		}},
 	})
 	loc := ResolveResource(rr, "nginx-abc")
-	if !loc.Found || loc.ResourceType != "k8s_pod" {
-		t.Fatalf("expected k8s_pod, got found=%v type=%q", loc.Found, loc.ResourceType)
+	if !loc.Found || loc.ResourceType != "k8s-pod" {
+		t.Fatalf("expected k8s-pod, got found=%v type=%q", loc.Found, loc.ResourceType)
 	}
 	if loc.K8sNamespace != "default" {
 		t.Fatalf("expected namespace default, got %q", loc.K8sNamespace)
@@ -223,8 +223,8 @@ func TestResolveResource_K8sDeployment(t *testing.T) {
 		}},
 	})
 	loc := ResolveResource(rr, "web-deploy")
-	if !loc.Found || loc.ResourceType != "k8s_deployment" {
-		t.Fatalf("expected k8s_deployment, got found=%v type=%q", loc.Found, loc.ResourceType)
+	if !loc.Found || loc.ResourceType != "k8s-deployment" {
+		t.Fatalf("expected k8s-deployment, got found=%v type=%q", loc.Found, loc.ResourceType)
 	}
 	if loc.K8sNamespace != "production" {
 		t.Fatalf("expected namespace production, got %q", loc.K8sNamespace)

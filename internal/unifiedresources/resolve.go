@@ -74,7 +74,7 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 			loc := models.ResourceLocation{
 				Found:          true,
 				Name:           dh.Hostname(),
-				ResourceType:   "dockerhost",
+				ResourceType:   "docker-host",
 				DockerHostName: dh.Hostname(),
 				TargetHost:     dh.Hostname(),
 			}
@@ -93,7 +93,7 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 			loc := models.ResourceLocation{
 				Found:        true,
 				Name:         name,
-				ResourceType: "docker",
+				ResourceType: "app-container",
 			}
 			// Find the parent Docker host to populate the routing chain.
 			parentID := container.ParentID()
@@ -156,7 +156,7 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 			return models.ResourceLocation{
 				Found:          true,
 				Name:           returnName,
-				ResourceType:   "k8s_cluster",
+				ResourceType:   "k8s-cluster",
 				K8sClusterName: returnName,
 				K8sAgentID:     cluster.AgentID(),
 				TargetHost:     returnName,
@@ -174,7 +174,7 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 			loc := models.ResourceLocation{
 				Found:        true,
 				Name:         pod.Name(),
-				ResourceType: "k8s_pod",
+				ResourceType: "k8s-pod",
 				K8sNamespace: pod.Namespace(),
 			}
 			if cluster := clusterByID[pod.ParentID()]; cluster != nil {
@@ -197,7 +197,7 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 			loc := models.ResourceLocation{
 				Found:        true,
 				Name:         deploy.Name(),
-				ResourceType: "k8s_deployment",
+				ResourceType: "k8s-deployment",
 				K8sNamespace: deploy.Namespace(),
 			}
 			if cluster := clusterByID[deploy.ParentID()]; cluster != nil {
