@@ -13,9 +13,11 @@ func TestAlertConfigUnmarshal_LegacyHostAliasesIgnored(t *testing.T) {
 		},
 		"disableAllHosts": true,
 		"disableAllHostsOffline": true,
-		"timeThresholds": {"host": 42},
+		"timeThresholds": {"host": 42, "docker": 7, "k8s": 8},
 		"metricTimeThresholds": {
-			"host": {"cpu": 11}
+			"host": {"cpu": 11},
+			"dockerhost": {"cpu": 5},
+			"kubernetes-cluster": {"cpu": 9}
 		}
 	}`)
 
@@ -39,11 +41,23 @@ func TestAlertConfigUnmarshal_LegacyHostAliasesIgnored(t *testing.T) {
 	if _, exists := cfg.TimeThresholds["host"]; exists {
 		t.Fatal("expected legacy timeThresholds.host to be removed")
 	}
+	if _, exists := cfg.TimeThresholds["docker"]; exists {
+		t.Fatal("expected legacy timeThresholds.docker to be removed")
+	}
+	if _, exists := cfg.TimeThresholds["k8s"]; exists {
+		t.Fatal("expected legacy timeThresholds.k8s to be removed")
+	}
 	if _, exists := cfg.MetricTimeThresholds["agent"]; exists {
 		t.Fatal("did not expect metricTimeThresholds.agent from legacy host key")
 	}
 	if _, exists := cfg.MetricTimeThresholds["host"]; exists {
 		t.Fatal("expected legacy metricTimeThresholds.host to be removed")
+	}
+	if _, exists := cfg.MetricTimeThresholds["dockerhost"]; exists {
+		t.Fatal("expected legacy metricTimeThresholds.dockerhost to be removed")
+	}
+	if _, exists := cfg.MetricTimeThresholds["kubernetes-cluster"]; exists {
+		t.Fatal("expected legacy metricTimeThresholds.kubernetes-cluster to be removed")
 	}
 }
 
@@ -62,7 +76,8 @@ func TestAlertConfigUnmarshal_CanonicalKeysTakePrecedence(t *testing.T) {
 		"timeThresholds": {"agent": 7, "host": 42},
 		"metricTimeThresholds": {
 			"agent": {"cpu": 3},
-			"host": {"cpu": 11}
+			"host": {"cpu": 11},
+			"docker": {"cpu": 13}
 		}
 	}`)
 
@@ -91,6 +106,9 @@ func TestAlertConfigUnmarshal_CanonicalKeysTakePrecedence(t *testing.T) {
 	}
 	if _, exists := cfg.MetricTimeThresholds["host"]; exists {
 		t.Fatal("did not expect legacy metricTimeThresholds.host to remain")
+	}
+	if _, exists := cfg.MetricTimeThresholds["docker"]; exists {
+		t.Fatal("did not expect legacy metricTimeThresholds.docker to remain")
 	}
 }
 

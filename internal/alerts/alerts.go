@@ -422,14 +422,30 @@ func NormalizeAlertConfigAliases(config *AlertConfig) {
 	}
 
 	if config.TimeThresholds != nil {
-		delete(config.TimeThresholds, "host")
+		for key := range config.TimeThresholds {
+			typeKey := canonicalAlertResourceType(key)
+			if typeKey == "" || typeKey == "all" {
+				continue
+			}
+			if isUnsupportedLegacyAlertResourceType(typeKey) {
+				delete(config.TimeThresholds, key)
+			}
+		}
 	}
 
 	if len(config.MetricTimeThresholds) == 0 {
 		return
 	}
 
-	delete(config.MetricTimeThresholds, "host")
+	for key := range config.MetricTimeThresholds {
+		typeKey := canonicalAlertResourceType(key)
+		if typeKey == "" || typeKey == "all" {
+			continue
+		}
+		if isUnsupportedLegacyAlertResourceType(typeKey) {
+			delete(config.MetricTimeThresholds, key)
+		}
+	}
 }
 
 func cloneStringIntMap(src map[string]int) map[string]int {
