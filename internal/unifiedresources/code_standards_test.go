@@ -235,6 +235,45 @@ func TestNoLegacyHostResourceTypeSymbol(t *testing.T) {
 	}
 }
 
+// TestNoLegacyHostToAgentMigrationHintsInRuntimeCode prevents reintroducing
+// runtime messages that imply host->agent aliasing behavior.
+func TestNoLegacyHostToAgentMigrationHintsInRuntimeCode(t *testing.T) {
+	bannedPhrases := []string{
+		`no longer supported; use "agent"`,
+		`no longer supported; use "agent:*"`,
+	}
+
+	internalDir := filepath.Join("..")
+	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		content := string(data)
+		normalizedPath := filepath.ToSlash(path)
+		for _, phrase := range bannedPhrases {
+			if !strings.Contains(content, phrase) {
+				continue
+			}
+			t.Errorf("%s: banned legacy migration hint detected: %q", normalizedPath, phrase)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to scan internal packages: %v", err)
+	}
+}
+
 // SRC-04b: Ratchet-to-hard-ban conversion completed 2026-03-01.
 //
 // All state.* field access patterns and GetState() calls in consumer packages

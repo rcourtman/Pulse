@@ -83,13 +83,10 @@ const (
 	ResourceTypePhysicalDisk    ResourceType = "physical_disk"
 )
 
-// CanonicalResourceType normalizes legacy and canonical type spellings into the
-// internal canonical enum value.
+// CanonicalResourceType normalizes resource type spellings into the internal
+// canonical enum value.
 func CanonicalResourceType(rt ResourceType) ResourceType {
 	normalized := ResourceType(strings.ToLower(strings.TrimSpace(string(rt))))
-	if normalized == "host" || normalized == "agent" {
-		return ResourceTypeAgent
-	}
 	return normalized
 }
 

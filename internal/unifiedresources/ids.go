@@ -20,22 +20,11 @@ func SourceSpecificID(resourceType ResourceType, source DataSource, sourceID str
 	return fmt.Sprintf("%s-%s", resourceType, hex.EncodeToString(hash[:8]))
 }
 
-// CanonicalResourceID normalizes legacy resource ID prefixes to canonical v6
-// identifiers. For example, "host-..." and "host:..." become "agent-..." and
-// "agent:...".
+// CanonicalResourceID returns the canonical v6 resource identifier.
 func CanonicalResourceID(id string) string {
 	trimmed := strings.TrimSpace(id)
 	if trimmed == "" {
 		return ""
 	}
-
-	lower := strings.ToLower(trimmed)
-	switch {
-	case strings.HasPrefix(lower, "host-"):
-		return "agent-" + trimmed[len("host-"):]
-	case strings.HasPrefix(lower, "host:"):
-		return "agent:" + trimmed[len("host:"):]
-	default:
-		return trimmed
-	}
+	return trimmed
 }
