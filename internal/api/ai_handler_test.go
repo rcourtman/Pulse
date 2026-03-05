@@ -446,7 +446,7 @@ func TestHandleChat_Success(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Content-Type"), "text/event-stream")
 }
 
-func TestHandleChat_CanonicalizesMentionTypes(t *testing.T) {
+func TestHandleChat_PreservesCanonicalMentionTypes(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
@@ -458,16 +458,15 @@ func TestHandleChat_CanonicalizesMentionTypes(t *testing.T) {
 		Return(nil).
 		Run(func(args mock.Arguments) {
 			reqArg := args.Get(1).(chat.ExecuteRequest)
-			if len(reqArg.Mentions) != 4 {
-				t.Fatalf("mentions len = %d, want 4 (%+v)", len(reqArg.Mentions), reqArg.Mentions)
+			if len(reqArg.Mentions) != 3 {
+				t.Fatalf("mentions len = %d, want 3 (%+v)", len(reqArg.Mentions), reqArg.Mentions)
 			}
 			assert.Equal(t, "system-container", reqArg.Mentions[0].Type)
-			assert.Equal(t, "system-container", reqArg.Mentions[1].Type)
-			assert.Equal(t, "app-container", reqArg.Mentions[2].Type)
-			assert.Equal(t, "agent", reqArg.Mentions[3].Type)
+			assert.Equal(t, "app-container", reqArg.Mentions[1].Type)
+			assert.Equal(t, "agent", reqArg.Mentions[2].Type)
 		})
 
-	body := `{"prompt":"hi","mentions":[{"id":"system-container:pve1:200","name":"ct200","type":"container","node":"pve1"},{"id":"system-container:pve1:201","name":"ct201","type":"lxc","node":"pve1"},{"id":"docker:agent-1:nginx","name":"nginx","type":"docker-container"},{"id":"agent:node-1","name":"node-1","type":"agent"}]}`
+	body := `{"prompt":"hi","mentions":[{"id":"system-container:pve1:200","name":"ct200","type":"system-container","node":"pve1"},{"id":"docker:agent-1:nginx","name":"nginx","type":"app-container"},{"id":"agent:node-1","name":"node-1","type":"agent"}]}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -494,7 +493,7 @@ func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {
 			assert.Equal(t, "agent", reqArg.Mentions[0].Type)
 		})
 
-	body := `{"prompt":"hi","mentions":[{"id":"host:node-1","name":"node-1","type":"host"},{"id":"system-container:pve1:200","name":"ct200","type":"system_container","node":"pve1"},{"id":"docker:agent-1:nginx","name":"nginx","type":"docker_container"},{"id":"agent:node-2","name":"node-2","type":"agent"}]}`
+	body := `{"prompt":"hi","mentions":[{"id":"host:node-1","name":"node-1","type":"host"},{"id":"system-container:pve1:200","name":"ct200","type":"system_container","node":"pve1"},{"id":"docker:agent-1:nginx","name":"nginx","type":"docker_container"},{"id":"ct:pve1:201","name":"ct201","type":"container","node":"pve1"},{"id":"ct:pve1:202","name":"ct202","type":"lxc","node":"pve1"},{"id":"docker:agent-1:db","name":"db","type":"docker-container"},{"id":"k8s:cluster-1","name":"cluster-1","type":"k8s"},{"id":"agent:node-2","name":"node-2","type":"agent"}]}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -505,6 +504,11 @@ func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {
 
 func TestCanonicalizeChatMentionType_RejectsRemovedAliases(t *testing.T) {
 	assert.Equal(t, "", canonicalizeChatMentionType("host"))
+	assert.Equal(t, "", canonicalizeChatMentionType("container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("lxc"))
+	assert.Equal(t, "", canonicalizeChatMentionType("docker"))
+	assert.Equal(t, "", canonicalizeChatMentionType("docker-container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("k8s"))
 	assert.Equal(t, "", canonicalizeChatMentionType("system_container"))
 	assert.Equal(t, "", canonicalizeChatMentionType("docker_container"))
 	assert.Equal(t, "", canonicalizeChatMentionType("app_container"))
