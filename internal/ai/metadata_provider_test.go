@@ -79,7 +79,7 @@ func TestService_SetResourceURL_ProviderErrors(t *testing.T) {
 func TestService_SetResourceURL_RejectsLegacyResourceTypeAliases(t *testing.T) {
 	svc := &Service{metadataProvider: &mockMetadataProvider{}}
 
-	for _, legacyType := range []string{"guest", "docker", "container", "lxc", "qemu", "docker_container", "docker_service"} {
+	for _, legacyType := range []string{"host", "guest", "docker", "container", "lxc", "qemu", "docker_container", "docker_service"} {
 		err := svc.SetResourceURL(legacyType, "guest-1", "https://example.com")
 		if err == nil || !strings.Contains(err.Error(), "unknown resource type") {
 			t.Fatalf("expected unknown resource type error for %q, got %v", legacyType, err)

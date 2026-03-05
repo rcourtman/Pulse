@@ -567,6 +567,31 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "ai", "approval", "store_test.go"),
+			requiredSnippets: []string{
+				`expected unsupported host target type to be rejected`,
+				`expected error for unsupported host target type input`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "metadata_provider_test.go"),
+			requiredSnippets: []string{
+				`[]string{"host", "guest", "docker", "container", "lxc", "qemu", "docker_container", "docker_service"}`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_metrics_alerts_test.go"),
+			requiredSnippets: []string{
+				`expected error for legacy host resource_type`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "chat", "context_prefetch_additional_test.go"),
+			requiredSnippets: []string{
+				`expected legacy host mention to be ignored`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
 			requiredSnippets: []string{
 				`TestNormalizeReportResourceType_RejectsLegacyAliases`,
