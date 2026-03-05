@@ -9,14 +9,14 @@ import {
 /**
  * Journey: Agent Install → Registration → Host Visible in UI/API
  *
- * Covers the host agent lifecycle:
- *   1. Disable mock mode to start with a clean host list
+ * Covers the unified agent lifecycle:
+ *   1. Disable mock mode to start with a clean infrastructure state
  *   2. Simulate agent registration via POST /api/agents/agent/report
- *   3. Verify the host appears in GET /api/state (hosts array)
+ *   3. Verify the agent resource appears in GET /api/state resources[]
  *   4. Verify the host is visible on the infrastructure page
- *   5. Verify host details (hostname, OS, CPU, memory) in API response
+ *   5. Verify resource metadata and metrics in the unified state response
  *   6. Send a second report and verify last-seen updates
- *   7. Delete the host and verify removal
+ *   7. Delete the agent and verify removal
  *
  * This satisfies L12 score-4 criteria: "Agent install → registration →
  * host visible in UI/API."
@@ -35,13 +35,44 @@ const TEST_AGENT_ID = `e2e-agent-${Date.now()}`;
 /** Whether mock mode was enabled before the journey (for cleanup). */
 let mockModeWasEnabled: boolean | null = null;
 
-/** Track whether the host was successfully registered (for cleanup). */
+/** Track whether the agent resource was successfully registered (for cleanup). */
 let hostRegistered = false;
 
 /** The agentId returned by the server (may differ from TEST_HOST_ID). */
 let serverAgentId = '';
 
-/** Build a synthetic host report payload. */
+type StateResource = Record<string, unknown>;
+
+const readString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+
+const readNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const findRegisteredAgentResource = (
+  state: Record<string, unknown>,
+): StateResource | undefined => {
+  const resources = state.resources as Array<Record<string, unknown>> | undefined;
+  return resources?.find((resource) => {
+    if (resource.type !== 'agent') {
+      return false;
+    }
+    if (resource.id === serverAgentId) {
+      return true;
+    }
+    if (resource.name === TEST_HOSTNAME || resource.displayName === TEST_HOSTNAME) {
+      return true;
+    }
+    return false;
+  });
+};
+
+/** Build a synthetic unified agent report payload. */
 function buildHostReport(overrides?: {
   cpuUsage?: number;
   memUsage?: number;
@@ -55,7 +86,7 @@ function buildHostReport(overrides?: {
     agent: {
       id: TEST_AGENT_ID,
       version: '1.0.0-e2e',
-      type: 'host',
+      type: 'unified',
     },
     host: {
       id: TEST_HOST_ID,
@@ -113,7 +144,7 @@ function buildHostReport(overrides?: {
  * (especially with parallel dev work), losing in-memory host state.
  * Also ensures mock mode is off — the API toggle only sets an env var,
  * not the mock.env file, so a backend restart may restore mock mode.
- * Returns the host record from /api/state after ensuring it exists.
+ * Returns the unified agent resource from /api/state after ensuring it exists.
  */
 async function ensureHostRegistered(
   page: import('@playwright/test').Page,
@@ -135,10 +166,7 @@ async function ensureHostRegistered(
   const stateRes = await apiRequest(page, '/api/state');
   if (stateRes.ok()) {
     const state = (await stateRes.json()) as Record<string, unknown>;
-    const hosts = state.hosts as Array<Record<string, unknown>>;
-    const found = hosts?.find(
-      (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
-    );
+    const found = findRegisteredAgentResource(state);
     if (found) return found;
   }
 
@@ -162,10 +190,7 @@ async function ensureHostRegistered(
     const stateRes2 = await apiRequest(page, '/api/state');
     if (stateRes2.ok()) {
       const state2 = (await stateRes2.json()) as Record<string, unknown>;
-      const hosts2 = state2.hosts as Array<Record<string, unknown>>;
-      const found = hosts2?.find(
-        (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
-      );
+      const found = findRegisteredAgentResource(state2);
       if (found) return found;
     }
     await page.waitForTimeout(500);
@@ -228,7 +253,7 @@ test.describe.serial(
       }
     });
 
-    test('simulate agent registration via host report', async (
+    test('simulate agent registration via unified agent report', async (
       { page },
       testInfo,
     ) => {
@@ -266,7 +291,7 @@ test.describe.serial(
       expect(body.osVersion).toBe('24.04 LTS');
     });
 
-    test('host appears in /api/state hosts array', async (
+    test('agent resource appears in /api/state resources[]', async (
       { page },
       testInfo,
     ) => {
@@ -283,16 +308,20 @@ test.describe.serial(
       // Ensure the host is in state (re-registers if backend restarted).
       const foundHost = await ensureHostRegistered(page);
 
-      // Verify host details match what we reported.
-      expect(foundHost.hostname).toBe(TEST_HOSTNAME);
-      expect(foundHost.platform).toBe('linux');
-      expect(foundHost.osName).toBe('Ubuntu');
-      expect(foundHost.osVersion).toBe('24.04 LTS');
-      expect(foundHost.cpuCount).toBe(4);
-      expect(foundHost.architecture).toBe('x86_64');
+      const platformData = asRecord(foundHost.platformData);
+
+      // Verify the unified resource matches what we reported.
+      expect(foundHost.type).toBe('agent');
+      expect(foundHost.platformType).toBe('agent');
+      expect(foundHost.sourceType).toBe('agent');
+      expect(foundHost.name).toBe(TEST_HOSTNAME);
+      expect(readString(platformData?.platform)).toBe('linux');
+      expect(readString(platformData?.osName)).toBe('Ubuntu');
+      expect(readString(platformData?.osVersion)).toBe('24.04 LTS');
+      expect(readString(platformData?.architecture)).toBe('x86_64');
     });
 
-    test('host details include CPU and memory metrics', async (
+    test('agent resource includes CPU and memory metrics', async (
       { page },
       testInfo,
     ) => {
@@ -305,17 +334,18 @@ test.describe.serial(
       await ensureAuthenticated(page);
 
       const host = await ensureHostRegistered(page);
+      const memory = asRecord(host.memory);
 
       // CPU usage should be close to what we reported (42.5%).
-      const cpuUsage = host.cpuUsage as number;
+      const cpu = asRecord(host.cpu);
+      const cpuUsage = readNumber(cpu?.current);
       expect(cpuUsage).toBeGreaterThan(0);
       expect(cpuUsage).toBeLessThanOrEqual(100);
 
       // Memory should be present.
-      const memory = host.memory as Record<string, unknown> | undefined;
       expect(memory, 'Host should have memory metrics').toBeTruthy();
-      expect(memory!.total).toBeGreaterThan(0);
-      expect(memory!.used).toBeGreaterThan(0);
+      expect(readNumber(memory!.total)).toBeGreaterThan(0);
+      expect(readNumber(memory!.used)).toBeGreaterThan(0);
     });
 
     test('updated report refreshes host last-seen', async (
@@ -333,7 +363,7 @@ test.describe.serial(
       await ensureAuthenticated(page);
 
       const host1 = await ensureHostRegistered(page);
-      const lastSeen1 = host1.lastSeen as string;
+      const lastSeen1 = readNumber(host1.lastSeen);
 
       // Wait briefly and send a second report with updated metrics.
       await page.waitForTimeout(1100);
@@ -350,28 +380,25 @@ test.describe.serial(
       const stateRes2 = await apiRequest(page, '/api/state');
       expect(stateRes2.ok()).toBeTruthy();
       const state2 = (await stateRes2.json()) as Record<string, unknown>;
-      const hosts2 = state2.hosts as Array<Record<string, unknown>>;
-      const host2 = hosts2?.find(
-        (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
-      );
+      const host2 = findRegisteredAgentResource(state2);
       expect(host2, 'Host should still exist after second report').toBeTruthy();
 
-      const lastSeen2 = host2!.lastSeen as string;
+      const lastSeen2 = readNumber(host2!.lastSeen);
       expect(
-        new Date(lastSeen2).getTime() >= new Date(lastSeen1).getTime(),
+        lastSeen2 !== undefined && lastSeen1 !== undefined && lastSeen2 >= lastSeen1,
         'lastSeen should be updated after second report',
       ).toBeTruthy();
 
       // Verify metrics reflect the second report values.
-      const cpuAfter = host2!.cpuUsage as number;
+      const cpuAfter = readNumber(asRecord(host2!.cpu)?.current);
       expect(
         cpuAfter,
         'CPU usage should reflect updated report (75%)',
       ).toBeGreaterThanOrEqual(70);
 
-      const memAfter = host2!.memory as Record<string, unknown>;
+      const memAfter = asRecord(host2!.memory);
       expect(memAfter, 'Memory should be present after update').toBeTruthy();
-      const memUsageAfter = memAfter.usage as number;
+      const memUsageAfter = readNumber(memAfter?.current);
       expect(
         memUsageAfter,
         'Memory usage should reflect updated report (80%)',
@@ -434,10 +461,7 @@ test.describe.serial(
       const stateRes = await apiRequest(page, '/api/state');
       expect(stateRes.ok()).toBeTruthy();
       const state = (await stateRes.json()) as Record<string, unknown>;
-      const hosts = state.hosts as Array<Record<string, unknown>>;
-      const found = hosts?.find(
-        (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
-      );
+      const found = findRegisteredAgentResource(state);
       expect(
         found,
         'Host should be removed from state after deletion',
