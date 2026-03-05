@@ -112,9 +112,9 @@ func TestHandleDiagnosticsDockerPrepareToken_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestHandleDiagnosticsDockerPrepareToken_MissingHostID(t *testing.T) {
+func TestHandleDiagnosticsDockerPrepareToken_MissingAgentID(t *testing.T) {
 	router := &Router{monitor: &monitoring.Monitor{}, config: &config.Config{}}
-	body := bytes.NewBufferString(`{"hostId":""}`)
+	body := bytes.NewBufferString(`{"agentId":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", body)
 	rec := httptest.NewRecorder()
 
@@ -125,10 +125,10 @@ func TestHandleDiagnosticsDockerPrepareToken_MissingHostID(t *testing.T) {
 	}
 }
 
-func TestHandleDiagnosticsDockerPrepareToken_HostNotFound(t *testing.T) {
+func TestHandleDiagnosticsDockerPrepareToken_AgentNotFound(t *testing.T) {
 	monitor, _, _ := newTestMonitor(t)
 	router := &Router{monitor: monitor, config: &config.Config{}}
-	body := bytes.NewBufferString(`{"hostId":"missing"}`)
+	body := bytes.NewBufferString(`{"agentId":"missing"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", body)
 	rec := httptest.NewRecorder()
 
@@ -144,7 +144,7 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	state.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
 
 	router := &Router{monitor: monitor, config: &config.Config{PublicURL: "https://pulse.example.com"}}
-	body := bytes.NewBufferString(`{"hostId":"host-1","tokenName":""}`)
+	body := bytes.NewBufferString(`{"agentId":"host-1","tokenName":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", body)
 	rec := httptest.NewRecorder()
 
@@ -163,9 +163,9 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	if payload["token"] == "" {
 		t.Fatalf("expected token in response")
 	}
-	host, _ := payload["host"].(map[string]interface{})
-	if host["id"] != "host-1" {
-		t.Fatalf("unexpected host id: %#v", host["id"])
+	agent, _ := payload["agent"].(map[string]interface{})
+	if agent["id"] != "host-1" {
+		t.Fatalf("unexpected agent id: %#v", agent["id"])
 	}
 	if !strings.Contains(payload["installCommand"].(string), "https://pulse.example.com") {
 		t.Fatalf("expected install command to include base URL")

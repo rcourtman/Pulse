@@ -8203,7 +8203,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 
 	var payload struct {
-		HostID    string `json:"hostId"`
+		AgentID   string `json:"agentId"`
 		TokenName string `json:"tokenName"`
 	}
 
@@ -8212,9 +8212,9 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
-	hostID := strings.TrimSpace(payload.HostID)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID (hostId) is required", nil)
+	agentID := strings.TrimSpace(payload.AgentID)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID (agentId) is required", nil)
 		return
 	}
 
@@ -8239,9 +8239,9 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
-	host, ok := monitor.GetDockerHost(hostID)
+	host, ok := monitor.GetDockerHost(agentID)
 	if !ok {
-		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Container runtime not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Container runtime not found", nil)
 		return
 	}
 
@@ -8253,14 +8253,14 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 
 	rawToken, err := auth.GenerateAPIToken()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to generate docker migration token")
+		log.Error().Err(err).Msg("Failed to generate container runtime migration token")
 		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
 		return
 	}
 
 	record, err := config.NewAPITokenRecord(rawToken, name, []string{config.ScopeDockerReport})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to construct token record for docker migration")
+		log.Error().Err(err).Msg("Failed to construct token record for container runtime migration")
 		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
 		return
 	}
@@ -8301,7 +8301,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		if err := activePersistence.SaveAPITokens(activeConfig.APITokens); err != nil {
 			activeConfig.RemoveAPIToken(record.ID)
 			config.Mu.Unlock()
-			log.Error().Err(err).Msg("Failed to persist API tokens after docker migration generation")
+			log.Error().Err(err).Msg("Failed to persist API tokens after container runtime migration generation")
 			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to persist API token", nil)
 			return
 		}
@@ -8322,7 +8322,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		"success": true,
 		"token":   rawToken,
 		"record":  toAPITokenDTO(*record),
-		"host": map[string]any{
+		"agent": map[string]any{
 			"id":   host.ID,
 			"name": preferredDockerHostName(host),
 		},
@@ -8332,7 +8332,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize docker token migration response")
+		log.Error().Err(err).Msg("Failed to serialize container runtime token migration response")
 	}
 }
 
