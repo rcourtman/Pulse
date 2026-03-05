@@ -180,7 +180,7 @@ func TestPredictFactKeys_BackupTasks(t *testing.T) {
 }
 
 func TestExtractFacts_Discovery(t *testing.T) {
-	input := map[string]interface{}{"host": "delly", "resource_id": "106"}
+	input := map[string]interface{}{"target_id": "delly", "resource_id": "106"}
 	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","target_id":"delly","resource_id":"106","ports":[{"port":25},{"port":22}]}`
 
 	facts := ExtractFacts("pulse_discovery", input, result)
@@ -192,6 +192,13 @@ func TestExtractFacts_Discovery(t *testing.T) {
 	assert.Contains(t, f.Value, "service=Postfix")
 	assert.Contains(t, f.Value, "hostname=patrol-signal-test")
 	assert.Contains(t, f.Value, "ports=[25,22]")
+}
+
+func TestExtractFacts_Discovery_RequiresTargetID(t *testing.T) {
+	input := map[string]interface{}{"resource_id": "106"}
+	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","resource_id":"106","ports":[{"port":25}]}`
+	facts := ExtractFacts("pulse_discovery", input, result)
+	assert.Empty(t, facts)
 }
 
 func TestExtractFacts_Exec_JSON(t *testing.T) {

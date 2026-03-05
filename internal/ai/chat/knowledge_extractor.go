@@ -716,7 +716,6 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 		ServiceType string `json:"service_type"`
 		Hostname    string `json:"hostname"`
 		TargetID    string `json:"target_id"`
-		HostID      string `json:"host_id"`
 		ResourceID  string `json:"resource_id"`
 		Ports       []struct {
 			Port int `json:"port"`
@@ -730,12 +729,12 @@ func extractDiscoveryFacts(input map[string]interface{}, resultText string) []Fa
 	if target == "" {
 		target = strFromMap(input, "target_id")
 	}
-	if target == "" {
-		target = disc.HostID
-	}
 	id := disc.ResourceID
 	if id == "" {
 		id = strFromMap(input, "resource_id")
+	}
+	if target == "" || id == "" {
+		return nil
 	}
 
 	var parts []string
