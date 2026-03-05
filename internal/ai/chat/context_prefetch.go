@@ -15,7 +15,7 @@ type ResourceMention struct {
 	Name         string
 	ResourceType string // "vm", "system-container", "docker", "agent", "node"
 	ResourceID   string
-	HostID       string
+	TargetID     string
 	MatchedText  string // The actual text that matched
 	// Docker-specific: bind mounts (source -> destination)
 	BindMounts []MountInfo
@@ -184,7 +184,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:         name,
 						ResourceType: "vm",
 						ResourceID:   fmt.Sprintf("%d", vm.VMID()),
-						HostID:       vm.Node(),
+						TargetID:     vm.Node(),
 						MatchedText:  name,
 					})
 				}
@@ -207,7 +207,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:         name,
 						ResourceType: "system-container",
 						ResourceID:   fmt.Sprintf("%d", ct.VMID()),
-						HostID:       ct.Node(),
+						TargetID:     ct.Node(),
 						MatchedText:  name,
 					})
 				}
@@ -262,7 +262,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:           name,
 						ResourceType:   "docker",
 						ResourceID:     container.ContainerID(),
-						HostID:         hostID,
+						TargetID:       hostID,
 						MatchedText:    name,
 						BindMounts:     mounts,
 						DockerHostName: loc.DockerHostName,
@@ -292,7 +292,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:         name,
 						ResourceType: "node",
 						ResourceID:   name,
-						HostID:       name,
+						TargetID:     name,
 						MatchedText:  name,
 						TargetHost:   loc.TargetHost,
 					})
@@ -319,7 +319,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:         hostname,
 						ResourceType: "agent",
 						ResourceID:   hostID,
-						HostID:       hostID,
+						TargetID:     hostID,
 						MatchedText:  hostname,
 						TargetHost:   loc.TargetHost,
 					})
@@ -331,7 +331,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 	// Check Kubernetes clusters, pods, and deployments (via ReadState)
 	if rs != nil {
 		// Build map from unified resource ID → source cluster ID so pods/deployments
-		// can resolve HostID to the original models.KubernetesCluster.ID.
+		// can resolve TargetID to the original models.KubernetesCluster.ID.
 		k8sClusterSourceIDs := make(map[string]string)
 		for _, cluster := range rs.K8sClusters() {
 			if cluster == nil {
@@ -350,7 +350,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:         clusterName,
 						ResourceType: "k8s_cluster",
 						ResourceID:   clusterSourceID,
-						HostID:       clusterSourceID,
+						TargetID:     clusterSourceID,
 						MatchedText:  clusterName,
 						TargetHost:   loc.TargetHost,
 					})
@@ -377,7 +377,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:         podName,
 						ResourceType: "k8s_pod",
 						ResourceID:   podName,
-						HostID:       hostID,
+						TargetID:     hostID,
 						MatchedText:  podName,
 						TargetHost:   loc.TargetHost,
 					})
@@ -404,7 +404,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Name:         deployName,
 						ResourceType: "k8s_deployment",
 						ResourceID:   deployName,
-						HostID:       hostID,
+						TargetID:     hostID,
 						MatchedText:  deployName,
 						TargetHost:   loc.TargetHost,
 					})
@@ -449,7 +449,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Name:         sm.Name,
 				ResourceType: "vm",
 				ResourceID:   vmID,
-				HostID:       node,
+				TargetID:     node,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,
 			})
@@ -465,7 +465,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Name:         sm.Name,
 				ResourceType: "system-container",
 				ResourceID:   vmID,
-				HostID:       node,
+				TargetID:     node,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,
 			})
@@ -498,7 +498,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Name:           sm.Name,
 				ResourceType:   "docker",
 				ResourceID:     containerID,
-				HostID:         hostID,
+				TargetID:       hostID,
 				MatchedText:    sm.Name,
 				BindMounts:     mounts,
 				DockerHostName: loc.DockerHostName,
@@ -513,7 +513,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Name:         sm.Name,
 				ResourceType: "node",
 				ResourceID:   sm.Name,
-				HostID:       sm.Name,
+				TargetID:     sm.Name,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,
 			})
@@ -527,7 +527,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Name:         sm.Name,
 				ResourceType: "agent",
 				ResourceID:   hostID,
-				HostID:       hostID,
+				TargetID:     hostID,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,
 			})
@@ -548,7 +548,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Name:         sm.Name,
 				ResourceType: resourceType,
 				ResourceID:   sm.ID,
-				HostID:       sm.Node,
+				TargetID:     sm.Node,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,
 			})
@@ -613,7 +613,7 @@ func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention R
 	discoveryType := mention.ResourceType
 
 	// First try to get existing discovery
-	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.HostID, mention.ResourceID)
+	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.TargetID, mention.ResourceID)
 	if err == nil && discovery != nil {
 		log.Debug().
 			Str("resource", mention.Name).
@@ -628,7 +628,7 @@ func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention R
 			Str("type", mention.ResourceType).
 			Msg("[ContextPrefetch] Triggering discovery")
 
-		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.HostID, mention.ResourceID)
+		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.TargetID, mention.ResourceID)
 		if err != nil {
 			return nil, err
 		}
@@ -651,12 +651,16 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	// Create a map for quick discovery lookup
 	discoveryMap := make(map[string]*tools.ResourceDiscoveryInfo)
 	for _, d := range discoveries {
-		key := fmt.Sprintf("%s:%s:%s", d.ResourceType, d.HostID, d.ResourceID)
+		discoveryTargetID := strings.TrimSpace(d.TargetID)
+		if discoveryTargetID == "" {
+			discoveryTargetID = strings.TrimSpace(d.HostID)
+		}
+		key := fmt.Sprintf("%s:%s:%s", d.ResourceType, discoveryTargetID, d.ResourceID)
 		discoveryMap[key] = d
 	}
 
 	for _, mention := range mentions {
-		key := fmt.Sprintf("%s:%s:%s", mention.ResourceType, mention.HostID, mention.ResourceID)
+		key := fmt.Sprintf("%s:%s:%s", mention.ResourceType, mention.TargetID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
 
 		// Docker containers get special treatment - show the full routing chain
@@ -711,7 +715,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 
 		// Non-Docker resources (LXC, VM, host, node)
 		sb.WriteString(fmt.Sprintf("## %s\n", mention.Name))
-		sb.WriteString(fmt.Sprintf("Type: %s | Host: %s\n", mention.ResourceType, mention.HostID))
+		sb.WriteString(fmt.Sprintf("Type: %s | Target: %s\n", mention.ResourceType, mention.TargetID))
 
 		// Include VMID for VMs and system containers — the AI needs this for pulse_control guest operations
 		if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && mention.ResourceID != "" {

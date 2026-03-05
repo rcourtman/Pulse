@@ -198,8 +198,8 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	if mentions[2].ResourceType != "system-container" {
 		t.Fatalf("expected container type normalized to system-container, got %q", mentions[2].ResourceType)
 	}
-	if mentions[3].HostID != "resource:docker:abc" {
-		t.Fatalf("expected docker host ID with colons preserved, got %q", mentions[3].HostID)
+	if mentions[3].TargetID != "resource:docker:abc" {
+		t.Fatalf("expected docker target ID with colons preserved, got %q", mentions[3].TargetID)
 	}
 	if mentions[3].ResourceID != "cid-simple" {
 		t.Fatalf("expected docker container ID parsed correctly, got %q", mentions[3].ResourceID)
@@ -226,7 +226,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 		ResourceID:   "101",
 	}
 
-	mention := ResourceMention{ResourceType: "vm", HostID: "node1", ResourceID: "101", Name: "alpha"}
+	mention := ResourceMention{ResourceType: "vm", TargetID: "node1", ResourceID: "101", Name: "alpha"}
 	res, err := prefetcher.getOrTriggerDiscovery(context.Background(), mention)
 	if err != nil || res == nil {
 		t.Fatalf("expected cached discovery, got err=%v res=%v", err, res)
@@ -235,7 +235,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 		t.Fatalf("expected no trigger when cached discovery exists")
 	}
 
-	mention2 := ResourceMention{ResourceType: "docker", HostID: "dock1", ResourceID: "cid1", Name: "homepage"}
+	mention2 := ResourceMention{ResourceType: "docker", TargetID: "dock1", ResourceID: "cid1", Name: "homepage"}
 	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention2)
 	if err != nil || res == nil {
 		t.Fatalf("expected discovery trigger to succeed")
@@ -244,7 +244,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 		t.Fatalf("expected trigger to be called once")
 	}
 
-	mention3 := ResourceMention{ResourceType: "agent", HostID: "host1", ResourceID: "host1", Name: "host1"}
+	mention3 := ResourceMention{ResourceType: "agent", TargetID: "host1", ResourceID: "host1", Name: "host1"}
 	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention3)
 	if err != nil || res != nil {
 		t.Fatalf("expected no discovery for agent type")
@@ -259,7 +259,7 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 			Name:           "homepage",
 			ResourceType:   "docker",
 			ResourceID:     "cid1",
-			HostID:         "dock1",
+			TargetID:       "dock1",
 			DockerHostName: "dock1",
 			DockerHostType: "standalone",
 			TargetHost:     "dock1",
@@ -269,7 +269,7 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 			Name:         "beta",
 			ResourceType: "lxc",
 			ResourceID:   "201",
-			HostID:       "node1",
+			TargetID:     "node1",
 		},
 	}
 
