@@ -52,7 +52,7 @@ func (s *Service) AnalyzeKubernetesCluster(ctx context.Context, clusterID string
 	clusterSourceID := cluster.ClusterID()
 	systemPrompt := s.buildSystemPrompt(ExecuteRequest{
 		Prompt:     prompt,
-		TargetType: "kubernetes_cluster",
+		TargetType: "k8s-cluster",
 		TargetID:   clusterSourceID,
 	})
 	systemPrompt += "\n\n## Kubernetes Cluster Telemetry\n"
@@ -61,7 +61,7 @@ func (s *Service) AnalyzeKubernetesCluster(ctx context.Context, clusterID string
 
 	return s.Execute(ctx, ExecuteRequest{
 		Prompt:       prompt,
-		TargetType:   "kubernetes_cluster",
+		TargetType:   "k8s-cluster",
 		TargetID:     clusterSourceID,
 		SystemPrompt: systemPrompt,
 		UseCase:      "chat",
