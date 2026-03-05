@@ -12,35 +12,35 @@ describe('AgentMetadataAPI', () => {
   });
 
   describe('getMetadata', () => {
-    it('fetches metadata for a specific host', async () => {
+    it('fetches metadata for a specific agent', async () => {
       const mockMetadata: AgentMetadata = {
-        id: 'host-1',
+        id: 'agent-1',
         customUrl: 'https://example.com',
-        description: 'Test host',
+        description: 'Test agent',
         tags: ['production', 'web'],
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockMetadata);
 
-      const result = await AgentMetadataAPI.getMetadata('host-1');
+      const result = await AgentMetadataAPI.getMetadata('agent-1');
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/agents/metadata/host-1');
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/agents/metadata/agent-1');
       expect(result).toEqual(mockMetadata);
     });
 
-    it('encodes special characters in hostId', async () => {
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ id: 'host+1' });
+    it('encodes special characters in agentId', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ id: 'agent+1' });
 
-      await AgentMetadataAPI.getMetadata('host+1');
+      await AgentMetadataAPI.getMetadata('agent+1');
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/agents/metadata/host%2B1');
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/agents/metadata/agent%2B1');
     });
   });
 
   describe('getAllMetadata', () => {
-    it('fetches all host metadata', async () => {
+    it('fetches all agent metadata', async () => {
       const mockAllMetadata: Record<string, AgentMetadata> = {
-        'host-1': { id: 'host-1', description: 'Host 1' },
-        'host-2': { id: 'host-2', description: 'Host 2' },
+        'agent-1': { id: 'agent-1', description: 'Agent 1' },
+        'agent-2': { id: 'agent-2', description: 'Agent 2' },
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockAllMetadata);
 
@@ -52,21 +52,21 @@ describe('AgentMetadataAPI', () => {
   });
 
   describe('updateMetadata', () => {
-    it('updates metadata for a host', async () => {
+    it('updates metadata for an agent', async () => {
       const updatedMetadata: AgentMetadata = {
-        id: 'host-1',
+        id: 'agent-1',
         description: 'Updated description',
         tags: ['updated'],
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(updatedMetadata);
 
-      const result = await AgentMetadataAPI.updateMetadata('host-1', {
+      const result = await AgentMetadataAPI.updateMetadata('agent-1', {
         description: 'Updated description',
         tags: ['updated'],
       });
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
-        '/api/agents/metadata/host-1',
+        '/api/agents/metadata/agent-1',
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ description: 'Updated description', tags: ['updated'] }),
@@ -77,13 +77,13 @@ describe('AgentMetadataAPI', () => {
   });
 
   describe('deleteMetadata', () => {
-    it('deletes metadata for a host', async () => {
+    it('deletes metadata for an agent', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);
 
-      await AgentMetadataAPI.deleteMetadata('host-1');
+      await AgentMetadataAPI.deleteMetadata('agent-1');
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
-        '/api/agents/metadata/host-1',
+        '/api/agents/metadata/agent-1',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
