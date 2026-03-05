@@ -5,7 +5,7 @@ import { createSignal } from 'solid-js';
 import { ThresholdsTable } from '../ThresholdsTable';
 import { normalizeDockerIgnoredInput } from '@/features/alerts/thresholds/helpers';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
-import type { Host } from '@/types/api';
+import type { Agent } from '@/types/api';
 
 const [getPathname, setPathname] = createSignal('/alerts/thresholds/containers');
 const mockNavigate = vi.fn();
@@ -234,7 +234,7 @@ describe('ThresholdsTable navigation and redirection', () => {
 
   it('loads agents tab from canonical route', async () => {
     setPathname('/alerts/thresholds/agents');
-    const host: Host = {
+    const host: Agent = {
       id: 'legacy-h1',
       hostname: 'legacy-host',
       displayName: 'Legacy Host',
@@ -268,7 +268,7 @@ describe('ThresholdsTable navigation and redirection', () => {
 describe('ThresholdsTable Resource Rendering', () => {
   it('renders agents correctly', async () => {
     setPathname('/alerts/thresholds/agents');
-    const host: Host = {
+    const host: Agent = {
       id: 'h1',
       hostname: 'host1',
       displayName: 'Host 1',
@@ -321,7 +321,7 @@ describe('ThresholdsTable Resource Rendering', () => {
 describe('ThresholdsTable Metric Formatting', () => {
   it('formats metrics correctly', async () => {
     setPathname('/alerts/thresholds/agents');
-    const host: Host = {
+    const host: Agent = {
       id: 'h1',
       hostname: 'host1',
       displayName: 'Host 1',

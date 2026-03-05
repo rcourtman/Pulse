@@ -729,7 +729,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         displayName: friendlyName,
         rawName: originalName,
         type: 'dockerHost' as const,
-        resourceType: 'Container Host',
+        resourceType: 'Container Runtime',
         node: host.identity?.hostname ?? host.name,
         instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
         status,
@@ -753,7 +753,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           displayName: friendlyName,
           rawName: originalName,
           type: 'dockerHost',
-          resourceType: 'Container Host',
+          resourceType: 'Container Runtime',
           node: override.node || '',
           instance: override.instance || '',
           status: 'unknown',
@@ -1540,7 +1540,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         },
         {
           key: 'dockerHosts' as const,
-          label: 'Container Hosts',
+          label: 'Container Runtimes',
           total: props.dockerHosts?.length ?? 0,
           overrides: countOverrides(dockerHostsWithOverrides()),
           tab: 'docker' as const,
@@ -3523,11 +3523,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">
               <ResourceTable
-                title="Container Hosts"
+                title="Container Runtimes"
                 resources={dockerHostsWithOverrides()}
                 columns={[]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No container hosts match the current filters."
+                emptyMessage="No container runtimes match the current filters."
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}

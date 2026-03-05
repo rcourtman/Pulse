@@ -512,7 +512,7 @@ export function Alerts() {
               dockerHost.name ||
               dockerHost.id,
             type: 'dockerHost',
-            resourceType: 'Container Host',
+            resourceType: 'Container Runtime',
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
           });
@@ -573,7 +573,7 @@ export function Alerts() {
             id: key,
             name: hostId || key,
             type: 'dockerHost',
-            resourceType: 'Container Host',
+            resourceType: 'Container Runtime',
             disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds),
           });

@@ -230,7 +230,7 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
     case 'node':
       return 'Node';
     case 'docker-host':
-      return 'Container Host';
+      return 'Container Runtime';
     case 'storage':
     case 'datastore':
       return 'Storage';
