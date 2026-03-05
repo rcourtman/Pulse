@@ -82,6 +82,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		TokenID:           host.TokenID,
 		TokenName:         host.TokenName,
 		TokenHint:         host.TokenHint,
+		TokenLastUsedAt:   host.TokenLastUsedAt,
 		Platform:          host.Platform,
 		OSName:            host.OSName,
 		OSVersion:         host.OSVersion,

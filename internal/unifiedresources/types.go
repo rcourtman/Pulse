@@ -454,6 +454,7 @@ type AgentData struct {
 	TokenID           string             `json:"tokenId,omitempty"`
 	TokenName         string             `json:"tokenName,omitempty"`
 	TokenHint         string             `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *time.Time         `json:"tokenLastUsedAt,omitempty"`
 	Platform          string             `json:"platform,omitempty"`
 	OSName            string             `json:"osName,omitempty"`
 	OSVersion         string             `json:"osVersion,omitempty"`

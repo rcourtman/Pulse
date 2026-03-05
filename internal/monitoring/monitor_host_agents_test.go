@@ -340,6 +340,57 @@ func TestRemoveHostAgent_KeepsSharedTokenUsedByDockerRuntime(t *testing.T) {
 	}
 }
 
+func TestApplyHostReport_PreservesPreviousTokenMetadata(t *testing.T) {
+	t.Helper()
+
+	lastUsed := time.Now().UTC().Add(-5 * time.Minute)
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	monitor.state.UpsertHost(models.Host{
+		ID:              "host-prev",
+		Hostname:        "preserve.local",
+		TokenID:         "token-prev",
+		TokenName:       "Previous Token",
+		TokenHint:       "prev_1234",
+		TokenLastUsedAt: &lastUsed,
+	})
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-prev",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "host-prev",
+			Hostname: "preserve.local",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if host.TokenID != "token-prev" || host.TokenName != "Previous Token" || host.TokenHint != "prev_1234" {
+		t.Fatalf("expected previous token metadata to be preserved, got id=%q name=%q hint=%q", host.TokenID, host.TokenName, host.TokenHint)
+	}
+	if host.TokenLastUsedAt == nil || !host.TokenLastUsedAt.Equal(lastUsed) {
+		t.Fatalf("expected TokenLastUsedAt %v, got %v", lastUsed, host.TokenLastUsedAt)
+	}
+}
+
 func TestEvaluateHostAgentsEmptyHostsList(t *testing.T) {
 	monitor := &Monitor{
 		state:        models.NewState(),

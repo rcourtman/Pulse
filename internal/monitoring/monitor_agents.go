@@ -1334,7 +1334,11 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		baseIdentifier = fmt.Sprintf("agent-%s", hex.EncodeToString(sum[:6]))
 	}
 
-	existingHosts := m.state.GetHosts()
+	readState := m.snapshotBackedUnifiedReadState()
+	var existingHosts []*unifiedresources.HostView
+	if readState != nil {
+		existingHosts = readState.Hosts()
+	}
 
 	identifier := baseIdentifier
 	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
@@ -1355,10 +1359,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		} else {
 			bindingID := baseIdentifier
 			for _, candidate := range existingHosts {
-				if candidate.ID != bindingID {
+				if candidate == nil || candidate.AgentID() != bindingID {
 					continue
 				}
-				if strings.TrimSpace(candidate.Hostname) == hostname && strings.TrimSpace(candidate.TokenID) == tokenID {
+				if strings.TrimSpace(candidate.Hostname()) == hostname && strings.TrimSpace(candidate.TokenID()) == tokenID {
 					break
 				}
 
@@ -1396,10 +1400,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 	}
 
-	var previous models.Host
+	var previous *unifiedresources.HostView
 	var hasPrevious bool
 	for _, candidate := range existingHosts {
-		if candidate.ID == identifier {
+		if candidate != nil && candidate.AgentID() == identifier {
 			previous = candidate
 			hasPrevious = true
 			break
@@ -1593,10 +1597,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			host.TokenLastUsedAt = &now
 		}
 	} else if hasPrevious {
-		host.TokenID = previous.TokenID
-		host.TokenName = previous.TokenName
-		host.TokenHint = previous.TokenHint
-		host.TokenLastUsedAt = previous.TokenLastUsedAt
+		host.TokenID = previous.TokenID()
+		host.TokenName = previous.TokenName()
+		host.TokenHint = previous.TokenHint()
+		host.TokenLastUsedAt = previous.TokenLastUsedAt()
 	}
 
 	// Link host agent to matching PVE node/VM/container by hostname

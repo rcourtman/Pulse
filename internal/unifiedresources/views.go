@@ -733,6 +733,14 @@ func (v HostView) TokenHint() string {
 	return v.r.Agent.TokenHint
 }
 
+func (v HostView) TokenLastUsedAt() *time.Time {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.TokenLastUsedAt == nil {
+		return nil
+	}
+	copied := *v.r.Agent.TokenLastUsedAt
+	return &copied
+}
+
 func (v HostView) Platform() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""
