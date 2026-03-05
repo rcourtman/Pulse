@@ -213,6 +213,8 @@ describe('agent model guardrails', () => {
     expect(containerUpdatesSource).not.toContain('export const syncWithHostCommand');
     expect(websocketStoreSource).toContain('syncWithAgentCommand(agentId, command as any)');
     expect(websocketStoreSource).not.toContain('syncWithHostCommand(hostId, command as any)');
+    expect(websocketStoreSource).toContain('markDockerRuntimesTokenRevoked');
+    expect(websocketStoreSource).toContain("markTokenRevoked('dockerRuntimes', tokenId, agentIds)");
     expect(guestRowSource).toContain('agentId={getWorkloadDockerHostId(props.guest)}');
     expect(guestRowSource).not.toContain('hostId={getWorkloadDockerHostId(props.guest)}');
     expect(guestDrawerSource).toContain('agentId={discoveryAgentId()}');

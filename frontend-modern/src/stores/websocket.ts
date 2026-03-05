@@ -600,10 +600,14 @@ export function createWebSocketStore(url: string) {
     }
   });
 
-  const markTokenRevoked = (key: 'dockerHosts' | 'agents', tokenId: string, hostIds: string[]) => {
-    if (!hostIds || hostIds.length === 0) return;
+  const markTokenRevoked = (
+    key: 'dockerRuntimes' | 'agents',
+    tokenId: string,
+    agentIds: string[],
+  ) => {
+    if (!agentIds || agentIds.length === 0) return;
     const timestamp = Date.now();
-    const targetIds = new Set(hostIds.filter(Boolean));
+    const targetIds = new Set(agentIds.filter(Boolean));
     setState(
       'resources',
       produce((draft: any[]) => {
@@ -625,13 +629,13 @@ export function createWebSocketStore(url: string) {
               ? platformData.docker
               : (platformData.docker = {});
 
-          const hostActionId =
+          const agentActionId =
             asString(agentData.agentId) ||
             asString(platformData.agentId) ||
             getAgentDiscoveryResourceId(resource?.discoveryTarget) ||
             asString(resource?.discoveryTarget?.hostId) ||
             asString(resource.id);
-          const dockerActionId =
+          const runtimeActionId =
             asString(dockerData.hostSourceId) ||
             asString(platformData.hostSourceId) ||
             asString(resource?.discoveryTarget?.hostId) ||
@@ -640,7 +644,7 @@ export function createWebSocketStore(url: string) {
               : undefined) ||
             asString(resource.id);
 
-          const matchedId = key === 'agents' ? hostActionId : dockerActionId;
+          const matchedId = key === 'agents' ? agentActionId : runtimeActionId;
           if (!matchedId || !targetIds.has(matchedId)) return;
 
           platformData.revokedTokenId = tokenId;
@@ -699,10 +703,13 @@ export function createWebSocketStore(url: string) {
       ws?.close(1000, 'Reconnecting');
       connect();
     },
+    markDockerRuntimesTokenRevoked: (tokenId: string, agentIds: string[]) =>
+      markTokenRevoked('dockerRuntimes', tokenId, agentIds),
+    // Legacy alias kept while callers migrate.
     markDockerHostsTokenRevoked: (tokenId: string, hostIds: string[]) =>
-      markTokenRevoked('dockerHosts', tokenId, hostIds),
-    markAgentsTokenRevoked: (tokenId: string, hostIds: string[]) =>
-      markTokenRevoked('agents', tokenId, hostIds),
+      markTokenRevoked('dockerRuntimes', tokenId, hostIds),
+    markAgentsTokenRevoked: (tokenId: string, agentIds: string[]) =>
+      markTokenRevoked('agents', tokenId, agentIds),
     removeAlerts: (predicate: (alert: Alert) => boolean) => {
       const keysToRemove: string[] = [];
       Object.entries(activeAlerts).forEach(([alertId, alert]) => {
