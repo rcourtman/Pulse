@@ -16,6 +16,7 @@ type stubDiscoveryProvider struct {
 	getResp             *ResourceDiscoveryInfo
 	getErr              error
 
+	lastListType     string
 	lastListTargetID string
 	listResp         []*ResourceDiscoveryInfo
 	listErr          error
@@ -36,8 +37,9 @@ func (s *stubDiscoveryProvider) ListDiscoveries() ([]*ResourceDiscoveryInfo, err
 	return nil, nil
 }
 
-func (s *stubDiscoveryProvider) ListDiscoveriesByType(_ string) ([]*ResourceDiscoveryInfo, error) {
-	return nil, nil
+func (s *stubDiscoveryProvider) ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error) {
+	s.lastListType = resourceType
+	return s.listResp, s.listErr
 }
 
 func (s *stubDiscoveryProvider) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error) {
@@ -160,6 +162,34 @@ func TestExecuteGetDiscovery_RejectsLegacyResourceTypeAlias(t *testing.T) {
 	assert.Equal(t, "", provider.lastGetResourceType)
 }
 
+func TestExecuteGetDiscovery_CanonicalAppContainerUsesDockerProviderType(t *testing.T) {
+	provider := &stubDiscoveryProvider{
+		getResp: &ResourceDiscoveryInfo{
+			ID:           "docker:agent-1:abc123",
+			ResourceType: "docker",
+			ResourceID:   "abc123",
+			TargetID:     "agent-1",
+			Hostname:     "docker-host-1",
+		},
+	}
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
+
+	result, err := exec.executeGetDiscovery(context.Background(), map[string]interface{}{
+		"resource_type": "app-container",
+		"resource_id":   "abc123",
+		"target_id":     "agent-1",
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+	assert.Equal(t, "docker", provider.lastGetResourceType)
+	assert.Equal(t, "agent-1", provider.lastGetTargetID)
+	assert.Equal(t, "abc123", provider.lastGetResourceID)
+
+	var payload map[string]interface{}
+	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
+	assert.Equal(t, "app-container", payload["resource_type"])
+}
+
 func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 	provider := &stubDiscoveryProvider{
 		listResp: []*ResourceDiscoveryInfo{
@@ -202,4 +232,37 @@ func TestExecuteListDiscoveries_RejectsLegacyTypeAlias(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, result.IsError)
 	assert.Contains(t, result.Content[0].Text, "unsupported type")
+}
+
+func TestExecuteListDiscoveries_CanonicalAppContainerUsesDockerProviderType(t *testing.T) {
+	provider := &stubDiscoveryProvider{
+		listResp: []*ResourceDiscoveryInfo{
+			{
+				ID:           "docker:agent-1:abc123",
+				ResourceType: "docker",
+				ResourceID:   "abc123",
+				TargetID:     "agent-1",
+				Hostname:     "docker-host-1",
+			},
+		},
+	}
+	exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
+
+	result, err := exec.executeListDiscoveries(context.Background(), map[string]interface{}{
+		"type": "app-container",
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+	assert.Equal(t, "docker", provider.lastListType)
+
+	var payload map[string]interface{}
+	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
+	assert.Equal(t, "app-container", payload["filter_type"])
+	discoveries, ok := payload["discoveries"].([]interface{})
+	assert.True(t, ok)
+	if assert.Len(t, discoveries, 1) {
+		first, castOK := discoveries[0].(map[string]interface{})
+		assert.True(t, castOK)
+		assert.Equal(t, "app-container", first["resource_type"])
+	}
 }

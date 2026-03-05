@@ -25,8 +25,8 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "For get: resource type (vm, system-container, docker, agent)",
-						Enum:        []string{"vm", "system-container", "docker", "agent"},
+						Description: "For get: canonical v6 resource type (vm, system-container, app-container, agent)",
+						Enum:        []string{"vm", "system-container", "app-container", "agent"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -39,7 +39,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					"type": {
 						Type:        "string",
 						Description: "For list: filter by resource type",
-						Enum:        []string{"vm", "system-container", "docker", "agent"},
+						Enum:        []string{"vm", "system-container", "app-container", "agent"},
 					},
 					"service_type": {
 						Type:        "string",
@@ -93,7 +93,7 @@ func getCLIAccessPattern(resourceType, targetID, resourceID string) string {
 		return fmt.Sprintf("System container on node '%s' (VMID %s)", targetID, resourceID)
 	case "vm":
 		return fmt.Sprintf("VM on node '%s' (VMID %s)", targetID, resourceID)
-	case "docker":
+	case "app-container":
 		return fmt.Sprintf("Docker container '%s' on target '%s'", resourceID, targetID)
 	case "agent":
 		return fmt.Sprintf("Agent '%s'", targetID)
@@ -225,17 +225,18 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		return NewTextResult("Discovery service not available."), nil
 	}
 
-	resourceType, _ := args["resource_type"].(string)
+	resourceTypeRaw, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	targetID, _ := args["target_id"].(string)
-	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	resourceType := canonicalDiscoveryResourceType(resourceTypeRaw)
+	providerResourceType := discoveryProviderResourceType(resourceType)
 	targetID = strings.TrimSpace(targetID)
 
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
 	}
-	if isUnsupportedLegacyResourceTypeToken(resourceType) || !isSupportedDiscoveryResourceType(resourceType) {
-		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", resourceType)), nil
+	if !isSupportedDiscoveryResourceType(resourceType) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), nil
 	}
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
@@ -279,7 +280,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	}
 
 	// First try to get existing discovery
-	discovery, err := e.discoveryProvider.GetDiscoveryByResource(resourceType, targetID, resourceID)
+	discovery, err := e.discoveryProvider.GetDiscoveryByResource(providerResourceType, targetID, resourceID)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to get discovery: %w", err)), nil
 	}
@@ -289,7 +290,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 
 	// If no discovery exists, trigger one
 	if discovery == nil {
-		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, resourceType, targetID, resourceID)
+		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, providerResourceType, targetID, resourceID)
 		if err != nil {
 			// Distinguish transient errors (rate limits, timeouts) from genuine not-found.
 			// Transient errors must surface as IsError so the model stops retrying.
@@ -356,10 +357,14 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	discoveryTargetID := canonicalDiscoveryTargetID(discovery, targetID)
 
 	// Return the discovery information
+	responseResourceType := canonicalDiscoveryResourceType(discovery.ResourceType)
+	if responseResourceType == "" {
+		responseResourceType = resourceType
+	}
 	response := map[string]interface{}{
 		"found":           true,
 		"id":              discovery.ID,
-		"resource_type":   discovery.ResourceType,
+		"resource_type":   responseResourceType,
 		"resource_id":     discovery.ResourceID,
 		"target_id":       discoveryTargetID,
 		"agent_id":        discovery.AgentID,
@@ -476,16 +481,36 @@ func nodeMatchesTargetID(nodeName, targetID string) bool {
 	return false
 }
 
+func isSupportedDiscoveryResourceType(value string) bool {
+	switch value {
+	case "vm", "system-container", "app-container", "agent":
+		return true
+	default:
+		return false
+	}
+}
+
 func isUnsupportedLegacyResourceTypeToken(value string) bool {
 	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(value)
 }
 
-func isSupportedDiscoveryResourceType(value string) bool {
-	switch value {
-	case "vm", "system-container", "docker", "agent":
-		return true
+func canonicalDiscoveryResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "docker", "docker-container", "docker_container", "app_container", "app-container":
+		return "app-container"
 	default:
-		return false
+		return resourceType
+	}
+}
+
+func discoveryProviderResourceType(canonical string) string {
+	switch canonicalDiscoveryResourceType(canonical) {
+	case "app-container":
+		// Discovery storage still keys Docker/container runtime discoveries as "docker".
+		return "docker"
+	default:
+		return canonicalDiscoveryResourceType(canonical)
 	}
 }
 
@@ -498,10 +523,11 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	filterTargetID, _ := args["target_id"].(string)
 	filterServiceType, _ := args["service_type"].(string)
 	limit := intArg(args, "limit", 50)
-	filterType = strings.ToLower(strings.TrimSpace(filterType))
+	filterType = canonicalDiscoveryResourceType(filterType)
+	providerFilterType := discoveryProviderResourceType(filterType)
 	filterTargetID = strings.TrimSpace(filterTargetID)
 
-	if filterType != "" && (isUnsupportedLegacyResourceTypeToken(filterType) || !isSupportedDiscoveryResourceType(filterType)) {
+	if filterType != "" && !isSupportedDiscoveryResourceType(filterType) {
 		return NewErrorResult(fmt.Errorf("unsupported type %q", filterType)), nil
 	}
 
@@ -510,7 +536,7 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 
 	// Get discoveries based on filters
 	if filterType != "" {
-		discoveries, err = e.discoveryProvider.ListDiscoveriesByType(filterType)
+		discoveries, err = e.discoveryProvider.ListDiscoveriesByType(providerFilterType)
 	} else if filterTargetID != "" {
 		discoveries, err = e.discoveryProvider.ListDiscoveriesByTarget(filterTargetID)
 	} else {
@@ -545,7 +571,7 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 		discoveryTargetID := canonicalDiscoveryTargetID(d, "")
 		result := map[string]interface{}{
 			"id":              d.ID,
-			"resource_type":   d.ResourceType,
+			"resource_type":   canonicalDiscoveryResourceType(d.ResourceType),
 			"resource_id":     d.ResourceID,
 			"target_id":       discoveryTargetID,
 			"agent_id":        d.AgentID,
