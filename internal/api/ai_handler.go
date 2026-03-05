@@ -615,6 +615,20 @@ type ChatMention struct {
 	Node string `json:"node,omitempty"`
 }
 
+func canonicalizeChatMentionType(raw string) string {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	switch normalized {
+	case "container", "lxc", "system_container":
+		return "system-container"
+	case "docker-container", "docker_container":
+		return "docker"
+	case "host", "hosts":
+		return "agent"
+	default:
+		return normalized
+	}
+}
+
 // ChatRequest represents a chat request
 type ChatRequest struct {
 	Prompt    string        `json:"prompt"`
@@ -745,10 +759,14 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// Convert API mentions to chat mentions
 	var chatMentions []chat.StructuredMention
 	for _, m := range req.Mentions {
+		mentionType := canonicalizeChatMentionType(m.Type)
+		if mentionType == "" {
+			continue
+		}
 		chatMentions = append(chatMentions, chat.StructuredMention{
 			ID:   m.ID,
 			Name: m.Name,
-			Type: m.Type,
+			Type: mentionType,
 			Node: m.Node,
 		})
 	}
