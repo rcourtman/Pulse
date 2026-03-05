@@ -166,6 +166,26 @@ func unmarshalStoredDiscovery(data []byte, discovery *ResourceDiscovery) error {
 	return nil
 }
 
+func unmarshalStoredFingerprint(data []byte, fp *ContainerFingerprint) error {
+	if fp == nil {
+		return fmt.Errorf("fingerprint output is required")
+	}
+
+	var stored struct {
+		ContainerFingerprint
+		LegacyHostID string `json:"host_id,omitempty"`
+	}
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return err
+	}
+
+	*fp = stored.ContainerFingerprint
+	if strings.TrimSpace(fp.HostID) == "" && strings.TrimSpace(stored.LegacyHostID) != "" {
+		fp.HostID = strings.TrimSpace(stored.LegacyHostID)
+	}
+	return nil
+}
+
 // toLegacyID converts a normalized resource ID back to its legacy form for file lookup.
 func toLegacyID(id string) string {
 	if strings.HasPrefix(id, "system-container:") {
@@ -658,7 +678,7 @@ func (s *Store) loadFingerprints() {
 		}
 
 		var fp ContainerFingerprint
-		if err := json.Unmarshal(data, &fp); err != nil {
+		if err := unmarshalStoredFingerprint(data, &fp); err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal fingerprint")
 			continue
 		}

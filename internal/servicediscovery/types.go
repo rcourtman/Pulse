@@ -342,7 +342,7 @@ const CLIAccessVersion = 2 // v2: Changed from shell commands to pulse_control i
 
 type ContainerFingerprint struct {
 	ResourceID    string    `json:"resource_id"`
-	HostID        string    `json:"host_id"`
+	HostID        string    `json:"target_id"`
 	Hash          string    `json:"hash"`           // SHA256 of metadata (truncated to 16 chars)
 	SchemaVersion int       `json:"schema_version"` // Version of fingerprint algorithm
 	GeneratedAt   time.Time `json:"generated_at"`

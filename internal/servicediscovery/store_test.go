@@ -991,6 +991,43 @@ func TestStore_LoadFingerprintsSkipsOversizedFiles(t *testing.T) {
 	}
 }
 
+func TestStore_LoadFingerprints_BackfillsLegacyHostID(t *testing.T) {
+	dir := t.TempDir()
+	fingerprintDir := filepath.Join(dir, "discovery", "fingerprints")
+	if err := os.MkdirAll(fingerprintDir, 0700); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	legacy := map[string]any{
+		"resource_id": "docker:legacy-host:web",
+		"host_id":     "legacy-host",
+		"hash":        "legacy123",
+	}
+	legacyData, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(fingerprintDir, "legacy.json"), legacyData, 0600); err != nil {
+		t.Fatalf("WriteFile legacy fingerprint error: %v", err)
+	}
+
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+
+	fp, err := store.GetFingerprint("docker:legacy-host:web")
+	if err != nil {
+		t.Fatalf("GetFingerprint error: %v", err)
+	}
+	if fp == nil {
+		t.Fatal("expected fingerprint, got nil")
+	}
+	if fp.HostID != "legacy-host" {
+		t.Fatalf("expected HostID legacy-host, got %q", fp.HostID)
+	}
+}
+
 func TestStore_GetStaleResources(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {
