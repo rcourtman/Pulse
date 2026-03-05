@@ -1,3 +1,5 @@
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
+
 export const WORKLOADS_QUERY_PARAMS = {
   type: 'type',
   runtime: 'runtime',
@@ -54,9 +56,7 @@ const normalizeQueryValue = (value: string | null | undefined): string => (value
 
 const normalizeWorkloadsType = (value: string | null | undefined): string => {
   const normalized = normalizeQueryValue(value).toLowerCase();
-  if (normalized === 'docker') return 'app-container';
-  if (normalized === 'k8s' || normalized === 'kubernetes') return 'pod';
-  return normalized;
+  return canonicalizeFrontendResourceType(normalized) || normalized;
 };
 
 type WorkloadsLinkOptions = {
