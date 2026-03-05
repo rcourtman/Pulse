@@ -333,7 +333,7 @@ func canonicalMetricsResourceType(raw string) string {
 	switch normalized {
 	case "container", "system-container":
 		return "system-container"
-	case "host", "node":
+	case "node":
 		return "node"
 	default:
 		return normalized

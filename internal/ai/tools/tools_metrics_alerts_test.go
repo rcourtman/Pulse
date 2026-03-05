@@ -309,6 +309,14 @@ func TestExecuteGetMetrics_RejectsLegacyUnderscoreResourceTypeAlias(t *testing.T
 	if !result.IsError {
 		t.Fatal("expected error for legacy system_container resource_type")
 	}
+
+	result, _ = executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "host",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy host resource_type")
+	}
 }
 
 func TestExecuteGetMetrics_FilterAndPagination(t *testing.T) {
