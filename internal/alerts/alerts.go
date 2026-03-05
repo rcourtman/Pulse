@@ -1649,8 +1649,11 @@ func normalizeMetricTimeThresholds(input map[string]map[string]int) map[string]m
 
 	normalized := make(map[string]map[string]int)
 	for rawType, metrics := range input {
-		typeKey := strings.ToLower(strings.TrimSpace(rawType))
+		typeKey := canonicalAlertResourceType(rawType)
 		if typeKey == "" || len(metrics) == 0 {
+			continue
+		}
+		if typeKey != "all" && isUnsupportedLegacyAlertResourceType(typeKey) {
 			continue
 		}
 		for rawMetric, delay := range metrics {

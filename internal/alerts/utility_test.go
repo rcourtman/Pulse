@@ -2186,6 +2186,36 @@ func TestNormalizeMetricTimeThresholds(t *testing.T) {
 			want: nil,
 		},
 		{
+			name: "legacy host alias type key is dropped",
+			input: map[string]map[string]int{
+				"host": {"cpu": 60},
+				"vm":   {"cpu": 30},
+			},
+			want: map[string]map[string]int{
+				"vm": {"cpu": 30},
+			},
+		},
+		{
+			name: "legacy docker alias type key is dropped",
+			input: map[string]map[string]int{
+				"docker":        {"cpu": 60},
+				"app-container": {"cpu": 30},
+			},
+			want: map[string]map[string]int{
+				"app-container": {"cpu": 30},
+			},
+		},
+		{
+			name: "all bucket is preserved",
+			input: map[string]map[string]int{
+				"all":  {"cpu": 120},
+				"host": {"cpu": 60},
+			},
+			want: map[string]map[string]int{
+				"all": {"cpu": 120},
+			},
+		},
+		{
 			name: "multiple resource types",
 			input: map[string]map[string]int{
 				"guest": {"cpu": 60, "memory": 120},
