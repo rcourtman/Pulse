@@ -622,21 +622,10 @@ func canonicalizeChatMentionType(raw string) string {
 		return "system-container"
 	case "docker", "docker-container", "app-container":
 		return "app-container"
-	default:
+	case "vm", "node", "agent", "docker-host", "k8s", "k8s-cluster", "k8s-node", "k8s-pod", "k8s-deployment", "storage", "disk", "pbs", "pmg", "proxmox", "truenas", "ceph", "oci-container":
 		return normalized
-	}
-}
-
-func isUnsupportedLegacyChatMentionType(mentionType string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(mentionType))
-	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalized) {
-		return true
-	}
-	switch normalized {
-	case "system_container", "docker_container", "app_container", "docker_host", "kubernetes_cluster", "k8s_cluster":
-		return true
 	default:
-		return false
+		return ""
 	}
 }
 
@@ -772,13 +761,10 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	for _, m := range req.Mentions {
 		mentionType := canonicalizeChatMentionType(m.Type)
 		if mentionType == "" {
-			continue
-		}
-		if isUnsupportedLegacyChatMentionType(mentionType) {
 			log.Warn().
-				Str("mention_type", mentionType).
+				Str("mention_type", m.Type).
 				Str("mention_name", m.Name).
-				Msg("Ignoring unsupported legacy chat mention type")
+				Msg("Ignoring unsupported chat mention type")
 			continue
 		}
 		chatMentions = append(chatMentions, chat.StructuredMention{

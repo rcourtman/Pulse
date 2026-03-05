@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -501,18 +502,21 @@ func slicesEqual(a, b []string) bool {
 
 func canonicalPatrolScopeResourceType(resourceType string) string {
 	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	if canonical, ok := unifiedresources.CanonicalizeLegacyResourceTypeAlias(normalized); ok {
+		return canonical
+	}
 	switch normalized {
 	case "guest", "qemu", "vm":
 		return "vm"
-	case "container", "lxc", "system_container", "system-container":
+	case "container", "lxc", "system-container":
 		return "system-container"
-	case "docker", "docker-container", "docker_container", "app_container", "app-container":
+	case "docker", "docker-container", "app-container":
 		return "app-container"
-	case "docker-host", "docker_host", "dockerhost":
+	case "docker-host", "dockerhost":
 		return "docker-host"
-	case "k8s", "kubernetes", "k8s_cluster", "kubernetes_cluster", "k8s-cluster", "kubernetes-cluster":
+	case "k8s", "kubernetes", "k8s-cluster", "kubernetes-cluster":
 		return "k8s-cluster"
-	case "host", "agent":
+	case "agent":
 		return "agent"
 	case "node":
 		return "node"

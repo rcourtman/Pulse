@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // Investigation limits for automatic finding investigation.
@@ -316,18 +318,21 @@ func inferFindingResourceType(resourceID, resourceName string) string {
 
 func canonicalFindingResourceType(resourceType string) string {
 	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	if canonical, ok := unifiedresources.CanonicalizeLegacyResourceTypeAlias(normalized); ok {
+		return canonical
+	}
 	switch normalized {
 	case "guest", "qemu":
 		return "vm"
-	case "container", "lxc", "system_container", "system-container":
+	case "container", "lxc", "system-container":
 		return "system-container"
-	case "docker", "docker-container", "docker_container", "app_container", "app-container":
+	case "docker", "docker-container", "app-container":
 		return "app-container"
-	case "docker-host", "docker_host", "dockerhost":
+	case "docker-host", "dockerhost":
 		return "docker-host"
-	case "k8s", "kubernetes", "kubernetes_cluster", "k8s_cluster", "k8s-cluster":
+	case "k8s", "kubernetes", "k8s-cluster":
 		return "k8s-cluster"
-	case "host", "agent":
+	case "agent":
 		return "agent"
 	default:
 		return normalized

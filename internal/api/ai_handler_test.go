@@ -503,11 +503,11 @@ func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestCanonicalizeChatMentionType_DoesNotNormalizeRemovedAliases(t *testing.T) {
-	assert.Equal(t, "host", canonicalizeChatMentionType("host"))
-	assert.Equal(t, "system_container", canonicalizeChatMentionType("system_container"))
-	assert.Equal(t, "docker_container", canonicalizeChatMentionType("docker_container"))
-	assert.Equal(t, "app_container", canonicalizeChatMentionType("app_container"))
+func TestCanonicalizeChatMentionType_RejectsRemovedAliases(t *testing.T) {
+	assert.Equal(t, "", canonicalizeChatMentionType("host"))
+	assert.Equal(t, "", canonicalizeChatMentionType("system_container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("docker_container"))
+	assert.Equal(t, "", canonicalizeChatMentionType("app_container"))
 }
 
 func TestHandleAnswerQuestion(t *testing.T) {

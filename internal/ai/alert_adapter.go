@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // AlertManagerAdapter adapts the alerts.Manager to the AI's AlertProvider interface
@@ -177,18 +178,21 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 
 func normalizeAlertResourceType(raw string) string {
 	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	if canonical, ok := unifiedresources.CanonicalizeLegacyResourceTypeAlias(resourceType); ok {
+		return canonical
+	}
 	switch resourceType {
 	case "guest", "vm", "qemu":
 		return "vm"
-	case "container", "lxc", "system-container", "system_container", "oci-container":
+	case "container", "lxc", "system-container", "oci-container":
 		return "system-container"
-	case "docker", "docker-service", "docker_service", "docker-container", "docker_container", "app-container", "app_container":
+	case "docker", "docker-service", "docker_service", "docker-container", "app-container":
 		return "app-container"
-	case "docker-host", "docker_host", "dockerhost":
+	case "docker-host", "dockerhost":
 		return "docker-host"
-	case "agent", "node", "host":
+	case "agent", "node":
 		return "agent"
-	case "kubernetes", "k8s-cluster", "k8s_cluster", "kubernetes_cluster", "kubernetes-cluster", "k8s":
+	case "kubernetes", "k8s-cluster", "kubernetes-cluster", "k8s":
 		return "k8s-cluster"
 	default:
 		return resourceType
