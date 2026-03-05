@@ -37,7 +37,7 @@ func TestResolvedContextAddAndGet(t *testing.T) {
 
 	// Add a resource
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "abc123",
 		Name:        "nginx",
 		Aliases:     []string{"nginx", "abc123", "abc123def456"},
@@ -70,12 +70,12 @@ func TestResolvedContextAddAndGet(t *testing.T) {
 
 	// Test GetResolvedResourceByID
 	// Note: canonical ID format uses kind/scope/provider_uid segments.
-	info, ok = ctx.GetResolvedResourceByID("docker_container:server1:abc123")
+	info, ok = ctx.GetResolvedResourceByID("app-container:server1:abc123")
 	if !ok {
-		t.Error("GetResolvedResourceByID should find docker_container:server1:abc123")
+		t.Error("GetResolvedResourceByID should find app-container:server1:abc123")
 	}
-	if info.GetKind() != "docker_container" {
-		t.Errorf("Kind = %q, want %q", info.GetKind(), "docker_container")
+	if info.GetKind() != "app-container" {
+		t.Errorf("Kind = %q, want %q", info.GetKind(), "app-container")
 	}
 }
 
@@ -86,7 +86,7 @@ func TestResolvedContextLRUEviction(t *testing.T) {
 	// Add 5 resources
 	for i := 0; i < 5; i++ {
 		ctx.AddResolvedResource(tools.ResourceRegistration{
-			Kind:        "docker_container",
+			Kind:        "app-container",
 			ProviderUID: string(rune('a' + i)),
 			Name:        string(rune('a' + i)),
 			Executors:   []tools.ExecutorRegistration{},
@@ -102,9 +102,9 @@ func TestResolvedContextLRUEviction(t *testing.T) {
 	}
 
 	// First two resources (a, b) should be evicted as LRU
-	_, okA := ctx.GetResolvedResourceByID("docker_container:a")
-	_, okB := ctx.GetResolvedResourceByID("docker_container:b")
-	_, okE := ctx.GetResolvedResourceByID("docker_container:e")
+	_, okA := ctx.GetResolvedResourceByID("app-container:a")
+	_, okB := ctx.GetResolvedResourceByID("app-container:b")
+	_, okE := ctx.GetResolvedResourceByID("app-container:e")
 
 	// Note: exact eviction depends on timing, but 'e' should definitely exist
 	if !okE {
@@ -123,14 +123,14 @@ func TestResolvedContextTTLExpiry(t *testing.T) {
 
 	// Add a resource
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "test123",
 		Name:        "test",
 		Executors:   []tools.ExecutorRegistration{},
 	})
 
 	// Should find it immediately
-	_, ok := ctx.GetResolvedResourceByID("docker_container:test123")
+	_, ok := ctx.GetResolvedResourceByID("app-container:test123")
 	if !ok {
 		t.Error("Resource should be found immediately after adding")
 	}
@@ -139,7 +139,7 @@ func TestResolvedContextTTLExpiry(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// Should be expired now
-	_, ok = ctx.GetResolvedResourceByID("docker_container:test123")
+	_, ok = ctx.GetResolvedResourceByID("app-container:test123")
 	if ok {
 		t.Error("Resource should be expired after TTL")
 	}
@@ -151,15 +151,15 @@ func TestResolvedContextPinning(t *testing.T) {
 
 	// Add and pin a resource
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "pinned123",
 		Name:        "pinned",
 		Executors:   []tools.ExecutorRegistration{},
 	})
-	ctx.PinResource("docker_container:pinned123")
+	ctx.PinResource("app-container:pinned123")
 
 	// Verify it's pinned
-	if !ctx.IsPinned("docker_container:pinned123") {
+	if !ctx.IsPinned("app-container:pinned123") {
 		t.Error("Resource should be pinned")
 	}
 
@@ -167,14 +167,14 @@ func TestResolvedContextPinning(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// Pinned resource should still exist
-	_, ok := ctx.GetResolvedResourceByID("docker_container:pinned123")
+	_, ok := ctx.GetResolvedResourceByID("app-container:pinned123")
 	if !ok {
 		t.Error("Pinned resource should survive TTL expiry")
 	}
 
 	// Unpin and verify
-	ctx.UnpinResource("docker_container:pinned123")
-	if ctx.IsPinned("docker_container:pinned123") {
+	ctx.UnpinResource("app-container:pinned123")
+	if ctx.IsPinned("app-container:pinned123") {
 		t.Error("Resource should be unpinned")
 	}
 }
@@ -185,17 +185,17 @@ func TestResolvedContextPinningSurvivesLRU(t *testing.T) {
 
 	// Add and pin first resource
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "first",
 		Name:        "first",
 		Executors:   []tools.ExecutorRegistration{},
 	})
-	ctx.PinResource("docker_container:first")
+	ctx.PinResource("app-container:first")
 
 	// Add more resources to trigger LRU
 	for i := 0; i < 5; i++ {
 		ctx.AddResolvedResource(tools.ResourceRegistration{
-			Kind:        "docker_container",
+			Kind:        "app-container",
 			ProviderUID: string(rune('a' + i)),
 			Name:        string(rune('a' + i)),
 			Executors:   []tools.ExecutorRegistration{},
@@ -204,7 +204,7 @@ func TestResolvedContextPinningSurvivesLRU(t *testing.T) {
 	}
 
 	// Pinned resource should still exist
-	_, ok := ctx.GetResolvedResourceByID("docker_container:first")
+	_, ok := ctx.GetResolvedResourceByID("app-container:first")
 	if !ok {
 		t.Error("Pinned resource should survive LRU eviction")
 	}
@@ -215,18 +215,18 @@ func TestResolvedContextClear(t *testing.T) {
 
 	// Add some resources
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "a",
 		Name:        "a",
 		Executors:   []tools.ExecutorRegistration{},
 	})
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "b",
 		Name:        "b",
 		Executors:   []tools.ExecutorRegistration{},
 	})
-	ctx.PinResource("docker_container:a")
+	ctx.PinResource("app-container:a")
 
 	// Clear without keeping pinned
 	ctx.Clear(false)
@@ -237,18 +237,18 @@ func TestResolvedContextClear(t *testing.T) {
 
 	// Re-add resources
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "a",
 		Name:        "a",
 		Executors:   []tools.ExecutorRegistration{},
 	})
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "b",
 		Name:        "b",
 		Executors:   []tools.ExecutorRegistration{},
 	})
-	ctx.PinResource("docker_container:a")
+	ctx.PinResource("app-container:a")
 
 	// Clear keeping pinned
 	ctx.Clear(true)
@@ -256,7 +256,7 @@ func TestResolvedContextClear(t *testing.T) {
 	if stats.UniqueResources != 1 {
 		t.Errorf("After Clear(true), UniqueResources = %d, want 1", stats.UniqueResources)
 	}
-	_, ok := ctx.GetResolvedResourceByID("docker_container:a")
+	_, ok := ctx.GetResolvedResourceByID("app-container:a")
 	if !ok {
 		t.Error("Pinned resource 'a' should survive Clear(true)")
 	}
@@ -266,13 +266,13 @@ func TestResolvedContextStats(t *testing.T) {
 	ctx := NewResolvedContextWithConfig("session-1", 30*time.Minute, 200)
 
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "abc",
 		Name:        "nginx",
 		Aliases:     []string{"nginx", "web", "abc"},
 		Executors:   []tools.ExecutorRegistration{},
 	})
-	ctx.PinResource("docker_container:abc")
+	ctx.PinResource("app-container:abc")
 
 	stats := ctx.Stats()
 	if stats.UniqueResources != 1 {
@@ -298,7 +298,7 @@ func TestResolvedContextAccessUpdatesLRU(t *testing.T) {
 
 	// Add 3 resources
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "oldest",
 		Name:        "oldest",
 		Executors:   []tools.ExecutorRegistration{},
@@ -306,7 +306,7 @@ func TestResolvedContextAccessUpdatesLRU(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "middle",
 		Name:        "middle",
 		Executors:   []tools.ExecutorRegistration{},
@@ -314,7 +314,7 @@ func TestResolvedContextAccessUpdatesLRU(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "newest",
 		Name:        "newest",
 		Executors:   []tools.ExecutorRegistration{},
@@ -322,25 +322,25 @@ func TestResolvedContextAccessUpdatesLRU(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	// Access 'oldest' to update its LRU time
-	ctx.GetResolvedResourceByID("docker_container:oldest")
+	ctx.GetResolvedResourceByID("app-container:oldest")
 	time.Sleep(5 * time.Millisecond)
 
 	// Add one more resource to trigger eviction
 	ctx.AddResolvedResource(tools.ResourceRegistration{
-		Kind:        "docker_container",
+		Kind:        "app-container",
 		ProviderUID: "extra",
 		Name:        "extra",
 		Executors:   []tools.ExecutorRegistration{},
 	})
 
 	// 'oldest' should still exist (recently accessed)
-	_, okOldest := ctx.GetResolvedResourceByID("docker_container:oldest")
+	_, okOldest := ctx.GetResolvedResourceByID("app-container:oldest")
 	if !okOldest {
 		t.Error("'oldest' should survive because it was recently accessed")
 	}
 
 	// 'middle' should be evicted (was LRU at eviction time)
-	_, okMiddle := ctx.GetResolvedResourceByID("docker_container:middle")
+	_, okMiddle := ctx.GetResolvedResourceByID("app-container:middle")
 	if okMiddle {
 		t.Error("'middle' should be evicted as it was LRU")
 	}

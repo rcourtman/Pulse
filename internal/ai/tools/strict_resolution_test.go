@@ -433,8 +433,8 @@ func TestValidateResolvedResourceStrictMode(t *testing.T) {
 
 	// Test: With context, resource found -> allowed
 	mockRes := &mockResource{
-		resourceID:     "docker_container:abc123",
-		kind:           "docker_container",
+		resourceID:     "app-container:abc123",
+		kind:           "app-container",
 		providerUID:    "abc123",
 		aliases:        []string{"nginx", "abc123"},
 		allowedActions: []string{"restart", "stop", "start"},
