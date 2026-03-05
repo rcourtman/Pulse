@@ -40,6 +40,7 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 		ID:             "test-id",
 		ResourceType:   ResourceTypeDocker,
 		ResourceID:     "container-1",
+		TargetID:       "host-1",
 		HostID:         "host-1",
 		Hostname:       "localhost",
 		ServiceType:    "nginx",
@@ -68,6 +69,8 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 		assert.Equal(t, discovery.ID, result.ID)
 		assert.Equal(t, string(discovery.ResourceType), result.ResourceType)
 		assert.Equal(t, discovery.ResourceID, result.ResourceID)
+		assert.Equal(t, discovery.TargetID, result.TargetID)
+		assert.Empty(t, result.AgentID)
 		assert.Equal(t, discovery.ServiceName, result.ServiceName)
 
 		// Check facts conversion
@@ -90,6 +93,28 @@ func TestToolsAdapter_GetDiscovery(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, result.ID)
 	})
+}
+
+func TestToolsAdapter_GetDiscovery_AgentIDFallback(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	require.NoError(t, err)
+	store.crypto = nil
+	service := NewService(store, nil, DefaultConfig())
+	adapter := NewToolsAdapter(service)
+
+	discovery := &ResourceDiscovery{
+		ID:           "agent:agent-1:agent-1",
+		ResourceType: ResourceTypeAgent,
+		ResourceID:   "agent-1",
+		HostID:       "agent-1",
+	}
+	require.NoError(t, store.Save(discovery))
+
+	result, err := adapter.GetDiscovery(discovery.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "agent-1", result.TargetID)
+	assert.Equal(t, "agent-1", result.AgentID)
+	assert.Equal(t, "agent-1", result.HostID)
 }
 
 func TestToolsAdapter_GetDiscoveryByResource(t *testing.T) {

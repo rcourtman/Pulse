@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -852,6 +853,8 @@ type DiscoverySourceData struct {
 	ID             string
 	ResourceType   string
 	ResourceID     string
+	TargetID       string
+	AgentID        string
 	HostID         string
 	Hostname       string
 	ServiceType    string
@@ -1026,6 +1029,8 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 			ID:             d.ID,
 			ResourceType:   d.ResourceType,
 			ResourceID:     d.ResourceID,
+			TargetID:       d.TargetID,
+			AgentID:        d.AgentID,
 			HostID:         d.HostID,
 			Hostname:       d.Hostname,
 			ServiceType:    d.ServiceType,
@@ -1101,10 +1106,21 @@ func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceD
 		})
 	}
 
+	targetID := strings.TrimSpace(data.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(data.HostID)
+	}
+	agentID := strings.TrimSpace(data.AgentID)
+	if agentID == "" && data.ResourceType == "agent" {
+		agentID = targetID
+	}
+
 	return &ResourceDiscoveryInfo{
 		ID:             data.ID,
 		ResourceType:   data.ResourceType,
 		ResourceID:     data.ResourceID,
+		TargetID:       targetID,
+		AgentID:        agentID,
 		HostID:         data.HostID,
 		Hostname:       data.Hostname,
 		ServiceType:    data.ServiceType,

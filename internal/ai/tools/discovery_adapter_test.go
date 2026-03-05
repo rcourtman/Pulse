@@ -61,6 +61,8 @@ func TestDiscoveryMCPAdapter_GetDiscovery(t *testing.T) {
 
 	expectedData := DiscoverySourceData{
 		ID:           "test-id",
+		ResourceType: "agent",
+		TargetID:     "agent-1",
 		ServiceName:  "test-service",
 		DiscoveredAt: time.Now(),
 		Facts: []DiscoverySourceFact{
@@ -74,6 +76,8 @@ func TestDiscoveryMCPAdapter_GetDiscovery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "test-id", result.ID)
 	assert.Equal(t, "test-service", result.ServiceName)
+	assert.Equal(t, "agent-1", result.TargetID)
+	assert.Equal(t, "agent-1", result.AgentID)
 	assert.Len(t, result.Facts, 1)
 	assert.Equal(t, "version", result.Facts[0].Key)
 	assert.Equal(t, "1.0", result.Facts[0].Value)
@@ -109,6 +113,26 @@ func TestDiscoveryMCPAdapter_GetDiscoveryByResource(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "res-id", result.ID)
 	assert.Equal(t, "100", result.ResourceID)
+
+	mockSource.AssertExpectations(t)
+}
+
+func TestDiscoveryMCPAdapter_GetDiscovery_TargetIDFallsBackToHostID(t *testing.T) {
+	mockSource := &MockDiscoverySource{}
+	adapter := NewDiscoveryMCPAdapter(mockSource)
+
+	expectedData := DiscoverySourceData{
+		ID:           "legacy-id",
+		ResourceType: "vm",
+		HostID:       "node-1",
+		ResourceID:   "100",
+	}
+	mockSource.On("GetDiscovery", "legacy-id").Return(expectedData, nil)
+
+	result, err := adapter.GetDiscovery("legacy-id")
+	assert.NoError(t, err)
+	assert.Equal(t, "node-1", result.TargetID)
+	assert.Empty(t, result.AgentID)
 
 	mockSource.AssertExpectations(t)
 }
@@ -182,7 +206,9 @@ func TestDiscoveryMCPAdapter_FormatForAIContext(t *testing.T) {
 
 	inputs := []*ResourceDiscoveryInfo{
 		{
-			ID: "d1",
+			ID:       "d1",
+			TargetID: "node-1",
+			AgentID:  "agent-1",
 			Facts: []DiscoveryFact{
 				{Key: "k", Value: "v"},
 			},
@@ -203,6 +229,8 @@ func TestDiscoveryMCPAdapter_FormatForAIContext(t *testing.T) {
 		}
 		d := ds[0]
 		return d.ID == "d1" &&
+			d.TargetID == "node-1" &&
+			d.AgentID == "agent-1" &&
 			len(d.Facts) == 1 && d.Facts[0].Key == "k" &&
 			len(d.Ports) == 1 && d.Ports[0].Port == 80 &&
 			len(d.DockerMounts) == 1 && d.DockerMounts[0].Source == "/src"

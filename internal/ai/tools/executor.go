@@ -271,6 +271,8 @@ type ResourceDiscoveryInfo struct {
 	ID             string              `json:"id"`
 	ResourceType   string              `json:"resource_type"`
 	ResourceID     string              `json:"resource_id"`
+	TargetID       string              `json:"target_id,omitempty"`
+	AgentID        string              `json:"agent_id,omitempty"`
 	HostID         string              `json:"host_id"`
 	Hostname       string              `json:"hostname"`
 	ServiceType    string              `json:"service_type"`

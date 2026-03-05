@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
@@ -133,10 +134,21 @@ func (a *ToolsAdapter) convertToSourceData(d *ResourceDiscovery) tools.Discovery
 		})
 	}
 
+	targetID := strings.TrimSpace(d.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(d.HostID)
+	}
+	agentID := strings.TrimSpace(d.AgentID)
+	if agentID == "" && d.ResourceType == ResourceTypeAgent {
+		agentID = targetID
+	}
+
 	return tools.DiscoverySourceData{
 		ID:             d.ID,
 		ResourceType:   string(d.ResourceType),
 		ResourceID:     d.ResourceID,
+		TargetID:       targetID,
+		AgentID:        agentID,
 		HostID:         d.HostID,
 		Hostname:       d.Hostname,
 		ServiceType:    d.ServiceType,
@@ -191,11 +203,26 @@ func (a *ToolsAdapter) convertFromSourceData(sd tools.DiscoverySourceData) *Reso
 		})
 	}
 
+	targetID := strings.TrimSpace(sd.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(sd.HostID)
+	}
+	hostID := strings.TrimSpace(sd.HostID)
+	if hostID == "" {
+		hostID = targetID
+	}
+	agentID := strings.TrimSpace(sd.AgentID)
+	if agentID == "" && sd.ResourceType == string(ResourceTypeAgent) {
+		agentID = targetID
+	}
+
 	return &ResourceDiscovery{
 		ID:             sd.ID,
 		ResourceType:   ResourceType(sd.ResourceType),
 		ResourceID:     sd.ResourceID,
-		HostID:         sd.HostID,
+		TargetID:       targetID,
+		AgentID:        agentID,
+		HostID:         hostID,
 		Hostname:       sd.Hostname,
 		ServiceType:    sd.ServiceType,
 		ServiceName:    sd.ServiceName,
