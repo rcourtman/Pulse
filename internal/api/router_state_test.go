@@ -52,12 +52,20 @@ func TestRouter_HandleState_MockIsolation(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var state models.StateFrontend
-		err := json.Unmarshal(w.Body.Bytes(), &state)
+		var payload map[string]any
+		err := json.Unmarshal(w.Body.Bytes(), &payload)
 		assert.NoError(t, err)
 
-		// Verify v6 contract: legacy per-type arrays are stripped from /api/state.
-		assert.Nil(t, state.Nodes)
+		// Verify v6 contract: legacy per-type arrays are omitted from /api/state.
+		for _, key := range []string{"nodes", "vms", "containers", "dockerHosts", "hosts", "storage"} {
+			if _, ok := payload[key]; ok {
+				t.Fatalf("expected %q to be omitted from /api/state payload", key)
+			}
+		}
+
+		var state models.StateFrontend
+		err = json.Unmarshal(w.Body.Bytes(), &state)
+		assert.NoError(t, err)
 		assert.Greater(t, state.LastUpdate, int64(0))
 	})
 

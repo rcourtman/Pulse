@@ -846,8 +846,18 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 		t.Fatalf("expected initialState message, got %q", msgType)
 	}
 
-	if _, ok := payload["nodes"]; ok {
-		t.Fatalf("initial state should omit legacy nodes key entirely: %v", payload["nodes"])
+	strippedLegacyKeys := []string{
+		"nodes",
+		"vms",
+		"containers",
+		"dockerHosts",
+		"hosts",
+		"storage",
+	}
+	for _, key := range strippedLegacyKeys {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("initial state should omit legacy key %q entirely", key)
+		}
 	}
 
 	// Broadcast an additional state update and ensure clients receive it
@@ -858,8 +868,10 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	if msgType != "rawData" {
 		t.Fatalf("expected rawData broadcast, got %q", msgType)
 	}
-	if _, ok := payload["nodes"]; ok {
-		t.Fatalf("broadcast payload should omit legacy nodes key entirely: %v", payload["nodes"])
+	for _, key := range strippedLegacyKeys {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("broadcast payload should omit legacy key %q entirely", key)
+		}
 	}
 }
 
