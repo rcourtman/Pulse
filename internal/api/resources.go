@@ -895,17 +895,14 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	for _, part := range splitCSV(raw) {
 		switch part {
 		case "agent", "agents", "node", "nodes", "docker-host":
-			// "agent", "node", and "docker-host" are frontend aliases that
-			// all resolve to ResourceTypeAgent. Filtering by the frontend type is supported because
-			// applyFrontendTypes() runs after filtering, so we match on the backend
-			// type and let the type conversion produce the expected frontend names.
+			// "agent", "node", and "docker-host" are frontend facets that all
+			// resolve to ResourceTypeAgent in unified resources.
 			result[unified.ResourceTypeAgent] = struct{}{}
 		case "vm", "vms":
 			result[unified.ResourceTypeVM] = struct{}{}
-		case "system-container", "container", "containers":
-			// "container" is the frontend name for system containers (LXC)
+		case "system-container", "system-containers", "oci-container":
 			result[unified.ResourceTypeSystemContainer] = struct{}{}
-		case "docker_container", "docker-container", "app-container":
+		case "app-container", "app-containers":
 			result[unified.ResourceTypeAppContainer] = struct{}{}
 		case "docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services":
 			result[unified.ResourceTypeDockerService] = struct{}{}
@@ -955,8 +952,8 @@ func isSupportedResourceTypeFilterToken(token string) bool {
 	switch token {
 	case "agent", "agents", "node", "nodes", "docker-host",
 		"vm", "vms",
-		"system-container", "container", "containers",
-		"docker_container", "docker-container", "app-container",
+		"system-container", "system-containers", "oci-container",
+		"app-container", "app-containers",
 		"docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services",
 		"pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod",
 		"k8s_cluster", "k8s-cluster", "kubernetes_cluster", "kubernetes-cluster",
@@ -1051,9 +1048,8 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 	resource.MetricsTarget = buildMetricsTarget(*resource, registry)
 }
 
-// frontendResourceType maps backend ResourceType values to the type strings
-// the frontend expects. This mirrors the monitorLegacyResourceType() logic in
-// monitor.go so that both the WebSocket and REST API paths agree on type names.
+// frontendResourceType maps backend ResourceType values to API/frontend type
+// strings while preserving canonical v6 workload naming.
 func frontendResourceType(r unified.Resource) unified.ResourceType {
 	switch unified.CanonicalResourceType(r.Type) {
 	case unified.ResourceTypeAgent:
@@ -1065,9 +1061,9 @@ func frontendResourceType(r unified.Resource) unified.ResourceType {
 		}
 		return "agent"
 	case unified.ResourceTypeSystemContainer:
-		return "container"
+		return "system-container"
 	case unified.ResourceTypeAppContainer:
-		return "docker-container"
+		return "app-container"
 	case unified.ResourceTypeCeph:
 		return "pool"
 	default:

@@ -3051,9 +3051,9 @@ func monitorLegacyResourceType(resource unifiedresources.Resource) string {
 	case unifiedresources.ResourceTypeVM:
 		return "vm"
 	case unifiedresources.ResourceTypeSystemContainer:
-		return "container"
+		return "system-container"
 	case unifiedresources.ResourceTypeAppContainer:
-		return "docker-container"
+		return "app-container"
 	case unifiedresources.ResourceTypeK8sCluster:
 		return "k8s-cluster"
 	case unifiedresources.ResourceTypeK8sNode:
@@ -3113,9 +3113,9 @@ func monitorLegacyNames(resource unifiedresources.Resource, resourceType string)
 
 func monitorPlatformType(resource unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
-	case "node", "vm", "container", "storage", "pool":
+	case "node", "vm", "system-container", "storage", "pool":
 		return "proxmox-pve"
-	case "docker-host", "docker-container":
+	case "docker-host", "app-container":
 		return "docker"
 	case "k8s-cluster", "k8s-node", "pod", "k8s-deployment":
 		return "kubernetes"
@@ -3155,7 +3155,7 @@ func monitorPlatformType(resource unifiedresources.Resource, resourceType string
 
 func monitorPlatformID(resource unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
-	case "node", "vm", "container":
+	case "node", "vm", "system-container":
 		if resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.Instance) != "" {
 			return strings.TrimSpace(resource.Proxmox.Instance)
 		}
@@ -3167,7 +3167,7 @@ func monitorPlatformID(resource unifiedresources.Resource, resourceType string) 
 		if resource.Docker != nil && strings.TrimSpace(resource.Docker.Hostname) != "" {
 			return strings.TrimSpace(resource.Docker.Hostname)
 		}
-	case "docker-container":
+	case "app-container":
 		if resource.Docker != nil && strings.TrimSpace(resource.Docker.Hostname) != "" {
 			return strings.TrimSpace(resource.Docker.Hostname)
 		}
@@ -3192,7 +3192,7 @@ func monitorPlatformID(resource unifiedresources.Resource, resourceType string) 
 
 func monitorLegacyStatus(resource unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
-	case "docker-container":
+	case "app-container":
 		switch resource.Status {
 		case unifiedresources.StatusOnline:
 			return "running"
@@ -3235,7 +3235,7 @@ func monitorLegacyStatus(resource unifiedresources.Resource, resourceType string
 
 func monitorIsWorkloadType(resourceType string) bool {
 	switch resourceType {
-	case "docker-container", "container", "vm", "oci-container":
+	case "app-container", "system-container", "vm", "oci-container":
 		return true
 	default:
 		return false
@@ -3438,7 +3438,7 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 		}
 	case "vm":
 		payload = buildProxmoxVMPayload(resource)
-	case "container", "oci-container":
+	case "system-container", "oci-container":
 		payload = buildProxmoxVMPayload(resource)
 	case "agent":
 		if resource.Agent != nil {
@@ -3470,7 +3470,7 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 				"disks":          resource.Docker.Disks,
 			}
 		}
-	case "docker-container":
+	case "app-container":
 		if resource.Docker != nil {
 			payload = map[string]interface{}{
 				"hostId":    monitorStringValue(resource.ParentID),

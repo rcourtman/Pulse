@@ -56,7 +56,7 @@ export interface ChartsResponse {
   dockerData?: Record<string, ChartData>; // Docker container data keyed by container ID
   dockerHostData?: Record<string, ChartData>; // Docker host data keyed by host ID
   agentData?: Record<string, ChartData>; // Unified agent data keyed by agent ID
-  guestTypes?: Record<string, 'vm' | 'container' | 'k8s'>; // Maps guest ID to type
+  guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>; // Maps guest ID to type
   timestamp: number;
   stats: ChartStats;
 }
@@ -72,7 +72,7 @@ export interface InfrastructureChartsResponse {
 export interface WorkloadChartsResponse {
   data: Record<string, ChartData>;
   dockerData?: Record<string, ChartData>;
-  guestTypes?: Record<string, 'vm' | 'container' | 'k8s'>;
+  guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>;
   timestamp: number;
   stats: ChartStats;
 }

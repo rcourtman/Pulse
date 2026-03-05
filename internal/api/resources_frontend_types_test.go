@@ -34,14 +34,14 @@ func TestFrontendResourceType(t *testing.T) {
 			want: "agent",
 		},
 		{
-			name: "system-container becomes container",
+			name: "system-container stays system-container",
 			r:    unified.Resource{Type: unified.ResourceTypeSystemContainer},
-			want: "container",
+			want: "system-container",
 		},
 		{
-			name: "app-container becomes docker-container",
+			name: "app-container stays app-container",
 			r:    unified.Resource{Type: unified.ResourceTypeAppContainer},
-			want: "docker-container",
+			want: "app-container",
 		},
 		{
 			name: "ceph becomes pool",
@@ -105,7 +105,7 @@ func TestApplyFrontendTypes(t *testing.T) {
 
 	applyFrontendTypes(resources)
 
-	expected := []unified.ResourceType{"node", "docker-host", "agent", "vm", "container"}
+	expected := []unified.ResourceType{"node", "docker-host", "agent", "vm", "system-container"}
 	for i, want := range expected {
 		if resources[i].Type != want {
 			t.Fatalf("resources[%d].Type = %q, want %q", i, resources[i].Type, want)
@@ -138,8 +138,8 @@ func TestComputeFrontendByType(t *testing.T) {
 	if byType[unified.ResourceTypeVM] != 2 {
 		t.Fatalf("byType[vm] = %d, want 2", byType[unified.ResourceTypeVM])
 	}
-	if byType["container"] != 1 {
-		t.Fatalf("byType[container] = %d, want 1", byType["container"])
+	if byType["system-container"] != 1 {
+		t.Fatalf("byType[system-container] = %d, want 1", byType["system-container"])
 	}
 
 	// Verify the input slice was NOT mutated — check exact per-index type.
@@ -171,7 +171,7 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		{name: "unsupported qemu ignored by parser", input: "qemu", want: map[unified.ResourceType]struct{}{}},
 		{name: "unsupported system_container ignored by parser", input: "system_container", want: map[unified.ResourceType]struct{}{}},
 		{name: "unsupported app_container ignored by parser", input: "app_container", want: map[unified.ResourceType]struct{}{}},
-		{name: "container", input: "container", want: map[unified.ResourceType]struct{}{unified.ResourceTypeSystemContainer: {}}},
+		{name: "unsupported container ignored by parser", input: "container", want: map[unified.ResourceType]struct{}{}},
 		{name: "pool", input: "pool", want: map[unified.ResourceType]struct{}{unified.ResourceTypeCeph: {}}},
 		{name: "vm", input: "vm", want: map[unified.ResourceType]struct{}{unified.ResourceTypeVM: {}}},
 		// CSV with multiple types
@@ -211,8 +211,10 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 }
 
 func TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases(t *testing.T) {
-	unsupported := unsupportedResourceTypeFilterTokens("vm,lxc,qemu,system-container,system_container,app_container")
-	expected := []string{"lxc", "qemu", "system_container", "app_container"}
+	unsupported := unsupportedResourceTypeFilterTokens(
+		"vm,lxc,qemu,system-container,system_container,app_container,container,docker-container",
+	)
+	expected := []string{"lxc", "qemu", "system_container", "app_container", "container", "docker-container"}
 	if len(unsupported) != len(expected) {
 		t.Fatalf("unsupportedResourceTypeFilterTokens returned %v, want %v", unsupported, expected)
 	}
@@ -396,7 +398,7 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("decode unfiltered response: %v", err)
 	}
 
-	// 5 resources: node + agent + docker-host + vm + container
+	// 5 resources: node + agent + docker-host + vm + system-container
 	if len(resp2.Data) != 5 {
 		t.Fatalf("expected 5 resources (node+agent+docker-host+vm+ct), got %d", len(resp2.Data))
 	}
@@ -418,8 +420,12 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	if typeSet2["vm"] != 1 {
 		t.Fatalf("expected 1 vm in unfiltered response, got %d (types=%v)", typeSet2["vm"], typeSet2)
 	}
-	if typeSet2["container"] != 1 {
-		t.Fatalf("expected 1 container in unfiltered response, got %d (types=%v)", typeSet2["container"], typeSet2)
+	if typeSet2["system-container"] != 1 {
+		t.Fatalf(
+			"expected 1 system-container in unfiltered response, got %d (types=%v)",
+			typeSet2["system-container"],
+			typeSet2,
+		)
 	}
 }
 

@@ -47,7 +47,7 @@ func TestChartResponseTypes(t *testing.T) {
 		},
 		GuestTypes: map[string]string{
 			"pve1/qemu/100": "vm",
-			"pve1/lxc/200":  "container",
+			"pve1/lxc/200":  "system-container",
 		},
 		Timestamp: now,
 		Stats: ChartStats{
@@ -79,8 +79,8 @@ func TestChartResponseTypes(t *testing.T) {
 	if response.GuestTypes["pve1/qemu/100"] != "vm" {
 		t.Errorf("Expected guest type 'vm', got '%s'", response.GuestTypes["pve1/qemu/100"])
 	}
-	if response.GuestTypes["pve1/lxc/200"] != "container" {
-		t.Errorf("Expected guest type 'container', got '%s'", response.GuestTypes["pve1/lxc/200"])
+	if response.GuestTypes["pve1/lxc/200"] != "system-container" {
+		t.Errorf("Expected guest type 'system-container', got '%s'", response.GuestTypes["pve1/lxc/200"])
 	}
 
 	// Verify docker data metric points
@@ -298,7 +298,7 @@ func TestGuestTypesMapping(t *testing.T) {
 		guestTypes[vm.ID] = "vm"
 	}
 	for _, ct := range containers {
-		guestTypes[ct.ID] = "container"
+		guestTypes[ct.ID] = "system-container"
 	}
 
 	if len(guestTypes) != 4 {
@@ -314,8 +314,8 @@ func TestGuestTypesMapping(t *testing.T) {
 
 	// Verify container types
 	for _, ct := range containers {
-		if guestTypes[ct.ID] != "container" {
-			t.Errorf("Expected 'container' for %s, got '%s'", ct.ID, guestTypes[ct.ID])
+		if guestTypes[ct.ID] != "system-container" {
+			t.Errorf("Expected 'system-container' for %s, got '%s'", ct.ID, guestTypes[ct.ID])
 		}
 	}
 }

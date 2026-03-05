@@ -190,8 +190,8 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 			want     string
 		}{
 			{name: "vm", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeVM}, want: "vm"},
-			{name: "lxc", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeSystemContainer}, want: "container"},
-			{name: "docker container", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAppContainer}, want: "docker-container"},
+			{name: "lxc", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeSystemContainer}, want: "system-container"},
+			{name: "docker container", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAppContainer}, want: "app-container"},
 			{name: "k8s cluster", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeK8sCluster}, want: "k8s-cluster"},
 			{name: "k8s node", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeK8sNode}, want: "k8s-node"},
 			{name: "pod", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypePod}, want: "pod"},
@@ -223,7 +223,7 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 			want         string
 		}{
 			{name: "node explicit", resourceType: "node", want: "proxmox-pve"},
-			{name: "docker explicit", resourceType: "docker-container", want: "docker"},
+			{name: "docker explicit", resourceType: "app-container", want: "docker"},
 			{name: "k8s explicit", resourceType: "k8s-node", want: "kubernetes"},
 			{name: "pbs explicit", resourceType: "pbs", want: "proxmox-pbs"},
 			{name: "pmg explicit", resourceType: "pmg", want: "proxmox-pmg"},
@@ -314,8 +314,8 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 				want:         "docker-a",
 			},
 			{
-				name:         "docker container uses parent fallback",
-				resourceType: "docker-container",
+				name:         "app container uses parent fallback",
+				resourceType: "app-container",
 				resource:     unifiedresources.Resource{ID: "fallback", ParentID: &parent, Docker: &unifiedresources.DockerData{}},
 				want:         "parent-1",
 			},
@@ -363,19 +363,19 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 		}{
 			{
 				name:         "docker online running",
-				resourceType: "docker-container",
+				resourceType: "app-container",
 				resource:     unifiedresources.Resource{Status: unifiedresources.StatusOnline},
 				want:         "running",
 			},
 			{
 				name:         "docker offline stopped",
-				resourceType: "docker-container",
+				resourceType: "app-container",
 				resource:     unifiedresources.Resource{Status: unifiedresources.StatusOffline},
 				want:         "stopped",
 			},
 			{
 				name:         "docker warning degraded",
-				resourceType: "docker-container",
+				resourceType: "app-container",
 				resource:     unifiedresources.Resource{Status: unifiedresources.StatusWarning},
 				want:         "degraded",
 			},
@@ -399,7 +399,7 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 			},
 			{
 				name:         "workload online running fallback",
-				resourceType: "container",
+				resourceType: "system-container",
 				resource:     unifiedresources.Resource{Status: unifiedresources.StatusOnline},
 				want:         "running",
 			},

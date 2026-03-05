@@ -4925,7 +4925,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Build guest types map for frontend to correctly identify VM vs Container
+	// Build guest type map with canonical v6 names.
 	guestTypes := make(map[string]string)
 	for _, vm := range readState.VMs() {
 		if vm == nil {
@@ -4940,7 +4940,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 		if sid := ct.SourceID(); sid != "" {
-			guestTypes[sid] = "container"
+			guestTypes[sid] = "system-container"
 		}
 	}
 
@@ -5572,7 +5572,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 
 		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
 		series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
-		guestTypes[ct.ID] = "container"
+		guestTypes[ct.ID] = "system-container"
 
 		if len(series["cpu"]) == 0 {
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPU * 100}}

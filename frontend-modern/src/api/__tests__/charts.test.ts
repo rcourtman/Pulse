@@ -141,7 +141,7 @@ describe('Charts API Types', () => {
       expect(response.agentData!['agent-1'].cpu![0].value).toBe(30);
     });
 
-    it('supports optional guestTypes field for VM/container type mapping', () => {
+    it('supports optional guestTypes field for VM/system-container type mapping', () => {
       const response: ChartsResponse = {
         data: {
           'vm-100': { cpu: [{ timestamp: 1000, value: 50 }] },
@@ -151,26 +151,26 @@ describe('Charts API Types', () => {
         storageData: {},
         guestTypes: {
           'vm-100': 'vm',
-          'ct-200': 'container',
+          'ct-200': 'system-container',
         },
         timestamp: Date.now(),
         stats: { oldestDataTimestamp: Date.now() },
       };
 
       expect(response.guestTypes!['vm-100']).toBe('vm');
-      expect(response.guestTypes!['ct-200']).toBe('container');
+      expect(response.guestTypes!['ct-200']).toBe('system-container');
     });
 
     it('contains all data sources for comprehensive monitoring', () => {
       const comprehensiveResponse: ChartsResponse = {
-        // VM and container metrics (legacy format)
+        // VM and system-container metrics
         data: {
-          'pve1/qemu/100': {
+          'vm-100': {
             cpu: [{ timestamp: 1000, value: 45 }],
             memory: [{ timestamp: 1000, value: 55 }],
             disk: [{ timestamp: 1000, value: 30 }],
           },
-          'pve1/lxc/200': {
+          'ct-200': {
             cpu: [{ timestamp: 1000, value: 15 }],
           },
         },
@@ -202,8 +202,8 @@ describe('Charts API Types', () => {
         },
         // Guest type mapping
         guestTypes: {
-          'pve1/qemu/100': 'vm',
-          'pve1/lxc/200': 'container',
+          'vm-100': 'vm',
+          'ct-200': 'system-container',
         },
         timestamp: 1733700000000,
         stats: {

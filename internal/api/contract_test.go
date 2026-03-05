@@ -755,7 +755,7 @@ func TestContract_AlertResourceTypeConsistency(t *testing.T) {
 		want         []string
 	}{
 		{resourceType: "VM", want: []string{"guest"}},
-		{resourceType: "Container", want: []string{"guest"}},
+		{resourceType: "Container", want: []string{"container"}},
 		{resourceType: "Node", want: []string{"node"}},
 		{resourceType: "Agent", want: []string{"agent", "node"}},
 		{resourceType: "Agent Disk", want: []string{"agent-disk", "agent", "storage"}},

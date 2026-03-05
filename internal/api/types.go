@@ -42,7 +42,7 @@ type ChartResponse struct {
 	DockerData     map[string]VMChartData      `json:"dockerData"`     // Docker container metrics (keyed by container ID)
 	DockerHostData map[string]VMChartData      `json:"dockerHostData"` // Docker host metrics (keyed by host ID)
 	AgentData      map[string]VMChartData      `json:"agentData"`      // Unified agent metrics (keyed by agent ID)
-	GuestTypes     map[string]string           `json:"guestTypes"`     // Maps guest ID to type ("vm", "container", "k8s")
+	GuestTypes     map[string]string           `json:"guestTypes"`     // Maps guest ID to type ("vm", "system-container", "k8s")
 	Timestamp      int64                       `json:"timestamp"`
 	Stats          ChartStats                  `json:"stats"`
 }
@@ -63,7 +63,7 @@ type InfrastructureChartsResponse struct {
 type WorkloadChartsResponse struct {
 	ChartData  map[string]VMChartData `json:"data"`       // Workload metrics keyed by workload ID
 	DockerData map[string]VMChartData `json:"dockerData"` // Docker container metrics keyed by container ID
-	GuestTypes map[string]string      `json:"guestTypes"` // Maps guest ID to type ("vm", "container", "k8s")
+	GuestTypes map[string]string      `json:"guestTypes"` // Maps guest ID to type ("vm", "system-container", "k8s")
 	Timestamp  int64                  `json:"timestamp"`  // Unix timestamp in milliseconds
 	Stats      ChartStats             `json:"stats"`      // Includes pointCounts + source hints
 }
