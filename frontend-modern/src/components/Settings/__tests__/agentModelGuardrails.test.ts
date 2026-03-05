@@ -180,6 +180,8 @@ describe('agent model guardrails', () => {
     expect(monitoringApiSource).not.toContain('body: JSON.stringify({ hostId, containerId, containerName })');
     expect(monitoringApiSource).toContain('agentId?: string;');
     expect(monitoringApiSource).not.toContain('hostId?: string;');
+    expect(monitoringApiSource).toContain('/agents/docker/runtimes/');
+    expect(monitoringApiSource).not.toContain('/agents/docker/hosts/');
   });
 
   it('keeps chart API contract on canonical agentData naming', () => {

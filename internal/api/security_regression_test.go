@@ -2181,6 +2181,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/agents/docker/containers/update", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/docker/hosts/host-1/update-all", body: ``},
 		{method: http.MethodDelete, path: "/api/agents/docker/hosts/host-1", body: ``},
+		{method: http.MethodPost, path: "/api/agents/docker/runtimes/host-1/update-all", body: ``},
+		{method: http.MethodDelete, path: "/api/agents/docker/runtimes/host-1", body: ``},
 		{method: http.MethodDelete, path: "/api/agents/kubernetes/clusters/cluster-1", body: ``},
 		{method: http.MethodPost, path: "/api/agents/agent/link", body: `{}`},
 		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
@@ -2255,6 +2257,7 @@ func TestDockerManageEndpointsRequireDockerManageScope(t *testing.T) {
 
 	paths := []string{
 		"/api/agents/docker/hosts/host-1",
+		"/api/agents/docker/runtimes/host-1",
 		"/api/agents/docker/containers/update",
 	}
 

@@ -314,6 +314,7 @@ var allRouteAllowlist = []string{
 	"/api/agents/agent/link",
 	"/api/agents/agent/",
 	"/api/agents/docker/commands/",
+	"/api/agents/docker/runtimes/",
 	"/api/agents/docker/hosts/",
 	"/api/agents/docker/containers/update",
 	"/api/agents/kubernetes/clusters/",

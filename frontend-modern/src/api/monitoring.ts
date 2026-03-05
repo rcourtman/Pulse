@@ -36,7 +36,7 @@ export class MonitoringAPI {
     if (options.hide) params.set('hide', 'true');
     if (options.force) params.set('force', 'true');
     const query = params.toString();
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}${query ? `?${query}` : ''}`;
+    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}${query ? `?${query}` : ''}`;
 
     const response = await apiFetch(url, {
       method: 'DELETE',
@@ -58,7 +58,7 @@ export class MonitoringAPI {
   }
 
   static async unhideDockerHost(agentId: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/unhide`;
+    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/unhide`;
 
     const response = await apiFetch(url, {
       method: 'PUT',
@@ -75,7 +75,7 @@ export class MonitoringAPI {
   }
 
   static async markDockerHostPendingUninstall(agentId: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/pending-uninstall`;
+    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/pending-uninstall`;
 
     const response = await apiFetch(url, {
       method: 'PUT',
@@ -92,7 +92,7 @@ export class MonitoringAPI {
   }
 
   static async setDockerHostDisplayName(agentId: string, displayName: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/display-name`;
+    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/display-name`;
 
     const response = await apiFetch(url, {
       method: 'PUT',
@@ -112,7 +112,7 @@ export class MonitoringAPI {
   }
 
   static async allowDockerHostReenroll(agentId: string): Promise<void> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/allow-reenroll`;
+    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/allow-reenroll`;
 
     const response = await apiFetch(url, {
       method: 'POST',
@@ -364,7 +364,7 @@ export class MonitoringAPI {
   static async checkDockerUpdates(
     agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/check-updates`;
+    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/check-updates`;
 
     const response = await apiFetch(url, {
       method: 'POST',
@@ -383,7 +383,7 @@ export class MonitoringAPI {
   static async updateAllDockerContainers(
     agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
-    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(agentId)}/update-all`;
+    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/update-all`;
 
     const response = await apiFetch(url, {
       method: 'POST',

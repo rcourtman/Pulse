@@ -65,7 +65,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.deleteDockerHost('host-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/hosts/host-1',
+        '/api/agents/docker/runtimes/host-1',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
@@ -76,7 +76,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.deleteDockerHost('host-1', { hide: true });
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/hosts/host-1?hide=true',
+        '/api/agents/docker/runtimes/host-1?hide=true',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
@@ -87,7 +87,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.deleteDockerHost('host-1', { force: true });
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/hosts/host-1?force=true',
+        '/api/agents/docker/runtimes/host-1?force=true',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
@@ -108,7 +108,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.unhideDockerHost('host-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/hosts/host-1/unhide',
+        '/api/agents/docker/runtimes/host-1/unhide',
         expect.objectContaining({ method: 'PUT' }),
       );
     });
@@ -121,7 +121,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.markDockerHostPendingUninstall('host-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/hosts/host-1/pending-uninstall',
+        '/api/agents/docker/runtimes/host-1/pending-uninstall',
         expect.objectContaining({ method: 'PUT' }),
       );
     });
@@ -134,7 +134,7 @@ describe('MonitoringAPI', () => {
       await MonitoringAPI.setDockerHostDisplayName('host-1', 'New Name');
 
       expect(apiFetch).toHaveBeenCalledWith(
-        '/api/agents/docker/hosts/host-1/display-name',
+        '/api/agents/docker/runtimes/host-1/display-name',
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ displayName: 'New Name' }),
@@ -143,8 +143,8 @@ describe('MonitoringAPI', () => {
     });
   });
 
-  describe('agent management aliases', () => {
-    it('deletes agent via host-compatible backend route', async () => {
+  describe('agent management', () => {
+    it('deletes agent via unified backend route', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(''),
@@ -158,7 +158,7 @@ describe('MonitoringAPI', () => {
       );
     });
 
-    it('updates agent config via host-compatible backend route', async () => {
+    it('updates agent config via unified backend route', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
 
       await MonitoringAPI.updateAgentConfig('agent-1', { commandsEnabled: true });
@@ -177,7 +177,7 @@ describe('MonitoringAPI', () => {
         new Response(
           JSON.stringify({
             success: true,
-            host: {
+            agent: {
               id: 'agent-1',
               hostname: 'agent-1.local',
               status: 'online',
@@ -192,7 +192,47 @@ describe('MonitoringAPI', () => {
       const result = await MonitoringAPI.lookupAgent({ id: 'agent-1' });
 
       expect(apiFetch).toHaveBeenCalledWith('/api/agents/agent/lookup?id=agent-1');
-      expect(typeof result?.host.lastSeen).toBe('number');
+      expect(result?.agent?.id).toBe('agent-1');
+      expect(typeof result?.agent?.lastSeen).toBe('number');
+    });
+
+    it('normalizes agent-first lookup payload', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            agent: {
+              id: 'agent-2',
+              hostname: 'agent-2.local',
+              status: 'online',
+              connected: true,
+              lastSeen: '2026-01-01T00:00:00Z',
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const result = await MonitoringAPI.lookupAgent({ id: 'agent-2' });
+
+      expect(result?.agent?.id).toBe('agent-2');
+      expect(typeof result?.agent?.lastSeen).toBe('number');
+    });
+
+    it('unlinks agent using canonical agentId', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
+
+      await MonitoringAPI.unlinkAgent('agent-1');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/agent/unlink',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            agentId: 'agent-1',
+          }),
+        }),
+      );
     });
   });
 

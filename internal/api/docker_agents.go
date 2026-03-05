@@ -64,6 +64,21 @@ func canonicalDockerAgentID(agentID string, legacyHostID string) string {
 	return strings.TrimSpace(legacyHostID)
 }
 
+func trimDockerRuntimePathPrefix(path string) string {
+	if strings.HasPrefix(path, "/api/agents/docker/runtimes/") {
+		return strings.TrimPrefix(path, "/api/agents/docker/runtimes/")
+	}
+	return strings.TrimPrefix(path, "/api/agents/docker/hosts/")
+}
+
+func dockerRuntimeAgentIDFromPath(path string, suffix string) string {
+	trimmed := trimDockerRuntimePathPrefix(path)
+	if suffix != "" {
+		trimmed = strings.TrimSuffix(trimmed, suffix)
+	}
+	return strings.TrimSpace(trimmed)
+}
+
 // NewDockerAgentHandlers constructs a new Docker agent handler group.
 func NewDockerAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub, cfg *config.Config) *DockerAgentHandlers {
 	return &DockerAgentHandlers{baseAgentHandlers: newBaseAgentHandlers(mtm, m, hub), config: cfg}
@@ -286,8 +301,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	agentID := strings.TrimSpace(trimmedPath)
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "")
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -384,9 +398,7 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 		return
 	}
 
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/allow-reenroll")
-	agentID := strings.TrimSpace(trimmedPath)
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/allow-reenroll")
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -415,9 +427,7 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/unhide")
-	agentID := strings.TrimSpace(trimmedPath)
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/unhide")
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -447,9 +457,7 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 		return
 	}
 
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/pending-uninstall")
-	agentID := strings.TrimSpace(trimmedPath)
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/pending-uninstall")
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -479,9 +487,7 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 		return
 	}
 
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/display-name")
-	agentID := strings.TrimSpace(trimmedPath)
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/display-name")
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -583,16 +589,15 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 }
 
 // HandleUpdateAll triggers an update for all containers with updates available on a container runtime.
-// POST /api/agents/docker/hosts/{agentId}/update-all
+// POST /api/agents/docker/runtimes/{agentId}/update-all
+// Legacy alias: /api/agents/docker/hosts/{agentId}/update-all
 func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
 		return
 	}
 
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/update-all")
-	agentID := strings.TrimSpace(trimmedPath)
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/update-all")
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -625,16 +630,15 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 }
 
 // HandleCheckUpdates triggers an immediate update check for all containers on a container runtime.
-// POST /api/agents/docker/hosts/{agentId}/check-updates
+// POST /api/agents/docker/runtimes/{agentId}/check-updates
+// Legacy alias: /api/agents/docker/hosts/{agentId}/check-updates
 func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
 		return
 	}
 
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/check-updates")
-	agentID := strings.TrimSpace(trimmedPath)
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/check-updates")
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
