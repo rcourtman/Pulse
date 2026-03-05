@@ -32,6 +32,9 @@ import chartsApiSource from '@/api/charts.ts?raw';
 import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
+import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
+import websocketStoreSource from '@/stores/websocket.ts?raw';
+import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 
 describe('agent model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
@@ -182,6 +185,15 @@ describe('agent model guardrails', () => {
     expect(monitoringApiSource).not.toContain('hostId?: string;');
     expect(monitoringApiSource).toContain('/agents/docker/runtimes/');
     expect(monitoringApiSource).not.toContain('/agents/docker/hosts/');
+  });
+
+  it('keeps container update actions wired to agentId naming only', () => {
+    expect(containerUpdatesSource).toContain('export function syncWithAgentCommand');
+    expect(containerUpdatesSource).not.toContain('export const syncWithHostCommand');
+    expect(websocketStoreSource).toContain('syncWithAgentCommand(agentId, command as any)');
+    expect(websocketStoreSource).not.toContain('syncWithHostCommand(hostId, command as any)');
+    expect(guestRowSource).toContain('agentId={getWorkloadDockerHostId(props.guest)}');
+    expect(guestRowSource).not.toContain('hostId={getWorkloadDockerHostId(props.guest)}');
   });
 
   it('keeps chart API contract on canonical agentData naming', () => {

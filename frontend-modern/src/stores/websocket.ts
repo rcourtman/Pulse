@@ -14,7 +14,7 @@ import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
 import { eventBus } from './events';
 import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
-import { syncWithHostCommand } from './containerUpdates';
+import { syncWithAgentCommand } from './containerUpdates';
 import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
 
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
@@ -389,7 +389,7 @@ export function createWebSocketStore(url: string) {
                   const command = dockerData?.command || platformData?.command;
                   if (!command || typeof command !== 'object') return;
 
-                  const hostIds = new Set<string>([
+                  const agentIds = new Set<string>([
                     resource.id,
                     asString(dockerData?.hostSourceId) || '',
                     asString(platformData?.hostSourceId) || '',
@@ -398,9 +398,9 @@ export function createWebSocketStore(url: string) {
                       ? asString(resource?.discoveryTarget?.resourceId) || ''
                       : '',
                   ]);
-                  hostIds.forEach((hostId) => {
-                    if (hostId) {
-                      syncWithHostCommand(hostId, command as any);
+                  agentIds.forEach((agentId) => {
+                    if (agentId) {
+                      syncWithAgentCommand(agentId, command as any);
                     }
                   });
                 });

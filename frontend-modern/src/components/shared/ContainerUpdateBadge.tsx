@@ -147,7 +147,7 @@ export const UpdateIcon: Component<{ updateStatus?: DockerContainerUpdateStatus 
 
 interface UpdateButtonProps {
   updateStatus?: DockerContainerUpdateStatus;
-  hostId: string;
+  agentId: string;
   containerId: string;
   containerName: string;
   compact?: boolean;
@@ -180,7 +180,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
   const storeState = createMemo(() => {
     // Access updateStates() to create reactive dependency
     updateStates();
-    return getContainerUpdateState(props.hostId, props.containerId);
+    return getContainerUpdateState(props.agentId, props.containerId);
   });
 
   // Derived state: check store first, then external prop, then local state
@@ -209,7 +209,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     if (stored && (stored.state === 'queued' || stored.state === 'updating')) {
       // If the container no longer has an update available, the update succeeded!
       if (props.updateStatus?.updateAvailable === false) {
-        markContainerUpdateSuccess(props.hostId, props.containerId);
+        markContainerUpdateSuccess(props.agentId, props.containerId);
       }
     }
   });
@@ -234,12 +234,12 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     if (state === 'confirming') {
       // User confirmed, trigger update
       // Immediately set store state so it persists
-      markContainerQueued(props.hostId, props.containerId);
+      markContainerQueued(props.agentId, props.containerId);
       setLocalState('idle'); // Reset local state
 
       try {
         await MonitoringAPI.updateDockerContainer(
-          props.hostId,
+          props.agentId,
           props.containerId,
           props.containerName,
         );
@@ -249,7 +249,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
       } catch (err) {
         const message = (err as Error).message || 'Failed to trigger update';
         setErrorMessage(message);
-        markContainerUpdateError(props.hostId, props.containerId, message);
+        markContainerUpdateError(props.agentId, props.containerId, message);
       }
     }
   };
@@ -259,7 +259,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     e.preventDefault();
     setLocalState('idle');
     // Also clear any store state if canceling
-    clearContainerUpdateState(props.hostId, props.containerId);
+    clearContainerUpdateState(props.agentId, props.containerId);
   };
 
   const getButtonClass = () => {

@@ -1494,7 +1494,7 @@ export function GuestRow(props: GuestRowProps) {
               <Show when={props.guest.type === 'docker' && getWorkloadDockerHostId(props.guest)}>
                 <UpdateButton
                   updateStatus={props.guest.updateStatus}
-                  hostId={getWorkloadDockerHostId(props.guest)}
+                  agentId={getWorkloadDockerHostId(props.guest)}
                   containerId={props.guest.id ?? ''}
                   containerName={props.guest.name}
                   compact={true}

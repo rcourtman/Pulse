@@ -18,41 +18,41 @@ describe('containerUpdates store lifecycle', () => {
   it('auto-clears success status after delay', async () => {
     const store = await loadStore();
 
-    store.markContainerUpdating('host-1', 'container-1', 'cmd-1');
-    store.markContainerUpdateSuccess('host-1', 'container-1');
+    store.markContainerUpdating('agent-1', 'container-1', 'cmd-1');
+    store.markContainerUpdateSuccess('agent-1', 'container-1');
 
-    expect(store.getContainerUpdateState('host-1', 'container-1')?.state).toBe('success');
+    expect(store.getContainerUpdateState('agent-1', 'container-1')?.state).toBe('success');
 
     vi.advanceTimersByTime(5000);
 
-    expect(store.getContainerUpdateState('host-1', 'container-1')).toBeUndefined();
+    expect(store.getContainerUpdateState('agent-1', 'container-1')).toBeUndefined();
   });
 
   it('does not clear a newer update when an older success timer fires', async () => {
     const store = await loadStore();
 
-    store.markContainerUpdating('host-1', 'container-1', 'cmd-1');
-    store.markContainerUpdateSuccess('host-1', 'container-1');
+    store.markContainerUpdating('agent-1', 'container-1', 'cmd-1');
+    store.markContainerUpdateSuccess('agent-1', 'container-1');
 
     vi.advanceTimersByTime(1000);
-    store.markContainerUpdating('host-1', 'container-1', 'cmd-2');
+    store.markContainerUpdating('agent-1', 'container-1', 'cmd-2');
 
     vi.advanceTimersByTime(4000);
 
-    expect(store.getContainerUpdateState('host-1', 'container-1')?.state).toBe('updating');
+    expect(store.getContainerUpdateState('agent-1', 'container-1')?.state).toBe('updating');
   });
 
   it('does not clear a newer queued update when an older error timer fires', async () => {
     const store = await loadStore();
 
-    store.markContainerUpdating('host-1', 'container-1', 'cmd-1');
-    store.markContainerUpdateError('host-1', 'container-1', 'failed');
+    store.markContainerUpdating('agent-1', 'container-1', 'cmd-1');
+    store.markContainerUpdateError('agent-1', 'container-1', 'failed');
 
     vi.advanceTimersByTime(1000);
-    store.markContainerQueued('host-1', 'container-1', 'cmd-2');
+    store.markContainerQueued('agent-1', 'container-1', 'cmd-2');
 
     vi.advanceTimersByTime(9000);
 
-    expect(store.getContainerUpdateState('host-1', 'container-1')?.state).toBe('queued');
+    expect(store.getContainerUpdateState('agent-1', 'container-1')?.state).toBe('queued');
   });
 });
