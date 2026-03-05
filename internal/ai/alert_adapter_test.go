@@ -91,8 +91,8 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 	if len(gotActive) != 2 {
 		t.Fatalf("GetActiveAlerts = %d, want 2", len(gotActive))
 	}
-	if gotActive[0].ResourceType != "agent" {
-		t.Fatalf("ResourceType = %q, want agent", gotActive[0].ResourceType)
+	if gotActive[0].ResourceType != "node" {
+		t.Fatalf("ResourceType = %q, want node", gotActive[0].ResourceType)
 	}
 	if gotActive[1].Duration == "" {
 		t.Fatalf("expected Duration to be populated")
@@ -163,21 +163,22 @@ func TestNormalizeAlertResourceType(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{name: "vm legacy guest", input: "guest", expected: "vm"},
-		{name: "vm qemu", input: "qemu", expected: "vm"},
-		{name: "system container lxc", input: "lxc", expected: "system-container"},
+		{name: "vm legacy guest rejected", input: "guest", expected: ""},
+		{name: "vm qemu rejected", input: "qemu", expected: ""},
+		{name: "system container lxc rejected", input: "lxc", expected: ""},
 		{name: "system container oci", input: "oci-container", expected: "system-container"},
-		{name: "app container docker", input: "docker", expected: "app-container"},
-		{name: "app container docker service", input: "docker-service", expected: "app-container"},
+		{name: "app container canonical", input: "app-container", expected: "app-container"},
+		{name: "app container docker rejected", input: "docker", expected: ""},
+		{name: "app container docker service rejected", input: "docker-service", expected: ""},
 		{name: "agent host alias rejected", input: "host", expected: ""},
-		{name: "agent node", input: "node", expected: "agent"},
+		{name: "node canonical", input: "node", expected: "node"},
 		{name: "docker host alias rejected", input: "docker_host", expected: ""},
 		{name: "k8s alias", input: "k8s-cluster", expected: "k8s-cluster"},
 		{name: "legacy system_container alias rejected", input: "system_container", expected: ""},
 		{name: "legacy docker_container alias rejected", input: "docker_container", expected: ""},
 		{name: "legacy docker_service alias rejected", input: "docker_service", expected: ""},
 		{name: "legacy kubernetes_cluster alias rejected", input: "kubernetes_cluster", expected: ""},
-		{name: "trim and case normalize", input: "  DOCKER-SERVICE  ", expected: "app-container"},
+		{name: "trim and case normalize rejected", input: "  DOCKER-SERVICE  ", expected: ""},
 		{name: "unknown passthrough", input: "storage", expected: "storage"},
 	}
 

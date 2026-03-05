@@ -106,7 +106,8 @@ func TestCanonicalFindingResourceType(t *testing.T) {
 		in   string
 		want string
 	}{
-		{in: "guest", want: "vm"},
+		{in: "guest", want: ""},
+		{in: "vm", want: "vm"},
 		{in: "system_container", want: ""},
 		{in: "docker_container", want: ""},
 		{in: "docker_host", want: ""},

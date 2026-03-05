@@ -509,21 +509,21 @@ func canonicalPatrolScopeResourceType(resourceType string) string {
 		return ""
 	}
 	switch normalized {
-	case "guest", "qemu", "vm":
+	case "vm":
 		return "vm"
-	case "container", "lxc", "system-container":
+	case "system-container":
 		return "system-container"
-	case "docker", "docker-container", "app-container":
+	case "app-container":
 		return "app-container"
 	case "docker-host":
 		return "docker-host"
-	case "k8s", "kubernetes", "k8s-cluster", "kubernetes-cluster":
+	case "k8s-cluster":
 		return "k8s-cluster"
 	case "agent":
 		return "agent"
 	case "node":
 		return "node"
-	case "docker_service", "dockerhost":
+	case "guest", "qemu", "container", "lxc", "docker", "docker-container", "k8s", "kubernetes", "kubernetes-cluster", "docker_service", "dockerhost":
 		return ""
 	default:
 		return normalized
