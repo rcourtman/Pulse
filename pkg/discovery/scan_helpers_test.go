@@ -126,7 +126,7 @@ func TestBuildEnvironmentInfoCopiesData(t *testing.T) {
 	if info == nil {
 		t.Fatal("expected environment info, got nil")
 	}
-	if info.Type != "docker_bridge" || info.Confidence != 0.75 {
+	if info.Type != "docker-bridge" || info.Confidence != 0.75 {
 		t.Fatalf("unexpected info: %+v", info)
 	}
 	if len(info.Warnings) != 1 || info.Warnings[0] != "warning-one" {

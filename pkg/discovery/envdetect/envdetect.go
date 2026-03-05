@@ -85,13 +85,13 @@ func (e Environment) String() string {
 	case Native:
 		return "native"
 	case DockerHost:
-		return "docker_host"
+		return "docker-host"
 	case DockerBridge:
-		return "docker_bridge"
+		return "docker-bridge"
 	case LXCPrivileged:
-		return "lxc_privileged"
+		return "lxc-privileged"
 	case LXCUnprivileged:
-		return "lxc_unprivileged"
+		return "lxc-unprivileged"
 	default:
 		return "unknown"
 	}
@@ -391,7 +391,7 @@ func detectLXCEnvironment(profile *EnvironmentProfile, probe environmentProbe) (
 
 		profile.Type = LXCPrivileged
 		profile.Confidence = 0.9
-		profile.Metadata["lxc_privileged"] = "true"
+		profile.Metadata["lxc-privileged"] = "true"
 		profile.Metadata["interface_count"] = strconv.Itoa(len(containerSubnets))
 
 		profile.Phases = append(profile.Phases, SubnetPhase{
@@ -407,7 +407,7 @@ func detectLXCEnvironment(profile *EnvironmentProfile, probe environmentProbe) (
 	// Unprivileged container.
 	profile.Type = LXCUnprivileged
 	profile.Confidence = 0.85
-	profile.Metadata["lxc_privileged"] = "false"
+	profile.Metadata["lxc-privileged"] = "false"
 
 	if len(containerSubnets) > 0 {
 		profile.Phases = append(profile.Phases, SubnetPhase{

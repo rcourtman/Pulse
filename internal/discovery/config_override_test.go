@@ -267,25 +267,49 @@ func TestEnvironmentFromOverride(t *testing.T) {
 			wantOK:  true,
 		},
 		{
-			name:    "docker_host",
+			name:    "docker-host",
+			value:   "docker-host",
+			wantEnv: envdetect.DockerHost,
+			wantOK:  true,
+		},
+		{
+			name:    "docker-bridge",
+			value:   "docker-bridge",
+			wantEnv: envdetect.DockerBridge,
+			wantOK:  true,
+		},
+		{
+			name:    "lxc-privileged",
+			value:   "lxc-privileged",
+			wantEnv: envdetect.LXCPrivileged,
+			wantOK:  true,
+		},
+		{
+			name:    "lxc-unprivileged",
+			value:   "lxc-unprivileged",
+			wantEnv: envdetect.LXCUnprivileged,
+			wantOK:  true,
+		},
+		{
+			name:    "docker_host alias",
 			value:   "docker_host",
 			wantEnv: envdetect.DockerHost,
 			wantOK:  true,
 		},
 		{
-			name:    "docker_bridge",
+			name:    "docker_bridge alias",
 			value:   "docker_bridge",
 			wantEnv: envdetect.DockerBridge,
 			wantOK:  true,
 		},
 		{
-			name:    "lxc_privileged",
+			name:    "lxc_privileged alias",
 			value:   "lxc_privileged",
 			wantEnv: envdetect.LXCPrivileged,
 			wantOK:  true,
 		},
 		{
-			name:    "lxc_unprivileged",
+			name:    "lxc_unprivileged alias",
 			value:   "lxc_unprivileged",
 			wantEnv: envdetect.LXCUnprivileged,
 			wantOK:  true,
@@ -375,7 +399,7 @@ func TestApplyConfigToProfileOverridesAndPolicies(t *testing.T) {
 	}
 
 	cfg := config.DiscoveryConfig{
-		EnvironmentOverride: "docker_bridge",
+		EnvironmentOverride: "docker-bridge",
 		SubnetBlocklist:     []string{"192.168.0.0/24"},
 		SubnetAllowlist:     []string{"10.0.0.0/24", "192.168.0.0/24", "invalid"},
 		MaxHostsPerScan:     10,

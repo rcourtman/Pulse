@@ -646,7 +646,7 @@ func TestCopyMetadata(t *testing.T) {
 		input := map[string]string{
 			"key1":        "value1",
 			"key2":        "value2",
-			"environment": "docker_bridge",
+			"environment": "docker-bridge",
 		}
 		result := copyMetadata(input)
 
@@ -659,8 +659,8 @@ func TestCopyMetadata(t *testing.T) {
 		if result["key2"] != "value2" {
 			t.Errorf("key2 = %q, want %q", result["key2"], "value2")
 		}
-		if result["environment"] != "docker_bridge" {
-			t.Errorf("environment = %q, want %q", result["environment"], "docker_bridge")
+		if result["environment"] != "docker-bridge" {
+			t.Errorf("environment = %q, want %q", result["environment"], "docker-bridge")
 		}
 	})
 
@@ -1043,7 +1043,7 @@ func TestCloneProfile(t *testing.T) {
 			Type: envdetect.DockerBridge,
 			Phases: []envdetect.SubnetPhase{
 				{
-					Name:       "docker_bridge",
+					Name:       "docker-bridge",
 					Subnets:    []net.IPNet{*subnet},
 					Confidence: 0.85,
 					Priority:   1,
@@ -1055,8 +1055,8 @@ func TestCloneProfile(t *testing.T) {
 		if len(result.Phases) != 1 {
 			t.Fatalf("Phases length = %d, want 1", len(result.Phases))
 		}
-		if result.Phases[0].Name != "docker_bridge" {
-			t.Errorf("Phases[0].Name = %q, want docker_bridge", result.Phases[0].Name)
+		if result.Phases[0].Name != "docker-bridge" {
+			t.Errorf("Phases[0].Name = %q, want docker-bridge", result.Phases[0].Name)
 		}
 
 		// Modify clone
@@ -1065,7 +1065,7 @@ func TestCloneProfile(t *testing.T) {
 		result.Phases[0].Subnets[0] = *newSubnet
 
 		// Original should be unchanged
-		if input.Phases[0].Name != "docker_bridge" {
+		if input.Phases[0].Name != "docker-bridge" {
 			t.Errorf("original Phases[0].Name was modified: got %q", input.Phases[0].Name)
 		}
 		if input.Phases[0].Subnets[0].String() != "172.17.0.0/16" {
