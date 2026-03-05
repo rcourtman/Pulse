@@ -47,7 +47,7 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 	// Header with service info
 	sb.WriteString(fmt.Sprintf("### %s (%s)\n", d.ServiceName, d.ID))
 	sb.WriteString(fmt.Sprintf("- **Type:** %s\n", d.ResourceType))
-	sb.WriteString(fmt.Sprintf("- **Host:** %s\n", firstNonEmpty(d.Hostname, d.TargetID, d.HostID)))
+	sb.WriteString(fmt.Sprintf("- **Target:** %s\n", firstNonEmpty(d.Hostname, d.TargetID, d.HostID)))
 
 	if d.ServiceVersion != "" {
 		sb.WriteString(fmt.Sprintf("- **Version:** %s\n", d.ServiceVersion))
@@ -190,13 +190,13 @@ func formatScopeDiscoverySummary(d *ResourceDiscovery) string {
 		base = fmt.Sprintf("%s %s", base, version)
 	}
 
-	host := firstNonEmpty(d.Hostname, d.HostID)
+	target := firstNonEmpty(d.Hostname, d.TargetID, d.HostID)
 	meta := strings.TrimSpace(string(d.ResourceType))
-	if host != "" {
+	if target != "" {
 		if meta != "" {
-			meta = fmt.Sprintf("%s on %s", meta, host)
+			meta = fmt.Sprintf("%s on %s", meta, target)
 		} else {
-			meta = host
+			meta = target
 		}
 	}
 	if meta != "" {
@@ -275,7 +275,7 @@ func FormatForRemediation(d *ResourceDiscovery) string {
 	sb.WriteString("## Resource Context for Remediation\n\n")
 
 	sb.WriteString(fmt.Sprintf("**Resource:** %s (%s)\n", d.ServiceName, d.ID))
-	sb.WriteString(fmt.Sprintf("**Type:** %s on %s\n\n", d.ResourceType, d.Hostname))
+	sb.WriteString(fmt.Sprintf("**Type:** %s on %s\n\n", d.ResourceType, firstNonEmpty(d.Hostname, d.TargetID, d.HostID)))
 
 	// CLI access is most critical
 	if d.CLIAccess != "" {
