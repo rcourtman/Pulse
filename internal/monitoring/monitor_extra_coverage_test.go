@@ -672,6 +672,66 @@ func TestMonitor_BuildBroadcastFrontendState_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
+	m := &Monitor{
+		state: models.NewState(),
+	}
+
+	m.state.UpdateVMs([]models.VM{
+		{ID: "vm-1", Instance: "pve1", VMID: 101, Name: "vm1"},
+		{ID: "vm-2", Instance: "pve2", VMID: 202, Name: "vm2"},
+	})
+	m.state.UpdateContainers([]models.Container{
+		{ID: "ct-1", Instance: "pve1", VMID: 111, Name: "ct1", Type: "oci"},
+		{ID: "ct-2", Instance: "pve1", VMID: 112, Name: "ct2", Type: "lxc"},
+		{ID: "ct-3", Instance: "pve2", VMID: 211, Name: "ct3", Type: "oci"},
+	})
+	m.state.UpsertHost(models.Host{ID: "host-1", LinkedVMID: "vm-1", Status: "online", Memory: models.Memory{Total: 1024}})
+	m.state.UpsertHost(models.Host{ID: "host-2", LinkedVMID: "vm-2", Status: "offline", Memory: models.Memory{Total: 1024}})
+	m.state.UpsertHost(models.Host{ID: "host-3", LinkedVMID: "vm-3", Status: "online", Memory: models.Memory{Total: 0}})
+
+	prev := m.previousGuestContextForInstance("pve1")
+
+	if len(prev.vms) != 1 || prev.vms[0].ID != "vm-1" {
+		t.Fatalf("expected only pve1 VMs, got %#v", prev.vms)
+	}
+	if len(prev.containers) != 2 {
+		t.Fatalf("expected only pve1 containers, got %#v", prev.containers)
+	}
+	if !prev.containerOCIByVMID[111] {
+		t.Fatalf("expected OCI container VMID 111 to be tracked, got %#v", prev.containerOCIByVMID)
+	}
+	if prev.containerOCIByVMID[112] || prev.containerOCIByVMID[211] {
+		t.Fatalf("unexpected OCI classification leakage: %#v", prev.containerOCIByVMID)
+	}
+	if len(prev.hostAgentsByVMID) != 1 || prev.hostAgentsByVMID["vm-1"].ID != "host-1" {
+		t.Fatalf("expected only online linked host with memory to be tracked, got %#v", prev.hostAgentsByVMID)
+	}
+}
+
+func TestMonitor_PreviousNodesForInstance_Extra(t *testing.T) {
+	m := &Monitor{
+		state: models.NewState(),
+	}
+
+	m.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Instance: "pve1", Name: "a", Memory: models.Memory{Total: 100}},
+		{ID: "node-2", Instance: "pve2", Name: "b", Memory: models.Memory{Total: 200}},
+	})
+
+	prevNodeMemory, prevNodes := m.previousNodesForInstance("pve1")
+
+	if len(prevNodes) != 1 || prevNodes[0].ID != "node-1" {
+		t.Fatalf("expected only pve1 nodes, got %#v", prevNodes)
+	}
+	if mem, ok := prevNodeMemory["node-1"]; !ok || mem.Total != 100 {
+		t.Fatalf("expected node memory for node-1, got %#v", prevNodeMemory)
+	}
+	if _, ok := prevNodeMemory["node-2"]; ok {
+		t.Fatalf("expected node-2 to be filtered out, got %#v", prevNodeMemory)
+	}
+}
+
 func TestMonitor_MoreUtilities_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),

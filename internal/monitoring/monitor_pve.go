@@ -484,17 +484,7 @@ func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName st
 }
 
 func (m *Monitor) snapshotPrevNodes(instanceName string) (map[string]models.Memory, []models.Node) {
-	prevState := m.GetState()
-	prevNodeMemory := make(map[string]models.Memory)
-	prevInstanceNodes := make([]models.Node, 0)
-	for _, existingNode := range prevState.Nodes {
-		if existingNode.Instance != instanceName {
-			continue
-		}
-		prevNodeMemory[existingNode.ID] = existingNode.Memory
-		prevInstanceNodes = append(prevInstanceNodes, existingNode)
-	}
-	return prevNodeMemory, prevInstanceNodes
+	return m.previousNodesForInstance(instanceName)
 }
 
 func (m *Monitor) pollPVENodesParallel(

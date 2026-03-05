@@ -26,24 +26,13 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		return false
 	}
 
-	// Seed OCI classification from previous state so we never "downgrade" to LXC
-	// if container config fetching intermittently fails (permissions or transient API errors).
-	prevState := m.GetState()
-	prevContainerIsOCI := seedPrevContainerOCI(instanceName, prevState)
-	// Build a lookup map from VM guest ID -> linked host agent.
-	// When a Pulse agent runs inside a VM, it reads /proc/meminfo directly
-	// and gets accurate MemAvailable (excluding page cache). We use this as
-	// a memory fallback before the inflated status.Mem value. Refs: #1270
-	vmIDToHostAgent := make(map[string]models.Host)
-	for _, h := range prevState.Hosts {
-		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
-			vmIDToHostAgent[h.LinkedVMID] = h
-		}
-	}
+	// Capture previous guest state once per poll cycle so fallback and grace-period
+	// behavior is based on a consistent pre-poll snapshot.
+	prevGuests := m.previousGuestContextForInstance(instanceName)
 
-	allVMs, allContainers := m.collectGuestsFromClusterResources(ctx, instanceName, resources, client, prevContainerIsOCI, vmIDToHostAgent)
+	allVMs, allContainers := m.collectGuestsFromClusterResources(ctx, instanceName, resources, client, prevGuests.containerOCIByVMID, prevGuests.hostAgentsByVMID)
 
-	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevState, nodeEffectiveStatus, allVMs, allContainers)
+	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevGuests.vms, prevGuests.containers, nodeEffectiveStatus, allVMs, allContainers)
 
 	// Always update state when using efficient polling path
 	// Even if arrays are empty, we need to update to clear out VMs from genuinely offline nodes

@@ -36,16 +36,10 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		}
 	}
 
-	// Build a lookup map from VM guest ID -> linked host agent.
-	// When a Pulse agent runs inside a VM, it can provide more accurate
-	// available memory than status.Mem when guest agent meminfo is incomplete.
-	vmIDToHostAgent := make(map[string]models.Host)
-	prevState := m.GetState()
-	for _, h := range prevState.Hosts {
-		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
-			vmIDToHostAgent[h.LinkedVMID] = h
-		}
-	}
+	// Capture the previous guest context once per poll cycle so fallback behavior
+	// is based on a consistent pre-poll snapshot.
+	prevGuests := m.previousGuestContextForInstance(instanceName)
+	vmIDToHostAgent := prevGuests.hostAgentsByVMID
 
 	log.Debug().
 		Str("instance", instanceName).
@@ -696,14 +690,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	// If we got ZERO VMs but had VMs before (likely cluster health issue),
 	// preserve previous VMs instead of clearing them
 	if len(allVMs) == 0 && len(nodes) > 0 {
-		prevState := m.GetState()
-		prevVMCount := 0
-		for _, vm := range prevState.VMs {
-			if vm.Instance == instanceName {
-				allVMs = append(allVMs, vm)
-				prevVMCount++
-			}
-		}
+		allVMs = append(allVMs, prevGuests.vms...)
+		prevVMCount := len(prevGuests.vms)
 		if prevVMCount > 0 {
 			log.Warn().
 				Str("instance", instanceName).

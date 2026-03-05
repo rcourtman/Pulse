@@ -8,26 +8,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func seedPrevContainerOCI(instanceName string, prevState models.StateSnapshot) map[int]bool {
-	prevContainerIsOCI := make(map[int]bool)
-	for _, ct := range prevState.Containers {
-		if ct.Instance != instanceName {
-			continue
-		}
-		if ct.VMID <= 0 {
-			continue
-		}
-		if ct.Type == "oci" || ct.IsOCI {
-			prevContainerIsOCI[ct.VMID] = true
-		}
-	}
-	return prevContainerIsOCI
-}
-
 func (m *Monitor) preserveGuestsForGracePeriod(
 	instanceName string,
 	resources []proxmox.ClusterResource,
-	prevState models.StateSnapshot,
+	prevVMs []models.VM,
+	prevContainers []models.Container,
 	nodeEffectiveStatus map[string]string,
 	allVMs []models.VM,
 	allContainers []models.Container,
@@ -36,18 +21,8 @@ func (m *Monitor) preserveGuestsForGracePeriod(
 	// The cluster/resources endpoint doesn't return VMs/containers from nodes Proxmox considers offline,
 	// but we want to keep showing them if the node is within grace period
 	// Count previous resources for this instance
-	prevVMCount := 0
-	prevContainerCount := 0
-	for _, vm := range prevState.VMs {
-		if vm.Instance == instanceName {
-			prevVMCount++
-		}
-	}
-	for _, container := range prevState.Containers {
-		if container.Instance == instanceName {
-			prevContainerCount++
-		}
-	}
+	prevVMCount := len(prevVMs)
+	prevContainerCount := len(prevContainers)
 
 	// Build map of which nodes are covered by current resources
 	nodesWithResources := make(map[string]bool)
@@ -76,16 +51,8 @@ func (m *Monitor) preserveGuestsForGracePeriod(
 			Msg("Cluster returned zero resources but had resources before - likely cluster health issue, preserving all previous resources")
 
 		// Preserve all previous VMs and containers for this instance
-		for _, vm := range prevState.VMs {
-			if vm.Instance == instanceName {
-				allVMs = append(allVMs, vm)
-			}
-		}
-		for _, container := range prevState.Containers {
-			if container.Instance == instanceName {
-				allContainers = append(allContainers, container)
-			}
-		}
+		allVMs = append(allVMs, prevVMs...)
+		allContainers = append(allContainers, prevContainers...)
 	}
 
 	// Check for nodes that are within grace period but not in cluster/resources response
@@ -99,15 +66,15 @@ func (m *Monitor) preserveGuestsForGracePeriod(
 			containersBefore := len(allContainers)
 
 			// Preserve VMs from this node
-			for _, vm := range prevState.VMs {
-				if vm.Instance == instanceName && vm.Node == nodeName {
+			for _, vm := range prevVMs {
+				if vm.Node == nodeName {
 					allVMs = append(allVMs, vm)
 				}
 			}
 
 			// Preserve containers from this node
-			for _, container := range prevState.Containers {
-				if container.Instance == instanceName && container.Node == nodeName {
+			for _, container := range prevContainers {
+				if container.Node == nodeName {
 					allContainers = append(allContainers, container)
 				}
 			}

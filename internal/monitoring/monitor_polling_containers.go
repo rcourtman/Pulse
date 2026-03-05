@@ -33,21 +33,10 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		}
 	}
 
-	// Seed OCI classification from previous state so we never "downgrade" to LXC
-	// if container config fetching intermittently fails (permissions or transient API errors).
-	prevState := m.GetState()
-	prevContainerIsOCI := make(map[int]bool)
-	for _, ct := range prevState.Containers {
-		if ct.Instance != instanceName {
-			continue
-		}
-		if ct.VMID <= 0 {
-			continue
-		}
-		if ct.Type == "oci" || ct.IsOCI {
-			prevContainerIsOCI[ct.VMID] = true
-		}
-	}
+	// Capture the previous guest context once per poll cycle so fallback behavior
+	// is based on a consistent pre-poll snapshot.
+	prevGuests := m.previousGuestContextForInstance(instanceName)
+	prevContainerIsOCI := prevGuests.containerOCIByVMID
 
 	log.Debug().
 		Str("instance", instanceName).
@@ -267,14 +256,8 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 	// If we got ZERO containers but had containers before (likely cluster health issue),
 	// preserve previous containers instead of clearing them
 	if len(allContainers) == 0 && len(nodes) > 0 {
-		prevState := m.GetState()
-		prevContainerCount := 0
-		for _, container := range prevState.Containers {
-			if container.Instance == instanceName {
-				allContainers = append(allContainers, container)
-				prevContainerCount++
-			}
-		}
+		allContainers = append(allContainers, prevGuests.containers...)
+		prevContainerCount := len(prevGuests.containers)
 		if prevContainerCount > 0 {
 			log.Warn().
 				Str("instance", instanceName).
