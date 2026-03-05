@@ -159,7 +159,7 @@ func TestStartRecordingCopiesPreIncidentBuffer(t *testing.T) {
 		{Timestamp: time.Now().Add(-30 * time.Second), Metrics: map[string]float64{"cpu": 1}},
 	}
 
-	windowID := recorder.StartRecording("res-1", "db", "host", "alert", "alert-1")
+	windowID := recorder.StartRecording("res-1", "db", "agent", "alert", "alert-1")
 	window := recorder.activeWindows[windowID]
 	if window == nil {
 		t.Fatalf("expected active window %s", windowID)

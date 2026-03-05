@@ -114,7 +114,7 @@ func TestRecordSampleSkipsPreIncidentBufferOnMetricsError(t *testing.T) {
 	}
 	recorder.SetMetricsProvider(provider)
 
-	windowID := recorder.StartRecording("res-ok", "db", "host", "alert", "alert-1")
+	windowID := recorder.StartRecording("res-ok", "db", "agent", "alert", "alert-1")
 	recorder.recordSample()
 
 	window := recorder.activeWindows[windowID]

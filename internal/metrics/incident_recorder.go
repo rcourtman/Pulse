@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -385,12 +386,13 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 	windowID := generateWindowID(resourceID)
 	now := time.Now()
 	endTime := now.Add(r.config.PostIncidentWindow)
+	normalizedResourceType := normalizeIncidentResourceType(resourceType)
 
 	window := &IncidentWindow{
 		ID:           windowID,
 		ResourceID:   resourceID,
 		ResourceName: resourceName,
-		ResourceType: resourceType,
+		ResourceType: normalizedResourceType,
 		TriggerType:  triggerType,
 		TriggerID:    triggerID,
 		StartTime:    now.Add(-r.config.PreIncidentWindow), // Include pre-incident data
@@ -413,6 +415,14 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 		Msg("started incident recording")
 
 	return windowID
+}
+
+func normalizeIncidentResourceType(resourceType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	if canonical, ok := unifiedresources.CanonicalizeLegacyResourceTypeAlias(normalized); ok {
+		return canonical
+	}
+	return normalized
 }
 
 // StopRecording stops recording for a specific window

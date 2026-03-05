@@ -124,17 +124,17 @@ func TestIncidentCoordinator_OnAnomalyDetected_DuplicateAndCapacityAndStop(t *te
 	coord.SetRecorder(recorder)
 	coord.Start()
 
-	coord.OnAnomalyDetected("resource-anomaly", "host", "cpu", "critical")
+	coord.OnAnomalyDetected("resource-anomaly", "agent", "cpu", "critical")
 	if got := coord.GetActiveIncidentCount(); got != 1 {
 		t.Fatalf("expected one anomaly incident, got %d", got)
 	}
 
-	coord.OnAnomalyDetected("resource-anomaly", "host", "cpu", "critical")
+	coord.OnAnomalyDetected("resource-anomaly", "agent", "cpu", "critical")
 	if got := coord.GetActiveIncidentCount(); got != 1 {
 		t.Fatalf("expected duplicate anomaly to be ignored, got %d", got)
 	}
 
-	coord.OnAnomalyDetected("resource-anomaly", "host", "memory", "warning")
+	coord.OnAnomalyDetected("resource-anomaly", "agent", "memory", "warning")
 	if got := coord.GetActiveIncidentCount(); got != 1 {
 		t.Fatalf("expected anomaly over capacity to be ignored, got %d", got)
 	}
@@ -144,8 +144,36 @@ func TestIncidentCoordinator_OnAnomalyDetected_DuplicateAndCapacityAndStop(t *te
 		t.Fatalf("expected active incidents to be cleared on stop, got %d", got)
 	}
 
-	coord.OnAnomalyDetected("resource-anomaly", "host", "cpu", "critical")
+	coord.OnAnomalyDetected("resource-anomaly", "agent", "cpu", "critical")
 	if got := coord.GetActiveIncidentCount(); got != 0 {
 		t.Fatalf("expected anomalies to be ignored while stopped, got %d", got)
+	}
+}
+
+func TestIncidentCoordinator_OnAnomalyDetected_CanonicalizesLegacyHostAlias(t *testing.T) {
+	cfg := DefaultIncidentCoordinatorConfig()
+	cfg.PostDuration = time.Minute
+
+	coord := NewIncidentCoordinator(cfg)
+
+	recCfg := metrics.DefaultIncidentRecorderConfig()
+	recorder := metrics.NewIncidentRecorder(recCfg)
+	recorder.SetMetricsProvider(&MockMetricsProvider{data: map[string]map[string]float64{
+		"resource-anomaly": {"cpu": 95},
+	}})
+	recorder.Start()
+	defer recorder.Stop()
+
+	coord.SetRecorder(recorder)
+	coord.Start()
+
+	coord.OnAnomalyDetected("resource-anomaly", "host", "cpu", "critical")
+
+	windows := recorder.GetWindowsForResource("resource-anomaly", 0)
+	if len(windows) != 1 {
+		t.Fatalf("expected one anomaly window, got %d", len(windows))
+	}
+	if windows[0].ResourceType != "agent" {
+		t.Fatalf("expected anomaly recording resource type to be canonicalized to agent, got %q", windows[0].ResourceType)
 	}
 }

@@ -182,7 +182,7 @@ func TestIncidentCoordinator_OnAnomalyDetected(t *testing.T) {
 	coord.Start()
 
 	// Start anomaly recording
-	coord.OnAnomalyDetected("res-1", "host", "cpu", "critical")
+	coord.OnAnomalyDetected("res-1", "agent", "cpu", "critical")
 
 	if coord.GetActiveIncidentCount() != 1 {
 		t.Errorf("Should start incident for anomaly, got %d", coord.GetActiveIncidentCount())

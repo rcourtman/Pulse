@@ -70,7 +70,7 @@ func TestIncidentRecorderConcurrentStartStopAndFlush(t *testing.T) {
 			<-start
 			for j := 0; j < iterations; j++ {
 				recorder.Start()
-				windowID := recorder.StartRecording("res-1", "db", "host", "alert", "a-1")
+				windowID := recorder.StartRecording("res-1", "db", "agent", "alert", "a-1")
 				recorder.recordSample()
 				recorder.StopRecording(windowID)
 				recorder.Stop()

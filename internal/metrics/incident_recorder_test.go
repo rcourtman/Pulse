@@ -99,20 +99,36 @@ func TestStartRecordingExtendsWindow(t *testing.T) {
 		PostIncidentWindow: time.Minute,
 	})
 
-	firstID := recorder.StartRecording("res-1", "db", "host", "alert", "alert-1")
+	firstID := recorder.StartRecording("res-1", "db", "agent", "alert", "alert-1")
 	firstWindow := recorder.activeWindows[firstID]
 	if firstWindow == nil {
 		t.Fatalf("expected window for %s", firstID)
 	}
 	firstEnd := *firstWindow.EndTime
 
-	secondID := recorder.StartRecording("res-1", "db", "host", "alert", "alert-2")
+	secondID := recorder.StartRecording("res-1", "db", "agent", "alert", "alert-2")
 	if secondID != firstID {
 		t.Fatalf("expected same window ID, got %s and %s", firstID, secondID)
 	}
 	secondWindow := recorder.activeWindows[secondID]
 	if secondWindow.EndTime.Before(firstEnd) {
 		t.Fatalf("expected end time to extend or remain, got %s before %s", secondWindow.EndTime, firstEnd)
+	}
+}
+
+func TestStartRecordingCanonicalizesLegacyHostAlias(t *testing.T) {
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{
+		PreIncidentWindow:  time.Minute,
+		PostIncidentWindow: time.Minute,
+	})
+
+	windowID := recorder.StartRecording("res-1", "db", "host", "alert", "alert-1")
+	window := recorder.activeWindows[windowID]
+	if window == nil {
+		t.Fatalf("expected window for %s", windowID)
+	}
+	if window.ResourceType != "agent" {
+		t.Fatalf("expected legacy host alias to canonicalize to agent, got %q", window.ResourceType)
 	}
 }
 
@@ -136,7 +152,7 @@ func TestRecordSampleBuffersAndCleansUp(t *testing.T) {
 		{Timestamp: time.Now().Add(-time.Minute), Metrics: map[string]float64{"cpu": 0.5}},
 	}
 
-	windowID := recorder.StartRecording("res-1", "db", "host", "alert", "alert-1")
+	windowID := recorder.StartRecording("res-1", "db", "agent", "alert", "alert-1")
 	recorder.recordSample()
 
 	window := recorder.activeWindows[windowID]
@@ -171,7 +187,7 @@ func TestStopRecordingCompletesWindow(t *testing.T) {
 	}
 	recorder.SetMetricsProvider(provider)
 
-	windowID := recorder.StartRecording("res-1", "db", "host", "alert", "alert-1")
+	windowID := recorder.StartRecording("res-1", "db", "agent", "alert", "alert-1")
 	recorder.recordSample()
 	recorder.StopRecording(windowID)
 
