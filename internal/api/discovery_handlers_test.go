@@ -97,7 +97,9 @@ func TestHandleListDiscoveries(t *testing.T) {
 	assert.Equal(t, float64(1), result["total"])
 	discoveries := result["discoveries"].([]interface{})
 	assert.Len(t, discoveries, 1)
-	assert.Equal(t, "Test Service", discoveries[0].(map[string]interface{})["service_name"])
+	first := discoveries[0].(map[string]interface{})
+	assert.Equal(t, "Test Service", first["service_name"])
+	assert.NotContains(t, first, "host_id")
 }
 
 func TestHandleGetDiscovery(t *testing.T) {
@@ -485,6 +487,7 @@ func TestHandleGetDiscovery_EmitsCanonicalAgentID(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
 	assert.Equal(t, "agent-1", body["target_id"])
 	assert.Equal(t, "agent-1", body["agent_id"])
+	assert.NotContains(t, body, "host_id")
 }
 
 // Additional test to cover service not configured case

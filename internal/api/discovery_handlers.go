@@ -251,6 +251,34 @@ func ensureDiscoveryCanonicalIDs(d *servicediscovery.ResourceDiscovery) *service
 	return &enriched
 }
 
+func stripLegacyHostID(value any) map[string]any {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to marshal discovery response payload")
+		return map[string]any{}
+	}
+
+	var response map[string]any
+	if err := json.Unmarshal(payload, &response); err != nil {
+		log.Warn().Err(err).Msg("Failed to unmarshal discovery response payload")
+		return map[string]any{}
+	}
+	delete(response, "host_id")
+	return response
+}
+
+func discoverySummaryResponse(d *servicediscovery.ResourceDiscovery) map[string]any {
+	canonical := ensureDiscoveryCanonicalIDs(d)
+	if canonical == nil {
+		return map[string]any{}
+	}
+	return stripLegacyHostID(canonical.ToSummary())
+}
+
+func discoveryDetailResponse(d *servicediscovery.ResourceDiscovery) map[string]any {
+	return stripLegacyHostID(ensureDiscoveryCanonicalIDs(d))
+}
+
 // HandleListDiscoveries handles GET /api/discovery
 func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
@@ -266,9 +294,9 @@ func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http
 	}
 
 	// Convert to summaries for list view
-	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
+	summaries := make([]map[string]any, 0, len(discoveries))
 	for _, d := range discoveries {
-		summaries = append(summaries, d.ToSummary())
+		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
 	writeDiscoveryJSON(w, map[string]any{
@@ -316,9 +344,7 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
-	discovery = ensureDiscoveryCanonicalIDs(discovery)
-
-	writeDiscoveryJSON(w, discovery)
+	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))
 }
 
 // HandleTriggerDiscovery handles POST /api/discovery/{type}/{target}/{id}
@@ -358,7 +384,6 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		TargetID:     targetID,
-		HostID:       targetID,
 		Hostname:     reqBody.Hostname,
 		Force:        reqBody.Force,
 	}
@@ -383,9 +408,7 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
-	discovery = ensureDiscoveryCanonicalIDs(discovery)
-
-	writeDiscoveryJSON(w, discovery)
+	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))
 }
 
 // HandleUpdateNotes handles PUT /api/discovery/{type}/{target}/{id}/notes
@@ -446,9 +469,7 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 	if !isAdmin {
 		discovery = redactSensitiveFields(discovery)
 	}
-	discovery = ensureDiscoveryCanonicalIDs(discovery)
-
-	writeDiscoveryJSON(w, discovery)
+	writeDiscoveryJSON(w, discoveryDetailResponse(discovery))
 }
 
 // HandleDeleteDiscovery handles DELETE /api/discovery/{type}/{target}/{id}
@@ -623,9 +644,9 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
+	summaries := make([]map[string]any, 0, len(discoveries))
 	for _, d := range discoveries {
-		summaries = append(summaries, d.ToSummary())
+		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
 	writeDiscoveryJSON(w, map[string]any{
@@ -652,9 +673,9 @@ func (h *DiscoveryHandlers) HandleListByAgent(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
+	summaries := make([]map[string]any, 0, len(discoveries))
 	for _, d := range discoveries {
-		summaries = append(summaries, d.ToSummary())
+		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
 	writeDiscoveryJSON(w, map[string]any{
