@@ -218,9 +218,6 @@ func TestStore_GetLegacyHostIDOnlyPayloadBackfillsCanonicalTarget(t *testing.T) 
 	if got.TargetID != "legacy-host" {
 		t.Fatalf("expected TargetID legacy-host, got %q", got.TargetID)
 	}
-	if got.HostID != "legacy-host" {
-		t.Fatalf("expected HostID legacy-host, got %q", got.HostID)
-	}
 }
 
 func TestStore_CryptoRoundTripAndPaths(t *testing.T) {
@@ -235,7 +232,7 @@ func TestStore_CryptoRoundTripAndPaths(t *testing.T) {
 		ID:           id,
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "app/name",
-		HostID:       "host1",
+		TargetID:     "host1",
 		ServiceName:  "App",
 	}
 	if err := store.Save(d); err != nil {
@@ -281,7 +278,7 @@ func TestStore_NeedsRefreshAndGetMultiple(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeAgent, "host1", "host1"),
 		ResourceType: ResourceTypeAgent,
 		ResourceID:   "host1",
-		HostID:       "host1",
+		TargetID:     "host1",
 		ServiceName:  "Host",
 	}
 	if err := store.Save(d); err != nil {
@@ -347,7 +344,7 @@ func TestStore_ErrorsAndListSkips(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "web"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		ServiceName:  "Web",
 		UserSecrets:  map[string]string{"token": "abc"},
 	}
@@ -548,7 +545,7 @@ func TestStore_SaveAndGet_ReturnsDefensiveCopies(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "web"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		ServiceName:  "Web",
 		Facts: []DiscoveryFact{
 			{Key: "service", Value: "nginx"},
@@ -740,9 +737,9 @@ func TestStore_GetChangedResources(t *testing.T) {
 
 	// Save discoveries with matching fingerprint hashes.
 	for _, d := range []*ResourceDiscovery{
-		{ID: "docker:host1:nginx", ResourceType: ResourceTypeDocker, HostID: "host1", ResourceID: "nginx", Fingerprint: "aaa111"},
-		{ID: "lxc:node1:101", ResourceType: ResourceTypeSystemContainer, HostID: "node1", ResourceID: "101", Fingerprint: "bbb222"},
-		{ID: "vm:node1:200", ResourceType: ResourceTypeVM, HostID: "node1", ResourceID: "200", Fingerprint: "ccc333"},
+		{ID: "docker:host1:nginx", ResourceType: ResourceTypeDocker, TargetID: "host1", ResourceID: "nginx", Fingerprint: "aaa111"},
+		{ID: "lxc:node1:101", ResourceType: ResourceTypeSystemContainer, TargetID: "node1", ResourceID: "101", Fingerprint: "bbb222"},
+		{ID: "vm:node1:200", ResourceType: ResourceTypeVM, TargetID: "node1", ResourceID: "200", Fingerprint: "ccc333"},
 	} {
 		if err := store.Save(d); err != nil {
 			t.Fatalf("Save error: %v", err)
@@ -788,7 +785,7 @@ func TestStore_GetStaleResourcesUsesLastUpdatedTimestamp(t *testing.T) {
 		ID:           id,
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 	}); err != nil {
 		t.Fatalf("Save error: %v", err)
 	}
@@ -920,7 +917,7 @@ func TestStore_ListSkipsOversizedAndSymlinkDiscoveries(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "valid"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "valid",
-		HostID:       "host1",
+		TargetID:     "host1",
 		ServiceName:  "Valid",
 	}
 	if err := store.Save(valid); err != nil {
@@ -1039,14 +1036,14 @@ func TestStore_GetStaleResources(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "old"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "old",
-		HostID:       "host1",
+		TargetID:     "host1",
 		DiscoveredAt: time.Now().Add(-2 * time.Hour),
 	}
 	fresh := &ResourceDiscovery{
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "fresh"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "fresh",
-		HostID:       "host1",
+		TargetID:     "host1",
 		DiscoveredAt: time.Now().Add(-5 * time.Minute),
 	}
 	for _, d := range []*ResourceDiscovery{old, fresh} {

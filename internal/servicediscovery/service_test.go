@@ -1306,12 +1306,12 @@ func TestService_Redirection(t *testing.T) {
 	}
 
 	// The discovery should be associated with the AGENT ID, not the NODE ID
-	expectedID := MakeResourceID(ResourceTypeAgent, "agent-pve1", "agent-pve1") // Host resources usually have HostID == ResourceID
+	expectedID := MakeResourceID(ResourceTypeAgent, "agent-pve1", "agent-pve1") // Host resources usually have TargetID == ResourceID
 	if discovery.ID != expectedID {
 		t.Errorf("DiscoverResource ID mismatch. Got %s, want %s (should have redirected to agent ID)", discovery.ID, expectedID)
 	}
 	if discovery.TargetID != "agent-pve1" {
-		t.Errorf("DiscoverResource HostID mismatch. Got %s, want agent-pve1", discovery.TargetID)
+		t.Errorf("DiscoverResource TargetID mismatch. Got %s, want agent-pve1", discovery.TargetID)
 	}
 
 	// 1b. Hostname aliases should canonicalize to the same host agent ID and

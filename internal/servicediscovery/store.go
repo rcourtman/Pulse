@@ -133,12 +133,6 @@ func normalizeDiscovery(d *ResourceDiscovery) {
 	}
 	d.ResourceType = canonicalStoredResourceType(d.ResourceType)
 	d.ID = canonicalStoredResourceID(d.ID)
-	if strings.TrimSpace(d.HostID) == "" && strings.TrimSpace(d.TargetID) != "" {
-		d.HostID = d.TargetID
-	}
-	if strings.TrimSpace(d.TargetID) == "" && strings.TrimSpace(d.HostID) != "" {
-		d.TargetID = d.HostID
-	}
 	if d.ResourceType == ResourceTypeAgent && strings.TrimSpace(d.AgentID) == "" {
 		d.AgentID = d.TargetID
 	}
@@ -172,13 +166,13 @@ func unmarshalStoredDiscovery(data []byte, discovery *ResourceDiscovery) error {
 	if err := json.Unmarshal(data, discovery); err != nil {
 		return err
 	}
-	if strings.TrimSpace(discovery.HostID) == "" {
+	if strings.TrimSpace(discovery.TargetID) == "" {
 		legacyHostID, err := extractLegacyStringField(data, "host_id")
 		if err != nil {
 			return err
 		}
 		if legacyHostID != "" {
-			discovery.HostID = legacyHostID
+			discovery.TargetID = legacyHostID
 		}
 	}
 	return nil

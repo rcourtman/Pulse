@@ -78,7 +78,7 @@ func TestHandleListDiscoveries(t *testing.T) {
 		ID:           "test:1",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "100",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Test Service",
 	}
 	require.NoError(t, store.Save(discovery))
@@ -109,7 +109,7 @@ func TestHandleGetDiscovery(t *testing.T) {
 		ID:           "vm:node1:100",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "100",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Test Service",
 		UserSecrets:  map[string]string{"key": "secret"},
 	}
@@ -149,7 +149,7 @@ func TestHandleGetDiscovery_SessionAdminRequiresConfiguredAdminUser(t *testing.T
 		ID:           "vm:node1:101",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "101",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Session Test Service",
 		UserSecrets:  map[string]string{"key": "secret"},
 	}
@@ -196,7 +196,7 @@ func TestHandleGetDiscovery_TokenAdminRequiresSettingsWriteScope(t *testing.T) {
 		ID:           "vm:node1:102",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "102",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Token Test Service",
 		UserSecrets:  map[string]string{"key": "secret"},
 	}
@@ -230,7 +230,7 @@ func TestHandleGetDiscovery_ForgedBasicHeaderDoesNotBypassAdmin(t *testing.T) {
 		ID:           "vm:node1:103",
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "103",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Forged Basic Test",
 		UserSecrets:  map[string]string{"key": "secret"},
 	}
@@ -292,7 +292,7 @@ func TestHandleUpdateNotes(t *testing.T) {
 		ID:           id,
 		ResourceType: servicediscovery.ResourceTypeVM,
 		ResourceID:   "100",
-		HostID:       "node1",
+		TargetID:     "node1",
 		ServiceName:  "Old Name",
 	}
 	require.NoError(t, store.Save(discovery))
@@ -321,7 +321,7 @@ func TestHandleDeleteDiscovery(t *testing.T) {
 	h, svc, store := setupDiscoveryHandlers(t)
 
 	id := "vm:node1:100"
-	discovery := &servicediscovery.ResourceDiscovery{ID: id, ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "100", HostID: "node1"}
+	discovery := &servicediscovery.ResourceDiscovery{ID: id, ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "100", TargetID: "node1"}
 	require.NoError(t, store.Save(discovery))
 
 	req := httptest.NewRequest("DELETE", "/api/discovery/vm/node1/100", nil)
@@ -375,8 +375,8 @@ func TestHandleUpdateSettings(t *testing.T) {
 func TestHandleListByType(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 
-	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "h"}
-	d2 := &servicediscovery.ResourceDiscovery{ID: "lxc:2", ResourceType: servicediscovery.ResourceTypeSystemContainer, ResourceID: "2", HostID: "h"}
+	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", TargetID: "h"}
+	d2 := &servicediscovery.ResourceDiscovery{ID: "lxc:2", ResourceType: servicediscovery.ResourceTypeSystemContainer, ResourceID: "2", TargetID: "h"}
 	require.NoError(t, store.Save(d1))
 	require.NoError(t, store.Save(d2))
 
@@ -409,8 +409,8 @@ func TestHandleListByType_RejectsLegacyHostType(t *testing.T) {
 func TestHandleListByAgent(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 
-	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "node1"}
-	d2 := &servicediscovery.ResourceDiscovery{ID: "vm:2", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "2", HostID: "node2"}
+	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", TargetID: "node1"}
+	d2 := &servicediscovery.ResourceDiscovery{ID: "vm:2", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "2", TargetID: "node2"}
 	require.NoError(t, store.Save(d1))
 	require.NoError(t, store.Save(d2))
 
@@ -440,7 +440,7 @@ func TestHandleGetProgress(t *testing.T) {
 	assert.Equal(t, "not_started", res1["status"])
 
 	// Case 2: Completed (if discovery exists)
-	require.NoError(t, store.Save(&servicediscovery.ResourceDiscovery{ID: "vm:node1:100", ResourceType: "vm", ResourceID: "100", HostID: "node1"}))
+	require.NoError(t, store.Save(&servicediscovery.ResourceDiscovery{ID: "vm:node1:100", ResourceType: "vm", ResourceID: "100", TargetID: "node1"}))
 	req = httptest.NewRequest("GET", "/api/discovery/vm/node1/100/progress", nil)
 	w = httptest.NewRecorder()
 	h.HandleGetProgress(w, req)
