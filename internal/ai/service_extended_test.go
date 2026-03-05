@@ -1402,6 +1402,46 @@ func TestService_ExecuteOnAgent_NormalizesTargetTypeAndColonVMID(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteOnAgent_AcceptsSystemContainerTargetType(t *testing.T) {
+	mockAgent := agentexec.ConnectedAgent{
+		AgentID:  "agent-1",
+		Hostname: "node-1",
+	}
+
+	var capturedCmd agentexec.ExecuteCommandPayload
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{mockAgent},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			capturedCmd = cmd
+			return &agentexec.CommandResultPayload{
+				Success: true,
+				Stdout:  "ok",
+			}, nil
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	req := ExecuteRequest{
+		TargetType: "system-container",
+		TargetID:   "delly:minipc:113",
+		Context: map[string]interface{}{
+			"node": "node-1",
+		},
+	}
+
+	_, err := svc.executeOnAgent(context.Background(), req, "uptime")
+	if err != nil {
+		t.Fatalf("executeOnAgent failed: %v", err)
+	}
+
+	if capturedCmd.TargetType != "container" {
+		t.Fatalf("Expected normalized TargetType 'container', got '%s'", capturedCmd.TargetType)
+	}
+	if capturedCmd.TargetID != "113" {
+		t.Fatalf("Expected extracted TargetID '113', got '%s'", capturedCmd.TargetID)
+	}
+}
+
 func TestService_ExecuteOnAgent_RejectsAmbiguousTargetTypeGuestWithTargetID(t *testing.T) {
 	mockServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{

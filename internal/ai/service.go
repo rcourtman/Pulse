@@ -3581,7 +3581,7 @@ func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}
 	switch targetType {
 	case "agent", "node", "docker", "docker_host", "kubernetes_cluster", "kubernetes", "k8s":
 		return "agent", nil
-	case "container":
+	case "container", "system-container", "system_container":
 		return "container", nil
 	case "vm":
 		return "vm", nil
@@ -3589,14 +3589,14 @@ func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}
 		if strings.TrimSpace(targetID) == "" && hasExplicitHostRoutingContext(ctx) {
 			return "agent", nil
 		}
-		return "", fmt.Errorf("target_type is required (agent, container, or vm)")
+		return "", fmt.Errorf("target_type is required (agent, system-container/container, or vm)")
 	case "guest":
 		if strings.TrimSpace(targetID) == "" {
 			return "agent", nil
 		}
-		return "", fmt.Errorf("target_type 'guest' is ambiguous with target_id; use 'container' or 'vm'")
+		return "", fmt.Errorf("target_type 'guest' is ambiguous with target_id; use 'system-container'/'container' or 'vm'")
 	default:
-		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, container, vm)", raw)
+		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container/container, vm)", raw)
 	}
 }
 
