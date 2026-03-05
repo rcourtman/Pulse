@@ -140,7 +140,6 @@ export function useInfrastructureSettingsState({
     () =>
       byType('vm').length +
       byType('system-container').length +
-      byType('container').length +
       byType('oci-container').length,
   );
 

@@ -405,7 +405,7 @@ export function useThresholdsData(
   const dockerContainersByHostId = createMemo(() => {
     const map = new Map<string, Resource[]>();
     (props.allResources ?? []).forEach((resource) => {
-      if (resource.type !== 'docker-container') return;
+      if (resource.type !== 'app-container') return;
       const parentId = resource.parentId;
       if (!parentId) return;
       const existing = map.get(parentId);

@@ -445,7 +445,6 @@ export function Alerts() {
       const vmResources = byType('vm');
       const containerResources = [
         ...byType('system-container'),
-        ...byType('container'),
         ...byType('oci-container'),
       ];
       const storageResources = allResources().filter(
@@ -483,7 +482,7 @@ export function Alerts() {
           dockerHostMap.set(id, host);
         });
         const containers = children(host.id).filter(
-          (r) => r.type === 'app-container' || r.type === 'docker-container',
+          (r) => r.type === 'app-container',
         );
         containers.forEach((container) => {
           const shortId = container.id.includes('/')
@@ -1229,7 +1228,6 @@ export function Alerts() {
     () => [
       ...byType('vm'),
       ...byType('system-container'),
-      ...byType('container'),
       ...byType('oci-container'),
     ],
     [],

@@ -445,13 +445,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     const nodes = byType('node');
     const vms = byType('vm');
-    const containers = [
-      ...byType('system-container'),
-      ...byType('container'),
-      ...byType('oci-container'),
-    ];
+    const containers = [...byType('system-container'), ...byType('oci-container')];
     const dockerHosts = byType('docker-host');
-    const dockerContainers = [...byType('app-container'), ...byType('docker-container')];
+    const dockerContainers = byType('app-container');
     const agentResources = allResources().filter(
       (resource) =>
         (resource.type === 'node' ||
