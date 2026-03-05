@@ -199,7 +199,7 @@ func TestDockerAgentHandlers_HandleDockerHostActions(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/allow-reenroll", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/allow-reenroll", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleDockerHostActions(rec, req)
@@ -212,7 +212,7 @@ func TestDockerAgentHandlers_HandleDeleteHost(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/agents/docker/hosts/"+hostID+"?force=true", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/agents/docker/runtimes/"+hostID+"?force=true", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleDeleteHost(rec, req)
@@ -225,7 +225,7 @@ func TestDockerAgentHandlers_HandleUnhideHost(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/hosts/"+hostID+"/unhide", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/runtimes/"+hostID+"/unhide", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleUnhideHost(rec, req)
@@ -238,7 +238,7 @@ func TestDockerAgentHandlers_HandleMarkPendingUninstall(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/hosts/"+hostID+"/pending-uninstall", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/runtimes/"+hostID+"/pending-uninstall", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleMarkPendingUninstall(rec, req)
@@ -252,7 +252,7 @@ func TestDockerAgentHandlers_HandleSetCustomDisplayName(t *testing.T) {
 	hostID := seedDockerHost(t, monitor)
 
 	body := []byte(`{"displayName":"My Docker Host"}`)
-	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/hosts/"+hostID+"/display-name", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/agents/docker/runtimes/"+hostID+"/display-name", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleSetCustomDisplayName(rec, req)
@@ -323,7 +323,7 @@ func TestDockerAgentHandlers_HandleCheckUpdates(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/check-updates", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/check-updates", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleCheckUpdates(rec, req)
@@ -370,7 +370,7 @@ func TestDockerAgentHandlers_HandleUpdateAll(t *testing.T) {
 		t.Fatalf("ApplyDockerReport (with containers): %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/update-all", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/update-all", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateAll(rec, req)
@@ -388,7 +388,7 @@ func TestDockerAgentHandlers_HandleUpdateAll_Disabled(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, cfg)
 	hostID := seedDockerHost(t, monitor)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/update-all", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/update-all", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateAll(rec, req)
