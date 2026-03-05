@@ -8,7 +8,7 @@ func TestOrganizationAccessors(t *testing.T) {
 		OwnerUserID: "owner",
 		Members: []OrganizationMember{
 			{UserID: "admin", Role: OrgRoleAdmin},
-			{UserID: "member", Role: OrgRoleMember},
+			{UserID: "member", Role: OrgRoleViewer},
 		},
 	}
 

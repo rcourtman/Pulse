@@ -17,8 +17,6 @@ const (
 	OrgRoleEditor OrganizationRole = "editor"
 	// OrgRoleViewer has read-only access to organization resources.
 	OrgRoleViewer OrganizationRole = "viewer"
-	// OrgRoleMember is a legacy alias kept for backward compatibility.
-	OrgRoleMember OrganizationRole = OrgRoleViewer
 )
 
 // OrgStatus represents lifecycle status for an organization.

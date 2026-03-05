@@ -89,7 +89,7 @@ func TestDefaultAuthorizationChecker_UserCanAccessOrg(t *testing.T) {
 		org := &models.Organization{
 			ID: "acme",
 			Members: []models.OrganizationMember{
-				{UserID: "other", Role: models.OrgRoleMember},
+				{UserID: "other", Role: models.OrgRoleViewer},
 			},
 		}
 		ml.On("GetOrganization", "acme").Return(org, nil).Once()
