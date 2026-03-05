@@ -2387,7 +2387,8 @@ function OverviewTab(props: {
 
   const filteredAlerts = createMemo(() => {
     const alerts = Object.values(props.activeAlerts);
-    // Sort: unacknowledged first, then by start time (newest first)
+    // Sort: unacknowledged first, then by start time (newest first), then by id
+    // for a stable tiebreaker when multiple alerts share the same startTime.
     return alerts
       .filter((alert) => props.showAcknowledged() || !alert.acknowledged)
       .sort((a, b) => {
@@ -2396,7 +2397,11 @@ function OverviewTab(props: {
           return a.acknowledged ? 1 : -1; // Unacknowledged first
         }
         // Then by time
-        return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+        const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        // Stable tiebreaker: sort by id to prevent visual scrambling when
+        // multiple alerts fire in the same polling cycle (#1218)
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       });
   });
 
@@ -4872,10 +4877,13 @@ function HistoryTab(props: {
       }
     }
 
-    // Sort by start time (newest first)
-    return [...filtered].sort(
-      (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
-    );
+    // Sort by start time (newest first), with id as a stable tiebreaker to
+    // prevent visual scrambling when multiple alerts share the same startTime (#1218)
+    return [...filtered].sort((a, b) => {
+      const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
   });
 
   const monthNames = [
