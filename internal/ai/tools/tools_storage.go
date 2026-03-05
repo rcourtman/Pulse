@@ -1295,7 +1295,7 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 			}
 			hostSummaries = append(hostSummaries, HostRAIDSummary{
 				Hostname: host.Hostname,
-				HostID:   host.ID,
+				TargetID: host.ID,
 				Arrays:   arrays,
 			})
 		}
@@ -1414,7 +1414,7 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 
 		hostSummaries = append(hostSummaries, HostCephSummary{
 			Hostname: host.Hostname,
-			HostID:   host.ID,
+			TargetID: host.ID,
 			FSID:     ceph.FSID,
 			Health: HostCephHealthSummary{
 				Status:   ceph.Health.Status,

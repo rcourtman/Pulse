@@ -50,7 +50,7 @@ func TestExecuteCheckDockerUpdates(t *testing.T) {
 
 	var resp DockerCheckUpdatesResponse
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
-	assert.Equal(t, "host1", resp.HostID)
+	assert.Equal(t, "host1", resp.TargetID)
 	assert.Equal(t, "Dock One", resp.HostName)
 	assert.Equal(t, "cmd1", resp.CommandID)
 

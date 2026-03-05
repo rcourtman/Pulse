@@ -298,7 +298,7 @@ func TestDockerUpdateTools(t *testing.T) {
 	})
 	updates := &stubUpdatesProvider{
 		pending: []ContainerUpdateInfo{
-			{HostID: "host1", ContainerID: "c1", ContainerName: "nginx", UpdateAvailable: true},
+			{TargetID: "host1", ContainerID: "c1", ContainerName: "nginx", UpdateAvailable: true},
 		},
 		enabled: true,
 		triggerStatus: DockerCommandStatus{
@@ -319,7 +319,7 @@ func TestDockerUpdateTools(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &listResp); err != nil {
 		t.Fatalf("decode docker updates: %v", err)
 	}
-	if listResp.HostID != "host1" || listResp.Total != 1 {
+	if listResp.TargetID != "host1" || listResp.Total != 1 {
 		t.Fatalf("unexpected docker updates response: %+v", listResp)
 	}
 
@@ -328,7 +328,7 @@ func TestDockerUpdateTools(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &checkResp); err != nil {
 		t.Fatalf("decode docker check response: %v", err)
 	}
-	if checkResp.CommandID != "cmd1" || checkResp.HostID != "host1" {
+	if checkResp.CommandID != "cmd1" || checkResp.TargetID != "host1" {
 		t.Fatalf("unexpected check response: %+v", checkResp)
 	}
 

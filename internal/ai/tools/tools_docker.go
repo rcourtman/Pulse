@@ -398,9 +398,9 @@ func (e *PulseToolExecutor) executeListDockerUpdates(_ context.Context, args map
 	}
 
 	response := DockerUpdatesResponse{
-		Updates: updates,
-		Total:   len(updates),
-		HostID:  hostID,
+		Updates:  updates,
+		Total:    len(updates),
+		TargetID: hostID,
 	}
 
 	return NewJSONResult(response), nil
@@ -434,7 +434,7 @@ func (e *PulseToolExecutor) executeCheckDockerUpdates(ctx context.Context, args 
 
 	response := DockerCheckUpdatesResponse{
 		Success:   true,
-		HostID:    hostID,
+		TargetID:  hostID,
 		HostName:  hostName,
 		CommandID: cmdStatus.ID,
 		Message:   "Update check command queued. Results will be available after the next agent report cycle (~30 seconds).",
@@ -490,7 +490,7 @@ func (e *PulseToolExecutor) executeUpdateDockerContainer(ctx context.Context, ar
 
 	response := DockerUpdateContainerResponse{
 		Success:       true,
-		HostID:        dockerHost.ID,
+		TargetID:      dockerHost.ID,
 		ContainerID:   container.ID,
 		ContainerName: containerName,
 		CommandID:     cmdStatus.ID,

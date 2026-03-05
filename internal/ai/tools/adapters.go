@@ -752,7 +752,7 @@ func (a *UpdatesMCPAdapter) GetPendingUpdates(hostID string) []ContainerUpdateIn
 			}
 
 			update := ContainerUpdateInfo{
-				HostID:          host.ID,
+				TargetID:        host.ID,
 				HostName:        host.DisplayName,
 				ContainerID:     container.ID,
 				ContainerName:   trimContainerName(container.Name),

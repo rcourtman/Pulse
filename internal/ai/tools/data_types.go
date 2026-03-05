@@ -734,7 +734,7 @@ type ControlActionResponse struct {
 
 // ContainerUpdateInfo represents a container with an available update
 type ContainerUpdateInfo struct {
-	HostID          string `json:"target_id"`
+	TargetID        string `json:"target_id"`
 	HostName        string `json:"host_name"`
 	ContainerID     string `json:"container_id"`
 	ContainerName   string `json:"container_name"`
@@ -756,15 +756,15 @@ type DockerCommandStatus struct {
 
 // DockerUpdatesResponse is returned by pulse_list_docker_updates
 type DockerUpdatesResponse struct {
-	Updates []ContainerUpdateInfo `json:"updates"`
-	Total   int                   `json:"total"`
-	HostID  string                `json:"target_id,omitempty"`
+	Updates  []ContainerUpdateInfo `json:"updates"`
+	Total    int                   `json:"total"`
+	TargetID string                `json:"target_id,omitempty"`
 }
 
 // DockerCheckUpdatesResponse is returned by pulse_check_docker_updates
 type DockerCheckUpdatesResponse struct {
 	Success   bool                `json:"success"`
-	HostID    string              `json:"target_id"`
+	TargetID  string              `json:"target_id"`
 	HostName  string              `json:"host_name"`
 	CommandID string              `json:"command_id"`
 	Message   string              `json:"message"`
@@ -774,7 +774,7 @@ type DockerCheckUpdatesResponse struct {
 // DockerUpdateContainerResponse is returned by pulse_update_docker_container
 type DockerUpdateContainerResponse struct {
 	Success       bool                `json:"success"`
-	HostID        string              `json:"target_id"`
+	TargetID      string              `json:"target_id"`
 	ContainerID   string              `json:"container_id"`
 	ContainerName string              `json:"container_name"`
 	CommandID     string              `json:"command_id"`
@@ -1227,7 +1227,7 @@ type HostRAIDStatusResponse struct {
 // HostRAIDSummary summarizes RAID arrays for a host
 type HostRAIDSummary struct {
 	Hostname string                 `json:"hostname"`
-	HostID   string                 `json:"target_id"`
+	TargetID string                 `json:"target_id"`
 	Arrays   []HostRAIDArraySummary `json:"arrays"`
 }
 
@@ -1266,7 +1266,7 @@ type HostCephDetailsResponse struct {
 // HostCephSummary summarizes host-collected Ceph cluster details
 type HostCephSummary struct {
 	Hostname    string                `json:"hostname"`
-	HostID      string                `json:"target_id"`
+	TargetID    string                `json:"target_id"`
 	FSID        string                `json:"fsid"`
 	Health      HostCephHealthSummary `json:"health"`
 	MonMap      *HostCephMonSummary   `json:"mon_map,omitempty"`
