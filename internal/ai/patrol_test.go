@@ -291,7 +291,7 @@ func TestPatrolService_filterStateByScope_KubernetesClusterType(t *testing.T) {
 	}
 }
 
-func TestPatrolService_filterStateByScope_PBSDatastoreType(t *testing.T) {
+func TestPatrolService_filterStateByScope_PBSDatastoreIDWithCanonicalPBSType(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		PBSInstances: []models.PBSInstance{
@@ -306,7 +306,7 @@ func TestPatrolService_filterStateByScope_PBSDatastoreType(t *testing.T) {
 	}
 	scope := PatrolScope{
 		ResourceIDs:   []string{"pbs1:ds1"},
-		ResourceTypes: []string{"pbs_datastore"},
+		ResourceTypes: []string{"pbs"},
 	}
 
 	filtered := ps.filterStateByScope(state, scope)

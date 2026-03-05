@@ -958,29 +958,19 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		if trimmed == "" {
 			return
 		}
-		// Normalize to semantic type names; expand subtypes for group matching.
+		// Strict v6 matching: only canonical patrol scope types are accepted.
+		// app-container and docker-host intentionally share docker-host resources.
 		switch trimmed {
-		case "docker", "docker-host", "app-container":
-			typeSet["docker"] = true
+		case "docker-host", "app-container":
 			typeSet["docker-host"] = true
 			typeSet["app-container"] = true
-		case "k8s", "kubernetes", "k8s-cluster":
-			typeSet["k8s"] = true
-			typeSet["kubernetes"] = true
+		case "k8s-cluster":
 			typeSet["k8s-cluster"] = true
-		case "system-container":
-			typeSet["system-container"] = true
-		case "vm":
-			typeSet["vm"] = true
-		case "agent", "agent_raid", "agent_sensor":
-			typeSet["agent"] = true
-			typeSet["agent_raid"] = true
-			typeSet["agent_sensor"] = true
-		case "pbs", "pbs_datastore", "pbs_job":
-			typeSet["pbs"] = true
-			typeSet["pbs_datastore"] = true
-			typeSet["pbs_job"] = true
+		case "system-container", "vm", "node", "storage", "agent", "pbs":
+			typeSet[trimmed] = true
 		default:
+			// Unknown/legacy values are preserved to fail closed in matching.
+			// This prevents accidental broadening when callers pass invalid types.
 			typeSet[trimmed] = true
 		}
 	}
@@ -1046,7 +1036,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		}
 	}
 	for _, d := range snap.DockerHosts {
-		if !matchesType("docker", "docker-host", "app-container") {
+		if !matchesType("docker-host", "app-container") {
 			continue
 		}
 
@@ -1087,7 +1077,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		}
 	}
 	for _, pbs := range snap.PBSInstances {
-		if !matchesType("pbs", "pbs_datastore", "pbs_job") {
+		if !matchesType("pbs") {
 			continue
 		}
 
@@ -1129,7 +1119,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		}
 	}
 	for _, h := range snap.Hosts {
-		if matchesType("agent", "agent_raid", "agent_sensor") && matchesID(h.ID, h.DisplayName, h.Hostname) {
+		if matchesType("agent") && matchesID(h.ID, h.DisplayName, h.Hostname) {
 			filtered.Hosts = append(filtered.Hosts, h)
 		}
 	}
@@ -1141,7 +1131,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		if clusterName == "" {
 			clusterName = k.Name
 		}
-		if matchesType("kubernetes", "k8s", "k8s-cluster") && matchesID(k.ID, clusterName) {
+		if matchesType("k8s-cluster") && matchesID(k.ID, clusterName) {
 			filtered.KubernetesClusters = append(filtered.KubernetesClusters, k)
 		}
 	}

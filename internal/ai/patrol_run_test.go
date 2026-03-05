@@ -101,6 +101,10 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 	state := models.StateSnapshot{
 		VMs:        []models.VM{{ID: "vm1", Name: "vm-1"}},
 		Containers: []models.Container{{ID: "ct1", Name: "ct-1"}},
+		Hosts:      []models.Host{{ID: "h1", Hostname: "host-1"}},
+		PBSInstances: []models.PBSInstance{
+			{ID: "pbs1", Name: "pbs-main", Datastores: []models.PBSDatastore{{Name: "ds1"}}},
+		},
 		KubernetesClusters: []models.KubernetesCluster{
 			{ID: "k1", Name: "cluster-1"},
 		},
@@ -148,6 +152,30 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 	filtered = ps.filterStateByScope(state, scope)
 	if len(filtered.KubernetesClusters) != 0 {
 		t.Errorf("expected legacy 'kubernetes_cluster' alias to be rejected, got %d kubernetes clusters", len(filtered.KubernetesClusters))
+	}
+
+	scope = PatrolScope{ResourceTypes: []string{"docker"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.DockerHosts) != 0 {
+		t.Errorf("expected non-canonical 'docker' alias to be rejected, got %d docker hosts", len(filtered.DockerHosts))
+	}
+
+	scope = PatrolScope{ResourceTypes: []string{"kubernetes"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.KubernetesClusters) != 0 {
+		t.Errorf("expected non-canonical 'kubernetes' alias to be rejected, got %d kubernetes clusters", len(filtered.KubernetesClusters))
+	}
+
+	scope = PatrolScope{ResourceTypes: []string{"pbs_datastore"}, ResourceIDs: []string{"pbs1:ds1"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.PBSInstances) != 0 {
+		t.Errorf("expected non-canonical 'pbs_datastore' alias to be rejected, got %d pbs instances", len(filtered.PBSInstances))
+	}
+
+	scope = PatrolScope{ResourceTypes: []string{"agent_raid"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.Hosts) != 0 {
+		t.Errorf("expected non-canonical 'agent_raid' alias to be rejected, got %d hosts", len(filtered.Hosts))
 	}
 }
 
@@ -198,7 +226,7 @@ func TestFilterStateByScope_DockerHost(t *testing.T) {
 	// Match by host ID
 	scope := PatrolScope{
 		ResourceIDs:   []string{"dh1"},
-		ResourceTypes: []string{"docker"},
+		ResourceTypes: []string{"docker-host"},
 	}
 	filtered := ps.filterStateByScope(state, scope)
 	if len(filtered.DockerHosts) != 1 {
@@ -328,11 +356,11 @@ func TestFilterStateByScope_Kubernetes(t *testing.T) {
 
 	scope := PatrolScope{
 		ResourceIDs:   []string{"k1"},
-		ResourceTypes: []string{"kubernetes"},
+		ResourceTypes: []string{"k8s-cluster"},
 	}
 	filtered := ps.filterStateByScope(state, scope)
 	if len(filtered.KubernetesClusters) != 1 {
-		t.Fatalf("expected 1 kubernetes cluster, got %d", len(filtered.KubernetesClusters))
+		t.Fatalf("expected 1 k8s cluster, got %d", len(filtered.KubernetesClusters))
 	}
 	if filtered.KubernetesClusters[0].ID != "k1" {
 		t.Errorf("expected cluster k1, got %s", filtered.KubernetesClusters[0].ID)
