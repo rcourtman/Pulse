@@ -149,6 +149,66 @@ func TestReportEngineWithMetricsStore_VM(t *testing.T) {
 	}
 }
 
+func TestReportEngineWithMetricsStore_CanonicalContainerAliases(t *testing.T) {
+	dir := t.TempDir()
+	store, err := metrics.NewStore(metrics.StoreConfig{
+		DBPath:          filepath.Join(dir, "metrics.db"),
+		WriteBufferSize: 10,
+		FlushInterval:   100 * time.Millisecond,
+		RetentionRaw:    24 * time.Hour,
+		RetentionMinute: 7 * 24 * time.Hour,
+		RetentionHourly: 30 * 24 * time.Hour,
+		RetentionDaily:  90 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	engine := NewReportEngine(EngineConfig{MetricsStore: store})
+	now := time.Now()
+
+	systemContainerID := "pve1:200"
+	appContainerID := "docker-abc123"
+
+	for i := 0; i < 6; i++ {
+		ts := now.Add(time.Duration(-30+i*5) * time.Minute)
+		store.Write("container", systemContainerID, "cpu", float64(20+i), ts)
+		store.Write("dockerContainer", appContainerID, "cpu", float64(40+i), ts)
+	}
+	store.Flush()
+
+	systemReq := MetricReportRequest{
+		ResourceType: "system-container",
+		ResourceID:   systemContainerID,
+		Start:        now.Add(-1 * time.Hour),
+		End:          now.Add(time.Minute),
+		Format:       FormatCSV,
+		MetricType:   "cpu",
+	}
+	appReq := MetricReportRequest{
+		ResourceType: "app-container",
+		ResourceID:   appContainerID,
+		Start:        now.Add(-1 * time.Hour),
+		End:          now.Add(time.Minute),
+		Format:       FormatCSV,
+		MetricType:   "cpu",
+	}
+
+	require.Eventually(t, func() bool {
+		systemCSV, _, genErr := engine.Generate(systemReq)
+		if genErr != nil || countCSVDataRows(string(systemCSV)) == 0 {
+			return false
+		}
+
+		appCSV, _, genErr := engine.Generate(appReq)
+		if genErr != nil || countCSVDataRows(string(appCSV)) == 0 {
+			return false
+		}
+		return true
+	}, 2*time.Second, 25*time.Millisecond)
+}
+
 // TestReportEngineStaleStoreAfterClose verifies that querying a closed
 // metrics store returns an error rather than silently returning zero results.
 // This documents the behavior that causes blank reports after a monitor reload.

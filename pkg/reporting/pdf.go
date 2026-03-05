@@ -1705,12 +1705,12 @@ func (g *PDFGenerator) writeMultiCoverPage(pdf *fpdf.Fpdf, data *MultiReportData
 	// Count by type
 	nodeCount, vmCount, ctCount := 0, 0, 0
 	for _, rd := range data.Resources {
-		switch rd.ResourceType {
+		switch CanonicalResourceType(rd.ResourceType) {
 		case "node":
 			nodeCount++
 		case "vm":
 			vmCount++
-		case "container":
+		case "system-container", "oci-container", "app-container":
 			ctCount++
 		}
 	}

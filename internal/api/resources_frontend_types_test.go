@@ -355,6 +355,27 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("agent metrics target resourceType = %q, want %q", foundAgentHost.MetricsTarget.ResourceType, "agent")
 	}
 
+	var foundDockerHost *unified.Resource
+	for i := range resp.Data {
+		if resp.Data[i].Type == "docker-host" {
+			foundDockerHost = &resp.Data[i]
+			break
+		}
+	}
+	if foundDockerHost == nil {
+		t.Fatalf("expected docker-host resource in response")
+	}
+	if foundDockerHost.MetricsTarget == nil {
+		t.Fatalf("expected metrics target on docker-host resource")
+	}
+	if foundDockerHost.MetricsTarget.ResourceType != "docker-host" {
+		t.Fatalf(
+			"docker-host metrics target resourceType = %q, want %q",
+			foundDockerHost.MetricsTarget.ResourceType,
+			"docker-host",
+		)
+	}
+
 	// Find the Proxmox node resource specifically and verify its metadata.
 	var foundNode *unified.Resource
 	for i := range resp.Data {
@@ -426,6 +447,25 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 			typeSet2["system-container"],
 			typeSet2,
 		)
+	}
+
+	var foundVM *unified.Resource
+	var foundSystemContainer *unified.Resource
+	for i := range resp2.Data {
+		switch resp2.Data[i].Type {
+		case "vm":
+			foundVM = &resp2.Data[i]
+		case "system-container":
+			foundSystemContainer = &resp2.Data[i]
+		}
+	}
+	if foundVM == nil || foundVM.MetricsTarget == nil || foundVM.MetricsTarget.ResourceType != "vm" {
+		t.Fatalf("expected vm metrics target resourceType vm, got %#v", foundVM)
+	}
+	if foundSystemContainer == nil ||
+		foundSystemContainer.MetricsTarget == nil ||
+		foundSystemContainer.MetricsTarget.ResourceType != "system-container" {
+		t.Fatalf("expected system-container metrics target, got %#v", foundSystemContainer)
 	}
 }
 

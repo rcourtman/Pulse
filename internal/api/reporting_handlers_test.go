@@ -137,6 +137,46 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 	}
 }
 
+func TestReportingHandlers_GenerateReport_NormalizesLegacyResourceTypeAlias(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=container&resourceId=ct-200", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if engine.lastReq.ResourceType != "system-container" {
+		t.Fatalf("expected canonical resource type system-container, got %q", engine.lastReq.ResourceType)
+	}
+}
+
+func TestReportingHandlers_GenerateReport_RejectsUnsupportedResourceType(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=host&resourceId=h-1", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+	if engine.lastReq.ResourceType != "" {
+		t.Fatalf("expected engine not to be called for unsupported type, got %+v", engine.lastReq)
+	}
+}
+
 func TestSanitizeFilename(t *testing.T) {
 	raw := "\"bad/../name\\\r\n"
 	got := sanitizeFilename(raw)

@@ -1112,19 +1112,19 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 			return &unified.MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[unified.SourceDocker]; ok {
-			return &unified.MetricsTarget{ResourceType: "dockerHost", ResourceID: st.SourceID}
+			return &unified.MetricsTarget{ResourceType: "docker-host", ResourceID: st.SourceID}
 		}
 	case unified.ResourceTypeVM:
 		if st, ok := bySource[unified.SourceProxmox]; ok {
-			return &unified.MetricsTarget{ResourceType: "guest", ResourceID: st.SourceID}
+			return &unified.MetricsTarget{ResourceType: "vm", ResourceID: st.SourceID}
 		}
 	case unified.ResourceTypeSystemContainer:
 		if st, ok := bySource[unified.SourceProxmox]; ok {
-			return &unified.MetricsTarget{ResourceType: "guest", ResourceID: st.SourceID}
+			return &unified.MetricsTarget{ResourceType: "system-container", ResourceID: st.SourceID}
 		}
 	case unified.ResourceTypeAppContainer:
 		if st, ok := bySource[unified.SourceDocker]; ok {
-			return &unified.MetricsTarget{ResourceType: "docker", ResourceID: st.SourceID}
+			return &unified.MetricsTarget{ResourceType: "app-container", ResourceID: st.SourceID}
 		}
 	case unified.ResourceTypeStorage, unified.ResourceTypeCeph:
 		if st, ok := bySource[unified.SourceProxmox]; ok {

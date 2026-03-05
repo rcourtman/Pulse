@@ -2,6 +2,8 @@ package reporting
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -49,6 +51,103 @@ func (e *ReportEngine) getMetricsStore() *metrics.Store {
 	return e.metricsStore
 }
 
+// CanonicalResourceType normalizes report resource type inputs to canonical v6 names.
+// Returns an empty string when the type is unsupported.
+func CanonicalResourceType(resourceType string) string {
+	switch strings.ToLower(strings.TrimSpace(resourceType)) {
+	case "node":
+		return "node"
+	case "vm", "guest":
+		return "vm"
+	case "system-container", "system_container", "container", "lxc":
+		return "system-container"
+	case "oci-container", "oci_container":
+		return "oci-container"
+	case "app-container", "app_container", "docker", "docker-container", "docker_container", "dockercontainer":
+		return "app-container"
+	case "docker-host", "docker_host", "dockerhost":
+		return "docker-host"
+	case "storage":
+		return "storage"
+	case "agent":
+		return "agent"
+	case "k8s", "k8s-node", "k8s-cluster", "cluster":
+		return "k8s"
+	case "disk":
+		return "disk"
+	case "pbs":
+		return "pbs"
+	case "pmg":
+		return "pmg"
+	case "pod":
+		return "pod"
+	case "datastore":
+		return "datastore"
+	case "pool":
+		return "pool"
+	case "dataset":
+		return "dataset"
+	default:
+		return ""
+	}
+}
+
+func metricsStoreResourceTypes(canonicalType string) []string {
+	switch canonicalType {
+	case "system-container", "oci-container":
+		return []string{"container"}
+	case "app-container":
+		return []string{"dockerContainer", "docker"}
+	case "docker-host":
+		return []string{"dockerHost"}
+	case "":
+		return nil
+	default:
+		return []string{canonicalType}
+	}
+}
+
+func mergeMetricPointsByTimestamp(existing, incoming []metrics.MetricPoint) []metrics.MetricPoint {
+	if len(incoming) == 0 {
+		return existing
+	}
+	if len(existing) == 0 {
+		out := make([]metrics.MetricPoint, len(incoming))
+		copy(out, incoming)
+		sort.Slice(out, func(i, j int) bool {
+			return out[i].Timestamp.Before(out[j].Timestamp)
+		})
+		return out
+	}
+
+	seen := make(map[int64]struct{}, len(existing)+len(incoming))
+	out := make([]metrics.MetricPoint, len(existing))
+	copy(out, existing)
+	for _, point := range existing {
+		seen[point.Timestamp.Unix()] = struct{}{}
+	}
+
+	for _, point := range incoming {
+		key := point.Timestamp.Unix()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, point)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Timestamp.Before(out[j].Timestamp)
+	})
+	return out
+}
+
+func mergeMetricMapsByTimestamp(dst, src map[string][]metrics.MetricPoint) {
+	for metricType, incomingPoints := range src {
+		dst[metricType] = mergeMetricPointsByTimestamp(dst[metricType], incomingPoints)
+	}
+}
+
 // Generate creates a report in the specified format.
 func (e *ReportEngine) Generate(req MetricReportRequest) (data []byte, contentType string, err error) {
 	if e.getMetricsStore() == nil {
@@ -62,7 +161,7 @@ func (e *ReportEngine) Generate(req MetricReportRequest) (data []byte, contentTy
 	}
 
 	log.Debug().
-		Str("resourceType", req.ResourceType).
+		Str("resourceType", reportData.ResourceType).
 		Str("resourceID", req.ResourceID).
 		Str("format", string(req.Format)).
 		Int("dataPoints", reportData.TotalPoints).
@@ -135,9 +234,14 @@ type MetricStats struct {
 
 // queryMetrics fetches metrics from the store and prepares report data.
 func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error) {
+	canonicalType := CanonicalResourceType(req.ResourceType)
+	if canonicalType == "" {
+		canonicalType = strings.TrimSpace(req.ResourceType)
+	}
+
 	data := &ReportData{
 		Title:        req.Title,
-		ResourceType: req.ResourceType,
+		ResourceType: canonicalType,
 		ResourceID:   req.ResourceID,
 		Start:        req.Start,
 		End:          req.End,
@@ -149,7 +253,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 	}
 
 	if data.Title == "" {
-		data.Title = fmt.Sprintf("%s Report: %s", req.ResourceType, req.ResourceID)
+		data.Title = fmt.Sprintf("%s Report: %s", GetResourceTypeDisplayName(data.ResourceType), req.ResourceID)
 	}
 
 	// Copy enrichment data from request
@@ -160,30 +264,41 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 	data.Disks = req.Disks
 
 	store := e.getMetricsStore()
+	storeTypes := metricsStoreResourceTypes(canonicalType)
+	if len(storeTypes) == 0 {
+		storeTypes = []string{canonicalType}
+	}
 
 	var metricsMap map[string][]metrics.MetricPoint
-	var err error
 
 	if req.MetricType != "" {
-		// Query specific metric
-		points, queryErr := store.Query(req.ResourceType, req.ResourceID, req.MetricType, req.Start, req.End, 0)
-		if queryErr != nil {
-			return nil, queryErr
+		// Query specific metric, merging across storage aliases during migrations.
+		var points []metrics.MetricPoint
+		for _, storeType := range storeTypes {
+			aliasPoints, queryErr := store.Query(storeType, req.ResourceID, req.MetricType, req.Start, req.End, 0)
+			if queryErr != nil {
+				return nil, queryErr
+			}
+			points = mergeMetricPointsByTimestamp(points, aliasPoints)
 		}
 		metricsMap = map[string][]metrics.MetricPoint{
 			req.MetricType: points,
 		}
 	} else {
-		// Query all metrics for the resource
-		metricsMap, err = store.QueryAll(req.ResourceType, req.ResourceID, req.Start, req.End, 0)
-		if err != nil {
-			return nil, err
+		// Query all metrics for the resource, merging across storage aliases.
+		metricsMap = make(map[string][]metrics.MetricPoint)
+		for _, storeType := range storeTypes {
+			aliasMap, queryErr := store.QueryAll(storeType, req.ResourceID, req.Start, req.End, 0)
+			if queryErr != nil {
+				return nil, queryErr
+			}
+			mergeMetricMapsByTimestamp(metricsMap, aliasMap)
 		}
 	}
 
 	if len(metricsMap) == 0 {
 		log.Warn().
-			Str("resourceType", req.ResourceType).
+			Str("resourceType", data.ResourceType).
 			Str("resourceID", req.ResourceID).
 			Str("metricType", req.MetricType).
 			Time("start", req.Start).
@@ -307,19 +422,39 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 
 // GetResourceTypeDisplayName returns a human-readable name for resource types.
 func GetResourceTypeDisplayName(resourceType string) string {
-	switch resourceType {
+	switch CanonicalResourceType(resourceType) {
 	case "node":
 		return "Node"
 	case "vm":
 		return "Virtual Machine"
-	case "container":
-		return "LXC Container"
-	case "dockerHost":
-		return "Docker Host"
-	case "dockerContainer":
-		return "Docker Container"
+	case "system-container":
+		return "System Container"
+	case "oci-container":
+		return "OCI Container"
+	case "app-container":
+		return "App Container"
+	case "docker-host":
+		return "Container Runtime"
 	case "storage":
 		return "Storage"
+	case "agent":
+		return "Agent"
+	case "k8s":
+		return "Kubernetes"
+	case "disk":
+		return "Disk"
+	case "pbs":
+		return "PBS"
+	case "pmg":
+		return "PMG"
+	case "pod":
+		return "Pod"
+	case "datastore":
+		return "Datastore"
+	case "pool":
+		return "Pool"
+	case "dataset":
+		return "Dataset"
 	default:
 		return resourceType
 	}

@@ -20,6 +20,18 @@ import (
 // validResourceID matches safe resource identifiers (includes colon for guest IDs like "instance:node:vmid")
 var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
 
+func normalizeReportResourceType(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("resourceType is required")
+	}
+	canonical := reporting.CanonicalResourceType(trimmed)
+	if canonical == "" {
+		return "", fmt.Errorf("unsupported resourceType %q", trimmed)
+	}
+	return canonical, nil
+}
+
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
 	mtMonitor       *monitoring.MultiTenantMonitor
@@ -183,20 +195,25 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
-	resourceType := q.Get("resourceType")
+	resourceTypeRaw := q.Get("resourceType")
 	resourceID := q.Get("resourceId")
-	if resourceType == "" || resourceID == "" {
+	if resourceTypeRaw == "" || resourceID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_params", "resourceType and resourceId are required", nil)
 		return
 	}
 
 	// Validate resourceType and resourceID format to prevent injection in filename
-	if !validResourceID.MatchString(resourceType) || len(resourceType) > 64 {
+	if !validResourceID.MatchString(resourceTypeRaw) || len(resourceTypeRaw) > 64 {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_type", "Invalid resourceType format", nil)
 		return
 	}
 	if !validResourceID.MatchString(resourceID) || len(resourceID) > 128 {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_id", "Invalid resourceId format", nil)
+		return
+	}
+	resourceType, err := normalizeReportResourceType(resourceTypeRaw)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_type", err.Error(), nil)
 		return
 	}
 
@@ -273,7 +290,7 @@ func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID strin
 		h.enrichNodeReport(req, snap, resources, start, end)
 	case "vm":
 		h.enrichVMReport(ctx, orgID, req, snap, start, end)
-	case "container":
+	case "system-container", "oci-container":
 		h.enrichContainerReport(ctx, orgID, req, snap, start, end)
 	}
 }
@@ -597,9 +614,14 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_id", fmt.Sprintf("Invalid resourceId: %s", res.ResourceID), nil)
 			return
 		}
+		resourceType, err := normalizeReportResourceType(res.ResourceType)
+		if err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_type", err.Error(), nil)
+			return
+		}
 
 		req := reporting.MetricReportRequest{
-			ResourceType: res.ResourceType,
+			ResourceType: resourceType,
 			ResourceID:   res.ResourceID,
 			MetricType:   body.MetricType,
 			Start:        start,

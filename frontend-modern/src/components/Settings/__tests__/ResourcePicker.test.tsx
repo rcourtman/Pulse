@@ -184,7 +184,7 @@ describe('ResourcePicker', () => {
     });
   });
 
-  it('normalizes docker host selections to dockerHost report type', async () => {
+  it('keeps docker host selections on canonical docker-host report type', async () => {
     mockResources = [
       makeResource({
         id: 'docker-host-1',
@@ -201,11 +201,11 @@ describe('ResourcePicker', () => {
     fireEvent.click(resourceButton!);
 
     expect(onSelectionChange).toHaveBeenCalledWith([
-      { id: 'docker-host-1', type: 'dockerHost', name: 'Docker Agent 1' },
+      { id: 'docker-host-1', type: 'docker-host', name: 'Docker Agent 1' },
     ]);
   });
 
-  it('normalizes docker container selections to dockerContainer report type', async () => {
+  it('keeps docker container selections on canonical app-container report type', async () => {
     mockResources = [
       makeResource({
         id: 'docker-container-1',
@@ -222,7 +222,7 @@ describe('ResourcePicker', () => {
     fireEvent.click(resourceButton!);
 
     expect(onSelectionChange).toHaveBeenCalledWith([
-      { id: 'docker-container-1', type: 'dockerContainer', name: 'web' },
+      { id: 'docker-container-1', type: 'app-container', name: 'web' },
     ]);
   });
 

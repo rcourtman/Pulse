@@ -130,14 +130,12 @@ export interface WorkloadsSummaryChartsResponse {
 export type HistoryTimeRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d';
 export type ResourceType =
   | 'node'
-  | 'guest'
   | 'vm'
   | 'system-container'
   | 'oci-container'
   | 'app-container'
   | 'storage'
-  | 'docker'
-  | 'dockerHost'
+  | 'docker-host'
   | 'k8s'
   | 'agent'
   | 'disk';

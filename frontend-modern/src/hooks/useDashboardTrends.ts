@@ -104,23 +104,30 @@ function dedupeValues(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
+function normalizeHistoryResourceType(type: string): string {
+  const normalized = type.trim().toLowerCase();
+  if (normalized === 'guest') return 'vm';
+  if (normalized === 'docker') return 'app-container';
+  if (normalized === 'dockerhost' || normalized === 'docker-host') return 'docker-host';
+  return normalized;
+}
+
 function asHistoryResourceType(type: string): HistoryResourceType | null {
+  const normalizedType = normalizeHistoryResourceType(type);
   const historyTypes: HistoryResourceType[] = [
     'node',
-    'guest',
     'vm',
     'system-container',
     'oci-container',
     'app-container',
     'storage',
-    'docker',
-    'dockerHost',
+    'docker-host',
     'k8s',
     'agent',
     'disk',
   ];
-  return historyTypes.includes(type as HistoryResourceType)
-    ? (type as HistoryResourceType)
+  return historyTypes.includes(normalizedType as HistoryResourceType)
+    ? (normalizedType as HistoryResourceType)
     : null;
 }
 
@@ -221,7 +228,7 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
     case 'agent':
       return 'agent';
     case 'docker-host':
-      return 'dockerHost';
+      return 'docker-host';
     case 'k8s-node':
     case 'k8s-cluster':
       return 'k8s';

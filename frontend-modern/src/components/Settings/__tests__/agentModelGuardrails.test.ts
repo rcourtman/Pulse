@@ -40,6 +40,7 @@ import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
 import websocketStoreSource from '@/stores/websocket.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
+import resourcePickerSource from '../ResourcePicker.tsx?raw';
 
 describe('agent model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
@@ -244,6 +245,15 @@ describe('agent model guardrails', () => {
     expect(chartsApiSource).toContain("| 'system-container'");
     expect(chartsApiSource).toContain("| 'app-container'");
     expect(chartsApiSource).not.toContain("| 'container'");
+    expect(chartsApiSource).toContain("| 'docker-host'");
+    expect(chartsApiSource).not.toContain("| 'dockerHost'");
+    expect(chartsApiSource).not.toContain("| 'guest'");
+    expect(chartsApiSource).not.toContain("| 'docker'");
+    expect(resourcePickerSource).toContain("return 'docker-host';");
+    expect(resourcePickerSource).toContain("return 'app-container';");
+    expect(resourcePickerSource).not.toContain("return 'dockerHost';");
+    expect(resourcePickerSource).not.toContain("return 'dockerContainer';");
+    expect(resourcePickerSource).not.toContain("return 'container';");
   });
 
   it('keeps login and SSO settings on provider-based flows only', () => {

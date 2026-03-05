@@ -71,18 +71,18 @@ const STORAGE_TYPES = new Set<ResourceType>(['storage', 'datastore', 'pool', 'da
 const RECOVERY_TYPES = new Set<ResourceType>(['pbs', 'datastore']);
 
 function normalizeType(type: ResourceType): string {
-  if (type === 'system-container' || type === 'oci-container') return 'container';
-  if (type === 'app-container') return 'docker';
-  if (type === 'docker-host') return 'agent';
+  if (type === 'system-container' || type === 'oci-container') return 'system-container';
+  if (type === 'app-container') return 'app-container';
+  if (type === 'docker-host') return 'docker-host';
   if (type === 'k8s-node') return 'node';
-  if (type === 'k8s-cluster') return 'cluster';
+  if (type === 'k8s-cluster') return 'k8s';
   return type;
 }
 
 function toReportResourceType(type: ResourceType): string {
-  if (type === 'system-container' || type === 'oci-container') return 'container';
-  if (type === 'app-container') return 'dockerContainer';
-  if (type === 'docker-host') return 'dockerHost';
+  if (type === 'system-container' || type === 'oci-container') return type;
+  if (type === 'app-container') return 'app-container';
+  if (type === 'docker-host') return 'docker-host';
   return type;
 }
 
@@ -183,20 +183,21 @@ export function ResourcePicker(props: ResourcePickerProps) {
     result.sort((a, b) => {
       const typeOrder: Record<string, number> = {
         node: 0,
-        agent: 1,
-        cluster: 2,
+        'docker-host': 1,
+        k8s: 2,
         pbs: 3,
         pmg: 4,
         vm: 5,
-        container: 6,
-        pod: 7,
-        storage: 8,
-        datastore: 9,
-        pool: 10,
-        dataset: 11,
+        'system-container': 6,
+        'app-container': 7,
+        pod: 8,
+        storage: 9,
+        datastore: 10,
+        pool: 11,
+        dataset: 12,
       };
-      const aOrder = typeOrder[normalizeType(a.type)] ?? 12;
-      const bOrder = typeOrder[normalizeType(b.type)] ?? 12;
+      const aOrder = typeOrder[normalizeType(a.type)] ?? 13;
+      const bOrder = typeOrder[normalizeType(b.type)] ?? 13;
       if (aOrder !== bOrder) return aOrder - bOrder;
       return getDisplayName(a).localeCompare(getDisplayName(b));
     });

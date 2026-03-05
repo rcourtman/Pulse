@@ -6864,7 +6864,7 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 // handleMetricsHistory returns historical metrics from the persistent SQLite store
 // Query params:
 //   - resourceType: "node", "agent", "vm", "system-container", "oci-container", "app-container",
-//     "guest", "docker", "dockerHost", "k8s", "storage", or "disk" (required)
+//     "docker-host", "k8s", "storage", or "disk" (required)
 //   - resourceId: the resource identifier (required)
 //   - metric: "cpu", "memory", "disk", etc. (optional, omit for all metrics)
 //   - range: time range like "1h", "24h", "7d", "30d", "90d" (optional, default "24h")
@@ -7732,8 +7732,18 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 func normalizeMetricsHistoryResourceType(input string) (responseType string, runtimeType string, storeTypes []string, err error) {
 	switch strings.ToLower(strings.TrimSpace(input)) {
-	case "node", "guest", "storage", "agent", "disk", "k8s", "vm":
-		return input, input, []string{input}, nil
+	case "node":
+		return "node", "node", []string{"node"}, nil
+	case "storage":
+		return "storage", "storage", []string{"storage"}, nil
+	case "agent":
+		return "agent", "agent", []string{"agent"}, nil
+	case "disk":
+		return "disk", "disk", []string{"disk"}, nil
+	case "k8s":
+		return "k8s", "k8s", []string{"k8s"}, nil
+	case "vm", "guest":
+		return "vm", "vm", []string{"vm"}, nil
 	case "system-container", "system_container":
 		return "system-container", "container", []string{"container"}, nil
 	case "oci-container", "oci_container":
@@ -7741,11 +7751,11 @@ func normalizeMetricsHistoryResourceType(input string) (responseType string, run
 	case "app-container", "app_container":
 		return "app-container", "dockerContainer", []string{"dockerContainer", "docker"}, nil
 	case "docker":
-		return "docker", "dockerContainer", []string{"dockerContainer", "docker"}, nil
+		return "app-container", "dockerContainer", []string{"dockerContainer", "docker"}, nil
 	case "dockercontainer", "docker-container", "docker_container":
-		return "docker", "dockerContainer", []string{"dockerContainer", "docker"}, nil
-	case "dockerhost", "docker-host":
-		return "dockerHost", "dockerHost", []string{"dockerHost"}, nil
+		return "app-container", "dockerContainer", []string{"dockerContainer", "docker"}, nil
+	case "dockerhost", "docker-host", "docker_host":
+		return "docker-host", "dockerHost", []string{"dockerHost"}, nil
 	default:
 		return "", "", nil, fmt.Errorf("unsupported resourceType %q", input)
 	}

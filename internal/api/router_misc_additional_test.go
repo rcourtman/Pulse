@@ -103,6 +103,22 @@ func TestNormalizeMetricsHistoryResourceType_RejectsLegacyContainerAlias(t *test
 	}
 }
 
+func TestNormalizeMetricsHistoryResourceType_DockerHostCanonicalType(t *testing.T) {
+	responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType("dockerhost")
+	if err != nil {
+		t.Fatalf("normalizeMetricsHistoryResourceType(dockerhost) error = %v", err)
+	}
+	if responseType != "docker-host" {
+		t.Fatalf("responseType = %q, want %q", responseType, "docker-host")
+	}
+	if runtimeType != "dockerHost" {
+		t.Fatalf("runtimeType = %q, want %q", runtimeType, "dockerHost")
+	}
+	if len(storeTypes) != 1 || storeTypes[0] != "dockerHost" {
+		t.Fatalf("storeTypes = %v, want [dockerHost]", storeTypes)
+	}
+}
+
 func TestHandleSchedulerHealth_MethodNotAllowed(t *testing.T) {
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodPost, "/api/scheduler/health", nil)
