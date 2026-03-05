@@ -226,33 +226,15 @@ func redactSensitiveFields(d *servicediscovery.ResourceDiscovery) *servicediscov
 	return &redacted
 }
 
-func ensureDiscoveryCanonicalIDs(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
-	if d == nil {
-		return nil
-	}
-
-	enriched := *d
-	changed := false
-	if enriched.ResourceType == servicediscovery.ResourceTypeAgent && strings.TrimSpace(enriched.AgentID) == "" {
-		enriched.AgentID = enriched.TargetID
-		changed = true
-	}
-	if !changed {
-		return d
-	}
-	return &enriched
-}
-
 func discoverySummaryResponse(d *servicediscovery.ResourceDiscovery) servicediscovery.DiscoverySummary {
-	canonical := ensureDiscoveryCanonicalIDs(d)
-	if canonical == nil {
+	if d == nil {
 		return servicediscovery.DiscoverySummary{}
 	}
-	return canonical.ToSummary()
+	return d.ToSummary()
 }
 
 func discoveryDetailResponse(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
-	return ensureDiscoveryCanonicalIDs(d)
+	return d
 }
 
 // HandleListDiscoveries handles GET /api/discovery

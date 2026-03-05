@@ -1655,12 +1655,18 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		}
 	}
 
+	agentID := ""
+	if req.ResourceType == ResourceTypeAgent {
+		agentID = req.TargetID
+	}
+
 	// Build discovery result
 	discovery := &ResourceDiscovery{
 		ID:               resourceID,
 		ResourceType:     req.ResourceType,
 		ResourceID:       req.ResourceID,
 		TargetID:         req.TargetID,
+		AgentID:          agentID,
 		Hostname:         hostname,
 		ServiceType:      result.ServiceType,
 		ServiceName:      result.ServiceName,

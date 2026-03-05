@@ -234,17 +234,12 @@ type DiscoverySummary struct {
 func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
 	targetID := d.TargetID
 
-	agentID := d.AgentID
-	if agentID == "" && d.ResourceType == ResourceTypeAgent {
-		agentID = targetID
-	}
-
 	return DiscoverySummary{
 		ID:             d.ID,
 		ResourceType:   d.ResourceType,
 		ResourceID:     d.ResourceID,
 		TargetID:       targetID,
-		AgentID:        agentID,
+		AgentID:        d.AgentID,
 		Hostname:       d.Hostname,
 		ServiceType:    d.ServiceType,
 		ServiceName:    d.ServiceName,
