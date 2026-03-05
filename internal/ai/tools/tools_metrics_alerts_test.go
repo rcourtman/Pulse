@@ -416,7 +416,7 @@ func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
 
 	executor.findingsProvider = findingsProv
 	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
-		"resource_type":     "docker",
+		"resource_type":     "app-container",
 		"include_dismissed": true,
 		"limit":             1,
 		"offset":            1,

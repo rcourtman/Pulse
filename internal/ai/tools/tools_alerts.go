@@ -41,7 +41,7 @@ Examples:
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Filter by resource type: vm, container, node, docker (for findings)",
+						Description: "Filter by canonical v6 resource type: vm, system-container, app-container, node (for findings)",
 					},
 					"resource_id": {
 						Type:        "string",
@@ -174,9 +174,15 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceType != "" {
-		validTypes := map[string]bool{"vm": true, "system-container": true, "container": true, "node": true, "docker": true}
+		resourceType = canonicalAlertFindingResourceType(resourceType)
+		validTypes := map[string]bool{
+			"vm":               true,
+			"system-container": true,
+			"node":             true,
+			"app-container":    true,
+		}
 		if !validTypes[resourceType] {
-			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, node, or docker", resourceType)), nil
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, node, or app-container", resourceType)), nil
 		}
 	}
 
@@ -190,18 +196,6 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		allDismissed = e.findingsProvider.GetDismissedFindings()
 	}
 
-	normalizeType := func(value string) string {
-		normalized := strings.ToLower(strings.TrimSpace(value))
-		switch normalized {
-		case "docker container", "docker-container", "docker_container":
-			return "docker"
-		case "system-container", "container":
-			return "system-container"
-		default:
-			return normalized
-		}
-	}
-
 	matches := func(f Finding) bool {
 		if severityFilter != "" && f.Severity != severityFilter {
 			return false
@@ -209,7 +203,7 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 		if resourceID != "" && f.ResourceID != resourceID {
 			return false
 		}
-		if resourceType != "" && normalizeType(f.ResourceType) != resourceType {
+		if resourceType != "" && canonicalAlertFindingResourceType(f.ResourceType) != resourceType {
 			return false
 		}
 		return true
@@ -281,6 +275,18 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 	}
 
 	return NewJSONResult(response), nil
+}
+
+func canonicalAlertFindingResourceType(raw string) string {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	switch normalized {
+	case "container", "system-container", "system_container":
+		return "system-container"
+	case "docker", "docker container", "docker-container", "docker_container", "app-container", "app_container":
+		return "app-container"
+	default:
+		return normalized
+	}
 }
 
 func (e *PulseToolExecutor) executeResolveFinding(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
