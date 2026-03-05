@@ -851,15 +851,15 @@ func triageCanonicalResourceType(resourceType string) string {
 func triageConnectionResourceType(resourceID string) string {
 	id := strings.ToLower(strings.TrimSpace(resourceID))
 	switch {
-	case strings.Contains(id, "qemu/"):
+	case strings.HasPrefix(id, "vm:"), strings.HasPrefix(id, "vm/"), strings.Contains(id, "qemu/"):
 		return "vm"
-	case strings.Contains(id, "lxc/"):
+	case strings.HasPrefix(id, "system-container:"), strings.HasPrefix(id, "system-container/"), strings.HasPrefix(id, "oci-container:"), strings.HasPrefix(id, "oci-container/"), strings.Contains(id, "lxc/"):
 		return "system-container"
-	case strings.HasPrefix(id, "node/"), strings.HasPrefix(id, "pve"), strings.Contains(id, "/node/"):
+	case strings.HasPrefix(id, "node/"), strings.HasPrefix(id, "node:"), strings.HasPrefix(id, "pve"), strings.Contains(id, "/node/"):
 		return "node"
 	case strings.HasPrefix(id, "storage/"), strings.Contains(id, "storage"):
 		return "storage"
-	case strings.HasPrefix(id, "docker-"), strings.Contains(id, "docker"):
+	case strings.HasPrefix(id, "docker-host:"), strings.HasPrefix(id, "docker-host/"), strings.HasPrefix(id, "app-container:"), strings.HasPrefix(id, "app-container/"), strings.HasPrefix(id, "docker-"), strings.Contains(id, "docker"):
 		return "docker-host"
 	case strings.HasPrefix(id, "pbs-"), strings.HasPrefix(id, "pbs/"), strings.Contains(id, "pbs"):
 		return "pbs"

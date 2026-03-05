@@ -232,6 +232,28 @@ func TestTriageResourceTypeRejectsLegacyKnownTypeAliases(t *testing.T) {
 	}
 }
 
+func TestTriageResourceTypeCanonicalResourceIDs(t *testing.T) {
+	testCases := []struct {
+		name       string
+		resourceID string
+		want       string
+	}{
+		{name: "vm canonical id", resourceID: "vm:pve1:100", want: "vm"},
+		{name: "system container canonical id", resourceID: "system-container:pve1:200", want: "system-container"},
+		{name: "oci container canonical id", resourceID: "oci-container:pve1:201", want: "system-container"},
+		{name: "node canonical id", resourceID: "node:pve1", want: "node"},
+		{name: "app container canonical id", resourceID: "app-container:docker-host-1:abc123", want: "docker-host"},
+		{name: "docker host canonical id", resourceID: "docker-host:edge-1", want: "docker-host"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := triageResourceType("", tc.resourceID); got != tc.want {
+				t.Fatalf("triageResourceType(%q) = %q, want %q", tc.resourceID, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestTriageQuietInfra(t *testing.T) {
 	p := &PatrolService{
 		findings:   NewFindingsStore(),
