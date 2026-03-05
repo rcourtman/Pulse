@@ -485,7 +485,6 @@ func TestHandleGetDiscovery_EmitsCanonicalAgentID(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
 	assert.Equal(t, "agent-1", body["target_id"])
 	assert.Equal(t, "agent-1", body["agent_id"])
-	assert.Equal(t, "agent-1", body["host_id"])
 }
 
 // Additional test to cover service not configured case

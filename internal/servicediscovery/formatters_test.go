@@ -85,6 +85,9 @@ func TestFormattersAndTables(t *testing.T) {
 	if jsonMap["agent_id"] != "agent-1" {
 		t.Fatalf("expected agent_id=agent-1, got %#v", jsonMap["agent_id"])
 	}
+	if _, hasLegacyHostID := jsonMap["host_id"]; hasLegacyHostID {
+		t.Fatalf("did not expect legacy host_id key in ToJSON output: %#v", jsonMap)
+	}
 	if ToJSON(nil) != nil {
 		t.Fatalf("expected nil json map for nil discovery")
 	}

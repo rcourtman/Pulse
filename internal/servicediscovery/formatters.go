@@ -577,7 +577,6 @@ func ToJSON(d *ResourceDiscovery) map[string]any {
 		"resource_id":                 d.ResourceID,
 		"target_id":                   firstNonEmpty(d.TargetID, d.HostID),
 		"agent_id":                    d.AgentID,
-		"host_id":                     d.HostID,
 		"hostname":                    d.Hostname,
 		"service_type":                d.ServiceType,
 		"service_name":                d.ServiceName,
