@@ -220,7 +220,6 @@ type DiscoverySummary struct {
 	ResourceID     string          `json:"resource_id"`
 	TargetID       string          `json:"target_id,omitempty"`
 	AgentID        string          `json:"agent_id,omitempty"`
-	HostID         string          `json:"-"` // Internal legacy alias of target_id
 	Hostname       string          `json:"hostname"`
 	ServiceType    string          `json:"service_type"`
 	ServiceName    string          `json:"service_name"`
@@ -251,7 +250,6 @@ func (d *ResourceDiscovery) ToSummary() DiscoverySummary {
 		ResourceID:     d.ResourceID,
 		TargetID:       targetID,
 		AgentID:        agentID,
-		HostID:         d.HostID,
 		Hostname:       d.Hostname,
 		ServiceType:    d.ServiceType,
 		ServiceName:    d.ServiceName,
