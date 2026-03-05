@@ -339,7 +339,7 @@ export function Infrastructure() {
                 <EmptyState
                   icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
                   title="No infrastructure resources yet"
-                  description="Add Proxmox VE nodes or install the Pulse agent on your hosts to start monitoring."
+                  description="Add Proxmox VE nodes or install the Pulse agent on your infrastructure to start monitoring."
                   actions={
                     <button
                       type="button"
@@ -358,11 +358,11 @@ export function Infrastructure() {
               <Show when={!summaryCollapsed()}>
                 <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
                   <InfrastructureSummary
-                    hosts={filteredResources()}
+                    resources={filteredResources()}
                     timeRange={infrastructureSummaryRange()}
                     onTimeRangeChange={setInfrastructureSummaryRange}
-                    hoveredHostId={hoveredResourceId()}
-                    focusedHostId={expandedResourceId()}
+                    hoveredResourceId={hoveredResourceId()}
+                    focusedResourceId={expandedResourceId()}
                   />
                 </div>
               </Show>

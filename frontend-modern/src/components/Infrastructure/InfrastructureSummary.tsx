@@ -16,12 +16,12 @@ import {
   SUMMARY_TIME_RANGES,
   SUMMARY_TIME_RANGE_LABEL,
 } from '@/components/shared/summaryTimeRange';
-import { HOST_COLORS } from '@/pages/DashboardPanels/hostColors';
+import { RESOURCE_COLORS } from '@/pages/DashboardPanels/resourceColors';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import { isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
-const normalizeHostIdentifier = (value?: string | null): string[] => {
+const normalizeResourceIdentifier = (value?: string | null): string[] => {
   if (!value) return [];
   const normalized = value.trim().toLowerCase();
   if (!normalized) return [];
@@ -98,9 +98,9 @@ const formatRate = (bytesPerSec: number): string => {
   return `${Math.round(bytesPerSec)} B/s`;
 };
 
-// Combine a host's net in/out into a single throughput series.
+// Combine a resource's net in/out into a single throughput series.
 // Buckets points into 30-second windows and sums rates from both directions.
-function combineHostNetSeries(inSeries: MetricPoint[], outSeries: MetricPoint[]): MetricPoint[] {
+function combineResourceThroughputSeries(inSeries: MetricPoint[], outSeries: MetricPoint[]): MetricPoint[] {
   const bucketSize = 30_000; // 30 seconds
   const buckets = new Map<number, number>();
   for (const p of inSeries) {
@@ -118,10 +118,10 @@ function combineHostNetSeries(inSeries: MetricPoint[], outSeries: MetricPoint[])
 }
 
 interface InfrastructureSummaryProps {
-  hosts: Resource[];
+  resources: Resource[];
   timeRange?: TimeRange;
-  hoveredHostId?: string | null;
-  focusedHostId?: string | null;
+  hoveredResourceId?: string | null;
+  focusedResourceId?: string | null;
   onTimeRangeChange?: (range: TimeRange) => void;
 }
 
@@ -153,7 +153,7 @@ if (import.meta.hot) {
 }
 
 export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (props) => {
-  // Chart data keyed by resource identifier (node name, host id, etc.)
+  // Chart data keyed by resource identifier (node name, resource id, etc.)
   const [chartMap, setChartMap] = createSignal<Map<string, ChartData>>(new Map());
   const [chartRange, setChartRange] = createSignal<TimeRange | null>(null);
   const [loadedRange, setLoadedRange] = createSignal<TimeRange | null>(null);
@@ -163,7 +163,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());
 
   const { workloads, resources } = useResources();
-  const hostAgents = createMemo(() =>
+  const agentResources = createMemo(() =>
     resources().filter(
       (resource) =>
         (resource.type === 'node' ||
@@ -209,7 +209,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   };
 
   const fetchCharts = async (options?: { prioritize?: boolean }) => {
-    if (props.hosts.length === 0) {
+    if (props.resources.length === 0) {
       return;
     }
 
@@ -280,13 +280,13 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   };
 
   createEffect(() => {
-    // Start polling when there are hosts to show. Crucially, do NOT tear down
+    // Start polling when there are resources to show. Crucially, do NOT tear down
     // and recreate the interval on every props update, or we end up refetching
     // charts at the websocket update cadence (causing visible UI flashes).
-    const hasHosts = props.hosts.length > 0;
+    const hasResources = props.resources.length > 0;
     // Read orgVersion to subscribe to org switches.
     const currentOrg = orgVersion();
-    if (!hasHosts) {
+    if (!hasResources) {
       if (refreshTimer) {
         clearInterval(refreshTimer);
         refreshTimer = undefined;
@@ -340,28 +340,28 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   // Match a unified resource to its chart data.
   // Chart data is keyed by backend composite IDs (e.g. "cluster-pve01" or "instance-pve01")
   // but unified resources have hashed IDs. We reconstruct the composite key or use suffix matching.
-  const findChartData = (host: Resource): ChartData | undefined => {
+  const findChartData = (resource: Resource): ChartData | undefined => {
     if (!hasCurrentRangeCharts()) return undefined;
     const map = chartMap();
     if (map.size === 0) return undefined;
 
     // 1. Agent ID match from unified platform data (most reliable for agent resources).
-    for (const key of getChartKeyCandidates(host)) {
+    for (const key of getChartKeyCandidates(resource)) {
       const match = map.get(key);
       if (match) return match;
     }
 
     // 2. Direct matches (works for agent resources where IDs may align)
     // Reconstruct composite key for clustered Proxmox nodes: "clusterName-nodeName"
-    if (host.clusterId && host.platformId) {
-      const clusterKey = `${host.clusterId}-${host.platformId}`;
+    if (resource.clusterId && resource.platformId) {
+      const clusterKey = `${resource.clusterId}-${resource.platformId}`;
       const clusterMatch = map.get(clusterKey);
       if (clusterMatch) return clusterMatch;
     }
 
     // 3. Suffix match for standalone Proxmox nodes: key ends with "-{nodeName}"
     // Handles cases where the instance name prefix is unknown to the frontend
-    const nameToMatch = host.platformId || host.name;
+    const nameToMatch = resource.platformId || resource.name;
     if (nameToMatch) {
       const suffix = `-${nameToMatch}`;
       for (const [key, data] of map) {
@@ -375,22 +375,22 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   // Find chart data from a linked agent when the primary chart data
   // (typically from nodeData) doesn't include agent-specific metrics like
   // netin/netout/diskread/diskwrite.
-  // Agent resources have internal IDs that match hostData chart keys, and
+  // Agent resources have internal IDs that match agentData chart keys, and
   // platformData.linkedNodeId + identity.hostname fields that let us correlate
   // with infrastructure resources.
-  const findAgentChartData = (host: Resource): ChartData | undefined => {
+  const findAgentChartData = (resource: Resource): ChartData | undefined => {
     if (!hasCurrentRangeCharts()) return undefined;
     const map = chartMap();
     if (map.size === 0) return undefined;
 
     const directAgentCandidates: string[] = [];
-    const explicitAgentId = getExplicitAgentIdFromResource(host);
+    const explicitAgentId = getExplicitAgentIdFromResource(resource);
     if (explicitAgentId) {
       directAgentCandidates.push(explicitAgentId);
     }
-    if (host.platformType === 'agent') {
-      const discoveryResourceId = asTrimmedString(host.discoveryTarget?.resourceId);
-      const discoveryHostId = asTrimmedString(host.discoveryTarget?.hostId);
+    if (resource.platformType === 'agent') {
+      const discoveryResourceId = asTrimmedString(resource.discoveryTarget?.resourceId);
+      const discoveryHostId = asTrimmedString(resource.discoveryTarget?.hostId);
       if (discoveryResourceId) directAgentCandidates.push(discoveryResourceId);
       if (discoveryHostId) directAgentCandidates.push(discoveryHostId);
     }
@@ -400,25 +400,25 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
       if (direct) return direct;
     }
 
-    const agentHosts = hostAgents();
-    if (!agentHosts || agentHosts.length === 0) return undefined;
+    const agentFacetResources = agentResources();
+    if (!agentFacetResources || agentFacetResources.length === 0) return undefined;
 
     const nodeRefCandidates = new Set<string>(
-      [host.id, host.name, host.platformId]
+      [resource.id, resource.name, resource.platformId]
         .map((value) => value?.trim().toLowerCase())
         .filter((value): value is string => Boolean(value)),
     );
-    const hostCandidates = new Set<string>([
-      ...normalizeHostIdentifier(host.platformId),
-      ...normalizeHostIdentifier(host.name),
-      ...normalizeHostIdentifier(host.displayName),
-      ...normalizeHostIdentifier(host.identity?.hostname),
+    const resourceNameCandidates = new Set<string>([
+      ...normalizeResourceIdentifier(resource.platformId),
+      ...normalizeResourceIdentifier(resource.name),
+      ...normalizeResourceIdentifier(resource.displayName),
+      ...normalizeResourceIdentifier(resource.identity?.hostname),
     ]);
 
     // Find an agent resource that matches this infrastructure resource
     // by linked node ID, hostname, or name
-    for (const agentHost of agentHosts) {
-      const linkedNodeId = getLinkedNodeIdFromResource(agentHost);
+    for (const agentResource of agentFacetResources) {
+      const linkedNodeId = getLinkedNodeIdFromResource(agentResource);
       const normalizedLinkedNodeId = linkedNodeId?.toLowerCase();
 
       // Match by linked node: agent is linked to a PVE node matching this resource
@@ -426,12 +426,14 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         ? nodeRefCandidates.has(normalizedLinkedNodeId)
         : false;
       // Match by hostname: agent hostname matches this resource
-      const agentHostName = agentHost.identity?.hostname ?? agentHost.name;
-      const agentHostNames = normalizeHostIdentifier(agentHostName);
-      const hostnameMatch = agentHostNames.some((candidate) => hostCandidates.has(candidate));
+      const agentResourceName = agentResource.identity?.hostname ?? agentResource.name;
+      const agentResourceNames = normalizeResourceIdentifier(agentResourceName);
+      const hostnameMatch = agentResourceNames.some((candidate) =>
+        resourceNameCandidates.has(candidate),
+      );
 
       if (linkedMatch || hostnameMatch) {
-        for (const key of getChartKeyCandidates(agentHost)) {
+        for (const key of getChartKeyCandidates(agentResource)) {
           const agentData = map.get(key);
           if (agentData) return agentData;
         }
@@ -440,13 +442,13 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     return undefined;
   };
 
-  // Build sparkline series for all hosts
-  const hostSeries = createMemo(() => {
+  // Build sparkline series for all resources
+  const resourceSeries = createMemo(() => {
     void chartMap(); // reactive dependency
-    return props.hosts.map((host, i) => {
-      const primaryData = findChartData(host);
-      const agentData = findAgentChartData(host);
-      const seriesId = host.id || host.platformId || host.name || `host-${i}`;
+    return props.resources.map((resource, i) => {
+      const primaryData = findChartData(resource);
+      const agentData = findAgentChartData(resource);
+      const seriesId = resource.id || resource.platformId || resource.name || `resource-${i}`;
 
       const metricSeries = (metric: keyof ChartData): MetricPoint[] => {
         const primary = primaryData?.[metric];
@@ -464,27 +466,30 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         disk: metricSeries('disk'),
         netin: metricSeries('netin'),
         netout: metricSeries('netout'),
-        network: combineHostNetSeries(metricSeries('netin'), metricSeries('netout')),
-        diskio: combineHostNetSeries(metricSeries('diskread'), metricSeries('diskwrite')),
-        color: HOST_COLORS[i % HOST_COLORS.length],
-        name: getDisplayName(host),
+        network: combineResourceThroughputSeries(metricSeries('netin'), metricSeries('netout')),
+        diskio: combineResourceThroughputSeries(
+          metricSeries('diskread'),
+          metricSeries('diskwrite'),
+        ),
+        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        name: getDisplayName(resource),
       };
     });
   });
 
   // When a resource drawer is open, filter sparklines to show only that resource
   const displaySeries = createMemo(() => {
-    const focused = props.focusedHostId;
-    const all = hostSeries();
+    const focused = props.focusedResourceId;
+    const all = resourceSeries();
     if (!focused) return all;
     const match = all.find((s) => s.id === focused);
     return match ? [match] : all;
   });
 
-  const focusedHostName = createMemo(() => {
-    const focused = props.focusedHostId;
+  const focusedResourceName = createMemo(() => {
+    const focused = props.focusedResourceId;
     if (!focused) return null;
-    const match = hostSeries().find((s) => s.id === focused);
+    const match = resourceSeries().find((s) => s.id === focused);
     return match?.name ?? null;
   });
 
@@ -514,24 +519,26 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   const hasDiskIOData = () => displaySeries().some((s) => s.diskio.length >= 1);
 
   const avgDiskCapacity = createMemo(() => {
-    const hosts = props.hosts.filter((h) => h.disk && h.disk.total);
-    if (hosts.length === 0) return null;
-    const avg = hosts.reduce((sum, h) => sum + getDiskPercent(h), 0) / hosts.length;
+    const diskResources = props.resources.filter((resource) => resource.disk && resource.disk.total);
+    if (diskResources.length === 0) return null;
+    const avg =
+      diskResources.reduce((sum, resource) => sum + getDiskPercent(resource), 0) /
+      diskResources.length;
     return Math.round(avg);
   });
 
   // Keep the network card visible when we have capability but limited history.
   const hasNetworkCapability = createMemo(() =>
-    props.hosts.some((host) => {
-      const platformData = getPlatformDataRecord(host);
+    props.resources.some((resource) => {
+      const platformData = getPlatformDataRecord(resource);
       const sources = (Array.isArray(platformData?.sources) ? platformData.sources : [])
         .map((source) => (typeof source === 'string' ? source.toLowerCase() : ''))
         .filter(Boolean);
       if (sources.includes('agent')) return true;
 
       // If current-rate metrics are present, treat as network-capable.
-      const rx = host.network?.rxBytes ?? 0;
-      const tx = host.network?.txBytes ?? 0;
+      const rx = resource.network?.rxBytes ?? 0;
+      const tx = resource.network?.txBytes ?? 0;
       return rx > 0 || tx > 0;
     }),
   );
@@ -563,29 +570,29 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     return { total: all.length, running, stopped, vms, containers };
   });
 
-  const hostCounts = createMemo(() => {
-    const total = props.hosts.length;
-    const online = props.hosts.filter((host) => host.status === 'online').length;
+  const resourceCounts = createMemo(() => {
+    const total = props.resources.length;
+    const online = props.resources.filter((resource) => resource.status === 'online').length;
     const offline = total - online;
     return { total, online, offline };
   });
 
   return (
-    <Show when={props.hosts.length > 0}>
+    <Show when={props.resources.length > 0}>
       <div data-testid="infrastructure-summary" class="space-y-2">
         <div class="rounded-md border border-border bg-surface p-2 shadow-sm sm:p-3">
           <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px] text-slate-500">
             <div class="flex items-center gap-3">
               <span class="font-medium text-base-content">
-                {hostCounts().total} {hostCounts().total === 1 ? 'resource' : 'resources'}
+                {resourceCounts().total} {resourceCounts().total === 1 ? 'resource' : 'resources'}
               </span>
-              <Show when={hostCounts().online > 0}>
+              <Show when={resourceCounts().online > 0}>
                 <span class="text-emerald-600 dark:text-emerald-400">
-                  {hostCounts().online} online
+                  {resourceCounts().online} online
                 </span>
               </Show>
-              <Show when={hostCounts().offline > 0}>
-                <span class="text-muted">{hostCounts().offline} offline</span>
+              <Show when={resourceCounts().offline > 0}>
+                <span class="text-muted">{resourceCounts().offline} offline</span>
               </Show>
             </div>
             <Show when={props.onTimeRangeChange}>
@@ -616,9 +623,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
                     CPU
                   </span>
-                  <Show when={focusedHostName()}>
+                  <Show when={focusedResourceName()}>
                     <span class="text-xs text-muted ml-1.5 truncate">
-                      &mdash; {focusedHostName()}
+                      &mdash; {focusedResourceName()}
                     </span>
                   </Show>
                 </div>
@@ -641,7 +648,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                       timeRange={props.timeRange}
                       yMode="percent"
                       highlightNearestSeriesOnHover
-                      highlightSeriesId={props.hoveredHostId}
+                      highlightSeriesId={props.hoveredResourceId}
                     />
                   </div>
                 </Show>
@@ -655,9 +662,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
                     Memory
                   </span>
-                  <Show when={focusedHostName()}>
+                  <Show when={focusedResourceName()}>
                     <span class="text-xs text-muted ml-1.5 truncate">
-                      &mdash; {focusedHostName()}
+                      &mdash; {focusedResourceName()}
                     </span>
                   </Show>
                 </div>
@@ -680,7 +687,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                       timeRange={props.timeRange}
                       yMode="percent"
                       highlightNearestSeriesOnHover
-                      highlightSeriesId={props.hoveredHostId}
+                      highlightSeriesId={props.hoveredResourceId}
                     />
                   </div>
                 </Show>
@@ -694,12 +701,12 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
                     Disk I/O
                   </span>
-                  <Show when={focusedHostName()}>
+                  <Show when={focusedResourceName()}>
                     <span class="text-xs text-muted ml-1.5 truncate">
-                      &mdash; {focusedHostName()}
+                      &mdash; {focusedResourceName()}
                     </span>
                   </Show>
-                  <Show when={!focusedHostName() && avgDiskCapacity() !== null}>
+                  <Show when={!focusedResourceName() && avgDiskCapacity() !== null}>
                     <span class="text-[10px] text-muted ml-auto shrink-0">
                       Capacity: {avgDiskCapacity()}%
                     </span>
@@ -788,9 +795,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                     <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
                       Network
                     </span>
-                    <Show when={focusedHostName()}>
+                    <Show when={focusedResourceName()}>
                       <span class="text-xs text-muted ml-1.5 truncate">
-                        &mdash; {focusedHostName()}
+                        &mdash; {focusedResourceName()}
                       </span>
                     </Show>
                   </div>

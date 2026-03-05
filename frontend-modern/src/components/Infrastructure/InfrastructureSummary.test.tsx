@@ -73,7 +73,7 @@ const makeChartsResponse = (ids: string[] = ['node-1']) => ({
     ]),
   ),
   dockerHostData: {},
-  hostData: {},
+  agentData: {},
   timestamp: Date.now(),
   stats: {
     oldestDataTimestamp: Date.now() - 60_000,
@@ -99,7 +99,7 @@ describe('InfrastructureSummary range behavior', () => {
 
   it('requests charts for initial and updated time ranges', async () => {
     const [range, setRange] = createSignal<TimeRange>('1h');
-    render(() => <InfrastructureSummary hosts={[makeHost()]} timeRange={range()} />);
+    render(() => <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />);
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');
@@ -122,8 +122,8 @@ describe('InfrastructureSummary range behavior', () => {
 
     render(() => (
       <>
-        <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
-        <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
+        <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+        <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
       </>
     ));
 
@@ -144,7 +144,7 @@ describe('InfrastructureSummary range behavior', () => {
     mockGetCharts.mockReset();
     mockGetCharts.mockResolvedValueOnce(makeChartsResponse());
     const { container: firstContainer, unmount } = render(() => (
-      <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
     ));
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');
@@ -156,7 +156,7 @@ describe('InfrastructureSummary range behavior', () => {
     mockGetCharts.mockReset();
     mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
     ));
 
     await waitFor(() => {
@@ -178,7 +178,7 @@ describe('InfrastructureSummary range behavior', () => {
     );
 
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
     ));
 
     await waitFor(() => {
@@ -205,7 +205,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const [range, setRange] = createSignal<TimeRange>('1h');
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[makeHost()]} timeRange={range()} />
+      <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />
     ));
 
     await waitFor(() => {
@@ -236,7 +236,7 @@ describe('InfrastructureSummary range behavior', () => {
     mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
 
     const [range, setRange] = createSignal<TimeRange>('1h');
-    render(() => <InfrastructureSummary hosts={[makeHost()]} timeRange={range()} />);
+    render(() => <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />);
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');
@@ -256,7 +256,7 @@ describe('InfrastructureSummary range behavior', () => {
       Promise.resolve({
         nodeData: {},
         dockerHostData: {},
-        hostData: {},
+        agentData: {},
         timestamp: Date.now(),
         stats: {
           oldestDataTimestamp: Date.now() - 60_000,
@@ -266,7 +266,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const [range, setRange] = createSignal<TimeRange>('1h');
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[makeHost()]} timeRange={range()} />
+      <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />
     ));
 
     await waitFor(() => {
@@ -295,7 +295,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const [range, setRange] = createSignal<TimeRange>('1h');
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[makeHost()]} timeRange={range()} />
+      <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />
     ));
 
     await waitFor(() => {
@@ -323,7 +323,7 @@ describe('InfrastructureSummary range behavior', () => {
     mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
 
     const [hosts, setHosts] = createSignal<Resource[]>([makeHost()]);
-    const { container } = render(() => <InfrastructureSummary hosts={hosts()} timeRange="1h" />);
+    const { container } = render(() => <InfrastructureSummary resources={hosts()} timeRange="1h" />);
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');
@@ -344,7 +344,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('keeps per-chart rendered series bounded to the focused host', async () => {
+  it('keeps per-chart rendered series bounded to the focused resource', async () => {
     mockGetCharts.mockReset();
     mockGetCharts.mockResolvedValueOnce(makeChartsResponse(['node-1', 'node-2']));
     const hosts = [
@@ -356,10 +356,14 @@ describe('InfrastructureSummary range behavior', () => {
         platformId: 'node-2',
       }),
     ];
-    const [focusedHostId, setFocusedHostId] = createSignal<string | null>(null);
+    const [focusedResourceId, setFocusedResourceId] = createSignal<string | null>(null);
 
     const { container } = render(() => (
-      <InfrastructureSummary hosts={hosts} timeRange="1h" focusedHostId={focusedHostId()} />
+      <InfrastructureSummary
+        resources={hosts}
+        timeRange="1h"
+        focusedResourceId={focusedResourceId()}
+      />
     ));
 
     await waitFor(() => {
@@ -369,7 +373,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
 
     const allSeriesPathCount = countSparklinePaths(container);
-    setFocusedHostId('node-2');
+    setFocusedResourceId('node-2');
 
     await waitFor(() => {
       expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
@@ -378,7 +382,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('does not refetch charts on large host list growth for the same range', async () => {
+  it('does not refetch charts on large resource list growth for the same range', async () => {
     mockGetCharts.mockReset();
     mockGetCharts.mockResolvedValue(makeChartsResponse(['node-1']));
 
@@ -393,7 +397,7 @@ describe('InfrastructureSummary range behavior', () => {
       ),
     );
 
-    render(() => <InfrastructureSummary hosts={hosts()} timeRange="1h" />);
+    render(() => <InfrastructureSummary resources={hosts()} timeRange="1h" />);
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledTimes(1);
@@ -415,13 +419,13 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('maps hostData by agentId from unified platform data when websocket hosts are unavailable', async () => {
+  it('maps agentData by agentId from unified platform data when websocket agents are unavailable', async () => {
     mockGetCharts.mockReset();
     const now = Date.now();
     mockGetCharts.mockResolvedValueOnce({
       nodeData: {},
       dockerHostData: {},
-      hostData: {
+      agentData: {
         'agent-host-1': {
           cpu: [],
           memory: [],
@@ -462,7 +466,7 @@ describe('InfrastructureSummary range behavior', () => {
     };
 
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[agentOnlyHost]} timeRange="1h" />
+      <InfrastructureSummary resources={[agentOnlyHost]} timeRange="1h" />
     ));
 
     await waitFor(() => {
@@ -477,13 +481,13 @@ describe('InfrastructureSummary range behavior', () => {
     expect(container.textContent).toContain('Network');
   });
 
-  it('maps hostData by top-level resource.agent.agentId when platformData is absent', async () => {
+  it('maps agentData by top-level resource.agent.agentId when platformData is absent', async () => {
     mockGetCharts.mockReset();
     const now = Date.now();
     mockGetCharts.mockResolvedValueOnce({
       nodeData: {},
       dockerHostData: {},
-      hostData: {
+      agentData: {
         'agent-host-2': {
           cpu: [],
           memory: [],
@@ -523,7 +527,7 @@ describe('InfrastructureSummary range behavior', () => {
     };
 
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[agentOnlyHost]} timeRange="1h" />
+      <InfrastructureSummary resources={[agentOnlyHost]} timeRange="1h" />
     ));
 
     await waitFor(() => {
@@ -535,7 +539,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('uses linked agent discovery IDs for network chart fallback when host resource IDs are hashed', async () => {
+  it('uses linked agent discovery IDs for network chart fallback when resource IDs are hashed', async () => {
     mockGetCharts.mockReset();
     const now = Date.now();
     mockGetCharts.mockResolvedValueOnce({
@@ -558,7 +562,7 @@ describe('InfrastructureSummary range behavior', () => {
         },
       },
       dockerHostData: {},
-      hostData: {
+      agentData: {
         'agent-host-3': {
           cpu: [],
           memory: [],
@@ -592,7 +596,7 @@ describe('InfrastructureSummary range behavior', () => {
         lastSeen: now,
         discoveryTarget: {
           resourceType: 'agent',
-          hostId: 'agent-host-3',
+          agentId: 'agent-host-3',
           resourceId: 'agent-host-3',
         },
         platformData: {
@@ -620,7 +624,7 @@ describe('InfrastructureSummary range behavior', () => {
     };
 
     const { container } = render(() => (
-      <InfrastructureSummary hosts={[proxmoxNodeHost]} timeRange="1h" />
+      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
     ));
 
     await waitFor(() => {
