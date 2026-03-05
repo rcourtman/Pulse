@@ -41,9 +41,9 @@ func TestNormalizeResourceType_DoesNotAliasHost(t *testing.T) {
 	}
 }
 
-func TestCanonicalStoredResourceType_HostLegacyAlias(t *testing.T) {
-	if got := canonicalStoredResourceType(ResourceType("host")); got != ResourceTypeAgent {
-		t.Fatalf("canonicalStoredResourceType(host) = %q, want %q", got, ResourceTypeAgent)
+func TestCanonicalStoredResourceType_DoesNotAliasHost(t *testing.T) {
+	if got := canonicalStoredResourceType(ResourceType("host")); got != ResourceType("host") {
+		t.Fatalf("canonicalStoredResourceType(host) = %q, want %q", got, ResourceType("host"))
 	}
 }
 
@@ -54,10 +54,10 @@ func TestNormalizeResourceID_DoesNotAliasHostPrefix(t *testing.T) {
 	}
 }
 
-func TestCanonicalStoredResourceID_HostPrefixLegacyAlias(t *testing.T) {
+func TestCanonicalStoredResourceID_DoesNotAliasHostPrefix(t *testing.T) {
 	const legacyID = "host:host1:host1"
-	if got := canonicalStoredResourceID(legacyID); got != "agent:host1:host1" {
-		t.Fatalf("canonicalStoredResourceID(%q) = %q, want %q", legacyID, got, "agent:host1:host1")
+	if got := canonicalStoredResourceID(legacyID); got != legacyID {
+		t.Fatalf("canonicalStoredResourceID(%q) = %q, want %q", legacyID, got, legacyID)
 	}
 }
 

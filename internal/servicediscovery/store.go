@@ -108,12 +108,7 @@ func NormalizeResourceType(rt ResourceType) ResourceType {
 }
 
 func canonicalStoredResourceType(rt ResourceType) ResourceType {
-	switch rt {
-	case "host":
-		return ResourceTypeAgent
-	default:
-		return NormalizeResourceType(rt)
-	}
+	return NormalizeResourceType(rt)
 }
 
 // normalizeResourceID replaces legacy type prefixes in resource IDs.
@@ -128,9 +123,6 @@ func normalizeResourceID(id string) string {
 }
 
 func canonicalStoredResourceID(id string) string {
-	if strings.HasPrefix(id, "host:") {
-		return string(ResourceTypeAgent) + id[4:]
-	}
 	return normalizeResourceID(id)
 }
 
