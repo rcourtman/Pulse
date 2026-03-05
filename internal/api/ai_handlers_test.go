@@ -38,6 +38,16 @@ func newTestAISettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	return handler
 }
 
+func saveEnabledTestAIConfig(t *testing.T, persistence *config.ConfigPersistence) {
+	t.Helper()
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "ollama:llama3"
+	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+}
+
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -284,6 +294,44 @@ func TestAISettingsHandler_Execute_Ollama(t *testing.T) {
 	if resp.Content != "hello from ollama" || resp.Model == "" {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
+}
+
+func TestHandleExecute_RejectsLegacyHostTargetType(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	saveEnabledTestAIConfig(t, persistence)
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{"prompt":"hi","target_type":"host","target_id":"agent-1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleExecute(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "Invalid target_type")
+}
+
+func TestHandleExecuteStream_RejectsLegacyHostTargetType(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	saveEnabledTestAIConfig(t, persistence)
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{"prompt":"hi","target_type":"host","target_id":"agent-1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleExecuteStream(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "Invalid target_type")
 }
 
 func TestNormalizeAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
@@ -1565,6 +1613,26 @@ func TestHandleInvestigateAlert_MissingAlertID(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
+}
+
+func TestHandleInvestigateAlert_RejectsLegacyHostResourceType(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	saveEnabledTestAIConfig(t, persistence)
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{"alert_id":"alert-1","resource_id":"agent-1","resource_name":"node-1","resource_type":"host","alert_type":"cpu","level":"warning","message":"high cpu"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleInvestigateAlert(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), `unsupported resource_type "host"`)
+	require.NotContains(t, rec.Header().Get("Content-Type"), "text/event-stream")
 }
 
 // ========================================

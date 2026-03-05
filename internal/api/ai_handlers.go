@@ -4062,6 +4062,30 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		Str("type", req.AlertType).
 		Msg("AI alert investigation started")
 
+	targetType, err := normalizeInvestigateAlertTargetType(req.ResourceType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resourceType := strings.ToLower(strings.TrimSpace(req.ResourceType))
+	targetID := strings.TrimSpace(req.ResourceID)
+	if targetType == "vm" || targetType == "system-container" {
+		if req.VMID > 0 {
+			targetID = strconv.Itoa(req.VMID)
+		}
+	} else if targetType == "agent" {
+		if node := strings.ToLower(strings.TrimSpace(req.Node)); node != "" {
+			targetID = node
+		} else if resourceType != "app-container" {
+			// Keep explicit host-like IDs for node/agent resources.
+			targetID = strings.ToLower(strings.TrimSpace(req.ResourceID))
+		} else {
+			// app-container IDs are container-scoped, not host routing IDs.
+			targetID = ""
+		}
+	}
+
 	// Set up SSE streaming
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -4121,30 +4145,6 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		}
 		flusher.Flush()
 		return true
-	}
-
-	targetType, err := normalizeInvestigateAlertTargetType(req.ResourceType)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	resourceType := strings.ToLower(strings.TrimSpace(req.ResourceType))
-	targetID := strings.TrimSpace(req.ResourceID)
-	if targetType == "vm" || targetType == "system-container" {
-		if req.VMID > 0 {
-			targetID = strconv.Itoa(req.VMID)
-		}
-	} else if targetType == "agent" {
-		if node := strings.ToLower(strings.TrimSpace(req.Node)); node != "" {
-			targetID = node
-		} else if resourceType != "app-container" {
-			// Keep explicit host-like IDs for node/agent resources.
-			targetID = strings.ToLower(strings.TrimSpace(req.ResourceID))
-		} else {
-			// app-container IDs are container-scoped, not host routing IDs.
-			targetID = ""
-		}
 	}
 
 	// Stream callback

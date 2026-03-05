@@ -574,6 +574,91 @@ func TestOrgHandlersShareIsolationAcrossOrganizations(t *testing.T) {
 	}
 }
 
+func TestOrgHandlersShareListsStripLegacyHostResourceTypes(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createAcmeReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createAcmeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createAcmeRec, createAcmeReq)
+	if createAcmeRec.Code != http.StatusCreated {
+		t.Fatalf("create acme failed: %d %s", createAcmeRec.Code, createAcmeRec.Body.String())
+	}
+
+	createBetaReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createBetaRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createBetaRec, createBetaReq)
+	if createBetaRec.Code != http.StatusCreated {
+		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
+	}
+
+	sourceOrg, err := h.loadOrganization("acme")
+	if err != nil {
+		t.Fatalf("load acme: %v", err)
+	}
+	sourceOrg.SharedResources = []models.OrganizationShare{
+		{
+			ID:           "legacy-host",
+			TargetOrgID:  "beta",
+			ResourceType: "host",
+			ResourceID:   "agent-1",
+			AccessRole:   models.OrgRoleViewer,
+		},
+		{
+			ID:           "canonical-agent",
+			TargetOrgID:  "beta",
+			ResourceType: "agent",
+			ResourceID:   "agent-2",
+			AccessRole:   models.OrgRoleViewer,
+		},
+	}
+	if err := persistence.SaveOrganization(sourceOrg); err != nil {
+		t.Fatalf("save acme with mixed shares: %v", err)
+	}
+
+	sourceSharesReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/shares", nil), "alice")
+	sourceSharesReq.SetPathValue("id", "acme")
+	sourceSharesRec := httptest.NewRecorder()
+	h.HandleListShares(sourceSharesRec, sourceSharesReq)
+	if sourceSharesRec.Code != http.StatusOK {
+		t.Fatalf("list source shares failed: %d %s", sourceSharesRec.Code, sourceSharesRec.Body.String())
+	}
+
+	var sourceShares []models.OrganizationShare
+	if err := json.Unmarshal(sourceSharesRec.Body.Bytes(), &sourceShares); err != nil {
+		t.Fatalf("decode source shares: %v", err)
+	}
+	if len(sourceShares) != 1 || sourceShares[0].ResourceType != "agent" {
+		t.Fatalf("expected only canonical agent share in source payload, got %+v", sourceShares)
+	}
+
+	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
+	incomingReq.SetPathValue("id", "beta")
+	incomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(incomingRec, incomingReq)
+	if incomingRec.Code != http.StatusOK {
+		t.Fatalf("list incoming shares failed: %d %s", incomingRec.Code, incomingRec.Body.String())
+	}
+
+	var incoming []incomingOrganizationShare
+	if err := json.Unmarshal(incomingRec.Body.Bytes(), &incoming); err != nil {
+		t.Fatalf("decode incoming shares: %v", err)
+	}
+	if len(incoming) != 1 || incoming[0].ResourceType != "agent" {
+		t.Fatalf("expected only canonical agent share in incoming payload, got %+v", incoming)
+	}
+}
+
 func TestNormalizeOrganizationShareResourceType(t *testing.T) {
 	tests := []struct {
 		name string
