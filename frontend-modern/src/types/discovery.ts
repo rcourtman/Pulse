@@ -4,11 +4,8 @@ export type ResourceType =
   | 'vm'
   | 'system-container'
   | 'app-container'
-  | 'docker'
   | 'k8s'
-  | 'agent'
-  | 'docker_vm'
-  | 'docker_system-container';
+  | 'agent';
 
 export type ServiceCategory =
   | 'database'

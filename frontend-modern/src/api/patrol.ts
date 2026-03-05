@@ -21,7 +21,7 @@ export interface Finding {
   category: FindingCategory;
   resource_id: string;
   resource_name: string;
-  resource_type: string; // node, vm, container, docker_host, docker_container, storage, pbs, host_raid
+  resource_type: string; // node, vm, system-container, app-container, storage, pbs, host_raid
   node?: string;
   title: string;
   description: string;
