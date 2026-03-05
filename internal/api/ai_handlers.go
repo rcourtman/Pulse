@@ -3003,10 +3003,10 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
 	if targetType != "" {
 		switch targetType {
-		case "agent", "container", "vm", "node", "lxc":
+		case "agent", "container", "vm", "node":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node, lxc)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node)", http.StatusBadRequest)
 			return
 		}
 	}
@@ -3189,10 +3189,10 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
 	if targetType != "" {
 		switch targetType {
-		case "agent", "container", "vm", "node", "lxc":
+		case "agent", "container", "vm", "node":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node, lxc)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, container, vm, node)", http.StatusBadRequest)
 			return
 		}
 	}

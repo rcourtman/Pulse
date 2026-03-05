@@ -528,7 +528,7 @@ func TestRouteExecuteStream_ValidTargetTypes(t *testing.T) {
 	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
 	defer ollama.Close()
 
-	for _, tt := range []string{"agent", "container", "vm", "node", "lxc"} {
+	for _, tt := range []string{"agent", "container", "vm", "node"} {
 		t.Run(tt, func(t *testing.T) {
 			router, token := setupExecuteRouter(t, ollama.URL)
 
