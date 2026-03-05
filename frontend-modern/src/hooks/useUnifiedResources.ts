@@ -411,14 +411,12 @@ const resolveType = (value?: string): ResourceType => {
     case 'vm':
       return 'vm';
     case 'system-container':
-    case 'system_container':
       return 'system-container';
     case 'oci-container':
       return 'oci-container';
     case 'container':
       return 'system-container';
     case 'app-container':
-    case 'app_container':
     case 'docker-container':
       return 'app-container';
     case 'docker_container':
@@ -466,8 +464,6 @@ const resolveDiscoveryResourceType = (
     case 'vm':
       return 'vm';
     case 'system-container':
-    case 'system_container':
-    case 'container':
       return 'system-container';
     case 'docker':
       return 'docker';
