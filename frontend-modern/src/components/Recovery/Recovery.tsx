@@ -688,7 +688,7 @@ const Recovery: Component = () => {
   });
 
   const nodeOptions = createMemo(() => {
-    const values = (facets().nodesHosts || [])
+    const values = (facets().nodesAgents || [])
       .slice()
       .map((v) => String(v || '').trim())
       .filter(Boolean)
@@ -817,7 +817,7 @@ const Recovery: Component = () => {
   const hasSizeData = createMemo(() => Boolean(facets().hasSize));
   const hasVerificationData = createMemo(() => Boolean(facets().hasVerification));
   const hasClusterData = createMemo(() => (facets().clusters || []).length > 0);
-  const hasNodeData = createMemo(() => (facets().nodesHosts || []).length > 0);
+  const hasNodeData = createMemo(() => (facets().nodesAgents || []).length > 0);
   const hasNamespaceData = createMemo(() => (facets().namespaces || []).length > 0);
   const hasEntityIDData = createMemo(() => Boolean(facets().hasEntityId));
 
@@ -826,7 +826,7 @@ const Recovery: Component = () => {
     { id: 'subject', label: 'Subject' },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: 'Cluster', toggleable: true },
-    { id: 'nodeHost', label: 'Node/Host', toggleable: true },
+    { id: 'nodeAgent', label: 'Node/Agent', toggleable: true },
     { id: 'namespace', label: 'Namespace', toggleable: true },
     { id: 'source', label: 'Source' },
     { id: 'verified', label: 'Verified', toggleable: true },
@@ -841,7 +841,7 @@ const Recovery: Component = () => {
     if (hasVerificationData()) ids.add('verified');
     if (hasSizeData()) ids.add('size');
     if (hasClusterData()) ids.add('cluster');
-    if (hasNodeData()) ids.add('nodeHost');
+    if (hasNodeData()) ids.add('nodeAgent');
     if (hasNamespaceData()) ids.add('namespace');
     if (hasEntityIDData()) ids.add('entityId');
     return ids;
@@ -850,7 +850,7 @@ const Recovery: Component = () => {
   const artifactColumnVisibility = useColumnVisibility(
     STORAGE_KEYS.RECOVERY_HIDDEN_COLUMNS,
     artifactColumns,
-    ['entityId', 'cluster', 'nodeHost', 'namespace'],
+    ['entityId', 'cluster', 'nodeAgent', 'namespace'],
     relevantArtifactColumnIDs,
   );
 
@@ -1350,7 +1350,7 @@ const Recovery: Component = () => {
                 </Show>
                 <Show when={activeNodeLabel()}>
                   <div class="inline-flex max-w-full items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-200">
-                    <span class="font-medium uppercase tracking-wide">Node/Host</span>
+                    <span class="font-medium uppercase tracking-wide">Node/Agent</span>
                     <span class="truncate font-mono text-[10px]" title={activeNodeLabel()}>
                       {activeNodeLabel()}
                     </span>
@@ -1971,7 +1971,7 @@ const Recovery: Component = () => {
                             for="recovery-node-filter"
                             class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
                           >
-                            Node/Host
+                            Node/Agent
                           </label>
                           <select
                             id="recovery-node-filter"
@@ -2098,7 +2098,7 @@ const Recovery: Component = () => {
 
                               const entityId = String(p.entityId || '').trim();
                               const cluster = String(p.cluster || '').trim();
-                              const nodeHost = String(p.node || '').trim();
+                              const nodeAgent = String(p.node || '').trim();
                               const namespace = String(p.namespace || '').trim();
 
                               return (
@@ -2157,10 +2157,10 @@ const Recovery: Component = () => {
                                                 {cluster || '—'}
                                               </TableCell>
                                             );
-                                          case 'nodeHost':
+                                          case 'nodeAgent':
                                             return (
                                               <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
-                                                {nodeHost || '—'}
+                                                {nodeAgent || '—'}
                                               </TableCell>
                                             );
                                           case 'namespace':

@@ -24,7 +24,7 @@ export interface RecoveryPointDisplay {
   subjectType?: string;
   isWorkload?: boolean;
   clusterLabel?: string;
-  nodeHostLabel?: string;
+  nodeAgentLabel?: string;
   namespaceLabel?: string;
   entityIdLabel?: string;
   repositoryLabel?: string;
@@ -107,7 +107,7 @@ export interface RecoveryPointsSeriesResponse {
 
 export interface RecoveryPointsFacets {
   clusters?: string[];
-  nodesHosts?: string[];
+  nodesAgents?: string[];
   namespaces?: string[];
   hasSize?: boolean;
   hasVerification?: boolean;

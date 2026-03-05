@@ -88,7 +88,7 @@ describe('Recovery', () => {
 
     facetsPayload = {
       clusters: [],
-      nodesHosts: [],
+      nodesAgents: [],
       namespaces: [],
       hasSize: true,
       hasVerification: false,

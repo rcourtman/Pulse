@@ -81,11 +81,34 @@ const buildURL = (query: RecoveryFacetsQuery | undefined): string => {
   return `${RECOVERY_FACETS_URL}?${params.toString()}`;
 };
 
+type RawRecoveryPointsFacets = RecoveryPointsFacets & {
+  nodesHosts?: string[];
+};
+
+type RawRecoveryPointsFacetsResponse = {
+  data: RawRecoveryPointsFacets;
+};
+
+const normalizeFacetValues = (values: unknown): string[] => {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter((value) => value.length > 0);
+};
+
+const normalizeFacets = (facets: RawRecoveryPointsFacets): RecoveryPointsFacets => ({
+  ...facets,
+  nodesAgents: normalizeFacetValues(facets.nodesAgents ?? facets.nodesHosts),
+});
+
 async function fetchFacets(
   query: RecoveryFacetsQuery | undefined,
 ): Promise<RecoveryPointsFacetsResponse> {
   const url = buildURL(query);
-  return apiFetchJSON<RecoveryPointsFacetsResponse>(url);
+  const response = await apiFetchJSON<RawRecoveryPointsFacetsResponse>(url);
+  return {
+    data: normalizeFacets(response.data || {}),
+  };
 }
 
 export function useRecoveryPointsFacets(query?: Accessor<RecoveryFacetsQuery | null | undefined>) {
