@@ -426,13 +426,13 @@ func TestReportResponse_Fields(t *testing.T) {
 
 func TestCommandAck_Fields(t *testing.T) {
 	ack := CommandAck{
-		HostID:  "host-123",
+		AgentID: "agent-123",
 		Status:  CommandStatusCompleted,
 		Message: "Command executed successfully",
 	}
 
-	if ack.HostID != "host-123" {
-		t.Errorf("HostID = %q, want host-123", ack.HostID)
+	if ack.AgentID != "agent-123" {
+		t.Errorf("AgentID = %q, want agent-123", ack.AgentID)
 	}
 	if ack.Status != CommandStatusCompleted {
 		t.Errorf("Status = %q, want %q", ack.Status, CommandStatusCompleted)

@@ -1143,7 +1143,7 @@ func (a *Agent) sendCommandAckWithPayload(ctx context.Context, target TargetConf
 	}
 
 	ackPayload := agentsdocker.CommandAck{
-		HostID:  a.hostID,
+		AgentID: a.hostID,
 		Status:  status,
 		Message: message,
 		Payload: payload,
