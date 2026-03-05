@@ -133,21 +133,21 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/infra-updates", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdates)))
 	r.mux.HandleFunc("/api/infra-updates/summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdatesSummary)))
 	r.mux.HandleFunc("/api/infra-updates/check", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, infraUpdateHandlers.HandleTriggerInfraUpdateCheck)))
-	r.mux.HandleFunc("/api/infra-updates/host/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, func(w http.ResponseWriter, req *http.Request) {
-		// Extract host ID from path: /api/infra-updates/host/{hostId}
-		hostID := strings.TrimPrefix(req.URL.Path, "/api/infra-updates/host/")
-		hostID = strings.TrimSuffix(hostID, "/")
-		if hostID == "" {
-			writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Container runtime ID is required", nil)
+	r.mux.HandleFunc("/api/infra-updates/agent/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, func(w http.ResponseWriter, req *http.Request) {
+		// Extract agent ID from path: /api/infra-updates/agent/{agentId}
+		agentID := strings.TrimPrefix(req.URL.Path, "/api/infra-updates/agent/")
+		agentID = strings.TrimSuffix(agentID, "/")
+		if agentID == "" {
+			writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 			return
 		}
-		infraUpdateHandlers.HandleGetInfraUpdatesForHost(w, req, hostID)
+		infraUpdateHandlers.HandleGetInfraUpdatesForAgent(w, req, agentID)
 	})))
 	r.mux.HandleFunc("/api/infra-updates/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, func(w http.ResponseWriter, req *http.Request) {
 		// Extract resource ID from path: /api/infra-updates/{resourceId}
 		resourceID := strings.TrimPrefix(req.URL.Path, "/api/infra-updates/")
 		resourceID = strings.TrimSuffix(resourceID, "/")
-		if resourceID == "" || resourceID == "summary" || resourceID == "check" || strings.HasPrefix(resourceID, "host/") {
+		if resourceID == "" || resourceID == "summary" || resourceID == "check" || strings.HasPrefix(resourceID, "agent/") {
 			// Let specific handlers deal with these
 			http.NotFound(w, req)
 			return

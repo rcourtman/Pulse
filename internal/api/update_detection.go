@@ -25,8 +25,8 @@ func NewUpdateDetectionHandlers(monitor *monitoring.Monitor, readState unifiedre
 
 // ContainerUpdateInfo represents a container with an available update
 type ContainerUpdateInfo struct {
-	HostID          string                  `json:"hostId"`
-	HostName        string                  `json:"hostName"`
+	AgentID         string                  `json:"agentId"`
+	AgentName       string                  `json:"agentName"`
 	ContainerID     string                  `json:"containerId"`
 	ContainerName   string                  `json:"containerName"`
 	Image           string                  `json:"image"`
@@ -47,35 +47,35 @@ type infraUpdatesResponse struct {
 	Total   int                   `json:"total"`
 }
 
-type infraUpdateHostSummary struct {
-	HostID     string `json:"hostId"`
-	HostName   string `json:"hostName"`
+type infraUpdateAgentSummary struct {
+	AgentID    string `json:"agentId"`
+	AgentName  string `json:"agentName"`
 	TotalCount int    `json:"totalCount"`
 	Containers int    `json:"containers"`
 }
 
 type infraUpdatesSummaryResponse struct {
-	Summaries    map[string]infraUpdateHostSummary `json:"summaries"`
-	TotalUpdates int                               `json:"totalUpdates"`
+	Summaries    map[string]infraUpdateAgentSummary `json:"summaries"`
+	TotalUpdates int                                `json:"totalUpdates"`
 }
 
-type infraUpdatesForHostResponse struct {
+type infraUpdatesForAgentResponse struct {
 	Updates []ContainerUpdateInfo `json:"updates"`
 	Total   int                   `json:"total"`
-	HostID  string                `json:"hostId"`
+	AgentID string                `json:"agentId"`
 }
 
 type triggerInfraUpdateCheckResponse struct {
 	Success   bool   `json:"success"`
 	CommandID string `json:"commandId"`
-	HostID    string `json:"hostId"`
+	AgentID   string `json:"agentId"`
 	Message   string `json:"message"`
 }
 
 // HandleGetInfraUpdates returns all tracked infrastructure updates with optional filtering.
 // GET /api/infra-updates
 //
-//	?hostId=<id>         Filter by host
+//	?agentId=<id>        Filter by agent
 //	?resourceType=docker Filter by type (currently only docker supported)
 func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -95,11 +95,11 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r
 
 	// Parse query filters
 	query := r.URL.Query()
-	hostIDFilter := query.Get("hostId")
+	agentIDFilter := query.Get("agentId")
 	resourceTypeFilter := strings.ToLower(query.Get("resourceType"))
 
-	// Collect updates from Docker hosts
-	updates := h.collectDockerUpdates(hostIDFilter)
+	// Collect updates from Docker agents
+	updates := h.collectDockerUpdates(agentIDFilter)
 
 	// Filter by resource type if specified
 	if resourceTypeFilter != "" && resourceTypeFilter != string(infraUpdateResourceTypeDocker) {
@@ -129,10 +129,10 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdateForResource(w http.Respons
 		return
 	}
 
-	// ResourceID format: docker:<hostId>/<containerId>
+	// ResourceID format: docker:<agentId>/<containerId>
 	updates := h.collectDockerUpdates("")
 	for _, update := range updates {
-		dockerResourceID := "docker:" + update.HostID + "/" + update.ContainerID
+		dockerResourceID := "docker:" + update.AgentID + "/" + update.ContainerID
 		if dockerResourceID == resourceID || update.ContainerID == resourceID {
 			if err := utils.WriteJSONResponse(w, update); err != nil {
 				log.Error().Err(err).Msg("Failed to serialize update response")
@@ -144,7 +144,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdateForResource(w http.Respons
 	writeErrorResponse(w, http.StatusNotFound, "not_found", "No update found for resource", nil)
 }
 
-// HandleGetInfraUpdatesSummary returns aggregated update statistics per host.
+// HandleGetInfraUpdatesSummary returns aggregated update statistics per agent.
 // GET /api/infra-updates/summary
 func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -154,7 +154,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 
 	if h.monitor == nil {
 		if err := utils.WriteJSONResponse(w, infraUpdatesSummaryResponse{
-			Summaries:    map[string]infraUpdateHostSummary{},
+			Summaries:    map[string]infraUpdateAgentSummary{},
 			TotalUpdates: 0,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize empty summary response")
@@ -164,19 +164,19 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 
 	updates := h.collectDockerUpdates("")
 
-	// Aggregate by host
-	summaries := make(map[string]infraUpdateHostSummary)
+	// Aggregate by agent
+	summaries := make(map[string]infraUpdateAgentSummary)
 	for _, update := range updates {
-		summary, ok := summaries[update.HostID]
+		summary, ok := summaries[update.AgentID]
 		if !ok {
-			summary = infraUpdateHostSummary{
-				HostID:   update.HostID,
-				HostName: update.HostName,
+			summary = infraUpdateAgentSummary{
+				AgentID:   update.AgentID,
+				AgentName: update.AgentName,
 			}
 		}
 		summary.TotalCount++
 		summary.Containers++
-		summaries[update.HostID] = summary
+		summaries[update.AgentID] = summary
 	}
 
 	response := infraUpdatesSummaryResponse{
@@ -189,10 +189,10 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 	}
 }
 
-// HandleTriggerInfraUpdateCheck triggers an update check for a specific resource or host.
+// HandleTriggerInfraUpdateCheck triggers an update check for a specific resource or agent.
 // POST /api/infra-updates/check
 //
-//	{ "hostId": "xxx" }       Check all on host
+//	{ "agentId": "xxx" }      Check all on agent
 //	{ "resourceId": "xxx" }   Check specific resource
 func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -210,7 +210,7 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 	defer r.Body.Close()
 
 	var req struct {
-		HostID     string `json:"hostId"`
+		AgentID    string `json:"agentId"`
 		ResourceID string `json:"resourceId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -218,9 +218,9 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 		return
 	}
 
-	// Handle host-level check
-	if req.HostID != "" {
-		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(req.HostID)
+	// Handle agent-level check
+	if req.AgentID != "" {
+		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(req.AgentID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "check_updates_failed", err.Error(), nil)
 			return
@@ -229,32 +229,32 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 		if err := utils.WriteJSONResponse(w, triggerInfraUpdateCheckResponse{
 			Success:   true,
 			CommandID: commandStatus.ID,
-			HostID:    req.HostID,
-			Message:   "Update check command queued for host",
+			AgentID:   req.AgentID,
+			Message:   "Update check command queued for agent",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize check response")
 		}
 		return
 	}
 
-	// Handle resource-level check (currently we just check the whole host)
+	// Handle resource-level check (currently we just check the whole agent)
 	if req.ResourceID != "" {
-		// Try to find which host this resource belongs to
+		// Try to find which agent this resource belongs to
 		updates := h.collectDockerUpdates("")
-		var hostID string
+		var agentID string
 		for _, update := range updates {
-			if update.ContainerID == req.ResourceID || ("docker:"+update.HostID+"/"+update.ContainerID) == req.ResourceID {
-				hostID = update.HostID
+			if update.ContainerID == req.ResourceID || ("docker:"+update.AgentID+"/"+update.ContainerID) == req.ResourceID {
+				agentID = update.AgentID
 				break
 			}
 		}
 
-		if hostID == "" {
+		if agentID == "" {
 			writeErrorResponse(w, http.StatusNotFound, "not_found", "Resource not found or has no update status", nil)
 			return
 		}
 
-		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(hostID)
+		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(agentID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "check_updates_failed", err.Error(), nil)
 			return
@@ -263,67 +263,67 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 		if err := utils.WriteJSONResponse(w, triggerInfraUpdateCheckResponse{
 			Success:   true,
 			CommandID: commandStatus.ID,
-			HostID:    hostID,
-			Message:   "Update check command queued for host",
+			AgentID:   agentID,
+			Message:   "Update check command queued for agent",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize check response")
 		}
 		return
 	}
 
-	writeErrorResponse(w, http.StatusBadRequest, "missing_params", "Either hostId or resourceId is required", nil)
+	writeErrorResponse(w, http.StatusBadRequest, "missing_params", "Either agentId or resourceId is required", nil)
 }
 
-// HandleGetInfraUpdatesForHost returns all updates for a specific host.
-// GET /api/infra-updates/host/{hostId}
-func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForHost(w http.ResponseWriter, r *http.Request, hostID string) {
+// HandleGetInfraUpdatesForAgent returns all updates for a specific agent.
+// GET /api/infra-updates/agent/{agentId}
+func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForAgent(w http.ResponseWriter, r *http.Request, agentID string) {
 	if r.Method != http.MethodGet {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
 		return
 	}
 
 	if h.monitor == nil {
-		if err := utils.WriteJSONResponse(w, infraUpdatesForHostResponse{
+		if err := utils.WriteJSONResponse(w, infraUpdatesForAgentResponse{
 			Updates: []ContainerUpdateInfo{},
 			Total:   0,
-			HostID:  hostID,
+			AgentID: agentID,
 		}); err != nil {
-			log.Error().Err(err).Msg("Failed to serialize empty host updates response")
+			log.Error().Err(err).Msg("Failed to serialize empty agent updates response")
 		}
 		return
 	}
 
-	updates := h.collectDockerUpdates(hostID)
+	updates := h.collectDockerUpdates(agentID)
 
-	response := infraUpdatesForHostResponse{
+	response := infraUpdatesForAgentResponse{
 		Updates: updates,
 		Total:   len(updates),
-		HostID:  hostID,
+		AgentID: agentID,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host updates response")
+		log.Error().Err(err).Msg("Failed to serialize agent updates response")
 	}
 }
 
-// collectDockerUpdates gathers update information from Docker hosts via ReadState.
-func (h *UpdateDetectionHandlers) collectDockerUpdates(hostIDFilter string) []ContainerUpdateInfo {
+// collectDockerUpdates gathers update information from Docker agents via ReadState.
+func (h *UpdateDetectionHandlers) collectDockerUpdates(agentIDFilter string) []ContainerUpdateInfo {
 	if h.readState == nil {
 		return nil
 	}
 
-	// Build host source ID → display name map for lookups.
-	hostNames := make(map[string]string)
+	// Build agent ID -> display name map for lookups.
+	agentNames := make(map[string]string)
 	for _, dh := range h.readState.DockerHosts() {
-		hostNames[dh.HostSourceID()] = dh.Name()
+		agentNames[dh.HostSourceID()] = dh.Name()
 	}
 
 	var updates []ContainerUpdateInfo
 	for _, c := range h.readState.DockerContainers() {
-		hostSourceID := c.HostSourceID()
+		agentID := c.HostSourceID()
 
-		// Filter by host ID if specified.
-		if hostIDFilter != "" && hostSourceID != hostIDFilter {
+		// Filter by agent ID if specified.
+		if agentIDFilter != "" && agentID != agentIDFilter {
 			continue
 		}
 
@@ -338,8 +338,8 @@ func (h *UpdateDetectionHandlers) collectDockerUpdates(hostIDFilter string) []Co
 		}
 
 		update := ContainerUpdateInfo{
-			HostID:          hostSourceID,
-			HostName:        hostNames[hostSourceID],
+			AgentID:         agentID,
+			AgentName:       agentNames[agentID],
 			ContainerID:     c.ContainerID(),
 			ContainerName:   strings.TrimPrefix(c.Name(), "/"),
 			Image:           c.Image(),

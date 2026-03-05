@@ -91,26 +91,26 @@ func TestHandleGetInfraUpdatesSummary(t *testing.T) {
 	})
 }
 
-func TestHandleGetInfraUpdatesForHost(t *testing.T) {
+func TestHandleGetInfraUpdatesForAgent(t *testing.T) {
 	handler := &UpdateDetectionHandlers{}
 
-	t.Run("returns empty for non-existent host", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/infra-updates/host/nonexistent", nil)
+	t.Run("returns empty for non-existent agent", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/infra-updates/agent/nonexistent", nil)
 		rr := httptest.NewRecorder()
 
-		handler.HandleGetInfraUpdatesForHost(rr, req, "nonexistent")
+		handler.HandleGetInfraUpdatesForAgent(rr, req, "nonexistent")
 
 		if rr.Code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 
-		var response infraUpdatesForHostResponse
+		var response infraUpdatesForAgentResponse
 		if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		if response.HostID != "nonexistent" {
-			t.Error("Expected hostId in response")
+		if response.AgentID != "nonexistent" {
+			t.Error("Expected agentId in response")
 		}
 		if response.Total != 0 {
 			t.Error("Expected total to be 0")
@@ -118,10 +118,10 @@ func TestHandleGetInfraUpdatesForHost(t *testing.T) {
 	})
 
 	t.Run("method not allowed for POST", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/infra-updates/host/test", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/infra-updates/agent/test", nil)
 		rr := httptest.NewRecorder()
 
-		handler.HandleGetInfraUpdatesForHost(rr, req, "test")
+		handler.HandleGetInfraUpdatesForAgent(rr, req, "test")
 
 		if rr.Code != http.StatusMethodNotAllowed {
 			t.Errorf("Expected status 405, got %d", rr.Code)
@@ -159,7 +159,7 @@ func TestHandleTriggerInfraUpdateCheck(t *testing.T) {
 	handler := &UpdateDetectionHandlers{}
 
 	t.Run("returns 503 without monitor", func(t *testing.T) {
-		body := strings.NewReader(`{"hostId":"test-host"}`)
+		body := strings.NewReader(`{"agentId":"test-host"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/infra-updates/check", body)
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
@@ -185,8 +185,8 @@ func TestHandleTriggerInfraUpdateCheck(t *testing.T) {
 
 func TestContainerUpdateInfo_JSONSerialization(t *testing.T) {
 	info := ContainerUpdateInfo{
-		HostID:          "host-1",
-		HostName:        "Test Host",
+		AgentID:         "host-1",
+		AgentName:       "Test Agent",
 		ContainerID:     "container-abc",
 		ContainerName:   "nginx",
 		Image:           "nginx:latest",
@@ -207,8 +207,8 @@ func TestContainerUpdateInfo_JSONSerialization(t *testing.T) {
 		t.Fatalf("Failed to unmarshal ContainerUpdateInfo: %v", err)
 	}
 
-	if decoded.HostID != info.HostID {
-		t.Errorf("Expected HostID %q, got %q", info.HostID, decoded.HostID)
+	if decoded.AgentID != info.AgentID {
+		t.Errorf("Expected AgentID %q, got %q", info.AgentID, decoded.AgentID)
 	}
 	if decoded.UpdateAvailable != info.UpdateAvailable {
 		t.Errorf("Expected UpdateAvailable %v, got %v", info.UpdateAvailable, decoded.UpdateAvailable)
@@ -285,7 +285,7 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 	setUnexportedField(t, monitor, "state", state)
 	handler := NewUpdateDetectionHandlers(monitor, registry)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/infra-updates?hostId=host-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/infra-updates?agentId=host-1", nil)
 	rr := httptest.NewRecorder()
 	handler.HandleGetInfraUpdates(rr, req)
 	if rr.Code != http.StatusOK {
@@ -347,7 +347,7 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 		t.Fatalf("expected container name stripped, got %q", update.ContainerName)
 	}
 
-	body := strings.NewReader(`{"hostId":"host-1"}`)
+	body := strings.NewReader(`{"agentId":"host-1"}`)
 	req = httptest.NewRequest(http.MethodPost, "/api/infra-updates/check", body)
 	rr = httptest.NewRecorder()
 	handler.HandleTriggerInfraUpdateCheck(rr, req)

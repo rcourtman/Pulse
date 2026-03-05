@@ -361,7 +361,7 @@ var allRouteAllowlist = []string{
 	"/api/infra-updates",
 	"/api/infra-updates/summary",
 	"/api/infra-updates/check",
-	"/api/infra-updates/host/",
+	"/api/infra-updates/agent/",
 	"/api/infra-updates/",
 	"/api/config/nodes",
 	"/api/security/validate-bootstrap-token",

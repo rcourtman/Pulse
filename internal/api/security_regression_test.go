@@ -1309,7 +1309,7 @@ func TestInfraUpdateReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 	paths := []string{
 		"/api/infra-updates",
 		"/api/infra-updates/summary",
-		"/api/infra-updates/host/host-1",
+		"/api/infra-updates/agent/host-1",
 		"/api/infra-updates/docker:host-1/c1",
 	}
 
