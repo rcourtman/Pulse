@@ -228,6 +228,9 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	resourceTypeRaw, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	targetID, _ := args["target_id"].(string)
+	if isUnsupportedDiscoveryLegacyResourceTypeToken(resourceTypeRaw) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), nil
+	}
 	resourceType := canonicalDiscoveryResourceType(resourceTypeRaw)
 	providerResourceType := discoveryProviderResourceType(resourceType)
 	targetID = strings.TrimSpace(targetID)
@@ -494,6 +497,19 @@ func isUnsupportedLegacyResourceTypeToken(value string) bool {
 	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(value)
 }
 
+func isUnsupportedDiscoveryLegacyResourceTypeToken(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if isUnsupportedLegacyResourceTypeToken(normalized) {
+		return true
+	}
+	switch normalized {
+	case "docker", "docker-container":
+		return true
+	default:
+		return false
+	}
+}
+
 func canonicalDiscoveryResourceType(raw string) string {
 	resourceType := strings.ToLower(strings.TrimSpace(raw))
 	switch resourceType {
@@ -523,6 +539,9 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	filterTargetID, _ := args["target_id"].(string)
 	filterServiceType, _ := args["service_type"].(string)
 	limit := intArg(args, "limit", 50)
+	if isUnsupportedDiscoveryLegacyResourceTypeToken(filterType) {
+		return NewErrorResult(fmt.Errorf("unsupported type %q", strings.TrimSpace(filterType))), nil
+	}
 	filterType = canonicalDiscoveryResourceType(filterType)
 	providerFilterType := discoveryProviderResourceType(filterType)
 	filterTargetID = strings.TrimSpace(filterTargetID)

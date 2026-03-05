@@ -128,6 +128,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 	}
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	if resourceType != "" {
+		if isLegacyMetricsResourceTypeInput(resourceType) {
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, or node", resourceType)), nil
+		}
 		resourceType = canonicalMetricsResourceType(resourceType)
 		validTypes := map[string]bool{"vm": true, "system-container": true, "node": true}
 		if !validTypes[resourceType] {
@@ -233,6 +236,9 @@ func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[stri
 	}
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	if resourceType != "" {
+		if isLegacyMetricsResourceTypeInput(resourceType) {
+			return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use vm, system-container, or node", resourceType)), nil
+		}
 		resourceType = canonicalMetricsResourceType(resourceType)
 		validTypes := map[string]bool{"vm": true, "system-container": true, "node": true}
 		if !validTypes[resourceType] {
@@ -338,6 +344,10 @@ func canonicalMetricsResourceType(raw string) string {
 	default:
 		return normalized
 	}
+}
+
+func isLegacyMetricsResourceTypeInput(resourceType string) bool {
+	return strings.EqualFold(strings.TrimSpace(resourceType), "container")
 }
 
 func (e *PulseToolExecutor) executeGetPatterns(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {

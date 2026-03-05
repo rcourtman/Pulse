@@ -2137,7 +2137,7 @@ func canonicalQueryListType(filterType string) string {
 
 func canonicalQueryTopologyInclude(include string) string {
 	switch strings.ToLower(strings.TrimSpace(include)) {
-	case "docker", "app-container":
+	case "app-container":
 		return "app-containers"
 	default:
 		return strings.ToLower(strings.TrimSpace(include))

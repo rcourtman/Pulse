@@ -317,6 +317,14 @@ func TestExecuteGetMetrics_RejectsLegacyUnderscoreResourceTypeAlias(t *testing.T
 	if !result.IsError {
 		t.Fatal("expected error for legacy host resource_type")
 	}
+
+	result, _ = executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy container resource_type")
+	}
 }
 
 func TestExecuteGetMetrics_FilterAndPagination(t *testing.T) {
@@ -381,6 +389,12 @@ func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {
 	})
 	if !result.IsError {
 		t.Fatal("expected error for legacy system_container resource_type")
+	}
+	result, _ = executor.executeGetBaselines(context.Background(), map[string]interface{}{
+		"resource_type": "container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy container resource_type")
 	}
 
 	executor = NewPulseToolExecutor(ExecutorConfig{

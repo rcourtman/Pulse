@@ -177,6 +177,25 @@ func TestExecuteGetDiscovery_RejectsLegacyUnderscoreAppContainerAlias(t *testing
 	assert.Equal(t, "", provider.lastGetResourceType)
 }
 
+func TestExecuteGetDiscovery_RejectsLegacyDockerResourceTypeAliases(t *testing.T) {
+	for _, alias := range []string{"docker", "docker-container"} {
+		t.Run(alias, func(t *testing.T) {
+			provider := &stubDiscoveryProvider{}
+			exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: provider})
+
+			result, err := exec.executeGetDiscovery(context.Background(), map[string]interface{}{
+				"resource_type": alias,
+				"resource_id":   "abc123",
+				"target_id":     "agent-1",
+			})
+			assert.NoError(t, err)
+			assert.True(t, result.IsError)
+			assert.Contains(t, result.Content[0].Text, "unsupported resource_type")
+			assert.Equal(t, "", provider.lastGetResourceType)
+		})
+	}
+}
+
 func TestExecuteGetDiscovery_CanonicalAppContainerUsesDockerProviderType(t *testing.T) {
 	provider := &stubDiscoveryProvider{
 		getResp: &ResourceDiscoveryInfo{
@@ -258,6 +277,21 @@ func TestExecuteListDiscoveries_RejectsLegacyUnderscoreAppContainerAlias(t *test
 	assert.NoError(t, err)
 	assert.True(t, result.IsError)
 	assert.Contains(t, result.Content[0].Text, "unsupported type")
+}
+
+func TestExecuteListDiscoveries_RejectsLegacyDockerTypeAliases(t *testing.T) {
+	for _, alias := range []string{"docker", "docker-container"} {
+		t.Run(alias, func(t *testing.T) {
+			exec := NewPulseToolExecutor(ExecutorConfig{DiscoveryProvider: &stubDiscoveryProvider{}})
+
+			result, err := exec.executeListDiscoveries(context.Background(), map[string]interface{}{
+				"type": alias,
+			})
+			assert.NoError(t, err)
+			assert.True(t, result.IsError)
+			assert.Contains(t, result.Content[0].Text, "unsupported type")
+		})
+	}
 }
 
 func TestExecuteListDiscoveries_CanonicalAppContainerUsesDockerProviderType(t *testing.T) {

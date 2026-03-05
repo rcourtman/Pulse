@@ -45,6 +45,9 @@ func TestCanonicalQueryTopologyInclude_StrictV6Tokens(t *testing.T) {
 	if got := canonicalQueryTopologyInclude("app_container"); got != "app_container" {
 		t.Fatalf("canonicalQueryTopologyInclude(app_container) = %q, want app_container", got)
 	}
+	if got := canonicalQueryTopologyInclude("docker"); got != "docker" {
+		t.Fatalf("canonicalQueryTopologyInclude(docker) = %q, want docker", got)
+	}
 }
 
 func TestCanonicalQuerySearchType_StrictV6Tokens(t *testing.T) {
@@ -178,6 +181,19 @@ func TestExecuteGetTopologySummaryOnly(t *testing.T) {
 	}
 	if topology.Summary.RunningVMs != 1 || topology.Summary.RunningDocker != 1 {
 		t.Fatalf("unexpected running summary: %+v", topology.Summary)
+	}
+}
+
+func TestExecuteGetTopology_RejectsLegacyDockerIncludeAlias(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeGetTopology(context.Background(), map[string]interface{}{
+		"include": "docker",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy include alias")
+	}
+	if !strings.Contains(result.Content[0].Text, "invalid include") {
+		t.Fatalf("unexpected error text: %s", result.Content[0].Text)
 	}
 }
 
