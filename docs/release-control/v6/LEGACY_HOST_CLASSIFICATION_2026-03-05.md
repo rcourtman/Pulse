@@ -182,6 +182,48 @@ These are valid rename/structure candidates after the host-agent compatibility s
 
 These remain naming debt, not release blockers.
 
+## AI And Service Discovery Follow-Up
+
+The remaining host-era naming in `internal/ai` and `internal/servicediscovery` is mostly internal execution
+and topology language, not canonical API/resource typing drift.
+
+### Must Remain For Release
+
+- `internal/ai/chat/context_prefetch.go`
+  `ReadState.Hosts()` is still used to discover unified-agent backed resources for chat mentions, but the
+  emitted mention type is canonical `agent`.
+- `internal/ai/tools/adapters.go` and `internal/ai/tools/tools_storage.go`
+  AI tools still consume `unifiedresources.HostView` for RAID/SMART/Ceph data exposed by unified agents.
+  This is already on the canonical read model even though the view name still says `Host`.
+- `internal/servicediscovery/service.go`
+  the discovery service still materializes an internal `StateSnapshot.Hosts []Host` representation for
+  topology analysis, hostname resolution, and redirecting scans to linked agents.
+- `internal/servicediscovery/deep_scanner.go`
+  command routing still talks about the agent running “on this host”, but the actual target type for
+  canonical execution remains `agent`.
+
+### Why This Is Not A V6 Leak
+
+- `internal/ai` already rejects removed `host` aliases at the API boundary and works with canonical
+  `agent` execution targets internally.
+- `internal/ai/tools` reads host-agent data through unified-resource views (`HostView`) rather than through
+  legacy `state.hosts` API payload assumptions.
+- `internal/servicediscovery` uses `host` as an internal topology concept for machines discovered via the
+  unified agent, not as an exposed removed resource type token.
+
+### Post-Release Refactor Targets
+
+These are rename/structure candidates once the compatibility naming debt is worth paying down:
+
+- `internal/servicediscovery/service.go`
+  internal `Host` and `StateSnapshot.Hosts` naming
+- `internal/servicediscovery/deep_scanner.go`
+  comments and helper names that still talk about “host” instead of agent-backed machine resources
+- `internal/ai/tools`
+  user-facing text strings like “host agents” and helper names keyed on `HostView` / `toolHost*`
+
+These are naming debt, not release blockers.
+
 ## Non-Resource Host Terminology
 
 These are unrelated to the removed v5 resource type and should not be treated as migration debt:
