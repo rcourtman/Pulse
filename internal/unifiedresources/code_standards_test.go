@@ -486,6 +486,13 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_test.go"),
+			requiredSnippets: []string{
+				`TestParseDiscoveryResourceType_RejectsLegacyHostAlias`,
+				`legacy host rejected`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
 			requiredSnippets: []string{
 				`TestNormalizeReportResourceType_RejectsLegacyAliases`,

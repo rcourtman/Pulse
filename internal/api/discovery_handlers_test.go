@@ -406,6 +406,35 @@ func TestHandleListByType_RejectsLegacyHostType(t *testing.T) {
 	assert.Equal(t, `unsupported resource type "host"`, body["message"])
 }
 
+func TestParseDiscoveryResourceType_RejectsLegacyHostAlias(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    servicediscovery.ResourceType
+		wantErr string
+	}{
+		{name: "agent", in: "agent", want: servicediscovery.ResourceTypeAgent},
+		{name: "vm", in: "vm", want: servicediscovery.ResourceTypeVM},
+		{name: "mixed case system container", in: " System-Container ", want: servicediscovery.ResourceTypeSystemContainer},
+		{name: "legacy host rejected", in: "host", wantErr: `unsupported resource type "host"`},
+		{name: "mixed case host rejected", in: " HoSt ", wantErr: `unsupported resource type "host"`},
+		{name: "missing required", in: "   ", wantErr: "resource type is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDiscoveryResourceType(tt.in)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestHandleListByAgent(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 
