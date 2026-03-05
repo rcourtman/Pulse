@@ -209,6 +209,20 @@ func getCommonServicePaths(serviceType string) (logPaths, configPaths, dataPaths
 	return nil, nil, nil
 }
 
+func canonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTargetID string) string {
+	if discovery == nil {
+		return strings.TrimSpace(fallbackTargetID)
+	}
+	targetID := strings.TrimSpace(discovery.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(discovery.HostID)
+	}
+	if targetID == "" {
+		targetID = strings.TrimSpace(fallbackTargetID)
+	}
+	return targetID
+}
+
 func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.discoveryProvider == nil {
 		return NewTextResult("Discovery service not available."), nil
@@ -350,13 +364,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		}
 	}
 
-	discoveryTargetID := strings.TrimSpace(discovery.TargetID)
-	if discoveryTargetID == "" {
-		discoveryTargetID = strings.TrimSpace(discovery.HostID)
-	}
-	if discoveryTargetID == "" {
-		discoveryTargetID = targetID
-	}
+	discoveryTargetID := canonicalDiscoveryTargetID(discovery, targetID)
 
 	// Return the discovery information
 	response := map[string]interface{}{
@@ -543,10 +551,7 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	// Build response
 	results := make([]map[string]interface{}, 0, len(discoveries))
 	for _, d := range discoveries {
-		discoveryTargetID := strings.TrimSpace(d.TargetID)
-		if discoveryTargetID == "" {
-			discoveryTargetID = strings.TrimSpace(d.HostID)
-		}
+		discoveryTargetID := canonicalDiscoveryTargetID(d, "")
 		result := map[string]interface{}{
 			"id":              d.ID,
 			"resource_type":   d.ResourceType,
