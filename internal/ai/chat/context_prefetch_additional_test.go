@@ -215,6 +215,24 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	}
 }
 
+func TestContextPrefetcher_ResolveStructuredMentions_DoesNotNormalizeLegacyLXCType(t *testing.T) {
+	rs := newTestReadState(models.StateSnapshot{})
+	prefetcher := NewContextPrefetcher(rs, nil)
+
+	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
+		ID:   "lxc:node1:201",
+		Name: "beta",
+		Type: "lxc",
+		Node: "node1",
+	}})
+	if len(mentions) != 1 {
+		t.Fatalf("expected one mention, got %d", len(mentions))
+	}
+	if mentions[0].ResourceType != "lxc" {
+		t.Fatalf("expected legacy lxc type to remain unnormalized, got %q", mentions[0].ResourceType)
+	}
+}
+
 func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{}}
 	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), provider)
