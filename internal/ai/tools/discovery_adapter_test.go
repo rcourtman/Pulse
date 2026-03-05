@@ -117,14 +117,14 @@ func TestDiscoveryMCPAdapter_GetDiscoveryByResource(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_GetDiscovery_TargetIDFallsBackToHostID(t *testing.T) {
+func TestDiscoveryMCPAdapter_GetDiscovery_UsesTargetID(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
 	adapter := NewDiscoveryMCPAdapter(mockSource)
 
 	expectedData := DiscoverySourceData{
 		ID:           "legacy-id",
 		ResourceType: "vm",
-		HostID:       "node-1",
+		TargetID:     "node-1",
 		ResourceID:   "100",
 	}
 	mockSource.On("GetDiscovery", "legacy-id").Return(expectedData, nil)
@@ -175,7 +175,7 @@ func TestDiscoveryMCPAdapter_ListDiscoveriesByTarget(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
 	adapter := NewDiscoveryMCPAdapter(mockSource)
 
-	list := []DiscoverySourceData{{ID: "d1", HostID: "h1"}}
+	list := []DiscoverySourceData{{ID: "d1", TargetID: "h1"}}
 	mockSource.On("ListDiscoveriesByTarget", "h1").Return(list, nil)
 
 	results, err := adapter.ListDiscoveriesByTarget("h1")

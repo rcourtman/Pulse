@@ -114,7 +114,6 @@ func TestToolsAdapter_GetDiscovery_AgentIDFallback(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "agent-1", result.TargetID)
 	assert.Equal(t, "agent-1", result.AgentID)
-	assert.Equal(t, "agent-1", result.HostID)
 }
 
 func TestToolsAdapter_GetDiscoveryByResource(t *testing.T) {

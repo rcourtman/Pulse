@@ -149,7 +149,6 @@ func (a *ToolsAdapter) convertToSourceData(d *ResourceDiscovery) tools.Discovery
 		ResourceID:     d.ResourceID,
 		TargetID:       targetID,
 		AgentID:        agentID,
-		HostID:         d.HostID,
 		Hostname:       d.Hostname,
 		ServiceType:    d.ServiceType,
 		ServiceName:    d.ServiceName,
@@ -204,13 +203,6 @@ func (a *ToolsAdapter) convertFromSourceData(sd tools.DiscoverySourceData) *Reso
 	}
 
 	targetID := strings.TrimSpace(sd.TargetID)
-	if targetID == "" {
-		targetID = strings.TrimSpace(sd.HostID)
-	}
-	hostID := strings.TrimSpace(sd.HostID)
-	if hostID == "" {
-		hostID = targetID
-	}
 	agentID := strings.TrimSpace(sd.AgentID)
 	if agentID == "" && sd.ResourceType == string(ResourceTypeAgent) {
 		agentID = targetID
@@ -222,7 +214,7 @@ func (a *ToolsAdapter) convertFromSourceData(sd tools.DiscoverySourceData) *Reso
 		ResourceID:     sd.ResourceID,
 		TargetID:       targetID,
 		AgentID:        agentID,
-		HostID:         hostID,
+		HostID:         targetID,
 		Hostname:       sd.Hostname,
 		ServiceType:    sd.ServiceType,
 		ServiceName:    sd.ServiceName,
