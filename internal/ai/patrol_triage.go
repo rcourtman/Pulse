@@ -483,15 +483,10 @@ func triageConnectivityChecks(snap models.StateSnapshot, guestIntel map[string]*
 			continue
 		}
 
-		resourceType := "vm"
-		if strings.EqualFold(intel.GuestType, "lxc") || strings.EqualFold(intel.GuestType, "container") || strings.EqualFold(intel.GuestType, "system-container") {
-			resourceType = "system-container"
-		}
-
 		flags = append(flags, TriageFlag{
 			ResourceID:   guestID,
 			ResourceName: triageResourceName(intel.Name, guestID),
-			ResourceType: resourceType,
+			ResourceType: triageGuestResourceType(intel.GuestType, guestID),
 			Category:     "connectivity",
 			Severity:     "warning",
 			Reason:       "Guest unreachable (ping failed)",
@@ -822,17 +817,37 @@ func triageMetricLabel(metric string) string {
 }
 
 func triageResourceType(knownType, resourceID string) string {
-	knownType = strings.TrimSpace(strings.ToLower(knownType))
-	if knownType != "" {
-		if knownType == "lxc" || knownType == "container" {
-			return "system-container"
-		}
-		if knownType == "docker" {
-			return "docker_host"
-		}
-		return knownType
+	if normalized := triageCanonicalResourceType(knownType); normalized != "" {
+		return normalized
 	}
 	return triageConnectionResourceType(resourceID)
+}
+
+func triageGuestResourceType(knownType, resourceID string) string {
+	canonicalType := triageCanonicalResourceType(knownType)
+	switch canonicalType {
+	case "vm", "system-container":
+		return canonicalType
+	}
+
+	derivedType := triageConnectionResourceType(resourceID)
+	switch derivedType {
+	case "vm", "system-container":
+		return derivedType
+	default:
+		return "vm"
+	}
+}
+
+func triageCanonicalResourceType(resourceType string) string {
+	switch strings.ToLower(strings.TrimSpace(resourceType)) {
+	case "vm", "system-container", "app-container", "node", "storage", "docker_host", "pbs", "pmg", "agent":
+		return strings.ToLower(strings.TrimSpace(resourceType))
+	case "docker":
+		return "docker_host"
+	default:
+		return ""
+	}
 }
 
 func triageConnectionResourceType(resourceID string) string {

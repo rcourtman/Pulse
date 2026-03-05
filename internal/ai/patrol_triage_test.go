@@ -54,7 +54,7 @@ func TestTriageAnomalyChecks(t *testing.T) {
 			{
 				ResourceID:   "lxc/200",
 				ResourceName: "worker-ct",
-				ResourceType: "container",
+				ResourceType: "system-container",
 				Metric:       "memory",
 				CurrentValue: 0.82,
 				BaselineMean: 0.62,
@@ -200,11 +200,12 @@ func TestTriageConnectivityChecks(t *testing.T) {
 	}
 	guestIntel := map[string]*GuestIntelligence{
 		"qemu/100": {Name: "web-01", GuestType: "vm", Reachable: &reachable},
+		"lxc/200":  {Name: "worker-ct", GuestType: "lxc", Reachable: &reachable},
 	}
 
 	flags := triageConnectivityChecks(state, guestIntel, nil)
-	if len(flags) != 2 {
-		t.Fatalf("expected 2 connectivity flags, got %d", len(flags))
+	if len(flags) != 3 {
+		t.Fatalf("expected 3 connectivity flags, got %d", len(flags))
 	}
 
 	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "pbs-backup1" && f.Severity == "critical" }) == nil {
@@ -212,6 +213,19 @@ func TestTriageConnectivityChecks(t *testing.T) {
 	}
 	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "qemu/100" && f.Severity == "warning" }) == nil {
 		t.Fatalf("expected warning unreachable flag for qemu/100")
+	}
+	ctFlag := triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "lxc/200" && f.Severity == "warning" })
+	if ctFlag == nil || ctFlag.ResourceType != "system-container" {
+		t.Fatalf("expected system-container unreachable flag for lxc/200, got %#v", ctFlag)
+	}
+}
+
+func TestTriageResourceTypeRejectsLegacyKnownTypeAliases(t *testing.T) {
+	if got := triageResourceType("container", "qemu/100"); got != "vm" {
+		t.Fatalf("expected canonical vm type from resource ID, got %q", got)
+	}
+	if got := triageResourceType("lxc", "qemu/100"); got != "vm" {
+		t.Fatalf("expected canonical vm type from resource ID, got %q", got)
 	}
 }
 
