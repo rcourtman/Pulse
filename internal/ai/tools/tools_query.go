@@ -2021,8 +2021,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type: 'vm', 'system-container', 'docker', 'node' (for action: get, config, search)",
-						Enum:        []string{"vm", "system-container", "container", "docker", "node"},
+						Description: "Resource type: 'vm', 'system-container', 'app-container', 'node' (for action: get, config, search)",
+						Enum:        []string{"vm", "system-container", "app-container", "node"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -2030,8 +2030,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"type": {
 						Type:        "string",
-						Description: "Filter by type (for action: list): 'nodes', 'vms', 'containers', 'docker', 'kubernetes', 'k8s_clusters', 'k8s_nodes', 'k8s_pods', 'k8s_deployments'",
-						Enum:        []string{"nodes", "vms", "containers", "docker", "kubernetes", "k8s_clusters", "k8s_nodes", "k8s_pods", "k8s_deployments"},
+						Description: "Filter by type (for action: list): 'nodes', 'vms', 'system-containers', 'app-containers', 'kubernetes', 'k8s_clusters', 'k8s_nodes', 'k8s_pods', 'k8s_deployments'",
+						Enum:        []string{"nodes", "vms", "system-containers", "app-containers", "kubernetes", "k8s_clusters", "k8s_nodes", "k8s_pods", "k8s_deployments"},
 					},
 					"status": {
 						Type:        "string",
@@ -2047,8 +2047,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"include": {
 						Type:        "string",
-						Description: "Include filter for topology: 'all', 'proxmox', 'docker', 'kubernetes' (for action: topology)",
-						Enum:        []string{"all", "proxmox", "docker", "kubernetes"},
+						Description: "Include filter for topology: 'all', 'proxmox', 'app-containers', 'kubernetes' (for action: topology)",
+						Enum:        []string{"all", "proxmox", "app-containers", "kubernetes"},
 					},
 					"summary_only": {
 						Type:        "boolean",
@@ -2108,6 +2108,54 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	})
 }
 
+func canonicalQueryResourceType(resourceType string) string {
+	switch strings.ToLower(strings.TrimSpace(resourceType)) {
+	case "container", "system_container", "system-container":
+		return "system-container"
+	case "docker", "docker-container", "docker_container", "app_container", "app-container":
+		return "app-container"
+	default:
+		return strings.ToLower(strings.TrimSpace(resourceType))
+	}
+}
+
+func canonicalQueryListType(filterType string) string {
+	switch strings.ToLower(strings.TrimSpace(filterType)) {
+	case "node":
+		return "nodes"
+	case "vm":
+		return "vms"
+	case "container", "containers", "system-container", "system_container", "system-containers", "system_containers":
+		return "system-containers"
+	case "docker", "docker-container", "docker_container", "app-container", "app_container", "app-containers", "app_containers":
+		return "app-containers"
+	default:
+		return strings.ToLower(strings.TrimSpace(filterType))
+	}
+}
+
+func canonicalQueryTopologyInclude(include string) string {
+	switch strings.ToLower(strings.TrimSpace(include)) {
+	case "docker", "app_container", "app-container", "app_containers":
+		return "app-containers"
+	default:
+		return strings.ToLower(strings.TrimSpace(include))
+	}
+}
+
+func canonicalQuerySearchType(typeFilter string) string {
+	switch strings.ToLower(strings.TrimSpace(typeFilter)) {
+	case "container", "system_container", "system-containers", "system_containers":
+		return "system-container"
+	case "docker", "docker-container", "docker_container", "app_container", "app-containers", "app_containers":
+		return "app-container"
+	case "docker-host", "docker_host":
+		return "docker_host"
+	default:
+		return strings.ToLower(strings.TrimSpace(typeFilter))
+	}
+}
+
 // executeQuery routes to the appropriate query handler based on action
 func (e *PulseToolExecutor) executeQuery(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	action, _ := args["action"].(string)
@@ -2136,6 +2184,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	}
 
 	filterType, _ := args["type"].(string)
+	filterType = canonicalQueryListType(filterType)
 	filterStatus, _ := args["status"].(string)
 	clusterNameFilter, _ := args["cluster_name"].(string)
 	namespaceFilter, _ := args["namespace"].(string)
@@ -2273,7 +2322,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	}
 
 	// Containers (LXC)
-	if filterType == "" || filterType == "containers" {
+	if filterType == "" || filterType == "system-containers" {
 		count := 0
 		for _, ct := range rs.Containers() {
 			if !statusMatchesFilter(string(ct.Status()), filterStatus) {
@@ -2297,13 +2346,13 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			})
 			count++
 		}
-		if filterType == "containers" {
+		if filterType == "system-containers" {
 			totalMatches = count
 		}
 	}
 
 	// Docker hosts
-	if filterType == "" || filterType == "docker" {
+	if filterType == "" || filterType == "app-containers" {
 		containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
 		for _, container := range rs.DockerContainers() {
 			if container == nil {
@@ -2367,7 +2416,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			response.DockerHosts = append(response.DockerHosts, dockerHost)
 			count++
 		}
-		if filterType == "docker" {
+		if filterType == "app-containers" {
 			totalMatches = count
 		}
 	}
@@ -2537,10 +2586,11 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	if include == "" {
 		include = "all"
 	}
+	include = canonicalQueryTopologyInclude(include)
 	switch include {
-	case "all", "proxmox", "docker", "kubernetes":
+	case "all", "proxmox", "app-containers", "kubernetes":
 	default:
-		return NewErrorResult(fmt.Errorf("invalid include: %s. Use all, proxmox, docker, or kubernetes", include)), nil
+		return NewErrorResult(fmt.Errorf("invalid include: %s. Use all, proxmox, app-containers, or kubernetes", include)), nil
 	}
 
 	summaryOnly, summaryProvided := args["summary_only"].(bool)
@@ -2613,7 +2663,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	controlEnabled := e.controlLevel != ControlLevelReadOnly && e.controlLevel != ""
 
 	includeProxmox := include == "all" || include == "proxmox"
-	includeDocker := include == "all" || include == "docker"
+	includeDocker := include == "all" || include == "app-containers"
 	includeKubernetes := include == "all" || include == "kubernetes"
 
 	// Summary counters
@@ -3016,6 +3066,8 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceType, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
+	resourceTypeRaw := strings.TrimSpace(resourceType)
+	resourceType = canonicalQueryResourceType(resourceType)
 
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
@@ -3085,7 +3137,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			"type":        "vm",
 		}), nil
 
-	case "system-container", "container":
+	case "system-container":
 		for _, ct := range rs.Containers() {
 			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
 				used := ct.MemoryUsed()
@@ -3140,7 +3192,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			"type":        "system-container",
 		}), nil
 
-	case "docker":
+	case "app-container":
 		dockerHostsByID := make(map[string]*unifiedresources.DockerHostView)
 		for _, host := range rs.DockerHosts() {
 			if host == nil {
@@ -3186,7 +3238,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			}
 
 			response := ResourceResponse{
-				Type:   "docker",
+				Type:   "app-container",
 				ID:     containerID,
 				Name:   container.Name(),
 				Status: state,
@@ -3282,11 +3334,11 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		return NewJSONResult(map[string]interface{}{
 			"error":       "not_found",
 			"resource_id": resourceID,
-			"type":        "docker",
+			"type":        "app-container",
 		}), nil
 
 	default:
-		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'vm', 'system-container', or 'docker'", resourceType)), nil
+		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'vm', 'system-container', or 'app-container'", resourceTypeRaw)), nil
 	}
 }
 
@@ -3361,20 +3413,20 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 }
 
 func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestType string, vmID int, name, node, instance string, err error) {
-	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	resourceType = canonicalQueryResourceType(resourceType)
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceType == "" || resourceID == "" {
 		return "", 0, "", "", "", fmt.Errorf("resource_type and resource_id are required")
 	}
 
 	switch resourceType {
-	case "system-container", "container":
+	case "system-container":
 		for _, ct := range rs.Containers() {
 			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
 				return "system-container", ct.VMID(), ct.Name(), ct.Node(), ct.Instance(), nil
 			}
 		}
-		return "", 0, "", "", "", fmt.Errorf("container not found: %s", resourceID)
+		return "", 0, "", "", "", fmt.Errorf("system-container not found: %s", resourceID)
 	case "vm":
 		for _, vm := range rs.VMs() {
 			if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
@@ -3383,7 +3435,7 @@ func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, reso
 		}
 		return "", 0, "", "", "", fmt.Errorf("vm not found: %s", resourceID)
 	default:
-		return "", 0, "", "", "", fmt.Errorf("invalid resource_type: %s", resourceType)
+		return "", 0, "", "", "", fmt.Errorf("invalid resource_type: %s. Use vm or system-container", resourceType)
 	}
 }
 
@@ -3534,6 +3586,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 	if typeFilter == "" {
 		typeFilter, _ = args["resource_type"].(string)
 	}
+	typeFilter = canonicalQuerySearchType(typeFilter)
 	statusFilter, _ := args["status"].(string)
 	limit := intArg(args, "limit", 20)
 	offset := intArg(args, "offset", 0)
@@ -3549,12 +3602,11 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		"node":             true,
 		"vm":               true,
 		"system-container": true,
-		"container":        true,
-		"docker":           true,
+		"app-container":    true,
 		"docker_host":      true,
 	}
 	if !allowedTypes[typeFilter] {
-		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, system-container, docker, or docker_host", typeFilter)), nil
+		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, system-container, app-container, or docker_host", typeFilter)), nil
 	}
 
 	// normalizeForSearch replaces common separators with spaces and splits at
@@ -3698,7 +3750,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 	}
 
-	if typeFilter == "" || typeFilter == "system-container" || typeFilter == "container" {
+	if typeFilter == "" || typeFilter == "system-container" {
 		for _, ct := range rs.Containers() {
 			status := string(ct.Status())
 			if !statusMatchesFilter(status, statusFilter) {
@@ -3761,7 +3813,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 	}
 
-	if typeFilter == "" || typeFilter == "docker" {
+	if typeFilter == "" || typeFilter == "app-container" {
 		for _, container := range rs.DockerContainers() {
 			if container == nil {
 				continue
@@ -3803,7 +3855,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			}
 
 			addMatch(ResourceMatch{
-				Type:   "docker",
+				Type:   "app-container",
 				ID:     containerID,
 				Name:   container.Name(),
 				Status: state,
@@ -3866,7 +3918,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 					Priority:   10,
 				}},
 			}
-		case "system-container", "container":
+		case "system-container":
 			reg = ResourceRegistration{
 				Kind:          "system-container",
 				ProviderUID:   fmt.Sprintf("%d", match.VMID),
@@ -3900,7 +3952,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 					Priority:   10,
 				}},
 			}
-		case "docker":
+		case "app-container":
 			reg = ResourceRegistration{
 				Kind:          "docker_container",
 				ProviderUID:   match.ID, // Docker container ID

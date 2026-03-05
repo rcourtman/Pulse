@@ -47,8 +47,8 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type",
-						Enum:        []string{"node", "vm", "system-container", "container", "docker_container", "storage", "agent", "kubernetes_cluster", "pbs"},
+						Description: "Canonical v6 resource type",
+						Enum:        []string{"node", "vm", "system-container", "app-container", "storage", "agent", "k8s-cluster", "pbs"},
 					},
 					"title": {
 						Type:        "string",
@@ -141,7 +141,7 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	resourceID, _ := args["resource_id"].(string)
 	resourceName, _ := args["resource_name"].(string)
 	resourceType, _ := args["resource_type"].(string)
-	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	resourceType = canonicalPatrolResourceType(resourceType)
 	title, _ := args["title"].(string)
 	description, _ := args["description"].(string)
 
@@ -176,6 +176,19 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	}
 	if isUnsupportedLegacyResourceTypeToken(resourceType) {
 		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", resourceType)), nil
+	}
+	validResourceTypes := map[string]bool{
+		"node":             true,
+		"vm":               true,
+		"system-container": true,
+		"app-container":    true,
+		"storage":          true,
+		"agent":            true,
+		"k8s-cluster":      true,
+		"pbs":              true,
+	}
+	if !validResourceTypes[resourceType] {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q: use node, vm, system-container, app-container, storage, agent, k8s-cluster, or pbs", resourceType)), nil
 	}
 
 	// Validate enums
@@ -268,4 +281,17 @@ func handlePatrolGetFindings(_ context.Context, e *PulseToolExecutor, args map[s
 	}
 	b, _ := json.Marshal(result)
 	return NewTextResult(string(b)), nil
+}
+
+func canonicalPatrolResourceType(resourceType string) string {
+	switch strings.ToLower(strings.TrimSpace(resourceType)) {
+	case "container", "system_container":
+		return "system-container"
+	case "docker", "docker-container", "docker_container", "app_container":
+		return "app-container"
+	case "kubernetes_cluster", "kubernetes-cluster", "k8s_cluster":
+		return "k8s-cluster"
+	default:
+		return strings.ToLower(strings.TrimSpace(resourceType))
+	}
 }

@@ -152,7 +152,7 @@ type ResourceSearchResponse struct {
 
 // ResourceMatch is a compact match result for pulse_search_resources
 type ResourceMatch struct {
-	Type           string `json:"type"` // "node", "vm", "container", "docker", "docker_host"
+	Type           string `json:"type"` // "node", "vm", "system-container", "app-container", "docker_host"
 	ID             string `json:"id,omitempty"`
 	Name           string `json:"name"`
 	Status         string `json:"status,omitempty"`
@@ -406,7 +406,7 @@ type TopologySummary struct {
 
 // ResourceResponse is returned by pulse_get_resource
 type ResourceResponse struct {
-	Type            string            `json:"type"` // "vm", "container", "docker"
+	Type            string            `json:"type"` // "vm", "system-container", "app-container"
 	ID              string            `json:"id"`
 	Name            string            `json:"name"`
 	Status          string            `json:"status"`

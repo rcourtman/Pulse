@@ -254,7 +254,7 @@ func TestExecuteSearchResources(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(response.Matches) != 1 || response.Matches[0].Type != "docker" || response.Matches[0].Name != "nginx" {
+	if len(response.Matches) != 1 || response.Matches[0].Type != "app-container" || response.Matches[0].Name != "nginx" {
 		t.Fatalf("unexpected search response: %+v", response)
 	}
 
@@ -352,13 +352,13 @@ func TestExecuteGetResource(t *testing.T) {
 	}
 
 	resource, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
-		"resource_type": "docker",
+		"resource_type": "app-container",
 		"resource_id":   "abc",
 	})
 	if err := json.Unmarshal([]byte(resource.Content[0].Text), &res); err != nil {
 		t.Fatalf("decode docker resource: %v", err)
 	}
-	if res.Type != "docker" || res.Name != "nginx" {
+	if res.Type != "app-container" || res.Name != "nginx" {
 		t.Fatalf("unexpected docker resource: %+v", res)
 	}
 }
@@ -402,7 +402,7 @@ func TestExecuteGetResource_DockerDetails(t *testing.T) {
 	})
 
 	result, _ := executor.executeGetResource(context.Background(), map[string]interface{}{
-		"resource_type": "docker",
+		"resource_type": "app-container",
 		"resource_id":   "web",
 	})
 	var res ResourceResponse
@@ -472,7 +472,7 @@ func TestExecuteListInfrastructurePaginationAndDockerFilter(t *testing.T) {
 	}
 
 	result, err = executor.executeListInfrastructure(context.Background(), map[string]interface{}{
-		"type":                           "docker",
+		"type":                           "app-containers",
 		"status":                         "running",
 		"max_docker_containers_per_host": 1,
 	})
@@ -616,7 +616,7 @@ func TestExecuteGetResourceErrorsAndContainer(t *testing.T) {
 	}}
 
 	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
-		"resource_type": "container",
+		"resource_type": "system-container",
 		"resource_id":   "ct1",
 	})
 	var res ResourceResponse

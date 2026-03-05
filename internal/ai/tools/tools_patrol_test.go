@@ -224,6 +224,48 @@ func TestHandlePatrolReportFinding_InvalidCategory(t *testing.T) {
 	assert.Contains(t, text, "networking")
 }
 
+func TestHandlePatrolReportFinding_NormalizesLegacyResourceTypeAliases(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "container", want: "system-container"},
+		{in: "docker_container", want: "app-container"},
+		{in: "kubernetes_cluster", want: "k8s-cluster"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			creator := &mockPatrolFindingCreator{checked: true}
+			exec := newPatrolTestExecutor(creator)
+
+			args := validReportArgs()
+			args["resource_type"] = tc.in
+
+			result, err := handlePatrolReportFinding(context.Background(), exec, args)
+			require.NoError(t, err)
+			assert.False(t, result.IsError, "unexpected error payload: %s", extractText(result))
+			require.Len(t, creator.createCalls, 1)
+			assert.Equal(t, tc.want, creator.createCalls[0].ResourceType)
+		})
+	}
+}
+
+func TestHandlePatrolReportFinding_InvalidResourceType(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
+	exec := newPatrolTestExecutor(creator)
+
+	args := validReportArgs()
+	args["resource_type"] = "bad-type"
+
+	result, err := handlePatrolReportFinding(context.Background(), exec, args)
+	require.NoError(t, err)
+
+	text := extractText(result)
+	assert.Contains(t, text, "unsupported resource_type")
+	assert.Contains(t, text, "bad-type")
+}
+
 func TestHandlePatrolReportFinding_ValidSeverities(t *testing.T) {
 	for _, sev := range []string{"critical", "warning"} {
 		t.Run(sev, func(t *testing.T) {
