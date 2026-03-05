@@ -773,6 +773,20 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_read_test.go"),
+			requiredSnippets: []string{
+				`TestPulseToolExecutor_ExecuteReadRejectsLegacyAppContainerArg`,
+				`app_container is no longer supported; use app-container`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_file_test.go"),
+			requiredSnippets: []string{
+				`Legacy AppContainer Rejected`,
+				`app_container is no longer supported; use app-container`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "ai", "chat", "context_prefetch_additional_test.go"),
 			requiredSnippets: []string{
 				`expected legacy host mention to be ignored`,

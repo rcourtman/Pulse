@@ -57,7 +57,7 @@ func TestExecuteFileEdit_Validation(t *testing.T) {
 		{
 			name:    "Legacy AppContainer Rejected",
 			args:    map[string]interface{}{"action": "read", "path": "/f", "target_host": "h1", "app_container": "nginx"},
-			wantErr: "app_container is no longer supported; use container",
+			wantErr: "app_container is no longer supported; use app-container",
 		},
 		{
 			name:    "Unknown Action",

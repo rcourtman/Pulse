@@ -121,3 +121,18 @@ func TestPulseToolExecutor_ExecuteReadLogs_Fallbacks(t *testing.T) {
 		agentSrv.AssertExpectations(t)
 	})
 }
+
+func TestPulseToolExecutor_ExecuteReadRejectsLegacyAppContainerArg(t *testing.T) {
+	exec := NewPulseToolExecutor(ExecutorConfig{})
+
+	result, err := exec.executeReadExec(context.Background(), map[string]interface{}{
+		"action":        "exec",
+		"command":       "uptime",
+		"target_host":   "node1",
+		"app_container": "homepage",
+	})
+	require.NoError(t, err)
+	assert.True(t, result.IsError)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, "app_container is no longer supported; use app-container")
+}

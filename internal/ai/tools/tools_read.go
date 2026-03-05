@@ -111,7 +111,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
 	if legacyContainerArg {
-		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use container")), nil
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
 
 	// High-confidence secret exfiltration blocks.
@@ -259,7 +259,7 @@ func (e *PulseToolExecutor) executeReadFile(ctx context.Context, args map[string
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
 	if legacyContainerArg {
-		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use container")), nil
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
 
 	// Validate path is absolute
@@ -327,7 +327,7 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
 	if legacyContainerArg {
-		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use container")), nil
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
 
 	// Validate path is absolute
