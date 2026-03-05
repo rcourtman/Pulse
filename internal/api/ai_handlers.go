@@ -3978,7 +3978,7 @@ type AIInvestigateAlertRequest struct {
 	AlertID      string  `json:"alert_id"`
 	ResourceID   string  `json:"resource_id"`
 	ResourceName string  `json:"resource_name"`
-	ResourceType string  `json:"resource_type"` // guest, node, storage, docker
+	ResourceType string  `json:"resource_type"` // canonical v6 resource type
 	AlertType    string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
 	Level        string  `json:"level"`         // warning, critical
 	Value        float64 `json:"value"`
@@ -3987,6 +3987,22 @@ type AIInvestigateAlertRequest struct {
 	Duration     string  `json:"duration"` // How long the alert has been active
 	Node         string  `json:"node,omitempty"`
 	VMID         int     `json:"vmid,omitempty"`
+}
+
+func normalizeInvestigateAlertTargetType(raw string) (string, error) {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "vm":
+		return "vm", nil
+	case "system-container", "oci-container":
+		return "system-container", nil
+	case "agent", "node", "docker-host", "app-container", "k8s", "k8s-node", "k8s-cluster", "storage", "disk", "pbs", "pmg", "proxmox", "truenas", "ceph":
+		return "agent", nil
+	case "":
+		return "", errors.New("resource_type is required")
+	default:
+		return "", fmt.Errorf("unsupported resource_type %q (allowed: vm, system-container, oci-container, app-container, agent, node, docker-host, k8s, storage, disk, pbs, pmg, proxmox, truenas, ceph)", raw)
+	}
 }
 
 // HandleInvestigateAlert investigates an alert using AI (POST /api/ai/investigate-alert)
@@ -4107,19 +4123,28 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		return true
 	}
 
-	// Determine target type and ID from alert info
-	targetType := req.ResourceType
-	targetID := req.ResourceID
+	targetType, err := normalizeInvestigateAlertTargetType(req.ResourceType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	// Map resource type to expected target type format
-	switch req.ResourceType {
-	case "guest":
-		// Could be VM or container - try to determine from VMID
+	resourceType := strings.ToLower(strings.TrimSpace(req.ResourceType))
+	targetID := strings.TrimSpace(req.ResourceID)
+	if targetType == "vm" || targetType == "system-container" {
 		if req.VMID > 0 {
-			targetType = "container" // Default to container, AI will figure it out
+			targetID = strconv.Itoa(req.VMID)
 		}
-	case "docker":
-		targetType = "docker_container"
+	} else if targetType == "agent" {
+		if node := strings.ToLower(strings.TrimSpace(req.Node)); node != "" {
+			targetID = node
+		} else if resourceType != "app-container" {
+			// Keep explicit host-like IDs for node/agent resources.
+			targetID = strings.ToLower(strings.TrimSpace(req.ResourceID))
+		} else {
+			// app-container IDs are container-scoped, not host routing IDs.
+			targetID = ""
+		}
 	}
 
 	// Stream callback

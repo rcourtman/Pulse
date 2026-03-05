@@ -213,7 +213,7 @@ type AlertInvestigationRequest struct {
 	AlertID      string  `json:"alert_id"`
 	ResourceID   string  `json:"resource_id"`
 	ResourceName string  `json:"resource_name"`
-	ResourceType string  `json:"resource_type"` // guest, node, storage, docker
+	ResourceType string  `json:"resource_type"` // canonical v6 resource type
 	AlertType    string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
 	Level        string  `json:"level"`         // warning, critical
 	Value        float64 `json:"value"`

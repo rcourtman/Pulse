@@ -305,6 +305,38 @@ func TestNormalizeAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
 	}
 }
 
+func TestNormalizeInvestigateAlertTargetType_StrictCanonicalV6(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr string
+	}{
+		{name: "vm", in: "vm", want: "vm"},
+		{name: "system container", in: "system-container", want: "system-container"},
+		{name: "oci container maps to system-container", in: "oci-container", want: "system-container"},
+		{name: "app container maps to agent", in: "app-container", want: "agent"},
+		{name: "node maps to agent", in: "node", want: "agent"},
+		{name: "legacy guest rejected", in: "guest", wantErr: "unsupported resource_type"},
+		{name: "legacy docker rejected", in: "docker", wantErr: "unsupported resource_type"},
+		{name: "legacy container rejected", in: "container", wantErr: "unsupported resource_type"},
+		{name: "missing type", in: "", wantErr: "resource_type is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeInvestigateAlertTargetType(tt.in)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func ptr[T any](v T) *T { return &v }
 
 func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
