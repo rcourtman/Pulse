@@ -7205,8 +7205,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		return apiPoints
 	}
-	snap := monitor.ReadSnapshot()
 	mockModeEnabled := mock.IsMockEnabled()
+	vms := monitor.VMsSnapshot()
+	containers := monitor.ContainersSnapshot()
+	nodes := monitor.NodesSnapshot()
+	storagePools := monitor.StorageSnapshot()
+	dockerHosts := monitor.DockerHostsSnapshot()
+	hosts := monitor.HostsSnapshot()
 
 	parseGuestID := func(id string) (string, string, int, bool) {
 		parts := strings.Split(id, ":")
@@ -7221,14 +7226,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findVM := func(id string) *models.VM {
-		for i := range snap.VMs {
-			if snap.VMs[i].ID == id {
-				return &snap.VMs[i]
+		for i := range vms {
+			if vms[i].ID == id {
+				return &vms[i]
 			}
 		}
 		if instance, node, vmID, ok := parseGuestID(id); ok {
-			for i := range snap.VMs {
-				vm := &snap.VMs[i]
+			for i := range vms {
+				vm := &vms[i]
 				if vm.VMID == vmID && vm.Node == node && vm.Instance == instance {
 					return vm
 				}
@@ -7238,14 +7243,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findContainer := func(id string) *models.Container {
-		for i := range snap.Containers {
-			if snap.Containers[i].ID == id {
-				return &snap.Containers[i]
+		for i := range containers {
+			if containers[i].ID == id {
+				return &containers[i]
 			}
 		}
 		if instance, node, vmID, ok := parseGuestID(id); ok {
-			for i := range snap.Containers {
-				ct := &snap.Containers[i]
+			for i := range containers {
+				ct := &containers[i]
 				if ct.VMID == vmID && ct.Node == node && ct.Instance == instance {
 					return ct
 				}
@@ -7255,44 +7260,44 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findNode := func(id string) *models.Node {
-		for i := range snap.Nodes {
-			if snap.Nodes[i].ID == id {
-				return &snap.Nodes[i]
+		for i := range nodes {
+			if nodes[i].ID == id {
+				return &nodes[i]
 			}
 		}
 		return nil
 	}
 
 	findStorage := func(id string) *models.Storage {
-		for i := range snap.Storage {
-			if snap.Storage[i].ID == id {
-				return &snap.Storage[i]
+		for i := range storagePools {
+			if storagePools[i].ID == id {
+				return &storagePools[i]
 			}
 		}
 		return nil
 	}
 
 	findDockerHost := func(id string) *models.DockerHost {
-		for i := range snap.DockerHosts {
-			if snap.DockerHosts[i].ID == id {
-				return &snap.DockerHosts[i]
+		for i := range dockerHosts {
+			if dockerHosts[i].ID == id {
+				return &dockerHosts[i]
 			}
 		}
 		return nil
 	}
 
 	findHost := func(id string) *models.Host {
-		for i := range snap.Hosts {
-			if snap.Hosts[i].ID == id {
-				return &snap.Hosts[i]
+		for i := range hosts {
+			if hosts[i].ID == id {
+				return &hosts[i]
 			}
 		}
 		return nil
 	}
 
 	findDockerContainer := func(id string) *models.DockerContainer {
-		for i := range snap.DockerHosts {
-			host := &snap.DockerHosts[i]
+		for i := range dockerHosts {
+			host := &dockerHosts[i]
 			for j := range host.Containers {
 				if host.Containers[j].ID == id {
 					return &host.Containers[j]

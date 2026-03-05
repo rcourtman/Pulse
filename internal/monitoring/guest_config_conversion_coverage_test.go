@@ -642,6 +642,41 @@ func TestMonitorGetLiveHostsSnapshot(t *testing.T) {
 	})
 }
 
+func TestMonitorWorkloadSnapshots(t *testing.T) {
+	t.Run("nil monitor", func(t *testing.T) {
+		var m *Monitor
+		if got := m.VMsSnapshot(); len(got) != 0 {
+			t.Fatalf("expected empty VMs for nil monitor, got %#v", got)
+		}
+		if got := m.ContainersSnapshot(); len(got) != 0 {
+			t.Fatalf("expected empty containers for nil monitor, got %#v", got)
+		}
+	})
+
+	t.Run("returns current vm and container snapshots", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdateVMsForInstance("pve", []models.VM{{ID: "vm-1", Name: "vm-1"}})
+		state.UpdateContainersForInstance("pve", []models.Container{{ID: "ct-1", Name: "ct-1"}})
+		m := &Monitor{state: state}
+
+		vms := m.VMsSnapshot()
+		if len(vms) != 1 {
+			t.Fatalf("expected one VM in snapshot, got %d", len(vms))
+		}
+		if vms[0].ID != "vm-1" {
+			t.Fatalf("unexpected vm id: %q", vms[0].ID)
+		}
+
+		containers := m.ContainersSnapshot()
+		if len(containers) != 1 {
+			t.Fatalf("expected one container in snapshot, got %d", len(containers))
+		}
+		if containers[0].ID != "ct-1" {
+			t.Fatalf("unexpected container id: %q", containers[0].ID)
+		}
+	})
+}
+
 func TestMonitorNodesSnapshot(t *testing.T) {
 	t.Run("nil monitor", func(t *testing.T) {
 		var m *Monitor
