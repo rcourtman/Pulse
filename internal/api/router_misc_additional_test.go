@@ -121,7 +121,7 @@ func TestNormalizeMetricsHistoryResourceType_DockerHostCanonicalType(t *testing.
 }
 
 func TestNormalizeMetricsHistoryResourceType_RejectsLegacyAliases(t *testing.T) {
-	legacyTypes := []string{"guest", "docker", "dockerhost", "dockercontainer", "system_container"}
+	legacyTypes := []string{"host", "guest", "docker", "dockerhost", "dockercontainer", "system_container"}
 	for _, legacyType := range legacyTypes {
 		_, _, _, err := normalizeMetricsHistoryResourceType(legacyType)
 		if err == nil {

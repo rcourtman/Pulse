@@ -157,6 +157,21 @@ func TestReportingHandlers_GenerateReport_RejectsLegacyResourceTypeAlias(t *test
 	}
 }
 
+func TestNormalizeReportResourceType_RejectsLegacyAliases(t *testing.T) {
+	tests := []string{"host", "container"}
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			got, err := normalizeReportResourceType(input)
+			if err == nil {
+				t.Fatalf("expected error for legacy alias %q, got canonical type %q", input, got)
+			}
+			if !strings.Contains(err.Error(), `unsupported resourceType "`+input+`"`) {
+				t.Fatalf("unexpected error for %q: %v", input, err)
+			}
+		})
+	}
+}
+
 func TestReportingHandlers_GenerateReport_RejectsUnsupportedResourceType(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()
