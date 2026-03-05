@@ -12,7 +12,7 @@ type WorkloadTypeBadgeKey =
   | 'app-container'
   | 'agent'
   | 'pod'
-  | 'oci';
+  | 'oci-container';
 
 const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
   vm: {
@@ -50,7 +50,7 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
     title: 'Agent',
     className: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
   },
-  oci: {
+  'oci-container': {
     label: 'OCI',
     title: 'OCI Container',
     className: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
@@ -73,25 +73,13 @@ const toTitleCase = (value: string): string =>
 const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | null => {
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized === 'vm' || normalized === 'qemu') return 'vm';
-  if (
-    normalized === 'system-container' ||
-    normalized === 'container' ||
-    normalized === 'lxc' ||
-    normalized === 'ct'
-  ) {
-    return 'system-container';
-  }
-  if (
-    normalized === 'docker' ||
-    normalized === 'app-container'
-  ) {
-    return 'app-container';
-  }
+  if (normalized === 'vm') return 'vm';
+  if (normalized === 'system-container') return 'system-container';
+  if (normalized === 'app-container' || normalized === 'docker') return 'app-container';
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
   if (normalized === 'pod' || normalized === 'k8s-pod') return 'pod';
   if (normalized === 'agent') return 'agent';
-  if (normalized === 'oci') return 'oci';
+  if (normalized === 'oci-container') return 'oci-container';
   return null;
 };
 

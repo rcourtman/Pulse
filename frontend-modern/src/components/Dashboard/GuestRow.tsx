@@ -868,7 +868,7 @@ export function GuestRow(props: GuestRowProps) {
   const isOCIContainer = createMemo(() => {
     if (workloadType() !== 'system-container') return false;
     const container = props.guest as Container;
-    return props.guest.type === 'oci' || container.isOci === true;
+    return props.guest.type === 'oci-container' || container.isOci === true;
   });
 
   // OCI image info - extract clean image name from osTemplate (similar to Docker container image display)
@@ -885,7 +885,7 @@ export function GuestRow(props: GuestRowProps) {
 
   const typeInfo = createMemo(() => {
     if (isOCIContainer()) {
-      return getWorkloadTypeBadge('oci', {
+      return getWorkloadTypeBadge('oci-container', {
         title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
       });
     }

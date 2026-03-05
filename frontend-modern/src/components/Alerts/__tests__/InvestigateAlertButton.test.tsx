@@ -299,13 +299,13 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('storage');
     });
 
-    it('canonicalizes explicit legacy resourceType props', async () => {
+    it('falls back to "guest" for explicit legacy resourceType props', async () => {
       const alert = makeAlert({ type: 'memory' });
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('system-container');
+      expect(context.targetType).toBe('guest');
     });
 
     it('falls back to "guest" when no resourceType and type has no prefix', async () => {
@@ -317,7 +317,7 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('guest');
     });
 
-    it('type prefix overrides explicit resourceType', async () => {
+    it('type prefix overrides explicit unsupported resourceType', async () => {
       const alert = makeAlert({ type: 'node_memory' });
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
       await fireEvent.click(screen.getByRole('button'));

@@ -10,10 +10,10 @@ describe('workloadTypeBadges', () => {
         expect(result.title).toBe('Virtual Machine');
       });
 
-      it('normalizes legacy qemu alias to VM', () => {
+      it('does not normalize removed qemu alias', () => {
         const result = getWorkloadTypeBadge('qemu');
-        expect(result.label).toBe('VM');
-        expect(result.title).toBe('Virtual Machine');
+        expect(result.label).toBe('Qemu');
+        expect(result.title).toBe('Qemu');
       });
 
       it('returns VM badge for VM (case insensitive)', () => {
@@ -29,16 +29,16 @@ describe('workloadTypeBadges', () => {
         expect(result.title).toBe('System Container');
       });
 
-      it('normalizes legacy ct alias to system-container', () => {
+      it('does not normalize removed ct alias', () => {
         const result = getWorkloadTypeBadge('ct');
-        expect(result.label).toBe('Container');
-        expect(result.title).toBe('System Container');
+        expect(result.label).toBe('Ct');
+        expect(result.title).toBe('Ct');
       });
 
-      it('normalizes legacy container alias to system-container', () => {
+      it('does not normalize removed container alias', () => {
         const result = getWorkloadTypeBadge('container');
         expect(result.label).toBe('Container');
-        expect(result.title).toBe('System Container');
+        expect(result.title).toBe('Container');
       });
     });
 
@@ -93,8 +93,8 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('OCI types', () => {
-      it('returns OCI badge for oci', () => {
-        const result = getWorkloadTypeBadge('oci');
+      it('returns OCI badge for oci-container', () => {
+        const result = getWorkloadTypeBadge('oci-container');
         expect(result.label).toBe('OCI');
         expect(result.title).toBe('OCI Container');
       });

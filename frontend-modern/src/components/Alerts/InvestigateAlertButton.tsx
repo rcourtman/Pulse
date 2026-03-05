@@ -26,18 +26,26 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const canonicalTargetType = (raw?: string) => {
     const normalized = (raw || '').trim().toLowerCase();
     switch (normalized) {
-      case 'lxc':
-      case 'container':
+      case 'vm':
+        return 'vm';
       case 'system-container':
+      case 'oci-container':
         return 'system-container';
-      case 'docker':
-      case 'docker-container':
       case 'app-container':
         return 'app-container';
       case 'agent':
-        return 'agent';
+      case 'node':
+      case 'storage':
+      case 'disk':
+      case 'docker-host':
+      case 'pbs':
+      case 'pmg':
+      case 'k8s':
+      case 'k8s-node':
+      case 'k8s-cluster':
+        return normalized;
       default:
-        return normalized || 'guest';
+        return 'guest';
     }
   };
 

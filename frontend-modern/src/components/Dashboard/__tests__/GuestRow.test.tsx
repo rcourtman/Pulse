@@ -834,14 +834,14 @@ describe('OCI container handling', () => {
   it('renders OCI badge for OCI containers', () => {
     renderGuestRow({
       guest: makeGuest({
-        type: 'oci',
+        type: 'oci-container',
         workloadType: 'system-container',
         osTemplate: 'oci:docker.io/library/alpine:3.18',
       }),
       visibleColumnIds: ['name', 'type'],
     });
     // Should render the OCI type badge
-    expect(screen.getByText('OCI')).toBeTruthy();
+    expect(screen.getByText('OCI-CONTAINER')).toBeTruthy();
   });
 });
 

@@ -9,12 +9,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 
 describe('resolveWorkloadType', () => {
   it('returns workloadType when present', () => {
-    const guest = { workloadType: 'vm' as const, type: 'lxc' };
-    expect(resolveWorkloadType(guest)).toBe('vm');
-  });
-
-  it('maps legacy qemu type to vm', () => {
-    const guest = { type: 'qemu' };
+    const guest = { workloadType: 'vm' as const, type: 'system-container' };
     expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
@@ -23,18 +18,8 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
-  it('maps legacy lxc type to system-container', () => {
-    const guest = { type: 'lxc' };
-    expect(resolveWorkloadType(guest)).toBe('system-container');
-  });
-
-  it('returns system-container for oci type', () => {
-    const guest = { type: 'oci' };
-    expect(resolveWorkloadType(guest)).toBe('system-container');
-  });
-
-  it('returns system-container for container type', () => {
-    const guest = { type: 'container' };
+  it('returns system-container for oci-container type', () => {
+    const guest = { type: 'oci-container' };
     expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
@@ -85,16 +70,28 @@ describe('resolveWorkloadType', () => {
 });
 
 describe('resolveWorkloadTypeFromString', () => {
-  it('normalizes qemu alias to vm', () => {
-    expect(resolveWorkloadTypeFromString('qemu')).toBe('vm');
+  it('returns vm for canonical vm type', () => {
+    expect(resolveWorkloadTypeFromString('vm')).toBe('vm');
   });
 
-  it('normalizes lxc alias to system-container', () => {
-    expect(resolveWorkloadTypeFromString('lxc')).toBe('system-container');
+  it('returns system-container for canonical system-container type', () => {
+    expect(resolveWorkloadTypeFromString('system-container')).toBe('system-container');
   });
 
-  it('normalizes container alias to system-container', () => {
-    expect(resolveWorkloadTypeFromString('container')).toBe('system-container');
+  it('returns system-container for canonical oci-container type', () => {
+    expect(resolveWorkloadTypeFromString('oci-container')).toBe('system-container');
+  });
+
+  it('does not normalize removed qemu alias', () => {
+    expect(resolveWorkloadTypeFromString('qemu')).toBeNull();
+  });
+
+  it('does not normalize removed lxc alias', () => {
+    expect(resolveWorkloadTypeFromString('lxc')).toBeNull();
+  });
+
+  it('does not normalize removed container alias', () => {
+    expect(resolveWorkloadTypeFromString('container')).toBeNull();
   });
 
   it('does not normalize removed docker-container alias', () => {
@@ -108,12 +105,12 @@ describe('resolveWorkloadTypeFromString', () => {
 
 describe('getWorkloadMetricsKind', () => {
   it('returns vm for vm workload', () => {
-    const guest = { workloadType: 'vm' as const, type: 'qemu' };
+    const guest = { workloadType: 'vm' as const, type: 'vm' };
     expect(getWorkloadMetricsKind(guest)).toBe('vm');
   });
 
   it('returns container for system-container workload', () => {
-    const guest = { workloadType: 'system-container' as const, type: 'lxc' };
+    const guest = { workloadType: 'system-container' as const, type: 'system-container' };
     expect(getWorkloadMetricsKind(guest)).toBe('container');
   });
 
@@ -123,7 +120,7 @@ describe('getWorkloadMetricsKind', () => {
   });
 
   it('returns k8s for k8s workload', () => {
-    const guest = { workloadType: 'k8s' as const, type: 'kubernetes' };
+    const guest = { workloadType: 'k8s' as const, type: 'k8s-pod' };
     expect(getWorkloadMetricsKind(guest)).toBe('k8s');
   });
 
@@ -135,13 +132,19 @@ describe('getWorkloadMetricsKind', () => {
 
 describe('getCanonicalWorkloadId', () => {
   it('returns composite id for vm with instance, node, vmid', () => {
-    const guest = { id: 'orig', type: 'qemu', instance: 'qemu', node: 'node1', vmid: 100 };
-    expect(getCanonicalWorkloadId(guest)).toBe('qemu:node1:100');
+    const guest = { id: 'orig', type: 'vm', instance: 'homelab', node: 'node1', vmid: 100 };
+    expect(getCanonicalWorkloadId(guest)).toBe('homelab:node1:100');
   });
 
-  it('returns composite id for lxc with instance, node, vmid', () => {
-    const guest = { id: 'orig', type: 'lxc', instance: 'lxc', node: 'node2', vmid: 200 };
-    expect(getCanonicalWorkloadId(guest)).toBe('lxc:node2:200');
+  it('returns composite id for system-container with instance, node, vmid', () => {
+    const guest = {
+      id: 'orig',
+      type: 'system-container',
+      instance: 'homelab',
+      node: 'node2',
+      vmid: 200,
+    };
+    expect(getCanonicalWorkloadId(guest)).toBe('homelab:node2:200');
   });
 
   it('returns id for docker (no instance/node/vmid)', () => {
@@ -169,17 +172,17 @@ describe('getCanonicalWorkloadId', () => {
   });
 
   it('returns id when vmid is 0', () => {
-    const guest = { id: 'test', type: 'qemu', instance: 'qemu', node: 'node1', vmid: 0 };
+    const guest = { id: 'test', type: 'vm', instance: 'homelab', node: 'node1', vmid: 0 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
   });
 
   it('returns id when instance is missing', () => {
-    const guest = { id: 'test', type: 'qemu', instance: '', node: 'node1', vmid: 100 };
+    const guest = { id: 'test', type: 'vm', instance: '', node: 'node1', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
   });
 
   it('returns id when node is missing', () => {
-    const guest = { id: 'test', type: 'qemu', instance: 'qemu', node: '', vmid: 100 };
+    const guest = { id: 'test', type: 'vm', instance: 'homelab', node: '', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
   });
 });
