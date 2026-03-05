@@ -2627,7 +2627,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				"label":      label,
 			}
 
-			m.checkMetric(perDiskResourceID, name, node, instanceName, guestType, "disk", disk.Usage, thresholds.Disk, &metricOptions{
+			m.checkMetric(perDiskResourceID, name, node, instanceName, snapshot.resourceType(), "disk", disk.Usage, thresholds.Disk, &metricOptions{
 				Metadata:    metadata,
 				Message:     message,
 				MonitorOnly: monitorOnly,
@@ -6244,9 +6244,9 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 
 	var keys []string
 	switch typeKey {
-	case "guest", "qemu", "vm", "container", "system-container":
+	case "guest", "vm", "system-container":
 		keys = addUnique(keys, "guest")
-	case "docker", "docker container", "dockercontainer", "app-container", "app_container":
+	case "docker", "docker container", "dockercontainer", "app-container":
 		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "guest")
 	case "docker host", "dockerhost":

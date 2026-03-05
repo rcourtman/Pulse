@@ -3754,11 +3754,18 @@ func TestGetBaseTimeThreshold(t *testing.T) {
 			wantFound:      true,
 		},
 		{
-			name:           "canonical key match for container",
+			name:           "canonical key match for system-container",
 			timeThresholds: map[string]int{"guest": 120},
-			resourceType:   "container",
+			resourceType:   "system-container",
 			wantDelay:      120,
 			wantFound:      true,
+		},
+		{
+			name:           "legacy container type no longer aliases to guest",
+			timeThresholds: map[string]int{"guest": 120},
+			resourceType:   "container",
+			wantDelay:      0,
+			wantFound:      false,
 		},
 		{
 			name:           "all fallback when no specific match",
@@ -3865,12 +3872,20 @@ func TestGetMetricTimeThreshold(t *testing.T) {
 			wantFound:            true,
 		},
 		{
-			name:                 "canonical key match container to guest",
+			name:                 "canonical key match system-container to guest",
 			metricTimeThresholds: map[string]map[string]int{"guest": {"memory": 90}},
-			resourceType:         "container",
+			resourceType:         "system-container",
 			metricType:           "memory",
 			wantDelay:            90,
 			wantFound:            true,
+		},
+		{
+			name:                 "legacy container type no longer aliases to guest",
+			metricTimeThresholds: map[string]map[string]int{"guest": {"memory": 90}},
+			resourceType:         "container",
+			metricType:           "memory",
+			wantDelay:            0,
+			wantFound:            false,
 		},
 		{
 			name:                 "default fallback within resourceType",

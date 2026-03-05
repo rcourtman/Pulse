@@ -1388,9 +1388,9 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			want:         []string{"guest"},
 		},
 		{
-			name:         "qemu returns guest",
+			name:         "qemu stays qemu",
 			resourceType: "qemu",
-			want:         []string{"guest"},
+			want:         []string{"qemu"},
 		},
 		{
 			name:         "vm returns guest",
@@ -1398,9 +1398,9 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 			want:         []string{"guest"},
 		},
 		{
-			name:         "container returns guest",
+			name:         "container stays container",
 			resourceType: "container",
-			want:         []string{"guest"},
+			want:         []string{"container"},
 		},
 		{
 			name:         "system-container returns guest",

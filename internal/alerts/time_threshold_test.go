@@ -22,10 +22,10 @@ func TestGetTimeThresholdMappings(t *testing.T) {
 		expected     int
 	}{
 		{"VM", 300},
-		{"Container", 300},
+		{"Container", 0},
 		{"system-container", 300},
 		{"guest", 300},
-		{"qemu", 300},
+		{"qemu", 0},
 		{"Node", 120},
 		{"storage", 45},
 		{"PBS", 90},
