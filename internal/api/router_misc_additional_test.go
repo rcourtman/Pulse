@@ -667,8 +667,11 @@ func TestHandleWorkloadCharts_WorkloadOnlyPayloadAndNodeFilter(t *testing.T) {
 	if decoded.GuestTypes["vm-101"] != "vm" {
 		t.Fatalf("expected vm guest type for vm-101, got %q", decoded.GuestTypes["vm-101"])
 	}
-	if decoded.GuestTypes["ct-301"] != "container" {
-		t.Fatalf("expected container guest type for ct-301, got %q", decoded.GuestTypes["ct-301"])
+	if decoded.GuestTypes["ct-301"] != "system-container" {
+		t.Fatalf(
+			"expected system-container guest type for ct-301, got %q",
+			decoded.GuestTypes["ct-301"],
+		)
 	}
 	if decoded.Stats.PointCounts.Total <= 0 {
 		t.Fatalf("expected stats.pointCounts.total > 0, got %d", decoded.Stats.PointCounts.Total)
