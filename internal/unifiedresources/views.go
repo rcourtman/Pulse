@@ -2232,6 +2232,20 @@ func (v PodView) ClusterName() string {
 	return v.r.Kubernetes.ClusterName
 }
 
+func (v PodView) ClusterID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterID
+}
+
+func (v PodView) NodeName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.NodeName
+}
+
 func (v PodView) Namespace() string {
 	if v.r == nil || v.r.Kubernetes == nil {
 		return ""
@@ -2300,6 +2314,27 @@ func (v PodView) MemoryPercent() float64 {
 		return 0
 	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PodView) DiskPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v PodView) NetInRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetIn)
+}
+
+func (v PodView) NetOutRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
 }
 
 func (v PodView) Tags() []string {
@@ -2569,6 +2604,20 @@ func (v DockerContainerView) DiskPercent() float64 {
 		return 0
 	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v DockerContainerView) NetInRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetIn)
+}
+
+func (v DockerContainerView) NetOutRate() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricValue(v.r.Metrics, selectMetricsNetOut)
 }
 
 func (v DockerContainerView) UptimeSeconds() int64 {

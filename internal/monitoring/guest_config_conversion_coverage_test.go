@@ -642,6 +642,30 @@ func TestMonitorGetLiveHostsSnapshot(t *testing.T) {
 	})
 }
 
+func TestMonitorNodesSnapshot(t *testing.T) {
+	t.Run("nil monitor", func(t *testing.T) {
+		var m *Monitor
+		nodes := m.NodesSnapshot()
+		if len(nodes) != 0 {
+			t.Fatalf("expected empty nodes for nil monitor, got %#v", nodes)
+		}
+	})
+
+	t.Run("returns current proxmox nodes", func(t *testing.T) {
+		state := models.NewState()
+		state.Nodes = []models.Node{{ID: "node-1", Name: "pve-1"}}
+		m := &Monitor{state: state}
+
+		nodes := m.NodesSnapshot()
+		if len(nodes) != 1 {
+			t.Fatalf("expected one node in snapshot, got %d", len(nodes))
+		}
+		if nodes[0].ID != "node-1" {
+			t.Fatalf("unexpected node id: %q", nodes[0].ID)
+		}
+	})
+}
+
 func TestMonitorStorageSnapshot(t *testing.T) {
 	t.Run("nil monitor", func(t *testing.T) {
 		var m *Monitor

@@ -2526,6 +2526,14 @@ func (m *Monitor) HostsSnapshot() []models.Host {
 	return m.GetState().Hosts
 }
 
+// NodesSnapshot returns the current Proxmox nodes.
+func (m *Monitor) NodesSnapshot() []models.Node {
+	if m == nil {
+		return nil
+	}
+	return m.GetState().Nodes
+}
+
 // DockerHostsSnapshot returns the current Docker hosts.
 func (m *Monitor) DockerHostsSnapshot() []models.DockerHost {
 	return m.GetState().DockerHosts

@@ -5520,7 +5520,12 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	snap := monitor.ReadSnapshot()
+	nodes := monitor.NodesSnapshot()
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		http.Error(w, "State unavailable", http.StatusInternalServerError)
+		return
+	}
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
 	if metricsStoreEnabled && duration > inMemoryChartThreshold {
@@ -5532,9 +5537,9 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 
 	var selectedNode *models.Node
 	if selectedNodeID != "" {
-		for idx := range snap.Nodes {
-			if snap.Nodes[idx].ID == selectedNodeID {
-				selectedNode = &snap.Nodes[idx]
+		for idx := range nodes {
+			if nodes[idx].ID == selectedNodeID {
+				selectedNode = &nodes[idx]
 				break
 			}
 		}
@@ -5556,33 +5561,39 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			strings.EqualFold(strings.TrimSpace(nodeName), strings.TrimSpace(selectedNode.Name))
 	}
 
-	matchesSelectedDockerHost := func(host models.DockerHost) bool {
+	matchesSelectedDockerHostView := func(host *unifiedresources.DockerHostView) bool {
 		if selectedNodeID == "" {
 			return true
 		}
 		if selectedNode == nil {
 			return true
 		}
+		if host == nil {
+			return false
+		}
 		nodeName := strings.TrimSpace(selectedNode.Name)
 		if nodeName == "" {
 			return false
 		}
-		return strings.EqualFold(strings.TrimSpace(host.Hostname), nodeName) ||
-			strings.EqualFold(strings.TrimSpace(host.DisplayName), nodeName)
+		return strings.EqualFold(strings.TrimSpace(host.Hostname()), nodeName) ||
+			strings.EqualFold(strings.TrimSpace(host.Name()), nodeName)
 	}
 
-	matchesSelectedKubernetesPod := func(pod models.KubernetesPod) bool {
+	matchesSelectedKubernetesPodView := func(pod *unifiedresources.PodView) bool {
 		if selectedNodeID == "" {
 			return true
 		}
 		if selectedNode == nil {
 			return true
 		}
+		if pod == nil {
+			return false
+		}
 		nodeName := strings.TrimSpace(selectedNode.Name)
 		if nodeName == "" {
 			return false
 		}
-		return strings.EqualFold(strings.TrimSpace(pod.NodeName), nodeName)
+		return strings.EqualFold(strings.TrimSpace(pod.NodeName()), nodeName)
 	}
 
 	chartData := make(map[string]VMChartData)
@@ -5590,109 +5601,127 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 
 	guestTypes := make(map[string]string)
 
-	for _, vm := range snap.VMs {
-		if !matchesSelectedNode(vm.Instance, vm.Node) {
+	for _, vm := range readState.VMs() {
+		if vm == nil {
+			continue
+		}
+		if !matchesSelectedNode(vm.Instance(), vm.Node()) {
 			continue
 		}
 
-		metrics := monitor.GetGuestMetricsForChart(vm.ID, "vm", vm.ID, duration)
+		sourceID := strings.TrimSpace(vm.SourceID())
+		if sourceID == "" {
+			continue
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(sourceID, "vm", sourceID, duration)
 		series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
-		guestTypes[vm.ID] = "vm"
+		guestTypes[sourceID] = "vm"
 
 		if len(series["cpu"]) == 0 {
-			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPU * 100}}
-			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.Memory.Usage}}
-			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.Disk.Usage}}
-			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.NetworkIn)}}
-			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.NetworkOut)}}
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPUPercent()}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.MemoryPercent()}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.DiskPercent()}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetIn()}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetOut()}}
 		}
 		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		chartData[vm.ID] = series
+		chartData[sourceID] = series
 	}
 
-	for _, ct := range snap.Containers {
-		if !matchesSelectedNode(ct.Instance, ct.Node) {
+	for _, ct := range readState.Containers() {
+		if ct == nil {
+			continue
+		}
+		if !matchesSelectedNode(ct.Instance(), ct.Node()) {
 			continue
 		}
 
-		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
+		sourceID := strings.TrimSpace(ct.SourceID())
+		if sourceID == "" {
+			continue
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(sourceID, "container", sourceID, duration)
 		series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
-		guestTypes[ct.ID] = "system-container"
+		guestTypes[sourceID] = "system-container"
 
 		if len(series["cpu"]) == 0 {
-			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPU * 100}}
-			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.Memory.Usage}}
-			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.Disk.Usage}}
-			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.NetworkIn)}}
-			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.NetworkOut)}}
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPUPercent()}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.MemoryPercent()}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.DiskPercent()}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetIn()}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetOut()}}
 		}
 		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		chartData[ct.ID] = series
+		chartData[sourceID] = series
 	}
 
-	for _, cluster := range snap.KubernetesClusters {
-		if cluster.Hidden {
+	for _, pod := range readState.Pods() {
+		if pod == nil {
 			continue
 		}
-		for _, pod := range cluster.Pods {
-			if !matchesSelectedKubernetesPod(pod) {
-				continue
-			}
-
-			metricKey := kubernetesPodMetricID(cluster, pod)
-			if metricKey == "" {
-				continue
-			}
-			currentMetrics := kubernetesPodCurrentMetrics(cluster, pod)
-
-			metrics := monitor.GetGuestMetricsForChart(metricKey, "k8s", metricKey, duration)
-			series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
-			guestTypes[metricKey] = "k8s"
-
-			if len(series["cpu"]) == 0 {
-				series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["cpu"]}}
-				series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["memory"]}}
-				series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["disk"]}}
-				series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["netin"]}}
-				series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: currentMetrics["netout"]}}
-			}
-			updateOldestTimestampFromSeries(series, &oldestTimestamp)
-			chartData[metricKey] = series
-		}
-	}
-
-	for _, host := range snap.DockerHosts {
-		if !matchesSelectedDockerHost(host) {
+		if !matchesSelectedKubernetesPodView(pod) {
 			continue
 		}
 
-		for _, container := range host.Containers {
-			if container.ID == "" {
+		metricKey := kubernetesPodMetricIDFromView(pod)
+		if metricKey == "" {
+			continue
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "k8s", metricKey, duration)
+		series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
+		guestTypes[metricKey] = "k8s"
+
+		if len(series["cpu"]) == 0 {
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: pod.CPUPercent()}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: pod.MemoryPercent()}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: pod.DiskPercent()}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: pod.NetInRate()}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: pod.NetOutRate()}}
+		}
+		updateOldestTimestampFromSeries(series, &oldestTimestamp)
+		chartData[metricKey] = series
+	}
+
+	dockerHostsByID := make(map[string]*unifiedresources.DockerHostView, len(readState.DockerHosts()))
+	for _, host := range readState.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		dockerHostsByID[host.ID()] = host
+	}
+
+	for _, container := range readState.DockerContainers() {
+		if container == nil {
+			continue
+		}
+
+		if selectedNodeID != "" && selectedNode != nil {
+			host := dockerHostsByID[container.ParentID()]
+			if host == nil || !matchesSelectedDockerHostView(host) {
 				continue
 			}
-
-			metricKey := fmt.Sprintf("docker:%s", container.ID)
-			metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", container.ID, duration)
-			series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
-
-			if len(series["cpu"]) == 0 {
-				series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: container.CPUPercent}}
-				series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: container.MemoryPercent}}
-
-				var diskPercent float64
-				if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-					diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-					if diskPercent > 100 {
-						diskPercent = 100
-					}
-				}
-				series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
-				series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetInRate}}
-				series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetOutRate}}
-			}
-			updateOldestTimestampFromSeries(series, &oldestTimestamp)
-			dockerData[container.ID] = series
 		}
+
+		containerID := strings.TrimSpace(container.ContainerID())
+		if containerID == "" {
+			continue
+		}
+		metricKey := fmt.Sprintf("docker:%s", containerID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", containerID, duration)
+		series := convertMetricsForChart(metrics, &oldestTimestamp, maxPoints)
+
+		if len(series["cpu"]) == 0 {
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: container.CPUPercent()}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: container.MemoryPercent()}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: container.DiskPercent()}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetInRate()}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetOutRate()}}
+		}
+		updateOldestTimestampFromSeries(series, &oldestTimestamp)
+		dockerData[containerID] = series
 	}
 
 	countChartPoints := func(metricsMap map[string]VMChartData) int {
@@ -6047,6 +6076,28 @@ func kubernetesPodIdentifier(pod models.KubernetesPod) string {
 func kubernetesPodMetricID(cluster models.KubernetesCluster, pod models.KubernetesPod) string {
 	clusterKey := kubernetesClusterKey(cluster)
 	podKey := kubernetesPodIdentifier(pod)
+	if clusterKey == "" || podKey == "" {
+		return ""
+	}
+	return fmt.Sprintf("k8s:%s:pod:%s", clusterKey, podKey)
+}
+
+func kubernetesPodMetricIDFromView(pod *unifiedresources.PodView) string {
+	if pod == nil {
+		return ""
+	}
+	clusterKey := strings.TrimSpace(pod.ClusterID())
+	if clusterKey == "" {
+		clusterKey = strings.TrimSpace(pod.ClusterName())
+	}
+	podKey := strings.TrimSpace(pod.PodUID())
+	if podKey == "" {
+		namespace := strings.TrimSpace(pod.Namespace())
+		name := strings.TrimSpace(pod.Name())
+		if namespace != "" || name != "" {
+			podKey = fmt.Sprintf("%s/%s", namespace, name)
+		}
+	}
 	if clusterKey == "" || podKey == "" {
 		return ""
 	}
