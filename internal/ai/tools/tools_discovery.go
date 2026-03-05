@@ -513,7 +513,7 @@ func isUnsupportedDiscoveryLegacyResourceTypeToken(value string) bool {
 func canonicalDiscoveryResourceType(raw string) string {
 	resourceType := strings.ToLower(strings.TrimSpace(raw))
 	switch resourceType {
-	case "docker", "docker-container", "app-container":
+	case "docker", "app-container":
 		return "app-container"
 	default:
 		return resourceType
