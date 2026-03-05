@@ -197,7 +197,7 @@ func TestStore_RejectsUnsupportedHostGuestInput(t *testing.T) {
 	if err := store.SaveNote("host:alpha", "alpha", "agent", "service", "Agent", "v1"); err == nil {
 		t.Fatalf("expected unsupported host guest ID to be rejected")
 	}
-	for _, legacyGuestID := range []string{"qemu/200", "lxc/101"} {
+	for _, legacyGuestID := range []string{"qemu/200", "lxc/101", "lxc-101"} {
 		if err := store.SaveNote(legacyGuestID, "legacy", "vm", "service", "Agent", "v1"); err == nil {
 			t.Fatalf("expected unsupported legacy guest ID %q to be rejected", legacyGuestID)
 		}
