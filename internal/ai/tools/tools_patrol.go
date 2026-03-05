@@ -285,12 +285,10 @@ func handlePatrolGetFindings(_ context.Context, e *PulseToolExecutor, args map[s
 
 func canonicalPatrolResourceType(resourceType string) string {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
-	case "container", "system_container":
+	case "container":
 		return "system-container"
-	case "docker", "docker-container", "docker_container", "app_container":
+	case "docker", "docker-container", "app-container":
 		return "app-container"
-	case "kubernetes_cluster", "kubernetes-cluster", "k8s_cluster":
-		return "k8s-cluster"
 	default:
 		return strings.ToLower(strings.TrimSpace(resourceType))
 	}
