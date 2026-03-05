@@ -14,6 +14,11 @@ import type {
 const API_BASE = '/api/discovery';
 const isAgentResourceType = (resourceType: ResourceType): boolean => resourceType === 'agent';
 const agentCollectionBasePath = (): string => `${API_BASE}/agent`;
+const resolveDiscoveryAgentId = (discovery: {
+  agent_id?: string;
+  host_id?: string;
+  resource_id: string;
+}): string => discovery.agent_id || discovery.host_id || discovery.resource_id;
 
 /**
  * List all discoveries
@@ -84,15 +89,22 @@ export async function getDiscovery(
       agentList.discoveries.find(
         (d) =>
           d.resource_type === 'agent' &&
-          (d.resource_id === resourceId || d.resource_id === targetId || d.host_id === targetId),
+          (d.resource_id === resourceId ||
+            d.resource_id === targetId ||
+            resolveDiscoveryAgentId(d) === targetId),
       ) ?? agentList.discoveries.find((d) => d.resource_type === 'agent');
 
     if (!resolvedAgentDiscovery) {
       return null;
     }
 
+    const resolvedAgentId = resolveDiscoveryAgentId(resolvedAgentDiscovery);
+    if (!resolvedAgentId) {
+      return null;
+    }
+
     const response = await apiFetch(
-      `${collectionBasePath}/${encodeURIComponent(resolvedAgentDiscovery.host_id)}/${encodeURIComponent(resolvedAgentDiscovery.resource_id)}`,
+      `${collectionBasePath}/${encodeURIComponent(resolvedAgentId)}/${encodeURIComponent(resolvedAgentDiscovery.resource_id)}`,
     );
     if (response.status === 404) {
       return null;

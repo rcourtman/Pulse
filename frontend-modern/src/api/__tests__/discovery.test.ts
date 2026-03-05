@@ -158,6 +158,70 @@ describe('discovery api', () => {
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/agent/agent-1/agent-1');
   });
 
+  it('prefers canonical agent_id when present in agent discovery summaries', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          discoveries: [
+            {
+              id: 'agent:legacy-host:agent-9',
+              resource_type: 'agent',
+              resource_id: 'agent-9',
+              agent_id: 'agent-9',
+              host_id: 'legacy-host',
+              hostname: 'agent-9.local',
+              service_type: 'linux',
+              service_name: 'Agent',
+              service_version: '',
+              category: 'unknown',
+              confidence: 0.9,
+              has_user_notes: false,
+              updated_at: '2026-02-06T00:00:00Z',
+            },
+          ],
+          total: 1,
+        }),
+        { status: 200 },
+      ),
+    );
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 'agent:agent-9:agent-9',
+          resource_type: 'agent',
+          resource_id: 'agent-9',
+          host_id: 'legacy-host',
+          hostname: 'agent-9.local',
+          service_type: 'linux',
+          service_name: 'Agent',
+          service_version: '',
+          category: 'unknown',
+          cli_access: '',
+          facts: [],
+          config_paths: [],
+          data_paths: [],
+          log_paths: [],
+          ports: [],
+          user_notes: '',
+          user_secrets: {},
+          confidence: 0.9,
+          ai_reasoning: '',
+          discovered_at: '2026-02-06T00:00:00Z',
+          updated_at: '2026-02-06T00:00:00Z',
+          scan_duration: 1,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await getDiscovery('agent', 'agent-9', 'agent-9');
+
+    expect(result?.id).toBe('agent:agent-9:agent-9');
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, '/api/discovery/agent/agent-9');
+    expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/agent/agent-9/agent-9');
+  });
+
   it('keeps non-host discovery lookups on the typed resource endpoint', async () => {
     apiFetchMock.mockResolvedValueOnce(
       new Response(
