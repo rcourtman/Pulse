@@ -76,8 +76,10 @@ interface APITokenSummary {
 
 interface APITokenUsage {
   tokenId: string;
-  hostCount: number;
-  hosts?: string[];
+  agentCount: number;
+  agents?: string[];
+  hostCount?: number; // Legacy alias kept while backend payloads migrate.
+  hosts?: string[]; // Legacy alias kept while backend payloads migrate.
 }
 
 interface APITokenDiagnostic {
@@ -91,7 +93,8 @@ interface APITokenDiagnostic {
 }
 
 interface DockerAgentAttention {
-  hostId: string;
+  agentId: string;
+  hostId?: string; // Legacy alias kept while backend payloads migrate.
   name: string;
   status: string;
   agentVersion?: string;
@@ -101,16 +104,26 @@ interface DockerAgentAttention {
 }
 
 interface DockerAgentDiagnostic {
-  hostsTotal: number;
-  hostsOnline: number;
-  hostsReportingVersion: number;
-  hostsWithTokenBinding: number;
-  hostsWithoutTokenBinding: number;
+  agentsTotal: number;
+  agentsOnline: number;
+  agentsReportingVersion: number;
+  agentsWithTokenBinding: number;
+  agentsWithoutTokenBinding: number;
+  agentsWithoutVersion?: number;
+  agentsOutdatedVersion?: number;
+  agentsWithStaleCommand?: number;
+  agentsPendingUninstall?: number;
+  agentsNeedingAttention: number;
+  hostsTotal?: number; // Legacy aliases kept while backend payloads migrate.
+  hostsOnline?: number;
+  hostsReportingVersion?: number;
+  hostsWithTokenBinding?: number;
+  hostsWithoutTokenBinding?: number;
   hostsWithoutVersion?: number;
   hostsOutdatedVersion?: number;
   hostsWithStaleCommand?: number;
   hostsPendingUninstall?: number;
-  hostsNeedingAttention: number;
+  hostsNeedingAttention?: number;
   recommendedAgentVersion?: string;
   attention?: DockerAgentAttention[];
   notes?: string[];

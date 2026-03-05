@@ -151,6 +151,8 @@ describe('agent model guardrails', () => {
     expect(diagnosticsPanelSource).not.toContain('legacyThresholdsDetected');
     expect(diagnosticsPanelSource).not.toContain('legacyThresholdSources');
     expect(diagnosticsPanelSource).not.toContain('legacyScheduleSettings');
+    expect(systemSettingsStateSource).toContain('agentCount: number;');
+    expect(systemSettingsStateSource).toContain('agentsTotal: number;');
     expect(systemSettingsStateSource).not.toContain('legacyThresholdsDetected');
     expect(systemSettingsStateSource).not.toContain('legacyThresholdSources');
     expect(systemSettingsStateSource).not.toContain('legacyScheduleSettings');
