@@ -109,7 +109,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     if (type === 'k8s') return 'k8s';
     return 'system-container';
   };
-  const discoveryHostId = () => {
+  const discoveryAgentId = () => {
     return getDiscoveryHostIdForWorkload(props.guest);
   };
   const discoveryResourceId = () => {
@@ -425,7 +425,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         >
           <DiscoveryTab
             resourceType={discoveryResourceType()}
-            hostId={discoveryHostId()}
+            agentId={discoveryAgentId()}
             resourceId={discoveryResourceId()}
             hostname={props.guest.name}
           />

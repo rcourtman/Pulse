@@ -23,7 +23,8 @@ import { eventBus } from '../../stores/events';
 
 interface DiscoveryTabProps {
   resourceType: ResourceType;
-  hostId: string;
+  agentId?: string;
+  hostId?: string; // Legacy alias accepted while callers migrate.
   resourceId: string;
   hostname: string;
   /** Whether commands are enabled for this agent (from agent config) */
@@ -31,8 +32,8 @@ interface DiscoveryTabProps {
 }
 
 // Construct the resource ID in the same format the backend uses
-const makeResourceId = (type: ResourceType, hostId: string, resourceId: string) => {
-  return `${type}:${hostId}:${resourceId}`;
+const makeResourceId = (type: ResourceType, agentId: string, resourceId: string) => {
+  return `${type}:${agentId}:${resourceId}`;
 };
 
 const getURLSuggestionSourceLabel = (code?: string): string => {
@@ -97,6 +98,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   const [showExplanation, setShowExplanation] = createSignal(true);
   // Track if we initiated scan via HTTP to prevent WebSocket race conditions
   const [httpScanInProgress, setHttpScanInProgress] = createSignal(false);
+  const targetAgentId = createMemo(() => props.agentId || props.hostId || '');
 
   // Fetch discovery info (AI provider, commands) - used for pre-scan transparency
   const [discoveryInfo] = createResource(
@@ -123,16 +125,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   // Matches backend logic in deep_scanner.go findAgentForHost()
   const hasConnectedAgent = () => {
     const agents = connectedAgents()?.agents || [];
+    const agentId = targetAgentId();
+    if (!agentId) return false;
 
     // First try exact match on agent ID
-    if (agents.some((agent) => agent.agent_id === props.hostId)) {
+    if (agents.some((agent) => agent.agent_id === agentId)) {
       return true;
     }
 
     // Then try hostname match
-    if (
-      agents.some((agent) => agent.hostname === props.hostname || agent.hostname === props.hostId)
-    ) {
+    if (agents.some((agent) => agent.hostname === props.hostname || agent.hostname === agentId)) {
       return true;
     }
 
@@ -148,11 +150,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   // Use a stable string key so createResource doesn't refetch when the parent's guest
   // object reference changes (e.g. from <Index> data updates every 5 seconds)
   const discoverySourceKey = createMemo(
-    () => `${props.resourceType}|${props.hostId}|${props.resourceId}`,
+    () => `${props.resourceType}|${targetAgentId()}|${props.resourceId}`,
   );
   const [discovery, { refetch, mutate }] = createResource(discoverySourceKey, async () => {
+    const agentId = targetAgentId();
+    if (!agentId) return null;
     try {
-      return await getDiscovery(props.resourceType, props.hostId, props.resourceId);
+      return await getDiscovery(props.resourceType, agentId, props.resourceId);
     } catch {
       return null;
     }
@@ -210,7 +214,12 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     setLiveElapsedSeconds(0);
     try {
       // triggerDiscovery runs the discovery and returns the result directly
-      const result = await triggerDiscovery(props.resourceType, props.hostId, props.resourceId, {
+      const agentId = targetAgentId();
+      if (!agentId) {
+        setScanError('Agent identifier unavailable for discovery');
+        return;
+      }
+      const result = await triggerDiscovery(props.resourceType, agentId, props.resourceId, {
         force,
         hostname: props.hostname,
       });
@@ -261,8 +270,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   // Handle saving notes
   const handleSaveNotes = async () => {
     setSaveError(null);
+    const agentId = targetAgentId();
+    if (!agentId) {
+      setSaveError('Agent identifier unavailable for discovery');
+      return;
+    }
     try {
-      await updateDiscoveryNotes(props.resourceType, props.hostId, props.resourceId, {
+      await updateDiscoveryNotes(props.resourceType, agentId, props.resourceId, {
         user_notes: notesText(),
       });
       setEditingNotes(false);
@@ -280,7 +294,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   };
 
   // Subscribe to WebSocket progress updates
-  const resourceId = () => makeResourceId(props.resourceType, props.hostId, props.resourceId);
+  const resourceId = () => makeResourceId(props.resourceType, targetAgentId(), props.resourceId);
 
   createEffect(() => {
     const unsubscribe = eventBus.on('ai_discovery_progress', (progress) => {
@@ -299,8 +313,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           // Fetch the updated discovery data
           // Use a small delay to ensure the backend has persisted the data
           setTimeout(async () => {
+            const agentId = targetAgentId();
+            if (!agentId) return;
             try {
-              const result = await getDiscovery(props.resourceType, props.hostId, props.resourceId);
+              const result = await getDiscovery(props.resourceType, agentId, props.resourceId);
               if (result) {
                 mutate(result);
               }

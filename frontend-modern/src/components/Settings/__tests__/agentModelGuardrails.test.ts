@@ -35,6 +35,7 @@ import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResource
 import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
 import websocketStoreSource from '@/stores/websocket.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
 
 describe('agent model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
@@ -200,6 +201,8 @@ describe('agent model guardrails', () => {
     expect(websocketStoreSource).not.toContain('syncWithHostCommand(hostId, command as any)');
     expect(guestRowSource).toContain('agentId={getWorkloadDockerHostId(props.guest)}');
     expect(guestRowSource).not.toContain('hostId={getWorkloadDockerHostId(props.guest)}');
+    expect(guestDrawerSource).toContain('agentId={discoveryAgentId()}');
+    expect(guestDrawerSource).not.toContain('hostId={discoveryHostId()}');
   });
 
   it('keeps chart API contract on canonical agentData naming', () => {

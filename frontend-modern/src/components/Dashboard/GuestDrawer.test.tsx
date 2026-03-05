@@ -20,13 +20,14 @@ vi.mock('./DiskList', () => ({
 vi.mock('../Discovery/DiscoveryTab', () => ({
   DiscoveryTab: (props: {
     resourceType: string;
-    hostId: string;
+    agentId?: string;
+    hostId?: string;
     resourceId: string;
     hostname: string;
   }) => (
     <div data-testid="discovery-tab">
       <span data-testid="disc-resource-type">{props.resourceType}</span>
-      <span data-testid="disc-host-id">{props.hostId}</span>
+      <span data-testid="disc-agent-id">{props.agentId || props.hostId}</span>
       <span data-testid="disc-resource-id">{props.resourceId}</span>
     </div>
   ),
@@ -558,7 +559,7 @@ describe('GuestDrawer', () => {
   // ── Discovery tab integration ──
 
   describe('DiscoveryTab integration', () => {
-    it('passes correct resourceType and hostId for VM', () => {
+    it('passes correct resourceType and agentId for VM', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ type: 'qemu', node: 'pve1', vmid: 101 })}
@@ -566,11 +567,11 @@ describe('GuestDrawer', () => {
         />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('vm');
-      expect(screen.getByTestId('disc-host-id').textContent).toBe('pve1');
+      expect(screen.getByTestId('disc-agent-id').textContent).toBe('pve1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('101');
     });
 
-    it('passes correct resourceType and hostId for docker', () => {
+    it('passes correct resourceType and agentId for docker', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({
@@ -582,7 +583,7 @@ describe('GuestDrawer', () => {
         />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('docker');
-      expect(screen.getByTestId('disc-host-id').textContent).toBe('dh-1');
+      expect(screen.getByTestId('disc-agent-id').textContent).toBe('dh-1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc');
     });
 
@@ -598,7 +599,7 @@ describe('GuestDrawer', () => {
         />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('k8s');
-      expect(screen.getByTestId('disc-host-id').textContent).toBe('k8s-agent-1');
+      expect(screen.getByTestId('disc-agent-id').textContent).toBe('k8s-agent-1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('my-pod');
     });
 
@@ -610,7 +611,7 @@ describe('GuestDrawer', () => {
         />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('system-container');
-      expect(screen.getByTestId('disc-host-id').textContent).toBe('pve2');
+      expect(screen.getByTestId('disc-agent-id').textContent).toBe('pve2');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('200');
     });
   });
