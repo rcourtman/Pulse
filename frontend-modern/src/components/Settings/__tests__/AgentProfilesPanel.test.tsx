@@ -59,17 +59,17 @@ vi.mock('@/utils/upgradeMetrics', () => ({
   trackUpgradeClicked: vi.fn(),
 }));
 
-const makeHostResource = (overrides: Partial<Resource> = {}): Resource => ({
-  id: 'hash-host-resource-id',
+const makeAgentResource = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'hash-agent-resource-id',
   type: 'node',
-  name: 'host-one',
-  displayName: 'Host One',
-  platformId: 'host-one',
+  name: 'agent-one',
+  displayName: 'Agent One',
+  platformId: 'agent-one',
   platformType: 'agent',
   sourceType: 'agent',
   status: 'online',
   lastSeen: Date.now(),
-  identity: { hostname: 'host-one' },
+  identity: { hostname: 'agent-one' },
   agent: { agentId: 'agent-123' },
   ...overrides,
 });
@@ -89,26 +89,26 @@ const makeNodeResource = (overrides: Partial<Resource> = {}): Resource => ({
   ...overrides,
 });
 
-const makeDockerHostResource = (overrides: Partial<Resource> = {}): Resource => ({
-  id: 'docker-host-resource-id',
+const makeDockerRuntimeResource = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'docker-runtime-resource-id',
   type: 'docker-host',
-  name: 'docker-host-1',
-  displayName: 'Docker Host One',
-  platformId: 'docker-host-1',
+  name: 'docker-runtime-1',
+  displayName: 'Docker Runtime One',
+  platformId: 'docker-runtime-1',
   platformType: 'docker',
   sourceType: 'agent',
   status: 'online',
   lastSeen: Date.now(),
-  identity: { hostname: 'docker-host-1' },
+  identity: { hostname: 'docker-runtime-1' },
   platformData: {
     agent: { agentId: 'agent-123' },
-    docker: { hostSourceId: 'docker-host-1' },
+    docker: { hostSourceId: 'docker-runtime-1' },
   },
   ...overrides,
 });
 
 beforeEach(() => {
-  mockResources = [makeHostResource()];
+  mockResources = [makeAgentResource()];
   listProfilesMock.mockReset();
   listAssignmentsMock.mockReset();
   assignProfileMock.mockReset();
@@ -142,7 +142,7 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
       expect(screen.getByText('Agent Assignments')).toBeInTheDocument();
     });
 
-    const agentCell = await screen.findByText('Host One');
+    const agentCell = await screen.findByText('Agent One');
     const row = agentCell.closest('tr') as HTMLElement;
     const assignmentSelect = within(row).getByRole('combobox') as HTMLSelectElement;
     await waitFor(() => {
@@ -153,7 +153,7 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
   it('sends actionable V6 agent ID when assigning a profile', async () => {
     render(() => <AgentProfilesPanel />);
 
-    const agentCell = await screen.findByText('Host One');
+    const agentCell = await screen.findByText('Agent One');
     const row = agentCell.closest('tr') as HTMLElement;
     const assignmentSelect = within(row).getByRole('combobox') as HTMLSelectElement;
     await waitFor(() => {
@@ -175,7 +175,7 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
 
     render(() => <AgentProfilesPanel />);
 
-    const agentCell = await screen.findByText('Host One');
+    const agentCell = await screen.findByText('Agent One');
     const row = agentCell.closest('tr') as HTMLElement;
     const assignmentSelect = within(row).getByRole('combobox') as HTMLSelectElement;
     await waitFor(() => {
@@ -189,7 +189,7 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     });
   });
 
-  it('lists assignable non-host v6 resources (e.g. node agents)', async () => {
+  it('lists assignable v6 agent resources (e.g. node agents)', async () => {
     mockResources = [makeNodeResource()];
 
     render(() => <AgentProfilesPanel />);
@@ -211,14 +211,14 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
 
   it('deduplicates resources that share the same actionable agent ID', async () => {
     mockResources = [
-      makeDockerHostResource(),
+      makeDockerRuntimeResource(),
       makeNodeResource({ agent: { agentId: 'agent-123' } }),
     ];
 
     render(() => <AgentProfilesPanel />);
 
     await screen.findByText('PVE Node One');
-    expect(screen.queryByText('Docker Host One')).not.toBeInTheDocument();
+    expect(screen.queryByText('Docker Runtime One')).not.toBeInTheDocument();
     expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 });

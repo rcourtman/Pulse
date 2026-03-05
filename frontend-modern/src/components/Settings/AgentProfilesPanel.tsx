@@ -26,6 +26,7 @@ import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics'
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import type { Resource } from '@/types/resource';
+import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -45,10 +46,12 @@ export const AgentProfilesPanel: Component = () => {
     typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
   const getActionableAgentId = (resource: Resource): string | undefined => {
     const discoveryType = resource.discoveryTarget?.resourceType;
+    const discoveryTargetAgentId =
+      getAgentDiscoveryResourceId(resource.discoveryTarget) ||
+      asString((resource.discoveryTarget as { agentId?: unknown } | undefined)?.agentId) ||
+      resource.discoveryTarget?.hostId;
     const discoveryResourceId =
-      discoveryType === 'agent' ||
-      discoveryType === 'docker' ||
-      discoveryType === 'k8s'
+      discoveryType === 'docker' || discoveryType === 'k8s'
         ? resource.discoveryTarget?.resourceId
         : undefined;
     return (
@@ -57,7 +60,7 @@ export const AgentProfilesPanel: Component = () => {
       asString(pd(resource)?.agentId) ||
       asString(resource.kubernetes?.agentId) ||
       asString(asRecord(pd(resource)?.kubernetes)?.agentId) ||
-      resource.discoveryTarget?.hostId ||
+      discoveryTargetAgentId ||
       discoveryResourceId
     );
   };
