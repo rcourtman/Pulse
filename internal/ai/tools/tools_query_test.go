@@ -56,6 +56,21 @@ func TestCanonicalQuerySearchType_StrictV6Tokens(t *testing.T) {
 	}
 }
 
+func TestCanonicalQueryHelpers_DoNotTranslateLegacyAliases(t *testing.T) {
+	if got := canonicalQueryResourceType("container"); got != "container" {
+		t.Fatalf("canonicalQueryResourceType(container) = %q, want container", got)
+	}
+	if got := canonicalQueryResourceType("docker"); got != "docker" {
+		t.Fatalf("canonicalQueryResourceType(docker) = %q, want docker", got)
+	}
+	if got := canonicalQueryListType("container"); got != "container" {
+		t.Fatalf("canonicalQueryListType(container) = %q, want container", got)
+	}
+	if got := canonicalQuerySearchType("docker"); got != "docker" {
+		t.Fatalf("canonicalQuerySearchType(docker) = %q, want docker", got)
+	}
+}
+
 func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{{ID: "node1", Name: "node1", Status: "online"}},

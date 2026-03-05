@@ -597,31 +597,7 @@ func TestNormalizeOrganizationShareResourceType(t *testing.T) {
 	}
 }
 
-func TestCanonicalizeOrganizationShareResourceType(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{name: "host maps to agent", in: "host", want: "agent"},
-		{name: "container maps to system-container", in: "container", want: "system-container"},
-		{name: "docker-container maps to app-container", in: "docker-container", want: "app-container"},
-		{name: "lxc maps to system-container", in: "lxc", want: "system-container"},
-		{name: "qemu maps to vm", in: "qemu", want: "vm"},
-		{name: "canonical type remains canonical", in: "system-container", want: "system-container"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := canonicalizeOrganizationShareResourceType(tt.in)
-			if got != tt.want {
-				t.Fatalf("canonicalizeOrganizationShareResourceType(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestNormalizeOrganizationShares_MigratesLegacyResourceTypesAndDropsUnsupported(t *testing.T) {
+func TestNormalizeOrganizationShares_DropsLegacyAndUnsupportedResourceTypes(t *testing.T) {
 	shares := []models.OrganizationShare{
 		{
 			ID:           "legacy-host",
@@ -661,20 +637,11 @@ func TestNormalizeOrganizationShares_MigratesLegacyResourceTypesAndDropsUnsuppor
 	}
 
 	normalized := normalizeOrganizationShares(shares)
-	if len(normalized) != 4 {
-		t.Fatalf("expected four normalized shares, got %d: %+v", len(normalized), normalized)
+	if len(normalized) != 1 {
+		t.Fatalf("expected only canonical v6 share to remain, got %d: %+v", len(normalized), normalized)
 	}
 	if normalized[0].ResourceType != "agent" {
-		t.Fatalf("expected legacy host share to migrate to agent, got %+v", normalized[0])
-	}
-	if normalized[1].ResourceType != "system-container" {
-		t.Fatalf("expected legacy container share to migrate to system-container, got %+v", normalized[1])
-	}
-	if normalized[2].ResourceType != "app-container" {
-		t.Fatalf("expected legacy docker-container share to migrate to app-container, got %+v", normalized[2])
-	}
-	if normalized[3].ResourceType != "agent" {
-		t.Fatalf("expected v6 agent share to remain, got %+v", normalized[3])
+		t.Fatalf("expected canonical agent share to remain, got %+v", normalized[0])
 	}
 }
 

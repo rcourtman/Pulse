@@ -454,14 +454,26 @@ func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected error for legacy app_container resource_type")
 	}
+	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy container resource_type")
+	}
+	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "docker",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy docker resource_type")
+	}
 
 	findingsProv := &mockFindingsProvider{}
 	findingsProv.On("GetActiveFindings").Return([]Finding{
-		{ID: "f1", Severity: "warning", ResourceType: "docker container", ResourceID: "r1"},
-		{ID: "f2", Severity: "warning", ResourceType: "lxc container", ResourceID: "r2"},
+		{ID: "f1", Severity: "warning", ResourceType: "app-container", ResourceID: "r1"},
+		{ID: "f2", Severity: "warning", ResourceType: "system-container", ResourceID: "r2"},
 	})
 	findingsProv.On("GetDismissedFindings").Return([]Finding{
-		{ID: "f3", Severity: "warning", ResourceType: "docker-container", ResourceID: "r3"},
+		{ID: "f3", Severity: "warning", ResourceType: "app-container", ResourceID: "r3"},
 	})
 
 	executor.findingsProvider = findingsProv

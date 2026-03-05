@@ -278,15 +278,7 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 }
 
 func canonicalAlertFindingResourceType(raw string) string {
-	normalized := strings.ToLower(strings.TrimSpace(raw))
-	switch normalized {
-	case "container", "system-container":
-		return "system-container"
-	case "docker", "docker container", "docker-container", "app-container":
-		return "app-container"
-	default:
-		return normalized
-	}
+	return strings.ToLower(strings.TrimSpace(raw))
 }
 
 func (e *PulseToolExecutor) executeResolveFinding(_ context.Context, args map[string]interface{}) (CallToolResult, error) {

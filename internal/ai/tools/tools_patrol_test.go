@@ -224,34 +224,8 @@ func TestHandlePatrolReportFinding_InvalidCategory(t *testing.T) {
 	assert.Contains(t, text, "networking")
 }
 
-func TestHandlePatrolReportFinding_NormalizesSupportedResourceTypeAliases(t *testing.T) {
-	tests := []struct {
-		in   string
-		want string
-	}{
-		{in: "container", want: "system-container"},
-		{in: "docker", want: "app-container"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.in, func(t *testing.T) {
-			creator := &mockPatrolFindingCreator{checked: true}
-			exec := newPatrolTestExecutor(creator)
-
-			args := validReportArgs()
-			args["resource_type"] = tc.in
-
-			result, err := handlePatrolReportFinding(context.Background(), exec, args)
-			require.NoError(t, err)
-			assert.False(t, result.IsError, "unexpected error payload: %s", extractText(result))
-			require.Len(t, creator.createCalls, 1)
-			assert.Equal(t, tc.want, creator.createCalls[0].ResourceType)
-		})
-	}
-}
-
 func TestHandlePatrolReportFinding_RejectsLegacyResourceTypeAliases(t *testing.T) {
-	for _, resourceType := range []string{"docker_container", "app_container", "k8s_cluster", "kubernetes_cluster"} {
+	for _, resourceType := range []string{"container", "docker", "docker-container", "docker_container", "app_container", "k8s_cluster", "kubernetes_cluster"} {
 		t.Run(resourceType, func(t *testing.T) {
 			creator := &mockPatrolFindingCreator{checked: true}
 			exec := newPatrolTestExecutor(creator)

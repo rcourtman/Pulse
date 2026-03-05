@@ -54,17 +54,6 @@ var supportedOrganizationShareResourceTypes = map[string]struct{}{
 	"view":             {},
 }
 
-var legacyOrganizationShareResourceTypeAliases = map[string]string{
-	"host":             "agent",
-	"hosts":            "agent",
-	"container":        "system-container",
-	"containers":       "system-container",
-	"docker-container": "app-container",
-	"dockercontainer":  "app-container",
-	"qemu":             "vm",
-	"lxc":              "system-container",
-}
-
 type OrgHandlers struct {
 	persistence  *config.MultiTenantPersistence
 	mtMonitor    *monitoring.MultiTenantMonitor
@@ -943,9 +932,7 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 			share.ID = generateOrganizationShareID()
 		}
 		share.TargetOrgID = strings.TrimSpace(share.TargetOrgID)
-		share.ResourceType = canonicalizeOrganizationShareResourceType(
-			normalizeOrganizationShareResourceType(share.ResourceType),
-		)
+		share.ResourceType = normalizeOrganizationShareResourceType(share.ResourceType)
 		share.ResourceID = strings.TrimSpace(share.ResourceID)
 		share.ResourceName = strings.TrimSpace(share.ResourceName)
 		share.AccessRole = models.NormalizeOrganizationRole(share.AccessRole)
@@ -970,14 +957,6 @@ func generateOrganizationShareID() string {
 
 func normalizeOrganizationShareResourceType(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
-}
-
-func canonicalizeOrganizationShareResourceType(resourceType string) string {
-	normalized := normalizeOrganizationShareResourceType(resourceType)
-	if canonical, ok := legacyOrganizationShareResourceTypeAliases[normalized]; ok {
-		return canonical
-	}
-	return normalized
 }
 
 func isUnsupportedOrganizationShareResourceType(resourceType string) bool {

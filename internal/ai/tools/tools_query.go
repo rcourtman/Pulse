@@ -2109,14 +2109,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 }
 
 func canonicalQueryResourceType(resourceType string) string {
-	switch strings.ToLower(strings.TrimSpace(resourceType)) {
-	case "container", "system-container":
-		return "system-container"
-	case "docker", "docker-container", "app-container":
-		return "app-container"
-	default:
-		return strings.ToLower(strings.TrimSpace(resourceType))
-	}
+	return strings.ToLower(strings.TrimSpace(resourceType))
 }
 
 func canonicalQueryListType(filterType string) string {
@@ -2125,17 +2118,17 @@ func canonicalQueryListType(filterType string) string {
 		return "nodes"
 	case "vm":
 		return "vms"
-	case "container", "containers", "system-container", "system-containers":
+	case "system-container":
 		return "system-containers"
-	case "docker", "docker-container", "app-container", "app-containers":
+	case "app-container":
 		return "app-containers"
 	case "k8s-cluster", "k8s-clusters":
 		return "k8s-clusters"
 	case "k8s-node", "k8s-nodes":
 		return "k8s-nodes"
-	case "k8s-pod", "k8s-pods", "pod", "pods":
+	case "k8s-pod", "k8s-pods":
 		return "k8s-pods"
-	case "k8s-deployment", "k8s-deployments", "deployment", "deployments":
+	case "k8s-deployment", "k8s-deployments":
 		return "k8s-deployments"
 	default:
 		return strings.ToLower(strings.TrimSpace(filterType))
@@ -2153,9 +2146,9 @@ func canonicalQueryTopologyInclude(include string) string {
 
 func canonicalQuerySearchType(typeFilter string) string {
 	switch strings.ToLower(strings.TrimSpace(typeFilter)) {
-	case "container", "system-containers":
+	case "system-containers":
 		return "system-container"
-	case "docker", "docker-container", "app-containers":
+	case "app-containers":
 		return "app-container"
 	case "docker-host":
 		return "docker-host"
