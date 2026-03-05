@@ -13,9 +13,9 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
-  it('defaults to system-container for legacy qemu type', () => {
+  it('maps legacy qemu type to vm', () => {
     const guest = { type: 'qemu' };
-    expect(resolveWorkloadType(guest)).toBe('system-container');
+    expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
   it('returns vm for VM type (case insensitive)', () => {
@@ -23,7 +23,7 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('vm');
   });
 
-  it('defaults to system-container for legacy lxc type', () => {
+  it('maps legacy lxc type to system-container', () => {
     const guest = { type: 'lxc' };
     expect(resolveWorkloadType(guest)).toBe('system-container');
   });
@@ -43,14 +43,14 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('docker');
   });
 
-  it('defaults to system-container for legacy docker-container type', () => {
+  it('maps legacy docker-container type to docker', () => {
     const guest = { type: 'docker-container' };
-    expect(resolveWorkloadType(guest)).toBe('system-container');
+    expect(resolveWorkloadType(guest)).toBe('docker');
   });
 
-  it('defaults to system-container for legacy docker_container type', () => {
+  it('maps legacy docker_container type to docker', () => {
     const guest = { type: 'docker_container' };
-    expect(resolveWorkloadType(guest)).toBe('system-container');
+    expect(resolveWorkloadType(guest)).toBe('docker');
   });
 
   it('returns k8s for k8s type', () => {
@@ -85,24 +85,24 @@ describe('resolveWorkloadType', () => {
 });
 
 describe('resolveWorkloadTypeFromString', () => {
-  it('does not normalize qemu alias', () => {
-    expect(resolveWorkloadTypeFromString('qemu')).toBeNull();
+  it('normalizes qemu alias to vm', () => {
+    expect(resolveWorkloadTypeFromString('qemu')).toBe('vm');
   });
 
-  it('does not normalize lxc alias', () => {
-    expect(resolveWorkloadTypeFromString('lxc')).toBeNull();
+  it('normalizes lxc alias to system-container', () => {
+    expect(resolveWorkloadTypeFromString('lxc')).toBe('system-container');
   });
 
-  it('does not normalize container alias', () => {
-    expect(resolveWorkloadTypeFromString('container')).toBeNull();
+  it('normalizes container alias to system-container', () => {
+    expect(resolveWorkloadTypeFromString('container')).toBe('system-container');
   });
 
-  it('does not normalize docker-container alias', () => {
-    expect(resolveWorkloadTypeFromString('docker-container')).toBeNull();
+  it('normalizes docker-container alias to docker', () => {
+    expect(resolveWorkloadTypeFromString('docker-container')).toBe('docker');
   });
 
-  it('does not normalize docker_container alias', () => {
-    expect(resolveWorkloadTypeFromString('docker_container')).toBeNull();
+  it('normalizes docker_container alias to docker', () => {
+    expect(resolveWorkloadTypeFromString('docker_container')).toBe('docker');
   });
 });
 

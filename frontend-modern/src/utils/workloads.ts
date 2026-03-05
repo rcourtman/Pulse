@@ -7,12 +7,33 @@ import type { MetricResourceKind } from '@/utils/metricsKeys';
  */
 export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadType | null => {
   const normalized = (value || '').trim().toLowerCase();
-  if (normalized === 'vm') return 'vm';
-  if (normalized === 'oci' || normalized === 'system-container') return 'system-container';
-  if (normalized === 'docker' || normalized === 'app-container') {
+  if (normalized === 'vm' || normalized === 'qemu') return 'vm';
+  if (
+    normalized === 'oci' ||
+    normalized === 'system-container' ||
+    normalized === 'lxc' ||
+    normalized === 'ct' ||
+    normalized === 'container'
+  ) {
+    return 'system-container';
+  }
+  if (
+    normalized === 'docker' ||
+    normalized === 'app-container' ||
+    normalized === 'docker-container' ||
+    normalized === 'docker_container'
+  ) {
     return 'docker';
   }
-  if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
+  if (
+    normalized === 'pod' ||
+    normalized === 'k8s' ||
+    normalized === 'kubernetes' ||
+    normalized === 'k8s-pod' ||
+    normalized === 'k8s_pod'
+  ) {
+    return 'k8s';
+  }
   return null;
 };
 
