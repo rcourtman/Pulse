@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type fakeDockerChecker struct{}
@@ -121,6 +122,108 @@ func TestMonitorMarkDockerHostPendingUninstall(t *testing.T) {
 	hosts := monitor.state.GetDockerHosts()
 	if len(hosts) != 1 || !hosts[0].PendingUninstall {
 		t.Fatalf("state PendingUninstall = %v, want true", hosts[0].PendingUninstall)
+	}
+}
+
+func wireUnifiedDockerHostForMonitor(m *Monitor, host models.DockerHost) string {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{host},
+	})
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	m.resourceStore = adapter
+	readState := unifiedresources.ReadState(adapter)
+	return readState.DockerHosts()[0].ID()
+}
+
+func TestMonitorDockerRuntimeActionsAcceptUnifiedID(t *testing.T) {
+	monitor := &Monitor{
+		state:               models.NewState(),
+		removedDockerHosts:  make(map[string]time.Time),
+		dockerCommands:      make(map[string]*dockerHostCommand),
+		dockerCommandIndex:  make(map[string]string),
+		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir(), nil),
+	}
+
+	host := models.DockerHost{ID: "host-1", Hostname: "host-1", DisplayName: "Host 1", Status: "online"}
+	monitor.state.UpsertDockerHost(host)
+	unifiedID := wireUnifiedDockerHostForMonitor(monitor, host)
+
+	got, found := monitor.GetDockerHost(unifiedID)
+	if !found || got.ID != host.ID {
+		t.Fatalf("GetDockerHost(%q) = (%+v, %v), want raw host id %q", unifiedID, got, found, host.ID)
+	}
+
+	updated, err := monitor.SetDockerHostCustomDisplayName(unifiedID, "Unified Name")
+	if err != nil {
+		t.Fatalf("SetDockerHostCustomDisplayName with unified id: %v", err)
+	}
+	if updated.CustomDisplayName != "Unified Name" {
+		t.Fatalf("expected custom display name to update, got %q", updated.CustomDisplayName)
+	}
+	meta := monitor.dockerMetadataStore.GetHostMetadata(host.ID)
+	if meta == nil || meta.CustomDisplayName != "Unified Name" {
+		t.Fatalf("expected metadata keyed by raw host id, got %#v", meta)
+	}
+
+	hidden, err := monitor.HideDockerHost(unifiedID)
+	if err != nil {
+		t.Fatalf("HideDockerHost with unified id: %v", err)
+	}
+	if !hidden.Hidden {
+		t.Fatal("expected hidden flag to be set")
+	}
+
+	visible, err := monitor.UnhideDockerHost(unifiedID)
+	if err != nil {
+		t.Fatalf("UnhideDockerHost with unified id: %v", err)
+	}
+	if visible.Hidden {
+		t.Fatal("expected hidden flag to be cleared")
+	}
+
+	pending, err := monitor.MarkDockerHostPendingUninstall(unifiedID)
+	if err != nil {
+		t.Fatalf("MarkDockerHostPendingUninstall with unified id: %v", err)
+	}
+	if !pending.PendingUninstall {
+		t.Fatal("expected pending uninstall flag to be set")
+	}
+
+	removed, err := monitor.RemoveDockerHost(unifiedID)
+	if err != nil {
+		t.Fatalf("RemoveDockerHost with unified id: %v", err)
+	}
+	if removed.ID != host.ID {
+		t.Fatalf("expected removed host id %q, got %q", host.ID, removed.ID)
+	}
+	if hosts := monitor.state.GetDockerHosts(); len(hosts) != 0 {
+		t.Fatalf("expected host to be removed from state, got %d hosts", len(hosts))
+	}
+	if _, exists := monitor.removedDockerHosts[host.ID]; !exists {
+		t.Fatalf("expected raw host id %q to be blocklisted after removal", host.ID)
+	}
+}
+
+func TestAllowDockerHostReenrollAcceptsUnifiedID(t *testing.T) {
+	monitor := &Monitor{
+		state:               models.NewState(),
+		removedDockerHosts:  make(map[string]time.Time),
+		dockerCommands:      make(map[string]*dockerHostCommand),
+		dockerCommandIndex:  make(map[string]string),
+		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir(), nil),
+	}
+
+	host := models.DockerHost{ID: "host-reenroll", Hostname: "host-reenroll", DisplayName: "Host Reenroll", Status: "online"}
+	monitor.state.UpsertDockerHost(host)
+	unifiedID := wireUnifiedDockerHostForMonitor(monitor, host)
+	monitor.removedDockerHosts[host.ID] = time.Now()
+
+	if err := monitor.AllowDockerHostReenroll(unifiedID); err != nil {
+		t.Fatalf("AllowDockerHostReenroll with unified id: %v", err)
+	}
+	if _, exists := monitor.removedDockerHosts[host.ID]; exists {
+		t.Fatalf("expected raw host id %q to be removed from blocklist", host.ID)
 	}
 }
 

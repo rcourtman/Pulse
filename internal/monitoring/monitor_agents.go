@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
@@ -22,6 +23,7 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	if hostID == "" {
 		return models.DockerHost{}, fmt.Errorf("docker host id is required")
 	}
+	hostID = m.canonicalDockerHostID(hostID)
 
 	host, removed := m.state.RemoveDockerHost(hostID)
 	if !removed {
@@ -408,6 +410,7 @@ func (m *Monitor) HideDockerHost(hostID string) (models.DockerHost, error) {
 	if hostID == "" {
 		return models.DockerHost{}, fmt.Errorf("docker host id is required")
 	}
+	hostID = m.canonicalDockerHostID(hostID)
 
 	host, ok := m.state.SetDockerHostHidden(hostID, true)
 	if !ok {
@@ -428,6 +431,7 @@ func (m *Monitor) UnhideDockerHost(hostID string) (models.DockerHost, error) {
 	if hostID == "" {
 		return models.DockerHost{}, fmt.Errorf("docker host id is required")
 	}
+	hostID = m.canonicalDockerHostID(hostID)
 
 	host, ok := m.state.SetDockerHostHidden(hostID, false)
 	if !ok {
@@ -454,6 +458,7 @@ func (m *Monitor) MarkDockerHostPendingUninstall(hostID string) (models.DockerHo
 	if hostID == "" {
 		return models.DockerHost{}, fmt.Errorf("docker host id is required")
 	}
+	hostID = m.canonicalDockerHostID(hostID)
 
 	host, ok := m.state.SetDockerHostPendingUninstall(hostID, true)
 	if !ok {
@@ -474,6 +479,7 @@ func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName strin
 	if hostID == "" {
 		return models.DockerHost{}, fmt.Errorf("docker host id is required")
 	}
+	hostID = m.canonicalDockerHostID(hostID)
 
 	customName = strings.TrimSpace(customName)
 
@@ -514,11 +520,23 @@ func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if host, resolvedHostID, found := m.resolveDockerCommandHostLocked(hostID); found {
+		hostID = resolvedHostID
+		if _, exists := m.removedDockerHosts[hostID]; !exists {
+			event := log.Info().
+				Str("dockerHostID", hostID)
+			if hostname := strings.TrimSpace(host.Hostname()); hostname != "" {
+				event = event.Str("dockerHost", hostname)
+			}
+			event.Msg("allow re-enroll requested but host was not blocked; ignoring")
+			return nil
+		}
+	}
+
 	if _, exists := m.removedDockerHosts[hostID]; !exists {
-		host, found := m.GetDockerHost(hostID)
 		event := log.Info().
 			Str("dockerHostID", hostID)
-		if found {
+		if host, found := m.stateDockerHostByIDLocked(hostID); found {
 			event = event.Str("dockerHost", host.Hostname)
 		}
 		event.Msg("allow re-enroll requested but host was not blocked; ignoring")
@@ -546,6 +564,7 @@ func (m *Monitor) GetDockerHost(hostID string) (models.DockerHost, bool) {
 	if hostID == "" {
 		return models.DockerHost{}, false
 	}
+	hostID = m.canonicalDockerHostID(hostID)
 
 	hosts := m.state.GetDockerHosts()
 	for _, host := range hosts {
@@ -562,6 +581,51 @@ func (m *Monitor) GetDockerHosts() []models.DockerHost {
 		return nil
 	}
 	return m.state.GetDockerHosts()
+}
+
+func (m *Monitor) canonicalDockerHostID(hostID string) string {
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return ""
+	}
+
+	if _, resolvedHostID, found := m.resolveDockerHostView(hostID); found {
+		return resolvedHostID
+	}
+
+	return hostID
+}
+
+func (m *Monitor) resolveDockerHostView(hostID string) (*unifiedresources.DockerHostView, string, bool) {
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return nil, "", false
+	}
+
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil, "", false
+	}
+
+	for _, host := range readState.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		candidateID := normalizeDockerHostID(host.ID())
+		sourceID := normalizeDockerHostID(host.HostSourceID())
+		if hostID != candidateID && hostID != sourceID {
+			continue
+		}
+		if sourceID == "" {
+			sourceID = candidateID
+		}
+		if sourceID == "" {
+			return nil, "", false
+		}
+		return host, sourceID, true
+	}
+
+	return nil, "", false
 }
 
 // RebuildTokenBindings reconstructs agent-to-token binding maps from the current
