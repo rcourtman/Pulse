@@ -1152,7 +1152,7 @@ export function Dashboard(props: DashboardProps) {
     if (prefix === 'docker') return { type: 'Containers', name: context };
     if (prefix === 'k8s') return { type: 'K8s', name: context };
     if (prefix === 'vm') return { type: 'VM', name: context };
-    if (prefix === 'lxc' || prefix === 'system-container') return { type: 'CT', name: context };
+    if (prefix === 'system-container') return { type: 'CT', name: context };
     // For PVE workload groups (instance-node key), show node name + cluster badge
     const first = guests[0];
     if (first) {

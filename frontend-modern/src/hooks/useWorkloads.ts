@@ -359,7 +359,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       workloadType === 'vm'
         ? 'vm'
         : workloadType === 'system-container'
-          ? 'lxc'
+          ? 'system-container'
           : workloadType === 'k8s'
             ? 'k8s'
             : 'docker',
