@@ -74,6 +74,7 @@ func (r *TenantRegistry) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_tenants_state ON tenants(state);
 	CREATE INDEX IF NOT EXISTS idx_tenants_stripe_customer_id ON tenants(stripe_customer_id);
+	CREATE INDEX IF NOT EXISTS idx_tenants_created_at ON tenants(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_tenants_state_created_at ON tenants(state, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_tenants_account_id_created_at ON tenants(account_id, created_at DESC);
 
@@ -84,6 +85,7 @@ func (r *TenantRegistry) initSchema() error {
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL
 	);
+	CREATE INDEX IF NOT EXISTS idx_accounts_created_at ON accounts(created_at DESC);
 
 	CREATE TABLE IF NOT EXISTS stripe_accounts (
 		account_id TEXT PRIMARY KEY,
