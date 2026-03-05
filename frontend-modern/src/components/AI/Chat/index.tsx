@@ -524,7 +524,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         mentionCandidates.push({
           id: `docker:${dockerActionId}:${originalContainerId}`,
           name: container.name,
-          type: 'docker',
+          type: 'app-container',
           status: container.status === 'running' ? 'running' : 'exited',
           node: hostnameOrId,
         });

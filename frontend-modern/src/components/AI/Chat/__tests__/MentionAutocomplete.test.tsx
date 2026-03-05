@@ -29,7 +29,7 @@ const defaultResources: MentionResource[] = [
   makeResource({
     id: 'docker-1',
     name: 'nginx-proxy',
-    type: 'docker',
+    type: 'app-container',
     status: 'running',
     node: 'docker-host',
   }),
