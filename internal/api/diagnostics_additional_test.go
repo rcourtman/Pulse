@@ -250,20 +250,20 @@ func TestBuildDockerAgentDiagnostic(t *testing.T) {
 	if diag == nil {
 		t.Fatalf("expected diagnostics")
 	}
-	if diag.HostsTotal != 2 {
-		t.Fatalf("hosts total = %d, want 2", diag.HostsTotal)
+	if diag.AgentsTotal != 2 {
+		t.Fatalf("agents total = %d, want 2", diag.AgentsTotal)
 	}
-	if diag.HostsOutdatedVersion != 1 {
-		t.Fatalf("outdated version count = %d, want 1", diag.HostsOutdatedVersion)
+	if diag.AgentsOutdatedVersion != 1 {
+		t.Fatalf("outdated version count = %d, want 1", diag.AgentsOutdatedVersion)
 	}
-	if diag.HostsWithoutVersion != 1 {
-		t.Fatalf("missing version count = %d, want 1", diag.HostsWithoutVersion)
+	if diag.AgentsWithoutVersion != 1 {
+		t.Fatalf("missing version count = %d, want 1", diag.AgentsWithoutVersion)
 	}
-	if diag.HostsWithoutTokenBinding != 1 {
-		t.Fatalf("hosts without token binding = %d, want 1", diag.HostsWithoutTokenBinding)
+	if diag.AgentsWithoutTokenBinding != 1 {
+		t.Fatalf("agents without token binding = %d, want 1", diag.AgentsWithoutTokenBinding)
 	}
-	if diag.HostsNeedingAttention == 0 {
-		t.Fatalf("expected hosts needing attention")
+	if diag.AgentsNeedingAttention == 0 {
+		t.Fatalf("expected agents needing attention")
 	}
 }
 

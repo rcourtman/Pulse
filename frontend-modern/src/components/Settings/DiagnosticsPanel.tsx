@@ -74,16 +74,16 @@ interface APITokenDiagnostic {
 }
 
 interface DockerAgentDiagnostic {
-  hostsTotal: number;
-  hostsOnline: number;
-  hostsReportingVersion: number;
-  hostsWithTokenBinding: number;
-  hostsWithoutTokenBinding: number;
-  hostsWithoutVersion?: number;
-  hostsOutdatedVersion?: number;
-  hostsWithStaleCommand?: number;
-  hostsPendingUninstall?: number;
-  hostsNeedingAttention: number;
+  agentsTotal: number;
+  agentsOnline: number;
+  agentsReportingVersion: number;
+  agentsWithTokenBinding: number;
+  agentsWithoutTokenBinding: number;
+  agentsWithoutVersion?: number;
+  agentsOutdatedVersion?: number;
+  agentsWithStaleCommand?: number;
+  agentsPendingUninstall?: number;
+  agentsNeedingAttention: number;
   recommendedAgentVersion?: string;
   notes?: string[];
 }
@@ -320,7 +320,7 @@ export const DiagnosticsPanel: Component = () => {
       if (Array.isArray(agents.attention)) {
         agents.attention = agents.attention.map((a: Record<string, unknown>, i: number) => ({
           ...a,
-          hostId: `docker-host-${i + 1}`,
+          agentId: `docker-host-${i + 1}`,
           name: `docker-host-${i + 1}`,
           tokenHint: a.tokenHint ? '[REDACTED]' : undefined,
         }));
@@ -705,8 +705,8 @@ export const DiagnosticsPanel: Component = () => {
                 </div>
                 <div class="ml-auto text-right">
                   <div class="text-lg font-bold text-base-content">
-                    {diagnosticsData()?.dockerAgents?.hostsOnline}/
-                    {diagnosticsData()?.dockerAgents?.hostsTotal}
+                    {diagnosticsData()?.dockerAgents?.agentsOnline}/
+                    {diagnosticsData()?.dockerAgents?.agentsTotal}
                   </div>
                   <div class="text-[10px] text-muted">online</div>
                 </div>
@@ -714,15 +714,15 @@ export const DiagnosticsPanel: Component = () => {
               <div class="space-y-2 text-xs">
                 <MetricRow
                   label="With Token Binding"
-                  value={diagnosticsData()?.dockerAgents?.hostsWithTokenBinding}
+                  value={diagnosticsData()?.dockerAgents?.agentsWithTokenBinding}
                 />
                 <MetricRow
                   label="Need Attention"
-                  value={diagnosticsData()?.dockerAgents?.hostsNeedingAttention}
+                  value={diagnosticsData()?.dockerAgents?.agentsNeedingAttention}
                 />
                 <MetricRow
                   label="Outdated Version"
-                  value={diagnosticsData()?.dockerAgents?.hostsOutdatedVersion ?? 0}
+                  value={diagnosticsData()?.dockerAgents?.agentsOutdatedVersion ?? 0}
                 />
               </div>
               <Show when={diagnosticsData()?.dockerAgents?.recommendedAgentVersion}>

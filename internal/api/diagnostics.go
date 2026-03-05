@@ -313,31 +313,31 @@ type APITokenSummary struct {
 
 // APITokenUsage summarises how tokens are consumed by connected agents.
 type APITokenUsage struct {
-	TokenID   string   `json:"tokenId"`
-	HostCount int      `json:"hostCount"`
-	Hosts     []string `json:"hosts,omitempty"`
+	TokenID    string   `json:"tokenId"`
+	AgentCount int      `json:"agentCount"`
+	Agents     []string `json:"agents,omitempty"`
 }
 
 // DockerAgentDiagnostic summarizes adoption of the Docker agent command system.
 type DockerAgentDiagnostic struct {
-	HostsTotal               int                    `json:"hostsTotal"`
-	HostsOnline              int                    `json:"hostsOnline"`
-	HostsReportingVersion    int                    `json:"hostsReportingVersion"`
-	HostsWithTokenBinding    int                    `json:"hostsWithTokenBinding"`
-	HostsWithoutTokenBinding int                    `json:"hostsWithoutTokenBinding"`
-	HostsWithoutVersion      int                    `json:"hostsWithoutVersion,omitempty"`
-	HostsOutdatedVersion     int                    `json:"hostsOutdatedVersion,omitempty"`
-	HostsWithStaleCommand    int                    `json:"hostsWithStaleCommand,omitempty"`
-	HostsPendingUninstall    int                    `json:"hostsPendingUninstall,omitempty"`
-	HostsNeedingAttention    int                    `json:"hostsNeedingAttention"`
-	RecommendedAgentVersion  string                 `json:"recommendedAgentVersion,omitempty"`
-	Attention                []DockerAgentAttention `json:"attention,omitempty"`
-	Notes                    []string               `json:"notes,omitempty"`
+	AgentsTotal               int                    `json:"agentsTotal"`
+	AgentsOnline              int                    `json:"agentsOnline"`
+	AgentsReportingVersion    int                    `json:"agentsReportingVersion"`
+	AgentsWithTokenBinding    int                    `json:"agentsWithTokenBinding"`
+	AgentsWithoutTokenBinding int                    `json:"agentsWithoutTokenBinding"`
+	AgentsWithoutVersion      int                    `json:"agentsWithoutVersion,omitempty"`
+	AgentsOutdatedVersion     int                    `json:"agentsOutdatedVersion,omitempty"`
+	AgentsWithStaleCommand    int                    `json:"agentsWithStaleCommand,omitempty"`
+	AgentsPendingUninstall    int                    `json:"agentsPendingUninstall,omitempty"`
+	AgentsNeedingAttention    int                    `json:"agentsNeedingAttention"`
+	RecommendedAgentVersion   string                 `json:"recommendedAgentVersion,omitempty"`
+	Attention                 []DockerAgentAttention `json:"attention,omitempty"`
+	Notes                     []string               `json:"notes,omitempty"`
 }
 
 // DockerAgentAttention captures an individual agent that requires user action.
 type DockerAgentAttention struct {
-	HostID       string   `json:"hostId"`
+	AgentID      string   `json:"agentId"`
 	Name         string   `json:"name"`
 	Status       string   `json:"status"`
 	AgentVersion string   `json:"agentVersion,omitempty"`
@@ -793,12 +793,12 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 
 		diag.Usage = make([]APITokenUsage, 0, len(keys))
 		for _, tokenID := range keys {
-			hosts := tokenUsage[tokenID]
-			sort.Strings(hosts)
+			agents := tokenUsage[tokenID]
+			sort.Strings(agents)
 			diag.Usage = append(diag.Usage, APITokenUsage{
-				TokenID:   tokenID,
-				HostCount: len(hosts),
-				Hosts:     hosts,
+				TokenID:    tokenID,
+				AgentCount: len(agents),
+				Agents:     agents,
 			})
 		}
 	}
@@ -813,7 +813,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 
 	hosts := m.GetDockerHosts()
 	diag := &DockerAgentDiagnostic{
-		HostsTotal:              len(hosts),
+		AgentsTotal:             len(hosts),
 		RecommendedAgentVersion: normalizeVersionLabel(serverVersion),
 	}
 
@@ -846,17 +846,17 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	for _, host := range hosts {
 		status := strings.ToLower(strings.TrimSpace(host.Status))
 		if status == "online" {
-			diag.HostsOnline++
+			diag.AgentsOnline++
 		}
 		versionStr := strings.TrimSpace(host.AgentVersion)
 		if versionStr != "" {
-			diag.HostsReportingVersion++
+			diag.AgentsReportingVersion++
 		} else {
-			diag.HostsWithoutVersion++
+			diag.AgentsWithoutVersion++
 		}
 
 		if strings.TrimSpace(host.TokenID) != "" {
-			diag.HostsWithTokenBinding++
+			diag.AgentsWithTokenBinding++
 		} else {
 			legacyTokenHosts++
 		}
@@ -872,7 +872,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		} else if serverVer != nil {
 			if agentVer, err := updates.ParseVersion(versionStr); err == nil {
 				if agentVer.Compare(serverVer) < 0 {
-					diag.HostsOutdatedVersion++
+					diag.AgentsOutdatedVersion++
 					issues = append(issues, fmt.Sprintf("Agent version %s lags behind the recommended %s. Re-run the installer to update.", normalizeVersionLabel(versionStr), recommendedLabel))
 				}
 			} else {
@@ -894,7 +894,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 			case monitoring.DockerCommandStatusQueued, monitoring.DockerCommandStatusDispatched, monitoring.DockerCommandStatusAcknowledged:
 				message := fmt.Sprintf("Command %s is still in progress.", cmdStatus)
 				if !host.Command.UpdatedAt.IsZero() && now.Sub(host.Command.UpdatedAt.UTC()) > 15*time.Minute {
-					diag.HostsWithStaleCommand++
+					diag.AgentsWithStaleCommand++
 					message = fmt.Sprintf("Command %s has been pending since %s; consider allowing re-enrolment.", cmdStatus, host.Command.UpdatedAt.UTC().Format(time.RFC3339))
 				}
 				issues = append(issues, message)
@@ -902,7 +902,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		}
 
 		if host.PendingUninstall {
-			diag.HostsPendingUninstall++
+			diag.AgentsPendingUninstall++
 			issues = append(issues, "Container runtime is pending uninstall; confirm the agent container stopped or clear the flag.")
 		}
 
@@ -911,7 +911,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		}
 
 		diag.Attention = append(diag.Attention, DockerAgentAttention{
-			HostID:       host.ID,
+			AgentID:      host.ID,
 			Name:         preferredDockerHostName(host),
 			Status:       host.Status,
 			AgentVersion: versionStr,
@@ -921,25 +921,25 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		})
 	}
 
-	diag.HostsWithoutTokenBinding = legacyTokenHosts
-	diag.HostsNeedingAttention = len(diag.Attention)
+	diag.AgentsWithoutTokenBinding = legacyTokenHosts
+	diag.AgentsNeedingAttention = len(diag.Attention)
 
 	if legacyTokenHosts > 0 {
 		appendNote(fmt.Sprintf("%d container runtime(s) still rely on the shared API token. Migrate each runtime to a dedicated token via Settings → Security and rerun the installer.", legacyTokenHosts))
 	}
-	if diag.HostsOutdatedVersion > 0 {
-		appendNote(fmt.Sprintf("%d container runtime(s) run an out-of-date agent. Re-run the installer from Settings → Agents to upgrade them.", diag.HostsOutdatedVersion))
+	if diag.AgentsOutdatedVersion > 0 {
+		appendNote(fmt.Sprintf("%d container runtime(s) run an out-of-date agent. Re-run the installer from Settings → Agents to upgrade them.", diag.AgentsOutdatedVersion))
 	}
-	if diag.HostsWithoutVersion > 0 {
-		appendNote(fmt.Sprintf("%d container runtime(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.HostsWithoutVersion))
+	if diag.AgentsWithoutVersion > 0 {
+		appendNote(fmt.Sprintf("%d container runtime(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.AgentsWithoutVersion))
 	}
-	if diag.HostsWithStaleCommand > 0 {
-		appendNote(fmt.Sprintf("%d container runtime command(s) appear stuck. Use the 'Allow re-enroll' action in Settings → Agents to reset them.", diag.HostsWithStaleCommand))
+	if diag.AgentsWithStaleCommand > 0 {
+		appendNote(fmt.Sprintf("%d container runtime command(s) appear stuck. Use the 'Allow re-enroll' action in Settings → Agents to reset them.", diag.AgentsWithStaleCommand))
 	}
-	if diag.HostsPendingUninstall > 0 {
-		appendNote(fmt.Sprintf("%d container runtime(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Agents.", diag.HostsPendingUninstall))
+	if diag.AgentsPendingUninstall > 0 {
+		appendNote(fmt.Sprintf("%d container runtime(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Agents.", diag.AgentsPendingUninstall))
 	}
-	if diag.HostsNeedingAttention == 0 {
+	if diag.AgentsNeedingAttention == 0 {
 		appendNote("All container runtime agents are reporting with dedicated tokens and the expected version.")
 	}
 
