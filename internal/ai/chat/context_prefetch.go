@@ -429,14 +429,15 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 		parts := strings.Split(sm.ID, ":")
 
 		// Enforce canonical v6 frontend mention types only.
-		resourceType := canonicalMentionResourceType(sm.Type)
-		if resourceType == "container" || resourceType == "lxc" {
+		legacyMentionType := strings.ToLower(strings.TrimSpace(sm.Type))
+		if legacyMentionType == "container" || legacyMentionType == "lxc" || legacyMentionType == "docker" || legacyMentionType == "docker-container" {
 			log.Warn().
 				Str("name", sm.Name).
 				Str("id", sm.ID).
 				Msg("[ContextPrefetch] Ignoring unsupported legacy structured mention type")
 			continue
 		}
+		resourceType := canonicalMentionResourceType(sm.Type)
 
 		// Use ResolveResource for full routing info (target_host, Docker chain, etc.)
 		loc := unifiedresources.ResolveResource(rs, sm.Name)

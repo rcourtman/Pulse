@@ -232,6 +232,16 @@ func TestContextPrefetcher_ResolveStructuredMentions_IgnoresLegacyContainerAlias
 			Type: "container",
 			Node: "node1",
 		},
+		{
+			ID:   "docker:host1:abc123",
+			Name: "homepage",
+			Type: "docker",
+		},
+		{
+			ID:   "docker:host1:abc123",
+			Name: "homepage",
+			Type: "docker-container",
+		},
 	})
 	if len(mentions) != 0 {
 		t.Fatalf("expected legacy container aliases to be ignored, got %#v", mentions)
