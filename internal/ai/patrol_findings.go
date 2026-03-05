@@ -601,10 +601,14 @@ func (p *PatrolService) GetAllFindings() []*Finding {
 
 func normalizeFindingResourceTypes(findings []*Finding) {
 	for _, f := range findings {
-		if f == nil || f.ResourceType != "" {
+		if f == nil {
 			continue
 		}
-		f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
+		if strings.TrimSpace(f.ResourceType) == "" {
+			f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
+			continue
+		}
+		f.ResourceType = canonicalFindingResourceType(f.ResourceType)
 	}
 }
 
@@ -612,6 +616,7 @@ func normalizeFindingResourceTypes(findings []*Finding) {
 // Optionally filter by startTime
 func (p *PatrolService) GetFindingsHistory(startTime *time.Time) []*Finding {
 	findings := p.findings.GetAll(startTime)
+	normalizeFindingResourceTypes(findings)
 
 	// Sort by detected time (newest first)
 	sort.Slice(findings, func(i, j int) bool {

@@ -314,6 +314,26 @@ func inferFindingResourceType(resourceID, resourceName string) string {
 	return "node"
 }
 
+func canonicalFindingResourceType(resourceType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	switch normalized {
+	case "guest", "qemu":
+		return "vm"
+	case "container", "lxc", "system_container", "system-container":
+		return "system-container"
+	case "docker", "docker-container", "docker_container", "app_container", "app-container":
+		return "app-container"
+	case "docker-host", "docker_host", "dockerhost":
+		return "docker-host"
+	case "k8s", "kubernetes", "kubernetes_cluster", "k8s_cluster", "k8s-cluster":
+		return "k8s-cluster"
+	case "host", "agent":
+		return "agent"
+	default:
+		return normalized
+	}
+}
+
 func hasFindingNumericSuffix(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" {

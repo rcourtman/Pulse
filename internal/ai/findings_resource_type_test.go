@@ -101,6 +101,43 @@ func TestHasFindingNumericSuffix(t *testing.T) {
 	}
 }
 
+func TestCanonicalFindingResourceType(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "guest", want: "vm"},
+		{in: "system_container", want: "system-container"},
+		{in: "docker_container", want: "app-container"},
+		{in: "docker_host", want: "docker-host"},
+		{in: "kubernetes_cluster", want: "k8s-cluster"},
+		{in: "host", want: "agent"},
+		{in: "storage", want: "storage"},
+	}
+
+	for _, tc := range tests {
+		if got := canonicalFindingResourceType(tc.in); got != tc.want {
+			t.Fatalf("canonicalFindingResourceType(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizeFindingResourceTypes_CanonicalizesAndInfers(t *testing.T) {
+	findings := []*Finding{
+		{ID: "f1", ResourceType: "docker_container", ResourceID: "docker://abc", ResourceName: "Docker Container"},
+		{ID: "f2", ResourceType: "", ResourceID: "lxc/101", ResourceName: "LXC Guest"},
+	}
+
+	normalizeFindingResourceTypes(findings)
+
+	if findings[0].ResourceType != "app-container" {
+		t.Fatalf("expected canonical app-container, got %q", findings[0].ResourceType)
+	}
+	if findings[1].ResourceType != "system-container" {
+		t.Fatalf("expected inferred system-container, got %q", findings[1].ResourceType)
+	}
+}
+
 func TestFindingsStoreAdd_InferResourceTypeWhenMissing(t *testing.T) {
 	store := NewFindingsStore()
 
