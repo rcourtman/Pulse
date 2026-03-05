@@ -130,7 +130,8 @@ type ResourceLocation struct {
 	K8sAgentID     string // Agent ID for routing kubectl commands
 
 	// For generic hosts (Windows/Linux via Pulse Unified Agent)
-	HostID   string // Host ID
+	TargetID string // Canonical target ID (agent ID for host resources)
+	HostID   string // Deprecated legacy alias of TargetID
 	Platform string // "linux", "windows", etc.
 
 	// The key output: where to route commands
@@ -266,6 +267,7 @@ func (s StateSnapshot) ResolveResource(name string) ResourceLocation {
 				Found:        true,
 				Name:         host.Hostname,
 				ResourceType: "agent",
+				TargetID:     host.ID,
 				HostID:       host.ID,
 				Platform:     host.Platform,
 				TargetHost:   host.Hostname,

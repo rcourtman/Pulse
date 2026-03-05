@@ -114,7 +114,7 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 
 	// Check generic Hosts (Windows/Linux via Pulse Unified Agent).
 	// Match on Hostname() or AgentID() for parity with state.Hosts[].Hostname/ID.
-	// Use AgentID() for HostID to match original models.Host.ID semantics.
+	// Use AgentID() as canonical target ID for host resources.
 	for _, host := range rs.Hosts() {
 		if host == nil {
 			continue
@@ -125,6 +125,7 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 				Found:        true,
 				Name:         host.Hostname(),
 				ResourceType: "agent",
+				TargetID:     agentID,
 				HostID:       agentID,
 				Platform:     host.Platform(),
 				TargetHost:   host.Hostname(),

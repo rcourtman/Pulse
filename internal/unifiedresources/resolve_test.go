@@ -158,6 +158,9 @@ func TestResolveResource_Host(t *testing.T) {
 	if loc.HostID != "host1" {
 		t.Fatalf("expected HostID=host1 (source agent ID), got %q", loc.HostID)
 	}
+	if loc.TargetID != "host1" {
+		t.Fatalf("expected TargetID=host1 (canonical target ID), got %q", loc.TargetID)
+	}
 
 	// Lookup by agent/source ID should also work.
 	loc2 := ResolveResource(rr, "host1")

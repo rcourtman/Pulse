@@ -510,8 +510,12 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		// Route based on resource type
 		switch loc.ResourceType {
 		case "agent":
+			agentTargetID := loc.TargetID
+			if agentTargetID == "" {
+				agentTargetID = loc.HostID
+			}
 			for _, agent := range agents {
-				if agent.Hostname == loc.TargetHost || agent.AgentID == loc.HostID {
+				if agent.Hostname == loc.TargetHost || agent.AgentID == agentTargetID {
 					result.AgentID = agent.AgentID
 					result.AgentHostname = agent.Hostname
 					result.ResolvedKind = "agent"
