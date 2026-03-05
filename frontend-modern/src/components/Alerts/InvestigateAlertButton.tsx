@@ -23,6 +23,26 @@ interface InvestigateAlertButtonProps {
 export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const [isHovered, setIsHovered] = createSignal(false);
   const isLocked = () => props.licenseLocked === true;
+  const canonicalTargetType = (raw?: string) => {
+    const normalized = (raw || '').trim().toLowerCase();
+    switch (normalized) {
+      case 'lxc':
+      case 'container':
+      case 'system-container':
+        return 'system-container';
+      case 'docker':
+      case 'docker-container':
+      case 'docker_container':
+      case 'app-container':
+      case 'app_container':
+        return 'app-container';
+      case 'host':
+      case 'agent':
+        return 'agent';
+      default:
+        return normalized || 'guest';
+    }
+  };
 
   // Don't render if AI is not enabled
   if (aiChatStore.enabled !== true) {
@@ -65,11 +85,11 @@ Please:
 4. Execute diagnostic commands if safe`;
 
     // Determine target type from alert or infer from resource
-    let targetType = props.resourceType || 'guest';
+    let targetType = canonicalTargetType(props.resourceType);
     if (props.alert.type.startsWith('node_')) {
       targetType = 'node';
     } else if (props.alert.type.startsWith('docker_')) {
-      targetType = 'docker_container';
+      targetType = 'app-container';
     } else if (props.alert.type.startsWith('storage_')) {
       targetType = 'storage';
     }

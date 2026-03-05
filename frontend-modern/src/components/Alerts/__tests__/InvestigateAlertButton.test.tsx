@@ -281,13 +281,13 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('node');
     });
 
-    it('uses "docker_container" when alert type starts with "docker_"', async () => {
+    it('uses "app-container" when alert type starts with "docker_"', async () => {
       const alert = makeAlert({ type: 'docker_cpu' });
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('docker_container');
+      expect(context.targetType).toBe('app-container');
     });
 
     it('uses "storage" when alert type starts with "storage_"', async () => {
@@ -299,13 +299,13 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('storage');
     });
 
-    it('uses explicit resourceType prop when provided', async () => {
+    it('canonicalizes explicit legacy resourceType props', async () => {
       const alert = makeAlert({ type: 'memory' });
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('lxc');
+      expect(context.targetType).toBe('system-container');
     });
 
     it('falls back to "guest" when no resourceType and type has no prefix', async () => {
