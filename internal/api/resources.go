@@ -902,10 +902,10 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 			result[unified.ResourceTypeAgent] = struct{}{}
 		case "vm", "vms":
 			result[unified.ResourceTypeVM] = struct{}{}
-		case "system-container", "system_container", "container", "containers":
+		case "system-container", "container", "containers":
 			// "container" is the frontend name for system containers (LXC)
 			result[unified.ResourceTypeSystemContainer] = struct{}{}
-		case "docker_container", "docker-container", "app-container", "app_container":
+		case "docker_container", "docker-container", "app-container":
 			result[unified.ResourceTypeAppContainer] = struct{}{}
 		case "docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services":
 			result[unified.ResourceTypeDockerService] = struct{}{}
@@ -955,8 +955,8 @@ func isSupportedResourceTypeFilterToken(token string) bool {
 	switch token {
 	case "agent", "agents", "node", "nodes", "docker-host",
 		"vm", "vms",
-		"system-container", "system_container", "container", "containers",
-		"docker_container", "docker-container", "app-container", "app_container",
+		"system-container", "container", "containers",
+		"docker_container", "docker-container", "app-container",
 		"docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services",
 		"pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod",
 		"k8s_cluster", "k8s-cluster", "kubernetes_cluster", "kubernetes-cluster",

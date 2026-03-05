@@ -169,6 +169,8 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		{name: "unsupported host ignored by parser", input: "host", want: map[unified.ResourceType]struct{}{}},
 		{name: "unsupported lxc ignored by parser", input: "lxc", want: map[unified.ResourceType]struct{}{}},
 		{name: "unsupported qemu ignored by parser", input: "qemu", want: map[unified.ResourceType]struct{}{}},
+		{name: "unsupported system_container ignored by parser", input: "system_container", want: map[unified.ResourceType]struct{}{}},
+		{name: "unsupported app_container ignored by parser", input: "app_container", want: map[unified.ResourceType]struct{}{}},
 		{name: "container", input: "container", want: map[unified.ResourceType]struct{}{unified.ResourceTypeSystemContainer: {}}},
 		{name: "pool", input: "pool", want: map[unified.ResourceType]struct{}{unified.ResourceTypeCeph: {}}},
 		{name: "vm", input: "vm", want: map[unified.ResourceType]struct{}{unified.ResourceTypeVM: {}}},
@@ -209,8 +211,8 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 }
 
 func TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases(t *testing.T) {
-	unsupported := unsupportedResourceTypeFilterTokens("vm,lxc,qemu,system-container")
-	expected := []string{"lxc", "qemu"}
+	unsupported := unsupportedResourceTypeFilterTokens("vm,lxc,qemu,system-container,system_container,app_container")
+	expected := []string{"lxc", "qemu", "system_container", "app_container"}
 	if len(unsupported) != len(expected) {
 		t.Fatalf("unsupportedResourceTypeFilterTokens returned %v, want %v", unsupported, expected)
 	}
