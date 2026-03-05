@@ -367,6 +367,7 @@ func TestNormalizeInvestigateAlertTargetType_StrictCanonicalV6(t *testing.T) {
 		{name: "pod maps to agent", in: "pod", want: "agent"},
 		{name: "k8s cluster maps to agent", in: "k8s-cluster", want: "agent"},
 		{name: "node maps to agent", in: "node", want: "agent"},
+		{name: "legacy host rejected", in: "host", wantErr: "unsupported resource_type"},
 		{name: "legacy guest rejected", in: "guest", wantErr: "unsupported resource_type"},
 		{name: "legacy docker rejected", in: "docker", wantErr: "unsupported resource_type"},
 		{name: "legacy container rejected", in: "container", wantErr: "unsupported resource_type"},
