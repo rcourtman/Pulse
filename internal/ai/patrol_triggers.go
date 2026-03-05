@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -498,11 +499,33 @@ func slicesEqual(a, b []string) bool {
 	return true
 }
 
+func canonicalPatrolScopeResourceType(resourceType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	switch normalized {
+	case "guest", "qemu", "vm":
+		return "vm"
+	case "container", "lxc", "system_container", "system-container":
+		return "system-container"
+	case "docker", "docker-container", "docker_container", "app_container", "app-container":
+		return "app-container"
+	case "docker-host", "docker_host", "dockerhost":
+		return "docker-host"
+	case "k8s", "kubernetes", "k8s_cluster", "kubernetes_cluster", "k8s-cluster", "kubernetes-cluster":
+		return "k8s-cluster"
+	case "host", "agent":
+		return "agent"
+	case "node":
+		return "node"
+	default:
+		return normalized
+	}
+}
+
 // AlertTriggeredPatrolScope creates a patrol scope for an alert that fired
 func AlertTriggeredPatrolScope(alertID, resourceID, resourceType, alertType string) PatrolScope {
 	return PatrolScope{
 		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
+		ResourceTypes: []string{canonicalPatrolScopeResourceType(resourceType)},
 		Depth:         PatrolDepthQuick,
 		Reason:        TriggerReasonAlertFired,
 		Context:       "Alert: " + alertType,
@@ -515,7 +538,7 @@ func AlertTriggeredPatrolScope(alertID, resourceID, resourceType, alertType stri
 func AlertClearedPatrolScope(alertID, resourceID, resourceType string) PatrolScope {
 	return PatrolScope{
 		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
+		ResourceTypes: []string{canonicalPatrolScopeResourceType(resourceType)},
 		Depth:         PatrolDepthQuick,
 		Reason:        TriggerReasonAlertCleared,
 		Context:       "Verify resolution",
@@ -528,7 +551,7 @@ func AlertClearedPatrolScope(alertID, resourceID, resourceType string) PatrolSco
 func AnomalyDetectedPatrolScope(resourceID, resourceType, metric string, value, baseline float64) PatrolScope {
 	return PatrolScope{
 		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
+		ResourceTypes: []string{canonicalPatrolScopeResourceType(resourceType)},
 		Depth:         PatrolDepthNormal,
 		Reason:        TriggerReasonAnomalyDetected,
 		Context:       "Anomaly: " + metric,
@@ -547,7 +570,7 @@ func AnomalyTriggeredPatrolScope(resourceID, resourceType, metric, severity stri
 	}
 	return PatrolScope{
 		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
+		ResourceTypes: []string{canonicalPatrolScopeResourceType(resourceType)},
 		Depth:         PatrolDepthQuick,
 		Reason:        TriggerReasonAnomalyDetected,
 		Context:       "Anomaly: " + metric + " (" + severity + ")",
