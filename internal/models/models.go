@@ -1404,7 +1404,7 @@ func nodeLogicalKey(node Node) string {
 		return "instance:" + instance + ":" + name
 	}
 	if host := normalizeNodeIdentityPart(node.Host); host != "" {
-		return "host:" + host + ":" + name
+		return "endpoint:" + host + ":" + name
 	}
 
 	return "name:" + name
