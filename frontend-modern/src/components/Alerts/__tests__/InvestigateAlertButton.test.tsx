@@ -326,6 +326,24 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('agent');
     });
 
+    it('infers canonical "pod" from Kubernetes pod-style resource IDs', async () => {
+      const alert = makeAlert({ resourceId: 'k8s:cluster-a:pod:api-7f9d' });
+      render(() => <InvestigateAlertButton alert={alert} />);
+      await fireEvent.click(screen.getByRole('button'));
+
+      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(context.targetType).toBe('pod');
+    });
+
+    it('infers canonical "pod" from pod-prefixed resource IDs', async () => {
+      const alert = makeAlert({ resourceId: 'pod:cluster-a:default/api-7f9d' });
+      render(() => <InvestigateAlertButton alert={alert} />);
+      await fireEvent.click(screen.getByRole('button'));
+
+      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(context.targetType).toBe('pod');
+    });
+
     it('ignores legacy metadata.resourceType aliases and falls back safely', async () => {
       const alert = makeAlert({
         resourceId: 'resource-xyz',

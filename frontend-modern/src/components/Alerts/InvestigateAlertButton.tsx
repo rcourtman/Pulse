@@ -104,7 +104,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       normalized.startsWith('pod:') ||
       normalized.includes(':pod:')
     ) {
-      return 'k8s-cluster';
+      return 'pod';
     }
 
     return undefined;
