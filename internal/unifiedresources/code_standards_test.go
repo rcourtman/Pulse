@@ -235,12 +235,13 @@ func TestNoLegacyHostResourceTypeSymbol(t *testing.T) {
 	}
 }
 
-// TestNoLegacyHostToAgentMigrationHintsInRuntimeCode prevents reintroducing
-// runtime messages that imply host->agent aliasing behavior.
-func TestNoLegacyHostToAgentMigrationHintsInRuntimeCode(t *testing.T) {
+// TestNoLegacyMigrationHintsInRuntimeCode prevents reintroducing runtime
+// messages that point removed aliases at the wrong token guidance.
+func TestNoLegacyMigrationHintsInRuntimeCode(t *testing.T) {
 	bannedPhrases := []string{
 		`no longer supported; use "agent"`,
 		`no longer supported; use "agent:*"`,
+		`app_container is no longer supported; use container`,
 	}
 
 	internalDir := filepath.Join("..")
