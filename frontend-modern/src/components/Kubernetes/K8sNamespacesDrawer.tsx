@@ -92,7 +92,7 @@ export const K8sNamespacesDrawer: Component<{
     if (!cluster) return;
     navigate(
       buildWorkloadsPath({
-        type: 'k8s',
+        type: 'pod',
         context: cluster,
         namespace: namespace ? normalize(namespace) : null,
       }),
