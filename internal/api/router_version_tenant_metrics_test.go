@@ -242,7 +242,7 @@ func TestHandleMetricsHistory_HostAliasReadsAgentStoreKeyAndReturnsAgentType(t *
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, `resourceType "host" is no longer supported; use "agent"`) {
+	if body := rec.Body.String(); !strings.Contains(body, `unsupported resourceType "host"`) {
 		t.Fatalf("unexpected response body: %s", body)
 	}
 }

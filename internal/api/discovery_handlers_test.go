@@ -401,7 +401,7 @@ func TestHandleListByType_RejectsLegacyHostType(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	assert.Equal(t, `resource type "host" is no longer supported; use "agent"`, body["message"])
+	assert.Equal(t, `unsupported resource type "host"`, body["message"])
 }
 
 func TestHandleListByHost(t *testing.T) {
@@ -458,7 +458,7 @@ func TestHandleGetDiscovery_RejectsLegacyHostType(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	assert.Equal(t, `resource type "host" is no longer supported; use "agent"`, body["message"])
+	assert.Equal(t, `unsupported resource type "host"`, body["message"])
 }
 
 // Additional test to cover service not configured case

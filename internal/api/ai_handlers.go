@@ -3931,7 +3931,7 @@ func (h *AISettingsHandler) HandleDebugContext(w http.ResponseWriter, r *http.Re
 }
 
 // HandleGetConnectedAgents returns the list of agents currently connected via WebSocket
-// This is useful for debugging when AI can't reach certain hosts
+// This is useful for debugging when AI can't reach certain agents
 func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -3962,7 +3962,7 @@ func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *h
 	response := map[string]interface{}{
 		"count":  len(agents),
 		"agents": agents,
-		"note":   "Agents connect via WebSocket to /api/agent/ws. If a host is missing, check that pulse-agent is installed and can reach the Pulse server.",
+		"note":   "Agents connect via WebSocket to /api/agent/ws. If an agent is missing, check that pulse-agent is installed and can reach the Pulse server.",
 	}
 
 	w.Header().Set("Content-Type", "application/json")

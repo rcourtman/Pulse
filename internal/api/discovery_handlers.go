@@ -117,10 +117,26 @@ func parseDiscoveryResourceType(raw string) (servicediscovery.ResourceType, erro
 	if trimmed == "" {
 		return "", fmt.Errorf("resource type is required")
 	}
-	if trimmed == "host" {
-		return "", fmt.Errorf(`resource type "host" is no longer supported; use "agent"`)
+	normalized := servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(trimmed))
+	if !isSupportedDiscoveryResourceType(normalized) {
+		return "", fmt.Errorf("unsupported resource type %q", trimmed)
 	}
-	return servicediscovery.NormalizeResourceType(servicediscovery.ResourceType(trimmed)), nil
+	return normalized, nil
+}
+
+func isSupportedDiscoveryResourceType(resourceType servicediscovery.ResourceType) bool {
+	switch resourceType {
+	case servicediscovery.ResourceTypeVM,
+		servicediscovery.ResourceTypeSystemContainer,
+		servicediscovery.ResourceTypeDocker,
+		servicediscovery.ResourceTypeK8s,
+		servicediscovery.ResourceTypeAgent,
+		servicediscovery.ResourceTypeDockerVM,
+		servicediscovery.ResourceTypeDockerSystemContainer:
+		return true
+	default:
+		return false
+	}
 }
 
 // isAdminRequest checks whether the request has privileged admin access for

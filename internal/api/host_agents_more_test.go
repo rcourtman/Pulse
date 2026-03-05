@@ -130,8 +130,8 @@ func TestHostAgentHandlers_HandleReportIncludesConfigOverride(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp["hostId"] != hostID {
-		t.Fatalf("expected hostId %q, got %#v", hostID, resp["hostId"])
+	if resp["agentId"] != hostID {
+		t.Fatalf("expected agentId %q, got %#v", hostID, resp["agentId"])
 	}
 	cfg, ok := resp["config"].(map[string]any)
 	if !ok {
@@ -158,8 +158,8 @@ func TestHostAgentHandlers_HandleDeleteHostErrors(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
-	if code := decodeErrorCode(t, rec); code != "missing_host_id" {
-		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
+	if code := decodeErrorCode(t, rec); code != "missing_agent_id" {
+		t.Fatalf("expected error code %q, got %q", "missing_agent_id", code)
 	}
 }
 
@@ -182,8 +182,8 @@ func TestHostAgentHandlers_HandleConfigErrors(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
-	if code := decodeErrorCode(t, rec); code != "missing_host_id" {
-		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
+	if code := decodeErrorCode(t, rec); code != "missing_agent_id" {
+		t.Fatalf("expected error code %q, got %q", "missing_agent_id", code)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
@@ -196,8 +196,8 @@ func TestHostAgentHandlers_HandleConfigErrors(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
 	}
-	if code := decodeErrorCode(t, rec); code != "host_not_found" {
-		t.Fatalf("expected error code %q, got %q", "host_not_found", code)
+	if code := decodeErrorCode(t, rec); code != "agent_not_found" {
+		t.Fatalf("expected error code %q, got %q", "agent_not_found", code)
 	}
 }
 
@@ -225,7 +225,7 @@ func TestHostAgentHandlers_HandleConfigPatchErrors(t *testing.T) {
 	}
 }
 
-func TestHostAgentHandlers_EnsureHostTokenMatchScopes(t *testing.T) {
+func TestHostAgentHandlers_EnsureAgentTokenMatchScopes(t *testing.T) {
 	handler := newHostAgentHandlerForTests(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
@@ -234,7 +234,7 @@ func TestHostAgentHandlers_EnsureHostTokenMatchScopes(t *testing.T) {
 		Scopes: []string{config.ScopeWildcard},
 	})
 	rec := httptest.NewRecorder()
-	if ok := handler.ensureHostTokenMatch(rec, req, "missing"); !ok {
+	if ok := handler.ensureAgentTokenMatch(rec, req, "missing"); !ok {
 		t.Fatalf("expected wildcard scope to allow access")
 	}
 	if rec.Code != http.StatusOK {
@@ -247,7 +247,7 @@ func TestHostAgentHandlers_EnsureHostTokenMatchScopes(t *testing.T) {
 		Scopes: []string{config.ScopeAgentConfigRead},
 	})
 	rec = httptest.NewRecorder()
-	if ok := handler.ensureHostTokenMatch(rec, req, "missing"); ok {
+	if ok := handler.ensureAgentTokenMatch(rec, req, "missing"); ok {
 		t.Fatalf("expected missing host to fail")
 	}
 	if rec.Code != http.StatusNotFound {
@@ -291,14 +291,14 @@ func TestHostAgentHandlers_HandleConfigSigningSuccess(t *testing.T) {
 
 	var resp struct {
 		Success bool                       `json:"success"`
-		HostID  string                     `json:"hostId"`
+		AgentID string                     `json:"agentId"`
 		Config  monitoring.HostAgentConfig `json:"config"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp.HostID != "host-1" {
-		t.Fatalf("expected hostId %q, got %q", "host-1", resp.HostID)
+	if resp.AgentID != "host-1" {
+		t.Fatalf("expected agentId %q, got %q", "host-1", resp.AgentID)
 	}
 	if resp.Config.Signature == "" {
 		t.Fatalf("expected config signature to be set")
@@ -360,21 +360,21 @@ func TestHostAgentHandlers_HandleUninstallErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "invalid_json", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewBufferString(`{"hostId":""}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewBufferString(`{"agentId":""}`))
 	rec = httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
-	if code := decodeErrorCode(t, rec); code != "missing_host_id" {
-		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
+	if code := decodeErrorCode(t, rec); code != "missing_agent_id" {
+		t.Fatalf("expected error code %q, got %q", "missing_agent_id", code)
 	}
 }
 
 func TestHostAgentHandlers_HandleUninstallMissingHostStillSucceeds(t *testing.T) {
 	handler, _ := newHostAgentHandlers(t, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewBufferString(`{"hostId":"missing"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewBufferString(`{"agentId":"missing"}`))
 	rec := httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
 	if rec.Code != http.StatusOK {
@@ -402,17 +402,17 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "invalid_json", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"hostId":"","nodeId":"node-1"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"agentId":"","nodeId":"node-1"}`))
 	rec = httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
-	if code := decodeErrorCode(t, rec); code != "missing_host_id" {
-		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
+	if code := decodeErrorCode(t, rec); code != "missing_agent_id" {
+		t.Fatalf("expected error code %q, got %q", "missing_agent_id", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"hostId":"host-1","nodeId":""}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"agentId":"host-1","nodeId":""}`))
 	rec = httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -422,7 +422,7 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "missing_node_id", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"hostId":"host-1","nodeId":"node-1"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewBufferString(`{"agentId":"host-1","nodeId":"node-1"}`))
 	rec = httptest.NewRecorder()
 	handler.HandleLink(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -449,17 +449,17 @@ func TestHostAgentHandlers_HandleLinkUnlinkErrors(t *testing.T) {
 		t.Fatalf("expected error code %q, got %q", "invalid_json", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewBufferString(`{"hostId":""}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewBufferString(`{"agentId":""}`))
 	rec = httptest.NewRecorder()
 	handler.HandleUnlink(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
-	if code := decodeErrorCode(t, rec); code != "missing_host_id" {
-		t.Fatalf("expected error code %q, got %q", "missing_host_id", code)
+	if code := decodeErrorCode(t, rec); code != "missing_agent_id" {
+		t.Fatalf("expected error code %q, got %q", "missing_agent_id", code)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewBufferString(`{"hostId":"missing"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewBufferString(`{"agentId":"missing"}`))
 	rec = httptest.NewRecorder()
 	handler.HandleUnlink(rec, req)
 	if rec.Code != http.StatusNotFound {

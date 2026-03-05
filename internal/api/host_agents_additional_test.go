@@ -181,7 +181,7 @@ func TestHostAgentHandlers_HandleConfigPatch(t *testing.T) {
 	}
 }
 
-func TestHostAgentHandlers_EnsureHostTokenMatch(t *testing.T) {
+func TestHostAgentHandlers_EnsureAgentTokenMatch(t *testing.T) {
 	handler, monitor := newHostAgentHandlers(t, nil)
 	state := monitorState(t, monitor)
 	state.UpsertHost(models.Host{
@@ -197,7 +197,7 @@ func TestHostAgentHandlers_EnsureHostTokenMatch(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 
-	ok := handler.ensureHostTokenMatch(rec, req, "host-3")
+	ok := handler.ensureAgentTokenMatch(rec, req, "host-3")
 	if ok {
 		t.Fatalf("expected token mismatch")
 	}
@@ -210,7 +210,7 @@ func TestHostAgentHandlers_HandleUninstall(t *testing.T) {
 	handler, monitor := newHostAgentHandlers(t, nil)
 	hostID := seedHostAgent(t, monitor)
 
-	body := []byte(`{"hostId":"` + hostID + `"}`)
+	body := []byte(`{"agentId":"` + hostID + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
@@ -231,7 +231,7 @@ func TestHostAgentHandlers_HandleUninstallRejectsTokenMismatch(t *testing.T) {
 		TokenID:  "token-1",
 	})
 
-	body := []byte(`{"hostId":"` + hostID + `"}`)
+	body := []byte(`{"agentId":"` + hostID + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	attachAPITokenRecord(req, &config.APITokenRecord{
 		ID:     "token-2",
@@ -249,7 +249,7 @@ func TestHostAgentHandlers_HandleUninstall_ResponseBody(t *testing.T) {
 	handler, monitor := newHostAgentHandlers(t, nil)
 	hostID := seedHostAgent(t, monitor)
 
-	body := []byte(`{"hostId":"` + hostID + `"}`)
+	body := []byte(`{"agentId":"` + hostID + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
@@ -260,7 +260,7 @@ func TestHostAgentHandlers_HandleUninstall_ResponseBody(t *testing.T) {
 
 	var resp struct {
 		Success bool   `json:"success"`
-		HostID  string `json:"hostId"`
+		AgentID string `json:"agentId"`
 		Message string `json:"message"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
@@ -269,8 +269,8 @@ func TestHostAgentHandlers_HandleUninstall_ResponseBody(t *testing.T) {
 	if !resp.Success {
 		t.Errorf("expected success=true, got false")
 	}
-	if resp.HostID != hostID {
-		t.Errorf("expected hostId=%q, got %q", hostID, resp.HostID)
+	if resp.AgentID != hostID {
+		t.Errorf("expected agentId=%q, got %q", hostID, resp.AgentID)
 	}
 	if resp.Message == "" {
 		t.Errorf("expected non-empty message")
@@ -323,7 +323,7 @@ func TestHostAgentHandlers_HandleUninstall_FullLifecycle(t *testing.T) {
 	}
 
 	// Uninstall
-	body := []byte(`{"hostId":"` + hostID + `"}`)
+	body := []byte(`{"agentId":"` + hostID + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/uninstall", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleUninstall(rec, req)
@@ -352,7 +352,7 @@ func TestHostAgentHandlers_HandleLinkUnlink(t *testing.T) {
 	state := monitorState(t, monitor)
 	state.UpdateNodes([]models.Node{{ID: "node-1", Name: "node-1"}})
 
-	linkBody := []byte(`{"hostId":"` + hostID + `","nodeId":"node-1"}`)
+	linkBody := []byte(`{"agentId":"` + hostID + `","nodeId":"node-1"}`)
 	linkReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/link", bytes.NewReader(linkBody))
 	linkRec := httptest.NewRecorder()
 
@@ -361,7 +361,7 @@ func TestHostAgentHandlers_HandleLinkUnlink(t *testing.T) {
 		t.Fatalf("link status = %d, want 200: %s", linkRec.Code, linkRec.Body.String())
 	}
 
-	unlinkBody := []byte(`{"hostId":"` + hostID + `"}`)
+	unlinkBody := []byte(`{"agentId":"` + hostID + `"}`)
 	unlinkReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/unlink", bytes.NewReader(unlinkBody))
 	unlinkRec := httptest.NewRecorder()
 

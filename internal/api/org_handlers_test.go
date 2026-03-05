@@ -605,13 +605,20 @@ func TestNormalizeOrganizationShareResourceType(t *testing.T) {
 	}
 }
 
-func TestNormalizeOrganizationShares_DropsLegacyHostType(t *testing.T) {
+func TestNormalizeOrganizationShares_DropsUnsupportedResourceTypes(t *testing.T) {
 	shares := []models.OrganizationShare{
 		{
 			ID:           "legacy-host",
 			TargetOrgID:  "beta",
 			ResourceType: "host",
 			ResourceID:   "agent-1",
+			AccessRole:   models.OrgRoleViewer,
+		},
+		{
+			ID:           "unsupported-custom",
+			TargetOrgID:  "beta",
+			ResourceType: "my-custom-type",
+			ResourceID:   "res-1",
 			AccessRole:   models.OrgRoleViewer,
 		},
 		{
@@ -632,7 +639,7 @@ func TestNormalizeOrganizationShares_DropsLegacyHostType(t *testing.T) {
 	}
 }
 
-func TestHandleCreateShareRejectsLegacyHostResourceType(t *testing.T) {
+func TestHandleCreateShareRejectsUnsupportedHostResourceType(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
@@ -669,7 +676,48 @@ func TestHandleCreateShareRejectsLegacyHostResourceType(t *testing.T) {
 	h.HandleCreateShare(createShareRec, createShareReq)
 
 	if createShareRec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for legacy host resource type, got %d: %s", createShareRec.Code, createShareRec.Body.String())
+		t.Fatalf("expected 400 for unsupported host resource type, got %d: %s", createShareRec.Code, createShareRec.Body.String())
+	}
+}
+
+func TestHandleCreateShareRejectsUnsupportedCustomResourceType(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createAcmeReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createAcmeRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createAcmeRec, createAcmeReq)
+	if createAcmeRec.Code != http.StatusCreated {
+		t.Fatalf("create acme failed: %d %s", createAcmeRec.Code, createAcmeRec.Body.String())
+	}
+
+	createBetaReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createBetaRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createBetaRec, createBetaReq)
+	if createBetaRec.Code != http.StatusCreated {
+		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"my-custom-type","resourceId":"res-1","accessRole":"viewer"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+
+	if createShareRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unsupported custom resource type, got %d: %s", createShareRec.Code, createShareRec.Body.String())
 	}
 }
 

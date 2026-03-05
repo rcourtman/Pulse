@@ -113,8 +113,8 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	}
 
 	resources := registry.List()
-	if hasLegacyHostTypeToken(r.URL.Query().Get("type")) {
-		http.Error(w, `type "host" is no longer supported; use "agent"`, http.StatusBadRequest)
+	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
+		http.Error(w, "unsupported type filter token(s): "+strings.Join(unsupported, ", "), http.StatusBadRequest)
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 
 	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
 	// no conversion needed), but recompute ByType from the full registry list so keys
-	// match frontend expectations (e.g. "node"/"agent" instead of backend "host").
+	// match frontend expectations (for example "node"/"agent").
 	stats := registry.Stats()
 	stats.ByType = computeFrontendByType(registry.List())
 
@@ -938,13 +938,40 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	return result
 }
 
-func hasLegacyHostTypeToken(raw string) bool {
+func unsupportedResourceTypeFilterTokens(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var unsupported []string
 	for _, part := range splitCSV(raw) {
-		if part == "host" || part == "hosts" {
-			return true
+		if !isSupportedResourceTypeFilterToken(part) {
+			unsupported = append(unsupported, part)
 		}
 	}
-	return false
+	return unsupported
+}
+
+func isSupportedResourceTypeFilterToken(token string) bool {
+	switch token {
+	case "agent", "agents", "node", "nodes", "docker-host",
+		"vm", "vms", "qemu",
+		"lxc", "lxcs", "system-container", "system_container", "container", "containers",
+		"docker_container", "docker-container", "app-container", "app_container",
+		"docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services",
+		"pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod",
+		"k8s_cluster", "k8s-cluster", "kubernetes_cluster", "kubernetes-cluster",
+		"k8s_node", "k8s-node", "kubernetes_node", "kubernetes-node",
+		"k8s_deployment", "k8s-deployment", "kubernetes_deployment", "kubernetes-deployment", "deployment", "deployments",
+		"k8s", "kubernetes",
+		"storage",
+		"pbs",
+		"pmg",
+		"ceph", "pool",
+		"physical_disk", "physical-disk", "physicaldisk", "disk":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseSources(raw string) map[unified.DataSource]struct{} {
@@ -1081,7 +1108,7 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 
 	switch unified.CanonicalResourceType(resource.Type) {
 	case unified.ResourceTypeAgent:
-		// Infrastructure hosts: prefer Proxmox > Agent > Docker source.
+		// Infrastructure agents: prefer Proxmox > Agent > Docker source.
 		if st, ok := bySource[unified.SourceProxmox]; ok {
 			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
 		}

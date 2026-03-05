@@ -88,10 +88,10 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 	}
 
 	log.Debug().
-		Str("hostId", host.ID).
+		Str("agentId", host.ID).
 		Str("hostname", host.Hostname).
 		Str("platform", host.Platform).
-		Msg("Host agent report processed")
+		Msg("Agent report processed")
 
 	h.broadcastState(r.Context())
 
@@ -100,7 +100,7 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 
 	resp := map[string]any{
 		"success":   true,
-		"hostId":    host.ID,
+		"agentId":   host.ID,
 		"lastSeen":  host.LastSeen,
 		"platform":  host.Platform,
 		"osName":    host.OSName,
@@ -115,11 +115,11 @@ func (h *HostAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host agent response")
+		log.Error().Err(err).Msg("Failed to serialize agent response")
 	}
 }
 
-// HandleLookup returns host registration details for installer validation.
+// HandleLookup returns agent registration details for installer validation.
 func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is allowed", nil)
@@ -130,11 +130,11 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 	hostname := strings.TrimSpace(r.URL.Query().Get("hostname"))
 
 	if lookupID == "" && hostname == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_lookup_param", "Provide either id or hostname to look up a host", nil)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_lookup_param", "Provide either id or hostname to look up an agent", nil)
 		return
 	}
 
-	// Use the live state snapshot (not the global mock snapshot) so host
+	// Use the live state snapshot (not the global mock snapshot) so agent
 	// registrations can still be validated while Pulse is in mock/demo mode.
 	snap := h.getMonitor(r.Context()).GetLiveStateSnapshot()
 
@@ -185,13 +185,13 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !found {
-		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
+		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Agent has not registered with Pulse yet", nil)
 		return
 	}
 
-	// Ensure the querying token matches the host (when applicable).
+	// Ensure the querying token matches the agent (when applicable).
 	if record := getAPITokenRecordFromRequest(r); record != nil && host.TokenID != "" && host.TokenID != record.ID {
-		writeErrorResponse(w, http.StatusForbidden, "host_lookup_forbidden", "Host does not belong to this API token", nil)
+		writeErrorResponse(w, http.StatusForbidden, "agent_lookup_forbidden", "Agent does not belong to this API token", nil)
 		return
 	}
 
@@ -199,44 +199,46 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 		strings.EqualFold(host.Status, "running") ||
 		strings.EqualFold(host.Status, "healthy")
 
+	agentInfo := map[string]any{
+		"id":           host.ID,
+		"hostname":     host.Hostname,
+		"displayName":  host.DisplayName,
+		"status":       host.Status,
+		"connected":    connected,
+		"lastSeen":     host.LastSeen,
+		"agentVersion": host.AgentVersion,
+	}
+
 	resp := map[string]any{
 		"success": true,
-		"host": map[string]any{
-			"id":           host.ID,
-			"hostname":     host.Hostname,
-			"displayName":  host.DisplayName,
-			"status":       host.Status,
-			"connected":    connected,
-			"lastSeen":     host.LastSeen,
-			"agentVersion": host.AgentVersion,
-		},
+		"agent":   agentInfo,
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host lookup response")
+		log.Error().Err(err).Msg("Failed to serialize agent lookup response")
 	}
 }
 
-// HandleDeleteHost removes a host from the shared state.
+// HandleDeleteHost removes an agent from the shared state.
 func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only DELETE is allowed", nil)
 		return
 	}
 
-	// Extract host ID from URL path
-	// Expected format: /api/agents/agent/{hostId}
+	// Extract agent ID from URL path.
+	// Expected format: /api/agents/agent/{agentId}
 	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", nil)
 		return
 	}
 
-	// Remove the host from state
-	host, err := h.getMonitor(r.Context()).RemoveHostAgent(hostID)
+	// Remove the agent from state.
+	host, err := h.getMonitor(r.Context()).RemoveHostAgent(agentID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "host_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", err.Error(), nil)
 		return
 	}
 
@@ -244,32 +246,32 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  host.ID,
-		"message": "Host removed",
+		"agentId": host.ID,
+		"message": "Agent removed",
 	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host removal response")
+		log.Error().Err(err).Msg("Failed to serialize agent removal response")
 	}
 }
 
-// HandleConfig handles GET (fetch config) and PATCH (update config) for host agents.
-// GET /api/agents/agent/{hostId}/config - Agent fetches its server-side config
-// PATCH /api/agents/agent/{hostId}/config - UI updates host config (e.g., commandsEnabled)
+// HandleConfig handles GET (fetch config) and PATCH (update config) for agents.
+// GET /api/agents/agent/{agentId}/config - Agent fetches its server-side config.
+// PATCH /api/agents/agent/{agentId}/config - UI updates agent config (e.g., commandsEnabled).
 func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
-	// Extract host ID from URL path
-	// Expected format: /api/agents/agent/{hostId}/config
+	// Extract agent ID from URL path.
+	// Expected format: /api/agents/agent/{agentId}/config
 	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/config")
-	hostID := strings.TrimSpace(trimmedPath)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+	agentID := strings.TrimSpace(trimmedPath)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", nil)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		h.handleGetConfig(w, r, hostID)
+		h.handleGetConfig(w, r, agentID)
 	case http.MethodPatch:
-		h.handlePatchConfig(w, r, hostID)
+		h.handlePatchConfig(w, r, agentID)
 	default:
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET and PATCH are allowed", nil)
 	}
@@ -284,14 +286,14 @@ func (h *HostAgentHandlers) canReadConfig(record *config.APITokenRecord) bool {
 		record.HasScope(config.ScopeSettingsWrite)
 }
 
-func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string, record *config.APITokenRecord) (models.Host, bool) {
-	// Use the live state snapshot so host agents can still fetch config while
+func (h *HostAgentHandlers) resolveConfigAgent(ctx context.Context, agentID string, record *config.APITokenRecord) (models.Host, bool) {
+	// Use the live state snapshot so agents can still fetch config while
 	// Pulse is running in mock/demo mode.
 	snap := h.getMonitor(ctx).GetLiveStateSnapshot()
 
 	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeAgentManage) {
 		for _, candidate := range snap.Hosts {
-			if candidate.ID == hostID {
+			if candidate.ID == agentID {
 				return candidate, true
 			}
 		}
@@ -307,7 +309,7 @@ func (h *HostAgentHandlers) resolveConfigHost(ctx context.Context, hostID string
 	return models.Host{}, false
 }
 
-func (h *HostAgentHandlers) signHostConfig(hostID string, cfg monitoring.HostAgentConfig) (monitoring.HostAgentConfig, error) {
+func (h *HostAgentHandlers) signAgentConfig(agentID string, cfg monitoring.HostAgentConfig) (monitoring.HostAgentConfig, error) {
 	signatureRequired := isConfigSignatureRequired()
 	key, err := getConfigSigningKey()
 	if err != nil {
@@ -328,7 +330,7 @@ func (h *HostAgentHandlers) signHostConfig(hostID string, cfg monitoring.HostAge
 	expiresAt := issuedAt.Add(configSignatureTTL)
 
 	payload := remoteconfig.SignedConfigPayload{
-		HostID:          hostID,
+		AgentID:         agentID,
 		IssuedAt:        issuedAt,
 		ExpiresAt:       expiresAt,
 		CommandsEnabled: cfg.CommandsEnabled,
@@ -338,9 +340,9 @@ func (h *HostAgentHandlers) signHostConfig(hostID string, cfg monitoring.HostAge
 	signature, err := remoteconfig.SignConfigPayload(payload, key)
 	if err != nil {
 		if signatureRequired {
-			return cfg, fmt.Errorf("failed to sign host config payload: %w", err)
+			return cfg, fmt.Errorf("failed to sign agent config payload: %w", err)
 		}
-		log.Warn().Err(err).Msg("Failed to sign host config payload")
+		log.Warn().Err(err).Msg("Failed to sign agent config payload")
 		return cfg, nil
 	}
 
@@ -372,50 +374,50 @@ func isConfigSignatureRequired() bool {
 }
 
 // handleGetConfig returns the server-side config for an agent to apply.
-func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Request, hostID string) {
+func (h *HostAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Request, agentID string) {
 	record := getAPITokenRecordFromRequest(r)
 	if !h.canReadConfig(record) {
 		respondMissingScope(w, config.ScopeAgentConfigRead)
 		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
-			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+			fmt.Sprintf("agent_id=%s token_id=%s", agentID, tokenID(record)))
 		return
 	}
 
-	host, ok := h.resolveConfigHost(r.Context(), hostID, record)
+	host, ok := h.resolveConfigAgent(r.Context(), agentID, record)
 	if !ok {
-		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
+		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Agent has not registered with Pulse yet", nil)
 		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
-			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+			fmt.Sprintf("agent_id=%s token_id=%s", agentID, tokenID(record)))
 		return
 	}
 
-	hostID = host.ID
+	agentID = host.ID
 
-	config := h.getMonitor(r.Context()).GetHostAgentConfig(hostID)
-	signedConfig, err := h.signHostConfig(hostID, config)
+	config := h.getMonitor(r.Context()).GetHostAgentConfig(agentID)
+	signedConfig, err := h.signAgentConfig(agentID, config)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to sign host config payload")
-		writeErrorResponse(w, http.StatusInternalServerError, "config_signing_failed", "Failed to sign host config", nil)
+		log.Error().Err(err).Msg("Failed to sign agent config payload")
+		writeErrorResponse(w, http.StatusInternalServerError, "config_signing_failed", "Failed to sign agent config", nil)
 		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
-			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+			fmt.Sprintf("agent_id=%s token_id=%s", agentID, tokenID(record)))
 		return
 	}
 
 	resp := map[string]any{
 		"success": true,
-		"hostId":  hostID,
+		"agentId": agentID,
 		"config":  signedConfig,
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host config response")
+		log.Error().Err(err).Msg("Failed to serialize agent config response")
 		LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false,
-			fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+			fmt.Sprintf("agent_id=%s token_id=%s", agentID, tokenID(record)))
 		return
 	}
 
 	LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true,
-		fmt.Sprintf("host_id=%s token_id=%s", hostID, tokenID(record)))
+		fmt.Sprintf("agent_id=%s token_id=%s", agentID, tokenID(record)))
 }
 
 func tokenID(record *config.APITokenRecord) string {
@@ -425,7 +427,7 @@ func tokenID(record *config.APITokenRecord) string {
 	return record.ID
 }
 
-func (h *HostAgentHandlers) ensureHostTokenMatch(w http.ResponseWriter, r *http.Request, hostID string) bool {
+func (h *HostAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http.Request, agentID string) bool {
 	record := getAPITokenRecordFromRequest(r)
 	if record == nil {
 		return true
@@ -438,23 +440,23 @@ func (h *HostAgentHandlers) ensureHostTokenMatch(w http.ResponseWriter, r *http.
 	// Use the live state snapshot so mock/demo mode doesn't block agent auth checks.
 	snap := h.getMonitor(r.Context()).GetLiveStateSnapshot()
 	for _, host := range snap.Hosts {
-		if host.ID != hostID {
+		if host.ID != agentID {
 			continue
 		}
 		if host.TokenID == record.ID {
 			return true
 		}
-		writeErrorResponse(w, http.StatusForbidden, "host_lookup_forbidden", "Host does not belong to this API token", nil)
+		writeErrorResponse(w, http.StatusForbidden, "agent_lookup_forbidden", "Agent does not belong to this API token", nil)
 		return false
 	}
 
-	writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Host has not registered with Pulse yet", nil)
+	writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Agent has not registered with Pulse yet", nil)
 	return false
 }
 
-// handlePatchConfig updates the server-side config for a host agent.
-func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Request, hostID string) {
-	if !h.ensureHostTokenMatch(w, r, hostID) {
+// handlePatchConfig updates the server-side config for an agent.
+func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Request, agentID string) {
+	if !h.ensureAgentTokenMatch(w, r, agentID) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
@@ -468,7 +470,7 @@ func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).UpdateHostAgentConfig(hostID, req.CommandsEnabled); err != nil {
+	if err := h.getMonitor(r.Context()).UpdateHostAgentConfig(agentID, req.CommandsEnabled); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", err.Error(), nil)
 		return
 	}
@@ -476,25 +478,25 @@ func (h *HostAgentHandlers) handlePatchConfig(w http.ResponseWriter, r *http.Req
 	h.broadcastState(r.Context())
 
 	log.Info().
-		Str("hostId", hostID).
+		Str("agentId", agentID).
 		Interface("commandsEnabled", req.CommandsEnabled).
-		Msg("Host agent config updated")
+		Msg("Agent config updated")
 
 	resp := map[string]any{
 		"success": true,
-		"hostId":  hostID,
+		"agentId": agentID,
 		"config": map[string]any{
 			"commandsEnabled": req.CommandsEnabled,
 		},
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host config update response")
+		log.Error().Err(err).Msg("Failed to serialize agent config update response")
 	}
 }
 
 // HandleUninstall allows an agent to unregister itself during uninstallation.
-// Requires ScopeAgentReport and a valid hostId in the request body.
+// Requires ScopeAgentReport and a valid agentId in the request body.
 func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -505,45 +507,45 @@ func (h *HostAgentHandlers) HandleUninstall(w http.ResponseWriter, r *http.Reque
 	defer r.Body.Close()
 
 	var req struct {
-		HostID string `json:"hostId"`
+		AgentID string `json:"agentId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
 		return
 	}
 
-	hostID := strings.TrimSpace(req.HostID)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+	agentID := strings.TrimSpace(req.AgentID)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", nil)
 		return
 	}
 
-	log.Info().Str("hostId", hostID).Msg("Received unregistration request from agent uninstaller")
+	log.Info().Str("agentId", agentID).Msg("Received unregistration request from agent uninstaller")
 
-	// Ensure the token can manage this specific host
-	if !h.ensureHostTokenMatch(w, r, hostID) {
+	// Ensure the token can manage this specific agent.
+	if !h.ensureAgentTokenMatch(w, r, agentID) {
 		return
 	}
 
-	// Remove the host from state
-	_, err := h.getMonitor(r.Context()).RemoveHostAgent(hostID)
+	// Remove the agent from state.
+	_, err := h.getMonitor(r.Context()).RemoveHostAgent(agentID)
 	if err != nil {
-		// If host not found, we still return success because the goal is reached
-		log.Warn().Err(err).Str("hostId", hostID).Msg("Host not found during unregistration request")
+		// If the agent is not found, we still return success because the goal is reached.
+		log.Warn().Err(err).Str("agentId", agentID).Msg("Agent not found during unregistration request")
 	}
 
 	h.broadcastState(r.Context())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  hostID,
-		"message": "Host unregistered successfully",
+		"agentId": agentID,
+		"message": "Agent unregistered successfully",
 	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host unregistration response")
+		log.Error().Err(err).Msg("Failed to serialize agent unregistration response")
 	}
 }
 
-// HandleLink manually links a host agent to a specific PVE node.
+// HandleLink manually links an agent to a specific PVE node.
 // This is used when auto-linking can't disambiguate (e.g., multiple nodes with hostname "pve").
 func (h *HostAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -555,17 +557,17 @@ func (h *HostAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	var req struct {
-		HostID string `json:"hostId"`
-		NodeID string `json:"nodeId"`
+		AgentID string `json:"agentId"`
+		NodeID  string `json:"nodeId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
 		return
 	}
 
-	hostID := strings.TrimSpace(req.HostID)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+	agentID := strings.TrimSpace(req.AgentID)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", nil)
 		return
 	}
 
@@ -575,7 +577,7 @@ func (h *HostAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).LinkHostAgent(hostID, nodeID); err != nil {
+	if err := h.getMonitor(r.Context()).LinkHostAgent(agentID, nodeID); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "link_failed", err.Error(), nil)
 		return
 	}
@@ -584,15 +586,15 @@ func (h *HostAgentHandlers) HandleLink(w http.ResponseWriter, r *http.Request) {
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  hostID,
+		"agentId": agentID,
 		"nodeId":  nodeID,
-		"message": "Host agent linked to PVE node",
+		"message": "Agent linked to PVE node",
 	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host link response")
+		log.Error().Err(err).Msg("Failed to serialize agent link response")
 	}
 }
 
-// HandleUnlink removes the link between a host agent and its PVE node.
+// HandleUnlink removes the link between an agent and its PVE node.
 // The agent continues to report but appears in the Managed Agents table.
 func (h *HostAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -604,20 +606,20 @@ func (h *HostAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request)
 	defer r.Body.Close()
 
 	var req struct {
-		HostID string `json:"hostId"`
+		AgentID string `json:"agentId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
 		return
 	}
 
-	hostID := strings.TrimSpace(req.HostID)
-	if hostID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+	agentID := strings.TrimSpace(req.AgentID)
+	if agentID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "agentId is required", nil)
 		return
 	}
 
-	if err := h.getMonitor(r.Context()).UnlinkHostAgent(hostID); err != nil {
+	if err := h.getMonitor(r.Context()).UnlinkHostAgent(agentID); err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "unlink_failed", err.Error(), nil)
 		return
 	}
@@ -626,9 +628,9 @@ func (h *HostAgentHandlers) HandleUnlink(w http.ResponseWriter, r *http.Request)
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"hostId":  hostID,
-		"message": "Host agent unlinked from PVE node",
+		"agentId": agentID,
+		"message": "Agent unlinked from PVE node",
 	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize host unlink response")
+		log.Error().Err(err).Msg("Failed to serialize agent unlink response")
 	}
 }

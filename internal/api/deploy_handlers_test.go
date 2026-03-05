@@ -543,9 +543,6 @@ func TestHandleEnroll_Success(t *testing.T) {
 	if resp["runtimeTokenId"] == nil || resp["runtimeTokenId"] == "" {
 		t.Fatal("expected runtimeTokenId in response")
 	}
-	if resp["hostId"] != "agent-pve-node2" {
-		t.Fatalf("expected hostId=agent-pve-node2, got %v", resp["hostId"])
-	}
 	if resp["agentId"] != "agent-pve-node2" {
 		t.Fatalf("expected agentId=agent-pve-node2, got %v", resp["agentId"])
 	}

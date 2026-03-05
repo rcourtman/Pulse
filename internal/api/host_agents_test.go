@@ -87,13 +87,13 @@ func TestHandleLookupByIDSuccess(t *testing.T) {
 
 	var resp struct {
 		Success bool `json:"success"`
-		Host    struct {
+		Agent   struct {
 			ID        string    `json:"id"`
 			Hostname  string    `json:"hostname"`
 			Status    string    `json:"status"`
 			Connected bool      `json:"connected"`
 			LastSeen  time.Time `json:"lastSeen"`
-		} `json:"host"`
+		} `json:"agent"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
@@ -102,14 +102,14 @@ func TestHandleLookupByIDSuccess(t *testing.T) {
 	if !resp.Success {
 		t.Fatalf("expected success=true")
 	}
-	if resp.Host.ID != hostID {
-		t.Fatalf("unexpected host id %q", resp.Host.ID)
+	if resp.Agent.ID != hostID {
+		t.Fatalf("unexpected agent id %q", resp.Agent.ID)
 	}
-	if !resp.Host.Connected {
+	if !resp.Agent.Connected {
 		t.Fatalf("expected connected host")
 	}
-	if !resp.Host.LastSeen.Equal(lastSeen) {
-		t.Fatalf("expected lastSeen %v, got %v", lastSeen, resp.Host.LastSeen)
+	if !resp.Agent.LastSeen.Equal(lastSeen) {
+		t.Fatalf("expected lastSeen %v, got %v", lastSeen, resp.Agent.LastSeen)
 	}
 }
 
@@ -294,9 +294,9 @@ func TestHandleLookupByHostname(t *testing.T) {
 
 			var resp struct {
 				Success bool `json:"success"`
-				Host    struct {
+				Agent   struct {
 					ID string `json:"id"`
-				} `json:"host"`
+				} `json:"agent"`
 			}
 			if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 				t.Fatalf("failed to decode response: %v", err)
@@ -305,8 +305,8 @@ func TestHandleLookupByHostname(t *testing.T) {
 			if !resp.Success {
 				t.Fatalf("expected success=true")
 			}
-			if resp.Host.ID != tc.expectedHostID {
-				t.Fatalf("expected host id %q, got %q", tc.expectedHostID, resp.Host.ID)
+			if resp.Agent.ID != tc.expectedHostID {
+				t.Fatalf("expected agent id %q, got %q", tc.expectedHostID, resp.Agent.ID)
 			}
 		})
 	}
@@ -358,13 +358,13 @@ func TestHandleConfigUsesTokenBinding(t *testing.T) {
 	}
 
 	var resp struct {
-		HostID string `json:"hostId"`
+		AgentID string `json:"agentId"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.HostID != "host-1" {
-		t.Fatalf("expected host id %q, got %q", "host-1", resp.HostID)
+	if resp.AgentID != "host-1" {
+		t.Fatalf("expected agent id %q, got %q", "host-1", resp.AgentID)
 	}
 }
 

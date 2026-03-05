@@ -186,5 +186,5 @@ func TestDiscoveryHandlersHandleGetInfoRejectsLegacyHostType(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	assert.Equal(t, `resource type "host" is no longer supported; use "agent"`, body["message"])
+	assert.Equal(t, `unsupported resource type "host"`, body["message"])
 }

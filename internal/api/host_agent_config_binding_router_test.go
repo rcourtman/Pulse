@@ -36,13 +36,13 @@ func TestHostAgentConfigUsesTokenBindingInRouter(t *testing.T) {
 		}
 
 		var resp struct {
-			HostID string `json:"hostId"`
+			AgentID string `json:"agentId"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 			t.Fatalf("decode response on %s: %v", path, err)
 		}
-		if resp.HostID != "host-1" {
-			t.Fatalf("expected host id %q on %s, got %q", "host-1", path, resp.HostID)
+		if resp.AgentID != "host-1" {
+			t.Fatalf("expected agent id %q on %s, got %q", "host-1", path, resp.AgentID)
 		}
 	}
 }

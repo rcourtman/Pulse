@@ -934,7 +934,6 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 	canonicalAgentID := fmt.Sprintf("agent-%s", req.Hostname)
 	resp := map[string]any{
 		"agentId":        canonicalAgentID,
-		"hostId":         canonicalAgentID, // Deprecated alias for older agents.
 		"runtimeToken":   runtimeRaw,
 		"runtimeTokenId": runtimeRecord.ID,
 		"reportInterval": "30s",

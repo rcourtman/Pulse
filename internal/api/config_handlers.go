@@ -627,39 +627,85 @@ type NodeConfigRequest struct {
 
 // NodeResponse represents a node in API responses
 type NodeResponse struct {
-	ID                           string                   `json:"id"`
-	Type                         string                   `json:"type"`
-	Name                         string                   `json:"name"`
-	Host                         string                   `json:"host"`
-	GuestURL                     string                   `json:"guestURL,omitempty"`
-	User                         string                   `json:"user,omitempty"`
-	HasPassword                  bool                     `json:"hasPassword"`
-	TokenName                    string                   `json:"tokenName,omitempty"`
-	HasToken                     bool                     `json:"hasToken"`
-	Fingerprint                  string                   `json:"fingerprint,omitempty"`
-	VerifySSL                    bool                     `json:"verifySSL"`
-	MonitorVMs                   bool                     `json:"monitorVMs,omitempty"`
-	MonitorContainers            bool                     `json:"monitorContainers,omitempty"`
-	MonitorStorage               bool                     `json:"monitorStorage,omitempty"`
-	MonitorBackups               bool                     `json:"monitorBackups,omitempty"`
-	MonitorPhysicalDisks         *bool                    `json:"monitorPhysicalDisks,omitempty"`
-	PhysicalDiskPollingMinutes   int                      `json:"physicalDiskPollingMinutes,omitempty"`
-	TemperatureMonitoringEnabled *bool                    `json:"temperatureMonitoringEnabled,omitempty"`
-	MonitorDatastores            bool                     `json:"monitorDatastores,omitempty"`
-	MonitorSyncJobs              bool                     `json:"monitorSyncJobs,omitempty"`
-	MonitorVerifyJobs            bool                     `json:"monitorVerifyJobs,omitempty"`
-	MonitorPruneJobs             bool                     `json:"monitorPruneJobs,omitempty"`
-	MonitorGarbageJobs           bool                     `json:"monitorGarbageJobs,omitempty"`
-	ExcludeDatastores            []string                 `json:"excludeDatastores,omitempty"` // PBS only
-	MonitorMailStats             bool                     `json:"monitorMailStats,omitempty"`
-	MonitorQueues                bool                     `json:"monitorQueues,omitempty"`
-	MonitorQuarantine            bool                     `json:"monitorQuarantine,omitempty"`
-	MonitorDomainStats           bool                     `json:"monitorDomainStats,omitempty"`
-	Status                       string                   `json:"status"` // "connected", "disconnected", "error"
-	IsCluster                    bool                     `json:"isCluster,omitempty"`
-	ClusterName                  string                   `json:"clusterName,omitempty"`
-	ClusterEndpoints             []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
-	Source                       string                   `json:"source,omitempty"` // "agent" or "script" - how this node was registered
+	ID                           string                    `json:"id"`
+	Type                         string                    `json:"type"`
+	Name                         string                    `json:"name"`
+	Host                         string                    `json:"host"`
+	GuestURL                     string                    `json:"guestURL,omitempty"`
+	User                         string                    `json:"user,omitempty"`
+	HasPassword                  bool                      `json:"hasPassword"`
+	TokenName                    string                    `json:"tokenName,omitempty"`
+	HasToken                     bool                      `json:"hasToken"`
+	Fingerprint                  string                    `json:"fingerprint,omitempty"`
+	VerifySSL                    bool                      `json:"verifySSL"`
+	MonitorVMs                   bool                      `json:"monitorVMs,omitempty"`
+	MonitorContainers            bool                      `json:"monitorContainers,omitempty"`
+	MonitorStorage               bool                      `json:"monitorStorage,omitempty"`
+	MonitorBackups               bool                      `json:"monitorBackups,omitempty"`
+	MonitorPhysicalDisks         *bool                     `json:"monitorPhysicalDisks,omitempty"`
+	PhysicalDiskPollingMinutes   int                       `json:"physicalDiskPollingMinutes,omitempty"`
+	TemperatureMonitoringEnabled *bool                     `json:"temperatureMonitoringEnabled,omitempty"`
+	MonitorDatastores            bool                      `json:"monitorDatastores,omitempty"`
+	MonitorSyncJobs              bool                      `json:"monitorSyncJobs,omitempty"`
+	MonitorVerifyJobs            bool                      `json:"monitorVerifyJobs,omitempty"`
+	MonitorPruneJobs             bool                      `json:"monitorPruneJobs,omitempty"`
+	MonitorGarbageJobs           bool                      `json:"monitorGarbageJobs,omitempty"`
+	ExcludeDatastores            []string                  `json:"excludeDatastores,omitempty"` // PBS only
+	MonitorMailStats             bool                      `json:"monitorMailStats,omitempty"`
+	MonitorQueues                bool                      `json:"monitorQueues,omitempty"`
+	MonitorQuarantine            bool                      `json:"monitorQuarantine,omitempty"`
+	MonitorDomainStats           bool                      `json:"monitorDomainStats,omitempty"`
+	Status                       string                    `json:"status"` // "connected", "disconnected", "error"
+	IsCluster                    bool                      `json:"isCluster,omitempty"`
+	ClusterName                  string                    `json:"clusterName,omitempty"`
+	ClusterEndpoints             []ClusterEndpointResponse `json:"clusterEndpoints,omitempty"`
+	Source                       string                    `json:"source,omitempty"` // "agent" or "script" - how this node was registered
+}
+
+// ClusterEndpointResponse is the v6 API shape for cluster endpoint payloads.
+// It keeps config storage structs internal while returning canonical JSON keys.
+type ClusterEndpointResponse struct {
+	NodeID         string     `json:"nodeId,omitempty"`
+	NodeName       string     `json:"nodeName,omitempty"`
+	Host           string     `json:"host,omitempty"`
+	GuestURL       string     `json:"guestURL,omitempty"`
+	IP             string     `json:"ip,omitempty"`
+	IPOverride     string     `json:"ipOverride,omitempty"`
+	Fingerprint    string     `json:"fingerprint,omitempty"`
+	Online         bool       `json:"online"`
+	LastSeen       time.Time  `json:"lastSeen,omitempty"`
+	PulseReachable *bool      `json:"pulseReachable,omitempty"`
+	LastPulseCheck *time.Time `json:"lastPulseCheck,omitempty"`
+	PulseError     string     `json:"pulseError,omitempty"`
+}
+
+func toClusterEndpointResponse(endpoint config.ClusterEndpoint) ClusterEndpointResponse {
+	return ClusterEndpointResponse{
+		NodeID:         endpoint.NodeID,
+		NodeName:       endpoint.NodeName,
+		Host:           endpoint.Host,
+		GuestURL:       endpoint.GuestURL,
+		IP:             endpoint.IP,
+		IPOverride:     endpoint.IPOverride,
+		Fingerprint:    endpoint.Fingerprint,
+		Online:         endpoint.Online,
+		LastSeen:       endpoint.LastSeen,
+		PulseReachable: endpoint.PulseReachable,
+		LastPulseCheck: endpoint.LastPulseCheck,
+		PulseError:     endpoint.PulseError,
+	}
+}
+
+func toClusterEndpointResponses(endpoints []config.ClusterEndpoint) []ClusterEndpointResponse {
+	if len(endpoints) == 0 {
+		return nil
+	}
+
+	out := make([]ClusterEndpointResponse, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		out = append(out, toClusterEndpointResponse(endpoint))
+	}
+	return out
 }
 
 func isContainerSSHRestricted() bool {
@@ -1217,7 +1263,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
-			ClusterEndpoints:             pve.ClusterEndpoints,
+			ClusterEndpoints:             toClusterEndpointResponses(pve.ClusterEndpoints),
 			Source:                       pve.Source,
 		}
 		nodes = append(nodes, node)

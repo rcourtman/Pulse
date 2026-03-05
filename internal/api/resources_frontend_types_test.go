@@ -166,7 +166,7 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		{name: "docker-host", input: "docker-host", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
 		{name: "agent", input: "agent", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
 		{name: "agents", input: "agents", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
-		{name: "legacy host ignored by parser", input: "host", want: map[unified.ResourceType]struct{}{}},
+		{name: "unsupported host ignored by parser", input: "host", want: map[unified.ResourceType]struct{}{}},
 		{name: "container", input: "container", want: map[unified.ResourceType]struct{}{unified.ResourceTypeSystemContainer: {}}},
 		{name: "pool", input: "pool", want: map[unified.ResourceType]struct{}{unified.ResourceTypeCeph: {}}},
 		{name: "vm", input: "vm", want: map[unified.ResourceType]struct{}{unified.ResourceTypeVM: {}}},

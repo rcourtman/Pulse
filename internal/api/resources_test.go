@@ -51,7 +51,7 @@ func TestResourceListRejectsLegacyHostTypeFilter(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, `type "host" is no longer supported; use "agent"`) {
+	if body := rec.Body.String(); !strings.Contains(body, `unsupported type filter token(s): host`) {
 		t.Fatalf("unexpected response body: %s", body)
 	}
 }

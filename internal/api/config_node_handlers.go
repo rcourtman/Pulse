@@ -101,7 +101,7 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 				Status:               "connected",
 				IsCluster:            true,
 				ClusterName:          "mock-cluster",
-				ClusterEndpoints:     clusterEndpoints, // All cluster nodes
+				ClusterEndpoints:     toClusterEndpointResponses(clusterEndpoints), // All cluster nodes
 			}
 			mockNodes = append(mockNodes, clusterNode)
 		}
@@ -127,7 +127,7 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 				Status:               "connected",
 				IsCluster:            false, // Not part of a cluster
 				ClusterName:          "",
-				ClusterEndpoints:     []config.ClusterEndpoint{},
+				ClusterEndpoints:     nil,
 			}
 			mockNodes = append(mockNodes, standaloneNode)
 		}
@@ -1612,7 +1612,7 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		"oldNodeCount": oldEndpointCount,
 		"newNodeCount": newEndpointCount,
 		"nodesAdded":   newEndpointCount - oldEndpointCount,
-		"clusterNodes": clusterEndpoints,
+		"clusterNodes": toClusterEndpointResponses(clusterEndpoints),
 	})
 }
 

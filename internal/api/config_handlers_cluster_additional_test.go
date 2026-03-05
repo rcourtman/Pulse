@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -229,6 +230,52 @@ func TestGetAllNodesForAPI(t *testing.T) {
 	}
 }
 
+func TestHandleGetNodes_ClusterEndpointJSONUsesCanonicalKeys(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "pve-1",
+				Host:        "https://pve-1.local:8006",
+				TokenValue:  "token",
+				IsCluster:   true,
+				ClusterName: "cluster-1",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{
+						NodeID:     "node-1",
+						NodeName:   "pve-1",
+						Host:       "https://pve-1.local:8006",
+						GuestURL:   "https://guest.local",
+						IP:         "10.0.0.1",
+						IPOverride: "10.0.0.10",
+						Online:     true,
+					},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetNodes(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"nodeId\":\"node-1\"") {
+		t.Fatalf("expected canonical nodeId key in response body: %s", body)
+	}
+	if !strings.Contains(body, "\"guestURL\":\"https://guest.local\"") {
+		t.Fatalf("expected canonical guestURL key in response body: %s", body)
+	}
+	if strings.Contains(body, "\"NodeID\"") || strings.Contains(body, "\"GuestURL\"") {
+		t.Fatalf("unexpected legacy endpoint key casing in response body: %s", body)
+	}
+}
+
 func TestHandleRefreshClusterNodes_Success(t *testing.T) {
 	cfg := &config.Config{
 		DataPath: t.TempDir(),
@@ -265,6 +312,20 @@ func TestHandleRefreshClusterNodes_Success(t *testing.T) {
 	}
 	if resp["clusterName"] != "cluster-1" {
 		t.Fatalf("expected clusterName to be cluster-1, got %v", resp["clusterName"])
+	}
+	clusterNodes, ok := resp["clusterNodes"].([]interface{})
+	if !ok || len(clusterNodes) == 0 {
+		t.Fatalf("expected non-empty clusterNodes in response")
+	}
+	firstNode, ok := clusterNodes[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected first cluster node to be an object")
+	}
+	if _, exists := firstNode["nodeName"]; !exists {
+		t.Fatalf("expected nodeName key in clusterNodes response, got %v", firstNode)
+	}
+	if _, exists := firstNode["NodeName"]; exists {
+		t.Fatalf("unexpected legacy NodeName key in clusterNodes response, got %v", firstNode)
 	}
 	if cfg.PVEInstances[0].ClusterName != "cluster-1" || !cfg.PVEInstances[0].IsCluster {
 		t.Fatalf("expected instance to be updated as cluster")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,6 +26,35 @@ const (
 )
 
 var organizationIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+var supportedOrganizationShareResourceTypes = map[string]struct{}{
+	"agent":            {},
+	"node":             {},
+	"docker-host":      {},
+	"k8s-cluster":      {},
+	"k8s-node":         {},
+	"truenas":          {},
+	"vm":               {},
+	"system-container": {},
+	"app-container":    {},
+	"container":        {},
+	"oci-container":    {},
+	"docker-container": {},
+	"pod":              {},
+	"jail":             {},
+	"docker-service":   {},
+	"k8s-deployment":   {},
+	"k8s-service":      {},
+	"storage":          {},
+	"datastore":        {},
+	"pool":             {},
+	"dataset":          {},
+	"pbs":              {},
+	"pmg":              {},
+	"physical_disk":    {},
+	"ceph":             {},
+	"view":             {},
+}
 
 type OrgHandlers struct {
 	persistence  *config.MultiTenantPersistence
@@ -679,8 +709,8 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource", "Resource type and resource ID are required", nil)
 		return
 	}
-	if req.ResourceType == "host" {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource", `Resource type "host" is no longer supported; use "agent"`, nil)
+	if isUnsupportedOrganizationShareResourceType(req.ResourceType) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_resource", fmt.Sprintf("unsupported resource type %q", req.ResourceType), nil)
 		return
 	}
 	if !models.IsValidOrganizationRole(req.AccessRole) || req.AccessRole == models.OrgRoleOwner {
@@ -914,8 +944,8 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 		if share.TargetOrgID == "" || share.ResourceType == "" || share.ResourceID == "" {
 			continue
 		}
-		// Legacy v5 share entries are invalid in v6 and should not be retained.
-		if share.ResourceType == "host" {
+		// Unsupported resource-type entries are invalid in v6 and should not be retained.
+		if isUnsupportedOrganizationShareResourceType(share.ResourceType) {
 			continue
 		}
 		normalized = append(normalized, share)
@@ -929,6 +959,11 @@ func generateOrganizationShareID() string {
 
 func normalizeOrganizationShareResourceType(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+func isUnsupportedOrganizationShareResourceType(resourceType string) bool {
+	_, ok := supportedOrganizationShareResourceTypes[strings.ToLower(strings.TrimSpace(resourceType))]
+	return !ok
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
