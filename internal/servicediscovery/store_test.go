@@ -185,7 +185,7 @@ func TestStore_SaveCanonicalizesAgentAndTargetIDs(t *testing.T) {
 	}
 }
 
-func TestStore_GetLegacyHostIDOnlyPayloadBackfillsCanonicalTarget(t *testing.T) {
+func TestStore_MigrateLegacyHostIDPayloads_BackfillsCanonicalTarget(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStore error: %v", err)
@@ -207,6 +207,7 @@ func TestStore_GetLegacyHostIDOnlyPayloadBackfillsCanonicalTarget(t *testing.T) 
 	if err := os.WriteFile(store.getFilePath(id), data, 0600); err != nil {
 		t.Fatalf("WriteFile error: %v", err)
 	}
+	store.migrateLegacyHostIDPayloads()
 
 	got, err := store.Get(id)
 	if err != nil {
@@ -217,6 +218,14 @@ func TestStore_GetLegacyHostIDOnlyPayloadBackfillsCanonicalTarget(t *testing.T) 
 	}
 	if got.TargetID != "legacy-host" {
 		t.Fatalf("expected TargetID legacy-host, got %q", got.TargetID)
+	}
+
+	persisted, err := os.ReadFile(store.getFilePath(id))
+	if err != nil {
+		t.Fatalf("ReadFile error: %v", err)
+	}
+	if strings.Contains(string(persisted), "host_id") {
+		t.Fatalf("expected migrated payload to remove host_id field, got %s", string(persisted))
 	}
 }
 
@@ -1022,6 +1031,14 @@ func TestStore_LoadFingerprints_BackfillsLegacyHostID(t *testing.T) {
 	}
 	if fp.TargetID != "legacy-host" {
 		t.Fatalf("expected TargetID legacy-host, got %q", fp.TargetID)
+	}
+
+	migratedData, err := os.ReadFile(filepath.Join(fingerprintDir, "legacy.json"))
+	if err != nil {
+		t.Fatalf("ReadFile migrated fingerprint error: %v", err)
+	}
+	if strings.Contains(string(migratedData), "host_id") {
+		t.Fatalf("expected migrated fingerprint to remove host_id field, got %s", string(migratedData))
 	}
 }
 
