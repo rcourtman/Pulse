@@ -225,7 +225,7 @@ func TestHandlePatrolReportFinding_InvalidCategory(t *testing.T) {
 }
 
 func TestHandlePatrolReportFinding_RejectsLegacyResourceTypeAliases(t *testing.T) {
-	for _, resourceType := range []string{"container", "docker", "docker-container", "docker_container", "app_container", "k8s_cluster", "kubernetes_cluster"} {
+	for _, resourceType := range []string{"host", "container", "docker", "docker-container", "docker_container", "app_container", "k8s_cluster", "kubernetes_cluster"} {
 		t.Run(resourceType, func(t *testing.T) {
 			creator := &mockPatrolFindingCreator{checked: true}
 			exec := newPatrolTestExecutor(creator)
