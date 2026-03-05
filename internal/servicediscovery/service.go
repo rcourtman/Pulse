@@ -2550,7 +2550,7 @@ func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceD
 
 // ListDiscoveriesByTarget returns discoveries for a specific target ID.
 func (s *Service) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscovery, error) {
-	discoveries, err := s.store.ListByHost(targetID)
+	discoveries, err := s.store.ListByTarget(targetID)
 	if err != nil {
 		return nil, fmt.Errorf("list discoveries by target %q: %w", targetID, err)
 	}

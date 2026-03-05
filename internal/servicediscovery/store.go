@@ -389,8 +389,8 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 }
 
 // GetByResource retrieves a discovery by resource type and ID.
-func (s *Store) GetByResource(resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
-	id := MakeResourceID(resourceType, hostID, resourceID)
+func (s *Store) GetByResource(resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
+	id := MakeResourceID(resourceType, targetID, resourceID)
 	return s.Get(id)
 }
 
@@ -501,16 +501,16 @@ func (s *Store) ListByType(resourceType ResourceType) ([]*ResourceDiscovery, err
 	return filtered, nil
 }
 
-// ListByHost returns discoveries for a specific host.
-func (s *Store) ListByHost(hostID string) ([]*ResourceDiscovery, error) {
+// ListByTarget returns discoveries for a specific target ID.
+func (s *Store) ListByTarget(targetID string) ([]*ResourceDiscovery, error) {
 	all, err := s.List()
 	if err != nil {
-		return nil, fmt.Errorf("list discoveries for host %s: %w", hostID, err)
+		return nil, fmt.Errorf("list discoveries for target %s: %w", targetID, err)
 	}
 
 	var filtered []*ResourceDiscovery
 	for _, d := range all {
-		if d.HostID == hostID {
+		if d.HostID == targetID {
 			filtered = append(filtered, d)
 		}
 	}

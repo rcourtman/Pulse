@@ -60,7 +60,7 @@ type ResourceDiscovery struct {
 	ResourceID   string       `json:"resource_id"`   // 101, container-name, etc.
 	TargetID     string       `json:"target_id,omitempty"`
 	AgentID      string       `json:"agent_id,omitempty"`
-	HostID       string       `json:"host_id"`  // Proxmox node name or host agent ID
+	HostID       string       `json:"host_id"`  // Compatibility mirror of target_id
 	Hostname     string       `json:"hostname"` // Human-readable host name
 
 	// AI-discovered info
@@ -135,12 +135,12 @@ type DockerBindMount struct {
 }
 
 // MakeResourceID creates a standardized resource ID.
-func MakeResourceID(resourceType ResourceType, hostID, resourceID string) string {
-	return fmt.Sprintf("%s:%s:%s", resourceType, hostID, resourceID)
+func MakeResourceID(resourceType ResourceType, targetID, resourceID string) string {
+	return fmt.Sprintf("%s:%s:%s", resourceType, targetID, resourceID)
 }
 
 // ParseResourceID parses a resource ID into its components.
-func ParseResourceID(id string) (resourceType ResourceType, hostID, resourceID string, err error) {
+func ParseResourceID(id string) (resourceType ResourceType, targetID, resourceID string, err error) {
 	var parts [3]string
 	count := 0
 	start := 0

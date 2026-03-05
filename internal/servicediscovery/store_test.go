@@ -131,12 +131,12 @@ func TestStore_SaveGetListAndNotes(t *testing.T) {
 		t.Fatalf("unexpected ListByType: %#v", byType)
 	}
 
-	byHost, err := store.ListByHost("host1")
+	byTarget, err := store.ListByTarget("host1")
 	if err != nil {
-		t.Fatalf("ListByHost error: %v", err)
+		t.Fatalf("ListByTarget error: %v", err)
 	}
-	if len(byHost) != 1 || byHost[0].ID != d1.ID {
-		t.Fatalf("unexpected ListByHost: %#v", byHost)
+	if len(byTarget) != 1 || byTarget[0].ID != d1.ID {
+		t.Fatalf("unexpected ListByTarget: %#v", byTarget)
 	}
 
 	summary := updated.ToSummary()
@@ -656,8 +656,8 @@ func TestStore_ListErrors(t *testing.T) {
 	if _, err := store.ListByType(ResourceTypeDocker); err == nil {
 		t.Fatalf("expected list by type error")
 	}
-	if _, err := store.ListByHost("host1"); err == nil {
-		t.Fatalf("expected list by host error")
+	if _, err := store.ListByTarget("host1"); err == nil {
+		t.Fatalf("expected list by target error")
 	}
 }
 
