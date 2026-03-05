@@ -21,7 +21,10 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
-import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
+import {
+  getAgentDiscoveryResourceId,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
   API_SCOPE_LABELS,
@@ -115,7 +118,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     return (
       readPlatformString(readNestedPlatformField(platformData, 'hostSourceId')) ||
       resource.discoveryTarget?.agentId ||
-      (resource.discoveryTarget?.resourceType === 'docker'
+      (isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
         ? resource.discoveryTarget.resourceId
         : undefined) ||
       resource.id

@@ -10,7 +10,10 @@ import type {
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
-import { isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
+import {
+  canonicalDiscoveryResourceType,
+  isAgentDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 
 export type ProxmoxPlatformData = {
   nodeName?: string;
@@ -186,15 +189,16 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     explicitDiscoveryAgentId &&
     explicitDiscoveryTarget.resourceId
   ) {
+    const explicitResourceType = canonicalDiscoveryResourceType(explicitDiscoveryTarget.resourceType);
     const resourceType = (() => {
-      switch (explicitDiscoveryTarget.resourceType) {
+      switch (explicitResourceType) {
         case 'agent':
           return 'agent';
         case 'vm':
         case 'system-container':
-        case 'docker':
+        case 'app-container':
         case 'k8s':
-          return explicitDiscoveryTarget.resourceType;
+          return explicitResourceType;
         default:
           return null;
       }
@@ -210,7 +214,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       const isHostDiscovery = isAgentDiscoveryResourceType(resourceType);
       const targetLabel = isHostDiscovery
         ? 'agent'
-        : resourceType === 'docker'
+        : resourceType === 'app-container'
           ? 'container'
           : resourceType === 'k8s'
             ? 'workload'
@@ -325,7 +329,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       };
     case 'app-container':
       return {
-        resourceType: 'docker',
+        resourceType: 'app-container',
         agentId: workloadAgentId,
         resourceId: asString(dockerPlatformData?.containerId) || resource.id,
         hostname,

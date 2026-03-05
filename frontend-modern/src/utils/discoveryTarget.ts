@@ -10,9 +10,25 @@ const asTrimmedString = (value: unknown): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+const normalizeDiscoveryResourceType = (resourceType: unknown): string | undefined => {
+  return asTrimmedString(resourceType)?.toLowerCase();
+};
+
+export const canonicalDiscoveryResourceType = (resourceType: unknown): string | undefined => {
+  const normalized = normalizeDiscoveryResourceType(resourceType);
+  if (!normalized) return undefined;
+  if (normalized === 'docker') return 'app-container';
+  return normalized;
+};
+
 export const isAgentDiscoveryResourceType = (resourceType: unknown): boolean => {
-  const normalized = asTrimmedString(resourceType)?.toLowerCase();
+  const normalized = normalizeDiscoveryResourceType(resourceType);
   return normalized === 'agent';
+};
+
+export const isAppContainerDiscoveryResourceType = (resourceType: unknown): boolean => {
+  const normalized = normalizeDiscoveryResourceType(resourceType);
+  return normalized === 'app-container' || normalized === 'docker';
 };
 
 export const getAgentDiscoveryResourceId = (

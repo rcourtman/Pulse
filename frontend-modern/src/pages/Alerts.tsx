@@ -58,7 +58,11 @@ import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import type { Incident, PBSInstance, PMGInstance } from '@/types/api';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
-import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
+import {
+  getAgentDiscoveryResourceId,
+  isAgentDiscoveryResourceType,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { filterIncidentEvents } from '@/features/alerts/types';
@@ -382,7 +386,7 @@ export function Alerts() {
     const data = pd(resource);
     const docker = asRecord(data?.docker);
     return uniqueIds(
-      resource.discoveryTarget?.resourceType === 'docker'
+      isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
         ? resource.discoveryTarget.resourceId
         : undefined,
       docker?.hostSourceId,

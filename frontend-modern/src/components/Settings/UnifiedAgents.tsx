@@ -36,7 +36,10 @@ import {
   trackAgentInstallTokenGenerated,
 } from '@/utils/upgradeMetrics';
 import type { Resource } from '@/types/resource';
-import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
+import {
+  getAgentDiscoveryResourceId,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
@@ -272,7 +275,10 @@ export const UnifiedAgents: Component = () => {
 
   const getDockerActionId = (r: Resource) => {
     const platformData = pd(r);
-    if (r.discoveryTarget?.resourceType === 'docker' && r.discoveryTarget.resourceId) {
+    if (
+      isAppContainerDiscoveryResourceType(r.discoveryTarget?.resourceType) &&
+      r.discoveryTarget.resourceId
+    ) {
       return r.discoveryTarget.resourceId;
     }
     return (

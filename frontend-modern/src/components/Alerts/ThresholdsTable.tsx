@@ -16,7 +16,10 @@ import Users from 'lucide-solid/icons/users';
 import Boxes from 'lucide-solid/icons/boxes';
 import { unwrap } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
-import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
+import {
+  getAgentDiscoveryResourceId,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
@@ -98,7 +101,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const platformData = pd(resource);
     const docker = asRecord(platformData?.docker);
     return uniqueIds(
-      resource.discoveryTarget?.resourceType === 'docker'
+      isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
         ? resource.discoveryTarget.resourceId
         : undefined,
       docker?.hostSourceId,

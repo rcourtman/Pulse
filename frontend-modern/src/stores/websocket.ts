@@ -15,7 +15,10 @@ import { notificationStore } from './notifications';
 import { eventBus } from './events';
 import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
 import { syncWithAgentCommand } from './containerUpdates';
-import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
+import {
+  getAgentDiscoveryResourceId,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
 
@@ -394,7 +397,7 @@ export function createWebSocketStore(url: string) {
                     asString(dockerData?.hostSourceId) || '',
                     asString(platformData?.hostSourceId) || '',
                     asString(resource?.discoveryTarget?.agentId) || '',
-                    resource?.discoveryTarget?.resourceType === 'docker'
+                    isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
                       ? asString(resource?.discoveryTarget?.resourceId) || ''
                       : '',
                   ]);
@@ -639,7 +642,7 @@ export function createWebSocketStore(url: string) {
             asString(dockerData.hostSourceId) ||
             asString(platformData.hostSourceId) ||
             asString(resource?.discoveryTarget?.agentId) ||
-            (resource?.discoveryTarget?.resourceType === 'docker'
+            (isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
               ? asString(resource?.discoveryTarget?.resourceId)
               : undefined) ||
             asString(resource.id);

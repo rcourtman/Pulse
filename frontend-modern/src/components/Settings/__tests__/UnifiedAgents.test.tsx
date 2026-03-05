@@ -117,7 +117,7 @@ const toDockerRuntimeResource = (d: any) => ({
   lastSeen: d.lastSeen,
   identity: { hostname: d.hostname },
   discoveryTarget: {
-    resourceType: 'docker' as const,
+    resourceType: 'app-container' as const,
     agentId: d.agentId || d.id,
     resourceId: d.id,
   },

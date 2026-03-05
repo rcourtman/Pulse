@@ -105,7 +105,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   const discoveryResourceType = (): DiscoveryResourceType => {
     const type = resolveWorkloadType(props.guest);
     if (type === 'vm') return 'vm';
-    if (type === 'docker') return 'docker';
+    if (type === 'docker') return 'app-container';
     if (type === 'k8s') return 'k8s';
     return 'system-container';
   };

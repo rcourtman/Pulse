@@ -106,7 +106,15 @@ export interface ResourceIdentity {
 }
 
 export interface ResourceDiscoveryTarget {
-  resourceType: 'agent' | 'vm' | 'system-container' | 'docker' | 'k8s' | 'disk' | 'ceph';
+  resourceType:
+    | 'agent'
+    | 'vm'
+    | 'system-container'
+    | 'app-container'
+    | 'docker'
+    | 'k8s'
+    | 'disk'
+    | 'ceph';
   agentId: string;
   resourceId: string;
   hostname?: string;

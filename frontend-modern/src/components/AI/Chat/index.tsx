@@ -16,7 +16,11 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
-import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
+import {
+  getAgentDiscoveryResourceId,
+  isAgentDiscoveryResourceType,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
@@ -418,7 +422,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const platformData = readPlatformData(resource);
       const platformDocker = asRecord(platformData?.docker);
       return (
-        (resource.discoveryTarget?.resourceType === 'docker'
+        (isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
           ? resource.discoveryTarget.resourceId
           : undefined) ||
         asString(platformDocker?.hostSourceId) ||

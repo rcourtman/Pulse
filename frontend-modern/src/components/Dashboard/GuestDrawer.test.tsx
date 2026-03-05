@@ -581,7 +581,7 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('docker');
+      expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
       expect(screen.getByTestId('disc-agent-id').textContent).toBe('dh-1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc');
     });

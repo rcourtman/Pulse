@@ -14,6 +14,7 @@ import type {
 import { normalizeDiskArray } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
+import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,pbs,pmg,k8s_cluster,k8s_node';
@@ -452,7 +453,7 @@ const resolveType = (value?: string): ResourceType => {
 const resolveDiscoveryResourceType = (
   value?: string,
 ): ResourceDiscoveryTarget['resourceType'] | undefined => {
-  const normalized = (value || '').toLowerCase();
+  const normalized = canonicalDiscoveryResourceType(value);
   switch (normalized) {
     case 'agent':
       return 'agent';
@@ -460,8 +461,8 @@ const resolveDiscoveryResourceType = (
       return 'vm';
     case 'system-container':
       return 'system-container';
-    case 'docker':
-      return 'docker';
+    case 'app-container':
+      return 'app-container';
     case 'k8s':
       return 'k8s';
     case 'disk':

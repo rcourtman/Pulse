@@ -154,7 +154,7 @@ describe('toDiscoveryConfig', () => {
 
     const config = toDiscoveryConfig(resource);
     expect(config).toEqual({
-      resourceType: 'docker',
+      resourceType: 'app-container',
       agentId: 'docker-host-1',
       resourceId: 'container-abc123',
       hostname: 'stale-hostname',
