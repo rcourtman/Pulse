@@ -401,11 +401,7 @@ const resolveType = (value?: string): ResourceType => {
       return 'docker-host';
     case 'k8s-cluster':
       return 'k8s-cluster';
-    case 'k8s_cluster':
-      return 'k8s-cluster';
     case 'k8s-node':
-      return 'k8s-node';
-    case 'k8s_node':
       return 'k8s-node';
     case 'truenas':
       return 'truenas';

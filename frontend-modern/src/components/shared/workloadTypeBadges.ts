@@ -84,15 +84,13 @@ const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | 
   }
   if (
     normalized === 'docker' ||
-    normalized === 'app-container' ||
-    normalized === 'docker-container' ||
-    normalized === 'docker_container'
+    normalized === 'app-container'
   ) {
     return 'app-container';
   }
   if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
-  if (normalized === 'pod' || normalized === 'k8s-pod' || normalized === 'k8s_pod') return 'pod';
-  if (normalized === 'agent' || normalized === 'host') return 'agent';
+  if (normalized === 'pod' || normalized === 'k8s-pod') return 'pod';
+  if (normalized === 'agent') return 'agent';
   if (normalized === 'oci') return 'oci';
   return null;
 };

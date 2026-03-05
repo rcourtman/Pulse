@@ -13,10 +13,10 @@ describe('discoveryTarget utils', () => {
     expect(isAgentDiscoveryResourceType('docker')).toBe(false);
   });
 
-  it('normalizes app container discovery type aliases', () => {
+  it('uses canonical app-container discovery type only', () => {
     expect(isAppContainerDiscoveryResourceType('app-container')).toBe(true);
-    expect(isAppContainerDiscoveryResourceType('docker')).toBe(true);
-    expect(canonicalDiscoveryResourceType('docker')).toBe('app-container');
+    expect(isAppContainerDiscoveryResourceType('docker')).toBe(false);
+    expect(canonicalDiscoveryResourceType('docker')).toBe('docker');
     expect(canonicalDiscoveryResourceType('app-container')).toBe('app-container');
   });
 

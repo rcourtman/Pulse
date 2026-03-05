@@ -55,9 +55,9 @@ describe('getTypeBadge', () => {
     expect(badge?.title).toBe('agent');
   });
 
-  it('maps legacy host alias to Agent', () => {
+  it('does not map removed host alias to Agent', () => {
     const badge = getTypeBadge('host');
-    expect(badge?.label).toBe('Agent');
-    expect(badge?.title).toBe('agent');
+    expect(badge?.label).toBe('host');
+    expect(badge?.title).toBe('host');
   });
 });

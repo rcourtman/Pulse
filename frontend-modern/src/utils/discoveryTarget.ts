@@ -17,7 +17,6 @@ const normalizeDiscoveryResourceType = (resourceType: unknown): string | undefin
 export const canonicalDiscoveryResourceType = (resourceType: unknown): string | undefined => {
   const normalized = normalizeDiscoveryResourceType(resourceType);
   if (!normalized) return undefined;
-  if (normalized === 'docker') return 'app-container';
   return normalized;
 };
 
@@ -28,7 +27,7 @@ export const isAgentDiscoveryResourceType = (resourceType: unknown): boolean => 
 
 export const isAppContainerDiscoveryResourceType = (resourceType: unknown): boolean => {
   const normalized = normalizeDiscoveryResourceType(resourceType);
-  return normalized === 'app-container' || normalized === 'docker';
+  return normalized === 'app-container';
 };
 
 export const getAgentDiscoveryResourceId = (

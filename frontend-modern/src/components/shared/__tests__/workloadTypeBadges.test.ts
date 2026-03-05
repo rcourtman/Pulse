@@ -48,16 +48,16 @@ describe('workloadTypeBadges', () => {
         expect(result.label).toBe('Containers');
       });
 
-      it('normalizes legacy docker-container alias to app-container', () => {
+      it('does not normalize removed docker-container alias', () => {
         const result = getWorkloadTypeBadge('docker-container');
-        expect(result.label).toBe('Containers');
-        expect(result.title).toBe('Application Container');
+        expect(result.label).toBe('Docker Container');
+        expect(result.title).toBe('Docker Container');
       });
 
-      it('normalizes legacy docker_container alias to app-container', () => {
+      it('does not normalize removed docker_container alias', () => {
         const result = getWorkloadTypeBadge('docker_container');
-        expect(result.label).toBe('Containers');
-        expect(result.title).toBe('Application Container');
+        expect(result.label).toBe('Docker Container');
+        expect(result.title).toBe('Docker Container');
       });
     });
 
@@ -79,10 +79,10 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('Agent types', () => {
-      it('maps legacy host alias to Agent', () => {
+      it('does not normalize removed host alias to Agent', () => {
         const result = getWorkloadTypeBadge('host');
-        expect(result.label).toBe('Agent');
-        expect(result.title).toBe('Agent');
+        expect(result.label).toBe('Host');
+        expect(result.title).toBe('Host');
       });
 
       it('returns Agent badge for agent', () => {

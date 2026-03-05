@@ -43,14 +43,14 @@ describe('resolveWorkloadType', () => {
     expect(resolveWorkloadType(guest)).toBe('docker');
   });
 
-  it('maps legacy docker-container type to docker', () => {
+  it('does not map removed docker-container type alias', () => {
     const guest = { type: 'docker-container' };
-    expect(resolveWorkloadType(guest)).toBe('docker');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
-  it('maps legacy docker_container type to docker', () => {
+  it('does not map removed docker_container type alias', () => {
     const guest = { type: 'docker_container' };
-    expect(resolveWorkloadType(guest)).toBe('docker');
+    expect(resolveWorkloadType(guest)).toBe('system-container');
   });
 
   it('returns k8s for k8s type', () => {
@@ -97,12 +97,12 @@ describe('resolveWorkloadTypeFromString', () => {
     expect(resolveWorkloadTypeFromString('container')).toBe('system-container');
   });
 
-  it('normalizes docker-container alias to docker', () => {
-    expect(resolveWorkloadTypeFromString('docker-container')).toBe('docker');
+  it('does not normalize removed docker-container alias', () => {
+    expect(resolveWorkloadTypeFromString('docker-container')).toBeNull();
   });
 
-  it('normalizes docker_container alias to docker', () => {
-    expect(resolveWorkloadTypeFromString('docker_container')).toBe('docker');
+  it('does not normalize removed docker_container alias', () => {
+    expect(resolveWorkloadTypeFromString('docker_container')).toBeNull();
   });
 });
 
