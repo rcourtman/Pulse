@@ -630,6 +630,15 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "alerts", "utility_test.go"),
+			requiredSnippets: []string{
+				`legacy host alias rejected`,
+				`legacy container alias rejected`,
+				`legacy docker alias rejected`,
+				`legacy k8s alias rejected`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "api", "resources_test.go"),
 			requiredSnippets: []string{
 				`/api/resources?type=host`,
