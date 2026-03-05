@@ -413,21 +413,23 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 		hosts := e.diskHealthProvider.GetHosts()
 		for _, host := range hosts {
 			hostHealth := HostDiskHealth{
-				Hostname: host.Hostname,
+				Hostname: toolHostLabel(host),
 			}
 
 			// SMART data
-			for _, disk := range host.Sensors.SMART {
-				hostHealth.SMART = append(hostHealth.SMART, SMARTDiskSummary{
-					Device:      disk.Device,
-					Model:       disk.Model,
-					Health:      disk.Health,
-					Temperature: disk.Temperature,
-				})
+			if sensors := host.Sensors(); sensors != nil {
+				for _, disk := range sensors.SMART {
+					hostHealth.SMART = append(hostHealth.SMART, SMARTDiskSummary{
+						Device:      disk.Device,
+						Model:       disk.Model,
+						Health:      disk.Health,
+						Temperature: disk.Temperature,
+					})
+				}
 			}
 
 			// RAID arrays
-			for _, raid := range host.RAID {
+			for _, raid := range host.RAID() {
 				hostHealth.RAID = append(hostHealth.RAID, RAIDArraySummary{
 					Device:         raid.Device,
 					Level:          raid.Level,
@@ -441,14 +443,14 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 			}
 
 			// Ceph from agent
-			if host.Ceph != nil {
+			if ceph := host.Ceph(); ceph != nil {
 				hostHealth.Ceph = &CephStatusSummary{
-					Health:       host.Ceph.Health.Status,
-					NumOSDs:      host.Ceph.OSDMap.NumOSDs,
-					NumOSDsUp:    host.Ceph.OSDMap.NumUp,
-					NumOSDsIn:    host.Ceph.OSDMap.NumIn,
-					NumPGs:       host.Ceph.PGMap.NumPGs,
-					UsagePercent: host.Ceph.PGMap.UsagePercent,
+					Health:       ceph.Health.Status,
+					NumOSDs:      ceph.OSDMap.NumOSDs,
+					NumOSDsUp:    ceph.OSDMap.NumUp,
+					NumOSDsIn:    ceph.OSDMap.NumIn,
+					NumPGs:       ceph.PGMap.NumPGs,
+					UsagePercent: ceph.PGMap.UsagePercent,
 				}
 			}
 
@@ -1241,19 +1243,23 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 	var hostSummaries []HostRAIDSummary
 
 	for _, host := range hosts {
+		targetID := toolHostTargetID(host)
+		hostLabel := toolHostLabel(host)
+
 		// Apply host filter
-		if hostFilter != "" && host.ID != hostFilter && host.Hostname != hostFilter && host.DisplayName != hostFilter {
+		if hostFilter != "" && targetID != hostFilter && host.ID() != hostFilter && toolHostName(host) != hostFilter && hostLabel != hostFilter {
 			continue
 		}
 
 		// Skip hosts without RAID arrays
-		if len(host.RAID) == 0 {
+		raidArrays := host.RAID()
+		if len(raidArrays) == 0 {
 			continue
 		}
 
 		var arrays []HostRAIDArraySummary
 
-		for _, raid := range host.RAID {
+		for _, raid := range raidArrays {
 			// Apply state filter
 			if stateFilter != "" && !strings.EqualFold(raid.State, stateFilter) {
 				continue
@@ -1294,8 +1300,8 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 				arrays = []HostRAIDArraySummary{}
 			}
 			hostSummaries = append(hostSummaries, HostRAIDSummary{
-				Hostname: host.Hostname,
-				TargetID: host.ID,
+				Hostname: hostLabel,
+				TargetID: targetID,
 				Arrays:   arrays,
 			})
 		}
@@ -1332,17 +1338,19 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 	var hostSummaries []HostCephSummary
 
 	for _, host := range hosts {
+		targetID := toolHostTargetID(host)
+		hostLabel := toolHostLabel(host)
+
 		// Apply host filter
-		if hostFilter != "" && host.ID != hostFilter && host.Hostname != hostFilter && host.DisplayName != hostFilter {
+		if hostFilter != "" && targetID != hostFilter && host.ID() != hostFilter && toolHostName(host) != hostFilter && hostLabel != hostFilter {
 			continue
 		}
 
 		// Skip hosts without Ceph data
-		if host.Ceph == nil {
+		ceph := host.Ceph()
+		if ceph == nil {
 			continue
 		}
-
-		ceph := host.Ceph
 
 		// Build health messages from checks and summary
 		var healthMessages []HostCephHealthMessage
@@ -1413,8 +1421,8 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 		}
 
 		hostSummaries = append(hostSummaries, HostCephSummary{
-			Hostname: host.Hostname,
-			TargetID: host.ID,
+			Hostname: hostLabel,
+			TargetID: targetID,
 			FSID:     ceph.FSID,
 			Health: HostCephHealthSummary{
 				Status:   ceph.Health.Status,
@@ -1464,6 +1472,33 @@ func (e *PulseToolExecutor) executeGetHostCephDetails(_ context.Context, args ma
 	}
 
 	return NewJSONResult(response), nil
+}
+
+func toolHostTargetID(host *unifiedresources.HostView) string {
+	if host == nil {
+		return ""
+	}
+	if agentID := strings.TrimSpace(host.AgentID()); agentID != "" {
+		return agentID
+	}
+	return strings.TrimSpace(host.ID())
+}
+
+func toolHostName(host *unifiedresources.HostView) string {
+	if host == nil {
+		return ""
+	}
+	if hostname := strings.TrimSpace(host.Hostname()); hostname != "" {
+		return hostname
+	}
+	return strings.TrimSpace(host.Name())
+}
+
+func toolHostLabel(host *unifiedresources.HostView) string {
+	if name := toolHostName(host); name != "" {
+		return name
+	}
+	return toolHostTargetID(host)
 }
 
 func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {

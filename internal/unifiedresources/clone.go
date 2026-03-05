@@ -251,6 +251,10 @@ func cloneHostCephMeta(in *HostCephMeta) *HostCephMeta {
 		return nil
 	}
 	out := *in
+	out.Health = cloneHostCephHealthMeta(in.Health)
+	out.MonMap = cloneHostCephMonitorMapMeta(in.MonMap)
+	out.Pools = cloneHostCephPoolMetaSlice(in.Pools)
+	out.Services = cloneHostCephServiceMetaSlice(in.Services)
 	return &out
 }
 
@@ -322,7 +326,72 @@ func cloneHostRAIDMetaSlice(in []HostRAIDMeta) []HostRAIDMeta {
 		return nil
 	}
 	out := make([]HostRAIDMeta, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Devices = cloneHostRAIDDeviceMetaSlice(in[i].Devices)
+	}
+	return out
+}
+
+func cloneHostRAIDDeviceMetaSlice(in []HostRAIDDeviceMeta) []HostRAIDDeviceMeta {
+	if in == nil {
+		return nil
+	}
+	out := make([]HostRAIDDeviceMeta, len(in))
 	copy(out, in)
+	return out
+}
+
+func cloneHostCephHealthMeta(in HostCephHealthMeta) HostCephHealthMeta {
+	out := HostCephHealthMeta{
+		Status:  in.Status,
+		Checks:  make(map[string]HostCephCheckMeta, len(in.Checks)),
+		Summary: make([]HostCephHealthSummaryMeta, len(in.Summary)),
+	}
+	for name, check := range in.Checks {
+		out.Checks[name] = HostCephCheckMeta{
+			Severity: check.Severity,
+			Message:  check.Message,
+			Detail:   append([]string(nil), check.Detail...),
+		}
+	}
+	copy(out.Summary, in.Summary)
+	return out
+}
+
+func cloneHostCephMonitorMapMeta(in HostCephMonitorMapMeta) HostCephMonitorMapMeta {
+	out := in
+	out.Monitors = cloneHostCephMonitorMetaSlice(in.Monitors)
+	return out
+}
+
+func cloneHostCephMonitorMetaSlice(in []HostCephMonitorMeta) []HostCephMonitorMeta {
+	if in == nil {
+		return nil
+	}
+	out := make([]HostCephMonitorMeta, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneHostCephPoolMetaSlice(in []HostCephPoolMeta) []HostCephPoolMeta {
+	if in == nil {
+		return nil
+	}
+	out := make([]HostCephPoolMeta, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneHostCephServiceMetaSlice(in []HostCephServiceMeta) []HostCephServiceMeta {
+	if in == nil {
+		return nil
+	}
+	out := make([]HostCephServiceMeta, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Daemons = cloneStringSlice(in[i].Daemons)
+	}
 	return out
 }
 

@@ -2123,10 +2123,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	// Wire disk health provider
 	if monitor != nil {
-		m := monitor
-		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(
-			func() []models.Host { return m.HostsSnapshot() },
-		)
+		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(monitor.GetUnifiedReadState())
 		if diskHealthAdapter != nil {
 			service.SetDiskHealthProvider(diskHealthAdapter)
 			log.Debug().Msg("AI chat: Disk health provider wired")
@@ -2135,14 +2132,13 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	// Wire updates provider for Docker container updates
 	if monitor != nil {
-		m := monitor
 		cfg := r.config
-		if monitorCfg := m.GetConfig(); monitorCfg != nil {
+		if monitorCfg := monitor.GetConfig(); monitorCfg != nil {
 			cfg = monitorCfg
 		}
 		updatesAdapter := tools.NewUpdatesMCPAdapter(
-			func() []models.DockerHost { return m.DockerHostsSnapshot() },
-			m,
+			monitor.GetUnifiedReadState(),
+			monitor,
 			&updatesConfigWrapper{cfg: cfg},
 		)
 		if updatesAdapter != nil {

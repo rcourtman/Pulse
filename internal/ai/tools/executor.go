@@ -154,7 +154,7 @@ type GuestConfigProvider interface {
 
 // DiskHealthProvider provides disk health information from host agents
 type DiskHealthProvider interface {
-	GetHosts() []models.Host
+	GetHosts() []*unifiedresources.HostView
 }
 
 // UpdatesProvider provides Docker update operations for MCP tools

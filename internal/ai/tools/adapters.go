@@ -210,26 +210,25 @@ func (a *RecoveryPointsMCPAdapter) ListPoints(ctx context.Context, opts recovery
 	return store.ListPoints(ctx, opts)
 }
 
-// DiskHealthMCPAdapter adapts host data sources to MCP DiskHealthProvider interface.
-// Uses a functional getter so callers can wire ReadState or StateSnapshot sources.
+// DiskHealthMCPAdapter adapts unified read-state hosts to MCP DiskHealthProvider.
 type DiskHealthMCPAdapter struct {
-	getHosts func() []models.Host
+	readState unifiedresources.ReadState
 }
 
 // NewDiskHealthMCPAdapter creates a new adapter for disk health data
-func NewDiskHealthMCPAdapter(getHosts func() []models.Host) *DiskHealthMCPAdapter {
-	if getHosts == nil {
+func NewDiskHealthMCPAdapter(readState unifiedresources.ReadState) *DiskHealthMCPAdapter {
+	if readState == nil {
 		return nil
 	}
-	return &DiskHealthMCPAdapter{getHosts: getHosts}
+	return &DiskHealthMCPAdapter{readState: readState}
 }
 
 // GetHosts implements mcp.DiskHealthProvider
-func (a *DiskHealthMCPAdapter) GetHosts() []models.Host {
-	if a.getHosts == nil {
+func (a *DiskHealthMCPAdapter) GetHosts() []*unifiedresources.HostView {
+	if a.readState == nil {
 		return nil
 	}
-	return a.getHosts()
+	return a.readState.Hosts()
 }
 
 // RawMetricPoint represents a single metric value at a point in time
@@ -712,69 +711,101 @@ type UpdatesConfig interface {
 // Uses a functional getter for Docker host iteration (decoupled from GetState)
 // and a command runner for Docker update operations.
 type UpdatesMCPAdapter struct {
-	getDockerHosts func() []models.DockerHost
-	commands       UpdatesCommandRunner
-	config         UpdatesConfig
+	readState unifiedresources.ReadState
+	commands  UpdatesCommandRunner
+	config    UpdatesConfig
 }
 
 // NewUpdatesMCPAdapter creates a new adapter for update operations.
-// getDockerHosts provides Docker host state; commands provides update command execution.
-func NewUpdatesMCPAdapter(getDockerHosts func() []models.DockerHost, commands UpdatesCommandRunner, config UpdatesConfig) *UpdatesMCPAdapter {
-	if getDockerHosts == nil || commands == nil {
+// readState provides Docker host/container views; commands provides update command execution.
+func NewUpdatesMCPAdapter(readState unifiedresources.ReadState, commands UpdatesCommandRunner, config UpdatesConfig) *UpdatesMCPAdapter {
+	if readState == nil || commands == nil {
 		return nil
 	}
-	return &UpdatesMCPAdapter{getDockerHosts: getDockerHosts, commands: commands, config: config}
+	return &UpdatesMCPAdapter{readState: readState, commands: commands, config: config}
 }
 
 // GetPendingUpdates implements mcp.UpdatesProvider
 func (a *UpdatesMCPAdapter) GetPendingUpdates(hostID string) []ContainerUpdateInfo {
-	if a.getDockerHosts == nil {
+	if a.readState == nil {
 		return nil
 	}
 
-	dockerHosts := a.getDockerHosts()
+	hostLabels := make(map[string]string)
+	for _, host := range a.readState.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		label := strings.TrimSpace(host.Name())
+		if label == "" {
+			label = strings.TrimSpace(host.Hostname())
+		}
+		if label == "" {
+			label = strings.TrimSpace(host.ID())
+		}
+		if resourceID := strings.TrimSpace(host.ID()); resourceID != "" {
+			hostLabels[resourceID] = label
+		}
+		if sourceID := strings.TrimSpace(host.HostSourceID()); sourceID != "" {
+			hostLabels[sourceID] = label
+		}
+	}
+
 	var updates []ContainerUpdateInfo
 
-	for _, host := range dockerHosts {
-		// Filter by host ID if specified
-		if hostID != "" && host.ID != hostID {
+	for _, container := range a.readState.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		targetID := strings.TrimSpace(container.HostSourceID())
+		if targetID == "" {
+			targetID = strings.TrimSpace(container.ParentID())
+		}
+		if hostID != "" && targetID != hostID && strings.TrimSpace(container.ParentID()) != hostID {
 			continue
 		}
 
-		for _, container := range host.Containers {
-			if container.UpdateStatus == nil {
-				continue
-			}
-
-			// Only include containers with updates available or errors
-			if !container.UpdateStatus.UpdateAvailable && container.UpdateStatus.Error == "" {
-				continue
-			}
-
-			update := ContainerUpdateInfo{
-				TargetID:        host.ID,
-				HostName:        host.DisplayName,
-				ContainerID:     container.ID,
-				ContainerName:   trimContainerName(container.Name),
-				Image:           container.Image,
-				UpdateAvailable: container.UpdateStatus.UpdateAvailable,
-			}
-
-			if container.UpdateStatus.CurrentDigest != "" {
-				update.CurrentDigest = container.UpdateStatus.CurrentDigest
-			}
-			if container.UpdateStatus.LatestDigest != "" {
-				update.LatestDigest = container.UpdateStatus.LatestDigest
-			}
-			if !container.UpdateStatus.LastChecked.IsZero() {
-				update.LastChecked = container.UpdateStatus.LastChecked.Unix()
-			}
-			if container.UpdateStatus.Error != "" {
-				update.Error = container.UpdateStatus.Error
-			}
-
-			updates = append(updates, update)
+		updateStatus := container.UpdateStatus()
+		if updateStatus == nil {
+			continue
 		}
+
+		// Only include containers with updates available or errors.
+		if !updateStatus.UpdateAvailable && updateStatus.Error == "" {
+			continue
+		}
+
+		containerID := strings.TrimSpace(container.ContainerID())
+		if containerID == "" {
+			containerID = strings.TrimSpace(container.ID())
+		}
+
+		update := ContainerUpdateInfo{
+			TargetID:        targetID,
+			HostName:        hostLabels[targetID],
+			ContainerID:     containerID,
+			ContainerName:   trimContainerName(container.Name()),
+			Image:           container.Image(),
+			UpdateAvailable: updateStatus.UpdateAvailable,
+		}
+
+		if updateStatus.CurrentDigest != "" {
+			update.CurrentDigest = updateStatus.CurrentDigest
+		}
+		if updateStatus.LatestDigest != "" {
+			update.LatestDigest = updateStatus.LatestDigest
+		}
+		if !updateStatus.LastChecked.IsZero() {
+			update.LastChecked = updateStatus.LastChecked.Unix()
+		}
+		if updateStatus.Error != "" {
+			update.Error = updateStatus.Error
+		}
+		if update.HostName == "" {
+			update.HostName = targetID
+		}
+
+		updates = append(updates, update)
 	}
 
 	return updates

@@ -627,11 +627,14 @@ func TestExecuteGetHostRAIDStatus(t *testing.T) {
 	assert.Equal(t, "Disk health provider not available.", result.Content[0].Text)
 
 	diskProvider := &mockDiskHealthProvider{}
-	diskProvider.On("GetHosts").Return([]models.Host{
-		{
-			ID:       "host1",
-			Hostname: "node1",
-			RAID: []models.HostRAIDArray{
+	diskProvider.On("GetHosts").Return([]*unifiedresources.HostView{
+		newHostView(
+			"host-resource-1",
+			"node1",
+			"host1",
+			"node1",
+			nil,
+			[]unifiedresources.HostRAIDMeta{
 				{
 					Device:         "/dev/md0",
 					Level:          "raid1",
@@ -639,12 +642,13 @@ func TestExecuteGetHostRAIDStatus(t *testing.T) {
 					TotalDevices:   2,
 					ActiveDevices:  2,
 					WorkingDevices: 2,
-					Devices: []models.HostRAIDDevice{
+					Devices: []unifiedresources.HostRAIDDeviceMeta{
 						{Device: "/dev/sda", State: "active", Slot: 0},
 					},
 				},
 			},
-		},
+			nil,
+		),
 	})
 
 	exec = NewPulseToolExecutor(ExecutorConfig{DiskHealthProvider: diskProvider})
@@ -671,41 +675,45 @@ func TestExecuteGetHostCephDetails(t *testing.T) {
 	assert.Equal(t, "Disk health provider not available.", result.Content[0].Text)
 
 	diskProvider := &mockDiskHealthProvider{}
-	diskProvider.On("GetHosts").Return([]models.Host{
-		{
-			ID:       "host1",
-			Hostname: "node1",
-			Ceph: &models.HostCephCluster{
+	diskProvider.On("GetHosts").Return([]*unifiedresources.HostView{
+		newHostView(
+			"host-resource-1",
+			"node1",
+			"host1",
+			"node1",
+			nil,
+			nil,
+			&unifiedresources.HostCephMeta{
 				FSID: "fsid1",
-				Health: models.HostCephHealth{
+				Health: unifiedresources.HostCephHealthMeta{
 					Status: "HEALTH_OK",
-					Checks: map[string]models.HostCephCheck{
+					Checks: map[string]unifiedresources.HostCephCheckMeta{
 						"CHECK_1": {Severity: "HEALTH_OK"},
 					},
-					Summary: []models.HostCephHealthSummary{
+					Summary: []unifiedresources.HostCephHealthSummaryMeta{
 						{Severity: "HEALTH_OK", Message: "ok"},
 					},
 				},
-				MonMap: models.HostCephMonitorMap{
+				MonMap: unifiedresources.HostCephMonitorMapMeta{
 					NumMons: 1,
-					Monitors: []models.HostCephMonitor{
+					Monitors: []unifiedresources.HostCephMonitorMeta{
 						{Name: "mon1", Rank: 0, Addr: "1.2.3.4", Status: "leader"},
 					},
 				},
-				MgrMap: models.HostCephManagerMap{
+				MgrMap: unifiedresources.HostCephManagerMapMeta{
 					Available: true,
 					NumMgrs:   1,
 					ActiveMgr: "mgr1",
 					Standbys:  0,
 				},
-				OSDMap: models.HostCephOSDMap{NumOSDs: 2, NumUp: 2, NumIn: 2},
-				PGMap:  models.HostCephPGMap{NumPGs: 1, BytesTotal: 10, BytesUsed: 5, BytesAvailable: 5, UsagePercent: 50},
-				Pools: []models.HostCephPool{
+				OSDMap: unifiedresources.HostCephOSDMapMeta{NumOSDs: 2, NumUp: 2, NumIn: 2},
+				PGMap:  unifiedresources.HostCephPGMapMeta{NumPGs: 1, BytesTotal: 10, BytesUsed: 5, BytesAvailable: 5, UsagePercent: 50},
+				Pools: []unifiedresources.HostCephPoolMeta{
 					{ID: 1, Name: "rbd", PercentUsed: 10},
 				},
 				CollectedAt: time.Now(),
 			},
-		},
+		),
 	})
 
 	exec = NewPulseToolExecutor(ExecutorConfig{DiskHealthProvider: diskProvider})

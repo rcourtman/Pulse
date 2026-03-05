@@ -293,16 +293,28 @@ type HostSMARTMeta struct {
 	Health      string `json:"health"`
 }
 
+// HostRAIDDeviceMeta describes a device in a RAID array.
+type HostRAIDDeviceMeta struct {
+	Device string `json:"device"`
+	State  string `json:"state"`
+	Slot   int    `json:"slot"`
+}
+
 // HostRAIDMeta describes a RAID array.
 type HostRAIDMeta struct {
-	Device     string  `json:"device"`
-	Name       string  `json:"name,omitempty"`
-	Level      string  `json:"level"`
-	State      string  `json:"state"`
-	Total      int     `json:"total"`
-	Active     int     `json:"active"`
-	Failed     int     `json:"failed"`
-	RebuildPct float64 `json:"rebuildPct,omitempty"`
+	Device         string               `json:"device"`
+	Name           string               `json:"name,omitempty"`
+	Level          string               `json:"level"`
+	State          string               `json:"state"`
+	TotalDevices   int                  `json:"totalDevices"`
+	ActiveDevices  int                  `json:"activeDevices"`
+	WorkingDevices int                  `json:"workingDevices"`
+	FailedDevices  int                  `json:"failedDevices"`
+	SpareDevices   int                  `json:"spareDevices"`
+	UUID           string               `json:"uuid,omitempty"`
+	Devices        []HostRAIDDeviceMeta `json:"devices,omitempty"`
+	RebuildPercent float64              `json:"rebuildPercent,omitempty"`
+	RebuildSpeed   string               `json:"rebuildSpeed,omitempty"`
 }
 
 // HostDiskIOMeta describes disk I/O counters.
@@ -315,15 +327,110 @@ type HostDiskIOMeta struct {
 	IOTimeMs   uint64 `json:"ioTimeMs,omitempty"`
 }
 
+// HostCephCheckMeta represents a health check detail.
+type HostCephCheckMeta struct {
+	Severity string   `json:"severity"`
+	Message  string   `json:"message,omitempty"`
+	Detail   []string `json:"detail,omitempty"`
+}
+
+// HostCephHealthSummaryMeta represents a health summary message.
+type HostCephHealthSummaryMeta struct {
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+}
+
+// HostCephHealthMeta represents Ceph cluster health status.
+type HostCephHealthMeta struct {
+	Status  string                       `json:"status"`
+	Checks  map[string]HostCephCheckMeta `json:"checks,omitempty"`
+	Summary []HostCephHealthSummaryMeta  `json:"summary,omitempty"`
+}
+
+// HostCephMonitorMeta represents a single Ceph monitor.
+type HostCephMonitorMeta struct {
+	Name   string `json:"name"`
+	Rank   int    `json:"rank"`
+	Addr   string `json:"addr,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+// HostCephMonitorMapMeta represents Ceph monitor information.
+type HostCephMonitorMapMeta struct {
+	Epoch    int                   `json:"epoch"`
+	NumMons  int                   `json:"numMons"`
+	Monitors []HostCephMonitorMeta `json:"monitors,omitempty"`
+}
+
+// HostCephManagerMapMeta represents Ceph manager information.
+type HostCephManagerMapMeta struct {
+	Available bool   `json:"available"`
+	NumMgrs   int    `json:"numMgrs"`
+	ActiveMgr string `json:"activeMgr,omitempty"`
+	Standbys  int    `json:"standbys"`
+}
+
+// HostCephOSDMapMeta represents OSD status summary.
+type HostCephOSDMapMeta struct {
+	Epoch   int `json:"epoch"`
+	NumOSDs int `json:"numOsds"`
+	NumUp   int `json:"numUp"`
+	NumIn   int `json:"numIn"`
+	NumDown int `json:"numDown,omitempty"`
+	NumOut  int `json:"numOut,omitempty"`
+}
+
+// HostCephPGMapMeta represents placement group statistics.
+type HostCephPGMapMeta struct {
+	NumPGs           int     `json:"numPgs"`
+	BytesTotal       uint64  `json:"bytesTotal"`
+	BytesUsed        uint64  `json:"bytesUsed"`
+	BytesAvailable   uint64  `json:"bytesAvailable"`
+	DataBytes        uint64  `json:"dataBytes,omitempty"`
+	UsagePercent     float64 `json:"usagePercent"`
+	DegradedRatio    float64 `json:"degradedRatio,omitempty"`
+	MisplacedRatio   float64 `json:"misplacedRatio,omitempty"`
+	ReadBytesPerSec  uint64  `json:"readBytesPerSec,omitempty"`
+	WriteBytesPerSec uint64  `json:"writeBytesPerSec,omitempty"`
+	ReadOpsPerSec    uint64  `json:"readOpsPerSec,omitempty"`
+	WriteOpsPerSec   uint64  `json:"writeOpsPerSec,omitempty"`
+}
+
+// HostCephPoolMeta represents a Ceph pool.
+type HostCephPoolMeta struct {
+	ID             int     `json:"id"`
+	Name           string  `json:"name"`
+	BytesUsed      uint64  `json:"bytesUsed"`
+	BytesAvailable uint64  `json:"bytesAvailable"`
+	Objects        uint64  `json:"objects"`
+	PercentUsed    float64 `json:"percentUsed"`
+}
+
+// HostCephServiceMeta represents a Ceph service summary.
+type HostCephServiceMeta struct {
+	Type    string   `json:"type"`
+	Running int      `json:"running"`
+	Total   int      `json:"total"`
+	Daemons []string `json:"daemons,omitempty"`
+}
+
 // HostCephMeta describes host-level Ceph cluster data.
 type HostCephMeta struct {
-	FSID         string  `json:"fsid"`
-	HealthStatus string  `json:"healthStatus"`
-	NumOSDs      int     `json:"numOsds"`
-	NumOSDsUp    int     `json:"numOsdsUp"`
-	NumOSDsIn    int     `json:"numOsdsIn"`
-	NumPGs       int     `json:"numPGs"`
-	UsagePercent float64 `json:"usagePercent"`
+	FSID         string                 `json:"fsid"`
+	Health       HostCephHealthMeta     `json:"health"`
+	MonMap       HostCephMonitorMapMeta `json:"monMap,omitempty"`
+	MgrMap       HostCephManagerMapMeta `json:"mgrMap,omitempty"`
+	OSDMap       HostCephOSDMapMeta     `json:"osdMap"`
+	PGMap        HostCephPGMapMeta      `json:"pgMap"`
+	Pools        []HostCephPoolMeta     `json:"pools,omitempty"`
+	Services     []HostCephServiceMeta  `json:"services,omitempty"`
+	CollectedAt  time.Time              `json:"collectedAt,omitempty"`
+	HealthStatus string                 `json:"healthStatus"`
+	NumOSDs      int                    `json:"numOsds"`
+	NumOSDsUp    int                    `json:"numOsdsUp"`
+	NumOSDsIn    int                    `json:"numOsdsIn"`
+	NumPGs       int                    `json:"numPGs"`
+	UsagePercent float64                `json:"usagePercent"`
 }
 
 // AgentMemoryMeta describes agent-reported memory including swap.

@@ -140,15 +140,28 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	if len(host.RAID) > 0 {
 		raid := make([]HostRAIDMeta, len(host.RAID))
 		for i, r := range host.RAID {
+			devices := make([]HostRAIDDeviceMeta, len(r.Devices))
+			for j, device := range r.Devices {
+				devices[j] = HostRAIDDeviceMeta{
+					Device: device.Device,
+					State:  device.State,
+					Slot:   device.Slot,
+				}
+			}
 			raid[i] = HostRAIDMeta{
-				Device:     r.Device,
-				Name:       r.Name,
-				Level:      r.Level,
-				State:      r.State,
-				Total:      r.TotalDevices,
-				Active:     r.ActiveDevices,
-				Failed:     r.FailedDevices,
-				RebuildPct: r.RebuildPercent,
+				Device:         r.Device,
+				Name:           r.Name,
+				Level:          r.Level,
+				State:          r.State,
+				TotalDevices:   r.TotalDevices,
+				ActiveDevices:  r.ActiveDevices,
+				WorkingDevices: r.WorkingDevices,
+				FailedDevices:  r.FailedDevices,
+				SpareDevices:   r.SpareDevices,
+				UUID:           r.UUID,
+				Devices:        devices,
+				RebuildPercent: r.RebuildPercent,
+				RebuildSpeed:   r.RebuildSpeed,
 			}
 		}
 		agent.RAID = raid
@@ -172,8 +185,93 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 
 	// Populate Ceph
 	if host.Ceph != nil {
+		healthChecks := make(map[string]HostCephCheckMeta, len(host.Ceph.Health.Checks))
+		for name, check := range host.Ceph.Health.Checks {
+			healthChecks[name] = HostCephCheckMeta{
+				Severity: check.Severity,
+				Message:  check.Message,
+				Detail:   append([]string(nil), check.Detail...),
+			}
+		}
+		healthSummary := make([]HostCephHealthSummaryMeta, len(host.Ceph.Health.Summary))
+		for i, summary := range host.Ceph.Health.Summary {
+			healthSummary[i] = HostCephHealthSummaryMeta{
+				Severity: summary.Severity,
+				Message:  summary.Message,
+			}
+		}
+		monitors := make([]HostCephMonitorMeta, len(host.Ceph.MonMap.Monitors))
+		for i, mon := range host.Ceph.MonMap.Monitors {
+			monitors[i] = HostCephMonitorMeta{
+				Name:   mon.Name,
+				Rank:   mon.Rank,
+				Addr:   mon.Addr,
+				Status: mon.Status,
+			}
+		}
+		pools := make([]HostCephPoolMeta, len(host.Ceph.Pools))
+		for i, pool := range host.Ceph.Pools {
+			pools[i] = HostCephPoolMeta{
+				ID:             pool.ID,
+				Name:           pool.Name,
+				BytesUsed:      pool.BytesUsed,
+				BytesAvailable: pool.BytesAvailable,
+				Objects:        pool.Objects,
+				PercentUsed:    pool.PercentUsed,
+			}
+		}
+		services := make([]HostCephServiceMeta, len(host.Ceph.Services))
+		for i, service := range host.Ceph.Services {
+			services[i] = HostCephServiceMeta{
+				Type:    service.Type,
+				Running: service.Running,
+				Total:   service.Total,
+				Daemons: append([]string(nil), service.Daemons...),
+			}
+		}
 		agent.Ceph = &HostCephMeta{
-			FSID:         host.Ceph.FSID,
+			FSID: host.Ceph.FSID,
+			Health: HostCephHealthMeta{
+				Status:  host.Ceph.Health.Status,
+				Checks:  healthChecks,
+				Summary: healthSummary,
+			},
+			MonMap: HostCephMonitorMapMeta{
+				Epoch:    host.Ceph.MonMap.Epoch,
+				NumMons:  host.Ceph.MonMap.NumMons,
+				Monitors: monitors,
+			},
+			MgrMap: HostCephManagerMapMeta{
+				Available: host.Ceph.MgrMap.Available,
+				NumMgrs:   host.Ceph.MgrMap.NumMgrs,
+				ActiveMgr: host.Ceph.MgrMap.ActiveMgr,
+				Standbys:  host.Ceph.MgrMap.Standbys,
+			},
+			OSDMap: HostCephOSDMapMeta{
+				Epoch:   host.Ceph.OSDMap.Epoch,
+				NumOSDs: host.Ceph.OSDMap.NumOSDs,
+				NumUp:   host.Ceph.OSDMap.NumUp,
+				NumIn:   host.Ceph.OSDMap.NumIn,
+				NumDown: host.Ceph.OSDMap.NumDown,
+				NumOut:  host.Ceph.OSDMap.NumOut,
+			},
+			PGMap: HostCephPGMapMeta{
+				NumPGs:           host.Ceph.PGMap.NumPGs,
+				BytesTotal:       host.Ceph.PGMap.BytesTotal,
+				BytesUsed:        host.Ceph.PGMap.BytesUsed,
+				BytesAvailable:   host.Ceph.PGMap.BytesAvailable,
+				DataBytes:        host.Ceph.PGMap.DataBytes,
+				UsagePercent:     host.Ceph.PGMap.UsagePercent,
+				DegradedRatio:    host.Ceph.PGMap.DegradedRatio,
+				MisplacedRatio:   host.Ceph.PGMap.MisplacedRatio,
+				ReadBytesPerSec:  host.Ceph.PGMap.ReadBytesPerSec,
+				WriteBytesPerSec: host.Ceph.PGMap.WriteBytesPerSec,
+				ReadOpsPerSec:    host.Ceph.PGMap.ReadOpsPerSec,
+				WriteOpsPerSec:   host.Ceph.PGMap.WriteOpsPerSec,
+			},
+			Pools:        pools,
+			Services:     services,
+			CollectedAt:  host.Ceph.CollectedAt,
 			HealthStatus: host.Ceph.Health.Status,
 			NumOSDs:      host.Ceph.OSDMap.NumOSDs,
 			NumOSDsUp:    host.Ceph.OSDMap.NumUp,

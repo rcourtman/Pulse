@@ -110,9 +110,9 @@ type mockDiskHealthProvider struct {
 	mock.Mock
 }
 
-func (m *mockDiskHealthProvider) GetHosts() []models.Host {
+func (m *mockDiskHealthProvider) GetHosts() []*unifiedresources.HostView {
 	args := m.Called()
-	return args.Get(0).([]models.Host)
+	return args.Get(0).([]*unifiedresources.HostView)
 }
 
 type mockUpdatesProvider struct {

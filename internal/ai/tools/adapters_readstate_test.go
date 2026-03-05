@@ -11,17 +11,20 @@ import (
 // fakeReadState is a minimal ReadState implementation for testing the
 // ReadState-preferred path in adapters that support SRC migration.
 type fakeReadState struct {
-	vms        []*ur.VMView
-	containers []*ur.ContainerView
-	nodes      []*ur.NodeView
+	vms              []*ur.VMView
+	containers       []*ur.ContainerView
+	nodes            []*ur.NodeView
+	hosts            []*ur.HostView
+	dockerHosts      []*ur.DockerHostView
+	dockerContainers []*ur.DockerContainerView
 }
 
 func (f *fakeReadState) VMs() []*ur.VMView                           { return f.vms }
 func (f *fakeReadState) Containers() []*ur.ContainerView             { return f.containers }
 func (f *fakeReadState) Nodes() []*ur.NodeView                       { return f.nodes }
-func (f *fakeReadState) Hosts() []*ur.HostView                       { return nil }
-func (f *fakeReadState) DockerHosts() []*ur.DockerHostView           { return nil }
-func (f *fakeReadState) DockerContainers() []*ur.DockerContainerView { return nil }
+func (f *fakeReadState) Hosts() []*ur.HostView                       { return f.hosts }
+func (f *fakeReadState) DockerHosts() []*ur.DockerHostView           { return f.dockerHosts }
+func (f *fakeReadState) DockerContainers() []*ur.DockerContainerView { return f.dockerContainers }
 func (f *fakeReadState) StoragePools() []*ur.StoragePoolView         { return nil }
 func (f *fakeReadState) PBSInstances() []*ur.PBSInstanceView         { return nil }
 func (f *fakeReadState) PMGInstances() []*ur.PMGInstanceView         { return nil }
@@ -68,6 +71,54 @@ func newNodeView(id string, name string, sourceID string) *ur.NodeView {
 		},
 	}
 	v := ur.NewNodeView(r)
+	return &v
+}
+
+func newHostView(id string, name string, agentID string, hostname string, sensors *ur.HostSensorMeta, raid []ur.HostRAIDMeta, ceph *ur.HostCephMeta) *ur.HostView {
+	r := &ur.Resource{
+		ID:   id,
+		Name: name,
+		Type: ur.ResourceTypeAgent,
+		Agent: &ur.AgentData{
+			AgentID:  agentID,
+			Hostname: hostname,
+			Sensors:  sensors,
+			RAID:     raid,
+			Ceph:     ceph,
+		},
+	}
+	v := ur.NewHostView(r)
+	return &v
+}
+
+func newDockerHostView(id string, sourceID string, name string, hostname string) *ur.DockerHostView {
+	r := &ur.Resource{
+		ID:   id,
+		Name: name,
+		Type: ur.ResourceTypeAgent,
+		Docker: &ur.DockerData{
+			HostSourceID: sourceID,
+			Hostname:     hostname,
+		},
+	}
+	v := ur.NewDockerHostView(r)
+	return &v
+}
+
+func newDockerContainerView(id string, parentID string, hostSourceID string, name string, containerID string, image string, updateStatus *ur.DockerUpdateStatusMeta) *ur.DockerContainerView {
+	r := &ur.Resource{
+		ID:       id,
+		Name:     name,
+		Type:     ur.ResourceTypeAppContainer,
+		ParentID: &parentID,
+		Docker: &ur.DockerData{
+			HostSourceID: hostSourceID,
+			ContainerID:  containerID,
+			Image:        image,
+			UpdateStatus: updateStatus,
+		},
+	}
+	v := ur.NewDockerContainerView(r)
 	return &v
 }
 

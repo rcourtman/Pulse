@@ -25,10 +25,10 @@ func (s *stubBackupProvider) GetPBSInstances() []models.PBSInstance {
 }
 
 type stubDiskHealthProvider struct {
-	hosts []models.Host
+	hosts []*unifiedresources.HostView
 }
 
-func (s *stubDiskHealthProvider) GetHosts() []models.Host {
+func (s *stubDiskHealthProvider) GetHosts() []*unifiedresources.HostView {
 	return s.hosts
 }
 

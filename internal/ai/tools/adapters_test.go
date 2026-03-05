@@ -172,7 +172,6 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 	}}
 	pbsInstances := []models.PBSInstance{{ID: "pbs1"}}
 	repJobs := []models.ReplicationJob{{ID: "rep1"}}
-	hosts := []models.Host{{ID: "h1"}}
 
 	if NewBackupMCPAdapter(nil, nil) != nil {
 		t.Fatal("expected nil backup adapter for nil getters")
@@ -196,10 +195,15 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 	}
 
 	if NewDiskHealthMCPAdapter(nil) != nil {
-		t.Fatal("expected nil disk health adapter for nil getter")
+		t.Fatal("expected nil disk health adapter for nil read state")
+	}
+	rs := &fakeReadState{
+		hosts: []*ur.HostView{
+			newHostView("host-resource-1", "Host 1", "host1", "host-1", nil, nil, nil),
+		},
 	}
 	diskAdapter := NewDiskHealthMCPAdapter(
-		func() []models.Host { return hosts },
+		rs,
 	)
 	if len(diskAdapter.GetHosts()) != 1 {
 		t.Fatal("expected hosts")
@@ -448,52 +452,52 @@ func TestUpdatesMCPAdapter(t *testing.T) {
 	if NewUpdatesMCPAdapter(nil, nil, nil) != nil {
 		t.Fatal("expected nil updates adapter for nil getters")
 	}
-	// Partial-nil: either getter or commands nil should return nil
-	if NewUpdatesMCPAdapter(func() []models.DockerHost { return nil }, nil, nil) != nil {
+	// Partial-nil: either read state or commands nil should return nil.
+	if NewUpdatesMCPAdapter(&fakeReadState{}, nil, nil) != nil {
 		t.Fatal("expected nil updates adapter when commands is nil")
 	}
 	if NewUpdatesMCPAdapter(nil, &fakeUpdatesCommandRunner{}, nil) != nil {
-		t.Fatal("expected nil updates adapter when getDockerHosts is nil")
+		t.Fatal("expected nil updates adapter when readState is nil")
 	}
 
 	now := time.Now()
-	dockerHosts := []models.DockerHost{
-		{
-			ID:          "host1",
-			Hostname:    "h1",
-			DisplayName: "Host 1",
-			Containers: []models.DockerContainer{
-				{
-					ID:   "c1",
-					Name: "/nginx",
-					UpdateStatus: &models.DockerContainerUpdateStatus{
-						UpdateAvailable: true,
-						CurrentDigest:   "old",
-						LatestDigest:    "new",
-						LastChecked:     now,
-					},
-				},
-			},
+	rs := &fakeReadState{
+		dockerHosts: []*ur.DockerHostView{
+			newDockerHostView("docker-resource-1", "host1", "Host 1", "h1"),
+			newDockerHostView("docker-resource-2", "host2", "Host 2", "h2"),
 		},
-		{
-			ID:          "host2",
-			Hostname:    "h2",
-			DisplayName: "Host 2",
-			Containers: []models.DockerContainer{
-				{
-					ID:   "c2",
-					Name: "redis",
-					UpdateStatus: &models.DockerContainerUpdateStatus{
-						Error: "rate limited",
-					},
+		dockerContainers: []*ur.DockerContainerView{
+			newDockerContainerView(
+				"docker-container-resource-1",
+				"docker-resource-1",
+				"host1",
+				"/nginx",
+				"c1",
+				"nginx:latest",
+				&ur.DockerUpdateStatusMeta{
+					UpdateAvailable: true,
+					CurrentDigest:   "old",
+					LatestDigest:    "new",
+					LastChecked:     now,
 				},
-			},
+			),
+			newDockerContainerView(
+				"docker-container-resource-2",
+				"docker-resource-2",
+				"host2",
+				"redis",
+				"c2",
+				"redis:latest",
+				&ur.DockerUpdateStatusMeta{
+					Error: "rate limited",
+				},
+			),
 		},
 	}
 
 	runner := &fakeUpdatesCommandRunner{}
 	adapter := NewUpdatesMCPAdapter(
-		func() []models.DockerHost { return dockerHosts },
+		rs,
 		runner,
 		&fakeUpdatesConfig{enabled: false},
 	)
