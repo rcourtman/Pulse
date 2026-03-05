@@ -402,7 +402,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           resource.discoveryTarget.hostId),
       );
     };
-    const getHostActionId = (resource: Resource): string => {
+    const getAgentActionId = (resource: Resource): string => {
       const platformData = readPlatformData(resource);
       const platformAgent = asRecord(platformData?.agent);
       return (
@@ -452,7 +452,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     ];
     const dockerHosts = byType('docker-host');
     const dockerContainers = [...byType('app-container'), ...byType('docker-container')];
-    const hosts = allResources().filter(
+    const agentResources = allResources().filter(
       (resource) =>
         (resource.type === 'node' ||
           resource.type === 'pbs' ||
@@ -492,33 +492,36 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
-    // Add Docker hosts
-    const dockerContainersByHostId = new Map<string, Resource[]>();
+    // Add Docker runtimes
+    const dockerContainersByRuntimeId = new Map<string, Resource[]>();
     for (const dockerContainer of dockerContainers) {
       if (!dockerContainer.parentId) continue;
-      const existing = dockerContainersByHostId.get(dockerContainer.parentId);
+      const existing = dockerContainersByRuntimeId.get(dockerContainer.parentId);
       if (existing) {
         existing.push(dockerContainer);
       } else {
-        dockerContainersByHostId.set(dockerContainer.parentId, [dockerContainer]);
+        dockerContainersByRuntimeId.set(dockerContainer.parentId, [dockerContainer]);
       }
     }
 
-    for (const host of dockerHosts) {
-      const dockerActionId = getDockerActionId(host);
-      const displayName = host.displayName || host.identity?.hostname || host.name || host.id;
-      const hostnameOrId = host.identity?.hostname || host.name || host.id;
-      const hostStatus =
-        host.status === 'online' || host.status === 'running' ? 'online' : host.status || 'online';
+    for (const runtime of dockerHosts) {
+      const dockerActionId = getDockerActionId(runtime);
+      const displayName =
+        runtime.displayName || runtime.identity?.hostname || runtime.name || runtime.id;
+      const hostnameOrId = runtime.identity?.hostname || runtime.name || runtime.id;
+      const runtimeStatus =
+        runtime.status === 'online' || runtime.status === 'running'
+          ? 'online'
+          : runtime.status || 'online';
       mentionCandidates.push({
         id: `agent:${dockerActionId}`,
         name: displayName,
         type: 'agent',
-        status: hostStatus,
+        status: runtimeStatus,
       });
 
       // Add Docker containers
-      for (const container of dockerContainersByHostId.get(host.id) || []) {
+      for (const container of dockerContainersByRuntimeId.get(runtime.id) || []) {
         const originalContainerId = container.id.includes('/')
           ? container.id.split('/').pop() || container.id
           : container.id;
@@ -543,16 +546,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
 
     // Add standalone agents
-    for (const host of hosts) {
-      const hostActionId = getHostActionId(host);
-      const name = host.displayName || host.identity?.hostname || host.name;
-      const hostStatus =
-        host.status === 'online' || host.status === 'running' ? 'online' : host.status;
+    for (const agentResource of agentResources) {
+      const agentActionId = getAgentActionId(agentResource);
+      const name =
+        agentResource.displayName || agentResource.identity?.hostname || agentResource.name;
+      const agentStatus =
+        agentResource.status === 'online' || agentResource.status === 'running'
+          ? 'online'
+          : agentResource.status;
       mentionCandidates.push({
-        id: `agent:${hostActionId}`,
+        id: `agent:${agentActionId}`,
         name,
         type: 'agent',
-        status: hostStatus,
+        status: agentStatus,
       });
     }
 

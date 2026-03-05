@@ -118,8 +118,8 @@ describe('aiChatUtils', () => {
       expect(id).toMatch(/^lxc:[^:]+:\d+$/);
     });
 
-    it('docker mention IDs follow docker:hostId:containerId format', () => {
-      const id = 'docker:host-1:abc123';
+    it('docker mention IDs follow docker:agentId:containerId format', () => {
+      const id = 'docker:agent-1:abc123';
       expect(id).toMatch(/^docker:[^:]+:[^:]+$/);
     });
 
