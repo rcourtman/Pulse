@@ -6439,7 +6439,12 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	snap := monitor.ReadSnapshot()
+	nodes := monitor.NodesSnapshot()
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		http.Error(w, "State unavailable", http.StatusInternalServerError)
+		return
+	}
 	mockModeEnabled := mock.IsMockEnabled()
 	metricsStoreEnabled := monitor.GetMetricsStore() != nil
 	primarySourceHint := "memory"
@@ -6453,13 +6458,13 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	buckets := make(map[int64]*workloadSummaryBuckets)
 	guestPointCount := 0
 	guestCounts := WorkloadsGuestCounts{}
-	snapshots := make([]workloadsSummarySnapshot, 0, len(snap.VMs)+len(snap.Containers))
+	snapshots := make([]workloadsSummarySnapshot, 0, len(readState.VMs())+len(readState.Containers()))
 
 	var selectedNode *models.Node
 	if selectedNodeID != "" {
-		for idx := range snap.Nodes {
-			if snap.Nodes[idx].ID == selectedNodeID {
-				selectedNode = &snap.Nodes[idx]
+		for idx := range nodes {
+			if nodes[idx].ID == selectedNodeID {
+				selectedNode = &nodes[idx]
 				break
 			}
 		}
@@ -6481,76 +6486,89 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			strings.EqualFold(strings.TrimSpace(nodeName), strings.TrimSpace(selectedNode.Name))
 	}
 
-	matchesSelectedDockerHost := func(host models.DockerHost) bool {
+	matchesSelectedDockerHostView := func(host *unifiedresources.DockerHostView) bool {
 		if selectedNodeID == "" {
 			return true
 		}
 		if selectedNode == nil {
 			return true
 		}
+		if host == nil {
+			return false
+		}
 		nodeName := strings.TrimSpace(selectedNode.Name)
 		if nodeName == "" {
 			return false
 		}
-		return strings.EqualFold(strings.TrimSpace(host.Hostname), nodeName) ||
-			strings.EqualFold(strings.TrimSpace(host.DisplayName), nodeName)
+		return strings.EqualFold(strings.TrimSpace(host.Hostname()), nodeName) ||
+			strings.EqualFold(strings.TrimSpace(host.Name()), nodeName)
 	}
 
-	matchesSelectedKubernetesPod := func(pod models.KubernetesPod) bool {
+	matchesSelectedKubernetesPodView := func(pod *unifiedresources.PodView) bool {
 		if selectedNodeID == "" {
 			return true
 		}
 		if selectedNode == nil {
 			return true
 		}
+		if pod == nil {
+			return false
+		}
 		nodeName := strings.TrimSpace(selectedNode.Name)
 		if nodeName == "" {
 			return false
 		}
-		return strings.EqualFold(strings.TrimSpace(pod.NodeName), nodeName)
+		return strings.EqualFold(strings.TrimSpace(pod.NodeName()), nodeName)
 	}
 
-	for _, vm := range snap.VMs {
-		if !matchesSelectedNode(vm.Instance, vm.Node) {
+	for _, vm := range readState.VMs() {
+		if vm == nil {
+			continue
+		}
+		if !matchesSelectedNode(vm.Instance(), vm.Node()) {
+			continue
+		}
+		sourceID := strings.TrimSpace(vm.SourceID())
+		if sourceID == "" {
 			continue
 		}
 		guestCounts.Total++
-		if strings.EqualFold(vm.Status, "running") {
+		if strings.EqualFold(string(vm.Status()), "running") {
 			guestCounts.Running++
 		} else {
 			guestCounts.Stopped++
 		}
 
 		snapshot := workloadsSummarySnapshot{
-			id:      vm.ID,
-			name:    strings.TrimSpace(vm.Name),
-			cpu:     clampWorkloadPercent(vm.CPU * 100),
-			memory:  clampWorkloadPercent(vm.Memory.Usage),
-			disk:    clampWorkloadPercent(vm.Disk.Usage),
-			network: clampNonNegativeWorkloadValue(float64(vm.NetworkIn) + float64(vm.NetworkOut)),
+			id:      sourceID,
+			name:    strings.TrimSpace(vm.Name()),
+			cpu:     clampWorkloadPercent(vm.CPUPercent()),
+			memory:  clampWorkloadPercent(vm.MemoryPercent()),
+			disk:    clampWorkloadPercent(vm.DiskPercent()),
+			network: clampNonNegativeWorkloadValue(vm.NetIn() + vm.NetOut()),
 		}
 		if snapshot.name == "" {
-			snapshot.name = vm.ID
+			snapshot.name = sourceID
 		}
 
-		metrics := monitor.GetGuestMetricsForChart(vm.ID, "vm", vm.ID, duration)
+		metrics := monitor.GetGuestMetricsForChart(sourceID, "vm", sourceID, duration)
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
-			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.CPU * 100}}
+			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.CPUPercent()}}
 		}
 		memoryPoints := metrics["memory"]
 		if len(memoryPoints) == 0 {
-			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.Memory.Usage}}
+			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.MemoryPercent()}}
 		}
 		diskPoints := metrics["disk"]
 		if len(diskPoints) == 0 {
-			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.Disk.Usage}}
+			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.DiskPercent()}}
 		}
 		netInPoints := metrics["netin"]
 		netOutPoints := metrics["netout"]
 		if len(netInPoints) == 0 && len(netOutPoints) == 0 {
-			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(vm.NetworkIn)}}
-			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(vm.NetworkOut)}}
+			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.NetIn()}}
+			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.NetOut()}}
 		}
 
 		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
@@ -6567,47 +6585,54 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	for _, ct := range snap.Containers {
-		if !matchesSelectedNode(ct.Instance, ct.Node) {
+	for _, ct := range readState.Containers() {
+		if ct == nil {
+			continue
+		}
+		if !matchesSelectedNode(ct.Instance(), ct.Node()) {
+			continue
+		}
+		sourceID := strings.TrimSpace(ct.SourceID())
+		if sourceID == "" {
 			continue
 		}
 		guestCounts.Total++
-		if strings.EqualFold(ct.Status, "running") {
+		if strings.EqualFold(string(ct.Status()), "running") {
 			guestCounts.Running++
 		} else {
 			guestCounts.Stopped++
 		}
 
 		snapshot := workloadsSummarySnapshot{
-			id:      ct.ID,
-			name:    strings.TrimSpace(ct.Name),
-			cpu:     clampWorkloadPercent(ct.CPU * 100),
-			memory:  clampWorkloadPercent(ct.Memory.Usage),
-			disk:    clampWorkloadPercent(ct.Disk.Usage),
-			network: clampNonNegativeWorkloadValue(float64(ct.NetworkIn) + float64(ct.NetworkOut)),
+			id:      sourceID,
+			name:    strings.TrimSpace(ct.Name()),
+			cpu:     clampWorkloadPercent(ct.CPUPercent()),
+			memory:  clampWorkloadPercent(ct.MemoryPercent()),
+			disk:    clampWorkloadPercent(ct.DiskPercent()),
+			network: clampNonNegativeWorkloadValue(ct.NetIn() + ct.NetOut()),
 		}
 		if snapshot.name == "" {
-			snapshot.name = ct.ID
+			snapshot.name = sourceID
 		}
 
-		metrics := monitor.GetGuestMetricsForChart(ct.ID, "container", ct.ID, duration)
+		metrics := monitor.GetGuestMetricsForChart(sourceID, "container", sourceID, duration)
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
-			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.CPU * 100}}
+			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.CPUPercent()}}
 		}
 		memoryPoints := metrics["memory"]
 		if len(memoryPoints) == 0 {
-			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.Memory.Usage}}
+			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.MemoryPercent()}}
 		}
 		diskPoints := metrics["disk"]
 		if len(diskPoints) == 0 {
-			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.Disk.Usage}}
+			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.DiskPercent()}}
 		}
 		netInPoints := metrics["netin"]
 		netOutPoints := metrics["netout"]
 		if len(netInPoints) == 0 && len(netOutPoints) == 0 {
-			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(ct.NetworkIn)}}
-			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: float64(ct.NetworkOut)}}
+			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.NetIn()}}
+			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.NetOut()}}
 		}
 
 		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
@@ -6624,156 +6649,169 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	for _, cluster := range snap.KubernetesClusters {
-		if cluster.Hidden {
+	for _, pod := range readState.Pods() {
+		if pod == nil {
 			continue
 		}
-		for _, pod := range cluster.Pods {
-			if !matchesSelectedKubernetesPod(pod) {
-				continue
-			}
-
-			metricKey := kubernetesPodMetricID(cluster, pod)
-			if metricKey == "" {
-				continue
-			}
-			currentMetrics := kubernetesPodCurrentMetrics(cluster, pod)
-
-			guestCounts.Total++
-			if kubernetesPodIsRunning(pod) {
-				guestCounts.Running++
-			} else {
-				guestCounts.Stopped++
-			}
-
-			snapshot := workloadsSummarySnapshot{
-				id:      metricKey,
-				name:    kubernetesPodDisplayName(pod),
-				cpu:     clampWorkloadPercent(currentMetrics["cpu"]),
-				memory:  clampWorkloadPercent(currentMetrics["memory"]),
-				disk:    clampWorkloadPercent(currentMetrics["disk"]),
-				network: clampNonNegativeWorkloadValue(currentMetrics["netin"] + currentMetrics["netout"]),
-			}
-			if snapshot.name == "" {
-				snapshot.name = metricKey
-			}
-
-			metrics := monitor.GetGuestMetricsForChart(metricKey, "k8s", metricKey, duration)
-			cpuPoints := metrics["cpu"]
-			if len(cpuPoints) == 0 {
-				cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["cpu"]}}
-			}
-			memoryPoints := metrics["memory"]
-			if len(memoryPoints) == 0 {
-				memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["memory"]}}
-			}
-			diskPoints := metrics["disk"]
-			if len(diskPoints) == 0 {
-				diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["disk"]}}
-			}
-			netInPoints := metrics["netin"]
-			if len(netInPoints) == 0 {
-				netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["netin"]}}
-			}
-			netOutPoints := metrics["netout"]
-			if len(netOutPoints) == 0 {
-				netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: currentMetrics["netout"]}}
-			}
-
-			if mockModeEnabled {
-				if len(cpuPoints) < mockWorkloadMinSeriesPoints {
-					cpuPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "cpu", currentMetrics["cpu"])
-				}
-				if len(memoryPoints) < mockWorkloadMinSeriesPoints {
-					memoryPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "memory", currentMetrics["memory"])
-				}
-				if len(diskPoints) < mockWorkloadMinSeriesPoints {
-					diskPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "disk", currentMetrics["disk"])
-				}
-				if len(netInPoints) < mockWorkloadMinSeriesPoints {
-					netInPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netin", currentMetrics["netin"])
-				}
-				if len(netOutPoints) < mockWorkloadMinSeriesPoints {
-					netOutPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netout", currentMetrics["netout"])
-				}
-			}
-
-			networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
-
-			snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
-			snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
-			snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
-			snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
-
-			guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
-			guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
-			guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
-			guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
-			snapshots = append(snapshots, snapshot)
+		if !matchesSelectedKubernetesPodView(pod) {
+			continue
 		}
+
+		metricKey := kubernetesPodMetricIDFromView(pod)
+		if metricKey == "" {
+			continue
+		}
+
+		guestCounts.Total++
+		if strings.EqualFold(pod.PodPhase(), "running") {
+			guestCounts.Running++
+		} else {
+			guestCounts.Stopped++
+		}
+
+		snapshot := workloadsSummarySnapshot{
+			id:      metricKey,
+			name:    strings.TrimSpace(pod.Namespace()),
+			cpu:     clampWorkloadPercent(pod.CPUPercent()),
+			memory:  clampWorkloadPercent(pod.MemoryPercent()),
+			disk:    clampWorkloadPercent(pod.DiskPercent()),
+			network: clampNonNegativeWorkloadValue(pod.NetInRate() + pod.NetOutRate()),
+		}
+		if name := strings.TrimSpace(pod.Name()); name != "" {
+			if snapshot.name == "" {
+				snapshot.name = name
+			} else {
+				snapshot.name = fmt.Sprintf("%s/%s", snapshot.name, name)
+			}
+		}
+		if snapshot.name == "" {
+			snapshot.name = metricKey
+		}
+
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "k8s", metricKey, duration)
+		cpuPoints := metrics["cpu"]
+		if len(cpuPoints) == 0 {
+			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: pod.CPUPercent()}}
+		}
+		memoryPoints := metrics["memory"]
+		if len(memoryPoints) == 0 {
+			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: pod.MemoryPercent()}}
+		}
+		diskPoints := metrics["disk"]
+		if len(diskPoints) == 0 {
+			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: pod.DiskPercent()}}
+		}
+		netInPoints := metrics["netin"]
+		if len(netInPoints) == 0 {
+			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: pod.NetInRate()}}
+		}
+		netOutPoints := metrics["netout"]
+		if len(netOutPoints) == 0 {
+			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: pod.NetOutRate()}}
+		}
+
+		if mockModeEnabled {
+			if len(cpuPoints) < mockWorkloadMinSeriesPoints {
+				cpuPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "cpu", snapshot.cpu)
+			}
+			if len(memoryPoints) < mockWorkloadMinSeriesPoints {
+				memoryPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "memory", snapshot.memory)
+			}
+			if len(diskPoints) < mockWorkloadMinSeriesPoints {
+				diskPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "disk", snapshot.disk)
+			}
+			if len(netInPoints) < mockWorkloadMinSeriesPoints {
+				netInPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netin", pod.NetInRate())
+			}
+			if len(netOutPoints) < mockWorkloadMinSeriesPoints {
+				netOutPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netout", pod.NetOutRate())
+			}
+		}
+
+		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
+
+		snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
+		snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
+		snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
+		snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
+
+		guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
+		snapshots = append(snapshots, snapshot)
 	}
 
-	for _, host := range snap.DockerHosts {
-		if !matchesSelectedDockerHost(host) {
+	dockerHostsByID := make(map[string]*unifiedresources.DockerHostView, len(readState.DockerHosts()))
+	for _, host := range readState.DockerHosts() {
+		if host == nil {
 			continue
 		}
-		for _, container := range host.Containers {
-			if container.ID == "" {
+		dockerHostsByID[host.ID()] = host
+	}
+
+	for _, container := range readState.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		if selectedNodeID != "" && selectedNode != nil {
+			host := dockerHostsByID[container.ParentID()]
+			if host == nil || !matchesSelectedDockerHostView(host) {
 				continue
 			}
-			guestCounts.Total++
-			if strings.EqualFold(container.State, "running") {
-				guestCounts.Running++
-			} else {
-				guestCounts.Stopped++
-			}
-
-			diskFallback := 0.0
-			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-				diskFallback = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-			}
-			snapshot := workloadsSummarySnapshot{
-				id:      container.ID,
-				name:    strings.TrimSpace(container.Name),
-				cpu:     clampWorkloadPercent(container.CPUPercent),
-				memory:  clampWorkloadPercent(container.MemoryPercent),
-				disk:    clampWorkloadPercent(diskFallback),
-				network: 0,
-			}
-			if snapshot.name == "" {
-				snapshot.name = container.ID
-			}
-
-			metricKey := fmt.Sprintf("docker:%s", container.ID)
-			metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", container.ID, duration)
-			cpuPoints := metrics["cpu"]
-			if len(cpuPoints) == 0 {
-				cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.CPUPercent}}
-			}
-			memoryPoints := metrics["memory"]
-			if len(memoryPoints) == 0 {
-				memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.MemoryPercent}}
-			}
-			diskPoints := metrics["disk"]
-			if len(diskPoints) == 0 {
-				diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: diskFallback}}
-			}
-			netInPoints := metrics["netin"]
-			netOutPoints := metrics["netout"]
-
-			networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
-
-			snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
-			snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
-			snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
-			snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
-
-			guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
-			guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
-			guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
-			guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
-			snapshots = append(snapshots, snapshot)
 		}
+		containerID := strings.TrimSpace(container.ContainerID())
+		if containerID == "" {
+			continue
+		}
+		guestCounts.Total++
+		if strings.EqualFold(container.ContainerState(), "running") {
+			guestCounts.Running++
+		} else {
+			guestCounts.Stopped++
+		}
+
+		snapshot := workloadsSummarySnapshot{
+			id:      containerID,
+			name:    strings.TrimSpace(container.Name()),
+			cpu:     clampWorkloadPercent(container.CPUPercent()),
+			memory:  clampWorkloadPercent(container.MemoryPercent()),
+			disk:    clampWorkloadPercent(container.DiskPercent()),
+			network: 0,
+		}
+		if snapshot.name == "" {
+			snapshot.name = containerID
+		}
+
+		metricKey := fmt.Sprintf("docker:%s", containerID)
+		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", containerID, duration)
+		cpuPoints := metrics["cpu"]
+		if len(cpuPoints) == 0 {
+			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.CPUPercent()}}
+		}
+		memoryPoints := metrics["memory"]
+		if len(memoryPoints) == 0 {
+			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.MemoryPercent()}}
+		}
+		diskPoints := metrics["disk"]
+		if len(diskPoints) == 0 {
+			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.DiskPercent()}}
+		}
+		netInPoints := metrics["netin"]
+		netOutPoints := metrics["netout"]
+
+		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
+
+		snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
+		snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
+		snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
+		snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
+
+		guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
+		guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
+		snapshots = append(snapshots, snapshot)
 	}
 
 	cpuMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
