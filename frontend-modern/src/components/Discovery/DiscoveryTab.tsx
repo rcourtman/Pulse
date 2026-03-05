@@ -47,13 +47,13 @@ const getURLSuggestionSourceLabel = (code?: string): string => {
     case 'host_management_profile_proxmox_node':
     case 'host_management_profile_linked_proxmox_node':
     case 'host_management_profile_pve':
-      return 'Proxmox host profile';
+      return 'Proxmox node profile';
     case 'host_management_profile_pbs':
       return 'Proxmox Backup profile';
     case 'host_management_profile_pmg':
       return 'Proxmox Mail Gateway profile';
     case 'host_management_profile_nas':
-      return 'NAS host profile';
+      return 'NAS node profile';
     default:
       return 'Discovery heuristic';
   }
@@ -121,7 +121,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     }
   });
 
-  // Check if this host has a connected agent for command execution
+  // Check if this resource has a connected agent for command execution
   // Matches backend logic in deep_scanner.go findAgentForHost()
   const hasConnectedAgent = () => {
     const agents = connectedAgents()?.agents || [];
@@ -244,7 +244,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         // Check if commands are enabled to provide more specific guidance
         if (props.commandsEnabled === false) {
           setScanError(
-            'Commands not enabled. Enable "Pulse Commands" in Settings → Unified Agents for this host.',
+            'Commands not enabled. Enable "Pulse Commands" in Settings → Unified Agents for this agent.',
           );
         } else if (props.commandsEnabled === true) {
           // Commands enabled but no WebSocket connection - likely token scope issue
