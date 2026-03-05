@@ -439,6 +439,40 @@ func TestV6AIEvalPromptsStayCanonical(t *testing.T) {
 	}
 }
 
+// TestV6AlertConfigAliasesStayStripped keeps alert-config compatibility tests
+// pinned on dropping removed legacy resource-type aliases and host-era keys.
+func TestV6AlertConfigAliasesStayStripped(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	path := filepath.Join(repoRoot, "internal", "alerts", "config_aliases_test.go")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	content := string(data)
+	normalizedPath := filepath.ToSlash(path)
+
+	requiredSnippets := []string{
+		`TestAlertConfigUnmarshal_LegacyHostAliasesIgnored`,
+		`expected legacy timeThresholds.host to be removed`,
+		`expected legacy timeThresholds.docker to be removed`,
+		`expected legacy timeThresholds.k8s to be removed`,
+		`expected legacy metricTimeThresholds.host to be removed`,
+		`expected legacy metricTimeThresholds.dockerhost to be removed`,
+		`expected legacy metricTimeThresholds.kubernetes-cluster to be removed`,
+		`TestAlertConfigUnmarshal_CanonicalKeysTakePrecedence`,
+		`did not expect legacy metricTimeThresholds.docker to remain`,
+		`TestAlertConfigMarshal_UsesCanonicalAgentKeys`,
+		`did not expect legacy hostDefaults in output`,
+		`did not expect legacy disableAllHosts in output`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(content, snippet) {
+			t.Errorf("%s: missing required alert-config alias stripping snippet %q", normalizedPath, snippet)
+		}
+	}
+}
+
 // TestV6ReleaseFacingAPITestsCoverLegacyHostRejection keeps release-facing API
 // contract tests pinned on strict v6 behavior for removed host aliases.
 func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
