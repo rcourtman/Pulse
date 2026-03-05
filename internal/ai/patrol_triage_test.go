@@ -227,6 +227,9 @@ func TestTriageResourceTypeRejectsLegacyKnownTypeAliases(t *testing.T) {
 	if got := triageResourceType("lxc", "qemu/100"); got != "vm" {
 		t.Fatalf("expected canonical vm type from resource ID, got %q", got)
 	}
+	if got := triageResourceType("docker", "qemu/100"); got != "vm" {
+		t.Fatalf("expected canonical vm type from resource ID when docker alias is provided, got %q", got)
+	}
 }
 
 func TestTriageQuietInfra(t *testing.T) {

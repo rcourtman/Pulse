@@ -843,8 +843,6 @@ func triageCanonicalResourceType(resourceType string) string {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
 	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent":
 		return strings.ToLower(strings.TrimSpace(resourceType))
-	case "docker":
-		return "docker-host"
 	default:
 		return ""
 	}
