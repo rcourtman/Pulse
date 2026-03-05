@@ -108,6 +108,16 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 			},
 		},
 		{
+			name:    "System container CPU above threshold creates alert",
+			alertID: "lxc-200-cpu",
+			input: &UnifiedResourceInput{
+				ID:   "lxc-200",
+				Type: "system-container",
+				Name: "worker-ct",
+				CPU:  &UnifiedResourceMetric{Percent: 91},
+			},
+		},
+		{
 			name:    "Node memory above threshold creates alert",
 			alertID: "node-a-memory",
 			input: &UnifiedResourceInput{
@@ -156,6 +166,20 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 			assertAlertPresent(t, m, tt.alertID)
 		})
 	}
+}
+
+func TestCheckUnifiedResourceRejectsLegacyGuestTypeAlias(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "legacy-ct-200",
+		Type: "lxc",
+		Name: "legacy-ct",
+		CPU:  &UnifiedResourceMetric{Percent: 95},
+	})
+
+	assertAlertMissing(t, m, "legacy-ct-200-cpu")
 }
 
 func TestCheckUnifiedResourceOverrideLowerThresholdCreatesAlert(t *testing.T) {
