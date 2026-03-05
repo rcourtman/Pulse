@@ -1205,7 +1205,7 @@ func cephDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	}
 	return &unified.DiscoveryTarget{
 		ResourceType: "ceph",
-		HostID:       hostID,
+		AgentID:      hostID,
 		ResourceID:   resource.ID,
 		Hostname:     resource.Name,
 	}
@@ -1237,7 +1237,7 @@ func hostDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	}
 	return &unified.DiscoveryTarget{
 		ResourceType: "agent",
-		HostID:       hostID,
+		AgentID:      hostID,
 		ResourceID:   hostID,
 		Hostname: firstNonEmptyTrimmed(
 			agentHostname(resource.Agent),
@@ -1263,7 +1263,7 @@ func proxmoxGuestDiscoveryTarget(resource unified.Resource, resourceType string)
 	}
 	return &unified.DiscoveryTarget{
 		ResourceType: resourceType,
-		HostID:       hostID,
+		AgentID:      hostID,
 		ResourceID:   resourceID,
 		Hostname: firstNonEmptyTrimmed(
 			firstResourceHostname(resource),
@@ -1320,7 +1320,7 @@ func kubernetesDiscoveryTarget(resource unified.Resource, kind string) *unified.
 
 	return &unified.DiscoveryTarget{
 		ResourceType: "k8s",
-		HostID:       hostID,
+		AgentID:      hostID,
 		ResourceID:   resourceID,
 		Hostname: firstNonEmptyTrimmed(
 			resource.Kubernetes.ClusterName,
@@ -1346,7 +1346,7 @@ func physicalDiskDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTa
 	}
 	return &unified.DiscoveryTarget{
 		ResourceType: "disk",
-		HostID:       hostID,
+		AgentID:      hostID,
 		ResourceID:   resource.ID,
 		Hostname:     hostID,
 	}

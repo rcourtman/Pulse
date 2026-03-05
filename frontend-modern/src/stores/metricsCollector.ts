@@ -42,7 +42,7 @@ const getResourceDiskCounters = (resource: unknown): DiskCounterSample[] => {
   const discoveryTarget = asRecord(raw.discoveryTarget);
   const agentId =
     asString(agent?.agentId) ||
-    asString(discoveryTarget?.hostId) ||
+    asString(discoveryTarget?.agentId) ||
     asString(raw.id) ||
     asString(raw.platformId);
   if (!agentId) return [];

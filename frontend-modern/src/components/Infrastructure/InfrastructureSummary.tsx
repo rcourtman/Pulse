@@ -60,7 +60,7 @@ const getAgentIdFromResource = (resource: Resource): string | null => {
   return (
     getExplicitAgentIdFromResource(resource) ||
     asTrimmedString(resource.discoveryTarget?.resourceId) ||
-    asTrimmedString(resource.discoveryTarget?.hostId)
+    asTrimmedString(resource.discoveryTarget?.agentId)
   );
 };
 
@@ -74,14 +74,14 @@ const hasAgentFacet = (resource: Resource): boolean =>
     getPlatformAgentRecord(resource) ||
     getExplicitAgentIdFromResource(resource) ||
     (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-      resource.discoveryTarget.hostId),
+      resource.discoveryTarget.agentId),
   );
 
 const getChartKeyCandidates = (resource: Resource): string[] => {
   const candidates = [
     getAgentIdFromResource(resource),
     asTrimmedString(resource.discoveryTarget?.resourceId),
-    asTrimmedString(resource.discoveryTarget?.hostId),
+    asTrimmedString(resource.discoveryTarget?.agentId),
     asTrimmedString(resource.id),
     asTrimmedString(resource.name),
     asTrimmedString(resource.platformId),
@@ -390,7 +390,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     }
     if (resource.platformType === 'agent') {
       const discoveryResourceId = asTrimmedString(resource.discoveryTarget?.resourceId);
-      const discoveryHostId = asTrimmedString(resource.discoveryTarget?.hostId);
+      const discoveryHostId = asTrimmedString(resource.discoveryTarget?.agentId);
       if (discoveryResourceId) directAgentCandidates.push(discoveryResourceId);
       if (discoveryHostId) directAgentCandidates.push(discoveryHostId);
     }

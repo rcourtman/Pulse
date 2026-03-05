@@ -82,7 +82,7 @@ const toAgentResource = (h: any) => ({
   identity: { hostname: h.hostname },
   discoveryTarget: {
     resourceType: 'agent' as const,
-    hostId: h.id,
+    agentId: h.id,
     resourceId: h.id,
   },
   agent: {
@@ -118,7 +118,7 @@ const toDockerRuntimeResource = (d: any) => ({
   identity: { hostname: d.hostname },
   discoveryTarget: {
     resourceType: 'docker' as const,
-    hostId: d.agentId || d.id,
+    agentId: d.agentId || d.id,
     resourceId: d.id,
   },
   platformData: {
@@ -149,7 +149,7 @@ const toK8sClusterResource = (k: any) => ({
   lastSeen: k.lastSeen,
   discoveryTarget: {
     resourceType: 'k8s' as const,
-    hostId: k.agentId || k.id,
+    agentId: k.agentId || k.id,
     resourceId: k.id,
   },
   platformData: {

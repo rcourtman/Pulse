@@ -21,13 +21,12 @@ vi.mock('../Discovery/DiscoveryTab', () => ({
   DiscoveryTab: (props: {
     resourceType: string;
     agentId?: string;
-    hostId?: string;
     resourceId: string;
     hostname: string;
   }) => (
     <div data-testid="discovery-tab">
       <span data-testid="disc-resource-type">{props.resourceType}</span>
-      <span data-testid="disc-agent-id">{props.agentId || props.hostId}</span>
+      <span data-testid="disc-agent-id">{props.agentId}</span>
       <span data-testid="disc-resource-id">{props.resourceId}</span>
     </div>
   ),

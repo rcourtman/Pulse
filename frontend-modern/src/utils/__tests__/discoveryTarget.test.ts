@@ -13,7 +13,7 @@ describe('discoveryTarget utils', () => {
       getAgentDiscoveryResourceId({
         resourceType: 'agent',
         resourceId: 'agent-1',
-        hostId: 'fallback-host-id',
+        agentId: 'fallback-agent-id',
       }),
     ).toBe('agent-1');
 
@@ -22,17 +22,8 @@ describe('discoveryTarget utils', () => {
         resourceType: 'agent',
         resourceId: '',
         agentId: 'agent-1',
-        hostId: 'host-1',
       }),
     ).toBe('agent-1');
-
-    expect(
-      getAgentDiscoveryResourceId({
-        resourceType: 'agent',
-        resourceId: '',
-        hostId: 'host-1',
-      }),
-    ).toBe('host-1');
   });
 
   it('returns undefined for non-agent discovery types', () => {
@@ -40,7 +31,7 @@ describe('discoveryTarget utils', () => {
       getAgentDiscoveryResourceId({
         resourceType: 'docker',
         resourceId: 'docker-host-1',
-        hostId: 'docker-host-1',
+        agentId: 'docker-host-1',
       }),
     ).toBeUndefined();
   });

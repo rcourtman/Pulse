@@ -59,7 +59,7 @@ const hasAgentFacet = (resource: Resource): boolean => {
     platformAgent ||
     asString(platformData.agentId) ||
     (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-      resource.discoveryTarget.hostId),
+      resource.discoveryTarget.agentId),
   );
 };
 
@@ -85,7 +85,7 @@ const toAgentSummaryShape = (resource: Resource) => {
     resource.identity?.hostname || asString(agent.hostname) || resource.name || resource.id;
   const id =
     asString(agent.agentId) ||
-    resource.discoveryTarget?.hostId ||
+    resource.discoveryTarget?.agentId ||
     getAgentDiscoveryResourceId(resource.discoveryTarget) ||
     resource.id;
   return {

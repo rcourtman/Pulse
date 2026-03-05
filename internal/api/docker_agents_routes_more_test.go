@@ -122,7 +122,7 @@ func TestDockerAgentHandlers_HandleDeleteHost_Errors(t *testing.T) {
 	}
 }
 
-func TestDockerAgentHandlers_LegacyHostsRouteAlias(t *testing.T) {
+func TestDockerAgentHandlers_RejectsLegacyHostsRouteAlias(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
@@ -130,7 +130,7 @@ func TestDockerAgentHandlers_LegacyHostsRouteAlias(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleDockerHostActions(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("legacy hosts alias status = %d, want 200", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("legacy hosts alias status = %d, want 400", rec.Code)
 	}
 }

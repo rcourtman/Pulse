@@ -162,7 +162,6 @@ export type DockerPlatformData = {
 export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;
   agentId: string;
-  hostId: string; // Legacy alias kept while callers migrate to `agentId`.
   resourceId: string;
   hostname: string;
   metadataKind: 'guest' | 'agent';
@@ -177,9 +176,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
   const explicitDiscoveryTarget = resource.discoveryTarget;
-  const explicitDiscoveryAgentId =
-    asString((explicitDiscoveryTarget as { agentId?: unknown } | undefined)?.agentId) ||
-    explicitDiscoveryTarget?.hostId;
+  const explicitDiscoveryAgentId = asString(
+    (explicitDiscoveryTarget as { agentId?: unknown } | undefined)?.agentId,
+  );
 
   if (
     explicitDiscoveryTarget &&
@@ -219,7 +218,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType,
         agentId: explicitDiscoveryAgentId,
-        hostId: explicitDiscoveryAgentId,
         resourceId: explicitDiscoveryTarget.resourceId,
         hostname,
         metadataKind: isHostDiscovery ? 'agent' : 'guest',
@@ -298,7 +296,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'agent',
         agentId: agentLikeId,
-        hostId: agentLikeId,
         resourceId: agentLikeId,
         hostname,
         metadataKind: 'agent',
@@ -309,7 +306,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'vm',
         agentId: workloadAgentId,
-        hostId: workloadAgentId,
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
@@ -322,7 +318,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'system-container',
         agentId: workloadAgentId,
-        hostId: workloadAgentId,
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
@@ -334,7 +329,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'docker',
         agentId: workloadAgentId,
-        hostId: workloadAgentId,
         resourceId: asString(dockerPlatformData?.containerId) || resource.id,
         hostname,
         metadataKind: 'guest',
@@ -347,7 +341,6 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return {
         resourceType: 'k8s',
         agentId: workloadAgentId,
-        hostId: workloadAgentId,
         resourceId: kubernetesResourceId || resource.id,
         hostname,
         metadataKind: 'guest',

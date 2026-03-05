@@ -393,7 +393,7 @@ export function createWebSocketStore(url: string) {
                     resource.id,
                     asString(dockerData?.hostSourceId) || '',
                     asString(platformData?.hostSourceId) || '',
-                    asString(resource?.discoveryTarget?.hostId) || '',
+                    asString(resource?.discoveryTarget?.agentId) || '',
                     resource?.discoveryTarget?.resourceType === 'docker'
                       ? asString(resource?.discoveryTarget?.resourceId) || ''
                       : '',
@@ -633,12 +633,12 @@ export function createWebSocketStore(url: string) {
             asString(agentData.agentId) ||
             asString(platformData.agentId) ||
             getAgentDiscoveryResourceId(resource?.discoveryTarget) ||
-            asString(resource?.discoveryTarget?.hostId) ||
+            asString(resource?.discoveryTarget?.agentId) ||
             asString(resource.id);
           const runtimeActionId =
             asString(dockerData.hostSourceId) ||
             asString(platformData.hostSourceId) ||
-            asString(resource?.discoveryTarget?.hostId) ||
+            asString(resource?.discoveryTarget?.agentId) ||
             (resource?.discoveryTarget?.resourceType === 'docker'
               ? asString(resource?.discoveryTarget?.resourceId)
               : undefined) ||
@@ -705,9 +705,6 @@ export function createWebSocketStore(url: string) {
     },
     markDockerRuntimesTokenRevoked: (tokenId: string, agentIds: string[]) =>
       markTokenRevoked('dockerRuntimes', tokenId, agentIds),
-    // Legacy alias kept while callers migrate.
-    markDockerHostsTokenRevoked: (tokenId: string, hostIds: string[]) =>
-      markTokenRevoked('dockerRuntimes', tokenId, hostIds),
     markAgentsTokenRevoked: (tokenId: string, agentIds: string[]) =>
       markTokenRevoked('agents', tokenId, agentIds),
     removeAlerts: (predicate: (alert: Alert) => boolean) => {

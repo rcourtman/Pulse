@@ -317,7 +317,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     const proxmox = data?.proxmox;
     const agent = data?.agent;
     const raw = [
-      props.resource.discoveryTarget?.hostId,
+      props.resource.discoveryTarget?.agentId,
       props.resource.discoveryTarget?.resourceId,
       proxmox?.nodeName,
       agent?.agentId,
@@ -1201,7 +1201,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             >
               <DiscoveryTab
                 resourceType={config().resourceType}
-                hostId={config().hostId}
+                agentId={config().agentId}
                 resourceId={config().resourceId}
                 hostname={config().hostname}
               />

@@ -114,7 +114,7 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 	if resource.DiscoveryTarget.ResourceType != "agent" {
 		t.Fatalf("discovery target resourceType = %q, want agent", resource.DiscoveryTarget.ResourceType)
 	}
-	if resource.DiscoveryTarget.HostID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
+	if resource.DiscoveryTarget.AgentID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
 		t.Fatalf("discovery target = %+v, want host-1/host-1", resource.DiscoveryTarget)
 	}
 }
@@ -183,13 +183,13 @@ func TestResourceListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 	if agentTarget.ResourceType != "agent" {
 		t.Fatalf("agent discovery target type = %q, want agent", agentTarget.ResourceType)
 	}
-	if agentTarget.HostID != "host-1" || agentTarget.ResourceID != "host-1" {
+	if agentTarget.AgentID != "host-1" || agentTarget.ResourceID != "host-1" {
 		t.Fatalf("agent discovery target = %+v, want host-1/host-1", agentTarget)
 	}
 	if nodeTarget == nil {
 		t.Fatalf("expected discovery target for proxmox node host")
 	}
-	if nodeTarget.HostID != "pve1" || nodeTarget.ResourceID != "pve1" {
+	if nodeTarget.AgentID != "pve1" || nodeTarget.ResourceID != "pve1" {
 		t.Fatalf("node discovery target = %+v, want pve1/pve1", nodeTarget)
 	}
 }
@@ -242,7 +242,7 @@ func TestResourceGetResource(t *testing.T) {
 	if resource.DiscoveryTarget.ResourceType != "agent" {
 		t.Fatalf("discovery target resourceType = %q, want agent", resource.DiscoveryTarget.ResourceType)
 	}
-	if resource.DiscoveryTarget.HostID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
+	if resource.DiscoveryTarget.AgentID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
 		t.Fatalf("discovery target = %+v, want host-1/host-1", resource.DiscoveryTarget)
 	}
 }
@@ -464,8 +464,8 @@ func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	if resource.DiscoveryTarget.ResourceType != "k8s" {
 		t.Fatalf("discovery target type = %q, want k8s", resource.DiscoveryTarget.ResourceType)
 	}
-	if resource.DiscoveryTarget.HostID != "agent-1" {
-		t.Fatalf("discovery target hostID = %q, want agent-1", resource.DiscoveryTarget.HostID)
+	if resource.DiscoveryTarget.AgentID != "agent-1" {
+		t.Fatalf("discovery target agentID = %q, want agent-1", resource.DiscoveryTarget.AgentID)
 	}
 	if resource.DiscoveryTarget.ResourceID != "pod-1" {
 		t.Fatalf("discovery target resourceID = %q, want pod-1", resource.DiscoveryTarget.ResourceID)
@@ -587,8 +587,8 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 			if target.ResourceType != "k8s" {
 				t.Fatalf("resource type = %q, want k8s", target.ResourceType)
 			}
-			if target.HostID != "agent-k8s-1" {
-				t.Fatalf("hostID = %q, want agent-k8s-1", target.HostID)
+			if target.AgentID != "agent-k8s-1" {
+				t.Fatalf("agentID = %q, want agent-k8s-1", target.AgentID)
 			}
 			if target.ResourceID != tt.wantResourceID {
 				t.Fatalf("resourceID = %q, want %q", target.ResourceID, tt.wantResourceID)

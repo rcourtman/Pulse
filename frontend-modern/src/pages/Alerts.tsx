@@ -371,7 +371,7 @@ export function Alerts() {
     const agent = asRecord(data?.agent);
     return uniqueIds(
       getAgentDiscoveryResourceId(resource.discoveryTarget),
-      resource.discoveryTarget?.hostId,
+      resource.discoveryTarget?.agentId,
       resource.agent?.agentId,
       agent?.agentId,
       data?.agentId,
@@ -387,7 +387,7 @@ export function Alerts() {
         : undefined,
       docker?.hostSourceId,
       data?.hostSourceId,
-      resource.discoveryTarget?.hostId,
+      resource.discoveryTarget?.agentId,
       resource.id,
     );
   };
@@ -403,7 +403,7 @@ export function Alerts() {
       agent ||
       asString(data?.agentId) ||
       (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-        resource.discoveryTarget.hostId),
+        resource.discoveryTarget.agentId),
     );
   };
   const agentResources = createMemo(() =>

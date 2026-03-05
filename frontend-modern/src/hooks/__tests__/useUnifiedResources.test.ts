@@ -21,7 +21,7 @@ const v2Resource = {
   },
   discoveryTarget: {
     resourceType: 'agent',
-    hostId: 'host-1',
+    agentId: 'host-1',
     resourceId: 'host-1',
     hostname: 'pve1',
   },
@@ -175,7 +175,7 @@ describe('useUnifiedResources', () => {
     expect(firstResourceEffectRuns).toBe(effectsAfterInitialFetch);
     expect(result!.resources()[0].discoveryTarget).toEqual({
       resourceType: 'agent',
-      hostId: 'host-1',
+      agentId: 'host-1',
       resourceId: 'host-1',
       hostname: 'pve1',
     });
@@ -216,7 +216,7 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('maps discoveryTarget.agentId into canonical discovery hostId', async () => {
+  it('maps discoveryTarget.agentId into canonical discovery agentId', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -244,7 +244,7 @@ describe('useUnifiedResources', () => {
     await result!.refetch();
     expect(result!.resources()[0].discoveryTarget).toEqual({
       resourceType: 'agent',
-      hostId: 'agent-discovery-1',
+      agentId: 'agent-discovery-1',
       resourceId: 'agent-discovery-1',
       hostname: 'pve1',
     });

@@ -171,7 +171,7 @@ func TestDockerAgentHandlers_HandleCommandAck(t *testing.T) {
 	}
 }
 
-func TestDockerAgentHandlers_HandleCommandAck_LegacyHostIDAlias(t *testing.T) {
+func TestDockerAgentHandlers_HandleCommandAck_RejectsLegacyHostIDAlias(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
 
@@ -190,8 +190,8 @@ func TestDockerAgentHandlers_HandleCommandAck_LegacyHostIDAlias(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleCommandAck(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -280,7 +280,7 @@ func TestDockerAgentHandlers_HandleContainerUpdate(t *testing.T) {
 	}
 }
 
-func TestDockerAgentHandlers_HandleContainerUpdate_LegacyHostIDAlias(t *testing.T) {
+func TestDockerAgentHandlers_HandleContainerUpdate_RejectsLegacyHostIDAlias(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, &config.Config{DataPath: t.TempDir()})
 	hostID := seedDockerHost(t, monitor)
 
@@ -294,8 +294,8 @@ func TestDockerAgentHandlers_HandleContainerUpdate_LegacyHostIDAlias(t *testing.
 	rec := httptest.NewRecorder()
 
 	handler.HandleContainerUpdate(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
 	}
 }
 

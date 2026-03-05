@@ -49,7 +49,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       platformAgent ||
       asString(platformData.agentId) ||
       (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-        resource.discoveryTarget.hostId),
+        resource.discoveryTarget.agentId),
     );
   };
 
@@ -168,7 +168,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
 
       const hostId =
         asString(agent.agentId) ||
-        resource.discoveryTarget?.hostId ||
+        resource.discoveryTarget?.agentId ||
         getAgentDiscoveryResourceId(resource.discoveryTarget) ||
         resource.id;
       const hostname =

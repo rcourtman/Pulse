@@ -46,7 +46,7 @@ const getAgentCandidateIds = (agent: Agent): string[] => {
   const candidates = [
     asTrimmedString(agent.id),
     asTrimmedString(discoveryTarget?.resourceId),
-    asTrimmedString(discoveryTarget?.hostId),
+    asTrimmedString(discoveryTarget?.agentId),
     asTrimmedString(platformAgent?.agentId),
     asTrimmedString(platformData?.agentId),
   ].filter((value): value is string => Boolean(value));

@@ -257,15 +257,15 @@ export const UnifiedAgents: Component = () => {
       asString(platformAgent(r)?.agentId) ||
       asString(platformData?.agentId) ||
       r.discoveryTarget?.resourceId ||
-      r.discoveryTarget?.hostId
+      r.discoveryTarget?.agentId
     );
   };
 
   const getAgentActionId = (r: Resource) => {
     const discoveryAgentId = getAgentDiscoveryResourceId(r.discoveryTarget);
     if (discoveryAgentId) return discoveryAgentId;
-    if (r.discoveryTarget?.hostId) {
-      return r.discoveryTarget.hostId;
+    if (r.discoveryTarget?.agentId) {
+      return r.discoveryTarget.agentId;
     }
     return getAgentId(r);
   };
@@ -278,7 +278,7 @@ export const UnifiedAgents: Component = () => {
     return (
       asString(platformDocker(r)?.hostSourceId) ||
       asString(platformData?.hostSourceId) ||
-      (r.type === 'docker-host' ? r.discoveryTarget?.hostId || r.id : undefined)
+      (r.type === 'docker-host' ? r.discoveryTarget?.agentId || r.id : undefined)
     );
   };
 
@@ -294,7 +294,7 @@ export const UnifiedAgents: Component = () => {
   const getKubernetesAgentId = (r: Resource) => {
     const kubernetes = platformKubernetes(r);
     return (
-      asString(kubernetes?.agentId) || r.discoveryTarget?.hostId || asString(kubernetes?.clusterId)
+      asString(kubernetes?.agentId) || r.discoveryTarget?.agentId || asString(kubernetes?.clusterId)
     );
   };
 

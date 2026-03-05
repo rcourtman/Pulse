@@ -90,7 +90,7 @@ describe('agent model guardrails', () => {
     expect(discoveryTypesSource).not.toContain("| 'lxc'");
     expect(discoveryTypesSource).not.toContain("| 'docker_lxc'");
     expect(discoveryTargetUtilsSource).toContain('discoveryTarget.agentId');
-    expect(unifiedResourcesHookSource).toContain('v2.discoveryTarget?.agentId || v2.discoveryTarget?.hostId');
+    expect(unifiedResourcesHookSource).toContain('const discoveryAgentId = v2.discoveryTarget?.agentId;');
   });
 
   it('keeps alerts agent thresholds sourced from unified agent resources', () => {
@@ -121,12 +121,10 @@ describe('agent model guardrails', () => {
     expect(unifiedNodeSelectorSource).not.toContain('if (hostLikeResources.length === 0');
   });
 
-  it('keeps discovery mapping agentId-first with hostId compatibility alias', () => {
+  it('keeps discovery mapping on canonical agentId only', () => {
     expect(resourceDetailMappersSource).toContain('agentId: explicitDiscoveryAgentId');
-    expect(resourceDetailMappersSource).toContain('hostId: explicitDiscoveryAgentId');
-    expect(unifiedResourcesHookSource).toContain(
-      'v2.discoveryTarget?.agentId || v2.discoveryTarget?.hostId',
-    );
+    expect(resourceDetailMappersSource).not.toContain('hostId: explicitDiscoveryAgentId');
+    expect(unifiedResourcesHookSource).toContain('const discoveryAgentId = v2.discoveryTarget?.agentId;');
   });
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {

@@ -105,7 +105,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       readPlatformString(resource.agent?.agentId) ||
       readPlatformString(readNestedPlatformField(platformData, 'agentId')) ||
       getAgentDiscoveryResourceId(resource.discoveryTarget) ||
-      resource.discoveryTarget?.hostId ||
+      resource.discoveryTarget?.agentId ||
       resource.id
     );
   };
@@ -114,7 +114,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     const platformData = readPlatformData(resource);
     return (
       readPlatformString(readNestedPlatformField(platformData, 'hostSourceId')) ||
-      resource.discoveryTarget?.hostId ||
+      resource.discoveryTarget?.agentId ||
       (resource.discoveryTarget?.resourceType === 'docker'
         ? resource.discoveryTarget.resourceId
         : undefined) ||

@@ -168,7 +168,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
       discoveryTarget: {
         resourceType: 'agent',
-        hostId: 'overflow-host-id',
+        agentId: 'overflow-host-id',
         resourceId: 'overflow-resource-id',
       },
       identity: {

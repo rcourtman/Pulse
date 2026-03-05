@@ -85,7 +85,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const agent = asRecord(platformData?.agent);
     return uniqueIds(
       getAgentDiscoveryResourceId(resource.discoveryTarget),
-      resource.discoveryTarget?.hostId,
+      resource.discoveryTarget?.agentId,
       resource.agent?.agentId,
       agent?.agentId,
       platformData?.agentId,
@@ -103,7 +103,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         : undefined,
       docker?.hostSourceId,
       platformData?.hostSourceId,
-      resource.discoveryTarget?.hostId,
+      resource.discoveryTarget?.agentId,
       resource.id,
     );
   };

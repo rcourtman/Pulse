@@ -399,7 +399,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         platformAgent ||
         asString(platformData?.agentId) ||
         (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-          resource.discoveryTarget.hostId),
+          resource.discoveryTarget.agentId),
       );
     };
     const getAgentActionId = (resource: Resource): string => {
@@ -407,7 +407,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const platformAgent = asRecord(platformData?.agent);
       return (
         getAgentDiscoveryResourceId(resource.discoveryTarget) ||
-        resource.discoveryTarget?.hostId ||
+        resource.discoveryTarget?.agentId ||
         asString(resource.agent?.agentId) ||
         asString(platformAgent?.agentId) ||
         asString(platformData?.agentId) ||
@@ -423,7 +423,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           : undefined) ||
         asString(platformDocker?.hostSourceId) ||
         asString(platformData?.hostSourceId) ||
-        resource.discoveryTarget?.hostId ||
+        resource.discoveryTarget?.agentId ||
         resource.id
       );
     };

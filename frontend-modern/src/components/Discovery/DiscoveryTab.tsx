@@ -24,7 +24,6 @@ import { eventBus } from '../../stores/events';
 interface DiscoveryTabProps {
   resourceType: ResourceType;
   agentId?: string;
-  hostId?: string; // Legacy alias accepted while callers migrate.
   resourceId: string;
   hostname: string;
   /** Whether commands are enabled for this agent (from agent config) */
@@ -98,7 +97,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   const [showExplanation, setShowExplanation] = createSignal(true);
   // Track if we initiated scan via HTTP to prevent WebSocket race conditions
   const [httpScanInProgress, setHttpScanInProgress] = createSignal(false);
-  const targetAgentId = createMemo(() => props.agentId || props.hostId || '');
+  const targetAgentId = createMemo(() => props.agentId || '');
 
   // Fetch discovery info (AI provider, commands) - used for pre-scan transparency
   const [discoveryInfo] = createResource(

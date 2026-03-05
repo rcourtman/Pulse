@@ -50,7 +50,7 @@ type Resource struct {
 // for this unified resource.
 type DiscoveryTarget struct {
 	ResourceType string `json:"resourceType"`
-	HostID       string `json:"hostId"`
+	AgentID      string `json:"agentId"`
 	ResourceID   string `json:"resourceId"`
 	Hostname     string `json:"hostname,omitempty"`
 }

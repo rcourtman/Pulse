@@ -12,7 +12,7 @@ interface NodeDrawerProps {
   node: Node;
   agent?: Agent;
   customUrl?: string; // Nodes don't typically have custom URL in current architecture but we can keep it
-  onCustomUrlChange?: (hostId: string, url: string) => void;
+  onCustomUrlChange?: (agentId: string, url: string) => void;
 }
 
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
@@ -87,7 +87,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         >
           <DiscoveryTab
             resourceType="agent"
-            hostId={metadataId()}
+            agentId={metadataId()}
             resourceId={metadataId()}
             hostname={discoveryHostname()}
           />

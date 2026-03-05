@@ -23,7 +23,6 @@ type DockerAgentHandlers struct {
 
 type dockerCommandAckRequest struct {
 	AgentID string         `json:"agentId"`
-	HostID  string         `json:"hostId,omitempty"` // Legacy alias accepted during migration.
 	Status  string         `json:"status"`
 	Message string         `json:"message,omitempty"`
 	Payload map[string]any `json:"payload,omitempty"`
@@ -56,19 +55,11 @@ func normalizeCommandStatus(status string) (string, error) {
 	}
 }
 
-func canonicalDockerAgentID(agentID string, legacyHostID string) string {
-	agentID = strings.TrimSpace(agentID)
-	if agentID != "" {
-		return agentID
-	}
-	return strings.TrimSpace(legacyHostID)
-}
-
 func trimDockerRuntimePathPrefix(path string) string {
-	if strings.HasPrefix(path, "/api/agents/docker/runtimes/") {
-		return strings.TrimPrefix(path, "/api/agents/docker/runtimes/")
+	if !strings.HasPrefix(path, "/api/agents/docker/runtimes/") {
+		return ""
 	}
-	return strings.TrimPrefix(path, "/api/agents/docker/hosts/")
+	return strings.TrimPrefix(path, "/api/agents/docker/runtimes/")
 }
 
 func dockerRuntimeAgentIDFromPath(path string, suffix string) string {
@@ -239,7 +230,7 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 	}
 
 	mon := h.getMonitor(r.Context())
-	agentID := canonicalDockerAgentID(req.AgentID, req.HostID)
+	agentID := strings.TrimSpace(req.AgentID)
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -538,7 +529,6 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 
 	var req struct {
 		AgentID       string `json:"agentId"`
-		HostID        string `json:"hostId,omitempty"` // Legacy alias accepted during migration.
 		ContainerID   string `json:"containerId"`
 		ContainerName string `json:"containerName"`
 	}
@@ -547,7 +537,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 		return
 	}
 
-	agentID := canonicalDockerAgentID(req.AgentID, req.HostID)
+	agentID := strings.TrimSpace(req.AgentID)
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
@@ -590,7 +580,6 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 
 // HandleUpdateAll triggers an update for all containers with updates available on a container runtime.
 // POST /api/agents/docker/runtimes/{agentId}/update-all
-// Legacy alias: /api/agents/docker/hosts/{agentId}/update-all
 func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -631,7 +620,6 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 
 // HandleCheckUpdates triggers an immediate update check for all containers on a container runtime.
 // POST /api/agents/docker/runtimes/{agentId}/check-updates
-// Legacy alias: /api/agents/docker/hosts/{agentId}/check-updates
 func (h *DockerAgentHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
