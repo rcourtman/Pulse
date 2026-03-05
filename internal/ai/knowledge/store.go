@@ -68,7 +68,7 @@ func isUnsupportedGuestID(guestID string) bool {
 	if unifiedresources.IsUnsupportedLegacyResourceIDAlias(normalized) {
 		return true
 	}
-	return strings.HasPrefix(normalized, "qemu/") || strings.HasPrefix(normalized, "lxc/") || strings.HasPrefix(normalized, "lxc-")
+	return strings.HasPrefix(normalized, "qemu/") || strings.HasPrefix(normalized, "lxc/") || strings.HasPrefix(normalized, "lxc-") || strings.HasPrefix(normalized, "ct-")
 }
 
 func normalizeGuestType(guestType string) string {
@@ -833,9 +833,6 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 	if strings.HasPrefix(lower, "vm-") {
 		utils.AddToken(tokens, trimmed[3:])
 	}
-	if strings.HasPrefix(lower, "ct-") {
-		utils.AddToken(tokens, trimmed[3:])
-	}
 	if strings.HasPrefix(lower, "system-container-") {
 		utils.AddToken(tokens, trimmed[17:])
 	}
@@ -843,7 +840,7 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 		utils.AddToken(tokens, trimmed[14:])
 	}
 
-	if strings.HasPrefix(lower, "vm-") || strings.HasPrefix(lower, "ct-") {
+	if strings.HasPrefix(lower, "vm-") {
 		if digits := utils.TrailingDigits(trimmed); digits != "" {
 			utils.AddToken(tokens, digits)
 		}
