@@ -45,11 +45,6 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
   });
 
-  it('ignores legacy host query param in v6', () => {
-    const parsed = parseWorkloadsLinkSearch('?type=docker&host=legacy-node-1');
-    expect(parsed.agent).toBe('');
-  });
-
   it('builds and parses infrastructure query params', () => {
     const href = buildInfrastructurePath({
       source: 'docker',

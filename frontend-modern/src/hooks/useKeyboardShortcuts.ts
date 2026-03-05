@@ -83,25 +83,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   };
 
   const getRoutes = (): Record<string, string> => {
-    const base: Record<string, string> = {
+    return {
       i: buildInfrastructurePath(),
       w: buildWorkloadsPath(),
       s: buildStoragePath(),
       b: buildRecoveryPath(),
       a: '/alerts',
       t: '/settings',
-    };
-
-    return {
-      ...base,
-      // Transition shortcuts for older muscle memory into unified views.
-      p: buildInfrastructurePath({ source: 'proxmox' }),
-      h: buildInfrastructurePath({ source: 'agent' }),
-      d: buildInfrastructurePath({ source: 'docker' }),
-      v: buildInfrastructurePath({ source: 'pmg' }), // services/mail gateway
-      c: buildWorkloadsPath({ type: 'docker' }), // docker/podman containers
-      l: buildWorkloadsPath({ type: 'lxc' }),
-      k: buildWorkloadsPath({ type: 'k8s' }),
     };
   };
 
