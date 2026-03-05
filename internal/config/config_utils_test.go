@@ -77,10 +77,10 @@ func TestIsValidDiscoveryEnvironment(t *testing.T) {
 		{"LXC-PRIVILEGED", "LXC-PRIVILEGED", true},
 		{"lxc-unprivileged", "lxc-unprivileged", true},
 		{"LXC-UNPRIVILEGED", "LXC-UNPRIVILEGED", true},
-		{"docker_host alias", "docker_host", true},
-		{"docker_bridge alias", "docker_bridge", true},
-		{"lxc_privileged alias", "lxc_privileged", true},
-		{"lxc_unprivileged alias", "lxc_unprivileged", true},
+		{"docker_host alias rejected", "docker_host", false},
+		{"docker_bridge alias rejected", "docker_bridge", false},
+		{"lxc_privileged alias rejected", "lxc_privileged", false},
+		{"lxc_unprivileged alias rejected", "lxc_unprivileged", false},
 
 		// Valid with whitespace trimming
 		{"auto with leading space", " auto", true},
@@ -125,9 +125,9 @@ func TestCanonicalDiscoveryEnvironment(t *testing.T) {
 		{name: "auto preserved", value: "auto", expected: "auto", ok: true},
 		{name: "native preserved", value: "native", expected: "native", ok: true},
 		{name: "hyphenated canonical", value: "docker-host", expected: "docker-host", ok: true},
-		{name: "underscore alias canonicalized", value: "docker_host", expected: "docker-host", ok: true},
-		{name: "uppercase underscore alias canonicalized", value: "DOCKER_HOST", expected: "docker-host", ok: true},
-		{name: "lxc privileged alias canonicalized", value: "lxc_privileged", expected: "lxc-privileged", ok: true},
+		{name: "underscore alias rejected", value: "docker_host", expected: "", ok: false},
+		{name: "uppercase underscore alias rejected", value: "DOCKER_HOST", expected: "", ok: false},
+		{name: "lxc privileged alias rejected", value: "lxc_privileged", expected: "", ok: false},
 		{name: "invalid value rejected", value: "dockerhost", expected: "", ok: false},
 	}
 

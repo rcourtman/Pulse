@@ -408,11 +408,9 @@ func IsValidDiscoveryEnvironment(value string) bool {
 }
 
 // CanonicalDiscoveryEnvironment returns the canonical discovery environment token.
-// Underscore aliases are accepted for backward compatibility but normalized to
-// hyphen-separated v6 tokens.
+// Only canonical v6 hyphen-separated tokens are accepted.
 func CanonicalDiscoveryEnvironment(value string) (string, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(value))
-	normalized = strings.ReplaceAll(normalized, "_", "-")
 	switch normalized {
 	case "", "auto":
 		return "auto", true

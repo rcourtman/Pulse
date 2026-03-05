@@ -227,7 +227,7 @@ Environment variables take precedence over `system.json`.
 | `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
 | `DISCOVERY_SUBNET` | CIDR or `auto` | `auto` |
-| `DISCOVERY_ENVIRONMENT_OVERRIDE` | Force discovery environment (`auto`, `native`, `docker-host`, `docker-bridge`, `lxc-privileged`, `lxc-unprivileged`). Legacy underscore forms are still accepted. | `auto` |
+| `DISCOVERY_ENVIRONMENT_OVERRIDE` | Force discovery environment (`auto`, `native`, `docker-host`, `docker-bridge`, `lxc-privileged`, `lxc-unprivileged`) | `auto` |
 | `DISCOVERY_SUBNET_ALLOWLIST` | Comma-separated CIDRs allowed for discovery | *(empty)* |
 | `DISCOVERY_SUBNET_BLOCKLIST` | Comma-separated CIDRs excluded from discovery | `169.254.0.0/16` |
 | `DISCOVERY_MAX_HOSTS_PER_SCAN` | Max hosts to scan per run | `1024` |

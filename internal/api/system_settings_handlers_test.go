@@ -194,7 +194,7 @@ func TestHandleUpdateSystemSettings_DiscoveryConfigAppliedFromCamelCasePayload(t
 
 	updates := map[string]interface{}{
 		"discoveryConfig": map[string]interface{}{
-			"environmentOverride": "docker_bridge",
+			"environmentOverride": "docker-bridge",
 			"subnetAllowlist":     []string{"10.0.0.0/8"},
 			"subnetBlocklist":     []string{"169.254.0.0/16"},
 			"maxHostsPerScan":     77,

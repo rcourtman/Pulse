@@ -417,11 +417,12 @@ func TestValidateSystemSettings(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "discoveryConfig.environment_override: legacy underscore alias still accepted",
+			name: "discoveryConfig.environment_override: legacy underscore alias rejected",
 			input: map[string]interface{}{
 				"discoveryConfig": map[string]interface{}{"environmentOverride": "docker_host"},
 			},
-			expectError: false,
+			expectError: true,
+			errorText:   "invalid discovery environment",
 		},
 		{
 			name: "discoveryConfig.environment_override: invalid value",
