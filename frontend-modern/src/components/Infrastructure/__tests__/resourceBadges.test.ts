@@ -55,9 +55,15 @@ describe('getTypeBadge', () => {
     expect(badge?.title).toBe('agent');
   });
 
-  it('does not map removed host alias to Agent', () => {
+  it('normalizes legacy host alias to Agent', () => {
     const badge = getTypeBadge('host');
-    expect(badge?.label).toBe('host');
-    expect(badge?.title).toBe('host');
+    expect(badge?.label).toBe('Agent');
+    expect(badge?.title).toBe('agent');
+  });
+
+  it('normalizes legacy docker host alias tokens to Container Runtime', () => {
+    const badge = getTypeBadge('docker_host');
+    expect(badge?.label).toBe('Container Runtime');
+    expect(badge?.title).toBe('docker-host');
   });
 });

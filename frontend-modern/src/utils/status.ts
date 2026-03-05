@@ -4,7 +4,7 @@ import type {
   Container,
   PBSInstance,
   Agent,
-  DockerHost,
+  DockerRuntime,
   DockerContainer,
   DockerService,
   ReplicationJob,
@@ -172,7 +172,7 @@ export function getAgentStatusIndicator(agent: Partial<Agent> | undefined | null
 }
 
 export function getDockerHostStatusIndicator(
-  host: Partial<DockerHost> | string | undefined | null,
+  host: Partial<DockerRuntime> | string | undefined | null,
 ): StatusIndicator {
   const rawStatus = typeof host === 'string' ? host : host?.status;
   const status = normalize(rawStatus);

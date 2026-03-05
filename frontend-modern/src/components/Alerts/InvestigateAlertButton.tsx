@@ -44,7 +44,6 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       case 'swarm_service':
         return 'app-container';
       case 'agent':
-      case 'host':
       case 'node':
       case 'storage':
       case 'disk':
@@ -56,6 +55,8 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       case 'k8s-deployment':
       case 'k8s-service':
         return normalized;
+      case 'host':
+        return 'agent';
       case 'k8s':
       case 'kubernetes':
       case 'kubernetes-cluster':

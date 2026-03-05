@@ -256,9 +256,6 @@ export interface DockerRuntime {
   isLegacy?: boolean;
 }
 
-// Legacy alias kept while remaining frontend references migrate.
-export type DockerHost = DockerRuntime;
-
 export interface DockerRuntimeCommand {
   id: string;
   type: string;

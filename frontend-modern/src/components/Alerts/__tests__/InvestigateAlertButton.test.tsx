@@ -338,6 +338,18 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('k8s-cluster');
     });
 
+    it('normalizes metadata.resourceType host alias to agent', async () => {
+      const alert = makeAlert({
+        resourceId: 'resource-xyz',
+        metadata: { resourceType: 'host' },
+      });
+      render(() => <InvestigateAlertButton alert={alert} />);
+      await fireEvent.click(screen.getByRole('button'));
+
+      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(context.targetType).toBe('agent');
+    });
+
     it('type prefix overrides explicit unsupported resourceType', async () => {
       const alert = makeAlert({ type: 'node_memory' });
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
