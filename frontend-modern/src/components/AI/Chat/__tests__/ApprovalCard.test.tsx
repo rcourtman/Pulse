@@ -51,7 +51,7 @@ describe('ApprovalCard', () => {
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
-  it('shows "Host" badge when runOnHost is true', () => {
+  it('shows "Agent" badge when runOnHost is true', () => {
     render(() => (
       <ApprovalCard
         approval={makeApproval({ runOnHost: true })}
@@ -60,10 +60,10 @@ describe('ApprovalCard', () => {
       />
     ));
 
-    expect(screen.getByText('Host')).toBeInTheDocument();
+    expect(screen.getByText('Agent')).toBeInTheDocument();
   });
 
-  it('does not show "Host" badge when runOnHost is false', () => {
+  it('does not show "Agent" badge when runOnHost is false', () => {
     render(() => (
       <ApprovalCard
         approval={makeApproval({ runOnHost: false })}
@@ -72,7 +72,7 @@ describe('ApprovalCard', () => {
       />
     ));
 
-    expect(screen.queryByText('Host')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agent')).not.toBeInTheDocument();
   });
 
   it('shows target host when targetHost is set', () => {
@@ -180,7 +180,7 @@ describe('ApprovalCard', () => {
       />
     ));
 
-    expect(screen.getByText('Host')).toBeInTheDocument();
+    expect(screen.getByText('Agent')).toBeInTheDocument();
     expect(screen.getByText('→ db-primary')).toBeInTheDocument();
   });
 
