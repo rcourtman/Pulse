@@ -13,6 +13,20 @@ The remaining `host` references in v6-adjacent code fall into three intentional 
 2. Internal state or wire-format shims that still bridge older model names to v6-facing output.
 3. Non-resource semantics where `host` means hostname, SSH host key, backup type, or endpoint host.
 
+## Release Decision
+
+Release can proceed on the host-type migration question.
+
+Reasoning:
+
+- canonical v6 request/resource surfaces now reject removed `host` aliases
+- the known release-facing registration leak has been fixed
+- remaining `host` naming is contained inside compatibility, ingest, topology, or DTO layers
+- added ratchets now pin the most important release-facing regression points
+
+This audit does not claim that all host-era naming is gone.
+It claims that the remaining naming debt is not evidence of canonical v6 behavior drifting back to the removed `host` resource type.
+
 ## Must Remove
 
 None found in active v6 runtime/read surfaces during this pass.
@@ -261,3 +275,25 @@ And requires:
 - `internal/unifiedresources/code_standards_test.go`
   Added `TestV6ReleaseFacingAPITestsCoverLegacyHostRejection` to pin release-facing API tests that
   explicitly reject removed `host` aliases in chat, AI actions, org shares, reporting, and metrics history.
+
+## Post-Release Queue
+
+Priority 1: unblock and finish executable guardrails
+
+- restore a green compile/test surface around `internal/api`, `internal/ai/tools`, and `internal/unifiedresources`
+- land the blocked API-level normalizer ratchets for reporting and metrics history
+
+Priority 2: rename compatibility-layer terminology
+
+- `internal/api/agent_ingest.go`
+- `internal/monitoring/monitor_agents.go`
+- `internal/models/models.go`
+- `internal/models/models_frontend.go`
+- `internal/models/converters.go`
+- `internal/servicediscovery/service.go`
+
+Priority 3: collapse remaining compat storage when feasible
+
+- retire `StateSnapshot.Hosts` / `models.Host*` only after agent-ingest, monitoring, routing, and discovery
+  no longer require the compatibility bridge
+- only do this alongside a deliberate compatibility-removal plan, not as opportunistic cleanup
