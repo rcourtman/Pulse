@@ -537,7 +537,7 @@ func categoryForPredictedKey(key string) FactCategory {
 	case strings.HasPrefix(key, "topology:") || strings.HasPrefix(key, "health:") ||
 		strings.HasPrefix(key, "search:") || strings.HasPrefix(key, "query:") ||
 		strings.HasPrefix(key, "inventory:") || strings.HasPrefix(key, "config:") ||
-		strings.HasPrefix(key, "docker_") || strings.HasPrefix(key, "k8s_") ||
+		strings.HasPrefix(key, "docker_") || strings.HasPrefix(key, "k8s_") || strings.HasPrefix(key, "k8s-") ||
 		strings.HasPrefix(key, "pmg:") || strings.HasPrefix(key, "pmg_"):
 		return FactCategoryResource
 	case strings.HasPrefix(key, "finding:") || strings.HasPrefix(key, "findings:") ||
@@ -1626,7 +1626,7 @@ func extractK8sClustersFacts(resultText string) []FactEntry {
 
 	markerFact := FactEntry{
 		Category: FactCategoryResource,
-		Key:      "k8s_clusters:queried",
+		Key:      "k8s-clusters:queried",
 		Value:    fmt.Sprintf("%d clusters", total),
 	}
 
@@ -1651,7 +1651,7 @@ func extractK8sClustersFacts(resultText string) []FactEntry {
 			c.Status, c.NodeCount, c.ReadyNodes, c.PodCount)
 		facts = append(facts, FactEntry{
 			Category: FactCategoryResource,
-			Key:      fmt.Sprintf("k8s_cluster:%s", name),
+			Key:      fmt.Sprintf("k8s-cluster:%s", name),
 			Value:    truncateValue(value),
 		})
 	}
@@ -1691,7 +1691,7 @@ func extractK8sNodesFacts(resultText string) []FactEntry {
 
 	return []FactEntry{{
 		Category: FactCategoryResource,
-		Key:      "k8s_nodes:queried",
+		Key:      "k8s-nodes:queried",
 		Value:    truncateValue(value),
 	}}
 }
@@ -1744,7 +1744,7 @@ func extractK8sPodsFacts(resultText string) []FactEntry {
 
 	return []FactEntry{{
 		Category: FactCategoryResource,
-		Key:      "k8s_pods:queried",
+		Key:      "k8s-pods:queried",
 		Value:    truncateValue(strings.Join(parts, ", ")),
 	}}
 }
@@ -1787,7 +1787,7 @@ func extractK8sDeploymentsFacts(resultText string) []FactEntry {
 
 	return []FactEntry{{
 		Category: FactCategoryResource,
-		Key:      "k8s_deployments:queried",
+		Key:      "k8s-deployments:queried",
 		Value:    truncateValue(value),
 	}}
 }
@@ -2162,13 +2162,13 @@ func PredictFactKeys(toolName string, toolInput map[string]interface{}) []string
 		}
 		switch action {
 		case "clusters":
-			return []string{"k8s_clusters:queried"}
+			return []string{"k8s-clusters:queried"}
 		case "nodes":
-			return []string{"k8s_nodes:queried"}
+			return []string{"k8s-nodes:queried"}
 		case "pods":
-			return []string{"k8s_pods:queried"}
+			return []string{"k8s-pods:queried"}
 		case "deployments":
-			return []string{"k8s_deployments:queried"}
+			return []string{"k8s-deployments:queried"}
 		}
 	case "pulse_pmg":
 		action := strFromMap(toolInput, "action")
@@ -2718,7 +2718,7 @@ var MarkerExpansions = map[string]string{
 	// Docker markers
 	"docker_services:queried": "docker_services:",
 	// Kubernetes markers
-	"k8s_clusters:queried": "k8s_cluster:",
+	"k8s-clusters:queried": "k8s-cluster:",
 	// PMG markers
 	"pmg:queried": "pmg:",
 	// Alert & finding markers → expand to per-item facts

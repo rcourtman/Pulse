@@ -1131,11 +1131,11 @@ func TestCategoryForPredictedKey(t *testing.T) {
 		{"docker_updates:queried", FactCategoryResource},
 		{"docker_swarm:status", FactCategoryResource},
 		{"docker_tasks:queried", FactCategoryResource},
-		{"k8s_clusters:queried", FactCategoryResource},
-		{"k8s_cluster:mycluster", FactCategoryResource},
-		{"k8s_nodes:queried", FactCategoryResource},
-		{"k8s_pods:queried", FactCategoryResource},
-		{"k8s_deployments:queried", FactCategoryResource},
+		{"k8s-clusters:queried", FactCategoryResource},
+		{"k8s-cluster:mycluster", FactCategoryResource},
+		{"k8s-nodes:queried", FactCategoryResource},
+		{"k8s-pods:queried", FactCategoryResource},
+		{"k8s-deployments:queried", FactCategoryResource},
 		{"pmg:queried", FactCategoryResource},
 		{"pmg:mypmg", FactCategoryResource},
 		{"pmg_mail_stats:queried", FactCategoryResource},
@@ -1489,10 +1489,10 @@ func TestExtractFacts_K8sClusters(t *testing.T) {
 	facts := ExtractFacts("pulse_kubernetes", input, result)
 	require.Len(t, facts, 2) // marker + 1 cluster
 
-	assert.Equal(t, "k8s_clusters:queried", facts[0].Key)
+	assert.Equal(t, "k8s-clusters:queried", facts[0].Key)
 	assert.Equal(t, "1 clusters", facts[0].Value)
 
-	assert.Equal(t, "k8s_cluster:Production", facts[1].Key)
+	assert.Equal(t, "k8s-cluster:Production", facts[1].Key)
 	assert.Contains(t, facts[1].Value, "healthy")
 	assert.Contains(t, facts[1].Value, "3 nodes")
 	assert.Contains(t, facts[1].Value, "3 ready")
@@ -1505,14 +1505,14 @@ func TestExtractFacts_K8sClusters_Empty(t *testing.T) {
 
 	facts := ExtractFacts("pulse_kubernetes", input, result)
 	require.Len(t, facts, 1)
-	assert.Equal(t, "k8s_clusters:queried", facts[0].Key)
+	assert.Equal(t, "k8s-clusters:queried", facts[0].Key)
 	assert.Equal(t, "0 clusters", facts[0].Value)
 }
 
 func TestPredictFactKeys_K8sClusters(t *testing.T) {
 	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "clusters"})
 	require.Len(t, keys, 1)
-	assert.Equal(t, "k8s_clusters:queried", keys[0])
+	assert.Equal(t, "k8s-clusters:queried", keys[0])
 }
 
 // --- Kubernetes: Nodes ---
@@ -1524,7 +1524,7 @@ func TestExtractFacts_K8sNodes(t *testing.T) {
 	facts := ExtractFacts("pulse_kubernetes", input, result)
 	require.Len(t, facts, 1)
 
-	assert.Equal(t, "k8s_nodes:queried", facts[0].Key)
+	assert.Equal(t, "k8s-nodes:queried", facts[0].Key)
 	assert.Contains(t, facts[0].Value, "cluster=prod")
 	assert.Contains(t, facts[0].Value, "3 nodes")
 	assert.Contains(t, facts[0].Value, "2 ready")
@@ -1534,7 +1534,7 @@ func TestExtractFacts_K8sNodes(t *testing.T) {
 func TestPredictFactKeys_K8sNodes(t *testing.T) {
 	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "nodes"})
 	require.Len(t, keys, 1)
-	assert.Equal(t, "k8s_nodes:queried", keys[0])
+	assert.Equal(t, "k8s-nodes:queried", keys[0])
 }
 
 // --- Kubernetes: Pods ---
@@ -1546,7 +1546,7 @@ func TestExtractFacts_K8sPods(t *testing.T) {
 	facts := ExtractFacts("pulse_kubernetes", input, result)
 	require.Len(t, facts, 1)
 
-	assert.Equal(t, "k8s_pods:queried", facts[0].Key)
+	assert.Equal(t, "k8s-pods:queried", facts[0].Key)
 	assert.Contains(t, facts[0].Value, "cluster=prod")
 	assert.Contains(t, facts[0].Value, "3 pods")
 	assert.Contains(t, facts[0].Value, "Running")
@@ -1556,7 +1556,7 @@ func TestExtractFacts_K8sPods(t *testing.T) {
 func TestPredictFactKeys_K8sPods(t *testing.T) {
 	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "pods"})
 	require.Len(t, keys, 1)
-	assert.Equal(t, "k8s_pods:queried", keys[0])
+	assert.Equal(t, "k8s-pods:queried", keys[0])
 }
 
 // --- Kubernetes: Deployments ---
@@ -1568,7 +1568,7 @@ func TestExtractFacts_K8sDeployments(t *testing.T) {
 	facts := ExtractFacts("pulse_kubernetes", input, result)
 	require.Len(t, facts, 1)
 
-	assert.Equal(t, "k8s_deployments:queried", facts[0].Key)
+	assert.Equal(t, "k8s-deployments:queried", facts[0].Key)
 	assert.Contains(t, facts[0].Value, "cluster=prod")
 	assert.Contains(t, facts[0].Value, "2 deployments")
 	assert.Contains(t, facts[0].Value, "1 healthy")
@@ -1578,7 +1578,7 @@ func TestExtractFacts_K8sDeployments(t *testing.T) {
 func TestPredictFactKeys_K8sDeployments(t *testing.T) {
 	keys := PredictFactKeys("pulse_kubernetes", map[string]interface{}{"action": "deployments"})
 	require.Len(t, keys, 1)
-	assert.Equal(t, "k8s_deployments:queried", keys[0])
+	assert.Equal(t, "k8s-deployments:queried", keys[0])
 }
 
 // --- PMG: Status ---
@@ -1865,7 +1865,7 @@ func TestGateFlowEndToEnd(t *testing.T) {
 			true}, // Marker expansion: ceph:queried → ceph:
 		{"k8s:clusters", "pulse_kubernetes", map[string]interface{}{"action": "clusters"},
 			`{"clusters":[{"name":"prod","status":"healthy","node_count":3,"ready_nodes":3,"pod_count":10}],"total":1}`,
-			true}, // Marker expansion: k8s_clusters:queried → k8s_cluster:
+			true}, // Marker expansion: k8s-clusters:queried → k8s-cluster:
 		{"pmg:status", "pulse_pmg", map[string]interface{}{"action": "status"},
 			`{"instances":[{"name":"pmg1","status":"running"}],"total":1}`,
 			true}, // Marker expansion: pmg:queried → pmg:
