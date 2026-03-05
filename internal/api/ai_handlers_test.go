@@ -286,6 +286,25 @@ func TestAISettingsHandler_Execute_Ollama(t *testing.T) {
 	}
 }
 
+func TestNormalizeAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "system-container", want: "system-container"},
+		{in: "SYSTEM-CONTAINER", want: "system-container"},
+		{in: "container", want: "container"},
+		{in: "system_container", want: "system_container"},
+	}
+
+	for _, tt := range tests {
+		got := normalizeAIExecuteTargetType(tt.in)
+		if got != tt.want {
+			t.Fatalf("normalizeAIExecuteTargetType(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func ptr[T any](v T) *T { return &v }
 
 func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
@@ -1212,13 +1231,21 @@ func TestNormalizeRunCommandApprovalTarget_CanonicalizesAgentTarget(t *testing.T
 			wantID:  "pve-a",
 		},
 		{
-			name: "system-container alias maps to container target",
+			name: "system-container target preserved",
 			req: AIRunCommandRequest{
 				TargetType: "system-container",
 				TargetID:   "201",
 			},
-			wantTyp: "container",
+			wantTyp: "system-container",
 			wantID:  "201",
+		},
+		{
+			name: "legacy container alias rejected",
+			req: AIRunCommandRequest{
+				TargetType: "container",
+				TargetID:   "201",
+			},
+			wantErr: "unsupported target_type",
 		},
 		{
 			name: "missing target host when run_on_host",

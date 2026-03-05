@@ -1325,7 +1325,7 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 
 	// Test with VMID in context as float64 (common from JSON)
 	req := ExecuteRequest{
-		TargetType: "container",
+		TargetType: "system-container",
 		TargetID:   "instance-123",
 		Context: map[string]interface{}{
 			"node": "node-1",
@@ -1362,17 +1362,15 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 	}
 }
 
-func TestService_ExecuteOnAgent_NormalizesTargetTypeAndColonVMID(t *testing.T) {
+func TestService_ExecuteOnAgent_RejectsLegacyContainerTargetTypeAlias(t *testing.T) {
 	mockAgent := agentexec.ConnectedAgent{
 		AgentID:  "agent-1",
 		Hostname: "node-1",
 	}
 
-	var capturedCmd agentexec.ExecuteCommandPayload
 	mockServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{mockAgent},
 		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
-			capturedCmd = cmd
 			return &agentexec.CommandResultPayload{
 				Success: true,
 				Stdout:  "ok",
@@ -1390,15 +1388,11 @@ func TestService_ExecuteOnAgent_NormalizesTargetTypeAndColonVMID(t *testing.T) {
 	}
 
 	_, err := svc.executeOnAgent(context.Background(), req, "uptime")
-	if err != nil {
-		t.Fatalf("executeOnAgent failed: %v", err)
+	if err == nil {
+		t.Fatal("expected error for legacy container target type alias")
 	}
-
-	if capturedCmd.TargetType != "container" {
-		t.Fatalf("Expected normalized TargetType 'container', got '%s'", capturedCmd.TargetType)
-	}
-	if capturedCmd.TargetID != "112" {
-		t.Fatalf("Expected extracted TargetID '112', got '%s'", capturedCmd.TargetID)
+	if !strings.Contains(err.Error(), "unsupported target_type") {
+		t.Fatalf("expected unsupported target_type error, got %v", err)
 	}
 }
 
@@ -1471,7 +1465,7 @@ func TestService_ExecuteOnAgent_RejectsLegacyTargetTypeAliases(t *testing.T) {
 	}
 	svc := NewService(nil, mockServer)
 
-	for _, legacyType := range []string{"lxc", "ct", "qemu"} {
+	for _, legacyType := range []string{"lxc", "ct", "qemu", "container", "system_container"} {
 		_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
 			TargetType: legacyType,
 			TargetID:   "101",
@@ -1500,7 +1494,7 @@ func TestService_ExecuteOnAgent_RejectsContainerWithoutNumericVMID(t *testing.T)
 	svc := NewService(nil, mockServer)
 
 	_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
-		TargetType: "container",
+		TargetType: "system-container",
 		TargetID:   "mycontainer",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}, "uptime")
@@ -1667,7 +1661,7 @@ func TestService_ExecuteOnAgent_TargetIDExtractionOnly(t *testing.T) {
 
 	// No vmid in context, but TargetID has a number
 	req := ExecuteRequest{
-		TargetType: "container",
+		TargetType: "system-container",
 		TargetID:   "delly-135",
 		Context: map[string]interface{}{
 			"node": "host-1", // Force routing
@@ -2762,7 +2756,7 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 		Node:         "minipc",
 		ResourceID:   "delly:minipc:112",
 		ResourceName: "debian-go",
-		ResourceType: "container",
+		ResourceType: "system-container",
 		Title:        "Test Finding",
 		Description:  "Test description",
 		Severity:     FindingSeverityWarning,
@@ -2786,8 +2780,8 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 	if req.TargetID != "delly:minipc:112" {
 		t.Errorf("Expected TargetID 'delly:minipc:112', got %s", req.TargetID)
 	}
-	if req.TargetType != "container" {
-		t.Errorf("Expected TargetType 'container', got %s", req.TargetType)
+	if req.TargetType != "system-container" {
+		t.Errorf("Expected TargetType 'system-container', got %s", req.TargetType)
 	}
 	if req.Context["finding_node"] != "minipc" {
 		t.Errorf("Expected finding_node 'minipc', got %v", req.Context["finding_node"])
@@ -2865,7 +2859,7 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 		Node:         "minipc",
 		ResourceID:   "delly:minipc:112",
 		ResourceName: "debian-go",
-		ResourceType: "container",
+		ResourceType: "system-container",
 		Title:        "Container disk usage growing",
 		Description:  "Disk growing at 4% per day",
 		Severity:     FindingSeverityWarning,
@@ -2944,7 +2938,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 		Node:         "minipc",
 		ResourceID:   "delly:minipc:112",
 		ResourceName: "debian-go",
-		ResourceType: "container",
+		ResourceType: "system-container",
 	}
 	svc.patrolService.GetFindings().Add(finding)
 

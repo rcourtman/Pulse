@@ -1702,7 +1702,7 @@ type ConversationMessage struct {
 // ExecuteRequest represents a request to execute an AI prompt
 type ExecuteRequest struct {
 	Prompt       string                 `json:"prompt"`
-	TargetType   string                 `json:"target_type,omitempty"` // "agent", "container", "vm", "node"
+	TargetType   string                 `json:"target_type,omitempty"` // "agent", "system-container", "vm", "node"
 	TargetID     string                 `json:"target_id,omitempty"`
 	Context      map[string]interface{} `json:"context,omitempty"`       // Current metrics, state, etc.
 	SystemPrompt string                 `json:"system_prompt,omitempty"` // Override system prompt
@@ -1853,7 +1853,7 @@ You have access to tools to execute commands on the target system. You should:
 1. Use run_command to investigate issues, gather information, and PERFORM actions
 2. Actually execute the commands - don't just explain what commands to run
 3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the AGENT (target_type=agent)
-4. For operations inside a container, run commands on the container (target_type=container)
+4. For operations inside a system container, use target_type=system-container
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -2062,7 +2062,7 @@ You have access to tools to execute commands on the target system. You should:
 1. Use run_command to investigate issues, gather information, and PERFORM actions
 2. Actually execute the commands - don't just explain what commands to run
 3. For Proxmox operations (resize disk, manage containers/VMs), run commands on the AGENT (target_type=agent)
-4. For operations inside a container, run commands on the container (target_type=container)
+4. For operations inside a system container, use target_type=system-container
 
 Examples of actions you can perform:
 - Resize LXC disk: pct resize <vmid> rootfs +10G (run on host)
@@ -3579,24 +3579,24 @@ func hasExplicitHostRoutingContext(ctx map[string]interface{}) bool {
 func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}) (string, error) {
 	targetType := strings.ToLower(strings.TrimSpace(raw))
 	switch targetType {
-	case "agent", "node", "docker", "docker_host", "kubernetes_cluster", "kubernetes", "k8s":
+	case "agent", "node", "docker-host", "k8s":
 		return "agent", nil
-	case "container", "system-container", "system_container":
-		return "container", nil
+	case "system-container":
+		return "system-container", nil
 	case "vm":
 		return "vm", nil
 	case "":
 		if strings.TrimSpace(targetID) == "" && hasExplicitHostRoutingContext(ctx) {
 			return "agent", nil
 		}
-		return "", fmt.Errorf("target_type is required (agent, system-container/container, or vm)")
+		return "", fmt.Errorf("target_type is required (agent, system-container, or vm)")
 	case "guest":
 		if strings.TrimSpace(targetID) == "" {
 			return "agent", nil
 		}
-		return "", fmt.Errorf("target_type 'guest' is ambiguous with target_id; use 'system-container'/'container' or 'vm'")
+		return "", fmt.Errorf("target_type 'guest' is ambiguous with target_id; use 'system-container' or 'vm'")
 	default:
-		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container/container, vm)", raw)
+		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container, vm)", raw)
 	}
 }
 
@@ -3677,7 +3677,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 		Msg("Command routed to agent")
 
 	targetID := strings.TrimSpace(req.TargetID)
-	if normalizedTargetType == "container" || normalizedTargetType == "vm" {
+	if normalizedTargetType == "system-container" || normalizedTargetType == "vm" {
 		if vmID, ok := extractVMIDFromContext(req.Context); ok {
 			targetID = vmID
 		} else if extracted := extractVMIDFromTargetID(req.TargetID); extracted > 0 {
@@ -3685,6 +3685,12 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 		} else {
 			return "", fmt.Errorf("%s target requires numeric VMID in context.vmid or target_id", normalizedTargetType)
 		}
+	}
+
+	dispatchTargetType := normalizedTargetType
+	if normalizedTargetType == "system-container" {
+		// Agent transport uses "container" for LXC command routing.
+		dispatchTargetType = "container"
 	}
 
 	requestID := uuid.New().String()
@@ -3700,7 +3706,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	cmd := agentexec.ExecuteCommandPayload{
 		RequestID:  requestID,
 		Command:    command,
-		TargetType: normalizedTargetType,
+		TargetType: dispatchTargetType,
 		TargetID:   targetID,
 		Timeout:    300, // 5 minutes - commands like du, backups, etc. can take a while
 	}
@@ -3733,7 +3739,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 type RunCommandRequest struct {
 	Command    string `json:"command"`
 	ApprovalID string `json:"approval_id,omitempty"` // Consumed by API handler before execution
-	TargetType string `json:"target_type"`           // "agent", "container", "vm"
+	TargetType string `json:"target_type"`           // "agent", "system-container", "vm"
 	TargetID   string `json:"target_id"`
 	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`
