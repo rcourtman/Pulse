@@ -349,14 +349,14 @@ func TestExecuteSearchResources(t *testing.T) {
 		t.Fatalf("unexpected docker-host search response: %+v", response)
 	}
 
-	// Proxmox-style type+VMID patterns: "LXC200", "VM100", "CT200"
+	// Canonical type+VMID patterns: "VM100", "CT200", "system-container200"
 	for _, tc := range []struct {
 		query    string
 		wantType string
 		wantName string
 	}{
-		{"LXC200", "system-container", "db-ct"},
 		{"CT200", "system-container", "db-ct"},
+		{"system-container200", "system-container", "db-ct"},
 		{"VM100", "vm", "web-vm"},
 		{"vm100", "vm", "web-vm"},
 	} {
@@ -372,6 +372,22 @@ func TestExecuteSearchResources(t *testing.T) {
 		}
 		if len(response.Matches) != 1 || response.Matches[0].Type != tc.wantType || response.Matches[0].Name != tc.wantName {
 			t.Fatalf("query %q: expected 1 match (%s %s), got %+v", tc.query, tc.wantType, tc.wantName, response.Matches)
+		}
+	}
+
+	for _, legacyQuery := range []string{"LXC200", "qemu100"} {
+		result, err = executor.executeSearchResources(context.Background(), map[string]interface{}{
+			"query": legacyQuery,
+		})
+		if err != nil {
+			t.Fatalf("legacy query %q: unexpected error: %v", legacyQuery, err)
+		}
+		response = ResourceSearchResponse{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+			t.Fatalf("legacy query %q: decode response: %v", legacyQuery, err)
+		}
+		if len(response.Matches) != 0 {
+			t.Fatalf("legacy query %q: expected no matches, got %+v", legacyQuery, response.Matches)
 		}
 	}
 }

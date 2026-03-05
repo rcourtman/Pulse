@@ -3729,9 +3729,9 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			if !statusMatchesFilter(status, statusFilter) {
 				continue
 			}
-			// Build searchable candidates: name, ID, VMID, type-prefixed VMID, IPs, tags
+			// Build searchable candidates: name, ID, VMID, canonical type-prefixed VMID, IPs, tags
 			vmidStr := fmt.Sprintf("%d", vm.VMID())
-			candidates := []string{vm.Name(), vm.ID(), vmidStr, "vm" + vmidStr, "qemu" + vmidStr}
+			candidates := []string{vm.Name(), vm.ID(), vmidStr, "vm" + vmidStr}
 			candidates = append(candidates, vm.IPAddresses()...)
 			candidates = append(candidates, vm.Tags()...)
 
@@ -3757,9 +3757,9 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			if !statusMatchesFilter(status, statusFilter) {
 				continue
 			}
-			// Build searchable candidates: name, ID, VMID, type-prefixed VMID, IPs, tags
+			// Build searchable candidates: name, ID, VMID, canonical type-prefixed VMID, IPs, tags
 			vmidStr := fmt.Sprintf("%d", ct.VMID())
-			candidates := []string{ct.Name(), ct.ID(), vmidStr, "lxc" + vmidStr, "ct" + vmidStr, "system-container" + vmidStr}
+			candidates := []string{ct.Name(), ct.ID(), vmidStr, "ct" + vmidStr, "system-container" + vmidStr}
 			candidates = append(candidates, ct.IPAddresses()...)
 			candidates = append(candidates, ct.Tags()...)
 
