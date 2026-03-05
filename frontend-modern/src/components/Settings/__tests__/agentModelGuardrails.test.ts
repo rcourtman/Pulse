@@ -25,6 +25,7 @@ import unifiedResourcesHookSource from '@/hooks/useUnifiedResources.ts?raw';
 import discoveryTypesSource from '@/types/discovery.ts?raw';
 import discoveryTargetUtilsSource from '@/utils/discoveryTarget.ts?raw';
 import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.tsx?raw';
+import commandPaletteSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import alertsApiSource from '@/api/alerts.ts?raw';
 import licenseApiSource from '@/api/license.ts?raw';
@@ -91,6 +92,10 @@ describe('agent model guardrails', () => {
     expect(discoveryTypesSource).not.toContain("| 'docker_lxc'");
     expect(discoveryTargetUtilsSource).toContain('discoveryTarget.agentId');
     expect(unifiedResourcesHookSource).toContain('const discoveryAgentId = v2.discoveryTarget?.agentId;');
+    expect(apiTypesSource).toContain("export type GuestType = 'vm' | 'system-container';");
+    expect(apiTypesSource).not.toContain("'qemu'");
+    expect(apiTypesSource).not.toContain("'lxc'");
+    expect(commandPaletteSource).not.toContain("'lxc'");
   });
 
   it('keeps alerts agent thresholds sourced from unified agent resources', () => {

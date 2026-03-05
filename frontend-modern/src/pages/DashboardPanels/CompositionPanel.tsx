@@ -14,7 +14,8 @@ interface CompositionPanelProps {
 
 const TYPE_ICONS: Record<string, any> = {
   vm: Server,
-  lxc: Box,
+  'system-container': Box,
+  'app-container': Container,
   docker: Container,
   k8s: AppWindow,
   database: Database,
@@ -23,7 +24,8 @@ const TYPE_ICONS: Record<string, any> = {
 
 const TYPE_LABELS: Record<string, string> = {
   vm: 'Virtual Machines',
-  lxc: 'LXC Containers',
+  'system-container': 'System Containers',
+  'app-container': 'App Containers',
   docker: 'Docker Containers',
   k8s: 'Kubernetes Pods',
   database: 'Databases',

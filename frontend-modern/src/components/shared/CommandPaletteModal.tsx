@@ -48,7 +48,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         label: 'Go to Workloads',
         description: workloadsPath,
         shortcut: 'g w',
-        keywords: ['vm', 'lxc', 'docker', 'k8s', 'kubernetes', 'pods'],
+        keywords: ['vm', 'system-container', 'app-container', 'docker', 'k8s', 'kubernetes', 'pods'],
         action: () => navigate(workloadsPath),
       },
       {
