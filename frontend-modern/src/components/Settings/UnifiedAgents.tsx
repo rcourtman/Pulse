@@ -592,11 +592,11 @@ export const UnifiedAgents: Component = () => {
     const map = new Map<string, Resource>();
     // Only include resources with an agent facet (not docker-only resources)
     // to avoid polluting the command config sync lookup.
-    for (const host of agentResources()) {
-      if (!host.agent) continue;
-      const actionId = getAgentActionId(host);
+    for (const agentResource of agentResources()) {
+      if (!agentResource.agent) continue;
+      const actionId = getAgentActionId(agentResource);
       if (!actionId || map.has(actionId)) continue;
-      map.set(actionId, host);
+      map.set(actionId, agentResource);
     }
     return map;
   });
@@ -867,20 +867,20 @@ export const UnifiedAgents: Component = () => {
       });
     });
 
-    removedDockerHosts().forEach((host) => {
-      const name = host.displayName || host.hostname || host.id;
+    removedDockerHosts().forEach((runtime) => {
+      const name = runtime.displayName || runtime.hostname || runtime.id;
       rows.push({
-        rowKey: `removed-docker-${host.id}`,
-        id: host.id,
-        dockerActionId: host.id,
+        rowKey: `removed-docker-${runtime.id}`,
+        id: runtime.id,
+        dockerActionId: runtime.id,
         name,
-        hostname: host.hostname,
-        displayName: host.displayName,
+        hostname: runtime.hostname,
+        displayName: runtime.displayName,
         capabilities: ['docker'],
         status: 'removed',
-        removedAt: host.removedAt,
+        removedAt: runtime.removedAt,
         scope: getScopeInfo(undefined),
-        searchText: [name, host.hostname, host.id].filter(Boolean).join(' ').toLowerCase(),
+        searchText: [name, runtime.hostname, runtime.id].filter(Boolean).join(' ').toLowerCase(),
       });
     });
 

@@ -47,9 +47,7 @@ vi.mock('@/App', () => ({
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
     lookupAgent: (...args: unknown[]) => lookupMock(...args),
-    lookupHost: (...args: unknown[]) => lookupMock(...args),
     deleteAgent: (...args: unknown[]) => deleteAgentMock(...args),
-    deleteHostAgent: (...args: unknown[]) => deleteAgentMock(...args),
     updateAgentConfig: (...args: unknown[]) => updateAgentConfigMock(...args),
     deleteDockerRuntime: (...args: unknown[]) => deleteDockerRuntimeMock(...args),
   },
@@ -72,7 +70,7 @@ vi.mock('@/api/agentProfiles', () => ({
 // Build mock resources from the WebSocket store data.
 // The component uses resources() for agentResources (filtered by r.agent != null || r.type === 'docker-host')
 // and byType('k8s-cluster') for kubernetes clusters.
-const toHostResource = (h: any) => ({
+const toAgentResource = (h: any) => ({
   id: h.id,
   type: 'node' as const,
   platformType: 'agent' as const,
@@ -108,7 +106,7 @@ const toHostResource = (h: any) => ({
   },
 });
 
-const toDockerHostResource = (d: any) => ({
+const toDockerRuntimeResource = (d: any) => ({
   id: d.id,
   type: 'docker-host' as const,
   platformType: 'docker' as const,
@@ -180,8 +178,8 @@ vi.mock('@/hooks/useResources', () => ({
     },
     resources: () => {
       const all: any[] = [];
-      for (const h of mockWsStore?.state?.hosts || []) all.push(toHostResource(h));
-      for (const d of mockWsStore?.state?.dockerHosts || []) all.push(toDockerHostResource(d));
+      for (const h of mockWsStore?.state?.hosts || []) all.push(toAgentResource(h));
+      for (const d of mockWsStore?.state?.dockerHosts || []) all.push(toDockerRuntimeResource(d));
       return all;
     },
   }),
@@ -204,7 +202,7 @@ vi.mock('@/utils/upgradeMetrics', () => ({
     trackAgentInstallProfileSelectedMock(...args),
 }));
 
-const createHost = (overrides?: Partial<Agent>): Agent => ({
+const createAgent = (overrides?: Partial<Agent>): Agent => ({
   id: 'host-1',
   hostname: 'host-1.local',
   displayName: 'Host One',
@@ -396,7 +394,7 @@ describe('UnifiedAgents agent lookup', () => {
       },
     });
 
-    const host = createHost();
+    const host = createAgent();
     setupComponent([host]);
 
     // Generate token first to unlock commands
@@ -488,7 +486,7 @@ describe('UnifiedAgents agent lookup', () => {
 
 describe('UnifiedAgents managed agents table', () => {
   it('displays agents in the table', async () => {
-    const host = createHost({ hostname: 'test-server.local', displayName: 'Test Server' });
+    const host = createAgent({ hostname: 'test-server.local', displayName: 'Test Server' });
     setupComponent([host]);
 
     await waitFor(() => {
@@ -538,7 +536,7 @@ describe('UnifiedAgents managed agents table', () => {
   });
 
   it('shows outdated agent warning when older agent binaries are present', async () => {
-    const legacyHost = createHost({ isLegacy: true });
+    const legacyHost = createAgent({ isLegacy: true });
     setupComponent([legacyHost]);
 
     await waitFor(() => {
@@ -555,7 +553,7 @@ describe('UnifiedAgents managed agents table', () => {
   });
 
   it('filters removed agents with the status filter', async () => {
-    const host = createHost({ displayName: 'Active Host' });
+    const host = createAgent({ displayName: 'Active Host' });
     const removedHost = createRemovedDockerHost();
     setupComponent([host], [], [], [removedHost]);
 
