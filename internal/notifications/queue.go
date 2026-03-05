@@ -163,6 +163,7 @@ func (nq *NotificationQueue) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_status ON notification_queue(status);
 	CREATE INDEX IF NOT EXISTS idx_next_retry ON notification_queue(next_retry_at) WHERE status = 'pending';
 	CREATE INDEX IF NOT EXISTS idx_created_at ON notification_queue(created_at);
+	CREATE INDEX IF NOT EXISTS idx_status_completed ON notification_queue(status, completed_at);
 
 	CREATE TABLE IF NOT EXISTS notification_audit (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
