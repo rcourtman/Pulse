@@ -66,10 +66,6 @@ func (e *PulseToolExecutor) registerReadTools() {
 						Type:        "string",
 						Description: "For logs/tail: filter output by pattern",
 					},
-					"app_container": {
-						Type:        "string",
-						Description: "Deprecated alias for container (Docker container name on target_host).",
-					},
 				},
 				Required: []string{"action", "target_host"},
 			},

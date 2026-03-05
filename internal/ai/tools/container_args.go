@@ -17,11 +17,10 @@ func resolveContainerArg(args map[string]interface{}) string {
 	return ""
 }
 
-// setContainerResponseFields includes canonical and compatibility keys.
+// setContainerResponseFields includes canonical response fields.
 func setContainerResponseFields(response map[string]interface{}, container string) {
 	if container == "" {
 		return
 	}
 	response["container"] = container
-	response["app_container"] = container
 }

@@ -79,10 +79,6 @@ Examples:
 						Type:        "string",
 						Description: "Docker container name (for files inside containers)",
 					},
-					"app_container": {
-						Type:        "string",
-						Description: "Deprecated alias for container (Docker container name)",
-					},
 				},
 				Required: []string{"action", "path", "target_host"},
 			},
