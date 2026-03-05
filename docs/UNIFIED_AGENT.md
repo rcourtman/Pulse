@@ -299,15 +299,15 @@ Set `--health-addr=""` or `PULSE_HEALTH_ADDR=""` to disable the health/metrics s
 - Verify network connectivity to Pulse server
 - Ensure auto-update is not disabled
 
-### Duplicate Hosts
-If cloned VMs appear as the same host:
+### Duplicate Agents
+If cloned VMs appear as the same agent:
 ```bash
 sudo rm /etc/machine-id && sudo systemd-machine-id-setup
 ```
 
 Or set a unique agent ID:
 ```bash
---agent-id my-unique-host-id
+--agent-id my-unique-agent-id
 ```
 
 ### Permission Denied (Docker)

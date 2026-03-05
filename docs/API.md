@@ -77,7 +77,7 @@ Lightweight HTML status page for quick checks.
 Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
 
 Query params:
-- `type`: comma-separated list (e.g., `host`, `vm`, `lxc`, `container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
+- `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
 - `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
 - `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
 - `parent`: parent resource ID
@@ -761,7 +761,7 @@ Returns resources shared inbound to this organization from other organizations.
   "accessRole": "viewer"
 }
 ```
-Share a resource with another organization. Valid resource types: `vm`, `container`, `host`, `storage`, `pbs`, `pmg`. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org.
+Share a resource with another organization. Valid resource types: `vm`, `container`, `agent`, `storage`, `pbs`, `pmg`. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org.
 
 ### Delete Share
 `DELETE /api/orgs/{id}/shares/{shareId}` (requires `settings:write`, session auth only)
@@ -971,7 +971,7 @@ Serves the PowerShell installer for Windows.
 `POST /api/agents/kubernetes/report` - Kubernetes cluster metrics
 
 ### Agent Management
-`GET /api/agents/agent/lookup?id=<host_id>`  
+`GET /api/agents/agent/lookup?id=<agent_id>`  
 `GET /api/agents/agent/lookup?hostname=<hostname>`  
 Looks up an agent by ID or hostname/display name. Requires `agent:report`.
 
@@ -981,7 +981,7 @@ Agent self-unregister during uninstall. Requires `agent:report`.
 `POST /api/agents/agent/unlink` (admin, `agent:manage`)  
 Unlinks an agent from a node.
 
-`DELETE /api/agents/agent/{host_id}` (admin, `agent:manage`)  
+`DELETE /api/agents/agent/{agent_id}` (admin, `agent:manage`)  
 Removes an agent from state.
 
 ### Agent Linking (Admin)

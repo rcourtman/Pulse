@@ -38,8 +38,8 @@ let mockModeWasEnabled: boolean | null = null;
 /** Track whether the host was successfully registered (for cleanup). */
 let hostRegistered = false;
 
-/** The hostId returned by the server (may differ from TEST_HOST_ID). */
-let serverHostId = '';
+/** The agentId returned by the server (may differ from TEST_HOST_ID). */
+let serverAgentId = '';
 
 /** Build a synthetic host report payload. */
 function buildHostReport(overrides?: {
@@ -137,7 +137,7 @@ async function ensureHostRegistered(
     const state = (await stateRes.json()) as Record<string, unknown>;
     const hosts = state.hosts as Array<Record<string, unknown>>;
     const found = hosts?.find(
-      (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
+      (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
     );
     if (found) return found;
   }
@@ -153,7 +153,7 @@ async function ensureHostRegistered(
     throw new Error(`Host re-registration failed: ${regRes.status()}`);
   }
   const body = (await regRes.json()) as Record<string, unknown>;
-  serverHostId = (body.hostId as string) || serverHostId;
+  serverAgentId = (body.agentId as string) || serverAgentId;
   hostRegistered = true;
 
   // Poll state after re-registration to allow for short settling windows
@@ -164,7 +164,7 @@ async function ensureHostRegistered(
       const state2 = (await stateRes2.json()) as Record<string, unknown>;
       const hosts2 = state2.hosts as Array<Record<string, unknown>>;
       const found = hosts2?.find(
-        (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
+        (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
       );
       if (found) return found;
     }
@@ -201,15 +201,15 @@ test.describe.serial(
         await ensureAuthenticated(page);
 
         // Delete the test host if it was registered.
-        if (hostRegistered && serverHostId) {
+        if (hostRegistered && serverAgentId) {
           const delRes = await apiRequest(
             page,
-            `/api/agents/agent/${serverHostId}`,
+            `/api/agents/agent/${serverAgentId}`,
             { method: 'DELETE' },
           );
           if (!delRes.ok()) {
             console.warn(
-              `[journey cleanup] DELETE host ${serverHostId} returned ${delRes.status()}`,
+              `[journey cleanup] DELETE host ${serverAgentId} returned ${delRes.status()}`,
             );
           }
         }
@@ -255,9 +255,9 @@ test.describe.serial(
       expect(body.success, 'Report response should indicate success').toBe(
         true,
       );
-      expect(body.hostId, 'Response must include a hostId').toBeTruthy();
+      expect(body.agentId, 'Response must include an agentId').toBeTruthy();
 
-      serverHostId = body.hostId as string;
+      serverAgentId = body.agentId as string;
       hostRegistered = true;
 
       // Verify basic fields in the response.
@@ -352,7 +352,7 @@ test.describe.serial(
       const state2 = (await stateRes2.json()) as Record<string, unknown>;
       const hosts2 = state2.hosts as Array<Record<string, unknown>>;
       const host2 = hosts2?.find(
-        (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
+        (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
       );
       expect(host2, 'Host should still exist after second report').toBeTruthy();
 
@@ -422,7 +422,7 @@ test.describe.serial(
 
       const delRes = await apiRequest(
         page,
-        `/api/agents/agent/${serverHostId}`,
+        `/api/agents/agent/${serverAgentId}`,
         { method: 'DELETE' },
       );
       expect(
@@ -436,7 +436,7 @@ test.describe.serial(
       const state = (await stateRes.json()) as Record<string, unknown>;
       const hosts = state.hosts as Array<Record<string, unknown>>;
       const found = hosts?.find(
-        (h) => h.id === serverHostId || h.hostname === TEST_HOSTNAME,
+        (h) => h.id === serverAgentId || h.hostname === TEST_HOSTNAME,
       );
       expect(
         found,
