@@ -3579,7 +3579,7 @@ func hasExplicitHostRoutingContext(ctx map[string]interface{}) bool {
 func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}) (string, error) {
 	targetType := strings.ToLower(strings.TrimSpace(raw))
 	switch targetType {
-	case "agent", "node", "docker-host", "k8s":
+	case "agent":
 		return "agent", nil
 	case "system-container":
 		return "system-container", nil
@@ -3590,11 +3590,6 @@ func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}
 			return "agent", nil
 		}
 		return "", fmt.Errorf("target_type is required (agent, system-container, or vm)")
-	case "guest":
-		if strings.TrimSpace(targetID) == "" {
-			return "agent", nil
-		}
-		return "", fmt.Errorf("target_type 'guest' is ambiguous with target_id; use 'system-container' or 'vm'")
 	default:
 		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container, vm)", raw)
 	}

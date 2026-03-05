@@ -2932,7 +2932,7 @@ type AIConversationMessage struct {
 
 type AIExecuteRequest struct {
 	Prompt     string                  `json:"prompt"`
-	TargetType string                  `json:"target_type,omitempty"` // "agent", "system-container", "vm", "node"
+	TargetType string                  `json:"target_type,omitempty"` // "agent", "system-container", "vm"
 	TargetID   string                  `json:"target_id,omitempty"`
 	Context    map[string]interface{}  `json:"context,omitempty"` // Current metrics, state, etc.
 	History    []AIConversationMessage `json:"history,omitempty"` // Previous conversation messages
@@ -3007,10 +3007,10 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	targetType := normalizeAIExecuteTargetType(req.TargetType)
 	if targetType != "" {
 		switch targetType {
-		case "agent", "system-container", "vm", "node":
+		case "agent", "system-container", "vm":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: agent, system-container, vm, node)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
 			return
 		}
 	}
@@ -3193,10 +3193,10 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	targetType := normalizeAIExecuteTargetType(req.TargetType)
 	if targetType != "" {
 		switch targetType {
-		case "agent", "system-container", "vm", "node":
+		case "agent", "system-container", "vm":
 			// valid
 		default:
-			http.Error(w, "Invalid target_type (allowed: agent, system-container, vm, node)", http.StatusBadRequest)
+			http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
 			return
 		}
 	}

@@ -225,7 +225,7 @@ func TestService_HasAgentForTarget(t *testing.T) {
 
 	// Target matching agent hostname
 	if !svc.hasAgentForTarget(ExecuteRequest{
-		TargetType: "guest",
+		TargetType: "vm",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}) {
 		t.Error("Should have agent for matching hostname")
@@ -233,7 +233,7 @@ func TestService_HasAgentForTarget(t *testing.T) {
 
 	// Target not matching
 	if svc.hasAgentForTarget(ExecuteRequest{
-		TargetType: "guest",
+		TargetType: "vm",
 		Context:    map[string]interface{}{"node": "other-node"},
 	}) {
 		t.Error("Should not have agent for non-matching node")
@@ -279,7 +279,7 @@ func TestService_ExecuteOnAgent(t *testing.T) {
 
 	// Routing failure
 	_, err = svc.executeOnAgent(context.Background(), ExecuteRequest{
-		TargetType: "guest",
+		TargetType: "vm",
 		Context:    map[string]interface{}{"node": "unknown"},
 	}, "uptime")
 	if err == nil {
@@ -1436,7 +1436,7 @@ func TestService_ExecuteOnAgent_AcceptsSystemContainerTargetType(t *testing.T) {
 	}
 }
 
-func TestService_ExecuteOnAgent_RejectsAmbiguousTargetTypeGuestWithTargetID(t *testing.T) {
+func TestService_ExecuteOnAgent_RejectsLegacyGuestTargetType(t *testing.T) {
 	mockServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
 			{AgentID: "agent-1", Hostname: "node-1"},
@@ -1449,11 +1449,8 @@ func TestService_ExecuteOnAgent_RejectsAmbiguousTargetTypeGuestWithTargetID(t *t
 		TargetID:   "delly:minipc:101",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}, "uptime")
-	if err == nil {
-		t.Fatal("expected error for ambiguous target type")
-	}
-	if !strings.Contains(err.Error(), "ambiguous") {
-		t.Fatalf("expected ambiguous target type error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unsupported target_type") {
+		t.Fatalf("expected unsupported target_type error, got: %v", err)
 	}
 }
 
@@ -1465,7 +1462,7 @@ func TestService_ExecuteOnAgent_RejectsLegacyTargetTypeAliases(t *testing.T) {
 	}
 	svc := NewService(nil, mockServer)
 
-	for _, legacyType := range []string{"lxc", "ct", "qemu", "container", "system_container"} {
+	for _, legacyType := range []string{"lxc", "ct", "qemu", "container", "system_container", "guest", "node", "docker-host", "k8s"} {
 		_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
 			TargetType: legacyType,
 			TargetID:   "101",
@@ -1942,7 +1939,7 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 	}
 	svc.provider = mock
 
-	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "guest"}, func(StreamEvent) {})
+	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "agent"}, func(StreamEvent) {})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}

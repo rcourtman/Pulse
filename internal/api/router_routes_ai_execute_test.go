@@ -304,7 +304,7 @@ func TestRouteExecute_WithTargetContext(t *testing.T) {
 
 	body := `{
 		"prompt": "Check CPU usage",
-		"target_type": "node",
+		"target_type": "agent",
 		"target_id": "pve1",
 		"context": {"cpu": 85.5, "memory": 60.2}
 	}`
@@ -555,7 +555,7 @@ func TestRouteExecute_ValidTargetTypes(t *testing.T) {
 	ollama := newIPv4HTTPServer(t, mockOllamaForExecute())
 	defer ollama.Close()
 
-	for _, tt := range []string{"agent", "system-container", "vm", "node"} {
+	for _, tt := range []string{"agent", "system-container", "vm"} {
 		t.Run(tt, func(t *testing.T) {
 			router, token := setupExecuteRouter(t, ollama.URL)
 
