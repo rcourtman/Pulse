@@ -27,21 +27,14 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     const normalized = (raw || '').trim().toLowerCase();
     switch (normalized) {
       case 'vm':
-      case 'qemu':
         return 'vm';
       case 'system-container':
-      case 'oci-container':
-      case 'lxc':
-      case 'ct':
-      case 'container':
-      case 'system_container':
-        return 'system-container';
       case 'app-container':
+      case 'oci-container':
+      case 'pod':
+        return normalized;
       case 'docker-container':
-      case 'docker_container':
       case 'docker-service':
-      case 'docker_service':
-      case 'swarm_service':
         return 'app-container';
       case 'agent':
       case 'node':
@@ -57,13 +50,6 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
         return normalized;
       case 'host':
         return 'agent';
-      case 'k8s':
-      case 'kubernetes':
-      case 'kubernetes-cluster':
-      case 'kubernetes-node':
-      case 'kubernetes-deployment':
-      case 'kubernetes-service':
-        return 'k8s-cluster';
       case '':
         return undefined;
       default:

@@ -299,13 +299,13 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('storage');
     });
 
-    it('maps legacy resourceType aliases to canonical v6 target types', async () => {
+    it('ignores legacy resourceType aliases and falls back to resource ID inference', async () => {
       const alert = makeAlert({ type: 'memory' });
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('system-container');
+      expect(context.targetType).toBe('vm');
     });
 
     it('infers "vm" when no resourceType is provided', async () => {
@@ -326,7 +326,7 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('agent');
     });
 
-    it('normalizes metadata.resourceType aliases to canonical v6 targets', async () => {
+    it('ignores legacy metadata.resourceType aliases and falls back safely', async () => {
       const alert = makeAlert({
         resourceId: 'resource-xyz',
         metadata: { resourceType: 'k8s' },
@@ -335,7 +335,7 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('k8s-cluster');
+      expect(context.targetType).toBe('agent');
     });
 
     it('normalizes metadata.resourceType host alias to agent', async () => {
