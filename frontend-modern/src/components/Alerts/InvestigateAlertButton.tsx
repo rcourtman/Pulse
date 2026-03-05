@@ -23,30 +23,143 @@ interface InvestigateAlertButtonProps {
 export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const [isHovered, setIsHovered] = createSignal(false);
   const isLocked = () => props.licenseLocked === true;
-  const canonicalTargetType = (raw?: string) => {
+  const canonicalTargetType = (raw?: string): string | undefined => {
     const normalized = (raw || '').trim().toLowerCase();
     switch (normalized) {
       case 'vm':
+      case 'qemu':
         return 'vm';
       case 'system-container':
       case 'oci-container':
+      case 'lxc':
+      case 'ct':
+      case 'container':
+      case 'system_container':
         return 'system-container';
       case 'app-container':
+      case 'docker-container':
+      case 'docker_container':
+      case 'docker-service':
+      case 'docker_service':
+      case 'swarm_service':
         return 'app-container';
       case 'agent':
+      case 'host':
       case 'node':
       case 'storage':
       case 'disk':
       case 'docker-host':
       case 'pbs':
       case 'pmg':
-      case 'k8s':
       case 'k8s-node':
       case 'k8s-cluster':
+      case 'k8s-deployment':
+      case 'k8s-service':
         return normalized;
+      case 'k8s':
+      case 'kubernetes':
+      case 'kubernetes-cluster':
+      case 'kubernetes-node':
+      case 'kubernetes-deployment':
+      case 'kubernetes-service':
+        return 'k8s-cluster';
+      case '':
+        return undefined;
       default:
-        return 'guest';
+        return undefined;
     }
+  };
+
+  const inferTargetTypeFromResourceID = (resourceID?: string): string | undefined => {
+    const normalized = (resourceID || '').trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+
+    if (
+      normalized.startsWith('vm-') ||
+      normalized.startsWith('qemu-') ||
+      normalized.includes('/qemu/')
+    ) {
+      return 'vm';
+    }
+    if (
+      normalized.startsWith('ct-') ||
+      normalized.startsWith('lxc-') ||
+      normalized.includes('/lxc/')
+    ) {
+      return 'system-container';
+    }
+    if (
+      normalized.startsWith('docker:') ||
+      normalized.startsWith('app-container:') ||
+      normalized.includes('/container:')
+    ) {
+      return 'app-container';
+    }
+    if (normalized.startsWith('node:')) {
+      return 'node';
+    }
+    if (normalized.startsWith('storage:')) {
+      return 'storage';
+    }
+    if (normalized.startsWith('disk:')) {
+      return 'disk';
+    }
+    if (normalized.startsWith('pbs:')) {
+      return 'pbs';
+    }
+    if (normalized.startsWith('pmg:')) {
+      return 'pmg';
+    }
+    if (
+      normalized.startsWith('k8s-') ||
+      normalized.startsWith('pod:') ||
+      normalized.includes(':pod:')
+    ) {
+      return 'k8s-cluster';
+    }
+
+    return undefined;
+  };
+
+  const resolveTargetType = (): string => {
+    const metadataType =
+      typeof props.alert.metadata?.resourceType === 'string'
+        ? (props.alert.metadata.resourceType as string)
+        : undefined;
+
+    const fromExplicitType = canonicalTargetType(props.resourceType);
+    if (fromExplicitType) {
+      return fromExplicitType;
+    }
+
+    const fromMetadataType = canonicalTargetType(metadataType);
+    if (fromMetadataType) {
+      return fromMetadataType;
+    }
+
+    const fromResourceID = inferTargetTypeFromResourceID(props.alert.resourceId);
+    if (fromResourceID) {
+      return fromResourceID;
+    }
+
+    return 'agent';
+  };
+
+  const resolveTargetTypeForAlert = (): string => {
+    const baseType = resolveTargetType();
+    if (props.alert.type.startsWith('node_')) {
+      return 'node';
+    }
+    if (props.alert.type.startsWith('docker_')) {
+      return 'app-container';
+    }
+    if (props.alert.type.startsWith('storage_')) {
+      return 'storage';
+    }
+
+    return baseType;
   };
 
   // Don't render if AI is not enabled
@@ -89,15 +202,7 @@ Please:
 3. Suggest specific remediation steps
 4. Execute diagnostic commands if safe`;
 
-    // Determine target type from alert or infer from resource
-    let targetType = canonicalTargetType(props.resourceType);
-    if (props.alert.type.startsWith('node_')) {
-      targetType = 'node';
-    } else if (props.alert.type.startsWith('docker_')) {
-      targetType = 'app-container';
-    } else if (props.alert.type.startsWith('storage_')) {
-      targetType = 'storage';
-    }
+    const targetType = resolveTargetTypeForAlert();
 
     // Open AI chat with this context and prompt
     aiChatStore.openWithPrompt(prompt, {

@@ -238,7 +238,7 @@ describe('InvestigateAlertButton', () => {
 
       // Verify context
       expect(context).toMatchObject({
-        targetType: 'guest',
+        targetType: 'vm',
         targetId: 'vm-101',
         context: {
           alertId: 'alert-1',
@@ -299,22 +299,43 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('storage');
     });
 
-    it('falls back to "guest" for explicit legacy resourceType props', async () => {
+    it('maps legacy resourceType aliases to canonical v6 target types', async () => {
       const alert = makeAlert({ type: 'memory' });
       render(() => <InvestigateAlertButton alert={alert} resourceType="lxc" />);
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('guest');
+      expect(context.targetType).toBe('system-container');
     });
 
-    it('falls back to "guest" when no resourceType and type has no prefix', async () => {
+    it('infers "vm" when no resourceType is provided', async () => {
       const alert = makeAlert({ type: 'cpu' });
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('guest');
+      expect(context.targetType).toBe('vm');
+    });
+
+    it('defaults to "agent" when type cannot be inferred', async () => {
+      const alert = makeAlert({ resourceId: 'unknown-resource-1' });
+      render(() => <InvestigateAlertButton alert={alert} />);
+      await fireEvent.click(screen.getByRole('button'));
+
+      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(context.targetType).toBe('agent');
+    });
+
+    it('normalizes metadata.resourceType aliases to canonical v6 targets', async () => {
+      const alert = makeAlert({
+        resourceId: 'resource-xyz',
+        metadata: { resourceType: 'k8s' },
+      });
+      render(() => <InvestigateAlertButton alert={alert} />);
+      await fireEvent.click(screen.getByRole('button'));
+
+      const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(context.targetType).toBe('k8s-cluster');
     });
 
     it('type prefix overrides explicit unsupported resourceType', async () => {
