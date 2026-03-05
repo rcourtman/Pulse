@@ -404,6 +404,41 @@ func TestV6AgentRegistrationArtifactsStayCanonical(t *testing.T) {
 	}
 }
 
+// TestV6AIEvalPromptsStayCanonical prevents internal AI eval scenarios from
+// teaching legacy pulse_query list types after the v6 canonicalization.
+func TestV6AIEvalPromptsStayCanonical(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	path := filepath.Join(repoRoot, "internal", "ai", "eval", "scenarios.go")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	content := string(data)
+	normalizedPath := filepath.ToSlash(path)
+
+	requiredSnippets := []string{
+		`type=system-containers`,
+		`type=app-containers`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(content, snippet) {
+			t.Errorf("%s: missing required canonical AI eval snippet %q", normalizedPath, snippet)
+		}
+	}
+
+	bannedSnippets := []string{
+		`type=containers`,
+		`type=docker`,
+	}
+	for _, snippet := range bannedSnippets {
+		if !strings.Contains(content, snippet) {
+			continue
+		}
+		t.Errorf("%s: banned legacy AI eval snippet %q", normalizedPath, snippet)
+	}
+}
+
 // TestV6ReleaseFacingAPITestsCoverLegacyHostRejection keeps release-facing API
 // contract tests pinned on strict v6 behavior for removed host aliases.
 func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {

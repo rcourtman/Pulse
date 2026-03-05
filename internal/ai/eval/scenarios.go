@@ -118,7 +118,7 @@ func ReadOnlyInfrastructureScenario() Scenario {
 		Steps: []Step{
 			{
 				Name:   "List containers",
-				Prompt: fmt.Sprintf("Use pulse_query action=list type=containers to list the LXC containers running on %s. Call only that tool once; do not call any other tools.", t.Node),
+				Prompt: fmt.Sprintf("Use pulse_query action=list type=system-containers to list the LXC containers running on %s. Call only that tool once; do not call any other tools.", t.Node),
 				Assertions: []Assertion{
 					AssertNoError(),
 					AssertAnyToolUsed(),
@@ -127,7 +127,7 @@ func ReadOnlyInfrastructureScenario() Scenario {
 					AssertToolNotBlocked(),
 					// Verify known container appears in tool output (more stable than response text)
 					AssertToolOutputContainsAny("pulse_query", t.NodeContainer),
-					AssertToolInputContains("pulse_query", "containers"),
+					AssertToolInputContains("pulse_query", "system-containers"),
 				},
 			},
 			{
@@ -436,7 +436,7 @@ func QuickSmokeTest() Scenario {
 		Steps: []Step{
 			{
 				Name:   "List infrastructure",
-				Prompt: "Use pulse_query action=list type=containers to list all my containers. Call only that tool once; do not call any other tools.",
+				Prompt: "Use pulse_query action=list type=system-containers to list all my LXC containers. Call only that tool once; do not call any other tools.",
 				Assertions: []Assertion{
 					AssertNoError(),
 					AssertAnyToolUsed(),
@@ -617,7 +617,7 @@ func ResourceAnalysisScenario() Scenario {
 		Steps: []Step{
 			{
 				Name:   "Find heavy hitters",
-				Prompt: "Use pulse_query action=list type=containers limit=5 and pulse_query action=list type=docker limit=5, then show me the top 5 by CPU and memory.",
+				Prompt: "Use pulse_query action=list type=system-containers limit=5 and pulse_query action=list type=app-containers limit=5, then show me the top 5 by CPU and memory.",
 				Assertions: []Assertion{
 					AssertNoError(),
 					AssertAnyToolUsed(),
@@ -678,7 +678,7 @@ func MultiNodeScenario() Scenario {
 			},
 			{
 				Name:   "Cross-node query",
-				Prompt: "Use pulse_query action=list type=containers and show all running containers across all nodes, sorted by memory usage.",
+				Prompt: "Use pulse_query action=list type=system-containers and show all running LXC containers across all nodes, sorted by memory usage.",
 				Assertions: []Assertion{
 					AssertNoError(),
 					AssertAnyToolUsed(),
@@ -1477,7 +1477,7 @@ func ExploreStatusLifecycleScenario() Scenario {
 		Steps: []Step{
 			{
 				Name:           "Read-only query with explore lifecycle",
-				Prompt:         fmt.Sprintf("Use pulse_query action=list type=containers on %s, then summarize which containers look unhealthy and why.", t.Node),
+				Prompt:         fmt.Sprintf("Use pulse_query action=list type=system-containers on %s, then summarize which LXC containers look unhealthy and why.", t.Node),
 				AutonomousMode: &interactive,
 				Assertions: []Assertion{
 					AssertNoError(),
