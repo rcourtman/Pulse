@@ -17,7 +17,7 @@ func TestVerifyConfigPayloadSignature_WithEnvKey(t *testing.T) {
 	}
 
 	payload := SignedConfigPayload{
-		HostID:          "host-1",
+		AgentID:         "host-1",
 		IssuedAt:        time.Now().UTC(),
 		ExpiresAt:       time.Now().UTC().Add(time.Minute),
 		CommandsEnabled: nil,

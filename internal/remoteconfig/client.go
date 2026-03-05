@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"net/http"
 	"net/url"
@@ -18,10 +19,10 @@ import (
 )
 
 const (
-	maxConfigResponseBodyBytes     int64 = 1 * 1024 * 1024
-	maxHostLookupResponseBodyBytes int64 = 64 * 1024
-	agentConfigPathFormat                = "/api/agents/agent/%s/config"
-	agentLookupPath                      = "/api/agents/agent/lookup"
+	maxConfigResponseBodyBytes      int64 = 1 * 1024 * 1024
+	maxAgentLookupResponseBodyBytes int64 = 64 * 1024
+	agentConfigPathFormat                 = "/api/agents/agent/%s/config"
+	agentLookupPath                       = "/api/agents/agent/lookup"
 )
 
 // Config holds configuration for the remote config client.
@@ -52,7 +53,7 @@ func (c *Client) Close() {
 // Response represents the JSON response from the config endpoint.
 type Response struct {
 	Success bool   `json:"success"`
-	HostID  string `json:"hostId"`
+	AgentID string `json:"agentId"`
 	Config  struct {
 		CommandsEnabled *bool                  `json:"commandsEnabled,omitempty"`
 		Settings        map[string]interface{} `json:"settings,omitempty"`
@@ -108,20 +109,20 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 
 	logger := c.logger()
 	signatureRequired := isConfigSignatureRequired()
-	hostID := c.cfg.AgentID
-	if resolved, err := c.resolveHostID(ctx); err != nil {
-		return nil, nil, fmt.Errorf("resolve host ID: %w", err)
+	agentID := c.cfg.AgentID
+	if resolved, err := c.resolveAgentID(ctx); err != nil {
+		return nil, nil, fmt.Errorf("resolve agent ID: %w", err)
 	} else if resolved != "" {
 		logger.Debug().
-			Str("action", "resolve_host_id_success").
+			Str("action", "resolve_agent_id_success").
 			Str("hostname", c.cfg.Hostname).
-			Str("requested_host_id", c.cfg.AgentID).
-			Str("resolved_host_id", resolved).
-			Msg("Remote config host lookup resolved host ID")
-		hostID = resolved
+			Str("requested_agent_id", c.cfg.AgentID).
+			Str("resolved_agent_id", resolved).
+			Msg("Remote config agent lookup resolved agent ID")
+		agentID = resolved
 	}
 
-	endpointURL := c.cfg.PulseURL + fmt.Sprintf(agentConfigPathFormat, url.PathEscape(hostID))
+	endpointURL := c.cfg.PulseURL + fmt.Sprintf(agentConfigPathFormat, url.PathEscape(agentID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create request: %w", err)
@@ -137,7 +138,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 			Err(err).
 			Str("action", "fetch_request_failed").
 			Str("endpoint_url", endpointURL).
-			Str("host_id", hostID).
+			Str("agent_id", agentID).
 			Msg("Remote config request failed")
 		return nil, nil, fmt.Errorf("do request: %w", err)
 	}
@@ -153,35 +154,36 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 			Str("endpoint_url", endpointURL).
 			Int("status_code", resp.StatusCode).
 			Str("status", resp.Status).
-			Str("host_id", hostID).
+			Str("agent_id", agentID).
 			Msg("Remote config request returned non-success status")
 		return nil, nil, fmt.Errorf("server responded with status %s", resp.Status)
 	}
 
 	var configResp Response
-	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxConfigResponseBodyBytes)).Decode(&configResp); err != nil {
 		logger.Warn().
 			Err(err).
 			Str("action", "decode_response_failed").
 			Str("endpoint_url", endpointURL).
-			Str("host_id", hostID).
+			Str("agent_id", agentID).
 			Msg("Remote config response decode failed")
 		return nil, nil, fmt.Errorf("decode response: %w", err)
 	}
 
+	responseAgentID := strings.TrimSpace(configResp.AgentID)
+
 	if configResp.Config.Signature != "" {
-		responseHostID := strings.TrimSpace(configResp.HostID)
-		if responseHostID == "" {
-			return nil, nil, fmt.Errorf("config signature missing host metadata")
+		if responseAgentID == "" {
+			return nil, nil, fmt.Errorf("config signature missing agent metadata")
 		}
-		if responseHostID != hostID {
-			return nil, nil, fmt.Errorf("config signature host mismatch: expected %q, got %q", hostID, responseHostID)
+		if responseAgentID != agentID {
+			return nil, nil, fmt.Errorf("config signature agent mismatch: expected %q, got %q", agentID, responseAgentID)
 		}
 		if configResp.Config.IssuedAt.IsZero() || configResp.Config.ExpiresAt.IsZero() {
 			logger.Warn().
 				Str("action", "signature_missing_timestamps").
-				Str("host_id", hostID).
-				Str("response_host_id", configResp.HostID).
+				Str("agent_id", agentID).
+				Str("response_agent_id", responseAgentID).
 				Msg("Remote config signature metadata missing timestamps")
 			return nil, nil, fmt.Errorf("config signature missing timestamp metadata")
 		}
@@ -189,8 +191,8 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		if now.After(configResp.Config.ExpiresAt.Add(2 * time.Minute)) {
 			logger.Warn().
 				Str("action", "signature_expired").
-				Str("host_id", hostID).
-				Str("response_host_id", configResp.HostID).
+				Str("agent_id", agentID).
+				Str("response_agent_id", responseAgentID).
 				Time("issued_at", configResp.Config.IssuedAt).
 				Time("expires_at", configResp.Config.ExpiresAt).
 				Time("observed_at", now).
@@ -200,8 +202,8 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		if configResp.Config.IssuedAt.After(now.Add(2 * time.Minute)) {
 			logger.Warn().
 				Str("action", "signature_issued_in_future").
-				Str("host_id", hostID).
-				Str("response_host_id", configResp.HostID).
+				Str("agent_id", agentID).
+				Str("response_agent_id", responseAgentID).
 				Time("issued_at", configResp.Config.IssuedAt).
 				Time("observed_at", now).
 				Msg("Remote config signature issued in the future")
@@ -209,7 +211,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		}
 
 		payload := SignedConfigPayload{
-			HostID:          responseHostID,
+			AgentID:         responseAgentID,
 			IssuedAt:        configResp.Config.IssuedAt,
 			ExpiresAt:       configResp.Config.ExpiresAt,
 			CommandsEnabled: configResp.Config.CommandsEnabled,
@@ -219,24 +221,24 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 			logger.Warn().
 				Err(err).
 				Str("action", "signature_verification_failed").
-				Str("host_id", hostID).
-				Str("response_host_id", configResp.HostID).
+				Str("agent_id", agentID).
+				Str("response_agent_id", responseAgentID).
 				Msg("Remote config signature verification failed")
 			return nil, nil, fmt.Errorf("config signature verification failed: %w", err)
 		}
 	} else if signatureRequired {
 		logger.Warn().
 			Str("action", "signature_missing_required").
-			Str("host_id", hostID).
-			Str("response_host_id", configResp.HostID).
+			Str("agent_id", agentID).
+			Str("response_agent_id", responseAgentID).
 			Bool("signature_required", signatureRequired).
 			Msg("Remote config signature required but missing")
 		return nil, nil, fmt.Errorf("config signature required but missing")
 	} else if len(configResp.Config.Settings) > 0 || configResp.Config.CommandsEnabled != nil {
 		logger.Warn().
 			Str("action", "missing_signature_skip_verification").
-			Str("host_id", hostID).
-			Str("response_host_id", configResp.HostID).
+			Str("agent_id", agentID).
+			Str("response_agent_id", responseAgentID).
 			Int("settings_count", len(configResp.Config.Settings)).
 			Bool("commands_enabled_present", configResp.Config.CommandsEnabled != nil).
 			Bool("signature_required", signatureRequired).
@@ -254,12 +256,12 @@ func (c *Client) logger() zerolog.Logger {
 	return c.cfg.Logger.With().Str("component", "remote_config_client").Logger()
 }
 
-func (c *Client) resolveHostID(ctx context.Context) (string, error) {
+func (c *Client) resolveAgentID(ctx context.Context) (string, error) {
 	if c.configErr != nil {
 		return "", fmt.Errorf("invalid remote config client configuration: %w", c.configErr)
 	}
 	if c.cfg.APIToken == "" {
-		return "", fmt.Errorf("API token is required for host lookup")
+		return "", fmt.Errorf("API token is required for agent lookup")
 	}
 
 	hostname := c.cfg.Hostname
@@ -273,11 +275,11 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	if err != nil {
 		logger.Warn().
 			Err(err).
-			Str("action", "host_lookup_request_build_failed").
+			Str("action", "agent_lookup_request_build_failed").
 			Str("endpoint_url", endpointURL).
 			Str("hostname", hostname).
-			Msg("Remote config host lookup request creation failed")
-		return "", fmt.Errorf("create host lookup request: %w", err)
+			Msg("Remote config agent lookup request creation failed")
+		return "", fmt.Errorf("create agent lookup request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.cfg.APIToken)
@@ -288,59 +290,60 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	if err != nil {
 		logger.Warn().
 			Err(err).
-			Str("action", "host_lookup_request_failed").
+			Str("action", "agent_lookup_request_failed").
 			Str("endpoint_url", endpointURL).
 			Str("hostname", hostname).
-			Msg("Remote config host lookup request failed")
-		return "", fmt.Errorf("host lookup request: %w", err)
+			Msg("Remote config agent lookup request failed")
+		return "", fmt.Errorf("agent lookup request: %w", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			c.cfg.Logger.Warn().Err(closeErr).Msg("Failed to close host lookup response body")
+			c.cfg.Logger.Warn().Err(closeErr).Msg("Failed to close agent lookup response body")
 		}
 	}()
 
 	if resp.StatusCode == http.StatusNotFound {
 		logger.Debug().
-			Str("action", "host_lookup_not_found").
+			Str("action", "agent_lookup_not_found").
 			Str("hostname", hostname).
-			Msg("Remote config host lookup returned not found")
+			Msg("Remote config agent lookup returned not found")
 		return "", nil
 	}
 	if resp.StatusCode >= 300 {
 		logger.Warn().
-			Str("action", "host_lookup_non_success_status").
+			Str("action", "agent_lookup_non_success_status").
 			Str("endpoint_url", endpointURL).
 			Str("hostname", hostname).
 			Int("status_code", resp.StatusCode).
 			Str("status", resp.Status).
-			Msg("Remote config host lookup returned non-success status")
-		return "", fmt.Errorf("host lookup responded with status %s", resp.Status)
+			Msg("Remote config agent lookup returned non-success status")
+		return "", fmt.Errorf("agent lookup responded with status %s", resp.Status)
 	}
 
 	var payload struct {
 		Success bool `json:"success"`
-		Host    struct {
+		Agent   struct {
 			ID string `json:"id"`
-		} `json:"host"`
+		} `json:"agent"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAgentLookupResponseBodyBytes)).Decode(&payload); err != nil {
 		logger.Warn().
 			Err(err).
-			Str("action", "host_lookup_decode_failed").
+			Str("action", "agent_lookup_decode_failed").
 			Str("endpoint_url", endpointURL).
 			Str("hostname", hostname).
-			Msg("Remote config host lookup response decode failed")
-		return "", fmt.Errorf("decode host lookup response: %w", err)
+			Msg("Remote config agent lookup response decode failed")
+		return "", fmt.Errorf("decode agent lookup response: %w", err)
 	}
 	if !payload.Success {
 		logger.Debug().
-			Str("action", "host_lookup_unsuccessful").
+			Str("action", "agent_lookup_unsuccessful").
 			Str("hostname", hostname).
-			Msg("Remote config host lookup returned unsuccessful response")
+			Msg("Remote config agent lookup returned unsuccessful response")
 		return "", nil
 	}
-	return strings.TrimSpace(payload.Host.ID), nil
+
+	return strings.TrimSpace(payload.Agent.ID), nil
 }
 
 func normalizeConfig(cfg Config) (Config, error) {

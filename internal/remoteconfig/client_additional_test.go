@@ -28,7 +28,7 @@ func TestClientFetchWithSignature(t *testing.T) {
 	settings := map[string]interface{}{"interval": "1m"}
 
 	payload := SignedConfigPayload{
-		HostID:          "agent-1",
+		AgentID:         "agent-1",
 		IssuedAt:        issuedAt,
 		ExpiresAt:       expiresAt,
 		CommandsEnabled: &commands,
@@ -46,7 +46,7 @@ func TestClientFetchWithSignature(t *testing.T) {
 		}
 		resp := Response{
 			Success: true,
-			HostID:  "agent-1",
+			AgentID: "agent-1",
 		}
 		resp.Config.CommandsEnabled = &commands
 		resp.Config.Settings = settings
@@ -83,10 +83,10 @@ func TestClientFetchSignatureFailures(t *testing.T) {
 	t.Setenv("PULSE_AGENT_CONFIG_PUBLIC_KEYS", base64.StdEncoding.EncodeToString(pub))
 
 	settings := map[string]interface{}{"interval": "1m"}
-	makeResp := func(hostID, sig string, issued, expires time.Time) Response {
+	makeResp := func(agentID, sig string, issued, expires time.Time) Response {
 		resp := Response{
 			Success: true,
-			HostID:  hostID,
+			AgentID: agentID,
 		}
 		resp.Config.Settings = settings
 		resp.Config.Signature = sig
@@ -98,7 +98,7 @@ func TestClientFetchSignatureFailures(t *testing.T) {
 	issuedAt := time.Now().UTC()
 	expiresAt := issuedAt.Add(5 * time.Minute)
 	payload := SignedConfigPayload{
-		HostID:    "agent-1",
+		AgentID:   "agent-1",
 		IssuedAt:  issuedAt,
 		ExpiresAt: expiresAt,
 		Settings:  settings,
@@ -113,8 +113,8 @@ func TestClientFetchSignatureFailures(t *testing.T) {
 		resp     Response
 		wantText string
 	}{
-		{name: "missing host metadata", resp: makeResp("", signature, issuedAt, expiresAt), wantText: "missing host metadata"},
-		{name: "host mismatch", resp: makeResp("agent-2", signature, issuedAt, expiresAt), wantText: "host mismatch"},
+		{name: "missing agent metadata", resp: makeResp("", signature, issuedAt, expiresAt), wantText: "missing agent metadata"},
+		{name: "agent mismatch", resp: makeResp("agent-2", signature, issuedAt, expiresAt), wantText: "agent mismatch"},
 		{name: "missing timestamps", resp: makeResp("agent-1", signature, time.Time{}, time.Time{}), wantText: "missing timestamp"},
 		{name: "expired", resp: makeResp("agent-1", signature, issuedAt.Add(-10*time.Minute), issuedAt.Add(-5*time.Minute)), wantText: "expired"},
 		{name: "future", resp: makeResp("agent-1", signature, issuedAt.Add(10*time.Minute), issuedAt.Add(20*time.Minute)), wantText: "future"},
@@ -137,15 +137,15 @@ func TestClientFetchSignatureFailures(t *testing.T) {
 	}
 }
 
-func TestClientFetchHostLookupAndErrors(t *testing.T) {
+func TestClientFetchAgentLookupAndErrors(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/agents/agent/lookup":
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"host":{"id":"host-9"}}`))
-		case "/api/agents/agent/host-9/config":
+			w.Write([]byte(`{"success":true,"agent":{"id":"agent-9"}}`))
+		case "/api/agents/agent/agent-9/config":
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"hostId":"host-9","config":{"settings":{"mode":"ok"}}}`))
+			w.Write([]byte(`{"success":true,"agentId":"agent-9","config":{"settings":{"mode":"ok"}}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -188,7 +188,7 @@ func TestClientFetchHostLookupAndErrors(t *testing.T) {
 	}
 }
 
-func TestClientNewDefaultsAndHostLookupNotFound(t *testing.T) {
+func TestClientNewDefaultsAndAgentLookupNotFound(t *testing.T) {
 	client := New(Config{PulseURL: "  ", InsecureSkipVerify: true})
 	if client.cfg.PulseURL != "http://localhost:7655" {
 		t.Fatalf("unexpected default PulseURL: %s", client.cfg.PulseURL)
@@ -209,12 +209,12 @@ func TestClientNewDefaultsAndHostLookupNotFound(t *testing.T) {
 		APIToken: "t",
 		Hostname: "missing",
 	})
-	if got, err := client.resolveHostID(context.Background()); err != nil || got != "" {
-		t.Fatalf("expected empty host ID, got %q err=%v", got, err)
+	if got, err := client.resolveAgentID(context.Background()); err != nil || got != "" {
+		t.Fatalf("expected empty agent ID, got %q err=%v", got, err)
 	}
 }
 
-func TestClientFetchResolveHostIDError(t *testing.T) {
+func TestClientFetchResolveAgentIDError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/lookup") {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -231,7 +231,7 @@ func TestClientFetchResolveHostIDError(t *testing.T) {
 		Hostname: "known",
 	})
 	if _, _, err := client.Fetch(context.Background()); err == nil {
-		t.Fatalf("expected resolve host error")
+		t.Fatalf("expected resolve agent error")
 	}
 }
 
@@ -252,13 +252,13 @@ func TestClientFetchInvalidURL(t *testing.T) {
 	}
 }
 
-func TestClientResolveHostIDRequestErrors(t *testing.T) {
+func TestClientResolveAgentIDRequestErrors(t *testing.T) {
 	client := New(Config{
 		PulseURL: "http://bad url",
 		APIToken: "t",
 		Hostname: "host",
 	})
-	if _, err := client.resolveHostID(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid remote config client configuration") {
+	if _, err := client.resolveAgentID(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid remote config client configuration") {
 		t.Fatalf("expected invalid configuration error, got %v", err)
 	}
 
@@ -268,7 +268,7 @@ func TestClientResolveHostIDRequestErrors(t *testing.T) {
 		Hostname: "host",
 	})
 	client.httpClient = &http.Client{Transport: errorRoundTripper{}}
-	if _, err := client.resolveHostID(context.Background()); err == nil || !strings.Contains(err.Error(), "host lookup request") {
+	if _, err := client.resolveAgentID(context.Background()); err == nil || !strings.Contains(err.Error(), "agent lookup request") {
 		t.Fatalf("expected transport error, got %v", err)
 	}
 }
@@ -319,13 +319,13 @@ func TestClientFetchConfigValidation(t *testing.T) {
 	}
 }
 
-func TestClientResolveHostIDEscapesHostnameQuery(t *testing.T) {
+func TestClientResolveAgentIDEscapesHostnameQuery(t *testing.T) {
 	const hostname = " host with spaces/and?chars "
 	var gotRawQuery string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotRawQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"host":{"id":"host-123"}}`))
+		w.Write([]byte(`{"success":true,"agent":{"id":"agent-123"}}`))
 	}))
 	defer ts.Close()
 
@@ -334,12 +334,12 @@ func TestClientResolveHostIDEscapesHostnameQuery(t *testing.T) {
 		APIToken: "token",
 		Hostname: hostname,
 	})
-	got, err := client.resolveHostID(context.Background())
+	got, err := client.resolveAgentID(context.Background())
 	if err != nil {
-		t.Fatalf("resolveHostID error: %v", err)
+		t.Fatalf("resolveAgentID error: %v", err)
 	}
-	if got != "host-123" {
-		t.Fatalf("expected host-123, got %q", got)
+	if got != "agent-123" {
+		t.Fatalf("expected agent-123, got %q", got)
 	}
 	if gotRawQuery != "hostname=host+with+spaces%2Fand%3Fchars" {
 		t.Fatalf("unexpected hostname query encoding: %q", gotRawQuery)
@@ -351,7 +351,7 @@ func TestClientFetchEscapesAgentIDPath(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotEscapedPath = r.URL.EscapedPath()
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"hostId":"agent/1","config":{"settings":{"mode":"ok"}}}`))
+		w.Write([]byte(`{"success":true,"agentId":"agent/1","config":{"settings":{"mode":"ok"}}}`))
 	}))
 	defer ts.Close()
 
@@ -372,7 +372,7 @@ func TestClientFetchEscapesAgentIDPath(t *testing.T) {
 	}
 }
 
-func TestClientResolveHostIDPreventsQueryInjection(t *testing.T) {
+func TestClientResolveAgentIDPreventsQueryInjection(t *testing.T) {
 	const hostname = "known&admin=true"
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/agents/agent/lookup" {
@@ -391,8 +391,8 @@ func TestClientResolveHostIDPreventsQueryInjection(t *testing.T) {
 	defer ts.Close()
 
 	client := New(Config{PulseURL: ts.URL, APIToken: "t", Hostname: hostname})
-	if got, err := client.resolveHostID(context.Background()); err != nil || got != "" {
-		t.Fatalf("expected empty host ID, got %q err=%v", got, err)
+	if got, err := client.resolveAgentID(context.Background()); err != nil || got != "" {
+		t.Fatalf("expected empty agent ID, got %q err=%v", got, err)
 	}
 }
 
@@ -404,7 +404,7 @@ func TestClientFetchLogsStructuredContextWhenSignatureMissing(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{
 			"success": true,
-			"hostId": "agent-1",
+			"agentId": "agent-1",
 			"config": {
 				"commandsEnabled": true,
 				"settings": {
@@ -434,12 +434,12 @@ func TestClientFetchLogsStructuredContextWhenSignatureMissing(t *testing.T) {
 	if entry["action"] != "missing_signature_skip_verification" {
 		t.Fatalf("expected action missing_signature_skip_verification, got %#v", entry["action"])
 	}
-	if entry["host_id"] != "agent-1" {
-		t.Fatalf("expected host_id agent-1, got %#v", entry["host_id"])
+	if entry["agent_id"] != "agent-1" {
+		t.Fatalf("expected agent_id agent-1, got %#v", entry["agent_id"])
 	}
 }
 
-func TestClientResolveHostIDLogsStructuredContextOnStatusError(t *testing.T) {
+func TestClientResolveAgentIDLogsStructuredContextOnStatusError(t *testing.T) {
 	var logs bytes.Buffer
 	logger := zerolog.New(&logs)
 
@@ -455,16 +455,16 @@ func TestClientResolveHostIDLogsStructuredContextOnStatusError(t *testing.T) {
 		Logger:   logger,
 	})
 
-	if _, err := client.resolveHostID(context.Background()); err == nil {
-		t.Fatal("expected error for host lookup server failure")
+	if _, err := client.resolveAgentID(context.Background()); err == nil {
+		t.Fatal("expected error for agent lookup server failure")
 	}
 
 	entry := decodeLastLogEntry(t, &logs)
 	if entry["component"] != "remote_config_client" {
 		t.Fatalf("expected component remote_config_client, got %#v", entry["component"])
 	}
-	if entry["action"] != "host_lookup_non_success_status" {
-		t.Fatalf("expected action host_lookup_non_success_status, got %#v", entry["action"])
+	if entry["action"] != "agent_lookup_non_success_status" {
+		t.Fatalf("expected action agent_lookup_non_success_status, got %#v", entry["action"])
 	}
 	if entry["status_code"] != float64(http.StatusInternalServerError) {
 		t.Fatalf("expected status_code %d, got %#v", http.StatusInternalServerError, entry["status_code"])

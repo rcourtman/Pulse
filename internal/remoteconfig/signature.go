@@ -25,7 +25,7 @@ MCowBQYDK2VwAyEAlbXZQRx8jgMzwpXbbjOGcnA+9TG0lms/auxbPzY+Tdo=
 
 // SignedConfigPayload is the canonical payload used for config signing.
 type SignedConfigPayload struct {
-	HostID          string
+	AgentID         string
 	IssuedAt        time.Time
 	ExpiresAt       time.Time
 	CommandsEnabled *bool
@@ -101,7 +101,7 @@ func VerifyConfigPayloadSignature(payload SignedConfigPayload, signatureBase64 s
 
 func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 	type canonicalPayload struct {
-		HostID          string          `json:"hostId"`
+		AgentID         string          `json:"agentId"`
 		IssuedAt        string          `json:"issuedAt"`
 		ExpiresAt       string          `json:"expiresAt"`
 		CommandsEnabled *bool           `json:"commandsEnabled,omitempty"`
@@ -118,7 +118,7 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 	}
 
 	canonical := canonicalPayload{
-		HostID:          payload.HostID,
+		AgentID:         strings.TrimSpace(payload.AgentID),
 		IssuedAt:        payload.IssuedAt.UTC().Format(time.RFC3339Nano),
 		ExpiresAt:       payload.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		CommandsEnabled: payload.CommandsEnabled,
