@@ -667,6 +667,7 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 		_, err = s.DiscoverResource(ctx, DiscoveryRequest{
 			ResourceType: resourceType,
 			ResourceID:   resourceID,
+			TargetID:     hostID,
 			HostID:       hostID,
 			Hostname:     hostID,
 		})
@@ -1268,6 +1269,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	req := DiscoveryRequest{
 		ResourceType: discovery.ResourceType,
 		ResourceID:   discovery.ResourceID,
+		TargetID:     discovery.TargetID,
 		HostID:       discovery.HostID,
 		Hostname:     discovery.Hostname,
 	}
@@ -1479,11 +1481,26 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		ctx = context.Background()
 	}
 
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.HostID = strings.TrimSpace(req.HostID)
+	if req.TargetID == "" {
+		req.TargetID = req.HostID
+	}
+	if req.HostID == "" {
+		req.HostID = req.TargetID
+	}
+
 	originalReq := req
-	aliasIDs := []string{MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)}
+	aliasIDs := make([]string, 0, 2)
+	if req.TargetID != "" && req.ResourceID != "" {
+		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, req.TargetID, req.ResourceID))
+	}
+	if req.HostID != "" && req.ResourceID != "" && req.HostID != req.TargetID {
+		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, req.HostID, req.ResourceID))
+	}
 	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
-	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
+	resourceID := MakeResourceID(req.ResourceType, req.TargetID, req.ResourceID)
 
 	// Get current fingerprint (if available)
 	// Fingerprint key matches the resource ID format: type:scope:id
@@ -1654,6 +1671,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		ID:               resourceID,
 		ResourceType:     req.ResourceType,
 		ResourceID:       req.ResourceID,
+		TargetID:         req.TargetID,
 		HostID:           req.HostID,
 		Hostname:         hostname,
 		ServiceType:      result.ServiceType,
@@ -1777,8 +1795,12 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	// Store result for any waiting goroutines
 	inProg.result = discovery
 	if originalReq != req {
+		originalTargetID := strings.TrimSpace(originalReq.TargetID)
+		if originalTargetID == "" {
+			originalTargetID = strings.TrimSpace(originalReq.HostID)
+		}
 		log.Debug().
-			Str("original_id", MakeResourceID(originalReq.ResourceType, originalReq.HostID, originalReq.ResourceID)).
+			Str("original_id", MakeResourceID(originalReq.ResourceType, originalTargetID, originalReq.ResourceID)).
 			Str("canonical_id", resourceID).
 			Msg("Discovery request canonicalized")
 	}
@@ -1788,6 +1810,15 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 // normalizeDiscoveryRequest resolves host discovery aliases to a canonical ID.
 // This prevents duplicate discoveries for the same physical host under different IDs.
 func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]string) DiscoveryRequest {
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.HostID = strings.TrimSpace(req.HostID)
+	if req.TargetID == "" {
+		req.TargetID = req.HostID
+	}
+	if req.HostID == "" {
+		req.HostID = req.TargetID
+	}
+
 	if req.ResourceType != ResourceTypeAgent {
 		return req
 	}
@@ -1816,6 +1847,7 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 				req.Hostname = host.Hostname
 			}
 			req.HostID = host.ID
+			req.TargetID = req.HostID
 			req.ResourceID = host.ID
 			return req
 		}
@@ -1835,10 +1867,12 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 					Msg("Redirecting discovery scan to linked host agent")
 				addAlias(node.LinkedAgentID, node.LinkedAgentID)
 				req.HostID = node.LinkedAgentID
+				req.TargetID = req.HostID
 				req.ResourceID = node.LinkedAgentID
 				return req
 			}
 			req.HostID = node.Name
+			req.TargetID = req.HostID
 			req.ResourceID = node.Name
 			return req
 		}
@@ -2494,13 +2528,14 @@ func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 func (s *Service) GetDiscoveryByResource(resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
 	req := DiscoveryRequest{
 		ResourceType: resourceType,
+		TargetID:     targetID,
 		HostID:       targetID,
 		ResourceID:   resourceID,
 	}
 	aliasIDs := []string{MakeResourceID(resourceType, targetID, resourceID)}
 	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
-	d, err := s.store.GetByResource(resourceType, req.HostID, req.ResourceID)
+	d, err := s.store.GetByResource(resourceType, req.TargetID, req.ResourceID)
 	if err != nil || d == nil {
 		for _, aliasID := range aliasIDs {
 			if aliasID == "" {
@@ -2513,7 +2548,7 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, targetID, re
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, req.HostID, req.ResourceID, err)
+			return nil, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, req.TargetID, req.ResourceID, err)
 		}
 		return nil, nil
 	}
@@ -2808,12 +2843,13 @@ func (s *Service) ClearCache() {
 // GetDiscoveryForAIChat returns discovery data for AI chat context.
 // It will run discovery if needed (fingerprint changed or no data exists).
 // This is the just-in-time discovery approach: only call AI when data is actually needed.
-func (s *Service) GetDiscoveryForAIChat(ctx context.Context, resourceType ResourceType, hostID, resourceID string) (*ResourceDiscovery, error) {
+func (s *Service) GetDiscoveryForAIChat(ctx context.Context, resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
 	// This is the same as DiscoverResource but without Force
 	return s.DiscoverResource(ctx, DiscoveryRequest{
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
-		HostID:       hostID,
+		TargetID:     targetID,
+		HostID:       targetID,
 		Force:        false, // Let fingerprint logic decide
 	})
 }

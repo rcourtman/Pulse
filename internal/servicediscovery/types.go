@@ -164,7 +164,8 @@ func ParseResourceID(id string) (resourceType ResourceType, targetID, resourceID
 type DiscoveryRequest struct {
 	ResourceType ResourceType `json:"resource_type"`
 	ResourceID   string       `json:"resource_id"`
-	HostID       string       `json:"host_id"`
+	TargetID     string       `json:"target_id,omitempty"`
+	HostID       string       `json:"host_id,omitempty"` // Compatibility alias of target_id
 	Hostname     string       `json:"hostname"`
 	Force        bool         `json:"force"` // Force re-scan even if recent
 }

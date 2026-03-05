@@ -86,6 +86,7 @@ func (a *ToolsAdapter) FormatForAIContext(sourceData []tools.DiscoverySourceData
 func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string) (tools.DiscoverySourceData, error) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceType(resourceType),
+		TargetID:     targetID,
 		HostID:       targetID,
 		ResourceID:   resourceID,
 		Force:        false, // Don't force if recently discovered

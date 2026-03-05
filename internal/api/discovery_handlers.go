@@ -341,7 +341,7 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hostID := parts[1]
+	targetID := parts[1]
 	resourceID := parts[2]
 
 	// Parse optional request body for force flag and hostname
@@ -357,21 +357,22 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	req := servicediscovery.DiscoveryRequest{
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
-		HostID:       hostID,
+		TargetID:     targetID,
+		HostID:       targetID,
 		Hostname:     reqBody.Hostname,
 		Force:        reqBody.Force,
 	}
 
-	// If hostname not provided, try to use hostID
+	// If hostname not provided, use target ID as a fallback.
 	if req.Hostname == "" {
-		req.Hostname = hostID
+		req.Hostname = targetID
 	}
 
 	discovery, err := h.service.DiscoverResource(r.Context(), req)
 	if err != nil {
 		log.Error().Err(err).
 			Str("type", string(resourceType)).
-			Str("host", hostID).
+			Str("target", targetID).
 			Str("id", resourceID).
 			Msg("Failed to trigger discovery")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Discovery failed: "+err.Error())
