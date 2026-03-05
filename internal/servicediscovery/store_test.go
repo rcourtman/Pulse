@@ -35,15 +35,21 @@ func (errorCrypto) Decrypt(ciphertext []byte) ([]byte, error) {
 	return nil, os.ErrInvalid
 }
 
-func TestNormalizeResourceType_DoesNotAliasHost(t *testing.T) {
-	if got := NormalizeResourceType(ResourceType("host")); got != ResourceType("host") {
-		t.Fatalf("NormalizeResourceType(host) = %q, want %q", got, ResourceType("host"))
+func TestNormalizeResourceType_DoesNotAliasLegacyTypes(t *testing.T) {
+	cases := []ResourceType{"host", "lxc", "docker_lxc"}
+	for _, tc := range cases {
+		if got := NormalizeResourceType(tc); got != tc {
+			t.Fatalf("NormalizeResourceType(%q) = %q, want %q", tc, got, tc)
+		}
 	}
 }
 
-func TestCanonicalStoredResourceType_DoesNotAliasHost(t *testing.T) {
-	if got := canonicalStoredResourceType(ResourceType("host")); got != ResourceType("host") {
-		t.Fatalf("canonicalStoredResourceType(host) = %q, want %q", got, ResourceType("host"))
+func TestCanonicalStoredResourceType_DoesNotAliasLegacyTypes(t *testing.T) {
+	cases := []ResourceType{"host", "lxc", "docker_lxc"}
+	for _, tc := range cases {
+		if got := canonicalStoredResourceType(tc); got != tc {
+			t.Fatalf("canonicalStoredResourceType(%q) = %q, want %q", tc, got, tc)
+		}
 	}
 }
 
@@ -709,8 +715,8 @@ func TestStore_GetChangedResources(t *testing.T) {
 		TargetID:   "host1",
 		Hash:       "aaa111",
 	}
-	lxcFP := &ContainerFingerprint{
-		ResourceID: "lxc:node1:101",
+	systemContainerFP := &ContainerFingerprint{
+		ResourceID: "system-container:node1:101",
 		TargetID:   "node1",
 		Hash:       "bbb222",
 	}
@@ -719,7 +725,7 @@ func TestStore_GetChangedResources(t *testing.T) {
 		TargetID:   "node1",
 		Hash:       "ccc333",
 	}
-	for _, fp := range []*ContainerFingerprint{dockerFP, lxcFP, vmFP} {
+	for _, fp := range []*ContainerFingerprint{dockerFP, systemContainerFP, vmFP} {
 		if err := store.SaveFingerprint(fp); err != nil {
 			t.Fatalf("SaveFingerprint error: %v", err)
 		}
@@ -737,7 +743,7 @@ func TestStore_GetChangedResources(t *testing.T) {
 	// Save discoveries with matching fingerprint hashes.
 	for _, d := range []*ResourceDiscovery{
 		{ID: "docker:host1:nginx", ResourceType: ResourceTypeDocker, TargetID: "host1", ResourceID: "nginx", Fingerprint: "aaa111"},
-		{ID: "lxc:node1:101", ResourceType: ResourceTypeSystemContainer, TargetID: "node1", ResourceID: "101", Fingerprint: "bbb222"},
+		{ID: "system-container:node1:101", ResourceType: ResourceTypeSystemContainer, TargetID: "node1", ResourceID: "101", Fingerprint: "bbb222"},
 		{ID: "vm:node1:200", ResourceType: ResourceTypeVM, TargetID: "node1", ResourceID: "200", Fingerprint: "ccc333"},
 	} {
 		if err := store.Save(d); err != nil {
@@ -754,9 +760,9 @@ func TestStore_GetChangedResources(t *testing.T) {
 		t.Fatalf("expected 0 changed (all match), got %d: %v", len(changed), changed)
 	}
 
-	// Update the LXC fingerprint to simulate a change.
-	lxcFP.Hash = "bbb222_changed"
-	if err := store.SaveFingerprint(lxcFP); err != nil {
+	// Update the system-container fingerprint to simulate a change.
+	systemContainerFP.Hash = "bbb222_changed"
+	if err := store.SaveFingerprint(systemContainerFP); err != nil {
 		t.Fatalf("SaveFingerprint error: %v", err)
 	}
 
