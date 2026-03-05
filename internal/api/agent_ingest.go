@@ -134,9 +134,9 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Use the live state snapshot (not the global mock snapshot) so agent
+	// Use the live host snapshot (not the global mock snapshot) so agent
 	// registrations can still be validated while Pulse is in mock/demo mode.
-	snap := h.getMonitor(r.Context()).GetLiveStateSnapshot()
+	hosts := h.getMonitor(r.Context()).GetLiveHostsSnapshot()
 
 	var (
 		host  models.Host
@@ -144,7 +144,7 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 	)
 
 	if lookupID != "" {
-		for _, candidate := range snap.Hosts {
+		for _, candidate := range hosts {
 			if candidate.ID == lookupID {
 				host = candidate
 				found = true
@@ -155,7 +155,7 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 
 	if !found && hostname != "" {
 		// First pass: exact match (case-insensitive)
-		for _, candidate := range snap.Hosts {
+		for _, candidate := range hosts {
 			if strings.EqualFold(candidate.Hostname, hostname) || strings.EqualFold(candidate.DisplayName, hostname) {
 				host = candidate
 				found = true
@@ -174,7 +174,7 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 			}
 
 			shortLookup := getShortName(hostname)
-			for _, candidate := range snap.Hosts {
+			for _, candidate := range hosts {
 				if strings.EqualFold(getShortName(candidate.Hostname), shortLookup) {
 					host = candidate
 					found = true
@@ -287,12 +287,12 @@ func (h *HostAgentHandlers) canReadConfig(record *config.APITokenRecord) bool {
 }
 
 func (h *HostAgentHandlers) resolveConfigAgent(ctx context.Context, agentID string, record *config.APITokenRecord) (models.Host, bool) {
-	// Use the live state snapshot so agents can still fetch config while
+	// Use the live host snapshot so agents can still fetch config while
 	// Pulse is running in mock/demo mode.
-	snap := h.getMonitor(ctx).GetLiveStateSnapshot()
+	hosts := h.getMonitor(ctx).GetLiveHostsSnapshot()
 
 	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeAgentManage) {
-		for _, candidate := range snap.Hosts {
+		for _, candidate := range hosts {
 			if candidate.ID == agentID {
 				return candidate, true
 			}
@@ -300,7 +300,7 @@ func (h *HostAgentHandlers) resolveConfigAgent(ctx context.Context, agentID stri
 		return models.Host{}, false
 	}
 
-	for _, candidate := range snap.Hosts {
+	for _, candidate := range hosts {
 		if candidate.TokenID != "" && candidate.TokenID == record.ID {
 			return candidate, true
 		}
@@ -437,9 +437,9 @@ func (h *HostAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http
 		return true
 	}
 
-	// Use the live state snapshot so mock/demo mode doesn't block agent auth checks.
-	snap := h.getMonitor(r.Context()).GetLiveStateSnapshot()
-	for _, host := range snap.Hosts {
+	// Use the live host snapshot so mock/demo mode doesn't block agent auth checks.
+	hosts := h.getMonitor(r.Context()).GetLiveHostsSnapshot()
+	for _, host := range hosts {
 		if host.ID != agentID {
 			continue
 		}

@@ -2582,6 +2582,15 @@ func (m *Monitor) GetLiveStateSnapshot() models.StateSnapshot {
 	return m.state.GetSnapshot()
 }
 
+// GetLiveHostsSnapshot returns the underlying registered host agents without
+// applying global mock mode overrides.
+func (m *Monitor) GetLiveHostsSnapshot() []models.Host {
+	if m == nil || m.state == nil {
+		return nil
+	}
+	return m.state.GetSnapshot().Hosts
+}
+
 // SetOrgID sets the organization ID for this monitor instance.
 // This is used for tenant isolation in multi-tenant deployments.
 func (m *Monitor) SetOrgID(orgID string) {

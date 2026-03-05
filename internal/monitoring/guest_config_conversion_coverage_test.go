@@ -618,6 +618,30 @@ func TestMonitorGetLiveStateSnapshot(t *testing.T) {
 	})
 }
 
+func TestMonitorGetLiveHostsSnapshot(t *testing.T) {
+	t.Run("nil monitor", func(t *testing.T) {
+		var m *Monitor
+		hosts := m.GetLiveHostsSnapshot()
+		if len(hosts) != 0 {
+			t.Fatalf("expected empty hosts for nil monitor, got %#v", hosts)
+		}
+	})
+
+	t.Run("returns underlying host registrations", func(t *testing.T) {
+		state := models.NewState()
+		state.UpsertHost(models.Host{ID: "host-1", Hostname: "host-1.local"})
+		m := &Monitor{state: state}
+
+		hosts := m.GetLiveHostsSnapshot()
+		if len(hosts) != 1 {
+			t.Fatalf("expected one host in snapshot, got %d", len(hosts))
+		}
+		if hosts[0].ID != "host-1" {
+			t.Fatalf("unexpected host id: %q", hosts[0].ID)
+		}
+	})
+}
+
 func decodePlatformDataPayload(t *testing.T, raw json.RawMessage) map[string]interface{} {
 	t.Helper()
 	if len(raw) == 0 {

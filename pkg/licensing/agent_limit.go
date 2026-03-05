@@ -42,6 +42,14 @@ func HostReportTargetsExistingHost(
 	report agentshost.Report,
 	tokenID string,
 ) bool {
+	return HostReportTargetsExistingHosts(snapshot.Hosts, report, tokenID)
+}
+
+func HostReportTargetsExistingHosts(
+	hosts []models.Host,
+	report agentshost.Report,
+	tokenID string,
+) bool {
 	hostname := strings.TrimSpace(report.Host.Hostname)
 	tokenID = strings.TrimSpace(tokenID)
 
@@ -51,7 +59,7 @@ func HostReportTargetsExistingHost(
 		report.Agent.ID,
 	)
 
-	for _, existing := range snapshot.Hosts {
+	for _, existing := range hosts {
 		for _, candidate := range candidates {
 			if existing.ID == candidate || existing.MachineID == candidate {
 				return true

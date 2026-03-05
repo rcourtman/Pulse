@@ -125,8 +125,7 @@ func agentCount(monitor *monitoring.Monitor) int {
 	if rs := monitor.GetUnifiedReadState(); rs != nil {
 		return len(rs.Hosts())
 	}
-	snap := monitor.GetLiveStateSnapshot()
-	return len(snap.Hosts)
+	return len(monitor.GetLiveHostsSnapshot())
 }
 
 func writeMaxAgentsLimitExceeded(w http.ResponseWriter, current, limit int) {
@@ -162,13 +161,13 @@ func enforceAgentLimitForHostReport(
 		return false
 	}
 
-	snapshot := monitor.GetLiveStateSnapshot()
+	hosts := monitor.GetLiveHostsSnapshot()
 	// Updates to an existing agent are always permitted.
-	if hostReportTargetsExistingHost(snapshot, report, tokenRecord) {
+	if hostReportTargetsExistingHost(hosts, report, tokenRecord) {
 		return false
 	}
 
-	current := len(snapshot.Hosts)
+	current := len(hosts)
 	reserved := deployReservedCount(ctx)
 	effective := current + reserved
 	if effective+1 <= limit {
@@ -245,7 +244,7 @@ func enforceAgentLimitForKubernetesReport(
 }
 
 func hostReportTargetsExistingHost(
-	snapshot models.StateSnapshot,
+	hosts []models.Host,
 	report agentshost.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
@@ -253,5 +252,5 @@ func hostReportTargetsExistingHost(
 	if tokenRecord != nil {
 		tokenID = tokenRecord.ID
 	}
-	return hostReportTargetsExistingHostFromLicensing(snapshot, report, tokenID)
+	return hostReportTargetsExistingHostsFromLicensing(hosts, report, tokenID)
 }

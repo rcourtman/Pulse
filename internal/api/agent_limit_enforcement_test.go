@@ -25,7 +25,7 @@ func TestHostReportTargetsExistingHostBridge(t *testing.T) {
 		report := agentshost.Report{
 			Host: agentshost.HostInfo{ID: "host-1"},
 		}
-		if !hostReportTargetsExistingHost(snapshot, report, nil) {
+		if !hostReportTargetsExistingHost(snapshot.Hosts, report, nil) {
 			t.Fatal("expected match by host ID")
 		}
 	})
@@ -34,7 +34,7 @@ func TestHostReportTargetsExistingHostBridge(t *testing.T) {
 		report := agentshost.Report{
 			Host: agentshost.HostInfo{ID: "host-new", Hostname: "new-server"},
 		}
-		if hostReportTargetsExistingHost(snapshot, report, nil) {
+		if hostReportTargetsExistingHost(snapshot.Hosts, report, nil) {
 			t.Fatal("expected no match for unknown host")
 		}
 	})
@@ -47,11 +47,11 @@ func TestHostReportTargetsExistingHostBridge(t *testing.T) {
 			Host: agentshost.HostInfo{Hostname: "srv-1"},
 		}
 		token := &config.APITokenRecord{ID: "token-a"}
-		if !hostReportTargetsExistingHost(snapshot, report, token) {
+		if !hostReportTargetsExistingHost(snapshot.Hosts, report, token) {
 			t.Fatal("expected match with matching token")
 		}
 		wrongToken := &config.APITokenRecord{ID: "token-b"}
-		if hostReportTargetsExistingHost(snapshot, report, wrongToken) {
+		if hostReportTargetsExistingHost(snapshot.Hosts, report, wrongToken) {
 			t.Fatal("expected no match with different token")
 		}
 	})

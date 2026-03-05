@@ -147,6 +147,10 @@ func hostReportTargetsExistingHostFromLicensing(snapshot models.StateSnapshot, r
 	return pkglicensing.HostReportTargetsExistingHost(snapshot, report, tokenID)
 }
 
+func hostReportTargetsExistingHostsFromLicensing(hosts []models.Host, report agentshost.Report, tokenID string) bool {
+	return pkglicensing.HostReportTargetsExistingHosts(hosts, report, tokenID)
+}
+
 func mapStripeSubscriptionStatusToStateFromLicensing(status string) subscriptionState {
 	return pkglicensing.MapStripeSubscriptionStatusToState(status)
 }
