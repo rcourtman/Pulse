@@ -17,9 +17,8 @@ const agentCollectionBasePath = (): string => `${API_BASE}/agent`;
 const resolveDiscoveryAgentId = (discovery: {
   target_id?: string;
   agent_id?: string;
-  host_id?: string;
   resource_id: string;
-}): string => discovery.agent_id || discovery.target_id || discovery.host_id || discovery.resource_id;
+}): string => discovery.agent_id || discovery.target_id || discovery.resource_id;
 
 /**
  * List all discoveries

@@ -41,7 +41,7 @@ describe('discovery api', () => {
               id: 'agent:host-1:host-1',
               resource_type: 'agent',
               resource_id: 'host-1',
-              host_id: 'host-1',
+              target_id: 'host-1',
               hostname: 'host-1.local',
               service_type: 'linux',
               service_name: 'Host',
@@ -63,7 +63,7 @@ describe('discovery api', () => {
           id: 'agent:host-1:host-1',
           resource_type: 'agent',
           resource_id: 'host-1',
-          host_id: 'host-1',
+          target_id: 'host-1',
           hostname: 'host-1.local',
           service_type: 'linux',
           service_name: 'Host',
@@ -104,7 +104,7 @@ describe('discovery api', () => {
               id: 'agent:agent-1:agent-1',
               resource_type: 'agent',
               resource_id: 'agent-1',
-              host_id: 'agent-1',
+              target_id: 'agent-1',
               hostname: 'agent-1.local',
               service_type: 'linux',
               service_name: 'Agent',
@@ -126,7 +126,7 @@ describe('discovery api', () => {
           id: 'agent:agent-1:agent-1',
           resource_type: 'agent',
           resource_id: 'agent-1',
-          host_id: 'agent-1',
+          target_id: 'agent-1',
           hostname: 'agent-1.local',
           service_type: 'linux',
           service_name: 'Agent',
@@ -168,6 +168,7 @@ describe('discovery api', () => {
               resource_type: 'agent',
               resource_id: 'agent-9',
               agent_id: 'agent-9',
+              target_id: 'agent-9',
               host_id: 'legacy-host',
               hostname: 'agent-9.local',
               service_type: 'linux',
@@ -190,7 +191,7 @@ describe('discovery api', () => {
           id: 'agent:agent-9:agent-9',
           resource_type: 'agent',
           resource_id: 'agent-9',
-          host_id: 'legacy-host',
+          target_id: 'agent-9',
           hostname: 'agent-9.local',
           service_type: 'linux',
           service_name: 'Agent',
@@ -222,7 +223,7 @@ describe('discovery api', () => {
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/agent/agent-9/agent-9');
   });
 
-  it('falls back to target_id when host_id is absent in agent summaries', async () => {
+  it('uses target_id when agent_id is absent in agent summaries', async () => {
     apiFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -292,7 +293,7 @@ describe('discovery api', () => {
           id: 'vm:node-1:100',
           resource_type: 'vm',
           resource_id: '100',
-          host_id: 'node-1',
+          target_id: 'node-1',
           hostname: 'vm-100',
           service_type: 'linux',
           service_name: 'VM',
