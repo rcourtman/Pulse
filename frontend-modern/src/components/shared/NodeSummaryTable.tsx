@@ -1,5 +1,5 @@
 import { Component, For, Show, createMemo, createSignal, lazy, Suspense } from 'solid-js';
-import type { Host, Node, PBSInstance } from '@/types/api';
+import type { Agent, Node, PBSInstance } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
@@ -37,14 +37,14 @@ const asTrimmedString = (value: unknown): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-const getHostCandidateIds = (host: Host): string[] => {
-  const hostRecord = host as unknown as Record<string, unknown>;
-  const discoveryTarget = asRecord(hostRecord.discoveryTarget);
-  const platformData = asRecord(hostRecord.platformData);
+const getAgentCandidateIds = (agent: Agent): string[] => {
+  const agentRecord = agent as unknown as Record<string, unknown>;
+  const discoveryTarget = asRecord(agentRecord.discoveryTarget);
+  const platformData = asRecord(agentRecord.platformData);
   const platformAgent = asRecord(platformData?.agent);
 
   const candidates = [
-    asTrimmedString(host.id),
+    asTrimmedString(agent.id),
     asTrimmedString(discoveryTarget?.resourceId),
     asTrimmedString(discoveryTarget?.hostId),
     asTrimmedString(platformAgent?.agentId),
@@ -54,23 +54,23 @@ const getHostCandidateIds = (host: Host): string[] => {
   return Array.from(new Set(candidates));
 };
 
-const getHostLinkedNodeId = (host: Host): string | undefined => {
-  const hostRecord = host as unknown as Record<string, unknown>;
-  const platformData = asRecord(hostRecord.platformData);
+const getAgentLinkedNodeId = (agent: Agent): string | undefined => {
+  const agentRecord = agent as unknown as Record<string, unknown>;
+  const platformData = asRecord(agentRecord.platformData);
   const platformAgent = asRecord(platformData?.agent);
 
   return (
-    asTrimmedString(host.linkedNodeId) ||
+    asTrimmedString(agent.linkedNodeId) ||
     asTrimmedString(platformData?.linkedNodeId) ||
     asTrimmedString(platformAgent?.linkedNodeId)
   );
 };
 
-const getHostNameCandidates = (host: Host): string[] => {
-  const hostRecord = host as unknown as Record<string, unknown>;
-  const platformData = asRecord(hostRecord.platformData);
+const getAgentNameCandidates = (agent: Agent): string[] => {
+  const agentRecord = agent as unknown as Record<string, unknown>;
+  const platformData = asRecord(agentRecord.platformData);
   const platformAgent = asRecord(platformData?.agent);
-  const names = [asTrimmedString(host.hostname), asTrimmedString(platformAgent?.hostname)].filter(
+  const names = [asTrimmedString(agent.hostname), asTrimmedString(platformAgent?.hostname)].filter(
     (value): value is string => Boolean(value),
   );
   return Array.from(new Set(names));
@@ -83,7 +83,7 @@ interface NodeSummaryTableProps {
   containerCounts?: Record<string, number>;
   storageCounts?: Record<string, number>;
   diskCounts?: Record<string, number>;
-  hosts?: Host[];
+  agents?: Agent[];
   backupCounts?: Record<string, number>;
   currentTab: 'dashboard' | 'storage' | 'recovery';
   selectedNode: string | null;
@@ -534,21 +534,21 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               const isSelected = () => props.selectedNode === nodeId;
               const isExpanded = () => expandedNodeId() === nodeId;
               const resourceId = isPVEItem ? node!.id || node!.name : pbs!.id || pbs!.name;
-              const linkedHostForDrawer = (): Host | undefined => {
+              const linkedAgentForDrawer = (): Agent | undefined => {
                 if (!isPVEItem || !node) return undefined;
-                const hosts = props.hosts ?? [];
+                const agents = props.agents ?? [];
 
                 const linkedAgentId = node.linkedAgentId;
                 if (linkedAgentId) {
-                  const byId = hosts.find((host) =>
-                    getHostCandidateIds(host).includes(linkedAgentId),
+                  const byId = agents.find((agent) =>
+                    getAgentCandidateIds(agent).includes(linkedAgentId),
                   );
                   if (byId) return byId;
                 }
 
                 const nodeName = (node.name || '').trim();
-                return hosts.find((host) => {
-                  const linkedNodeId = getHostLinkedNodeId(host);
+                return agents.find((agent) => {
+                  const linkedNodeId = getAgentLinkedNodeId(agent);
                   if (linkedNodeId === node.id) {
                     return true;
                   }
@@ -556,7 +556,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   if (!nodeName) {
                     return false;
                   }
-                  return getHostNameCandidates(host).includes(nodeName);
+                  return getAgentNameCandidates(agent).includes(nodeName);
                 });
               };
               const metricsKey = buildMetricKey('node', resourceId);
@@ -992,7 +992,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         <Suspense
                           fallback={<div class="flex justify-center p-4">Loading stats...</div>}
                         >
-                          <NodeDrawer node={node!} host={linkedHostForDrawer()} />
+                          <NodeDrawer node={node!} agent={linkedAgentForDrawer()} />
                         </Suspense>
                       </TableCell>
                     </TableRow>

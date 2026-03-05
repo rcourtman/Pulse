@@ -773,8 +773,6 @@ export function Dashboard(props: DashboardProps) {
     nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.agent);
-    // Cleanup non-canonical alias params once canonical params are applied.
-    nextParams.delete('host');
     managedUrl.searchParams.forEach((value, key) => {
       nextParams.set(key, value);
     });

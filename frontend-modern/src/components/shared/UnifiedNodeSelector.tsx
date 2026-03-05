@@ -10,7 +10,7 @@ import {
 import { unwrap } from 'solid-js/store';
 import { NodeSummaryTable } from './NodeSummaryTable';
 import { useResources } from '@/hooks/useResources';
-import type { Host, Node } from '@/types/api';
+import type { Agent, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import { nodeFromResource, pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
@@ -118,8 +118,8 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     return counts;
   });
 
-  const hostsForNodeSummary = createMemo<Host[]>(() => {
-    const hostLikeResources = resources().filter(
+  const agentsForNodeSummary = createMemo<Agent[]>(() => {
+    const agentFacetResources = resources().filter(
       (resource) =>
         (resource.type === 'node' ||
           resource.type === 'pbs' ||
@@ -128,8 +128,8 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         hasAgentFacet(resource),
     );
 
-    const hostsById = new Map<string, Host>();
-    for (const resource of hostLikeResources) {
+    const agentsById = new Map<string, Agent>();
+    for (const resource of agentFacetResources) {
       const platformData = pd(resource);
       const agent = {
         ...(asRecord(platformData?.agent) || {}),
@@ -174,8 +174,8 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       const hostname =
         resource.identity?.hostname || asString(agent.hostname) || resource.name || hostId;
 
-      if (hostsById.has(hostId)) continue;
-      hostsById.set(hostId, {
+      if (agentsById.has(hostId)) continue;
+      agentsById.set(hostId, {
         id: hostId,
         hostname,
         displayName: resource.displayName || hostname,
@@ -195,10 +195,10 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         },
         disks,
         networkInterfaces: Array.isArray(agent.networkInterfaces)
-          ? (agent.networkInterfaces as Host['networkInterfaces'])
+          ? (agent.networkInterfaces as Agent['networkInterfaces'])
           : [],
-        sensors: asRecord(agent.sensors) as Host['sensors'],
-        raid: Array.isArray(agent.raid) ? (agent.raid as Host['raid']) : [],
+        sensors: asRecord(agent.sensors) as Agent['sensors'],
+        raid: Array.isArray(agent.raid) ? (agent.raid as Agent['raid']) : [],
         status: resource.status || 'unknown',
         uptimeSeconds: asNumber(agent.uptimeSeconds) ?? resource.uptime,
         lastSeen: resource.lastSeen,
@@ -214,7 +214,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       });
     }
 
-    return Array.from(hostsById.values());
+    return Array.from(agentsById.values());
   });
 
   const unifiedNodes = createMemo<Node[]>(() =>
@@ -281,7 +281,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
           containerCounts={containerCounts()}
           storageCounts={storageCounts()}
           diskCounts={diskCounts()}
-          hosts={hostsForNodeSummary()}
+          agents={agentsForNodeSummary()}
           backupCounts={backupCounts()}
           currentTab={props.currentTab}
           selectedNode={selectedNode()}

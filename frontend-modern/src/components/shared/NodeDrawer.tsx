@@ -1,5 +1,5 @@
 import { Component, Suspense, createSignal } from 'solid-js';
-import type { Host, Node } from '@/types/api';
+import type { Agent, Node } from '@/types/api';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
@@ -10,15 +10,15 @@ import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 
 interface NodeDrawerProps {
   node: Node;
-  host?: Host;
+  agent?: Agent;
   customUrl?: string; // Nodes don't typically have custom URL in current architecture but we can keep it
   onCustomUrlChange?: (hostId: string, url: string) => void;
 }
 
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
-  const metadataId = () => props.host?.id || props.node.id || props.node.name;
-  const discoveryHostname = () => props.host?.hostname || props.node.name;
+  const metadataId = () => props.agent?.id || props.node.id || props.node.name;
+  const discoveryHostname = () => props.agent?.hostname || props.node.name;
 
   const switchTab = (tab: 'overview' | 'discovery') => {
     setActiveTab(tab);
@@ -58,8 +58,8 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           <SystemInfoCard variant="node" node={props.node} />
           <HardwareCard variant="node" node={props.node} />
           <RootDiskCard node={props.node} />
-          <NetworkInterfacesCard interfaces={props.host?.networkInterfaces} />
-          <DisksCard disks={props.host?.disks} />
+          <NetworkInterfacesCard interfaces={props.agent?.networkInterfaces} />
+          <DisksCard disks={props.agent?.disks} />
         </div>
         <div class="mt-3">
           <WebInterfaceUrlField
