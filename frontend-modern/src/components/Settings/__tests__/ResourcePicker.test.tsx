@@ -226,6 +226,48 @@ describe('ResourcePicker', () => {
     ]);
   });
 
+  it('keeps kubernetes cluster selections on canonical k8s-cluster type', async () => {
+    mockResources = [
+      makeResource({
+        id: 'k8s-cluster:edge',
+        type: 'k8s-cluster',
+        name: 'edge-cluster',
+        displayName: 'edge-cluster',
+      }),
+    ];
+
+    const { onSelectionChange } = renderPicker();
+
+    const resourceButton = (await screen.findByText('edge-cluster')).closest('button');
+    expect(resourceButton).toBeTruthy();
+    fireEvent.click(resourceButton!);
+
+    expect(onSelectionChange).toHaveBeenCalledWith([
+      { id: 'k8s-cluster:edge', type: 'k8s-cluster', name: 'edge-cluster' },
+    ]);
+  });
+
+  it('keeps pod selections on canonical pod type', async () => {
+    mockResources = [
+      makeResource({
+        id: 'k8s:edge:pod:api-7f9d',
+        type: 'pod',
+        name: 'api-7f9d',
+        displayName: 'api-7f9d',
+      }),
+    ];
+
+    const { onSelectionChange } = renderPicker();
+
+    const resourceButton = (await screen.findByText('api-7f9d')).closest('button');
+    expect(resourceButton).toBeTruthy();
+    fireEvent.click(resourceButton!);
+
+    expect(onSelectionChange).toHaveBeenCalledWith([
+      { id: 'k8s:edge:pod:api-7f9d', type: 'pod', name: 'api-7f9d' },
+    ]);
+  });
+
   it('enforces the max selection limit when toggling', async () => {
     mockResources = [
       makeResource({ id: 'vm-new', type: 'vm', name: 'Overflow VM', displayName: 'Overflow VM' }),

@@ -12,7 +12,7 @@ const MAX_SELECTION = 50;
 
 export interface SelectedResource {
   id: string;
-  type: string;
+  type: ResourceType;
   name: string;
 }
 
@@ -76,14 +76,6 @@ function normalizeType(type: ResourceType): string {
   if (type === 'docker-host') return 'docker-host';
   if (type === 'k8s-node') return 'node';
   if (type === 'k8s-cluster') return 'k8s';
-  return type;
-}
-
-function toReportResourceType(type: ResourceType): string {
-  if (type === 'system-container' || type === 'oci-container') return type;
-  if (type === 'app-container') return 'app-container';
-  if (type === 'docker-host') return 'docker-host';
-  if (type === 'k8s-node' || type === 'k8s-cluster' || type === 'pod') return 'k8s';
   return type;
 }
 
@@ -223,7 +215,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
         ...current,
         {
           id: resource.id,
-          type: toReportResourceType(resource.type),
+          type: resource.type,
           name: getDisplayName(resource),
         },
       ]);
@@ -237,7 +229,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
       .filter((r) => !currentIds.has(r.id))
       .map((r) => ({
         id: r.id,
-        type: toReportResourceType(r.type),
+        type: r.type,
         name: getDisplayName(r),
       }));
 

@@ -16,6 +16,7 @@ import {
   entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import { toReportingResourceType } from './reportingResourceTypes';
 
 interface FormFieldProps {
   label: string;
@@ -100,7 +101,7 @@ export function ReportingPanel() {
       if (resources.length === 1) {
         const res = resources[0];
         const params = new URLSearchParams({
-          resourceType: res.type,
+          resourceType: toReportingResourceType(res.type),
           resourceId: res.id,
           format: format(),
           start: startStr,
@@ -117,7 +118,7 @@ export function ReportingPanel() {
       } else {
         const body = {
           resources: resources.map((r) => ({
-            resourceType: r.type,
+            resourceType: toReportingResourceType(r.type),
             resourceId: r.id,
           })),
           format: format(),
