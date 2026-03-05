@@ -1025,13 +1025,17 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 				ReadOnly:      m.ReadOnly,
 			})
 		}
+		hostID := strings.TrimSpace(d.HostID)
+		if hostID == "" {
+			hostID = strings.TrimSpace(d.TargetID)
+		}
 		sourceData = append(sourceData, DiscoverySourceData{
 			ID:             d.ID,
 			ResourceType:   d.ResourceType,
 			ResourceID:     d.ResourceID,
 			TargetID:       d.TargetID,
 			AgentID:        d.AgentID,
-			HostID:         d.HostID,
+			HostID:         hostID,
 			Hostname:       d.Hostname,
 			ServiceType:    d.ServiceType,
 			ServiceName:    d.ServiceName,
@@ -1114,6 +1118,10 @@ func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceD
 	if agentID == "" && data.ResourceType == "agent" {
 		agentID = targetID
 	}
+	hostID := strings.TrimSpace(data.HostID)
+	if hostID == "" {
+		hostID = targetID
+	}
 
 	return &ResourceDiscoveryInfo{
 		ID:             data.ID,
@@ -1121,7 +1129,7 @@ func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceD
 		ResourceID:     data.ResourceID,
 		TargetID:       targetID,
 		AgentID:        agentID,
-		HostID:         data.HostID,
+		HostID:         hostID,
 		Hostname:       data.Hostname,
 		ServiceType:    data.ServiceType,
 		ServiceName:    data.ServiceName,

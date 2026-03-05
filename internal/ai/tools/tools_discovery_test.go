@@ -131,6 +131,7 @@ func TestExecuteGetDiscovery_UsesTargetID(t *testing.T) {
 	var payload map[string]interface{}
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "node1", payload["target_id"])
+	assert.NotContains(t, payload, "host_id")
 }
 
 func TestExecuteGetDiscovery_TargetIDRequired(t *testing.T) {
@@ -170,4 +171,11 @@ func TestExecuteListDiscoveries_FiltersByTargetID(t *testing.T) {
 	var payload map[string]interface{}
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "node2", payload["filter_target_id"])
+	discoveries, ok := payload["discoveries"].([]interface{})
+	assert.True(t, ok)
+	if assert.NotEmpty(t, discoveries) {
+		first, castOK := discoveries[0].(map[string]interface{})
+		assert.True(t, castOK)
+		assert.NotContains(t, first, "host_id")
+	}
 }
