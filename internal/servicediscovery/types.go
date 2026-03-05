@@ -165,7 +165,7 @@ type DiscoveryRequest struct {
 	ResourceType ResourceType `json:"resource_type"`
 	ResourceID   string       `json:"resource_id"`
 	TargetID     string       `json:"target_id,omitempty"`
-	HostID       string       `json:"host_id,omitempty"` // Compatibility alias of target_id
+	HostID       string       `json:"-"` // Internal legacy alias of target_id
 	Hostname     string       `json:"hostname"`
 	Force        bool         `json:"force"` // Force re-scan even if recent
 }
@@ -220,7 +220,7 @@ type DiscoverySummary struct {
 	ResourceID     string          `json:"resource_id"`
 	TargetID       string          `json:"target_id,omitempty"`
 	AgentID        string          `json:"agent_id,omitempty"`
-	HostID         string          `json:"host_id"`
+	HostID         string          `json:"-"` // Internal legacy alias of target_id
 	Hostname       string          `json:"hostname"`
 	ServiceType    string          `json:"service_type"`
 	ServiceName    string          `json:"service_name"`
