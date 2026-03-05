@@ -353,6 +353,36 @@ func TestNormalizeAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
 	}
 }
 
+func TestNormalizeAndValidateAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr string
+	}{
+		{name: "empty allowed", in: "", want: ""},
+		{name: "agent", in: "agent", want: "agent"},
+		{name: "system container canonical", in: "SYSTEM-CONTAINER", want: "system-container"},
+		{name: "vm", in: "vm", want: "vm"},
+		{name: "legacy host rejected", in: "host", wantErr: "invalid target_type"},
+		{name: "legacy container rejected", in: "container", wantErr: "invalid target_type"},
+		{name: "legacy underscore container rejected", in: "system_container", wantErr: "invalid target_type"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeAndValidateAIExecuteTargetType(tt.in)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestNormalizeInvestigateAlertTargetType_StrictCanonicalV6(t *testing.T) {
 	tests := []struct {
 		name    string

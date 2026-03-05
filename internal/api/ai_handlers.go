@@ -2945,6 +2945,20 @@ func normalizeAIExecuteTargetType(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
 }
 
+func normalizeAndValidateAIExecuteTargetType(raw string) (string, error) {
+	targetType := normalizeAIExecuteTargetType(raw)
+	if targetType == "" {
+		return "", nil
+	}
+
+	switch targetType {
+	case "agent", "system-container", "vm":
+		return targetType, nil
+	default:
+		return "", fmt.Errorf("invalid target_type")
+	}
+}
+
 // AIExecuteResponse is the response from POST /api/ai/execute
 type AIExecuteResponse struct {
 	Content          string                  `json:"content"`
@@ -3004,15 +3018,10 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	}
 
 	// Validate and normalize target_type if provided
-	targetType := normalizeAIExecuteTargetType(req.TargetType)
-	if targetType != "" {
-		switch targetType {
-		case "agent", "system-container", "vm":
-			// valid
-		default:
-			http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
-			return
-		}
+	targetType, err := normalizeAndValidateAIExecuteTargetType(req.TargetType)
+	if err != nil {
+		http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
+		return
 	}
 
 	// Validate target_id length if provided
@@ -3190,15 +3199,10 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	}
 
 	// Validate and normalize target_type if provided
-	targetType := normalizeAIExecuteTargetType(req.TargetType)
-	if targetType != "" {
-		switch targetType {
-		case "agent", "system-container", "vm":
-			// valid
-		default:
-			http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
-			return
-		}
+	targetType, err := normalizeAndValidateAIExecuteTargetType(req.TargetType)
+	if err != nil {
+		http.Error(w, "Invalid target_type (allowed: agent, system-container, vm)", http.StatusBadRequest)
+		return
 	}
 
 	// Validate target_id length if provided
