@@ -146,6 +146,7 @@ describe('agent model guardrails', () => {
     expect(mentionAutocompleteSource).toContain("| 'agent'");
     expect(mentionAutocompleteSource).toContain("| 'system-container'");
     expect(mentionAutocompleteSource).not.toContain("| 'container'");
+    expect(mentionAutocompleteSource).not.toContain("| 'storage'");
     expect(mentionAutocompleteSource).not.toContain("| 'host'");
   });
 

@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from 'solid-js';
-import { AIChatAPI, type StreamEvent } from '@/api/aiChat';
+import { AIChatAPI, type ChatMention, type StreamEvent } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import type {
@@ -399,7 +399,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Send a message - allows sending mid-stream (aborts current response like Pulse AI TUI)
   const sendMessage = async (
     prompt: string,
-    mentions?: Array<{ id: string; name: string; type: string; node?: string }>,
+    mentions?: ChatMention[],
     findingId?: string,
   ): Promise<boolean> => {
     if (!prompt.trim()) return false;

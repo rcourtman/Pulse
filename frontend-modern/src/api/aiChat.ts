@@ -13,6 +13,15 @@ export interface ChatSession {
   message_count: number;
 }
 
+export type ChatMentionType = 'vm' | 'system-container' | 'docker' | 'node' | 'agent';
+
+export interface ChatMention {
+  id: string;
+  name: string;
+  type: ChatMentionType;
+  node?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -190,7 +199,7 @@ export class AIChatAPI {
     model: string | undefined,
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal,
-    mentions?: Array<{ id: string; name: string; type: string; node?: string }>,
+    mentions?: ChatMention[],
     findingId?: string,
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });

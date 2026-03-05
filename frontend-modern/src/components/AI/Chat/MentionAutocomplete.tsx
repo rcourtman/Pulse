@@ -3,7 +3,7 @@ import { createSignal, createEffect, For, Show, onCleanup } from 'solid-js';
 export interface MentionResource {
   id: string;
   name: string;
-  type: 'vm' | 'system-container' | 'node' | 'storage' | 'docker' | 'agent';
+  type: 'vm' | 'system-container' | 'node' | 'docker' | 'agent';
   status?: string;
   node?: string;
 }

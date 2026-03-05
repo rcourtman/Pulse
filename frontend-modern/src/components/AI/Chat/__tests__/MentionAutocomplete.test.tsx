@@ -26,7 +26,6 @@ const defaultResources: MentionResource[] = [
     node: 'pve2',
   }),
   makeResource({ id: 'node-1', name: 'pve1', type: 'node', status: 'running' }),
-  makeResource({ id: 'stor-1', name: 'local-lvm', type: 'storage', node: undefined }),
   makeResource({
     id: 'docker-1',
     name: 'nginx-proxy',
@@ -34,7 +33,13 @@ const defaultResources: MentionResource[] = [
     status: 'running',
     node: 'docker-host',
   }),
-  makeResource({ id: 'host-1', name: 'bare-metal-01', type: 'agent', status: 'stopped' }),
+  makeResource({
+    id: 'host-1',
+    name: 'bare-metal-01',
+    type: 'agent',
+    status: 'stopped',
+    node: undefined,
+  }),
 ];
 
 const defaultPosition = { top: 100, left: 200 };
@@ -126,11 +131,11 @@ describe('MentionAutocomplete', () => {
     });
 
     it('does not show node separator when node is absent', () => {
-      renderAutocomplete({ query: 'local-lvm' });
-      const resourceBtn = screen.getByText('local-lvm').closest('button')!;
-      // Should contain "storage" but NOT " · "
+      renderAutocomplete({ query: 'bare-metal' });
+      const resourceBtn = screen.getByText('bare-metal-01').closest('button')!;
+      // Should contain "agent" but NOT " · "
       const typeDiv = resourceBtn.querySelector('.text-xs.text-muted')!;
-      expect(typeDiv.textContent).toContain('storage');
+      expect(typeDiv.textContent).toContain('agent');
       expect(typeDiv.textContent).not.toContain(' · ');
     });
 
