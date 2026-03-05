@@ -182,7 +182,7 @@ func TestGetGuestConfig(t *testing.T) {
 	})
 }
 
-func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
+func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 	t.Run("resource type mapping", func(t *testing.T) {
 		tests := []struct {
 			name     string
@@ -208,8 +208,8 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := monitorLegacyResourceType(tt.resource); got != tt.want {
-					t.Fatalf("monitorLegacyResourceType() = %q, want %q", got, tt.want)
+				if got := monitorFrontendResourceType(tt.resource); got != tt.want {
+					t.Fatalf("monitorFrontendResourceType() = %q, want %q", got, tt.want)
 				}
 			})
 		}
@@ -419,8 +419,8 @@ func TestMonitorLegacyAndMetricHelpers(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := monitorLegacyStatus(tt.resource, tt.resourceType); got != tt.want {
-					t.Fatalf("monitorLegacyStatus() = %q, want %q", got, tt.want)
+				if got := monitorFrontendStatus(tt.resource, tt.resourceType); got != tt.want {
+					t.Fatalf("monitorFrontendStatus() = %q, want %q", got, tt.want)
 				}
 			})
 		}

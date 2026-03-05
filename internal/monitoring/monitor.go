@@ -3011,8 +3011,8 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 }
 
 func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {
-	resourceType := monitorLegacyResourceType(resource)
-	name, displayName := monitorLegacyNames(resource, resourceType)
+	resourceType := monitorFrontendResourceType(resource)
+	name, displayName := monitorFrontendNames(resource, resourceType)
 	platformID := monitorPlatformID(resource, resourceType)
 
 	input := models.ResourceConvertInput{
@@ -3025,7 +3025,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		SourceType:   monitorSourceType(resource.Sources),
 		ParentID:     monitorStringValue(resource.ParentID),
 		ClusterID:    monitorClusterID(resource),
-		Status:       monitorLegacyStatus(resource, resourceType),
+		Status:       monitorFrontendStatus(resource, resourceType),
 		CPU:          monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),
 		Memory:       monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
 		Disk:         monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk })),
@@ -3046,7 +3046,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 	return input
 }
 
-func monitorLegacyResourceType(resource unifiedresources.Resource) string {
+func monitorFrontendResourceType(resource unifiedresources.Resource) string {
 	switch resource.Type {
 	case unifiedresources.ResourceTypeVM:
 		return "vm"
@@ -3083,7 +3083,7 @@ func monitorLegacyResourceType(resource unifiedresources.Resource) string {
 	}
 }
 
-func monitorLegacyNames(resource unifiedresources.Resource, resourceType string) (string, string) {
+func monitorFrontendNames(resource unifiedresources.Resource, resourceType string) (string, string) {
 	name := strings.TrimSpace(resource.Name)
 	displayName := ""
 
@@ -3190,7 +3190,7 @@ func monitorPlatformID(resource unifiedresources.Resource, resourceType string) 
 	return resource.ID
 }
 
-func monitorLegacyStatus(resource unifiedresources.Resource, resourceType string) string {
+func monitorFrontendStatus(resource unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
 	case "app-container":
 		switch resource.Status {

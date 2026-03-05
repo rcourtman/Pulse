@@ -9,9 +9,9 @@ import (
 
 func ptrF64Coverage(v float64) *float64 { return &v }
 
-func TestMonitorLegacyNamesAdditional(t *testing.T) {
+func TestMonitorFrontendNamesAdditional(t *testing.T) {
 	t.Run("node prefers proxmox node name and preserves display name", func(t *testing.T) {
-		name, display := monitorLegacyNames(unifiedresources.Resource{
+		name, display := monitorFrontendNames(unifiedresources.Resource{
 			ID:   "node-1",
 			Name: "Node Friendly",
 			Proxmox: &unifiedresources.ProxmoxData{
@@ -28,7 +28,7 @@ func TestMonitorLegacyNamesAdditional(t *testing.T) {
 	})
 
 	t.Run("agent and docker host use source hostnames", func(t *testing.T) {
-		hostName, hostDisplay := monitorLegacyNames(unifiedresources.Resource{
+		hostName, hostDisplay := monitorFrontendNames(unifiedresources.Resource{
 			ID:   "host-1",
 			Name: "Friendly Host",
 			Agent: &unifiedresources.AgentData{
@@ -39,7 +39,7 @@ func TestMonitorLegacyNamesAdditional(t *testing.T) {
 			t.Fatalf("agent branch mismatch: name=%q display=%q", hostName, hostDisplay)
 		}
 
-		dockerName, dockerDisplay := monitorLegacyNames(unifiedresources.Resource{
+		dockerName, dockerDisplay := monitorFrontendNames(unifiedresources.Resource{
 			ID:   "docker-1",
 			Name: "Friendly Docker",
 			Docker: &unifiedresources.DockerData{
@@ -52,7 +52,7 @@ func TestMonitorLegacyNamesAdditional(t *testing.T) {
 	})
 
 	t.Run("falls back to id when name is empty", func(t *testing.T) {
-		name, display := monitorLegacyNames(unifiedresources.Resource{
+		name, display := monitorFrontendNames(unifiedresources.Resource{
 			ID:   "fallback-id",
 			Name: "   ",
 		}, "unknown")
