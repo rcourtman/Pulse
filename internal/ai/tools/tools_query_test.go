@@ -410,6 +410,17 @@ func TestExecuteSearchResources_Errors(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected error for invalid type")
 	}
+
+	result, _ = executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "node",
+		"type":  "host",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy host type")
+	}
+	if !strings.Contains(result.Content[0].Text, "invalid type: host") {
+		t.Fatalf("unexpected legacy host type error: %s", result.Content[0].Text)
+	}
 }
 
 func TestExecuteGetResource(t *testing.T) {
@@ -737,6 +748,17 @@ func TestExecuteGetResourceErrorsAndContainer(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected error for invalid resource_type")
 	}
+
+	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "host",
+		"resource_id":   "1",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy host resource_type")
+	}
+	if !strings.Contains(result.Content[0].Text, "invalid resource_type: host") {
+		t.Fatalf("unexpected legacy host resource_type error: %s", result.Content[0].Text)
+	}
 }
 
 func TestExecuteListInfrastructure_NoStateProvider(t *testing.T) {
@@ -809,7 +831,7 @@ func TestExecuteGetGuestConfig_SystemContainerUsesCanonicalResolution(t *testing
 	}
 }
 
-func TestExecuteGetGuestConfig_RejectsLegacyLXCResourceType(t *testing.T) {
+func TestExecuteGetGuestConfig_RejectsLegacyResourceTypes(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: &mockStateProvider{state: models.StateSnapshot{
 			Containers: []models.Container{
@@ -819,14 +841,18 @@ func TestExecuteGetGuestConfig_RejectsLegacyLXCResourceType(t *testing.T) {
 		GuestConfigProvider: &mockGuestConfigProvider{config: map[string]interface{}{}},
 	})
 
-	result, _ := executor.executeGetGuestConfig(context.Background(), map[string]interface{}{
-		"resource_type": "lxc",
-		"resource_id":   "ct1",
-	})
-	if !result.IsError {
-		t.Fatal("expected error for legacy lxc resource_type")
-	}
-	if !strings.Contains(result.Content[0].Text, "invalid resource_type: lxc") {
-		t.Fatalf("unexpected error text: %s", result.Content[0].Text)
+	for _, resourceType := range []string{"lxc", "host"} {
+		t.Run(resourceType, func(t *testing.T) {
+			result, _ := executor.executeGetGuestConfig(context.Background(), map[string]interface{}{
+				"resource_type": resourceType,
+				"resource_id":   "ct1",
+			})
+			if !result.IsError {
+				t.Fatalf("expected error for legacy %s resource_type", resourceType)
+			}
+			if !strings.Contains(result.Content[0].Text, "invalid resource_type: "+resourceType) {
+				t.Fatalf("unexpected error text for %s: %s", resourceType, result.Content[0].Text)
+			}
+		})
 	}
 }
