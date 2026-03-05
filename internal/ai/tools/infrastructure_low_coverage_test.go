@@ -376,6 +376,58 @@ func TestExecuteGetResourceDisks(t *testing.T) {
 	assert.Equal(t, "vm1", resp.Resources[0].ID)
 }
 
+func TestExecuteGetResourceDisks_SystemContainerTypeFilter(t *testing.T) {
+	ctx := context.Background()
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:       "vm1",
+				VMID:     101,
+				Name:     "vm1",
+				Instance: "pve1",
+				Disks: []models.Disk{
+					{Device: "vda", Usage: 85},
+				},
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "ct1",
+				VMID:     201,
+				Name:     "ct1",
+				Instance: "pve1",
+				Disks: []models.Disk{
+					{Device: "vda", Usage: 50},
+				},
+			},
+		},
+	}
+
+	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	result, err := exec.executeGetResourceDisks(ctx, map[string]interface{}{
+		"type": "system-container",
+	})
+	require.NoError(t, err)
+
+	var resp ResourceDisksResponse
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+	require.Len(t, resp.Resources, 1)
+	assert.Equal(t, "system-container", resp.Resources[0].Type)
+	assert.Equal(t, "ct1", resp.Resources[0].ID)
+}
+
+func TestExecuteGetResourceDisks_RejectsLegacyLXCTypeFilter(t *testing.T) {
+	ctx := context.Background()
+	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+
+	result, err := exec.executeGetResourceDisks(ctx, map[string]interface{}{
+		"type": "lxc",
+	})
+	require.NoError(t, err)
+	require.True(t, result.IsError)
+	require.Contains(t, result.Content[0].Text, "unsupported type")
+}
+
 func TestExecuteListBackupTasks(t *testing.T) {
 	ctx := context.Background()
 	exec := NewPulseToolExecutor(ExecutorConfig{})

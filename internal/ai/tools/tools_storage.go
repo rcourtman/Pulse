@@ -1476,11 +1476,16 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 	typeFilter, _ := args["type"].(string)
 	instanceFilter, _ := args["instance"].(string)
 	minUsage, _ := args["min_usage"].(float64)
+	typeFilter = strings.ToLower(strings.TrimSpace(typeFilter))
+
+	if typeFilter != "" && typeFilter != "vm" && typeFilter != "system-container" {
+		return NewErrorResult(fmt.Errorf("unsupported type %q (allowed: vm, system-container)", typeFilter)), nil
+	}
 
 	var resources []ResourceDisksSummary
 
 	// Process VMs
-	if typeFilter == "" || strings.EqualFold(typeFilter, "vm") {
+	if typeFilter == "" || typeFilter == "vm" {
 		for _, vm := range rs.VMs() {
 			if vm == nil {
 				continue
@@ -1556,7 +1561,7 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 	}
 
 	// Process containers
-	if typeFilter == "" || strings.EqualFold(typeFilter, "lxc") || strings.EqualFold(typeFilter, "system-container") {
+	if typeFilter == "" || typeFilter == "system-container" {
 		for _, ct := range rs.Containers() {
 			if ct == nil {
 				continue
