@@ -102,13 +102,16 @@ func (e *PulseToolExecutor) executeRead(ctx context.Context, args map[string]int
 func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer := resolveContainerArg(args)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required for exec action")), nil
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
+	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use container")), nil
 	}
 
 	// High-confidence secret exfiltration blocks.
@@ -247,13 +250,16 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 func (e *PulseToolExecutor) executeReadFile(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	path, _ := args["path"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer := resolveContainerArg(args)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for file action")), nil
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
+	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use container")), nil
 	}
 
 	// Validate path is absolute
@@ -312,13 +318,16 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	targetHost, _ := args["target_host"].(string)
 	lines := intArg(args, "lines", 100)
 	grepPattern, _ := args["grep"].(string)
-	dockerContainer := resolveContainerArg(args)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for tail action")), nil
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
+	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use container")), nil
 	}
 
 	// Validate path is absolute

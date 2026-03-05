@@ -2,19 +2,21 @@ package tools
 
 import "strings"
 
-// resolveContainerArg returns the preferred container argument value.
-// "container" is canonical; "app_container" is a legacy compatibility alias.
-func resolveContainerArg(args map[string]interface{}) string {
+// resolveContainerArg returns the canonical container argument value.
+// The returned bool is true when deprecated app_container was provided.
+func resolveContainerArg(args map[string]interface{}) (string, bool) {
 	if value, ok := args["container"].(string); ok {
 		value = strings.TrimSpace(value)
 		if value != "" {
-			return value
+			return value, false
 		}
 	}
 	if value, ok := args["app_container"].(string); ok {
-		return strings.TrimSpace(value)
+		if strings.TrimSpace(value) != "" {
+			return "", true
+		}
 	}
-	return ""
+	return "", false
 }
 
 // setContainerResponseFields includes canonical response fields.

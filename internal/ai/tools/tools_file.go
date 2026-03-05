@@ -96,13 +96,16 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 	path, _ := args["path"].(string)
 	content, _ := args["content"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer := resolveContainerArg(args)
+	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required")), nil
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
+	}
+	if legacyContainerArg {
+		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use container")), nil
 	}
 
 	// Validate path - must be absolute

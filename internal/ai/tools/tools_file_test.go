@@ -55,6 +55,11 @@ func TestExecuteFileEdit_Validation(t *testing.T) {
 			wantErr: "invalid character",
 		},
 		{
+			name:    "Legacy AppContainer Rejected",
+			args:    map[string]interface{}{"action": "read", "path": "/f", "target_host": "h1", "app_container": "nginx"},
+			wantErr: "app_container is no longer supported; use container",
+		},
+		{
 			name:    "Unknown Action",
 			args:    map[string]interface{}{"action": "dance", "path": "/f", "target_host": "h1"},
 			wantErr: "unknown action",
