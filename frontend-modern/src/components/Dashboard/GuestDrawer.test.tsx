@@ -534,24 +534,24 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('url-label').textContent).toBe('workload');
     });
 
-    it('labels VM guests as "guest"', () => {
+    it('labels VM guests as "workload"', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ type: 'qemu', workloadType: undefined })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('url-label').textContent).toBe('guest');
+      expect(screen.getByTestId('url-label').textContent).toBe('workload');
     });
 
-    it('labels LXC guests as "guest"', () => {
+    it('labels LXC guests as "workload"', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ type: 'lxc', workloadType: undefined })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('url-label').textContent).toBe('guest');
+      expect(screen.getByTestId('url-label').textContent).toBe('workload');
     });
   });
 

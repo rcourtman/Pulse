@@ -120,7 +120,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     const type = resolveWorkloadType(props.guest);
     if (type === 'docker') return 'container';
     if (type === 'k8s') return 'workload';
-    return 'guest';
+    return 'workload';
   };
   return (
     <div class="space-y-3">
