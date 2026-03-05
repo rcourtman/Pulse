@@ -141,7 +141,7 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 	if err := store.SaveNote("vm-100", "web-server", "vm", "config", "DB", "Postgres"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
-	if err := store.SaveNote("qemu/200", "app", "vm", "service", "API", "FastAPI"); err != nil {
+	if err := store.SaveNote("vm-200", "app", "vm", "service", "API", "FastAPI"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
 	if err := store.SaveNote("agent:alpha", "alpha", "agent", "service", "Agent", "v1"); err != nil {
@@ -151,8 +151,8 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 		t.Fatalf("Failed to save note: %v", err)
 	}
 
-	// Scope to a single VM by qemu resource ID
-	scoped := store.FormatForContextForResources([]string{"qemu/100"})
+	// Scope to a single VM by canonical vm resource ID
+	scoped := store.FormatForContextForResources([]string{"vm-100"})
 	if scoped == "" {
 		t.Fatalf("Expected scoped context, got empty")
 	}
@@ -160,7 +160,7 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 		t.Fatalf("Expected vm-100 notes in scoped context")
 	}
 	if strings.Contains(scoped, "app") {
-		t.Fatalf("Did not expect qemu/200 notes in scoped context")
+		t.Fatalf("Did not expect vm-200 notes in scoped context")
 	}
 
 	// Scope to docker resource ID
@@ -196,6 +196,14 @@ func TestStore_RejectsUnsupportedHostGuestInput(t *testing.T) {
 
 	if err := store.SaveNote("host:alpha", "alpha", "agent", "service", "Agent", "v1"); err == nil {
 		t.Fatalf("expected unsupported host guest ID to be rejected")
+	}
+	for _, legacyGuestID := range []string{"qemu/200", "lxc/101"} {
+		if err := store.SaveNote(legacyGuestID, "legacy", "vm", "service", "Agent", "v1"); err == nil {
+			t.Fatalf("expected unsupported legacy guest ID %q to be rejected", legacyGuestID)
+		}
+		if _, err := store.GetKnowledge(legacyGuestID); err == nil {
+			t.Fatalf("expected unsupported legacy guest ID query %q to be rejected", legacyGuestID)
+		}
 	}
 	if _, err := store.GetKnowledge("host:alpha"); err == nil {
 		t.Fatalf("expected unsupported host guest ID query to be rejected")
