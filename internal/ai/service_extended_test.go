@@ -1423,6 +1423,26 @@ func TestService_ExecuteOnAgent_RejectsAmbiguousTargetTypeGuestWithTargetID(t *t
 	}
 }
 
+func TestService_ExecuteOnAgent_RejectsLegacyTargetTypeAliases(t *testing.T) {
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "node-1"},
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	for _, legacyType := range []string{"lxc", "ct", "qemu"} {
+		_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
+			TargetType: legacyType,
+			TargetID:   "101",
+			Context:    map[string]interface{}{"node": "node-1"},
+		}, "uptime")
+		if err == nil || !strings.Contains(err.Error(), "unsupported target_type") {
+			t.Fatalf("expected unsupported target_type error for %q, got %v", legacyType, err)
+		}
+	}
+}
+
 func TestService_ExecuteOnAgent_RejectsContainerWithoutNumericVMID(t *testing.T) {
 	mockAgent := agentexec.ConnectedAgent{
 		AgentID:  "agent-1",

@@ -3581,9 +3581,9 @@ func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}
 	switch targetType {
 	case "agent", "node", "docker", "docker_host", "kubernetes_cluster", "kubernetes", "k8s":
 		return "agent", nil
-	case "container", "lxc", "ct":
+	case "container":
 		return "container", nil
-	case "vm", "qemu":
+	case "vm":
 		return "vm", nil
 	case "":
 		if strings.TrimSpace(targetID) == "" && hasExplicitHostRoutingContext(ctx) {
