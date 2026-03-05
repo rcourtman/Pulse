@@ -99,7 +99,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     if (targetHost) prompt += `\n**Target:** ${targetHost}`;
     prompt += `\n**Risk level:** ${riskLevel}`;
     if (rationale) prompt += `\n**Rationale:** ${rationale}`;
-    prompt += `\n\nPlease execute this fix on the target host.`;
+    prompt += `\n\nPlease execute this fix on the target agent.`;
 
     aiChatStore.openWithPrompt(prompt, {
       targetType: props.resourceType,

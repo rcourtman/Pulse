@@ -287,7 +287,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 </Show>
                 <Show when={run.hosts_checked > 0}>
                   <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300">
-                    <GlobeIcon class="w-3 h-3" /> {run.hosts_checked} host
+                    <GlobeIcon class="w-3 h-3" /> {run.hosts_checked} agent
                     {run.hosts_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
