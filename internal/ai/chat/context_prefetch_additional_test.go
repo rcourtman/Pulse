@@ -374,11 +374,11 @@ func TestCanonicalMentionResourceType(t *testing.T) {
 		want string
 	}{
 		{in: "docker", want: "app-container"},
-		{in: "app_container", want: "app-container"},
-		{in: "dockerhost", want: "docker-host"},
-		{in: "k8s_cluster", want: "k8s-cluster"},
-		{in: "k8s_pod", want: "k8s-pod"},
-		{in: "k8s_deployment", want: "k8s-deployment"},
+		{in: "app_container", want: "app_container"},
+		{in: "dockerhost", want: "dockerhost"},
+		{in: "k8s_cluster", want: "k8s_cluster"},
+		{in: "k8s_pod", want: "k8s_pod"},
+		{in: "k8s_deployment", want: "k8s_deployment"},
 		{in: "system-container", want: "system-container"},
 	}
 

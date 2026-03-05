@@ -615,15 +615,15 @@ func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadSt
 func canonicalMentionResourceType(raw string) string {
 	resourceType := strings.ToLower(strings.TrimSpace(raw))
 	switch resourceType {
-	case "docker", "docker-container", "docker_container", "app_container":
+	case "docker", "docker-container":
 		return "app-container"
-	case "dockerhost", "docker-host":
+	case "docker-host":
 		return "docker-host"
-	case "k8s_cluster", "kubernetes_cluster", "k8s-cluster", "kubernetes-cluster":
+	case "k8s-cluster":
 		return "k8s-cluster"
-	case "k8s_pod", "kubernetes_pod", "k8s-pod", "kubernetes-pod":
+	case "k8s-pod":
 		return "k8s-pod"
-	case "k8s_deployment", "kubernetes_deployment", "k8s-deployment", "kubernetes-deployment":
+	case "k8s-deployment":
 		return "k8s-deployment"
 	default:
 		return resourceType
