@@ -139,7 +139,7 @@ func TestOrgHandlersCRUDLifecycle(t *testing.T) {
 	}
 }
 
-func TestOrgHandlersMemberCannotManageOrg(t *testing.T) {
+func TestOrgHandlersViewerCannotManageOrg(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
@@ -158,7 +158,7 @@ func TestOrgHandlersMemberCannotManageOrg(t *testing.T) {
 	}
 
 	inviteReq := withUser(
-		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"member"}`)),
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"viewer"}`)),
 		"alice",
 	)
 	inviteReq.SetPathValue("id", "acme")
@@ -246,7 +246,7 @@ func TestOrgHandlersMultiTenantGate(t *testing.T) {
 	}
 }
 
-func TestOrgHandlersNormalizesLegacyMemberRoleToViewer(t *testing.T) {
+func TestOrgHandlersRejectsLegacyMemberRole(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
@@ -271,16 +271,8 @@ func TestOrgHandlersNormalizesLegacyMemberRoleToViewer(t *testing.T) {
 	inviteReq.SetPathValue("id", "acme")
 	inviteRec := httptest.NewRecorder()
 	h.HandleInviteMember(inviteRec, inviteReq)
-	if inviteRec.Code != http.StatusOK {
-		t.Fatalf("invite failed: %d %s", inviteRec.Code, inviteRec.Body.String())
-	}
-
-	var member models.OrganizationMember
-	if err := json.Unmarshal(inviteRec.Body.Bytes(), &member); err != nil {
-		t.Fatalf("decode member: %v", err)
-	}
-	if member.Role != models.OrgRoleViewer {
-		t.Fatalf("expected normalized viewer role, got %q", member.Role)
+	if inviteRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for legacy member role, got %d: %s", inviteRec.Code, inviteRec.Body.String())
 	}
 }
 
