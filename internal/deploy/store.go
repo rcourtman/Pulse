@@ -125,10 +125,15 @@ CREATE TABLE IF NOT EXISTS deploy_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_deploy_targets_job ON deploy_targets(job_id);
+CREATE INDEX IF NOT EXISTS idx_deploy_targets_job_created ON deploy_targets(job_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_deploy_events_job ON deploy_events(job_id);
+CREATE INDEX IF NOT EXISTS idx_deploy_events_job_created ON deploy_events(job_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_deploy_events_target ON deploy_events(target_id);
+CREATE INDEX IF NOT EXISTS idx_deploy_events_target_created ON deploy_events(target_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_deploy_jobs_org ON deploy_jobs(org_id);
+CREATE INDEX IF NOT EXISTS idx_deploy_jobs_org_created ON deploy_jobs(org_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_deploy_jobs_status ON deploy_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_deploy_jobs_completed ON deploy_jobs(completed_at);
 `
 	_, err := s.db.Exec(schema)
 	return err
