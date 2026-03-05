@@ -5,7 +5,7 @@ import { getDisplayName } from '@/types/resource';
 import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
-import { getHostStatusIndicator } from '@/utils/status';
+import { getAgentStatusIndicator } from '@/utils/status';
 import {
   getPlatformBadge,
   getSourceBadge,
@@ -44,7 +44,7 @@ import {
   type DockerPlatformData,
   toDiscoveryConfig,
   toNodeFromProxmox,
-  toHostFromAgent,
+  toAgentFromResource,
   buildTemperatureRows,
   normalizeHealthLabel,
   healthToneClass,
@@ -69,7 +69,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
   const displayName = createMemo(() => getDisplayName(props.resource));
   const statusIndicator = createMemo(() =>
-    getHostStatusIndicator({ status: props.resource.status }),
+    getAgentStatusIndicator({ status: props.resource.status }),
   );
   const lastSeen = createMemo(() => formatRelativeTime(props.resource.lastSeen));
   const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(props.resource.lastSeen));
@@ -149,8 +149,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   });
 
   const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
-  const agentHost = createMemo(() => toHostFromAgent(props.resource, agentMeta()));
-  const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
+  const agentInfo = createMemo(() => toAgentFromResource(props.resource, agentMeta()));
+  const temperatureRows = createMemo(() => buildTemperatureRows(agentInfo()?.sensors));
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
   const dockerHostSourceId = createMemo(
@@ -626,7 +626,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       {/* Overview Tab */}
       <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
-        <Show when={proxmoxNode() || agentHost()}>
+        <Show when={proxmoxNode() || agentInfo()}>
           <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
             <Show when={proxmoxNode()}>
               {(node) => (
@@ -637,13 +637,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </>
               )}
             </Show>
-            <Show when={agentHost()}>
-              {(host) => (
+            <Show when={agentInfo()}>
+              {(agent) => (
                 <>
-                  <SystemInfoCard variant="agent" host={host()} />
-                  <HardwareCard variant="agent" host={host()} />
-                  <NetworkInterfacesCard interfaces={host().networkInterfaces} />
-                  <DisksCard disks={host().disks} />
+                  <SystemInfoCard variant="agent" agent={agent()} />
+                  <HardwareCard variant="agent" agent={agent()} />
+                  <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
+                  <DisksCard disks={agent().disks} />
                   <RaidCard arrays={agentMeta()?.raid} />
                   <TemperaturesCard rows={temperatureRows()} />
                 </>
@@ -1287,7 +1287,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             when={props.resource.type === 'docker-host' && dockerSwarmClusterKey()}
             fallback={
               <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
-                Swarm details are only available for Docker hosts reporting Swarm metadata.
+                Swarm details are only available for Docker runtimes reporting Swarm metadata.
               </div>
             }
           >

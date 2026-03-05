@@ -18,10 +18,10 @@ import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { getHostStatusIndicator } from '@/utils/status';
+import { getAgentStatusIndicator } from '@/utils/status';
 import type { Disk } from '@/types/api';
 import {
-  splitHostAndServiceResources,
+  splitPrimaryAndServiceResources,
   sortResources,
   groupResources,
   computeIOScale,
@@ -235,12 +235,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     }
   };
 
-  const split = createMemo(() => splitHostAndServiceResources(props.resources));
-  const hostResources = createMemo(() => split().hosts);
+  const split = createMemo(() => splitPrimaryAndServiceResources(props.resources));
+  const primaryResources = createMemo(() => split().primaryResources);
   const serviceResources = createMemo(() => split().services);
 
   const sortedResources = createMemo(() =>
-    sortResources(hostResources(), sortKey(), sortDirection()),
+    sortResources(primaryResources(), sortKey(), sortDirection()),
   );
 
   const groupedResources = createMemo<ResourceGroup[]>(() =>
@@ -327,7 +327,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     ),
   );
 
-  const ioScale = createMemo(() => computeIOScale(hostResources()));
+  const ioScale = createMemo(() => computeIOScale(primaryResources()));
 
   const renderSortIndicator = (key: SortKey) => {
     if (sortKey() !== key) return null;
@@ -402,7 +402,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   };
 
   const showHostTable = createMemo(
-    () => hostResources().length > 0 || serviceResources().length === 0,
+    () => primaryResources().length > 0 || serviceResources().length === 0,
   );
   const serviceCountColumnStyle = createMemo(() =>
     isMobile()
@@ -545,7 +545,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     );
                     const displayName = createMemo(() => getDisplayName(resource));
                     const statusIndicator = createMemo(() =>
-                      getHostStatusIndicator({ status: resource.status }),
+                      getAgentStatusIndicator({ status: resource.status }),
                     );
                     const metricsKey = createMemo(() => buildMetricKey('agent', resource.id));
 
@@ -1028,7 +1028,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         () => buildServiceDetailLinks(resource)[0] ?? null,
                       );
                       const statusIndicator = createMemo(() =>
-                        getHostStatusIndicator({ status: resource.status }),
+                        getAgentStatusIndicator({ status: resource.status }),
                       );
                       const pbsRow = createMemo(() => getPBSTableRow(resource));
                       const platformBadge = createMemo(() =>
@@ -1326,7 +1326,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         () => buildServiceDetailLinks(resource)[0] ?? null,
                       );
                       const statusIndicator = createMemo(() =>
-                        getHostStatusIndicator({ status: resource.status }),
+                        getAgentStatusIndicator({ status: resource.status }),
                       );
                       const pmgRow = createMemo(() => getPMGTableRow(resource));
                       const platformBadge = createMemo(() =>

@@ -3,7 +3,7 @@ import type {
   VM,
   Container,
   PBSInstance,
-  Host,
+  Agent,
   DockerHost,
   DockerContainer,
   DockerService,
@@ -150,9 +150,9 @@ export function getGuestPowerIndicator(
     : { variant: 'danger', label: 'Stopped' };
 }
 
-export function getHostStatusIndicator(host: Partial<Host> | undefined | null): StatusIndicator {
-  if (!host) return defaultIndicator;
-  const status = normalize(host.status);
+export function getAgentStatusIndicator(agent: Partial<Agent> | undefined | null): StatusIndicator {
+  if (!agent) return defaultIndicator;
+  const status = normalize(agent.status);
 
   if (OFFLINE_HEALTH_STATUSES.has(status)) {
     return { variant: 'danger', label: formatStatusLabel(status, 'Offline') };

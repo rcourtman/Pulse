@@ -256,10 +256,10 @@ export const filterResources = (
   return filtered;
 };
 
-export const splitHostAndServiceResources = (
+export const splitPrimaryAndServiceResources = (
   resources: Resource[],
-): { hosts: Resource[]; services: Resource[] } => ({
-  hosts: resources.filter((resource) => !isServiceInfrastructureResource(resource)),
+): { primaryResources: Resource[]; services: Resource[] } => ({
+  primaryResources: resources.filter((resource) => !isServiceInfrastructureResource(resource)),
   services: resources.filter((resource) => isServiceInfrastructureResource(resource)),
 });
 

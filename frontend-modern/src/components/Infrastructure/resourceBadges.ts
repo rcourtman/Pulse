@@ -54,7 +54,7 @@ const unifiedSourceClasses: Record<UnifiedSource, string> = {
 const typeLabels: Record<string, string> = {
   agent: 'Agent',
   node: 'Node',
-  'docker-host': 'Container Host',
+  'docker-host': 'Container Runtime',
   pbs: 'PBS',
   pmg: 'PMG',
   'k8s-node': 'K8s Node',

@@ -12,7 +12,7 @@ import {
   groupResources,
   matchesSearch,
   sortResources,
-  splitHostAndServiceResources,
+  splitPrimaryAndServiceResources,
   tokenizeSearch,
 } from '@/components/Infrastructure/infrastructureSelectors';
 
@@ -150,16 +150,16 @@ describe('infrastructureSelectors', () => {
     });
   });
 
-  describe('splitHostAndServiceResources', () => {
-    it('splits pbs/pmg as services and everything else as hosts', () => {
+  describe('splitPrimaryAndServiceResources', () => {
+    it('splits pbs/pmg as services and everything else as primary resources', () => {
       const resources = [
         makeResource(1, { type: 'node' }),
         makeResource(2, { type: 'node' }),
         makeResource(3, { type: 'pbs' }),
         makeResource(4, { type: 'pmg' }),
       ];
-      const { hosts, services } = splitHostAndServiceResources(resources);
-      expect(hosts.map((resource) => resource.id)).toEqual(['resource-1', 'resource-2']);
+      const { primaryResources, services } = splitPrimaryAndServiceResources(resources);
+      expect(primaryResources.map((resource) => resource.id)).toEqual(['resource-1', 'resource-2']);
       expect(services.map((resource) => resource.id)).toEqual(['resource-3', 'resource-4']);
     });
   });

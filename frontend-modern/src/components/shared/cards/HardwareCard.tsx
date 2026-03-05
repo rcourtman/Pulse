@@ -1,8 +1,8 @@
 import { Component } from 'solid-js';
-import { Host, Node } from '@/types/api';
+import type { Agent, Node } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 
-type HardwareCardProps = { variant: 'node'; node: Node } | { variant: 'agent'; host: Host };
+type HardwareCardProps = { variant: 'node'; node: Node } | { variant: 'agent'; agent: Agent };
 
 export const HardwareCard: Component<HardwareCardProps> = (props) => {
   if (props.variant === 'node') {
@@ -37,7 +37,7 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
     );
   }
 
-  const agentHost = props.host;
+  const agentInfo = props.agent;
   return (
     <div class="rounded border border-border bg-surface p-3 shadow-sm">
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
@@ -46,17 +46,17 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
       <div class="space-y-1.5 text-[11px]">
         <div class="flex items-center justify-between">
           <span class="text-muted">CPU</span>
-          <span class="font-medium text-base-content">{agentHost.cpuCount} Cores</span>
+          <span class="font-medium text-base-content">{agentInfo.cpuCount} Cores</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-muted">Memory</span>
           <span class="font-medium text-base-content">
-            {formatBytes(agentHost.memory?.total || 0)}
+            {formatBytes(agentInfo.memory?.total || 0)}
           </span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-muted">Agent</span>
-          <span class="font-medium text-base-content">{agentHost.agentVersion}</span>
+          <span class="font-medium text-base-content">{agentInfo.agentVersion}</span>
         </div>
       </div>
     </div>

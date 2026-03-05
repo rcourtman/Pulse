@@ -9,7 +9,7 @@ import {
   isGuestRunning,
   getNodeStatusIndicator,
   getGuestPowerIndicator,
-  getHostStatusIndicator,
+  getAgentStatusIndicator,
   getDockerHostStatusIndicator,
   getDockerContainerStatusIndicator,
   getDockerServiceStatusIndicator,
@@ -117,24 +117,24 @@ describe('getGuestPowerIndicator', () => {
   });
 });
 
-describe('getHostStatusIndicator', () => {
+describe('getAgentStatusIndicator', () => {
   it('returns muted for null/undefined', () => {
-    expect(getHostStatusIndicator(null)).toEqual({ variant: 'muted', label: 'Unknown' });
+    expect(getAgentStatusIndicator(null)).toEqual({ variant: 'muted', label: 'Unknown' });
   });
 
-  it('returns success for online host', () => {
-    const result = getHostStatusIndicator({ status: 'online' });
+  it('returns success for online agent', () => {
+    const result = getAgentStatusIndicator({ status: 'online' });
     expect(result.variant).toBe('success');
     expect(result.label).toBe('Online');
   });
 
-  it('returns danger for offline host', () => {
-    const result = getHostStatusIndicator({ status: 'offline' });
+  it('returns danger for offline agent', () => {
+    const result = getAgentStatusIndicator({ status: 'offline' });
     expect(result.variant).toBe('danger');
   });
 
-  it('returns warning for degraded host', () => {
-    const result = getHostStatusIndicator({ status: 'degraded' });
+  it('returns warning for degraded agent', () => {
+    const result = getAgentStatusIndicator({ status: 'degraded' });
     expect(result.variant).toBe('warning');
   });
 });

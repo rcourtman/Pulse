@@ -6,7 +6,7 @@ import {
   filterResources,
   sortResources,
   groupResources,
-  splitHostAndServiceResources,
+  splitPrimaryAndServiceResources,
   computeIOScale,
 } from '@/components/Infrastructure/infrastructureSelectors';
 // Stub ResizeObserver for jsdom
@@ -243,10 +243,10 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(grouped.length).toBe(3);
     });
 
-    it('splitHostAndServiceResources partitions without losing resources', () => {
+    it('splitPrimaryAndServiceResources partitions without losing resources', () => {
       const resources = makeResources(PROFILES.S);
-      const { hosts, services } = splitHostAndServiceResources(resources);
-      expect(hosts.length + services.length).toBe(PROFILES.S);
+      const { primaryResources, services } = splitPrimaryAndServiceResources(resources);
+      expect(primaryResources.length + services.length).toBe(PROFILES.S);
     });
 
     it('computeIOScale produces valid stats for Profile M', () => {
