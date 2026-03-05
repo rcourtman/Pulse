@@ -274,6 +274,85 @@ func TestNoLegacyHostToAgentMigrationHintsInRuntimeCode(t *testing.T) {
 	}
 }
 
+// TestV6AgentRegistrationArtifactsStayCanonical prevents the release-facing
+// agent registration journey and eval instructions from drifting back to
+// legacy /api/state.hosts or legacy agent.type="host" assumptions.
+func TestV6AgentRegistrationArtifactsStayCanonical(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	artifacts := []struct {
+		path             string
+		requiredSnippets []string
+		bannedPatterns   []*regexp.Regexp
+	}{
+		{
+			path: filepath.Join(
+				repoRoot,
+				"tests",
+				"integration",
+				"tests",
+				"journeys",
+				"04-agent-install-registration.spec.ts",
+			),
+			requiredSnippets: []string{
+				"state.resources",
+				"type: 'unified'",
+			},
+			bannedPatterns: []*regexp.Regexp{
+				regexp.MustCompile(`state\.hosts\b`),
+				regexp.MustCompile(`hosts array`),
+				regexp.MustCompile(`type:\s*'host'`),
+				regexp.MustCompile(`"type"\s*:\s*"host"`),
+			},
+		},
+		{
+			path: filepath.Join(
+				repoRoot,
+				"tests",
+				"integration",
+				"evals",
+				"tasks",
+				"agent-registration.md",
+			),
+			requiredSnippets: []string{
+				"resources[]",
+				`agent.type = "unified"`,
+			},
+			bannedPatterns: []*regexp.Regexp{
+				regexp.MustCompile("`hosts` array"),
+				regexp.MustCompile(`agent\.type\s*=\s*"host"`),
+			},
+		},
+	}
+
+	for _, artifact := range artifacts {
+		data, err := os.ReadFile(artifact.path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", artifact.path, err)
+		}
+		content := string(data)
+		normalizedPath := filepath.ToSlash(artifact.path)
+
+		for _, snippet := range artifact.requiredSnippets {
+			if !strings.Contains(content, snippet) {
+				t.Errorf("%s: missing required canonical v6 snippet %q", normalizedPath, snippet)
+			}
+		}
+
+		for _, pattern := range artifact.bannedPatterns {
+			matches := pattern.FindAllStringIndex(content, -1)
+			for _, match := range matches {
+				line := 1 + strings.Count(content[:match[0]], "\n")
+				t.Errorf(
+					"%s:%d: banned legacy agent registration artifact pattern %q",
+					normalizedPath,
+					line,
+					pattern.String(),
+				)
+			}
+		}
+	}
+}
+
 // SRC-04b: Ratchet-to-hard-ban conversion completed 2026-03-01.
 //
 // All state.* field access patterns and GetState() calls in consumer packages
