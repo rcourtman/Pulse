@@ -280,9 +280,9 @@ func (e *PulseToolExecutor) executeListFindings(_ context.Context, args map[stri
 func canonicalAlertFindingResourceType(raw string) string {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 	switch normalized {
-	case "container", "system-container", "system_container":
+	case "container", "system-container":
 		return "system-container"
-	case "docker", "docker container", "docker-container", "docker_container", "app-container", "app_container":
+	case "docker", "docker container", "docker-container", "app-container":
 		return "app-container"
 	default:
 		return normalized

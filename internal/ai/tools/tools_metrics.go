@@ -331,7 +331,7 @@ func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[stri
 func canonicalMetricsResourceType(raw string) string {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 	switch normalized {
-	case "container", "system-container", "system_container":
+	case "container", "system-container":
 		return "system-container"
 	case "host", "node":
 		return "node"

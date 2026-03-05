@@ -300,6 +300,17 @@ func TestExecuteGetMetrics_InvalidResourceType(t *testing.T) {
 	}
 }
 
+func TestExecuteGetMetrics_RejectsLegacyUnderscoreResourceTypeAlias(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{})
+	result, _ := executor.executeGetMetrics(context.Background(), map[string]interface{}{
+		"period":        "24h",
+		"resource_type": "system_container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy system_container resource_type")
+	}
+}
+
 func TestExecuteGetMetrics_FilterAndPagination(t *testing.T) {
 	metricsProv := &mockMetricsHistoryProvider{}
 	metricsProv.On("GetAllMetricsSummary", mock.Anything).Return(map[string]ResourceMetricsSummary{
@@ -355,6 +366,13 @@ func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {
 	})
 	if !result.IsError {
 		t.Fatal("expected error for invalid resource_type")
+	}
+
+	result, _ = executor.executeGetBaselines(context.Background(), map[string]interface{}{
+		"resource_type": "system_container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy system_container resource_type")
 	}
 
 	executor = NewPulseToolExecutor(ExecutorConfig{
@@ -420,6 +438,13 @@ func TestExecuteListFindings_ResourceTypeFilter(t *testing.T) {
 	})
 	if !result.IsError {
 		t.Fatal("expected error for invalid resource_type")
+	}
+
+	result, _ = executor.executeListFindings(context.Background(), map[string]interface{}{
+		"resource_type": "app_container",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy app_container resource_type")
 	}
 
 	findingsProv := &mockFindingsProvider{}
