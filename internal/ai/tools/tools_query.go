@@ -3322,7 +3322,7 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 	}
 
 	// Normalize semantic type to provider-level type for guest config lookup.
-	// GetGuestConfig expects "container"/"lxc" or "vm", not "system-container".
+	// GetGuestConfig expects "container" or "vm", not "system-container".
 	configType := guestType
 	if configType == "system-container" {
 		configType = "container"
@@ -3341,7 +3341,7 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 	}
 
 	switch guestType {
-	case "system-container", "container", "lxc":
+	case "system-container":
 		hostname, osType, onboot, rootfs, mounts := parseContainerConfig(rawConfig)
 		response.Hostname = hostname
 		response.OSType = osType
@@ -3368,7 +3368,7 @@ func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, reso
 	}
 
 	switch resourceType {
-	case "system-container", "container", "lxc":
+	case "system-container", "container":
 		for _, ct := range rs.Containers() {
 			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
 				return "system-container", ct.VMID(), ct.Name(), ct.Node(), ct.Instance(), nil

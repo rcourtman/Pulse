@@ -3,11 +3,28 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+type mockGuestConfigProvider struct {
+	lastGuestType string
+	lastInstance  string
+	lastNode      string
+	lastVMID      int
+	config        map[string]interface{}
+}
+
+func (m *mockGuestConfigProvider) GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error) {
+	m.lastGuestType = guestType
+	m.lastInstance = instance
+	m.lastNode = node
+	m.lastVMID = vmID
+	return m.config, nil
+}
 
 func TestExecuteListInfrastructureAndTopology(t *testing.T) {
 	state := models.StateSnapshot{
@@ -654,5 +671,71 @@ func TestExecuteGetResource_MissingArgs(t *testing.T) {
 	})
 	if !result.IsError {
 		t.Fatal("expected error for missing resource_id")
+	}
+}
+
+func TestExecuteGetGuestConfig_SystemContainerUsesCanonicalResolution(t *testing.T) {
+	guestCfg := &mockGuestConfigProvider{
+		config: map[string]interface{}{
+			"hostname": "ct1",
+			"ostype":   "debian",
+			"onboot":   "1",
+			"rootfs":   "local-lvm:vm-200-disk-0,size=8G",
+			"mp0":      "local:200/vm-200-disk-1.raw,mp=/data",
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: models.StateSnapshot{
+			Containers: []models.Container{
+				{ID: "ct1", VMID: 200, Name: "ct1", Status: "running", Node: "node1", Instance: "pve1"},
+			},
+		}},
+		GuestConfigProvider: guestCfg,
+	})
+
+	result, _ := executor.executeGetGuestConfig(context.Background(), map[string]interface{}{
+		"resource_type": "system-container",
+		"resource_id":   "ct1",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result: %s", result.Content[0].Text)
+	}
+
+	var response GuestConfigResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode guest config response: %v", err)
+	}
+
+	if response.GuestType != "system-container" || response.VMID != 200 || response.Node != "node1" {
+		t.Fatalf("unexpected guest config response: %+v", response)
+	}
+	if guestCfg.lastGuestType != "container" {
+		t.Fatalf("expected provider guestType=container, got %q", guestCfg.lastGuestType)
+	}
+	if guestCfg.lastInstance != "pve1" || guestCfg.lastNode != "node1" || guestCfg.lastVMID != 200 {
+		t.Fatalf("unexpected provider call context: instance=%q node=%q vmid=%d", guestCfg.lastInstance, guestCfg.lastNode, guestCfg.lastVMID)
+	}
+}
+
+func TestExecuteGetGuestConfig_RejectsLegacyLXCResourceType(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: models.StateSnapshot{
+			Containers: []models.Container{
+				{ID: "ct1", VMID: 200, Name: "ct1", Status: "running", Node: "node1", Instance: "pve1"},
+			},
+		}},
+		GuestConfigProvider: &mockGuestConfigProvider{config: map[string]interface{}{}},
+	})
+
+	result, _ := executor.executeGetGuestConfig(context.Background(), map[string]interface{}{
+		"resource_type": "lxc",
+		"resource_id":   "ct1",
+	})
+	if !result.IsError {
+		t.Fatal("expected error for legacy lxc resource_type")
+	}
+	if !strings.Contains(result.Content[0].Text, "invalid resource_type: lxc") {
+		t.Fatalf("unexpected error text: %s", result.Content[0].Text)
 	}
 }
