@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -129,17 +130,11 @@ func (m *Monitor) queueDockerStopCommand(hostID string) (models.DockerHostComman
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
 	}
 
-	// Ensure the host exists
-	var hostExists bool
-	for _, host := range m.state.GetDockerHosts() {
-		if host.ID == hostID {
-			hostExists = true
-			break
-		}
-	}
-	if !hostExists {
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
+	if !ok {
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
+	hostID = canonicalHostID
 
 	if existing, ok := m.dockerCommands[hostID]; ok {
 		switch existing.status.Status {
@@ -183,17 +178,11 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 		return models.DockerHostCommandStatus{}, fmt.Errorf("container id is required")
 	}
 
-	// Ensure the host exists
-	var hostExists bool
-	for _, host := range m.state.GetDockerHosts() {
-		if host.ID == hostID {
-			hostExists = true
-			break
-		}
-	}
-	if !hostExists {
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
+	if !ok {
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
+	hostID = canonicalHostID
 
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
@@ -244,10 +233,11 @@ func (m *Monitor) QueueDockerUpdateAllCommand(hostID string) (models.DockerHostC
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
 	}
 
-	host, ok := m.GetDockerHost(hostID)
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
 	if !ok {
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
+	hostID = canonicalHostID
 
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
@@ -258,15 +248,37 @@ func (m *Monitor) QueueDockerUpdateAllCommand(hostID string) (models.DockerHostC
 	}
 
 	// Select containers that currently have updates available.
-	containerIDs := make([]string, 0, len(host.Containers))
-	for _, c := range host.Containers {
-		if c.UpdateStatus == nil || !c.UpdateStatus.UpdateAvailable {
+	readState := m.dockerCommandReadStateLocked()
+	containerIDs := make([]string, 0)
+	for _, c := range readState.DockerContainers() {
+		if c == nil || normalizeDockerHostID(c.HostSourceID()) != hostID {
 			continue
 		}
-		if strings.TrimSpace(c.ID) == "" {
+		updateStatus := c.UpdateStatus()
+		if updateStatus == nil || !updateStatus.UpdateAvailable {
 			continue
 		}
-		containerIDs = append(containerIDs, c.ID)
+		containerID := strings.TrimSpace(c.ContainerID())
+		if containerID == "" {
+			continue
+		}
+		containerIDs = append(containerIDs, containerID)
+	}
+
+	if len(containerIDs) == 0 {
+		// Fallback to host-level nested container data when read-state was built from
+		// a snapshot shape that has not yet materialized per-container resources.
+		if snapshotHost, found := m.stateDockerHostByIDLocked(hostID); found {
+			for _, c := range snapshotHost.Containers {
+				if c.UpdateStatus == nil || !c.UpdateStatus.UpdateAvailable {
+					continue
+				}
+				if strings.TrimSpace(c.ID) == "" {
+					continue
+				}
+				containerIDs = append(containerIDs, c.ID)
+			}
+		}
 	}
 
 	if len(containerIDs) == 0 {
@@ -313,17 +325,11 @@ func (m *Monitor) QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHo
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
 	}
 
-	// Ensure the host exists
-	var hostExists bool
-	for _, host := range m.state.GetDockerHosts() {
-		if host.ID == hostID {
-			hostExists = true
-			break
-		}
-	}
-	if !hostExists {
+	_, canonicalHostID, ok := m.resolveDockerCommandHostLocked(hostID)
+	if !ok {
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
+	hostID = canonicalHostID
 
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
@@ -471,4 +477,65 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 
 func normalizeDockerHostID(id string) string {
 	return strings.TrimSpace(id)
+}
+
+func (m *Monitor) dockerCommandReadStateLocked() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	if readState, ok := m.resourceStore.(unifiedresources.ReadState); ok && readState != nil {
+		return readState
+	}
+	if m.state == nil {
+		return nil
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(m.state.GetSnapshot())
+	return unifiedresources.NewMonitorAdapter(registry)
+}
+
+func (m *Monitor) resolveDockerCommandHostLocked(hostID string) (*unifiedresources.DockerHostView, string, bool) {
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return nil, "", false
+	}
+
+	readState := m.dockerCommandReadStateLocked()
+	if readState == nil {
+		return nil, "", false
+	}
+
+	for _, host := range readState.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		candidateID := normalizeDockerHostID(host.ID())
+		sourceID := normalizeDockerHostID(host.HostSourceID())
+		if hostID != candidateID && hostID != sourceID {
+			continue
+		}
+		if sourceID == "" {
+			sourceID = candidateID
+		}
+		if sourceID == "" {
+			return nil, "", false
+		}
+		return host, sourceID, true
+	}
+
+	return nil, "", false
+}
+
+func (m *Monitor) stateDockerHostByIDLocked(hostID string) (models.DockerHost, bool) {
+	if m == nil || m.state == nil {
+		return models.DockerHost{}, false
+	}
+
+	for _, host := range m.state.GetDockerHosts() {
+		if normalizeDockerHostID(host.ID) == hostID {
+			return host, true
+		}
+	}
+	return models.DockerHost{}, false
 }
