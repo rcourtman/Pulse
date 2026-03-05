@@ -133,55 +133,28 @@ func normalizeDiscovery(d *ResourceDiscovery) {
 	}
 	d.ResourceType = canonicalStoredResourceType(d.ResourceType)
 	d.ID = canonicalStoredResourceID(d.ID)
+	if strings.TrimSpace(d.TargetID) == "" {
+		_, targetID, _, err := ParseResourceID(d.ID)
+		if err == nil {
+			d.TargetID = strings.TrimSpace(targetID)
+		}
+	}
 	if d.ResourceType == ResourceTypeAgent && strings.TrimSpace(d.AgentID) == "" {
 		d.AgentID = d.TargetID
 	}
 }
 
-func decodeJSONStringRaw(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
+func canonicalizeFingerprint(fp *ContainerFingerprint) {
+	if fp == nil {
+		return
 	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(value)
-}
-
-func migrateLegacyHostIDPayload(data []byte) ([]byte, bool, error) {
-	var payload map[string]json.RawMessage
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, false, err
-	}
-
-	targetID := decodeJSONStringRaw(payload["target_id"])
-	legacyHostID := decodeJSONStringRaw(payload["host_id"])
-	changed := false
-
-	if targetID == "" && legacyHostID != "" {
-		targetValue, err := json.Marshal(legacyHostID)
-		if err != nil {
-			return nil, false, err
+	fp.ResourceID = canonicalStoredResourceID(fp.ResourceID)
+	if strings.TrimSpace(fp.TargetID) == "" {
+		_, targetID, _, err := ParseResourceID(fp.ResourceID)
+		if err == nil {
+			fp.TargetID = strings.TrimSpace(targetID)
 		}
-		payload["target_id"] = targetValue
-		changed = true
 	}
-
-	if _, hasLegacyHostID := payload["host_id"]; hasLegacyHostID {
-		delete(payload, "host_id")
-		changed = true
-	}
-
-	if !changed {
-		return nil, false, nil
-	}
-
-	migrated, err := json.Marshal(payload)
-	if err != nil {
-		return nil, false, err
-	}
-	return migrated, true, nil
 }
 
 func unmarshalStoredDiscovery(data []byte, discovery *ResourceDiscovery) error {
@@ -196,90 +169,6 @@ func unmarshalStoredFingerprint(data []byte, fp *ContainerFingerprint) error {
 		return fmt.Errorf("fingerprint output is required")
 	}
 	return json.Unmarshal(data, fp)
-}
-
-func (s *Store) migrateLegacyHostIDFile(path string, maxBytes int64, encrypted bool) (bool, error) {
-	data, err := readRegularFileWithLimit(path, maxBytes)
-	if err != nil {
-		return false, err
-	}
-
-	if encrypted && s.crypto != nil {
-		decrypted, err := s.crypto.Decrypt(data)
-		if err != nil {
-			return false, err
-		}
-		data = decrypted
-	}
-
-	migrated, changed, err := migrateLegacyHostIDPayload(data)
-	if err != nil {
-		return false, err
-	}
-	if !changed {
-		return false, nil
-	}
-
-	if encrypted && s.crypto != nil {
-		encrypted, err := s.crypto.Encrypt(migrated)
-		if err != nil {
-			return false, err
-		}
-		migrated = encrypted
-	}
-
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, migrated, 0600); err != nil {
-		return false, err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		if cleanupErr := os.Remove(tmpPath); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
-			log.Warn().Err(cleanupErr).Str("tmp_path", tmpPath).Msg("Failed to remove temp migration file after rename failure")
-		}
-		return false, err
-	}
-
-	return true, nil
-}
-
-func (s *Store) migrateLegacyHostIDPayloads() {
-	migrateDir := func(dir, suffix string, maxBytes int64, encrypted bool) int {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				log.Warn().Err(err).Str("dir", dir).Msg("failed to list directory for host_id migration")
-			}
-			return 0
-		}
-
-		migratedCount := 0
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), suffix) {
-				continue
-			}
-
-			path := filepath.Join(dir, entry.Name())
-			changed, err := s.migrateLegacyHostIDFile(path, maxBytes, encrypted)
-			if err != nil {
-				log.Warn().Err(err).Str("file", path).Msg("failed to migrate legacy host_id payload")
-				continue
-			}
-			if changed {
-				migratedCount++
-			}
-		}
-
-		return migratedCount
-	}
-
-	discoveryMigrated := migrateDir(s.dataDir, ".enc", maxDiscoveryFileReadBytes, true)
-	fingerprintMigrated := migrateDir(s.fingerprintDir, ".json", maxFingerprintFileReadBytes, false)
-	if discoveryMigrated > 0 || fingerprintMigrated > 0 {
-		log.Info().
-			Int("discovery_files", discoveryMigrated).
-			Int("fingerprint_files", fingerprintMigrated).
-			Msg("migrated legacy host_id payloads to target_id")
-	}
 }
 
 // toLegacyID converts a normalized resource ID back to its legacy form for file lookup.
@@ -338,9 +227,6 @@ func NewStore(dataDir string) (*Store, error) {
 		cacheTTL:       5 * time.Minute,
 		fingerprints:   make(map[string]*ContainerFingerprint),
 	}
-
-	// One-time migration boundary: rewrite legacy host_id payloads to target_id.
-	store.migrateLegacyHostIDPayloads()
 
 	// Load existing fingerprints from disk
 	store.loadFingerprints()
@@ -417,9 +303,7 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 
 	// Persist/cache a defensive copy so callers cannot mutate shared state after Save.
 	toSave := cloneResourceDiscovery(d)
-	if toSave.ResourceType == ResourceTypeAgent && strings.TrimSpace(toSave.AgentID) == "" {
-		toSave.AgentID = toSave.TargetID
-	}
+	normalizeDiscovery(toSave)
 
 	data, err := marshalDiscovery(toSave)
 	if err != nil {
@@ -771,7 +655,7 @@ func (s *Store) loadFingerprints() {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal fingerprint")
 			continue
 		}
-		fp.ResourceID = canonicalStoredResourceID(fp.ResourceID)
+		canonicalizeFingerprint(&fp)
 
 		s.fingerprints[fp.ResourceID] = &fp
 	}
@@ -790,6 +674,7 @@ func (s *Store) SaveFingerprint(fp *ContainerFingerprint) error {
 
 	// Update in-memory cache
 	fpCopy := cloneContainerFingerprint(fp)
+	canonicalizeFingerprint(fpCopy)
 	s.fingerprints[fpCopy.ResourceID] = fpCopy
 
 	// Persist to disk
