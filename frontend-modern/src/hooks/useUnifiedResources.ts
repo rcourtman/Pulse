@@ -18,7 +18,7 @@ import { eventBus } from '@/stores/events';
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,pbs,pmg,k8s_cluster,k8s_node';
 const STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY =
-  'type=storage,pbs,pmg,vm,lxc,container,pod,agent,k8s_cluster,k8s_node,physical_disk,ceph';
+  'type=storage,pbs,pmg,vm,system-container,pod,agent,k8s_cluster,k8s_node,physical_disk,ceph';
 const UNIFIED_RESOURCES_PAGE_LIMIT = 100;
 const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
@@ -412,7 +412,6 @@ const resolveType = (value?: string): ResourceType => {
       return 'vm';
     case 'system-container':
     case 'system_container':
-    case 'lxc':
       return 'system-container';
     case 'oci-container':
       return 'oci-container';
@@ -468,7 +467,6 @@ const resolveDiscoveryResourceType = (
       return 'vm';
     case 'system-container':
     case 'system_container':
-    case 'lxc':
     case 'container':
       return 'system-container';
     case 'docker':
