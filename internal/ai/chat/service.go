@@ -1281,7 +1281,7 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 }
 
 var recentContextPronounPattern = regexp.MustCompile(`(?i)\b(it|its|that|those|this|them|previous|earlier|last|same|former|latter)\b`)
-var recentContextNounPattern = regexp.MustCompile(`(?i)\b(the (service|container|vm|lxc|node|host|docker|instance|one))\b`)
+var recentContextNounPattern = regexp.MustCompile(`(?i)\b(the (service|container|vm|node|host|docker|instance|one))\b`)
 
 func shouldInjectRecentContext(prompt string) bool {
 	return recentContextPronounPattern.MatchString(prompt) || recentContextNounPattern.MatchString(prompt)
