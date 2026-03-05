@@ -404,6 +404,64 @@ func TestV6AgentRegistrationArtifactsStayCanonical(t *testing.T) {
 	}
 }
 
+// TestV6ReleaseFacingAPITestsCoverLegacyHostRejection keeps release-facing API
+// contract tests pinned on strict v6 behavior for removed host aliases.
+func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	artifacts := []struct {
+		path             string
+		requiredSnippets []string
+	}{
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "ai_handler_test.go"),
+			requiredSnippets: []string{
+				`canonicalizeChatMentionType("host")`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "ai_handlers_test.go"),
+			requiredSnippets: []string{
+				`"target_type":"host"`,
+				`unsupported resource_type "host"`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "org_handlers_test.go"),
+			requiredSnippets: []string{
+				`"resourceType":"host"`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
+			requiredSnippets: []string{
+				`/api/reporting?format=pdf&resourceType=host&resourceId=h-1`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "router_version_tenant_metrics_test.go"),
+			requiredSnippets: []string{
+				`/api/metrics-store/history?resourceType=host&resourceId=agent-1&metric=cpu&range=1h`,
+				`unsupported resourceType "host"`,
+			},
+		},
+	}
+
+	for _, artifact := range artifacts {
+		data, err := os.ReadFile(artifact.path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", artifact.path, err)
+		}
+		content := string(data)
+		normalizedPath := filepath.ToSlash(artifact.path)
+
+		for _, snippet := range artifact.requiredSnippets {
+			if !strings.Contains(content, snippet) {
+				t.Errorf("%s: missing required legacy-host rejection snippet %q", normalizedPath, snippet)
+			}
+		}
+	}
+}
+
 // SRC-04b: Ratchet-to-hard-ban conversion completed 2026-03-01.
 //
 // All state.* field access patterns and GetState() calls in consumer packages
