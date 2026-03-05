@@ -344,15 +344,13 @@ func Run(ctx context.Context, version string) error {
 
 	// Set state getter for WebSocket hub (legacy - for default org)
 	wsHub.SetStateGetter(func() interface{} {
-		state := reloadableMonitor.GetMonitor().GetState()
-		return state.ToFrontend()
+		return reloadableMonitor.GetMonitor().BuildFrontendState()
 	})
 
 	// Set tenant-aware state getter for multi-tenant support
 	wsHub.SetStateGetterForTenant(func(orgID string) interface{} {
 		if orgID == "" || orgID == "default" {
-			state := reloadableMonitor.GetMonitor().GetState()
-			return state.ToFrontend()
+			return reloadableMonitor.GetMonitor().BuildFrontendState()
 		}
 
 		mtMonitor := reloadableMonitor.GetMultiTenantMonitor()
@@ -366,8 +364,7 @@ func Run(ctx context.Context, version string) error {
 			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor for org state request")
 			return models.StateFrontend{}
 		}
-		state := monitor.GetState()
-		return state.ToFrontend()
+		return monitor.BuildFrontendState()
 	})
 
 	// Set org authorization checker for WebSocket connections
@@ -461,15 +458,17 @@ func Run(ctx context.Context, version string) error {
 
 			// Resource counts from monitor state.
 			if mon := reloadableMonitor.GetMonitor(); mon != nil {
-				state := mon.GetState()
-				snap.PVENodes = len(state.Nodes)
-				snap.PBSInstances = len(state.PBSInstances)
-				snap.PMGInstances = len(state.PMGInstances)
-				snap.VMs = len(state.VMs)
-				snap.Containers = len(state.Containers)
-				snap.DockerHosts = len(state.DockerHosts)
-				snap.KubernetesClusters = len(state.KubernetesClusters)
-				snap.ActiveAlerts = len(state.ActiveAlerts)
+				readState := mon.GetUnifiedReadStateOrSnapshot()
+				if readState != nil {
+					snap.PVENodes = len(readState.Nodes())
+					snap.PBSInstances = len(readState.PBSInstances())
+					snap.PMGInstances = len(readState.PMGInstances())
+					snap.VMs = len(readState.VMs())
+					snap.Containers = len(readState.Containers())
+					snap.DockerHosts = len(readState.DockerHosts())
+					snap.KubernetesClusters = len(readState.K8sClusters())
+				}
+				snap.ActiveAlerts = len(mon.ActiveAlertsSnapshot())
 			}
 
 			// Feature flags from persisted config (using pre-created persistence).
