@@ -668,7 +668,6 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 			ResourceType: resourceType,
 			ResourceID:   resourceID,
 			TargetID:     targetID,
-			HostID:       targetID,
 			Hostname:     targetID,
 		})
 		if err != nil {
@@ -1452,7 +1451,7 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 		ID:             MakeResourceID(ResourceTypeDocker, host.AgentID, c.Name),
 		ResourceType:   ResourceTypeDocker,
 		ResourceID:     c.Name,
-		HostID:         host.AgentID,
+		TargetID:       host.AgentID,
 		Hostname:       host.Hostname,
 		ServiceType:    result.ServiceType,
 		ServiceName:    result.ServiceName,
@@ -1481,16 +1480,12 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		ctx = context.Background()
 	}
 
-	legacyHostID := strings.TrimSpace(req.HostID)
 	req = normalizeDiscoveryRequestAliases(req)
 
 	originalReq := req
 	aliasIDs := make([]string, 0, 2)
 	if req.TargetID != "" && req.ResourceID != "" {
 		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, req.TargetID, req.ResourceID))
-	}
-	if legacyHostID != "" && req.ResourceID != "" && legacyHostID != req.TargetID {
-		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, legacyHostID, req.ResourceID))
 	}
 	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
@@ -1666,7 +1661,6 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		ResourceType:     req.ResourceType,
 		ResourceID:       req.ResourceID,
 		TargetID:         req.TargetID,
-		HostID:           req.TargetID,
 		Hostname:         hostname,
 		ServiceType:      result.ServiceType,
 		ServiceName:      result.ServiceName,
@@ -1832,7 +1826,6 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 				req.Hostname = host.Hostname
 			}
 			req.TargetID = host.ID
-			req.HostID = req.TargetID
 			req.ResourceID = host.ID
 			return req
 		}
@@ -1852,12 +1845,10 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 					Msg("Redirecting discovery scan to linked host agent")
 				addAlias(node.LinkedAgentID, node.LinkedAgentID)
 				req.TargetID = node.LinkedAgentID
-				req.HostID = req.TargetID
 				req.ResourceID = node.LinkedAgentID
 				return req
 			}
 			req.TargetID = node.Name
-			req.HostID = req.TargetID
 			req.ResourceID = node.Name
 			return req
 		}
@@ -2517,7 +2508,6 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, targetID, re
 	req := DiscoveryRequest{
 		ResourceType: resourceType,
 		TargetID:     targetID,
-		HostID:       targetID,
 		ResourceID:   resourceID,
 	}
 	aliasIDs := []string{MakeResourceID(resourceType, targetID, resourceID)}
@@ -2807,16 +2797,11 @@ func canonicalDiscoveryTargetID(discovery *ResourceDiscovery) string {
 }
 
 func canonicalRequestTargetID(req DiscoveryRequest) string {
-	targetID := strings.TrimSpace(req.TargetID)
-	if targetID == "" {
-		targetID = strings.TrimSpace(req.HostID)
-	}
-	return targetID
+	return strings.TrimSpace(req.TargetID)
 }
 
 func normalizeDiscoveryRequestAliases(req DiscoveryRequest) DiscoveryRequest {
 	req.TargetID = canonicalRequestTargetID(req)
-	req.HostID = req.TargetID // Keep legacy alias in sync for compatibility paths.
 	return req
 }
 
@@ -2860,7 +2845,6 @@ func (s *Service) GetDiscoveryForAIChat(ctx context.Context, resourceType Resour
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		TargetID:     targetID,
-		HostID:       targetID,
 		Force:        false, // Let fingerprint logic decide
 	})
 }

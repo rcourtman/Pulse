@@ -403,14 +403,14 @@ func TestService_DiscoverResource_RecentAndNoAnalyzer(t *testing.T) {
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "nginx",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	}
 	discovery := &ResourceDiscovery{
-		ID:           MakeResourceID(req.ResourceType, req.HostID, req.ResourceID),
+		ID:           MakeResourceID(req.ResourceType, req.TargetID, req.ResourceID),
 		ResourceType: req.ResourceType,
 		ResourceID:   req.ResourceID,
-		HostID:       req.HostID,
+		TargetID:     req.TargetID,
 		Hostname:     req.Hostname,
 		ServiceName:  "Existing",
 	}
@@ -429,7 +429,7 @@ func TestService_DiscoverResource_RecentAndNoAnalyzer(t *testing.T) {
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeVM,
 		ResourceID:   "101",
-		HostID:       "node1",
+		TargetID:     "node1",
 		Hostname:     "node1",
 		Force:        true,
 	})
@@ -441,7 +441,7 @@ func TestService_DiscoverResource_RecentAndNoAnalyzer(t *testing.T) {
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeVM,
 		ResourceID:   "102",
-		HostID:       "node1",
+		TargetID:     "node1",
 		Hostname:     "node1",
 		Force:        true,
 	})
@@ -453,7 +453,7 @@ func TestService_DiscoverResource_RecentAndNoAnalyzer(t *testing.T) {
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeVM,
 		ResourceID:   "103",
-		HostID:       "node1",
+		TargetID:     "node1",
 		Hostname:     "node1",
 		Force:        true,
 	})
@@ -487,7 +487,7 @@ func TestService_getResourceMetadata(t *testing.T) {
 	vmMeta := service.getResourceMetadata(DiscoveryRequest{
 		ResourceType: ResourceTypeVM,
 		ResourceID:   "101",
-		HostID:       "node1",
+		TargetID:     "node1",
 	})
 	if vmMeta["name"] != "vm1" || vmMeta["vmid"] != 101 {
 		t.Fatalf("unexpected vm metadata: %#v", vmMeta)
@@ -496,7 +496,7 @@ func TestService_getResourceMetadata(t *testing.T) {
 	lxcMeta := service.getResourceMetadata(DiscoveryRequest{
 		ResourceType: ResourceTypeSystemContainer,
 		ResourceID:   "201",
-		HostID:       "node2",
+		TargetID:     "node2",
 	})
 	if lxcMeta["name"] != "lxc1" || lxcMeta["status"] != "offline" {
 		t.Fatalf("unexpected lxc metadata: %#v", lxcMeta)
@@ -505,7 +505,7 @@ func TestService_getResourceMetadata(t *testing.T) {
 	dockerMeta := service.getResourceMetadata(DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "redis",
-		HostID:       "agent1",
+		TargetID:     "agent1",
 	})
 	if dockerMeta["image"] != "redis:latest" || dockerMeta["status"] != "online" {
 		t.Fatalf("unexpected docker metadata: %#v", dockerMeta)
@@ -514,7 +514,7 @@ func TestService_getResourceMetadata(t *testing.T) {
 	dockerByHost := service.getResourceMetadata(DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "redis",
-		HostID:       "dock1",
+		TargetID:     "dock1",
 	})
 	if dockerByHost["image"] != "redis:latest" {
 		t.Fatalf("unexpected docker hostname metadata: %#v", dockerByHost)
@@ -537,7 +537,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	got := service.getResourceExternalIP(DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
 		ResourceID:   "agent-pve1",
-		HostID:       "agent-pve1",
+		TargetID:     "agent-pve1",
 		Hostname:     "ignored-hostname",
 	})
 	if got != "10.0.0.15" {
@@ -547,7 +547,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	got = service.getResourceExternalIP(DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
 		ResourceID:   "node-1",
-		HostID:       "node-1",
+		TargetID:     "node-1",
 		Hostname:     "ignored-hostname",
 	})
 	if got != "pve-node-01" {
@@ -557,7 +557,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	got = service.getResourceExternalIP(DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
 		ResourceID:   "missing-host",
-		HostID:       "missing-host",
+		TargetID:     "missing-host",
 		Hostname:     "valid-hostname.local",
 	})
 	if got != "valid-hostname.local" {
@@ -567,7 +567,7 @@ func TestService_getResourceExternalIP_Host(t *testing.T) {
 	got = service.getResourceExternalIP(DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
 		ResourceID:   "missing-host",
-		HostID:       "host-id-fallback",
+		TargetID:     "host-id-fallback",
 		Hostname:     "Display Name With Spaces",
 	})
 	if got != "" {
@@ -693,7 +693,7 @@ func TestService_FingerprintCollectionAndDiscoveryWrappers(t *testing.T) {
 	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 	})
 	if err != nil {
@@ -1015,7 +1015,7 @@ func TestService_DiscoverResource_SaveError(t *testing.T) {
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 		Force:        true,
 	})
@@ -1044,7 +1044,7 @@ func TestService_DiscoverResource_AITimeout(t *testing.T) {
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 		Force:        true,
 	})
@@ -1074,7 +1074,7 @@ func TestService_DiscoverResource_ScanError(t *testing.T) {
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 		Force:        true,
 	})
@@ -1129,7 +1129,7 @@ func TestService_DiscoverResource_WithScanResult(t *testing.T) {
 		ID:           MakeResourceID(ResourceTypeDocker, "host1", "web"),
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 		UserNotes:    "keep",
 		UserSecrets:  map[string]string{"token": "secret"},
@@ -1142,7 +1142,7 @@ func TestService_DiscoverResource_WithScanResult(t *testing.T) {
 	found, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "host1",
 		Force:        true,
 	})
@@ -1295,7 +1295,7 @@ func TestService_Redirection(t *testing.T) {
 	// Trigger discovery for the PVE node "pve1"
 	req := DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
-		HostID:       "pve1",
+		TargetID:     "pve1",
 		ResourceID:   "pve1",
 		Force:        true,
 	}
@@ -1310,8 +1310,8 @@ func TestService_Redirection(t *testing.T) {
 	if discovery.ID != expectedID {
 		t.Errorf("DiscoverResource ID mismatch. Got %s, want %s (should have redirected to agent ID)", discovery.ID, expectedID)
 	}
-	if discovery.HostID != "agent-pve1" {
-		t.Errorf("DiscoverResource HostID mismatch. Got %s, want agent-pve1", discovery.HostID)
+	if discovery.TargetID != "agent-pve1" {
+		t.Errorf("DiscoverResource HostID mismatch. Got %s, want agent-pve1", discovery.TargetID)
 	}
 
 	// 1b. Hostname aliases should canonicalize to the same host agent ID and
@@ -1320,7 +1320,7 @@ func TestService_Redirection(t *testing.T) {
 	if err := store.Save(&ResourceDiscovery{
 		ID:           hostnameAliasID,
 		ResourceType: ResourceTypeAgent,
-		HostID:       "pve1-host",
+		TargetID:     "pve1-host",
 		ResourceID:   "pve1-host",
 		ServiceName:  "Alias Entry",
 	}); err != nil {
@@ -1329,7 +1329,7 @@ func TestService_Redirection(t *testing.T) {
 
 	discoveryFromHostname, err := service.DiscoverResource(ctx, DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
-		HostID:       "pve1-host",
+		TargetID:     "pve1-host",
 		ResourceID:   "pve1-host",
 		Hostname:     "pve1-host",
 		Force:        true,
@@ -1384,7 +1384,7 @@ func TestService_Redirection(t *testing.T) {
 	legacyDiscovery := &ResourceDiscovery{
 		ID:           legacyID,
 		ResourceType: ResourceTypeAgent,
-		HostID:       "pve1",
+		TargetID:     "pve1",
 		ResourceID:   "pve1",
 		ServiceName:  "Legacy PVE",
 	}
@@ -1471,7 +1471,7 @@ func TestService_DiscoverResource_HostSuggestedURLFallbackForLinkedNode(t *testi
 
 	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
-		HostID:       "pve1",
+		TargetID:     "pve1",
 		ResourceID:   "pve1",
 		Force:        true,
 	})
@@ -1510,7 +1510,7 @@ func TestService_DiscoverResource_URLSuggestionDiagnostics(t *testing.T) {
 
 	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeAgent,
-		HostID:       "missing-host",
+		TargetID:     "missing-host",
 		ResourceID:   "missing-host",
 		Hostname:     "Display Name With Spaces",
 		Force:        true,
@@ -1557,7 +1557,7 @@ func TestService_DiscoverResource_URLSuggestionSource_Primary(t *testing.T) {
 	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
 		ResourceID:   "web",
-		HostID:       "host1",
+		TargetID:     "host1",
 		Hostname:     "10.0.0.22",
 		Force:        true,
 	})
@@ -1610,7 +1610,7 @@ func TestService_DiscoverResource_ReturnsUpgradedCachedDiscovery(t *testing.T) {
 	legacy := &ResourceDiscovery{
 		ID:           id,
 		ResourceType: ResourceTypeDocker,
-		HostID:       "host1",
+		TargetID:     "host1",
 		ResourceID:   "web",
 		ServiceType:  "nginx",
 		Category:     CategoryWebServer,
@@ -1626,7 +1626,7 @@ func TestService_DiscoverResource_ReturnsUpgradedCachedDiscovery(t *testing.T) {
 	service := NewService(store, nil, DefaultConfig())
 	got, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
 		ResourceType: ResourceTypeDocker,
-		HostID:       "host1",
+		TargetID:     "host1",
 		ResourceID:   "web",
 	})
 	if err != nil {

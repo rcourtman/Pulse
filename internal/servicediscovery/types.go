@@ -165,7 +165,6 @@ type DiscoveryRequest struct {
 	ResourceType ResourceType `json:"resource_type"`
 	ResourceID   string       `json:"resource_id"`
 	TargetID     string       `json:"target_id,omitempty"`
-	HostID       string       `json:"-"` // Internal legacy alias of target_id
 	Hostname     string       `json:"hostname"`
 	Force        bool         `json:"force"` // Force re-scan even if recent
 }
