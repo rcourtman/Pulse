@@ -1481,22 +1481,16 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		ctx = context.Background()
 	}
 
-	req.TargetID = strings.TrimSpace(req.TargetID)
-	req.HostID = strings.TrimSpace(req.HostID)
-	if req.TargetID == "" {
-		req.TargetID = req.HostID
-	}
-	if req.HostID == "" {
-		req.HostID = req.TargetID
-	}
+	legacyHostID := strings.TrimSpace(req.HostID)
+	req = normalizeDiscoveryRequestAliases(req)
 
 	originalReq := req
 	aliasIDs := make([]string, 0, 2)
 	if req.TargetID != "" && req.ResourceID != "" {
 		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, req.TargetID, req.ResourceID))
 	}
-	if req.HostID != "" && req.ResourceID != "" && req.HostID != req.TargetID {
-		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, req.HostID, req.ResourceID))
+	if legacyHostID != "" && req.ResourceID != "" && legacyHostID != req.TargetID {
+		aliasIDs = append(aliasIDs, MakeResourceID(req.ResourceType, legacyHostID, req.ResourceID))
 	}
 	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
 
@@ -1672,7 +1666,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		ResourceType:     req.ResourceType,
 		ResourceID:       req.ResourceID,
 		TargetID:         req.TargetID,
-		HostID:           req.HostID,
+		HostID:           req.TargetID,
 		Hostname:         hostname,
 		ServiceType:      result.ServiceType,
 		ServiceName:      result.ServiceName,
@@ -1795,10 +1789,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	// Store result for any waiting goroutines
 	inProg.result = discovery
 	if originalReq != req {
-		originalTargetID := strings.TrimSpace(originalReq.TargetID)
-		if originalTargetID == "" {
-			originalTargetID = strings.TrimSpace(originalReq.HostID)
-		}
+		originalTargetID := canonicalRequestTargetID(originalReq)
 		log.Debug().
 			Str("original_id", MakeResourceID(originalReq.ResourceType, originalTargetID, originalReq.ResourceID)).
 			Str("canonical_id", resourceID).
@@ -1810,14 +1801,8 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 // normalizeDiscoveryRequest resolves discovery aliases to a canonical target ID.
 // This prevents duplicate discoveries for the same physical host under different IDs.
 func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]string) DiscoveryRequest {
-	req.TargetID = strings.TrimSpace(req.TargetID)
-	req.HostID = strings.TrimSpace(req.HostID)
-	if req.TargetID == "" {
-		req.TargetID = req.HostID
-	}
-	if req.HostID == "" {
-		req.HostID = req.TargetID
-	}
+	req = normalizeDiscoveryRequestAliases(req)
+	requestTargetID := req.TargetID
 
 	if req.ResourceType != ResourceTypeAgent {
 		return req
@@ -1840,21 +1825,21 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 	}
 
 	for _, host := range snap.Hosts {
-		if host.ID == req.HostID || host.ID == req.ResourceID || host.Hostname == req.HostID || host.Hostname == req.ResourceID || (req.Hostname != "" && host.Hostname == req.Hostname) {
+		if host.ID == requestTargetID || host.ID == req.ResourceID || host.Hostname == requestTargetID || host.Hostname == req.ResourceID || (req.Hostname != "" && host.Hostname == req.Hostname) {
 			addAlias(host.ID, host.ID)
 			addAlias(host.Hostname, host.Hostname)
 			if req.Hostname == "" {
 				req.Hostname = host.Hostname
 			}
-			req.HostID = host.ID
-			req.TargetID = req.HostID
+			req.TargetID = host.ID
+			req.HostID = req.TargetID
 			req.ResourceID = host.ID
 			return req
 		}
 	}
 
 	for _, node := range snap.Nodes {
-		if node.Name == req.HostID || node.Name == req.ResourceID || node.ID == req.HostID || node.ID == req.ResourceID || (req.Hostname != "" && node.Name == req.Hostname) {
+		if node.Name == requestTargetID || node.Name == req.ResourceID || node.ID == requestTargetID || node.ID == req.ResourceID || (req.Hostname != "" && node.Name == req.Hostname) {
 			addAlias(node.Name, node.Name)
 			addAlias(node.ID, node.ID)
 			if req.Hostname == "" {
@@ -1862,17 +1847,17 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 			}
 			if node.LinkedAgentID != "" {
 				log.Info().
-					Str("from_host", req.HostID).
+					Str("from_target", requestTargetID).
 					Str("to_agent", node.LinkedAgentID).
 					Msg("Redirecting discovery scan to linked host agent")
 				addAlias(node.LinkedAgentID, node.LinkedAgentID)
-				req.HostID = node.LinkedAgentID
-				req.TargetID = req.HostID
+				req.TargetID = node.LinkedAgentID
+				req.HostID = req.TargetID
 				req.ResourceID = node.LinkedAgentID
 				return req
 			}
-			req.HostID = node.Name
-			req.TargetID = req.HostID
+			req.TargetID = node.Name
+			req.HostID = req.TargetID
 			req.ResourceID = node.Name
 			return req
 		}
@@ -1904,11 +1889,12 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 		return nil
 	}
 	metadata := make(map[string]any)
+	requestTargetID := canonicalRequestTargetID(req)
 
 	switch req.ResourceType {
 	case ResourceTypeSystemContainer:
 		for _, c := range snap.Containers {
-			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
+			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == requestTargetID {
 				metadata["name"] = c.Name
 				metadata["status"] = c.Status
 				metadata["vmid"] = c.VMID
@@ -1917,7 +1903,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 		}
 	case ResourceTypeVM:
 		for _, vm := range snap.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == req.HostID {
+			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == requestTargetID {
 				metadata["name"] = vm.Name
 				metadata["status"] = vm.Status
 				metadata["vmid"] = vm.VMID
@@ -1926,7 +1912,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 		}
 	case ResourceTypeDocker:
 		for _, host := range snap.DockerHosts {
-			if host.AgentID == req.HostID || host.Hostname == req.HostID {
+			if host.AgentID == requestTargetID || host.Hostname == requestTargetID {
 				for _, c := range host.Containers {
 					if c.Name == req.ResourceID {
 						metadata["image"] = c.Image
@@ -1941,7 +1927,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 		}
 	case ResourceTypeAgent:
 		for _, host := range snap.Hosts {
-			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID {
+			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == requestTargetID {
 				metadata["hostname"] = host.Hostname
 				metadata["display_name"] = host.DisplayName
 				metadata["platform"] = host.Platform
@@ -1970,11 +1956,12 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 	if !ok {
 		return ""
 	}
+	requestTargetID := canonicalRequestTargetID(req)
 
 	switch req.ResourceType {
 	case ResourceTypeSystemContainer:
 		for _, c := range snap.Containers {
-			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == req.HostID {
+			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == requestTargetID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
 				}
@@ -1983,7 +1970,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 		}
 	case ResourceTypeVM:
 		for _, vm := range snap.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == req.HostID {
+			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == requestTargetID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
 				}
@@ -1993,23 +1980,23 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 	case ResourceTypeDocker:
 		// For Docker containers, use the Docker host's hostname/IP
 		for _, host := range snap.DockerHosts {
-			if host.AgentID == req.HostID || host.Hostname == req.HostID {
+			if host.AgentID == requestTargetID || host.Hostname == requestTargetID {
 				// Use hostname if it looks like an IP, otherwise it's a hostname
 				return host.Hostname
 			}
 		}
 	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
 		// For Docker containers inside VMs/system containers, find the parent's IP
-		// The hostID contains the parent resource info
+		// The target ID contains the parent resource info.
 		for _, vm := range snap.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == req.HostID || vm.Name == req.HostID {
+			if fmt.Sprintf("%d", vm.VMID) == requestTargetID || vm.Name == requestTargetID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
 				}
 			}
 		}
 		for _, c := range snap.Containers {
-			if fmt.Sprintf("%d", c.VMID) == req.HostID || c.Name == req.HostID {
+			if fmt.Sprintf("%d", c.VMID) == requestTargetID || c.Name == requestTargetID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
 				}
@@ -2018,7 +2005,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 	case ResourceTypeAgent:
 		// Host-agent resources: prefer the reported hostname from state
 		for _, host := range snap.Hosts {
-			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == req.HostID || host.Hostname == req.HostID {
+			if host.ID == req.ResourceID || host.Hostname == req.ResourceID || host.ID == requestTargetID || host.Hostname == requestTargetID {
 				if isURLHostCandidate(host.Hostname) {
 					return host.Hostname
 				}
@@ -2027,7 +2014,7 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 
 		// Proxmox node resources routed through host discovery: fall back to node name
 		for _, node := range snap.Nodes {
-			if node.ID == req.ResourceID || node.Name == req.ResourceID || node.ID == req.HostID || node.Name == req.HostID {
+			if node.ID == req.ResourceID || node.Name == req.ResourceID || node.ID == requestTargetID || node.Name == requestTargetID {
 				if isURLHostCandidate(node.Name) {
 					return node.Name
 				}
@@ -2158,10 +2145,11 @@ func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host 
 	if !ok {
 		return "", "state_provider_unavailable", "state unavailable"
 	}
+	requestTargetID := canonicalRequestTargetID(req)
 
 	nodeMatchesReq := func(node Node) bool {
-		return node.ID == req.HostID ||
-			node.Name == req.HostID ||
+		return node.ID == requestTargetID ||
+			node.Name == requestTargetID ||
 			node.ID == req.ResourceID ||
 			node.Name == req.ResourceID ||
 			(req.Hostname != "" && node.Name == req.Hostname)
@@ -2170,7 +2158,7 @@ func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host 
 	var matchedHost *Host
 	for i := range snap.Hosts {
 		h := &snap.Hosts[i]
-		if h.ID == req.HostID || h.Hostname == req.HostID || h.ID == req.ResourceID || h.Hostname == req.ResourceID {
+		if h.ID == requestTargetID || h.Hostname == requestTargetID || h.ID == req.ResourceID || h.Hostname == req.ResourceID {
 			matchedHost = h
 			break
 		}
@@ -2820,6 +2808,20 @@ func canonicalDiscoveryTargetID(discovery *ResourceDiscovery) string {
 		targetID = strings.TrimSpace(discovery.HostID)
 	}
 	return targetID
+}
+
+func canonicalRequestTargetID(req DiscoveryRequest) string {
+	targetID := strings.TrimSpace(req.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(req.HostID)
+	}
+	return targetID
+}
+
+func normalizeDiscoveryRequestAliases(req DiscoveryRequest) DiscoveryRequest {
+	req.TargetID = canonicalRequestTargetID(req)
+	req.HostID = req.TargetID // Keep legacy alias in sync for compatibility paths.
+	return req
 }
 
 // GetMaxDiscoveryAge returns the current max discovery age (staleness threshold).
