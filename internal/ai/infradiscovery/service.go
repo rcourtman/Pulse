@@ -37,7 +37,7 @@ type DiscoveredApp struct {
 	Name          string    `json:"name"`           // Human-readable name: "Proxmox Backup Server"
 	Category      string    `json:"category"`       // Category: backup, database, web, monitoring, unknown
 	RunsIn        string    `json:"runs_in"`        // Runtime: docker, systemd, native
-	HostID        string    `json:"host_id"`        // Host identifier (agent ID or hostname)
+	TargetID      string    `json:"target_id"`      // Canonical target identifier (agent ID or hostname)
 	Hostname      string    `json:"hostname"`       // Human-readable hostname
 	ContainerID   string    `json:"container_id"`   // Docker container ID (if applicable)
 	ContainerName string    `json:"container_name"` // Docker container name (if applicable)
@@ -524,7 +524,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 		result = entry.result
 		log.Debug().
 			Str("host", hostHostname).
-			Str("host_id", hostAgentID).
+			Str("target_id", hostAgentID).
 			Str("container", cName).
 			Str("container_id", cID).
 			Str("image", cImage).
@@ -547,7 +547,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 			log.Warn().
 				Err(err).
 				Str("host", hostHostname).
-				Str("host_id", hostAgentID).
+				Str("target_id", hostAgentID).
 				Str("container", cName).
 				Str("container_id", cID).
 				Str("image", cImage).
@@ -583,7 +583,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 		if result == nil {
 			log.Warn().
 				Str("host", hostHostname).
-				Str("host_id", hostAgentID).
+				Str("target_id", hostAgentID).
 				Str("container", cName).
 				Str("container_id", cID).
 				Str("image", cImage).
@@ -606,7 +606,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 
 		log.Debug().
 			Str("host", hostHostname).
-			Str("host_id", hostAgentID).
+			Str("target_id", hostAgentID).
 			Str("container", cName).
 			Str("container_id", cID).
 			Str("image", cImage).
@@ -619,7 +619,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 	if result.ServiceType == "unknown" || result.Confidence < 0.5 {
 		log.Debug().
 			Str("host", hostHostname).
-			Str("host_id", hostAgentID).
+			Str("target_id", hostAgentID).
 			Str("container", cName).
 			Str("container_id", cID).
 			Str("image", cImage).
@@ -638,7 +638,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 		cliAccess = strings.ReplaceAll(cliAccess, "${container}", safeContainerName)
 	}
 
-	hostID := sanitizeText(hostAgentID, maxAppFieldLength)
+	targetID := sanitizeText(hostAgentID, maxAppFieldLength)
 	hostname := sanitizeText(hostHostname, maxAppFieldLength)
 	containerID := sanitizeText(cID, maxAppFieldLength)
 	containerName := sanitizeText(cName, maxAppFieldLength)
@@ -665,7 +665,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c *
 		Name:          result.ServiceName,
 		Category:      result.Category,
 		RunsIn:        "docker",
-		HostID:        hostID,
+		TargetID:      targetID,
 		Hostname:      hostname,
 		ContainerID:   containerID,
 		ContainerName: containerName,
@@ -877,12 +877,12 @@ func (s *Service) saveDiscoveries(apps []DiscoveredApp) {
 		}
 
 		// Persist under canonical v6 agent identity.
-		hostID := unifiedresources.CanonicalResourceID(app.HostID)
-		if hostID == "" {
-			hostID = app.HostID
+		targetID := unifiedresources.CanonicalResourceID(app.TargetID)
+		if targetID == "" {
+			targetID = app.TargetID
 		}
 		err := s.knowledgeStore.SaveNote(
-			hostID,
+			targetID,
 			app.Hostname,
 			"agent",
 			knowledge.CategoryInfra,
