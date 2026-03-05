@@ -14,7 +14,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_discovery",
-			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, host_id). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
+			Description: `Get AI-discovered service details (log paths, config locations, ports). action="get" triggers discovery for a resource (requires resource_type, resource_id, target_id; legacy host_id alias accepted). action="list" searches existing discoveries. Use pulse_query action="search" first to find resource details.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -32,9 +32,13 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 						Type:        "string",
 						Description: "For get: resource identifier (VMID, container name, hostname)",
 					},
+					"target_id": {
+						Type:        "string",
+						Description: "For get/list: canonical target identifier (agent ID, node ID, or cluster ID)",
+					},
 					"host_id": {
 						Type:        "string",
-						Description: "For get: node/host where resource runs",
+						Description: "For get/list: legacy alias of target_id (kept for compatibility)",
 					},
 					"type": {
 						Type:        "string",
@@ -43,7 +47,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					},
 					"host": {
 						Type:        "string",
-						Description: "For list: filter by host/node ID",
+						Description: "For list: legacy alias of target_id",
 					},
 					"service_type": {
 						Type:        "string",
@@ -220,8 +224,12 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 
 	resourceType, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
-	hostID, _ := args["host_id"].(string)
+	targetID, _ := args["target_id"].(string)
+	if strings.TrimSpace(targetID) == "" {
+		targetID, _ = args["host_id"].(string)
+	}
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	targetID = strings.TrimSpace(targetID)
 
 	// Silently normalize legacy "lxc" from in-flight LLM conversations.
 	if resourceType == "lxc" {
@@ -240,8 +248,8 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
 	}
-	if hostID == "" {
-		return NewErrorResult(fmt.Errorf("host_id is required - use the 'node' field from search or get_resource results")), nil
+	if targetID == "" {
+		return NewErrorResult(fmt.Errorf("target_id is required - use the node/agent field from search or get_resource results")), nil
 	}
 
 	// For system-container and VM types, resourceID should be a numeric VMID.
@@ -255,7 +263,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			if err == nil {
 				if resourceType == "system-container" {
 					for _, c := range rs.Containers() {
-						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesHostID(c.Node(), hostID) {
+						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesHostID(c.Node(), targetID) {
 							resourceID = fmt.Sprintf("%d", c.VMID())
 							resolved = true
 							break
@@ -263,7 +271,7 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 					}
 				} else if resourceType == "vm" {
 					for _, vm := range rs.VMs() {
-						if strings.EqualFold(vm.Name(), resourceID) && nodeMatchesHostID(vm.Node(), hostID) {
+						if strings.EqualFold(vm.Name(), resourceID) && nodeMatchesHostID(vm.Node(), targetID) {
 							resourceID = fmt.Sprintf("%d", vm.VMID())
 							resolved = true
 							break
@@ -273,23 +281,23 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			}
 
 			if !resolved {
-				return NewErrorResult(fmt.Errorf("could not resolve resource name '%s' to a VMID on host '%s'", resourceID, hostID)), nil
+				return NewErrorResult(fmt.Errorf("could not resolve resource name '%s' to a VMID on target '%s'", resourceID, targetID)), nil
 			}
 		}
 	}
 
 	// First try to get existing discovery
-	discovery, err := e.discoveryProvider.GetDiscoveryByResource(resourceType, hostID, resourceID)
+	discovery, err := e.discoveryProvider.GetDiscoveryByResource(resourceType, targetID, resourceID)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to get discovery: %w", err)), nil
 	}
 
 	// Compute CLI access pattern (always useful, even if discovery fails)
-	cliAccess := getCLIAccessPattern(resourceType, hostID, resourceID)
+	cliAccess := getCLIAccessPattern(resourceType, targetID, resourceID)
 
 	// If no discovery exists, trigger one
 	if discovery == nil {
-		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, resourceType, hostID, resourceID)
+		discovery, err = e.discoveryProvider.TriggerDiscovery(ctx, resourceType, targetID, resourceID)
 		if err != nil {
 			// Distinguish transient errors (rate limits, timeouts) from genuine not-found.
 			// Transient errors must surface as IsError so the model stops retrying.
@@ -308,7 +316,8 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 				"found":         false,
 				"resource_type": responseType,
 				"resource_id":   resourceID,
-				"host_id":       hostID,
+				"target_id":     targetID,
+				"host_id":       targetID,
 				"cli_access":    cliAccess,
 				"message":       fmt.Sprintf("Discovery failed: %v", err),
 				"hint":          "Use pulse_control with type='command' to investigate. Try checking /var/log/ for logs.",
@@ -322,7 +331,8 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			"found":         false,
 			"resource_type": responseType,
 			"resource_id":   resourceID,
-			"host_id":       hostID,
+			"target_id":     targetID,
+			"host_id":       targetID,
 			"cli_access":    cliAccess,
 			"message":       "Discovery returned no data. The resource may not be accessible.",
 			"hint":          "Use pulse_control with type='command' to investigate. Try listing /var/log/ or checking running processes.",
@@ -353,13 +363,19 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 		}
 	}
 
+	discoveryTargetID := strings.TrimSpace(discovery.HostID)
+	if discoveryTargetID == "" {
+		discoveryTargetID = targetID
+	}
+
 	// Return the discovery information
 	response := map[string]interface{}{
 		"found":           true,
 		"id":              discovery.ID,
 		"resource_type":   discovery.ResourceType,
 		"resource_id":     discovery.ResourceID,
-		"host_id":         discovery.HostID,
+		"target_id":       discoveryTargetID,
+		"host_id":         discoveryTargetID,
 		"hostname":        discovery.Hostname,
 		"service_type":    discovery.ServiceType,
 		"service_name":    discovery.ServiceName,
@@ -483,10 +499,17 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	}
 
 	filterType, _ := args["type"].(string)
-	filterHost, _ := args["host"].(string)
+	filterTargetID, _ := args["target_id"].(string)
+	if strings.TrimSpace(filterTargetID) == "" {
+		filterTargetID, _ = args["host_id"].(string)
+	}
+	if strings.TrimSpace(filterTargetID) == "" {
+		filterTargetID, _ = args["host"].(string)
+	}
 	filterServiceType, _ := args["service_type"].(string)
 	limit := intArg(args, "limit", 50)
 	filterType = strings.ToLower(strings.TrimSpace(filterType))
+	filterTargetID = strings.TrimSpace(filterTargetID)
 
 	// Silently normalize legacy "lxc" from in-flight LLM conversations.
 	if filterType == "lxc" {
@@ -505,8 +528,8 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	// Get discoveries based on filters
 	if filterType != "" {
 		discoveries, err = e.discoveryProvider.ListDiscoveriesByType(filterType)
-	} else if filterHost != "" {
-		discoveries, err = e.discoveryProvider.ListDiscoveriesByHost(filterHost)
+	} else if filterTargetID != "" {
+		discoveries, err = e.discoveryProvider.ListDiscoveriesByHost(filterTargetID)
 	} else {
 		discoveries, err = e.discoveryProvider.ListDiscoveries()
 	}
@@ -540,6 +563,7 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 			"id":              d.ID,
 			"resource_type":   d.ResourceType,
 			"resource_id":     d.ResourceID,
+			"target_id":       d.HostID,
 			"host_id":         d.HostID,
 			"hostname":        d.Hostname,
 			"service_type":    d.ServiceType,
@@ -572,8 +596,9 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	if responseFilterType != "" {
 		response["filter_type"] = responseFilterType
 	}
-	if filterHost != "" {
-		response["filter_host"] = filterHost
+	if filterTargetID != "" {
+		response["filter_target_id"] = filterTargetID
+		response["filter_host"] = filterTargetID
 	}
 	if filterServiceType != "" {
 		response["filter_service_type"] = filterServiceType
