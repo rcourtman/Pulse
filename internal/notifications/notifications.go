@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -56,6 +57,8 @@ const (
 	eventResolved   notificationEvent = "resolved"
 	eventEscalation notificationEvent = "escalation"
 )
+
+var ErrNotificationCancelled = errors.New("notification cancelled")
 
 // createSecureWebhookClient creates an HTTP client with security controls
 func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *http.Client {
@@ -473,7 +476,6 @@ func (n *NotificationManager) GetPublicURL() string {
 // SetEmailConfig updates email configuration
 func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	n.emailConfig = config
 
 	// Recreate email manager with new config to preserve rate limiting state
@@ -492,13 +494,29 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 		AuthRequired:  config.Username != "" && config.Password != "",
 	}
 	n.emailManager = NewEnhancedEmailManager(providerConfig)
+	queue := n.queue
+	n.mu.Unlock()
+
+	if !config.Enabled && queue != nil {
+		if err := queue.CancelByTypes([]string{"email", "email_resolved", "email_escalation"}); err != nil {
+			log.Error().Err(err).Msg("Failed to cancel queued email notifications after disable")
+		}
+	}
 }
 
 // SetAppriseConfig updates Apprise configuration.
 func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	n.appriseConfig = NormalizeAppriseConfig(config)
+	queue := n.queue
+	enabled := n.appriseConfig.Enabled
+	n.mu.Unlock()
+
+	if !enabled && queue != nil {
+		if err := queue.CancelByTypes([]string{"apprise", "apprise_resolved", "apprise_escalation"}); err != nil {
+			log.Error().Err(err).Msg("Failed to cancel queued Apprise notifications after disable")
+		}
+	}
 }
 
 // GetAppriseConfig returns a copy of the Apprise configuration.
@@ -568,28 +586,40 @@ func (n *NotificationManager) AddWebhook(webhook WebhookConfig) {
 // UpdateWebhook updates an existing webhook
 func (n *NotificationManager) UpdateWebhook(id string, webhook WebhookConfig) error {
 	n.mu.Lock()
-	defer n.mu.Unlock()
-
+	queue := n.queue
 	for i, w := range n.webhooks {
 		if w.ID == id {
 			n.webhooks[i] = webhook
+			n.mu.Unlock()
+			if !webhook.Enabled && queue != nil {
+				if err := queue.CancelWebhooksByIDs([]string{id}); err != nil {
+					log.Error().Err(err).Str("webhookID", id).Msg("Failed to cancel queued webhook notifications after disable")
+				}
+			}
 			return nil
 		}
 	}
+	n.mu.Unlock()
 	return fmt.Errorf("webhook not found: %s", id)
 }
 
 // DeleteWebhook removes a webhook
 func (n *NotificationManager) DeleteWebhook(id string) error {
 	n.mu.Lock()
-	defer n.mu.Unlock()
-
+	queue := n.queue
 	for i, w := range n.webhooks {
 		if w.ID == id {
 			n.webhooks = append(n.webhooks[:i], n.webhooks[i+1:]...)
+			n.mu.Unlock()
+			if queue != nil {
+				if err := queue.CancelWebhooksByIDs([]string{id}); err != nil {
+					log.Error().Err(err).Str("webhookID", id).Msg("Failed to cancel queued webhook notifications after delete")
+				}
+			}
 			return nil
 		}
 	}
+	n.mu.Unlock()
 	return fmt.Errorf("webhook not found: %s", id)
 }
 
@@ -3279,9 +3309,9 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 	var err error
 	switch baseType {
 	case "email":
-		var emailConfig EmailConfig
-		if err = json.Unmarshal(notif.Config, &emailConfig); err != nil {
-			return fmt.Errorf("failed to unmarshal email config: %w", err)
+		emailConfig, resolveErr := n.resolveQueuedEmailConfig()
+		if resolveErr != nil {
+			return resolveErr
 		}
 		if event == eventResolved {
 			err = n.sendResolvedEmail(emailConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
@@ -3290,9 +3320,13 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		}
 
 	case "webhook":
-		var webhookConfig WebhookConfig
-		if err = json.Unmarshal(notif.Config, &webhookConfig); err != nil {
+		var queuedWebhookConfig WebhookConfig
+		if err = json.Unmarshal(notif.Config, &queuedWebhookConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal webhook config: %w", err)
+		}
+		webhookConfig, resolveErr := n.resolveQueuedWebhookConfig(queuedWebhookConfig)
+		if resolveErr != nil {
+			return resolveErr
 		}
 		if event == eventResolved {
 			err = n.sendResolvedWebhook(webhookConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
@@ -3301,9 +3335,9 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		}
 
 	case "apprise":
-		var appriseConfig AppriseConfig
-		if err = json.Unmarshal(notif.Config, &appriseConfig); err != nil {
-			return fmt.Errorf("failed to unmarshal apprise config: %w", err)
+		appriseConfig, resolveErr := n.resolveQueuedAppriseConfig()
+		if resolveErr != nil {
+			return resolveErr
 		}
 		if event == eventResolved {
 			err = n.sendResolvedApprise(appriseConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
@@ -3329,6 +3363,60 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 	}
 
 	return err
+}
+
+func (n *NotificationManager) resolveQueuedEmailConfig() (EmailConfig, error) {
+	n.mu.RLock()
+	config := copyEmailConfig(n.emailConfig)
+	n.mu.RUnlock()
+
+	if !config.Enabled {
+		return EmailConfig{}, fmt.Errorf("%w: email notifications are disabled", ErrNotificationCancelled)
+	}
+
+	return config, nil
+}
+
+func (n *NotificationManager) resolveQueuedAppriseConfig() (AppriseConfig, error) {
+	n.mu.RLock()
+	config := copyAppriseConfig(n.appriseConfig)
+	n.mu.RUnlock()
+
+	if !config.Enabled {
+		return AppriseConfig{}, fmt.Errorf("%w: Apprise notifications are disabled", ErrNotificationCancelled)
+	}
+
+	return config, nil
+}
+
+func (n *NotificationManager) resolveQueuedWebhookConfig(queued WebhookConfig) (WebhookConfig, error) {
+	n.mu.RLock()
+	webhooks := copyWebhookConfigs(n.webhooks)
+	n.mu.RUnlock()
+
+	if queued.ID != "" {
+		for _, webhook := range webhooks {
+			if webhook.ID != queued.ID {
+				continue
+			}
+			if !webhook.Enabled {
+				return WebhookConfig{}, fmt.Errorf("%w: webhook %s is disabled", ErrNotificationCancelled, queued.ID)
+			}
+			return webhook, nil
+		}
+		return WebhookConfig{}, fmt.Errorf("%w: webhook %s no longer exists", ErrNotificationCancelled, queued.ID)
+	}
+
+	for _, webhook := range webhooks {
+		if webhook.Name == queued.Name && webhook.URL == queued.URL {
+			if !webhook.Enabled {
+				return WebhookConfig{}, fmt.Errorf("%w: webhook %q is disabled", ErrNotificationCancelled, queued.Name)
+			}
+			return webhook, nil
+		}
+	}
+
+	return WebhookConfig{}, fmt.Errorf("%w: webhook %q no longer exists", ErrNotificationCancelled, queued.Name)
 }
 
 // cleanupOldNotificationRecords periodically cleans up old entries from lastNotified map

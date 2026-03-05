@@ -3,10 +3,12 @@ package notifications
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -294,11 +296,15 @@ func (nq *NotificationQueue) IncrementAttemptAndSetStatus(id string, status Noti
 		SET attempts = attempts + 1,
 		    status = ?,
 		    last_attempt = ?
-		WHERE id = ?
+		WHERE id = ? AND status = 'pending'
 	`
-	_, err := nq.db.Exec(query, status, time.Now().Unix(), id)
+	result, err := nq.db.Exec(query, status, time.Now().Unix(), id)
 	if err != nil {
 		return fmt.Errorf("failed to increment attempt and set status: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("notification not pending: %s", id)
 	}
 	return nil
 }
@@ -588,7 +594,11 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 
 	// Atomically increment attempt counter and set status to sending
 	if err := nq.IncrementAttemptAndSetStatus(notif.ID, QueueStatusSending); err != nil {
-		log.Error().Err(err).Str("id", notif.ID).Msg("Failed to increment attempt and set status")
+		if strings.Contains(err.Error(), "notification not pending") {
+			log.Debug().Str("id", notif.ID).Msg("Skipping notification that is no longer pending")
+		} else {
+			log.Error().Err(err).Str("id", notif.ID).Msg("Failed to increment attempt and set status")
+		}
 		return
 	}
 
@@ -604,8 +614,10 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		err = fmt.Errorf("no processor configured")
 	}
 
+	cancelled := errors.Is(err, ErrNotificationCancelled)
+
 	// Record audit
-	success := err == nil
+	success := err == nil || cancelled
 	errorMsg := ""
 	if err != nil {
 		errorMsg = err.Error()
@@ -615,7 +627,17 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		log.Error().Err(auditErr).Str("id", notif.ID).Msg("Failed to record audit")
 	}
 
-	if success {
+	if cancelled {
+		if err := nq.UpdateStatus(notif.ID, QueueStatusCancelled, errorMsg); err != nil {
+			log.Error().Err(err).Str("id", notif.ID).Msg("Failed to update notification status to cancelled")
+		} else {
+			log.Info().
+				Str("id", notif.ID).
+				Str("type", notif.Type).
+				Str("reason", errorMsg).
+				Msg("Notification cancelled before delivery")
+		}
+	} else if success {
 		// Mark as sent
 		if err := nq.UpdateStatus(notif.ID, QueueStatusSent, ""); err != nil {
 			log.Error().Err(err).Str("id", notif.ID).Msg("Failed to update notification status to sent")
@@ -723,6 +745,120 @@ func (nq *NotificationQueue) Stop() error {
 
 	log.Info().Msg("Notification queue stopped")
 	return nil
+}
+
+func sqlPlaceholders(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	return strings.TrimRight(strings.Repeat("?,", count), ",")
+}
+
+func (nq *NotificationQueue) cancelByIDsLocked(ids []string, reason string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	now := time.Now().Unix()
+	args := make([]interface{}, 0, len(ids)+3)
+	args = append(args, QueueStatusCancelled, now, reason)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE notification_queue
+		SET status = ?, completed_at = ?, last_error = ?
+		WHERE id IN (%s) AND status IN ('pending', 'sending')
+	`, sqlPlaceholders(len(ids)))
+
+	_, err := nq.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to cancel notifications: %w", err)
+	}
+
+	return nil
+}
+
+// CancelByTypes marks queued notifications of the given types as cancelled.
+func (nq *NotificationQueue) CancelByTypes(types []string) error {
+	if len(types) == 0 {
+		return nil
+	}
+
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+
+	now := time.Now().Unix()
+	args := make([]interface{}, 0, len(types)+3)
+	args = append(args, QueueStatusCancelled, now, "cancelled due to notification configuration change")
+	for _, typ := range types {
+		args = append(args, typ)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE notification_queue
+		SET status = ?, completed_at = ?, last_error = ?
+		WHERE status IN ('pending', 'sending') AND type IN (%s)
+	`, sqlPlaceholders(len(types)))
+
+	_, err := nq.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to cancel notifications by type: %w", err)
+	}
+
+	return nil
+}
+
+// CancelWebhooksByIDs marks queued webhook notifications for the given webhook IDs as cancelled.
+func (nq *NotificationQueue) CancelWebhooksByIDs(webhookIDs []string) error {
+	if len(webhookIDs) == 0 {
+		return nil
+	}
+
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+
+	rows, err := nq.db.Query(`
+		SELECT id, config
+		FROM notification_queue
+		WHERE status IN ('pending', 'sending')
+		  AND type IN ('webhook', 'webhook_resolved', 'webhook_escalation')
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query queued webhooks for cancellation: %w", err)
+	}
+	defer rows.Close()
+
+	webhookIDSet := make(map[string]struct{}, len(webhookIDs))
+	for _, id := range webhookIDs {
+		webhookIDSet[id] = struct{}{}
+	}
+
+	var queueIDs []string
+	for rows.Next() {
+		var queueID string
+		var configJSON []byte
+		if err := rows.Scan(&queueID, &configJSON); err != nil {
+			return fmt.Errorf("failed to scan queued webhook notification: %w", err)
+		}
+
+		var webhook WebhookConfig
+		if err := json.Unmarshal(configJSON, &webhook); err != nil {
+			log.Error().Err(err).Str("notificationID", queueID).Msg("Failed to parse queued webhook config for cancellation")
+			continue
+		}
+
+		if _, exists := webhookIDSet[webhook.ID]; exists {
+			queueIDs = append(queueIDs, queueID)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed while reading queued webhook notifications: %w", err)
+	}
+
+	return nq.cancelByIDsLocked(queueIDs, "cancelled due to webhook configuration change")
 }
 
 // calculateBackoff calculates exponential backoff duration

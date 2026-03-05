@@ -3,6 +3,7 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +28,57 @@ func flushPending(n *NotificationManager) {
 	}
 	n.mu.Unlock()
 	n.sendGroupedAlerts()
+}
+
+func testQueuedAlert() *alerts.Alert {
+	return &alerts.Alert{
+		ID:           "queued-alert",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		Message:      "CPU usage high",
+		Value:        95,
+		Threshold:    90,
+		StartTime:    time.Now().Add(-time.Minute),
+		LastSeen:     time.Now(),
+	}
+}
+
+func queuedNotificationStatus(t *testing.T, queue *NotificationQueue, id string) NotificationQueueStatus {
+	t.Helper()
+
+	var status string
+	if err := queue.db.QueryRow(`SELECT status FROM notification_queue WHERE id = ?`, id).Scan(&status); err != nil {
+		t.Fatalf("failed to read notification status: %v", err)
+	}
+
+	return NotificationQueueStatus(status)
+}
+
+func insertPendingQueuedNotification(t *testing.T, queue *NotificationQueue, notif *QueuedNotification) {
+	t.Helper()
+
+	alertsJSON, err := json.Marshal(notif.Alerts)
+	if err != nil {
+		t.Fatalf("marshal alerts: %v", err)
+	}
+
+	if notif.CreatedAt.IsZero() {
+		notif.CreatedAt = time.Now()
+	}
+	if notif.MaxAttempts == 0 {
+		notif.MaxAttempts = 3
+	}
+
+	_, err = queue.db.Exec(`
+		INSERT INTO notification_queue
+		(id, type, method, status, alerts, config, attempts, max_attempts, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, notif.ID, notif.Type, notif.Method, QueueStatusPending, string(alertsJSON), string(notif.Config), notif.Attempts, notif.MaxAttempts, notif.CreatedAt.Unix())
+	if err != nil {
+		t.Fatalf("insert queued notification: %v", err)
+	}
 }
 
 func TestNormalizeAppriseConfig(t *testing.T) {
@@ -2794,20 +2846,21 @@ func TestSendNotificationsDirect_AppriseEnabled(t *testing.T) {
 }
 
 func TestProcessQueuedNotification_InvalidEmailConfig(t *testing.T) {
-	nm := &NotificationManager{}
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
 	notif := &QueuedNotification{
 		ID:     "test-1",
 		Type:   "email",
 		Config: json.RawMessage(`{invalid json`),
-		Alerts: []*alerts.Alert{},
+		Alerts: []*alerts.Alert{testQueuedAlert()},
 	}
 
 	err := nm.ProcessQueuedNotification(notif)
-	if err == nil {
-		t.Error("expected error for invalid email config JSON")
-	}
-	if !strings.Contains(err.Error(), "failed to unmarshal email config") {
-		t.Errorf("expected 'failed to unmarshal email config' error, got: %v", err)
+	if !errors.Is(err, ErrNotificationCancelled) {
+		t.Fatalf("expected queued email to be cancelled when live config is disabled, got: %v", err)
 	}
 }
 
@@ -2830,20 +2883,146 @@ func TestProcessQueuedNotification_InvalidWebhookConfig(t *testing.T) {
 }
 
 func TestProcessQueuedNotification_InvalidAppriseConfig(t *testing.T) {
-	nm := &NotificationManager{}
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
 	notif := &QueuedNotification{
 		ID:     "test-3",
 		Type:   "apprise",
 		Config: json.RawMessage(`broken json`),
-		Alerts: []*alerts.Alert{},
+		Alerts: []*alerts.Alert{testQueuedAlert()},
 	}
 
 	err := nm.ProcessQueuedNotification(notif)
-	if err == nil {
-		t.Error("expected error for invalid apprise config JSON")
+	if !errors.Is(err, ErrNotificationCancelled) {
+		t.Fatalf("expected queued Apprise notification to be cancelled when live config is disabled, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "failed to unmarshal apprise config") {
-		t.Errorf("expected 'failed to unmarshal apprise config' error, got: %v", err)
+}
+
+func TestProcessQueuedNotification_WebhookUsesCurrentConfig(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	hits := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case hits <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm := NewNotificationManager("https://pulse.local")
+	defer nm.Stop()
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("failed to allowlist localhost: %v", err)
+	}
+
+	currentWebhook := WebhookConfig{
+		ID:      "wh-live",
+		Name:    "live",
+		URL:     server.URL,
+		Method:  http.MethodPost,
+		Enabled: true,
+	}
+	nm.AddWebhook(currentWebhook)
+
+	queuedWebhook := currentWebhook
+	queuedWebhook.URL = "https://example.invalid/should-not-be-used"
+
+	configJSON, err := json.Marshal(queuedWebhook)
+	if err != nil {
+		t.Fatalf("marshal queued webhook: %v", err)
+	}
+
+	err = nm.ProcessQueuedNotification(&QueuedNotification{
+		ID:     "test-webhook-live",
+		Type:   "webhook",
+		Config: configJSON,
+		Alerts: []*alerts.Alert{testQueuedAlert()},
+	})
+	if err != nil {
+		t.Fatalf("expected queued webhook to use live config, got: %v", err)
+	}
+
+	select {
+	case <-hits:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected webhook request to hit the live webhook URL")
+	}
+}
+
+func TestSetEmailConfig_DisableCancelsQueuedEmailNotifications(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.queue.processorTicker.Stop()
+
+	emailConfigJSON, err := json.Marshal(EmailConfig{
+		Enabled:  true,
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 587,
+		From:     "pulse@example.com",
+		To:       []string{"ops@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("marshal email config: %v", err)
+	}
+
+	notif := &QueuedNotification{
+		ID:     "queued-email-disable",
+		Type:   "email",
+		Config: emailConfigJSON,
+		Alerts: []*alerts.Alert{testQueuedAlert()},
+	}
+	insertPendingQueuedNotification(t, nm.queue, notif)
+
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	if got := queuedNotificationStatus(t, nm.queue, notif.ID); got != QueueStatusCancelled {
+		t.Fatalf("expected queued email to be cancelled, got %s", got)
+	}
+}
+
+func TestUpdateWebhook_DisableCancelsQueuedWebhookNotifications(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.queue.processorTicker.Stop()
+
+	webhook := WebhookConfig{
+		ID:      "queued-webhook",
+		Name:    "queued",
+		URL:     "https://example.com/webhook",
+		Method:  http.MethodPost,
+		Enabled: true,
+	}
+	nm.AddWebhook(webhook)
+
+	configJSON, err := json.Marshal(webhook)
+	if err != nil {
+		t.Fatalf("marshal webhook config: %v", err)
+	}
+
+	notif := &QueuedNotification{
+		ID:     "queued-webhook-disable",
+		Type:   "webhook",
+		Config: configJSON,
+		Alerts: []*alerts.Alert{testQueuedAlert()},
+	}
+	insertPendingQueuedNotification(t, nm.queue, notif)
+
+	webhook.Enabled = false
+	if err := nm.UpdateWebhook(webhook.ID, webhook); err != nil {
+		t.Fatalf("disable webhook: %v", err)
+	}
+
+	if got := queuedNotificationStatus(t, nm.queue, notif.ID); got != QueueStatusCancelled {
+		t.Fatalf("expected queued webhook to be cancelled, got %s", got)
 	}
 }
 
