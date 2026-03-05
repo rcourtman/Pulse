@@ -111,7 +111,6 @@ export interface ResourceDiscoveryTarget {
     | 'vm'
     | 'system-container'
     | 'app-container'
-    | 'docker'
     | 'k8s'
     | 'disk'
     | 'ceph';
