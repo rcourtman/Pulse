@@ -119,7 +119,7 @@ export interface Override {
   id: string; // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node, "pbs-name" for PBS)
   name: string; // Display name
   type: OverrideType;
-  resourceType?: string; // VM, CT, Node, Storage, or PBS
+  resourceType?: string; // VM, Container, Node, Storage, or PBS
   vmid?: number; // Only for guests
   node?: string; // Node name (for guests and storage), undefined for nodes themselves
   instance?: string;

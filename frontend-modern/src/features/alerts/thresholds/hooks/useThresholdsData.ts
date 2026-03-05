@@ -813,7 +813,7 @@ export function useThresholdsData(
         id: guestId,
         name: guest.name,
         type: 'guest' as const,
-        resourceType: guest.type === 'vm' ? 'VM' : 'CT',
+        resourceType: guest.type === 'vm' ? 'VM' : 'Container',
         vmid,
         node,
         instance,

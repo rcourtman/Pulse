@@ -1217,7 +1217,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         id: guestId,
         name: guest.name,
         type: 'guest' as const,
-        resourceType: guest.type === 'vm' ? 'VM' : 'CT',
+        resourceType: guest.type === 'vm' ? 'VM' : 'Container',
         vmid,
         node,
         instance,
@@ -3042,7 +3042,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       }
                       label={<span class="text-sm font-medium text-base-content">Alerts</span>}
                       description={
-                        <span class="text-xs text-muted">Toggle orphaned VM/CT backup alerts</span>
+                        <span class="text-xs text-muted">
+                          Toggle orphaned VM/Container backup alerts
+                        </span>
                       }
                       size="sm"
                     />

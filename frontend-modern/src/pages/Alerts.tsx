@@ -684,7 +684,7 @@ export function Alerts() {
                   id: key,
                   name: guest.name,
                   type: 'guest',
-                  resourceType: guest.type === 'vm' ? 'VM' : 'CT',
+                  resourceType: guest.type === 'vm' ? 'VM' : 'Container',
                   vmid: (data?.vmid as number | undefined) ?? guessNumericId(guest.id),
                   node: (data?.node as string | undefined) ?? '',
                   instance: (data?.instance as string | undefined) ?? guest.platformId,
@@ -4084,7 +4084,7 @@ function HistoryTab(props: {
     return `${startDay}, ${startTimeStr} → ${endDay}, ${endTimeStr}`;
   };
 
-  // Get resource type (VM, CT, Node, Storage, Docker, PBS, etc.)
+  // Get resource type (VM, Container, Node, Storage, Docker, PBS, etc.)
   const getResourceType = (
     resourceName: string,
     metadata?: Record<string, unknown> | undefined,
@@ -5218,7 +5218,8 @@ function HistoryTab(props: {
                                         class={`text-xs px-1 py-0.5 rounded ${
                                           alert.resourceType === 'VM'
                                             ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                                            : alert.resourceType === 'CT'
+                                            : alert.resourceType === 'Container' ||
+                                                alert.resourceType === 'CT'
                                               ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
                                               : alert.resourceType === 'Node'
                                                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
