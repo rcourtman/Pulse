@@ -45,14 +45,17 @@ describe('agent model guardrails', () => {
     expect(agentProfilesPanelSource).not.toContain("const hosts = byType('host')");
   });
 
-  it('keeps APITokenManager host usage mapped from unified agent-capable resources', () => {
-    expect(apiTokenManagerSource).toContain('const hostAgentResources = createMemo(() =>');
+  it('keeps APITokenManager runtime/agent usage mapped from unified resources', () => {
+    expect(apiTokenManagerSource).toContain('const agentCapableResources = createMemo(() =>');
+    expect(apiTokenManagerSource).toContain("const dockerRuntimeResources = createMemo(() => byType('docker-host'))");
     expect(apiTokenManagerSource).toContain('const hasAgentScopeResource = (resource: Resource)');
     expect(apiTokenManagerSource).toContain("resource.type === 'node'");
     expect(apiTokenManagerSource).toContain("resource.type === 'pbs'");
     expect(apiTokenManagerSource).toContain("resource.type === 'pmg'");
     expect(apiTokenManagerSource).toContain("resource.type === 'truenas'");
     expect(apiTokenManagerSource).toContain('resource.agent != null');
+    expect(apiTokenManagerSource).toContain('markDockerRuntimesTokenRevoked');
+    expect(apiTokenManagerSource).not.toContain('markDockerHostsTokenRevoked');
     expect(apiTokenManagerSource).not.toContain("resource.type === 'host'");
     expect(apiTokenManagerSource).not.toContain('markHostsTokenRevoked');
     expect(apiTokenManagerSource).not.toContain(
