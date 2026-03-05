@@ -556,6 +556,7 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 		{
 			path: filepath.Join(repoRoot, "internal", "ai", "alert_adapter_test.go"),
 			requiredSnippets: []string{
+				`with_metadata_host_legacy_ignored`,
 				`agent host alias rejected`,
 				`input: "host"`,
 			},
@@ -640,6 +641,13 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			requiredSnippets: []string{
 				`unsupported host ignored by parser`,
 				`TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "router_helpers_additional_test.go"),
+			requiredSnippets: []string{
+				`metadata legacy resource type ignored`,
+				`Metadata:   map[string]interface{}{"resourceType": "host"}`,
 			},
 		},
 		{
