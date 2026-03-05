@@ -41,7 +41,7 @@ type Note struct {
 type GuestKnowledge struct {
 	GuestID   string    `json:"guest_id"`
 	GuestName string    `json:"guest_name"`
-	GuestType string    `json:"guest_type"` // "vm", "container", "node", "agent"
+	GuestType string    `json:"guest_type"` // canonical v6 type (e.g. vm, system-container, app-container, node, agent)
 	Notes     []Note    `json:"notes"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -68,11 +68,23 @@ func isUnsupportedGuestID(guestID string) bool {
 }
 
 func normalizeGuestType(guestType string) string {
-	return strings.TrimSpace(guestType)
+	return strings.ToLower(strings.TrimSpace(guestType))
 }
 
 func isUnsupportedGuestType(guestType string) bool {
-	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(guestType)
+	normalized := normalizeGuestType(guestType)
+	if normalized == "" {
+		return false
+	}
+	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalized) {
+		return true
+	}
+	switch normalized {
+	case "guest", "qemu", "container", "lxc", "docker", "docker-container", "k8s", "kubernetes", "kubernetes-cluster", "docker_service", "dockerhost":
+		return true
+	default:
+		return false
+	}
 }
 
 // NewStore creates a new knowledge store with encryption

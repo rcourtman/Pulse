@@ -249,7 +249,7 @@ func TestHandleSaveGuestNote_VerifySavedFields(t *testing.T) {
 	t.Parallel()
 	handler := newTestAISettingsHandlerWithService(t)
 
-	body := `{"guest_id":"vm-verify","guest_name":"Test VM","guest_type":"container","category":"service","title":"Nginx Config","content":"proxy_pass http://backend:8080"}`
+	body := `{"guest_id":"vm-verify","guest_name":"Test VM","guest_type":"system-container","category":"service","title":"Nginx Config","content":"proxy_pass http://backend:8080"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/knowledge/save", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleSaveGuestNote(rec, req)
@@ -281,8 +281,8 @@ func TestHandleSaveGuestNote_VerifySavedFields(t *testing.T) {
 	if gk.GuestName != "Test VM" {
 		t.Errorf("expected guest name 'Test VM', got %q", gk.GuestName)
 	}
-	if gk.GuestType != "container" {
-		t.Errorf("expected guest type 'container', got %q", gk.GuestType)
+	if gk.GuestType != "system-container" {
+		t.Errorf("expected guest type 'system-container', got %q", gk.GuestType)
 	}
 }
 

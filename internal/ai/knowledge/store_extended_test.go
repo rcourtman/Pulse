@@ -147,7 +147,7 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 	if err := store.SaveNote("agent:alpha", "alpha", "agent", "service", "Agent", "v1"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
-	if err := store.SaveNote("docker:host1/container1", "container1", "docker", "service", "Web", "Nginx"); err != nil {
+	if err := store.SaveNote("docker:host1/container1", "container1", "app-container", "service", "Web", "Nginx"); err != nil {
 		t.Fatalf("Failed to save note: %v", err)
 	}
 
@@ -202,6 +202,11 @@ func TestStore_RejectsUnsupportedHostGuestInput(t *testing.T) {
 	}
 	if err := store.SaveNote("agent:alpha", "alpha", "host", "service", "Agent", "v1"); err == nil {
 		t.Fatalf("expected unsupported host guest type to be rejected")
+	}
+	for _, legacyType := range []string{"container", "docker", "lxc", "qemu", "kubernetes"} {
+		if err := store.SaveNote("agent:alpha", "alpha", legacyType, "service", "Agent", "v1"); err == nil {
+			t.Fatalf("expected unsupported legacy guest type %q to be rejected", legacyType)
+		}
 	}
 }
 
