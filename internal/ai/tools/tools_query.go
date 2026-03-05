@@ -2030,8 +2030,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"type": {
 						Type:        "string",
-						Description: "Filter by type (for action: list): 'nodes', 'vms', 'system-containers', 'app-containers', 'kubernetes', 'k8s_clusters', 'k8s_nodes', 'k8s_pods', 'k8s_deployments'",
-						Enum:        []string{"nodes", "vms", "system-containers", "app-containers", "kubernetes", "k8s_clusters", "k8s_nodes", "k8s_pods", "k8s_deployments"},
+						Description: "Filter by type (for action: list): 'nodes', 'vms', 'system-containers', 'app-containers', 'kubernetes', 'k8s-clusters', 'k8s-nodes', 'k8s-pods', 'k8s-deployments'",
+						Enum:        []string{"nodes", "vms", "system-containers", "app-containers", "kubernetes", "k8s-clusters", "k8s-nodes", "k8s-pods", "k8s-deployments"},
 					},
 					"status": {
 						Type:        "string",
@@ -2129,6 +2129,14 @@ func canonicalQueryListType(filterType string) string {
 		return "system-containers"
 	case "docker", "docker-container", "docker_container", "app-container", "app_container", "app-containers", "app_containers":
 		return "app-containers"
+	case "k8s-cluster", "k8s_cluster", "k8s-clusters", "k8s_clusters", "kubernetes-cluster", "kubernetes_cluster", "kubernetes-clusters", "kubernetes_clusters":
+		return "k8s-clusters"
+	case "k8s-node", "k8s_node", "k8s-nodes", "k8s_nodes", "kubernetes-node", "kubernetes_node", "kubernetes-nodes", "kubernetes_nodes":
+		return "k8s-nodes"
+	case "k8s-pod", "k8s_pod", "k8s-pods", "k8s_pods", "pod", "pods", "kubernetes-pod", "kubernetes_pod", "kubernetes-pods", "kubernetes_pods":
+		return "k8s-pods"
+	case "k8s-deployment", "k8s_deployment", "k8s-deployments", "k8s_deployments", "deployment", "deployments", "kubernetes-deployment", "kubernetes_deployment", "kubernetes-deployments", "kubernetes_deployments":
+		return "k8s-deployments"
 	default:
 		return strings.ToLower(strings.TrimSpace(filterType))
 	}
@@ -2422,7 +2430,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	}
 
 	// Kubernetes clusters
-	if filterType == "" || filterType == "kubernetes" || filterType == "k8s_clusters" {
+	if filterType == "" || filterType == "kubernetes" || filterType == "k8s-clusters" {
 		count := 0
 		for _, cluster := range rs.K8sClusters() {
 			if cluster == nil {
@@ -2454,13 +2462,13 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			})
 			count++
 		}
-		if filterType == "kubernetes" || filterType == "k8s_clusters" {
+		if filterType == "kubernetes" || filterType == "k8s-clusters" {
 			totalMatches = count
 		}
 	}
 
 	// Kubernetes nodes
-	if filterType == "" || filterType == "k8s_nodes" {
+	if filterType == "" || filterType == "k8s-nodes" {
 		count := 0
 		for _, node := range rs.K8sNodes() {
 			if node == nil {
@@ -2490,13 +2498,13 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			})
 			count++
 		}
-		if filterType == "k8s_nodes" {
+		if filterType == "k8s-nodes" {
 			totalMatches = count
 		}
 	}
 
 	// Kubernetes pods
-	if filterType == "" || filterType == "k8s_pods" {
+	if filterType == "" || filterType == "k8s-pods" {
 		count := 0
 		for _, pod := range rs.Pods() {
 			if pod == nil {
@@ -2528,13 +2536,13 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			})
 			count++
 		}
-		if filterType == "k8s_pods" {
+		if filterType == "k8s-pods" {
 			totalMatches = count
 		}
 	}
 
 	// Kubernetes deployments
-	if filterType == "" || filterType == "k8s_deployments" {
+	if filterType == "" || filterType == "k8s-deployments" {
 		count := 0
 		for _, deployment := range rs.K8sDeployments() {
 			if deployment == nil {
@@ -2565,7 +2573,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			})
 			count++
 		}
-		if filterType == "k8s_deployments" {
+		if filterType == "k8s-deployments" {
 			totalMatches = count
 		}
 	}
