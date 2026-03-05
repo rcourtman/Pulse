@@ -439,7 +439,7 @@ export function Dashboard(props: DashboardProps) {
 
     for (const guest of allGuests()) {
       const type = resolveWorkloadType(guest);
-      if (type === 'k8s') continue;
+      if (type === 'pod') continue;
       const scope = workloadNodeScopeId(guest);
       if (!scope || scope === '-') continue;
       const nodeName = (guest.node || '').trim();
@@ -449,7 +449,7 @@ export function Dashboard(props: DashboardProps) {
 
     for (const guest of allGuests()) {
       const type = resolveWorkloadType(guest);
-      if (type === 'k8s') continue;
+      if (type === 'pod') continue;
       const scope = workloadNodeScopeId(guest);
       if (!scope || scope === '-' || labelsByScope.has(scope)) continue;
       const nodeName = (guest.node || '').trim();
@@ -466,7 +466,7 @@ export function Dashboard(props: DashboardProps) {
   });
 
   createEffect(() => {
-    if (viewMode() === 'k8s') return;
+    if (viewMode() === 'pod') return;
     const hostHint = selectedHostHint();
     if (!hostHint || selectedNode() !== null) return;
     const normalizedHint = hostHint.trim().toLowerCase();
@@ -484,7 +484,7 @@ export function Dashboard(props: DashboardProps) {
   const kubernetesContextOptions = createMemo(() => {
     const contexts = new Set<string>();
     for (const guest of allGuests()) {
-      if (resolveWorkloadType(guest) !== 'k8s') continue;
+      if (resolveWorkloadType(guest) !== 'pod') continue;
       const context = getKubernetesContextKey(guest);
       if (context) {
         contexts.add(context);
@@ -497,7 +497,7 @@ export function Dashboard(props: DashboardProps) {
     const namespaces = new Set<string>();
     const contextFilter = (selectedKubernetesContext() || '').trim();
     for (const guest of allGuests()) {
-      if (resolveWorkloadType(guest) !== 'k8s') continue;
+      if (resolveWorkloadType(guest) !== 'pod') continue;
       if (contextFilter && getKubernetesContextKey(guest) !== contextFilter) continue;
       const ns = (guest.namespace || '').trim();
       if (ns) namespaces.add(ns);
@@ -507,7 +507,7 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
-    if (viewMode() !== 'k8s') return;
+    if (viewMode() !== 'pod') return;
     const selected = (selectedKubernetesNamespace() || '').trim();
     if (!selected) return;
     const normalized = selected.toLowerCase();
@@ -520,7 +520,7 @@ export function Dashboard(props: DashboardProps) {
   const containerRuntimeOptions = createMemo(() => {
     const runtimes = new Set<string>();
     for (const guest of allGuests()) {
-      if (resolveWorkloadType(guest) !== 'docker') continue;
+      if (resolveWorkloadType(guest) !== 'app-container') continue;
       const runtime = (guest.containerRuntime || '').trim();
       if (runtime) {
         runtimes.add(runtime);
@@ -529,17 +529,19 @@ export function Dashboard(props: DashboardProps) {
     return Array.from(runtimes).sort((a, b) => a.localeCompare(b));
   });
 
+  function normalizeViewModeParam(value: string): ViewMode | null {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'all') return 'all';
+    if (normalized === 'vm') return 'vm';
+    if (normalized === 'system-container') return 'system-container';
+    if (normalized === 'docker' || normalized === 'app-container') return 'app-container';
+    if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'pod';
+    return null;
+  }
+
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
-    deserialize: (raw) => {
-      return raw === 'all' ||
-        raw === 'vm' ||
-        raw === 'system-container' ||
-        raw === 'docker' ||
-        raw === 'k8s'
-        ? (raw as ViewMode)
-        : 'all';
-    },
+    deserialize: (raw) => normalizeViewModeParam(raw) ?? 'all',
   });
 
   const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>(
@@ -553,7 +555,7 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
-    if (viewMode() !== 'docker') return;
+    if (viewMode() !== 'app-container') return;
     const selected = containerRuntime().trim();
     if (!selected) return;
     const normalized = selected.toLowerCase();
@@ -565,7 +567,7 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
-    if (viewMode() === 'k8s') {
+    if (viewMode() === 'pod') {
       if (selectedNode() !== null) {
         setSelectedNode(null);
       }
@@ -584,20 +586,10 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
-    if (viewMode() !== 'docker' && containerRuntime().trim() !== '') {
+    if (viewMode() !== 'app-container' && containerRuntime().trim() !== '') {
       setContainerRuntime('');
     }
   });
-
-  const normalizeTypeParam = (value: string): ViewMode | null => {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'all') return 'all';
-    if (normalized === 'vm') return 'vm';
-    if (normalized === 'system-container') return 'system-container';
-    if (normalized === 'docker' || normalized === 'app-container') return 'docker';
-    if (normalized === 'k8s' || normalized === 'kubernetes' || normalized === 'pod') return 'k8s';
-    return null;
-  };
 
   createEffect(() => {
     const parsed = parseWorkloadsLinkSearch(location.search);
@@ -610,15 +602,15 @@ export function Dashboard(props: DashboardProps) {
       return;
     }
 
-    // Context/namespace implies k8s view; ignore conflicting type params.
+    // Context/namespace implies pod view; ignore conflicting type params.
     const hasK8sScope =
       Boolean((parsed.context ?? '').trim()) || Boolean((parsed.namespace ?? '').trim());
-    const nextMode = normalizeTypeParam(normalizedType);
+    const nextMode = normalizeViewModeParam(normalizedType);
     if (!nextMode) {
       setHandledTypeParam(normalizedType);
       return;
     }
-    if (hasK8sScope && nextMode !== 'k8s') {
+    if (hasK8sScope && nextMode !== 'pod') {
       setHandledTypeParam(normalizedType);
       return;
     }
@@ -633,8 +625,8 @@ export function Dashboard(props: DashboardProps) {
     if (normalized === handledContextParam()) return;
 
     if (normalized) {
-      if (viewMode() !== 'k8s') {
-        setViewMode('k8s');
+      if (viewMode() !== 'pod') {
+        setViewMode('pod');
       }
       setSelectedKubernetesContext(normalized);
       if (!showFilters()) {
@@ -654,8 +646,8 @@ export function Dashboard(props: DashboardProps) {
     if (normalized === handledNamespaceParam()) return;
 
     if (normalized) {
-      if (viewMode() !== 'k8s') {
-        setViewMode('k8s');
+      if (viewMode() !== 'pod') {
+        setViewMode('pod');
       }
       setSelectedKubernetesNamespace(normalized);
       if (!showFilters()) {
@@ -699,9 +691,9 @@ export function Dashboard(props: DashboardProps) {
     const hasContext = Boolean(urlContext.trim());
     const hasNamespace = Boolean((parsed.namespace ?? '').trim());
     const urlType = parsed.type ?? '';
-    const nextMode = normalizeTypeParam(urlType);
+    const nextMode = normalizeViewModeParam(urlType);
     const runtimeRelevant =
-      !hasContext && !hasNamespace && (nextMode === 'docker' || !urlType.trim());
+      !hasContext && !hasNamespace && (nextMode === 'app-container' || !urlType.trim());
 
     // Ignore runtime param outside of container views, but still mark it handled so URL-sync can clean it up.
     if (!runtimeRelevant) {
@@ -715,8 +707,8 @@ export function Dashboard(props: DashboardProps) {
       return;
     }
 
-    if (viewMode() !== 'docker') {
-      setViewMode('docker');
+    if (viewMode() !== 'app-container') {
+      setViewMode('app-container');
     }
     setContainerRuntime(urlRuntime);
     if (!showFilters()) {
@@ -747,10 +739,10 @@ export function Dashboard(props: DashboardProps) {
     const currentParams = new URLSearchParams(location.search);
     const nextParams = new URLSearchParams(location.search);
     const nextType = viewMode() === 'all' ? '' : viewMode();
-    const nextRuntime = viewMode() === 'docker' ? containerRuntime().trim() : '';
-    const nextContext = viewMode() === 'k8s' ? (selectedKubernetesContext() ?? '') : '';
-    const nextNamespace = viewMode() === 'k8s' ? (selectedKubernetesNamespace() ?? '') : '';
-    const nextAgent = viewMode() === 'k8s' ? '' : (selectedNode() ?? selectedHostHint() ?? '');
+    const nextRuntime = viewMode() === 'app-container' ? containerRuntime().trim() : '';
+    const nextContext = viewMode() === 'pod' ? (selectedKubernetesContext() ?? '') : '';
+    const nextNamespace = viewMode() === 'pod' ? (selectedKubernetesNamespace() ?? '') : '';
+    const nextAgent = viewMode() === 'pod' ? '' : (selectedNode() ?? selectedHostHint() ?? '');
 
     const managedPath = buildWorkloadsPath({
       type: nextType || null,
@@ -1149,8 +1141,8 @@ export function Dashboard(props: DashboardProps) {
     const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
     const [prefix, ...rest] = normalizedGroupKey.split(':');
     const context = rest.length > 0 ? rest.join(':') : normalizedGroupKey;
-    if (prefix === 'docker') return { type: 'Containers', name: context };
-    if (prefix === 'k8s') return { type: 'K8s', name: context };
+    if (prefix === 'app-container') return { type: 'App Containers', name: context };
+    if (prefix === 'pod') return { type: 'Pods', name: context };
     if (prefix === 'vm') return { type: 'VM', name: context };
     if (prefix === 'system-container') return { type: 'Container', name: context };
     // For PVE workload groups (instance-node key), show node name + cluster badge
@@ -1536,7 +1528,7 @@ export function Dashboard(props: DashboardProps) {
           }
           containerRuntimeFilter={(() => {
             if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() !== 'docker') return undefined;
+            if (viewMode() !== 'app-container') return undefined;
             const options = containerRuntimeOptions();
             if (options.length === 0) return undefined;
             return {
@@ -1552,7 +1544,7 @@ export function Dashboard(props: DashboardProps) {
           })()}
           hostFilter={(() => {
             if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() === 'k8s') {
+            if (viewMode() === 'pod') {
               return {
                 id: 'workloads-k8s-context-filter',
                 label: 'Cluster',
@@ -1580,7 +1572,7 @@ export function Dashboard(props: DashboardProps) {
           })()}
           namespaceFilter={(() => {
             if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() !== 'k8s') return undefined;
+            if (viewMode() !== 'pod') return undefined;
             const options = kubernetesNamespaceOptions();
             if (options.length === 0) return undefined;
             return {

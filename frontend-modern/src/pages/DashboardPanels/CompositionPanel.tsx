@@ -16,8 +16,7 @@ const TYPE_ICONS: Record<string, any> = {
   vm: Server,
   'system-container': Box,
   'app-container': Container,
-  docker: Container,
-  k8s: AppWindow,
+  pod: AppWindow,
   database: Database,
   unknown: Server,
 };
@@ -26,8 +25,7 @@ const TYPE_LABELS: Record<string, string> = {
   vm: 'Virtual Machines',
   'system-container': 'System Containers',
   'app-container': 'App Containers',
-  docker: 'Docker Containers',
-  k8s: 'Kubernetes Pods',
+  pod: 'Kubernetes Pods',
   database: 'Databases',
 };
 

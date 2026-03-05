@@ -62,14 +62,14 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('Kubernetes types', () => {
-      it('returns K8s badge for k8s', () => {
+      it('returns Pod badge for k8s alias input', () => {
         const result = getWorkloadTypeBadge('k8s');
-        expect(result.label).toBe('K8s');
+        expect(result.label).toBe('Pod');
       });
 
-      it('returns K8s badge for kubernetes', () => {
+      it('returns Pod badge for kubernetes alias input', () => {
         const result = getWorkloadTypeBadge('kubernetes');
-        expect(result.label).toBe('K8s');
+        expect(result.label).toBe('Pod');
       });
 
       it('returns Pod badge for pod', () => {

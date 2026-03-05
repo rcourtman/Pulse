@@ -335,10 +335,10 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     ) {
       return `${instance}:${node}:${vmid}`;
     }
-    if (workloadType === 'docker') {
+    if (workloadType === 'app-container') {
       return resource.docker?.containerId || resource.id;
     }
-    if (workloadType === 'k8s') {
+    if (workloadType === 'pod') {
       const clusterId = resource.kubernetes?.clusterId;
       const podUid = resource.kubernetes?.podUid;
       if (clusterId && podUid) {
@@ -360,9 +360,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         ? 'vm'
         : workloadType === 'system-container'
           ? 'system-container'
-          : workloadType === 'k8s'
-            ? 'k8s'
-            : 'docker',
+          : workloadType === 'pod'
+            ? 'pod'
+            : 'app-container',
     cpu: cpuPercent / 100,
     cpus: resource.proxmox?.cpus ?? 1,
     memory: (() => {
@@ -407,12 +407,12 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     workloadType,
     displayId,
     image:
-      workloadType === 'docker'
+      workloadType === 'app-container'
         ? resource.docker?.image || resource.docker?.imageName || resource.docker?.imageRef
-        : workloadType === 'k8s'
+        : workloadType === 'pod'
           ? resource.kubernetes?.image
           : undefined,
-    namespace: workloadType === 'k8s' ? resource.kubernetes?.namespace : undefined,
+    namespace: workloadType === 'pod' ? resource.kubernetes?.namespace : undefined,
     contextLabel:
       workloadType === 'vm' || workloadType === 'system-container'
         ? node
@@ -423,18 +423,20 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
               return node;
             })()
           : undefined
-        : workloadType === 'docker'
+        : workloadType === 'app-container'
           ? resource.parentName || resource.docker?.hostname
-          : workloadType === 'k8s'
+          : workloadType === 'pod'
             ? resource.kubernetes?.clusterName || resource.kubernetes?.context
             : undefined,
     clusterName:
       (resource.proxmox?.clusterName || resource.identity?.clusterName || '').trim() || undefined,
     containerRuntime:
-      workloadType === 'docker' ? (resource.docker?.runtime || '').trim() || undefined : undefined,
+      workloadType === 'app-container'
+        ? (resource.docker?.runtime || '').trim() || undefined
+        : undefined,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
     dockerHostId: resource.docker?.hostSourceId,
-    kubernetesAgentId: workloadType === 'k8s' ? resource.kubernetes?.agentId : undefined,
+    kubernetesAgentId: workloadType === 'pod' ? resource.kubernetes?.agentId : undefined,
     platformType: resolvePlatformType(resource.sources),
   };
 };

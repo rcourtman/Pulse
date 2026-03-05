@@ -11,11 +11,8 @@ export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadTy
   if (normalized === 'system-container' || normalized === 'oci-container') {
     return 'system-container';
   }
-  if (
-    normalized === 'docker' ||
-    normalized === 'app-container'
-  ) {
-    return 'docker';
+  if (normalized === 'docker' || normalized === 'app-container') {
+    return 'app-container';
   }
   if (
     normalized === 'pod' ||
@@ -23,7 +20,7 @@ export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadTy
     normalized === 'kubernetes' ||
     normalized === 'k8s-pod'
   ) {
-    return 'k8s';
+    return 'pod';
   }
   return null;
 };
@@ -31,7 +28,8 @@ export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadTy
 export const resolveWorkloadType = (
   guest: Pick<WorkloadGuest, 'workloadType' | 'type'>,
 ): WorkloadType => {
-  if (guest.workloadType) return guest.workloadType;
+  const explicitType = resolveWorkloadTypeFromString(guest.workloadType);
+  if (explicitType) return explicitType;
   return resolveWorkloadTypeFromString(guest.type) ?? 'system-container';
 };
 
@@ -42,9 +40,9 @@ export const getWorkloadMetricsKind = (
   switch (type) {
     case 'vm':
       return 'vm';
-    case 'docker':
+    case 'app-container':
       return 'dockerContainer';
-    case 'k8s':
+    case 'pod':
       return 'k8s';
     case 'system-container':
     default:

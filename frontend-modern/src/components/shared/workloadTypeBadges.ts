@@ -30,16 +30,6 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
     title: 'Application Container',
     className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
   },
-  docker: {
-    label: 'Containers',
-    title: 'Container (Docker-compatible runtime)',
-    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
-  },
-  k8s: {
-    label: 'K8s',
-    title: 'Kubernetes Pod',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-  },
   pod: {
     label: 'Pod',
     title: 'Kubernetes Pod',
@@ -76,7 +66,7 @@ const normalizeKey = (value: string | null | undefined): WorkloadTypeBadgeKey | 
   if (normalized === 'vm') return 'vm';
   if (normalized === 'system-container') return 'system-container';
   if (normalized === 'app-container' || normalized === 'docker') return 'app-container';
-  if (normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
+  if (normalized === 'k8s' || normalized === 'kubernetes') return 'pod';
   if (normalized === 'pod' || normalized === 'k8s-pod') return 'pod';
   if (normalized === 'host') return 'agent';
   if (normalized === 'agent') return 'agent';

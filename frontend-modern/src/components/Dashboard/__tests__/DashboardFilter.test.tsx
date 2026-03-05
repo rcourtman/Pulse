@@ -82,7 +82,7 @@ describe('DashboardFilter', () => {
 
       const options = typeSelect.querySelectorAll('option');
       const values = Array.from(options).map((o) => o.value);
-      expect(values).toEqual(['all', 'vm', 'system-container', 'docker', 'k8s']);
+      expect(values).toEqual(['all', 'vm', 'system-container', 'app-container', 'pod']);
     });
 
     it('renders the Status filter select with all options', () => {
@@ -240,7 +240,7 @@ describe('DashboardFilter', () => {
       const runtimeOnChange = vi.fn();
       const props = makeProps({
         search: vi.fn(() => 'test'),
-        viewMode: vi.fn(() => 'docker' as const),
+        viewMode: vi.fn(() => 'app-container' as const),
         containerRuntimeFilter: {
           value: 'podman',
           options: [
@@ -353,9 +353,9 @@ describe('DashboardFilter', () => {
   // --- Container runtime filter ---
 
   describe('container runtime filter', () => {
-    it('renders only when viewMode is "docker" and containerRuntimeFilter is provided', () => {
+    it('renders only when viewMode is "app-container" and containerRuntimeFilter is provided', () => {
       const props = makeProps({
-        viewMode: vi.fn(() => 'docker' as const),
+        viewMode: vi.fn(() => 'app-container' as const),
         containerRuntimeFilter: {
           value: '',
           options: [
@@ -369,7 +369,7 @@ describe('DashboardFilter', () => {
       expect(screen.getByLabelText('Runtime')).toBeInTheDocument();
     });
 
-    it('does not render when viewMode is not "docker"', () => {
+    it('does not render when viewMode is not "app-container"', () => {
       const props = makeProps({
         viewMode: vi.fn(() => 'all' as const),
         containerRuntimeFilter: {
@@ -388,7 +388,7 @@ describe('DashboardFilter', () => {
     it('calls onChange when runtime selection changes', () => {
       const onChange = vi.fn();
       const props = makeProps({
-        viewMode: vi.fn(() => 'docker' as const),
+        viewMode: vi.fn(() => 'app-container' as const),
         containerRuntimeFilter: {
           value: '',
           options: [
@@ -522,7 +522,7 @@ describe('DashboardFilter', () => {
       isMobileMock.mockReturnValue(true);
       const props = makeProps({
         search: vi.fn(() => '  query  '),
-        viewMode: vi.fn(() => 'k8s' as const),
+        viewMode: vi.fn(() => 'pod' as const),
         statusMode: vi.fn(() => 'degraded' as const),
         hostFilter: {
           value: 'h1',

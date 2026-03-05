@@ -485,8 +485,8 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
   const tip = useTooltip();
 
   const label = createMemo(() => {
-    if (props.type === 'docker') return 'Image';
-    if (props.type === 'k8s') return 'Namespace';
+    if (props.type === 'app-container') return 'Image';
+    if (props.type === 'pod') return 'Namespace';
     return 'ID';
   });
 
@@ -514,7 +514,7 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'name', label: 'Name', width: '200px', sortKey: 'name' },
   { id: 'type', label: 'Type', width: '60px', sortKey: 'type' },
-  { id: 'info', label: 'Info', width: '100px' }, // Merged identifier: VMID for VMs/LXCs, image for Docker, namespace for K8s
+  { id: 'info', label: 'Info', width: '100px' }, // Merged identifier: VMID for VMs/LXCs, image for app containers, namespace for pods
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
 
   // Core metrics
@@ -739,7 +739,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'netIo',
     'link',
   ]),
-  docker: new Set([
+  'app-container': new Set([
     'name',
     'cpu',
     'memory',
@@ -750,7 +750,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'update',
     'link',
   ]),
-  k8s: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'link']),
+  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'link']),
 };
 
 interface GuestRowProps {
@@ -851,13 +851,13 @@ export function GuestRow(props: GuestRowProps) {
   const infoValue = createMemo(() => {
     const type = workloadType();
     if (type === 'vm' || type === 'system-container') return displayId();
-    if (type === 'docker') return dockerImage() ? getShortImageName(dockerImage()) : '';
-    if (type === 'k8s') return namespace();
+    if (type === 'app-container') return dockerImage() ? getShortImageName(dockerImage()) : '';
+    if (type === 'pod') return namespace();
     return '';
   });
   const infoTooltip = createMemo(() => {
     const type = workloadType();
-    if (type === 'docker') return dockerImage(); // Full image name in tooltip
+    if (type === 'app-container') return dockerImage(); // Full image name in tooltip
     return infoValue();
   });
   const supportsBackup = createMemo(() => {
@@ -889,7 +889,7 @@ export function GuestRow(props: GuestRowProps) {
         title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
       });
     }
-    if (workloadType() === 'docker') {
+    if (workloadType() === 'app-container') {
       const runtime = (props.guest.containerRuntime || '').trim();
       const normalized = runtime.toLowerCase();
       const label =
@@ -908,7 +908,7 @@ export function GuestRow(props: GuestRowProps) {
             : runtime
               ? `${runtime} Container`
               : 'Container (Docker-compatible runtime)';
-      return getWorkloadTypeBadge('docker', { label, title });
+      return getWorkloadTypeBadge('app-container', { label, title });
     }
     return getWorkloadTypeBadge(workloadType());
   });
@@ -1296,7 +1296,7 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={workloadType() === 'docker' && dockerImage()}
+                when={workloadType() === 'app-container' && dockerImage()}
                 fallback={<span class="text-xs ">—</span>}
               >
                 <span class="text-xs text-muted truncate max-w-[140px]" title={dockerImage()}>
@@ -1312,7 +1312,7 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={workloadType() === 'k8s' && namespace()}
+                when={workloadType() === 'pod' && namespace()}
                 fallback={<span class="text-xs ">—</span>}
               >
                 <span class="text-xs text-muted truncate max-w-[120px]" title={namespace()}>
@@ -1491,7 +1491,9 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('update')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <Show when={props.guest.type === 'docker' && getWorkloadDockerHostId(props.guest)}>
+              <Show
+                when={workloadType() === 'app-container' && getWorkloadDockerHostId(props.guest)}
+              >
                 <UpdateButton
                   updateStatus={props.guest.updateStatus}
                   agentId={getWorkloadDockerHostId(props.guest)}

@@ -4,6 +4,7 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import type { ViewMode } from '@/types/workloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
@@ -12,8 +13,8 @@ interface DashboardFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
   isSearchLocked: () => boolean;
-  viewMode: () => 'all' | 'vm' | 'system-container' | 'docker' | 'k8s';
-  setViewMode: (value: 'all' | 'vm' | 'system-container' | 'docker' | 'k8s') => void;
+  viewMode: () => ViewMode;
+  setViewMode: (value: ViewMode) => void;
   statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
   setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
   groupingMode: () => 'grouped' | 'flat';
@@ -144,7 +145,9 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               )}
             </Show>
 
-            <Show when={props.viewMode() === 'docker' ? props.containerRuntimeFilter : undefined}>
+            <Show
+              when={props.viewMode() === 'app-container' ? props.containerRuntimeFilter : undefined}
+            >
               {(runtimeFilter) => (
                 <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
                   <label
@@ -183,17 +186,17 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                       | 'all'
                       | 'vm'
                       | 'system-container'
-                      | 'docker'
-                      | 'k8s',
+                      | 'app-container'
+                      | 'pod',
                   )
                 }
                 class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All</option>
                 <option value="vm">VMs</option>
-                <option value="system-container">CTs</option>
-                <option value="docker">Containers</option>
-                <option value="k8s">K8s</option>
+                <option value="system-container">System Containers</option>
+                <option value="app-container">App Containers</option>
+                <option value="pod">Pods</option>
               </select>
             </div>
 

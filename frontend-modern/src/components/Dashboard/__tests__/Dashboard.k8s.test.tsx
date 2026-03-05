@@ -8,7 +8,7 @@ const mockWebSocketState = {
   temperatureMonitoringEnabled: false,
 };
 
-let mockLocationSearch = '?type=k8s';
+let mockLocationSearch = '?type=pod';
 let mockWorkloads: Array<Record<string, unknown>> = [];
 const navigateSpy = vi.fn();
 type HostFilterMock = {
@@ -133,9 +133,9 @@ vi.mock('../GuestRow', () => {
     VIEW_MODE_COLUMNS: {
       all: new Set(['name', 'status']),
       vm: new Set(['name', 'status']),
-      lxc: new Set(['name', 'status']),
-      docker: new Set(['name', 'status']),
-      k8s: new Set(['name', 'status']),
+      'system-container': new Set(['name', 'status']),
+      'app-container': new Set(['name', 'status']),
+      pod: new Set(['name', 'status']),
     },
     GuestRow: (props: { guest: { name: string } }) => (
       <tr data-testid={`guest-row-${props.guest.name}`}>
@@ -146,14 +146,14 @@ vi.mock('../GuestRow', () => {
   };
 });
 
-describe('Dashboard Kubernetes workloads integration', () => {
+describe('Dashboard pod workloads integration', () => {
   beforeEach(() => {
     navigateSpy.mockReset();
     localStorage.clear();
     lastDrawerGuestName = null;
   });
 
-  it('renders Kubernetes pods in the unified workloads table and shows cluster filter in k8s view', async () => {
+  it('renders pod workloads in the unified workloads table and shows cluster filter in pod view', async () => {
     lastHostFilter = undefined;
     mockWorkloads = [
       {
@@ -163,7 +163,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         node: 'worker-1',
         instance: 'cluster-visible',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -178,11 +178,11 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
     ];
-    mockLocationSearch = '?type=k8s';
+    mockLocationSearch = '?type=pod';
     const { getByText, getByTestId } = render(() => (
       <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
@@ -194,7 +194,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     expect(getByTestId('dashboard-filter')).toHaveTextContent('host-filter-enabled');
   });
 
-  it('does not let preselected host filtering suppress k8s workloads', async () => {
+  it('does not let preselected host filtering suppress pod workloads', async () => {
     lastHostFilter = undefined;
     mockWorkloads = [
       {
@@ -204,7 +204,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         node: 'worker-1',
         instance: 'cluster-visible',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -219,11 +219,11 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
     ];
-    mockLocationSearch = '?type=k8s&resource=legacy:pve1:101';
+    mockLocationSearch = '?type=pod&resource=legacy:pve1:101';
 
     const { getByText } = render(() => (
       <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
@@ -236,7 +236,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
   it('renders only native v2 kubernetes workloads', async () => {
     lastHostFilter = undefined;
-    mockLocationSearch = '?type=k8s';
+    mockLocationSearch = '?type=pod';
     mockWorkloads = [
       {
         id: 'v2-k8s-pod-1',
@@ -245,7 +245,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         node: 'worker-v2',
         instance: 'cluster-visible',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -260,7 +260,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
     ];
@@ -278,7 +278,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
   it('filters kubernetes workloads by selected cluster', async () => {
     lastHostFilter = undefined;
-    mockLocationSearch = '?type=k8s';
+    mockLocationSearch = '?type=pod';
     mockWorkloads = [
       {
         id: 'v2-k8s-pod-a',
@@ -288,7 +288,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-a',
         contextLabel: 'cluster-a',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -303,7 +303,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
       {
@@ -314,7 +314,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-b',
         contextLabel: 'cluster-b',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -329,7 +329,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
     ];
@@ -358,7 +358,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
   it('applies kubernetes context from URL query params', async () => {
     lastHostFilter = undefined;
-    mockLocationSearch = '?type=k8s&context=cluster-b';
+    mockLocationSearch = '?type=pod&context=cluster-b';
     mockWorkloads = [
       {
         id: 'v2-k8s-pod-a',
@@ -368,7 +368,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-a',
         contextLabel: 'cluster-a',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -383,7 +383,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
       {
@@ -394,7 +394,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-b',
         contextLabel: 'cluster-b',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -409,7 +409,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
     ];
@@ -490,7 +490,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
   it('opens the Kubernetes workload drawer from resource deep links in mixed workloads', async () => {
     lastHostFilter = undefined;
-    mockLocationSearch = '?type=k8s&resource=v2-k8s-pod-b';
+    mockLocationSearch = '?type=pod&resource=v2-k8s-pod-b';
     mockWorkloads = [
       {
         id: 'v2-vm-101',
@@ -524,7 +524,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-a',
         contextLabel: 'cluster-a',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -539,7 +539,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
       {
@@ -550,7 +550,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-b',
         contextLabel: 'cluster-b',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -565,7 +565,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
     ];
@@ -586,7 +586,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
   it('groups Kubernetes workloads by context with the same grouped table behavior as other workloads', async () => {
     lastHostFilter = undefined;
-    mockLocationSearch = '?type=k8s';
+    mockLocationSearch = '?type=pod';
     mockWorkloads = [
       {
         id: 'v2-k8s-pod-a',
@@ -596,7 +596,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-a',
         contextLabel: 'cluster-a',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -611,7 +611,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
       {
@@ -622,7 +622,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         instance: 'cluster-b',
         contextLabel: 'cluster-b',
         status: 'running',
-        type: 'k8s',
+        type: 'pod',
         cpu: 0,
         cpus: 0,
         memory: { total: 0, used: 0, free: 0, usage: 0 },
@@ -637,7 +637,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
         tags: [],
         lock: '',
         lastSeen: new Date().toISOString(),
-        workloadType: 'k8s',
+        workloadType: 'pod',
         namespace: 'default',
       },
     ];
@@ -649,7 +649,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
     await waitFor(() => {
       expect(getByText('cluster-a')).toBeInTheDocument();
       expect(getByText('cluster-b')).toBeInTheDocument();
-      expect(getAllByText('K8s').length).toBeGreaterThan(0);
+      expect(getAllByText('Pods').length).toBeGreaterThan(0);
       expect(getByText('api-a')).toBeInTheDocument();
       expect(getByText('api-b')).toBeInTheDocument();
     });
@@ -684,7 +684,7 @@ describe('Dashboard Kubernetes workloads integration', () => {
 
     const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
     const params = new URLSearchParams(path.split('?')[1] || '');
-    expect(params.get('type')).toBe('k8s');
+    expect(params.get('type')).toBe('pod');
     expect(params.get('context')).toBe('cluster-a');
     expect(options?.replace).toBe(true);
   });

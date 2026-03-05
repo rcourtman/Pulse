@@ -25,8 +25,8 @@ export interface WorkloadStats {
   stopped: number;
   vms: number;
   containers: number;
-  docker: number;
-  k8s: number;
+  appContainers: number;
+  pods: number;
 }
 
 type SortDirection = 'asc' | 'desc';
@@ -49,16 +49,16 @@ export const getKubernetesContextKey = (guest: WorkloadGuest): string => {
 
 export const getWorkloadDockerHostId = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
-  if (type !== 'docker') return '';
+  if (type !== 'app-container') return '';
   return (guest.dockerHostId || guest.node || guest.instance || '').trim();
 };
 
 export const getDiscoveryHostIdForWorkload = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
-  if (type === 'docker') {
+  if (type === 'app-container') {
     return getWorkloadDockerHostId(guest);
   }
-  if (type === 'k8s') {
+  if (type === 'pod') {
     return (guest.kubernetesAgentId || guest.instance || guest.node || '').trim();
   }
   return (guest.node || '').trim();
@@ -66,10 +66,10 @@ export const getDiscoveryHostIdForWorkload = (guest: WorkloadGuest): string => {
 
 export const getDiscoveryResourceIdForWorkload = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
-  if (type === 'docker') {
+  if (type === 'app-container') {
     return (guest.id || '').trim();
   }
-  if (type === 'k8s') {
+  if (type === 'pod') {
     const rawId = (guest.id || '').trim();
     const match = rawId.match(/^k8s:[^:]+:pod:(.+)$/);
     return (match?.[1] || rawId || String(guest.vmid)).trim();
@@ -94,30 +94,30 @@ export const filterWorkloads = ({
   let guests = allGuests;
 
   const nodeScope = selectedNode;
-  if (nodeScope && viewMode !== 'k8s') {
+  if (nodeScope && viewMode !== 'pod') {
     guests = guests.filter((g) => workloadNodeScopeId(g) === nodeScope);
   }
 
   const hostHint = (selectedHostHint || '').trim().toLowerCase();
-  if (!nodeScope && hostHint && viewMode !== 'k8s') {
+  if (!nodeScope && hostHint && viewMode !== 'pod') {
     guests = guests.filter((g) => {
-      if (resolveWorkloadType(g) === 'k8s') return false;
+      if (resolveWorkloadType(g) === 'pod') return false;
       const candidates = [g.node, g.instance, g.contextLabel];
       return candidates.some((candidate) => (candidate || '').toLowerCase().includes(hostHint));
     });
   }
 
   const k8sContext = selectedKubernetesContext;
-  if (k8sContext && viewMode === 'k8s') {
+  if (k8sContext && viewMode === 'pod') {
     guests = guests.filter(
-      (g) => resolveWorkloadType(g) === 'k8s' && getKubernetesContextKey(g) === k8sContext,
+      (g) => resolveWorkloadType(g) === 'pod' && getKubernetesContextKey(g) === k8sContext,
     );
   }
 
   const k8sNamespace = (selectedKubernetesNamespace || '').trim();
-  if (k8sNamespace && viewMode === 'k8s') {
+  if (k8sNamespace && viewMode === 'pod') {
     guests = guests.filter((g) => {
-      if (resolveWorkloadType(g) !== 'k8s') return false;
+      if (resolveWorkloadType(g) !== 'pod') return false;
       return (g.namespace || '').trim() === k8sNamespace;
     });
   }
@@ -127,9 +127,9 @@ export const filterWorkloads = ({
   }
 
   const normalizedRuntime = (containerRuntime || '').trim().toLowerCase();
-  if (normalizedRuntime && viewMode === 'docker') {
+  if (normalizedRuntime && viewMode === 'app-container') {
     guests = guests.filter((g) => {
-      if (resolveWorkloadType(g) !== 'docker') return false;
+      if (resolveWorkloadType(g) !== 'app-container') return false;
       const runtime = (g.containerRuntime || '').trim().toLowerCase();
       return runtime === normalizedRuntime;
     });
@@ -328,8 +328,8 @@ export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => 
   const stopped = guests.length - running - degraded;
   const vms = guests.filter((g) => resolveWorkloadType(g) === 'vm').length;
   const containers = guests.filter((g) => resolveWorkloadType(g) === 'system-container').length;
-  const docker = guests.filter((g) => resolveWorkloadType(g) === 'docker').length;
-  const k8s = guests.filter((g) => resolveWorkloadType(g) === 'k8s').length;
+  const appContainers = guests.filter((g) => resolveWorkloadType(g) === 'app-container').length;
+  const pods = guests.filter((g) => resolveWorkloadType(g) === 'pod').length;
 
   return {
     total: guests.length,
@@ -338,8 +338,8 @@ export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => 
     stopped,
     vms,
     containers,
-    docker,
-    k8s,
+    appContainers,
+    pods,
   };
 };
 

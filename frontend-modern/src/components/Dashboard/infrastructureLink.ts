@@ -19,12 +19,12 @@ export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string
     return buildInfrastructurePath({ source: 'proxmox', query });
   }
 
-  if (type === 'docker') {
+  if (type === 'app-container') {
     const query = firstNonEmpty([guest.contextLabel, guest.node, guest.instance, guest.name]);
     return buildInfrastructurePath({ source: 'docker', query });
   }
 
-  if (type === 'k8s') {
+  if (type === 'pod') {
     const query = firstNonEmpty([
       guest.contextLabel,
       guest.instance,

@@ -1,7 +1,7 @@
 import type { VM, Container, DockerContainerUpdateStatus } from './api';
 
-export type WorkloadType = 'vm' | 'system-container' | 'docker' | 'k8s';
-export type ViewMode = 'all' | 'vm' | 'system-container' | 'docker' | 'k8s';
+export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
+export type ViewMode = 'all' | WorkloadType;
 
 export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
@@ -12,7 +12,7 @@ export type WorkloadGuest = (VM | Container) & {
   /** Cluster name from Proxmox (for badge display in workloads table). */
   clusterName?: string;
   platformType?: string;
-  // For "docker" workloads, this is the underlying runtime ("docker", "podman", etc.)
+  // For app-container workloads, this is the underlying runtime ("docker", "podman", etc.)
   containerRuntime?: string;
   updateStatus?: DockerContainerUpdateStatus;
   // Docker host ID — needed for update button (= resource.docker.hostSourceId)

@@ -25,7 +25,7 @@ const makeGuest = (i: number, overrides?: Partial<WorkloadGuest>): WorkloadGuest
   node: `node-${i % 5}`,
   instance: `cluster-${i % 3}`,
   status: i % 7 === 0 ? 'stopped' : 'running',
-  type: i % 4 === 0 ? 'lxc' : i % 3 === 0 ? 'docker' : 'vm',
+  type: i % 4 === 0 ? 'lxc' : i % 3 === 0 ? 'app-container' : 'vm',
   cpu: (i % 100) / 100,
   cpus: 2,
   memory: { total: 4096, used: ((i % 80) / 100) * 4096, free: 0, usage: (i % 80) / 100 },
@@ -40,7 +40,7 @@ const makeGuest = (i: number, overrides?: Partial<WorkloadGuest>): WorkloadGuest
   tags: [],
   lock: '',
   lastSeen: new Date().toISOString(),
-  workloadType: (i % 4 === 0 ? 'lxc' : i % 3 === 0 ? 'docker' : 'vm') as any,
+  workloadType: (i % 4 === 0 ? 'lxc' : i % 3 === 0 ? 'app-container' : 'vm') as any,
   ...overrides,
 });
 
@@ -87,7 +87,7 @@ describe('workloadSelectors', () => {
         makeGuest(2, { status: 'warning', type: 'vm', workloadType: 'vm' }),
         makeGuest(3, { status: 'migrating', type: 'vm', workloadType: 'vm' }),
         makeGuest(4, { status: 'offline', type: 'vm', workloadType: 'vm' }),
-        makeGuest(5, { status: 'running', type: 'docker', workloadType: 'docker' }),
+        makeGuest(5, { status: 'running', type: 'app-container', workloadType: 'app-container' }),
       ];
 
       const vmOnly = filterWorkloads({
@@ -183,8 +183,8 @@ describe('workloadSelectors', () => {
         }),
         makeGuest(2, {
           name: 'docker-a',
-          type: 'docker',
-          workloadType: 'docker',
+          type: 'app-container',
+          workloadType: 'app-container',
           node: 'docker-node',
           instance: 'docker-cluster',
           contextLabel: 'edge-host',
@@ -192,8 +192,8 @@ describe('workloadSelectors', () => {
         }),
         makeGuest(3, {
           name: 'k8s-a',
-          type: 'k8s',
-          workloadType: 'k8s',
+          type: 'pod',
+          workloadType: 'pod',
           node: 'worker-a',
           instance: 'cluster-prod',
           contextLabel: 'prod-context',
@@ -202,8 +202,8 @@ describe('workloadSelectors', () => {
         }),
         makeGuest(4, {
           name: 'k8s-b',
-          type: 'k8s',
-          workloadType: 'k8s',
+          type: 'pod',
+          workloadType: 'pod',
           node: 'worker-b',
           instance: 'cluster-stage',
           contextLabel: 'stage-context',
@@ -236,7 +236,7 @@ describe('workloadSelectors', () => {
 
       const withK8sContext = filterWorkloads({
         guests,
-        viewMode: 'k8s',
+        viewMode: 'pod',
         statusMode: 'all',
         searchTerm: '',
         selectedNode: null,
@@ -313,8 +313,8 @@ describe('workloadSelectors', () => {
         makeGuest(3, {
           id: 'docker-1',
           name: 'docker-1',
-          type: 'docker',
-          workloadType: 'docker',
+          type: 'app-container',
+          workloadType: 'app-container',
           contextLabel: 'edge',
         }),
       ];
@@ -322,7 +322,7 @@ describe('workloadSelectors', () => {
       const comparator = createWorkloadSortComparator('name', 'asc');
       const grouped = groupWorkloads(guests, 'grouped', comparator);
 
-      expect(Object.keys(grouped).sort()).toEqual(['cluster-a-node-a', 'docker:edge']);
+      expect(Object.keys(grouped).sort()).toEqual(['app-container:edge', 'cluster-a-node-a']);
       expect(grouped['cluster-a-node-a'].map((g) => g.id)).toEqual(['vm-a', 'vm-b']);
     });
   });
@@ -333,8 +333,8 @@ describe('workloadSelectors', () => {
         makeGuest(1, { type: 'vm', workloadType: 'vm', status: 'running' }),
         makeGuest(2, { type: 'vm', workloadType: 'vm', status: 'warning' }),
         makeGuest(3, { type: 'lxc', workloadType: 'system-container', status: 'offline' }),
-        makeGuest(4, { type: 'docker', workloadType: 'docker', status: 'running' }),
-        makeGuest(5, { type: 'k8s', workloadType: 'k8s', status: 'migrating' }),
+        makeGuest(4, { type: 'app-container', workloadType: 'app-container', status: 'running' }),
+        makeGuest(5, { type: 'pod', workloadType: 'pod', status: 'migrating' }),
       ];
 
       expect(computeWorkloadStats(guests)).toEqual({
@@ -344,8 +344,8 @@ describe('workloadSelectors', () => {
         stopped: 1,
         vms: 2,
         containers: 1,
-        docker: 1,
-        k8s: 1,
+        appContainers: 1,
+        pods: 1,
       });
     });
   });
@@ -378,7 +378,7 @@ describe('workloadSelectors', () => {
   });
 
   describe('getWorkloadGroupKey', () => {
-    it('uses instance-node for vm/lxc, and type:context for docker/k8s', () => {
+    it('uses instance-node for vm/lxc, and type:context for app-container/pod', () => {
       const vm = makeGuest(1, {
         type: 'vm',
         workloadType: 'vm',
@@ -386,23 +386,23 @@ describe('workloadSelectors', () => {
         node: 'node-a',
       });
       const docker = makeGuest(2, {
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         contextLabel: 'docker-edge',
         instance: 'inst-b',
         node: 'node-b',
       });
       const k8s = makeGuest(3, {
-        type: 'k8s',
-        workloadType: 'k8s',
+        type: 'pod',
+        workloadType: 'pod',
         contextLabel: '',
         node: 'worker-2',
         instance: 'cluster-z',
       });
 
       expect(getWorkloadGroupKey(vm)).toBe('inst-a-node-a');
-      expect(getWorkloadGroupKey(docker)).toBe('docker:docker-edge');
-      expect(getWorkloadGroupKey(k8s)).toBe('k8s:worker-2');
+      expect(getWorkloadGroupKey(docker)).toBe('app-container:docker-edge');
+      expect(getWorkloadGroupKey(k8s)).toBe('pod:worker-2');
     });
   });
 
@@ -481,15 +481,15 @@ describe('workloadSelectors', () => {
   describe('workload discovery/action IDs', () => {
     it('prefers docker hostSourceId and falls back to node/instance', () => {
       const dockerWithHostId = makeGuest(1, {
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         dockerHostId: 'docker-host-1',
         node: 'node-a',
         instance: 'inst-a',
       });
       const dockerFallback = makeGuest(2, {
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         dockerHostId: '',
         node: 'node-b',
         instance: 'inst-b',
@@ -498,17 +498,17 @@ describe('workloadSelectors', () => {
       expect(getWorkloadDockerHostId(dockerFallback)).toBe('node-b');
     });
 
-    it('maps discovery host/resource IDs for docker, k8s, and vm', () => {
+    it('maps discovery host/resource IDs for app-container, pod, and vm', () => {
       const docker = makeGuest(1, {
         id: 'container-abc123',
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         dockerHostId: 'docker-host-1',
       });
       const k8s = makeGuest(2, {
         id: 'k8s:cluster-a:pod:pod-uid-1',
-        type: 'k8s',
-        workloadType: 'k8s',
+        type: 'pod',
+        workloadType: 'pod',
         kubernetesAgentId: 'k8s-agent-1',
         instance: 'cluster-a',
         node: 'worker-a',

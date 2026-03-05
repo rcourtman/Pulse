@@ -105,8 +105,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   const discoveryResourceType = (): DiscoveryResourceType => {
     const type = resolveWorkloadType(props.guest);
     if (type === 'vm') return 'vm';
-    if (type === 'docker') return 'app-container';
-    if (type === 'k8s') return 'k8s';
+    if (type === 'app-container') return 'app-container';
+    if (type === 'pod') return 'k8s';
     return 'system-container';
   };
   const discoveryAgentId = () => {
@@ -118,8 +118,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
   const urlTargetLabel = () => {
     const type = resolveWorkloadType(props.guest);
-    if (type === 'docker') return 'container';
-    if (type === 'k8s') return 'workload';
+    if (type === 'app-container') return 'container';
+    if (type === 'pod') return 'workload';
     return 'workload';
   };
   return (
