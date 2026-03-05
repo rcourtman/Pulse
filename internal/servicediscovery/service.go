@@ -1284,10 +1284,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	}
 
 	// Build analysis request with command outputs
-	targetID := strings.TrimSpace(discovery.TargetID)
-	if targetID == "" {
-		targetID = strings.TrimSpace(discovery.HostID)
-	}
+	targetID := canonicalDiscoveryTargetID(discovery)
 	analysisReq := AIAnalysisRequest{
 		ResourceType:   discovery.ResourceType,
 		ResourceID:     discovery.ResourceID,
@@ -2628,9 +2625,10 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 	hasAgentDiscovery := make(map[string]bool)
 	for _, d := range discoveries {
 		if d.ResourceType == ResourceTypeAgent {
-			// d.HostID is usually the agent ID for host resources
-			if _, ok := linkedAgents[d.HostID]; ok {
-				hasAgentDiscovery[d.HostID] = true
+			discoveryTargetID := canonicalDiscoveryTargetID(d)
+			// discoveryTargetID is usually the agent ID for host resources
+			if _, ok := linkedAgents[discoveryTargetID]; ok {
+				hasAgentDiscovery[discoveryTargetID] = true
 			}
 		}
 	}
@@ -2645,16 +2643,17 @@ func (s *Service) deduplicateDiscoveries(discoveries []*ResourceDiscovery) []*Re
 			// Is this discovery's ID satisfying a Node check?
 			isPVENode := false
 			var linkedAgentID string
+			discoveryTargetID := canonicalDiscoveryTargetID(d)
 
 			for _, node := range snap.Nodes {
-				if d.HostID == node.Name || d.HostID == node.ID || d.ResourceID == node.Name {
+				if discoveryTargetID == node.Name || discoveryTargetID == node.ID || d.ResourceID == node.Name {
 					isPVENode = true
 					linkedAgentID = node.LinkedAgentID
 					break
 				}
 			}
 
-			if isPVENode && linkedAgentID != "" && hasAgentDiscovery[linkedAgentID] && d.HostID != linkedAgentID {
+			if isPVENode && linkedAgentID != "" && hasAgentDiscovery[linkedAgentID] && discoveryTargetID != linkedAgentID {
 				// We have the agent discovery, so skip this redundant PVE node discovery
 				continue
 			}
@@ -2693,7 +2692,7 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 	// Fix empty hostname by looking up the resource name from state
 	if d.Hostname == "" {
 		if snap, ok := s.getSnapshot(); ok {
-			hostname := s.lookupHostnameFromState(d.ResourceType, d.HostID, d.ResourceID, snap)
+			hostname := s.lookupHostnameFromState(d.ResourceType, canonicalDiscoveryTargetID(d), d.ResourceID, snap)
 			if hostname != "" {
 				d.Hostname = hostname
 				upgraded = true
@@ -2810,6 +2809,17 @@ func (s *Service) GetStatusSnapshot() ServiceStatus {
 		FingerprintCount:    fingerprintCount,
 		LastFingerprintScan: lastFingerprintScan,
 	}
+}
+
+func canonicalDiscoveryTargetID(discovery *ResourceDiscovery) string {
+	if discovery == nil {
+		return ""
+	}
+	targetID := strings.TrimSpace(discovery.TargetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(discovery.HostID)
+	}
+	return targetID
 }
 
 // GetMaxDiscoveryAge returns the current max discovery age (staleness threshold).
