@@ -1381,200 +1381,80 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 		resourceType string
 		want         []string
 	}{
-		// Guest types
+		{name: "guest category preserved", resourceType: "guest", want: []string{"guest"}},
+		{name: "vm canonical + guest fallback", resourceType: "vm", want: []string{"vm", "guest"}},
 		{
-			name:         "guest returns guest",
-			resourceType: "guest",
-			want:         []string{"guest"},
-		},
-		{
-			name:         "qemu stays qemu",
-			resourceType: "qemu",
-			want:         []string{"qemu"},
-		},
-		{
-			name:         "vm returns guest",
-			resourceType: "vm",
-			want:         []string{"guest"},
-		},
-		{
-			name:         "container stays container",
-			resourceType: "container",
-			want:         []string{"container"},
-		},
-		{
-			name:         "system-container returns guest",
+			name:         "system-container canonical + guest fallback",
 			resourceType: "system-container",
-			want:         []string{"guest"},
-		},
-
-		// Docker container types
-		{
-			name:         "docker returns docker and guest",
-			resourceType: "docker",
-			want:         []string{"docker", "guest"},
+			want:         []string{"system-container", "guest"},
 		},
 		{
-			name:         "docker container with space returns docker and guest",
-			resourceType: "docker container",
-			want:         []string{"docker", "guest"},
+			name:         "oci-container canonical + system-container + guest fallback",
+			resourceType: "oci-container",
+			want:         []string{"oci-container", "system-container", "guest"},
 		},
 		{
-			name:         "dockercontainer returns docker and guest",
-			resourceType: "dockercontainer",
-			want:         []string{"docker", "guest"},
-		},
-
-		// Docker host types
-		{
-			name:         "docker host with space returns dockerhost, docker, node",
-			resourceType: "docker host",
-			want:         []string{"dockerhost", "docker", "node"},
+			name:         "app-container canonical + docker + guest fallback",
+			resourceType: "app-container",
+			want:         []string{"app-container", "docker", "guest"},
 		},
 		{
-			name:         "dockerhost returns dockerhost, docker, node",
-			resourceType: "dockerhost",
-			want:         []string{"dockerhost", "docker", "node"},
+			name:         "docker-host canonical + legacy fallbacks",
+			resourceType: "docker-host",
+			want:         []string{"docker-host", "dockerhost", "docker", "node"},
 		},
 		{
-			name:         "docker service returns docker-service, docker, guest",
-			resourceType: "docker service",
-			want:         []string{"docker-service", "docker", "guest"},
+			name:         "docker-service canonical + app-container + docker + guest fallback",
+			resourceType: "docker-service",
+			want:         []string{"docker-service", "app-container", "docker", "guest"},
 		},
+		{name: "node canonical", resourceType: "node", want: []string{"node"}},
+		{name: "agent canonical + node fallback", resourceType: "agent", want: []string{"agent", "node"}},
 		{
-			name:         "dockerservice returns docker-service, docker, guest",
-			resourceType: "dockerservice",
-			want:         []string{"docker-service", "docker", "guest"},
-		},
-
-		// Node type
-		{
-			name:         "node returns node",
-			resourceType: "node",
-			want:         []string{"node"},
-		},
-		{
-			name:         "agent returns agent and node",
-			resourceType: "agent",
-			want:         []string{"agent", "node"},
-		},
-		{
-			name:         "agent disk returns agent-disk, agent, storage",
-			resourceType: "agent disk",
+			name:         "agent-disk canonical + storage fallbacks",
+			resourceType: "agent-disk",
 			want:         []string{"agent-disk", "agent", "storage"},
 		},
-
-		// PBS types
+		{name: "pbs canonical + node fallback", resourceType: "pbs", want: []string{"pbs", "node"}},
+		{name: "pmg canonical + node fallback", resourceType: "pmg", want: []string{"pmg", "node"}},
 		{
-			name:         "pbs returns pbs and node",
-			resourceType: "pbs",
-			want:         []string{"pbs", "node"},
+			name:         "k8s cluster canonical + guest fallback",
+			resourceType: "k8s-cluster",
+			want:         []string{"k8s-cluster", "k8s", "guest"},
 		},
 		{
-			name:         "pbs server with space returns pbs and node",
-			resourceType: "pbs server",
-			want:         []string{"pbs", "node"},
+			name:         "k8s node canonical + node fallback",
+			resourceType: "k8s-node",
+			want:         []string{"k8s-node", "node", "k8s"},
 		},
+		{name: "pod canonical + guest fallback", resourceType: "pod", want: []string{"pod", "k8s", "guest"}},
+		{name: "storage canonical", resourceType: "storage", want: []string{"storage"}},
+		{name: "disk canonical + storage fallback", resourceType: "disk", want: []string{"disk", "storage"}},
 		{
-			name:         "pbsserver returns pbs and node",
-			resourceType: "pbsserver",
-			want:         []string{"pbs", "node"},
+			name:         "datastore canonical + storage + pbs fallback",
+			resourceType: "datastore",
+			want:         []string{"datastore", "storage", "pbs"},
 		},
-
-		// Storage type
+		{name: "pool canonical + storage fallback", resourceType: "pool", want: []string{"pool", "storage"}},
 		{
-			name:         "storage returns storage",
-			resourceType: "storage",
-			want:         []string{"storage"},
+			name:         "dataset canonical + storage fallback",
+			resourceType: "dataset",
+			want:         []string{"dataset", "storage"},
 		},
-
-		// Case insensitivity
+		{name: "ceph canonical + storage fallback", resourceType: "ceph", want: []string{"ceph", "storage"}},
 		{
-			name:         "GUEST uppercase returns guest",
-			resourceType: "GUEST",
-			want:         []string{"guest"},
+			name:         "physical_disk canonical + storage fallback",
+			resourceType: "physical_disk",
+			want:         []string{"physical_disk", "disk", "storage"},
 		},
-		{
-			name:         "Docker mixed case returns docker and guest",
-			resourceType: "Docker",
-			want:         []string{"docker", "guest"},
-		},
-		{
-			name:         "NODE uppercase returns node",
-			resourceType: "NODE",
-			want:         []string{"node"},
-		},
-
-		// Whitespace handling
-		{
-			name:         "guest with leading whitespace",
-			resourceType: "  guest",
-			want:         []string{"guest"},
-		},
-		{
-			name:         "guest with trailing whitespace",
-			resourceType: "guest  ",
-			want:         []string{"guest"},
-		},
-		{
-			name:         "guest with surrounding whitespace",
-			resourceType: "  guest  ",
-			want:         []string{"guest"},
-		},
-
-		// Unknown types return self
-		{
-			name:         "legacy host stays host (no alias)",
-			resourceType: "host",
-			want:         []string{"host"},
-		},
-		{
-			name:         "unknown type returns itself",
-			resourceType: "custom",
-			want:         []string{"custom"},
-		},
-		{
-			name:         "pmg returns pmg and node",
-			resourceType: "pmg",
-			want:         []string{"pmg", "node"},
-		},
-		{
-			name:         "pmg server returns pmg and node",
-			resourceType: "pmg server",
-			want:         []string{"pmg", "node"},
-		},
-		{
-			name:         "proxmox mail gateway returns pmg and node",
-			resourceType: "proxmox mail gateway",
-			want:         []string{"pmg", "node"},
-		},
-		{
-			name:         "k8s returns k8s and guest",
-			resourceType: "k8s",
-			want:         []string{"k8s", "guest"},
-		},
-		{
-			name:         "kubernetes returns k8s and guest",
-			resourceType: "kubernetes",
-			want:         []string{"k8s", "guest"},
-		},
-		{
-			name:         "pod returns k8s and guest",
-			resourceType: "pod",
-			want:         []string{"k8s", "guest"},
-		},
-
-		// Empty and whitespace-only
-		{
-			name:         "empty string returns empty slice",
-			resourceType: "",
-			want:         []string{},
-		},
-		{
-			name:         "whitespace only returns empty slice",
-			resourceType: "   ",
-			want:         []string{},
-		},
+		{name: "unknown type passthrough", resourceType: "custom", want: []string{"custom"}},
+		{name: "legacy host alias rejected", resourceType: "host", want: []string{}},
+		{name: "legacy container alias rejected", resourceType: "container", want: []string{}},
+		{name: "legacy docker alias rejected", resourceType: "docker", want: []string{}},
+		{name: "legacy dockerhost alias rejected", resourceType: "dockerhost", want: []string{}},
+		{name: "legacy k8s alias rejected", resourceType: "k8s", want: []string{}},
+		{name: "empty string returns empty slice", resourceType: "", want: []string{}},
+		{name: "whitespace only returns empty slice", resourceType: "   ", want: []string{}},
 	}
 
 	for _, tc := range tests {

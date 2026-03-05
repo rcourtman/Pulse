@@ -754,25 +754,28 @@ func TestContract_AlertResourceTypeConsistency(t *testing.T) {
 		resourceType string
 		want         []string
 	}{
-		{resourceType: "VM", want: []string{"guest"}},
-		{resourceType: "Container", want: []string{"container"}},
+		{resourceType: "VM", want: []string{"vm", "guest"}},
+		{resourceType: "Container", want: []string{}},
 		{resourceType: "Node", want: []string{"node"}},
 		{resourceType: "Agent", want: []string{"agent", "node"}},
-		{resourceType: "Agent Disk", want: []string{"agent-disk", "agent", "storage"}},
+		{resourceType: "Agent Disk", want: []string{}},
 		{resourceType: "PBS", want: []string{"pbs", "node"}},
-		{resourceType: "Docker Container", want: []string{"docker", "guest"}},
-		{resourceType: "DockerHost", want: []string{"dockerhost", "docker", "node"}},
-		{resourceType: "Docker Service", want: []string{"docker-service", "docker", "guest"}},
+		{resourceType: "Docker Container", want: []string{}},
+		{resourceType: "DockerHost", want: []string{}},
+		{resourceType: "Docker Service", want: []string{}},
 		{resourceType: "Storage", want: []string{"storage"}},
 		{resourceType: "PMG", want: []string{"pmg", "node"}},
-		{resourceType: "K8s", want: []string{"k8s", "guest"}},
+		{resourceType: "K8s", want: []string{}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.resourceType, func(t *testing.T) {
 			got := alerts.CanonicalResourceTypeKeys(tc.resourceType)
-			if len(got) == 0 {
+			if len(tc.want) > 0 && len(got) == 0 {
 				t.Fatalf("resource type %q returned no canonical keys", tc.resourceType)
+			}
+			if len(tc.want) == 0 && len(got) == 0 {
+				return
 			}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("canonical keys mismatch for %q: got %v want %v", tc.resourceType, got, tc.want)

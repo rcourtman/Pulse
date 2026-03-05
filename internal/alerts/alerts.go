@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
@@ -6229,6 +6230,9 @@ func (m *Manager) getGlobalMetricTimeThreshold(metricType string) (int, bool) {
 // CanonicalResourceTypeKeys returns normalized resource-type keys for threshold lookup.
 func CanonicalResourceTypeKeys(resourceType string) []string {
 	typeKey := canonicalAlertResourceType(resourceType)
+	if typeKey == "" || isUnsupportedLegacyAlertResourceType(typeKey) {
+		return nil
+	}
 
 	addUnique := func(slice []string, value string) []string {
 		if value == "" {
@@ -6244,17 +6248,30 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 
 	var keys []string
 	switch typeKey {
-	case "guest", "vm", "system-container":
+	case "guest":
 		keys = addUnique(keys, "guest")
-	case "docker", "docker container", "dockercontainer", "app-container":
+	case "vm":
+		keys = addUnique(keys, "vm")
+		keys = addUnique(keys, "guest")
+	case "system-container":
+		keys = addUnique(keys, "system-container")
+		keys = addUnique(keys, "guest")
+	case "oci-container":
+		keys = addUnique(keys, "oci-container")
+		keys = addUnique(keys, "system-container")
+		keys = addUnique(keys, "guest")
+	case "app-container":
+		keys = addUnique(keys, "app-container")
 		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "guest")
-	case "docker host", "dockerhost":
+	case "docker-host":
+		keys = addUnique(keys, "docker-host")
 		keys = addUnique(keys, "dockerhost")
 		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "node")
-	case "docker service", "dockerservice":
+	case "docker-service":
 		keys = addUnique(keys, "docker-service")
+		keys = addUnique(keys, "app-container")
 		keys = addUnique(keys, "docker")
 		keys = addUnique(keys, "guest")
 	case "node":
@@ -6262,26 +6279,65 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 	case "agent":
 		keys = addUnique(keys, "agent")
 		keys = addUnique(keys, "node")
-	case "agent disk", "agentdisk":
+	case "agent-disk":
 		keys = addUnique(keys, "agent-disk")
 		keys = addUnique(keys, "agent")
 		keys = addUnique(keys, "storage")
-	case "pbs", "pbs server", "pbsserver":
+	case "pbs":
 		keys = addUnique(keys, "pbs")
 		keys = addUnique(keys, "node")
-	case "pmg", "pmg server", "proxmox mail gateway":
+	case "pmg":
 		keys = addUnique(keys, "pmg")
 		keys = addUnique(keys, "node")
-	case "k8s", "kubernetes", "k8s pod", "pod":
+	case "k8s-cluster":
+		keys = addUnique(keys, "k8s-cluster")
+		keys = addUnique(keys, "k8s")
+		keys = addUnique(keys, "guest")
+	case "k8s-node":
+		keys = addUnique(keys, "k8s-node")
+		keys = addUnique(keys, "node")
+		keys = addUnique(keys, "k8s")
+	case "pod":
+		keys = addUnique(keys, "pod")
 		keys = addUnique(keys, "k8s")
 		keys = addUnique(keys, "guest")
 	case "storage":
+		keys = addUnique(keys, "storage")
+	case "disk":
+		keys = addUnique(keys, "disk")
+		keys = addUnique(keys, "storage")
+	case "datastore":
+		keys = addUnique(keys, "datastore")
+		keys = addUnique(keys, "storage")
+		keys = addUnique(keys, "pbs")
+	case "pool", "dataset":
+		keys = addUnique(keys, typeKey)
+		keys = addUnique(keys, "storage")
+	case "ceph":
+		keys = addUnique(keys, "ceph")
+		keys = addUnique(keys, "storage")
+	case "physical_disk":
+		keys = addUnique(keys, "physical_disk")
+		keys = addUnique(keys, "disk")
 		keys = addUnique(keys, "storage")
 	default:
 		keys = addUnique(keys, typeKey)
 	}
 
 	return keys
+}
+
+func isUnsupportedLegacyAlertResourceType(typeKey string) bool {
+	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(typeKey) {
+		return true
+	}
+
+	switch typeKey {
+	case "host", "qemu", "container", "lxc", "docker", "docker container", "dockercontainer", "docker host", "dockerhost", "docker service", "dockerservice", "k8s", "k8s pod", "kubernetes", "kubernetes-cluster", "agent disk", "agentdisk", "pbs server", "pbsserver", "pmg server", "proxmox mail gateway":
+		return true
+	default:
+		return false
+	}
 }
 
 func canonicalAlertResourceType(resourceType string) string {
