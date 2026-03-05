@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -176,8 +177,8 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 	// Set defaults
 	req.OrgID = strings.TrimSpace(req.OrgID)
 	req.TargetType = normalizeApprovalTargetType(req.TargetType)
-	if req.TargetType == "host" {
-		return fmt.Errorf(`unsupported targetType %q; use "agent"`, req.TargetType)
+	if isUnsupportedApprovalTargetType(req.TargetType) {
+		return fmt.Errorf("unsupported targetType %q", req.TargetType)
 	}
 	req.Status = StatusPending
 	req.RequestedAt = time.Now()
@@ -382,8 +383,8 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 
 	// Verify command hash matches
 	targetType = normalizeApprovalTargetType(targetType)
-	if targetType == "host" {
-		return nil, fmt.Errorf(`unsupported targetType %q; use "agent"`, targetType)
+	if isUnsupportedApprovalTargetType(targetType) {
+		return nil, fmt.Errorf("unsupported targetType %q", targetType)
 	}
 	expectedHash := ComputeCommandHash(command, targetType, targetID)
 	approvedHash := req.CommandHash
@@ -584,11 +585,12 @@ func (s *Store) load() error {
 		var approvals []*ApprovalRequest
 		if err := json.Unmarshal(data, &approvals); err == nil {
 			for _, a := range approvals {
-				if normalizeApprovalTargetType(a.TargetType) == "host" {
+				if isUnsupportedApprovalTargetType(a.TargetType) {
 					shouldPersist = true
 					log.Warn().
 						Str("id", a.ID).
-						Msg("dropping legacy approval with unsupported target type host")
+						Str("target_type", normalizeApprovalTargetType(a.TargetType)).
+						Msg("dropping approval with unsupported target type")
 					continue
 				}
 				if canonicalizeApprovalRequest(a) {
@@ -817,6 +819,10 @@ func ComputeCommandHash(command, targetType, targetID string) string {
 
 func normalizeApprovalTargetType(targetType string) string {
 	return strings.ToLower(strings.TrimSpace(targetType))
+}
+
+func isUnsupportedApprovalTargetType(targetType string) bool {
+	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalizeApprovalTargetType(targetType))
 }
 
 func canonicalizeApprovalRequest(req *ApprovalRequest) bool {

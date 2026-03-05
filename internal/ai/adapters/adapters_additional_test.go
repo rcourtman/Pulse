@@ -151,7 +151,7 @@ func TestKnowledgeStore_SaveLoad(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if err := store.SaveNote("host:res-legacy", "note", "general"); err == nil {
-		t.Fatalf("expected legacy host resource ID to be rejected")
+		t.Fatalf("expected unsupported host resource ID to be rejected")
 	}
 	store.saveToDisk()
 	info, err := os.Stat(filepath.Join(dir, "knowledge_store.json"))
@@ -171,7 +171,7 @@ func TestKnowledgeStore_SaveLoad(t *testing.T) {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
 	if len(loaded.GetKnowledge("host:res-1", "general")) != 0 {
-		t.Fatalf("expected legacy host query alias to be rejected")
+		t.Fatalf("expected unsupported host query alias to be rejected")
 	}
 }
 
@@ -184,7 +184,7 @@ func TestKnowledgeStore_LoadMissingFile(t *testing.T) {
 	}
 }
 
-func TestKnowledgeStore_LoadFromDisk_CanonicalizesLegacyHostKeys(t *testing.T) {
+func TestKnowledgeStore_LoadFromDisk_DoesNotCanonicalizeLegacyHostKeys(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "knowledge_store.json")
 	payload := `{"host:alpha":[{"ID":"n1","ResourceID":"host:alpha","Note":"legacy","Category":"general","CreatedAt":"2026-01-01T00:00:00Z","UpdatedAt":"2026-01-01T00:00:00Z"}]}`
@@ -194,13 +194,10 @@ func TestKnowledgeStore_LoadFromDisk_CanonicalizesLegacyHostKeys(t *testing.T) {
 
 	store := NewKnowledgeStore(dir)
 	entries := store.GetKnowledge("agent:alpha", "general")
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 canonicalized entry, got %d", len(entries))
-	}
-	if entries[0].ResourceID != "agent:alpha" {
-		t.Fatalf("ResourceID = %q, want %q", entries[0].ResourceID, "agent:alpha")
+	if len(entries) != 0 {
+		t.Fatalf("expected no canonicalized entries, got %d", len(entries))
 	}
 	if len(store.GetKnowledge("host:alpha", "general")) != 0 {
-		t.Fatalf("expected legacy host query alias to be rejected")
+		t.Fatalf("expected unsupported host query alias to be rejected")
 	}
 }

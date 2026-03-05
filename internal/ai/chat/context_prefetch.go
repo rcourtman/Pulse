@@ -532,14 +532,14 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetHost:   loc.TargetHost,
 			})
 
-		case "host":
-			log.Warn().
-				Str("name", sm.Name).
-				Str("id", sm.ID).
-				Msg("[ContextPrefetch] Ignoring legacy structured mention type host; use agent")
-			continue
-
 		default:
+			if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(sm.Type) {
+				log.Warn().
+					Str("name", sm.Name).
+					Str("id", sm.ID).
+					Msg("[ContextPrefetch] Ignoring unsupported structured mention type")
+				continue
+			}
 			log.Warn().
 				Str("name", sm.Name).
 				Str("type", sm.Type).

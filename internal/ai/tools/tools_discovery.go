@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // registerDiscoveryTools registers the pulse_discovery tool
@@ -225,8 +227,8 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	if resourceType == "lxc" {
 		resourceType = "system-container"
 	}
-	if resourceType == "host" {
-		return NewErrorResult(fmt.Errorf(`resource_type "host" is no longer supported; use "agent"`)), nil
+	if isUnsupportedLegacyResourceTypeToken(resourceType) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", resourceType)), nil
 	}
 
 	// Preserve the caller's type for response fields.
@@ -471,6 +473,10 @@ func nodeMatchesHostID(nodeName, hostID string) bool {
 	return false
 }
 
+func isUnsupportedLegacyResourceTypeToken(value string) bool {
+	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(value)
+}
+
 func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.discoveryProvider == nil {
 		return NewTextResult("Discovery service not available."), nil
@@ -486,8 +492,8 @@ func (e *PulseToolExecutor) executeListDiscoveries(_ context.Context, args map[s
 	if filterType == "lxc" {
 		filterType = "system-container"
 	}
-	if filterType == "host" {
-		return NewErrorResult(fmt.Errorf(`type "host" is no longer supported; use "agent"`)), nil
+	if isUnsupportedLegacyResourceTypeToken(filterType) {
+		return NewErrorResult(fmt.Errorf("unsupported type %q", filterType)), nil
 	}
 
 	// Preserve caller's type for the response echo.

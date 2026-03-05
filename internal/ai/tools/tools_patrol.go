@@ -174,8 +174,8 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	if len(missing) > 0 {
 		return NewErrorResult(fmt.Errorf("missing required fields: %s", strings.Join(missing, ", "))), nil
 	}
-	if resourceType == "host" {
-		return NewErrorResult(fmt.Errorf(`resource_type "host" is no longer supported; use "agent"`)), nil
+	if isUnsupportedLegacyResourceTypeToken(resourceType) {
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q", resourceType)), nil
 	}
 
 	// Validate enums

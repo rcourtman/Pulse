@@ -182,7 +182,7 @@ func TestStore_FormatForContextForResources_Scoped(t *testing.T) {
 	}
 }
 
-func TestStore_RejectsLegacyHostGuestInput(t *testing.T) {
+func TestStore_RejectsUnsupportedHostGuestInput(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "knowledge-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -195,17 +195,17 @@ func TestStore_RejectsLegacyHostGuestInput(t *testing.T) {
 	}
 
 	if err := store.SaveNote("host:alpha", "alpha", "agent", "service", "Agent", "v1"); err == nil {
-		t.Fatalf("expected legacy host guest ID to be rejected")
+		t.Fatalf("expected unsupported host guest ID to be rejected")
 	}
 	if _, err := store.GetKnowledge("host:alpha"); err == nil {
-		t.Fatalf("expected legacy host guest ID query to be rejected")
+		t.Fatalf("expected unsupported host guest ID query to be rejected")
 	}
 	if err := store.SaveNote("agent:alpha", "alpha", "host", "service", "Agent", "v1"); err == nil {
-		t.Fatalf("expected legacy host guest type to be rejected")
+		t.Fatalf("expected unsupported host guest type to be rejected")
 	}
 }
 
-func TestStore_MigrateLegacyHostGuestFiles(t *testing.T) {
+func TestStore_DoesNotMigrateUnsupportedHostGuestFiles(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "knowledge-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -236,31 +236,21 @@ func TestStore_MigrateLegacyHostGuestFiles(t *testing.T) {
 	}
 
 	if err := store.saveToFile("host:alpha", legacy); err != nil {
-		t.Fatalf("Failed to seed legacy host file: %v", err)
-	}
-
-	if err := store.migrateLegacyHostGuestFiles(); err != nil {
-		t.Fatalf("migrateLegacyHostGuestFiles failed: %v", err)
+		t.Fatalf("Failed to seed unsupported host file: %v", err)
 	}
 
 	knowledge, err := store.GetKnowledge("agent:alpha")
 	if err != nil {
 		t.Fatalf("GetKnowledge failed: %v", err)
 	}
-	if knowledge.GuestID != "agent:alpha" {
-		t.Fatalf("GuestID = %q, want %q", knowledge.GuestID, "agent:alpha")
+	if len(knowledge.Notes) != 0 {
+		t.Fatalf("expected no migrated notes for agent:alpha, got %d", len(knowledge.Notes))
 	}
-	if knowledge.GuestType != "agent" {
-		t.Fatalf("GuestType = %q, want %q", knowledge.GuestType, "agent")
+	if _, err := store.GetKnowledge("host:alpha"); err == nil {
+		t.Fatalf("expected unsupported host guest ID query to be rejected")
 	}
-	if len(knowledge.Notes) != 1 {
-		t.Fatalf("expected 1 migrated note, got %d", len(knowledge.Notes))
-	}
-	if _, err := os.Stat(store.guestFilePath("agent:alpha")); err != nil {
-		t.Fatalf("expected canonical agent file to exist: %v", err)
-	}
-	if _, err := os.Stat(store.guestFilePath("host:alpha")); !os.IsNotExist(err) {
-		t.Fatalf("expected legacy host file to be removed, got err=%v", err)
+	if _, err := os.Stat(store.guestFilePath("host:alpha")); err != nil {
+		t.Fatalf("expected unsupported host file to remain unchanged, got err=%v", err)
 	}
 }
 

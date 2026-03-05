@@ -337,16 +337,8 @@ func normalizeKnowledgeResourceID(resourceID string) string {
 	return strings.TrimSpace(resourceID)
 }
 
-func isLegacyHostKnowledgeResourceID(resourceID string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(resourceID)), "host:")
-}
-
-func canonicalStoredKnowledgeResourceID(resourceID string) string {
-	trimmed := strings.TrimSpace(resourceID)
-	if strings.HasPrefix(strings.ToLower(trimmed), "host:") {
-		return "agent:" + trimmed[5:]
-	}
-	return trimmed
+func isUnsupportedKnowledgeResourceID(resourceID string) bool {
+	return unifiedresources.IsUnsupportedLegacyResourceIDAlias(resourceID)
 }
 
 // NewKnowledgeStore creates a new knowledge store
@@ -369,8 +361,8 @@ func (s *KnowledgeStore) SaveNote(resourceID, note, category string) error {
 	defer s.mu.Unlock()
 
 	resourceID = normalizeKnowledgeResourceID(resourceID)
-	if isLegacyHostKnowledgeResourceID(resourceID) {
-		return fmt.Errorf(`resource ID %q is no longer supported; use "agent:*"`, resourceID)
+	if isUnsupportedKnowledgeResourceID(resourceID) {
+		return fmt.Errorf("unsupported resource ID %q", resourceID)
 	}
 
 	entry := KnowledgeEntry{
@@ -397,10 +389,10 @@ func (s *KnowledgeStore) GetKnowledge(resourceID string, category string) []Know
 	defer s.mu.RUnlock()
 
 	resourceID = normalizeKnowledgeResourceID(resourceID)
-	if isLegacyHostKnowledgeResourceID(resourceID) {
+	if isUnsupportedKnowledgeResourceID(resourceID) {
 		log.Warn().
 			Str("resource_id", resourceID).
-			Msg("ai.adapters.KnowledgeStore.GetKnowledge: ignoring legacy host:* resource ID; use agent:*")
+			Msg("ai.adapters.KnowledgeStore.GetKnowledge: ignoring unsupported resource ID")
 		return nil
 	}
 
@@ -477,27 +469,6 @@ func (s *KnowledgeStore) loadFromDisk() error {
 
 	if err := json.Unmarshal(data, &s.entries); err != nil {
 		return err
-	}
-
-	// Canonicalize legacy host:* keys at load time.
-	needsSave := false
-	normalized := make(map[string][]KnowledgeEntry, len(s.entries))
-	for rawID, entries := range s.entries {
-		canonicalID := canonicalStoredKnowledgeResourceID(rawID)
-		if canonicalID != rawID {
-			needsSave = true
-		}
-		for i := range entries {
-			if entries[i].ResourceID != canonicalID {
-				needsSave = true
-			}
-			entries[i].ResourceID = canonicalID
-		}
-		normalized[canonicalID] = append(normalized[canonicalID], entries...)
-	}
-	s.entries = normalized
-	if needsSave {
-		s.saveToDisk()
 	}
 	return nil
 }

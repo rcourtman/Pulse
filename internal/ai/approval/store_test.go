@@ -109,7 +109,7 @@ func TestCreateApproval(t *testing.T) {
 	}
 }
 
-func TestCreateApproval_RejectsLegacyHostTargetType(t *testing.T) {
+func TestCreateApproval_RejectsUnsupportedHostTargetType(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -128,7 +128,7 @@ func TestCreateApproval_RejectsLegacyHostTargetType(t *testing.T) {
 	}
 
 	if err := store.CreateApproval(req); err == nil {
-		t.Fatal("expected legacy host target type to be rejected")
+		t.Fatal("expected unsupported host target type to be rejected")
 	}
 }
 
@@ -408,7 +408,7 @@ func TestConsumeApproval_LegacyWithoutCommandHash_MismatchRejected(t *testing.T)
 	}
 }
 
-func TestConsumeApproval_RejectsLegacyHostTargetTypeInput(t *testing.T) {
+func TestConsumeApproval_RejectsUnsupportedHostTargetTypeInput(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -429,7 +429,7 @@ func TestConsumeApproval_RejectsLegacyHostTargetTypeInput(t *testing.T) {
 	_, _ = store.Approve(req.ID, "admin")
 
 	if _, err := store.ConsumeApproval(req.ID, "uptime", "host", "node-1"); err == nil {
-		t.Fatal("expected error for legacy host target type input")
+		t.Fatal("expected error for unsupported host target type input")
 	}
 }
 
