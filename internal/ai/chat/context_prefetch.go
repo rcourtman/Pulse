@@ -13,7 +13,7 @@ import (
 // ResourceMention represents a detected resource mention in a user message
 type ResourceMention struct {
 	Name         string
-	ResourceType string // "vm", "system-container", "docker", "agent", "node"
+	ResourceType string // "vm", "system-container", "app-container", "agent", "node"
 	ResourceID   string
 	TargetID     string
 	MatchedText  string // The actual text that matched
@@ -260,7 +260,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 
 					mentions = append(mentions, ResourceMention{
 						Name:           name,
-						ResourceType:   "docker",
+						ResourceType:   "app-container",
 						ResourceID:     container.ContainerID(),
 						TargetID:       hostID,
 						MatchedText:    name,
@@ -429,7 +429,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 		parts := strings.Split(sm.ID, ":")
 
 		// Enforce canonical v6 frontend mention types only.
-		resourceType := strings.TrimSpace(strings.ToLower(sm.Type))
+		resourceType := canonicalMentionResourceType(sm.Type)
 		if resourceType == "container" || resourceType == "lxc" {
 			log.Warn().
 				Str("name", sm.Name).
@@ -474,7 +474,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				TargetHost:   loc.TargetHost,
 			})
 
-		case "docker":
+		case "app-container":
 			hostID, containerID := parseStructuredDockerMentionID(sm.ID, rs)
 
 			// Gather bind mounts via ReadState
@@ -500,7 +500,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 
 			mentions = append(mentions, ResourceMention{
 				Name:           sm.Name,
-				ResourceType:   "docker",
+				ResourceType:   "app-container",
 				ResourceID:     containerID,
 				TargetID:       hostID,
 				MatchedText:    sm.Name,
@@ -612,6 +612,26 @@ func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadSt
 	return parts[0], parts[1]
 }
 
+func canonicalMentionResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "docker", "docker-container", "docker_container", "app_container":
+		return "app-container"
+	default:
+		return resourceType
+	}
+}
+
+func discoveryResourceType(resourceType string) string {
+	switch canonicalMentionResourceType(resourceType) {
+	case "app-container":
+		// Discovery backend still stores Docker containers under "docker".
+		return "docker"
+	default:
+		return canonicalMentionResourceType(resourceType)
+	}
+}
+
 func canonicalDiscoveryTargetID(discovery *tools.ResourceDiscoveryInfo) string {
 	if discovery == nil {
 		return ""
@@ -622,7 +642,8 @@ func canonicalDiscoveryTargetID(discovery *tools.ResourceDiscoveryInfo) string {
 
 // getOrTriggerDiscovery gets existing discovery or triggers a new one
 func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention ResourceMention) (*tools.ResourceDiscoveryInfo, error) {
-	discoveryType := mention.ResourceType
+	discoveryType := discoveryResourceType(mention.ResourceType)
+	canonicalType := canonicalMentionResourceType(mention.ResourceType)
 
 	// First try to get existing discovery
 	discovery, err := p.discoveryProvider.GetDiscoveryByResource(discoveryType, mention.TargetID, mention.ResourceID)
@@ -634,10 +655,10 @@ func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention R
 	}
 
 	// Trigger discovery if not found (for VMs, system containers, and Docker containers)
-	if mention.ResourceType == "vm" || mention.ResourceType == "system-container" || mention.ResourceType == "docker" {
+	if canonicalType == "vm" || canonicalType == "system-container" || canonicalType == "app-container" {
 		log.Debug().
 			Str("resource", mention.Name).
-			Str("type", mention.ResourceType).
+			Str("type", canonicalType).
 			Msg("[ContextPrefetch] Triggering discovery")
 
 		discovery, err = p.discoveryProvider.TriggerDiscovery(ctx, discoveryType, mention.TargetID, mention.ResourceID)
@@ -664,16 +685,16 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	discoveryMap := make(map[string]*tools.ResourceDiscoveryInfo)
 	for _, d := range discoveries {
 		discoveryTargetID := canonicalDiscoveryTargetID(d)
-		key := fmt.Sprintf("%s:%s:%s", d.ResourceType, discoveryTargetID, d.ResourceID)
+		key := fmt.Sprintf("%s:%s:%s", canonicalMentionResourceType(d.ResourceType), discoveryTargetID, d.ResourceID)
 		discoveryMap[key] = d
 	}
 
 	for _, mention := range mentions {
-		key := fmt.Sprintf("%s:%s:%s", mention.ResourceType, mention.TargetID, mention.ResourceID)
+		key := fmt.Sprintf("%s:%s:%s", canonicalMentionResourceType(mention.ResourceType), mention.TargetID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
 
 		// Docker containers get special treatment - show the full routing chain
-		if mention.ResourceType == "docker" {
+		if canonicalMentionResourceType(mention.ResourceType) == "app-container" {
 			sb.WriteString(fmt.Sprintf("## %s (Docker container)\n", mention.Name))
 
 			// Show the full routing chain unambiguously

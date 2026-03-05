@@ -463,7 +463,7 @@ func TestHandleChat_CanonicalizesLegacyMentionTypes(t *testing.T) {
 			}
 			assert.Equal(t, "system-container", reqArg.Mentions[0].Type)
 			assert.Equal(t, "system-container", reqArg.Mentions[1].Type)
-			assert.Equal(t, "docker", reqArg.Mentions[2].Type)
+			assert.Equal(t, "app-container", reqArg.Mentions[2].Type)
 			assert.Equal(t, "agent", reqArg.Mentions[3].Type)
 		})
 

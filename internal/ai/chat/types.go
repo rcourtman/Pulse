@@ -61,7 +61,7 @@ type StreamCallback func(event StreamEvent)
 type StructuredMention struct {
 	ID   string `json:"id"`             // e.g. "system-container:delly:123", "docker:docker-host-1:container", "agent:host-1"
 	Name string `json:"name"`           // Display name, e.g. "ntfy"
-	Type string `json:"type"`           // "vm", "system-container", "container", "docker", "node", "agent"
+	Type string `json:"type"`           // "vm", "system-container", "app-container", "node", "agent"
 	Node string `json:"node,omitempty"` // Proxmox node or parent host
 }
 

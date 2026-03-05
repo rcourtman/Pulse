@@ -620,8 +620,8 @@ func canonicalizeChatMentionType(raw string) string {
 	switch normalized {
 	case "container", "lxc", "system_container":
 		return "system-container"
-	case "docker-container", "docker_container":
-		return "docker"
+	case "docker", "docker-container", "docker_container", "app_container":
+		return "app-container"
 	case "host", "hosts":
 		return "agent"
 	default:

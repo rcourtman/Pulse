@@ -127,20 +127,20 @@ func TestContextPrefetcher_ExtractResourceMentions(t *testing.T) {
 		t.Fatalf("expected mentions to be detected")
 	}
 
-	foundDocker := false
+	foundAppContainer := false
 	for _, m := range mentions {
-		if m.ResourceType == "docker" && m.Name == "homepage" {
-			foundDocker = true
+		if m.ResourceType == "app-container" && m.Name == "homepage" {
+			foundAppContainer = true
 			if m.TargetHost == "" {
-				t.Fatalf("expected docker mention to have target host")
+				t.Fatalf("expected app-container mention to have target host")
 			}
 			if len(m.BindMounts) == 0 {
-				t.Fatalf("expected docker bind mounts to be captured")
+				t.Fatalf("expected app-container bind mounts to be captured")
 			}
 		}
 	}
-	if !foundDocker {
-		t.Fatalf("expected docker mention")
+	if !foundAppContainer {
+		t.Fatalf("expected app-container mention")
 	}
 }
 
@@ -162,10 +162,10 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	}
 
 	structured := []StructuredMention{
-		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "docker"},
+		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "app-container"},
 		{ID: "agent:host1", Name: "host1", Type: "agent"},
 		{ID: "system-container:node1:201", Name: "beta", Type: "system-container", Node: "node1"},
-		{ID: "docker:resource:docker:abc:cid-simple", Name: "homepage2", Type: "docker"},
+		{ID: "docker:resource:docker:abc:cid-simple", Name: "homepage2", Type: "app-container"},
 	}
 	state.DockerHosts = append(state.DockerHosts, models.DockerHost{
 		ID:       "resource:docker:abc",
@@ -257,7 +257,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 		t.Fatalf("expected no trigger when cached discovery exists")
 	}
 
-	mention2 := ResourceMention{ResourceType: "docker", TargetID: "dock1", ResourceID: "cid1", Name: "homepage"}
+	mention2 := ResourceMention{ResourceType: "app-container", TargetID: "dock1", ResourceID: "cid1", Name: "homepage"}
 	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention2)
 	if err != nil || res == nil {
 		t.Fatalf("expected discovery trigger to succeed")
@@ -279,7 +279,7 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 	mentions := []ResourceMention{
 		{
 			Name:           "homepage",
-			ResourceType:   "docker",
+			ResourceType:   "app-container",
 			ResourceID:     "cid1",
 			TargetID:       "dock1",
 			DockerHostName: "dock1",
@@ -313,7 +313,7 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 
 	summary := prefetcher.formatContextSummary(mentions, discoveries)
 	if !strings.Contains(summary, "Docker container") {
-		t.Fatalf("expected docker context in summary")
+		t.Fatalf("expected app-container docker context in summary")
 	}
 	if !strings.Contains(summary, "target_host") {
 		t.Fatalf("expected target_host in summary")

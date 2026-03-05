@@ -406,7 +406,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 					if mention.TargetID != "" {
 						resourceID = "vm:" + mention.TargetID + ":" + mention.ResourceID
 					}
-				case "docker":
+				case "app-container":
 					if mention.TargetHost != "" {
 						resourceID = "docker_container:" + mention.TargetHost + ":" + mention.ResourceID
 					}
