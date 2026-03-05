@@ -50,6 +50,53 @@ These are still legacy-shaped internally, but they are not evidence of v6 model 
   `StateSnapshot` and `ResolveResource()` still model host-agent state for producer/wire compatibility.
   This is not the canonical read model; `ReadState` and unified resources are.
 
+## Internal Models Follow-Up
+
+The remaining `internal/models` host-era surface is still serving live compatibility and routing work.
+It should not be treated as dead migration residue.
+
+### Must Remain For Release
+
+- `internal/models/models.go`
+  `Host`, `HostSensorSummary`, `HostDiskSMART`, `ClearAllHosts()`, `LinkHostAgentToNode()`,
+  and `UnlinkHostAgent()` still back the host-agent ingest and linking flow.
+- `internal/models/models_frontend.go`
+  `HostFrontend` and the `StateFrontend.Hosts` field remain part of the internal/frontend wire DTO layer.
+  `/api/state` strips that array for the canonical v6 contract, but the model still exists for compatibility,
+  websocket shaping, mock data, and legacy-facing internal consumers.
+- `internal/models/converters.go`
+  `Host -> HostFrontend` conversion is still the compatibility bridge from host-agent state into the
+  older frontend DTO family.
+- `internal/models/state_snapshot.go`
+  `StateSnapshot.Hosts` and `ResolveResource()` still support host-agent lookup/routing for compatibility flows.
+
+### Active Runtime Boundaries Still Using That Surface
+
+- `internal/api/router.go`
+  Metrics/history and live metric fallback still read `snap.Hosts` when the canonical resource type is `agent`.
+- `internal/api/agent_ingest.go`
+  Host agent lookup and registration validation still scan the live `snap.Hosts` snapshot.
+- `internal/monitoring/monitor_agents.go`
+  `ApplyHostReport()` still writes into `models.Host` state before unified-resource ingestion layers consume it.
+- `internal/ai/chat/context_prefetch.go`
+  Chat mention prefetch already uses `ReadState.Hosts()` and maps those records to canonical `agent` mentions.
+  This is canonical at the read boundary even though the underlying source model is still named `Host`.
+
+### Post-Release Rename Candidates
+
+These look like rename-only cleanup once the host-agent compatibility/state layer is intentionally retired or renamed:
+
+- `internal/models/models.go`
+  `Host`, `HostSensorSummary`, `HostDiskSMART`, `HostCephCluster`
+- `internal/models/models_frontend.go`
+  `HostFrontend`, `HostSensorSummaryFrontend`, `HostDiskSMARTFrontend`
+- `internal/models/converters.go`
+  `ToFrontend converts a Host to HostFrontend`
+- `internal/models/state_snapshot.go`
+  comments like `Check generic Hosts` and the `hosts` local variable naming
+
+These are naming debt, not current v6 correctness bugs.
+
 ## Non-Resource Host Terminology
 
 These are unrelated to the removed v5 resource type and should not be treated as migration debt:
@@ -83,3 +130,7 @@ And requires:
 
 - unified `resources[]`
 - unified agent marker `type: 'unified'` / `agent.type = "unified"`
+
+- `internal/unifiedresources/code_standards_test.go`
+  Added `TestV6ReleaseFacingAPITestsCoverLegacyHostRejection` to pin release-facing API tests that
+  explicitly reject removed `host` aliases in chat, AI actions, org shares, reporting, and metrics history.
