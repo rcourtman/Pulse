@@ -243,32 +243,16 @@ func ensureDiscoveryCanonicalIDs(d *servicediscovery.ResourceDiscovery) *service
 	return &enriched
 }
 
-func stripLegacyHostID(value any) map[string]any {
-	payload, err := json.Marshal(value)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to marshal discovery response payload")
-		return map[string]any{}
-	}
-
-	var response map[string]any
-	if err := json.Unmarshal(payload, &response); err != nil {
-		log.Warn().Err(err).Msg("Failed to unmarshal discovery response payload")
-		return map[string]any{}
-	}
-	delete(response, "host_id")
-	return response
-}
-
-func discoverySummaryResponse(d *servicediscovery.ResourceDiscovery) map[string]any {
+func discoverySummaryResponse(d *servicediscovery.ResourceDiscovery) servicediscovery.DiscoverySummary {
 	canonical := ensureDiscoveryCanonicalIDs(d)
 	if canonical == nil {
-		return map[string]any{}
+		return servicediscovery.DiscoverySummary{}
 	}
-	return stripLegacyHostID(canonical.ToSummary())
+	return canonical.ToSummary()
 }
 
-func discoveryDetailResponse(d *servicediscovery.ResourceDiscovery) map[string]any {
-	return stripLegacyHostID(ensureDiscoveryCanonicalIDs(d))
+func discoveryDetailResponse(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
+	return ensureDiscoveryCanonicalIDs(d)
 }
 
 // HandleListDiscoveries handles GET /api/discovery
@@ -286,8 +270,11 @@ func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http
 	}
 
 	// Convert to summaries for list view
-	summaries := make([]map[string]any, 0, len(discoveries))
+	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
 	for _, d := range discoveries {
+		if d == nil {
+			continue
+		}
 		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
@@ -636,8 +623,11 @@ func (h *DiscoveryHandlers) HandleListByType(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	summaries := make([]map[string]any, 0, len(discoveries))
+	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
 	for _, d := range discoveries {
+		if d == nil {
+			continue
+		}
 		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
@@ -665,8 +655,11 @@ func (h *DiscoveryHandlers) HandleListByAgent(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	summaries := make([]map[string]any, 0, len(discoveries))
+	summaries := make([]servicediscovery.DiscoverySummary, 0, len(discoveries))
 	for _, d := range discoveries {
+		if d == nil {
+			continue
+		}
 		summaries = append(summaries, discoverySummaryResponse(d))
 	}
 
