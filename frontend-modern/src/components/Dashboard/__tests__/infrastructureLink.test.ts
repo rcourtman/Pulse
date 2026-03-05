@@ -40,22 +40,22 @@ describe('buildInfrastructureHrefForWorkload', () => {
     expect(href).toBe('/infrastructure?source=proxmox&q=pve1');
   });
 
-  it('maps docker workloads to docker infrastructure source with context query', () => {
+  it('maps app-container workloads to docker infrastructure source with context query', () => {
     const href = buildInfrastructureHrefForWorkload(
       baseGuest({
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         contextLabel: 'docker-host-1',
       }),
     );
     expect(href).toBe('/infrastructure?source=docker&q=docker-host-1');
   });
 
-  it('maps kubernetes workloads to kubernetes infrastructure source with cluster query', () => {
+  it('maps pod workloads to kubernetes infrastructure source with cluster query', () => {
     const href = buildInfrastructureHrefForWorkload(
       baseGuest({
-        type: 'k8s',
-        workloadType: 'k8s',
+        type: 'pod',
+        workloadType: 'pod',
         contextLabel: 'cluster-a',
       }),
     );

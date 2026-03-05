@@ -484,12 +484,12 @@ describe('GuestRow', () => {
     });
   });
 
-  describe('docker workload type', () => {
-    it('shows image column for docker guests', () => {
+  describe('app-container workload type', () => {
+    it('shows image column for app-container guests', () => {
       renderGuestRow({
         guest: makeGuest({
-          type: 'docker',
-          workloadType: 'docker',
+          type: 'app-container',
+          workloadType: 'app-container',
           image: 'nginx:latest',
         }),
         visibleColumnIds: ['name', 'image'],
@@ -498,11 +498,11 @@ describe('GuestRow', () => {
       expect(screen.getByText('nginx:latest')).toBeTruthy();
     });
 
-    it('shows update button for docker guests', () => {
+    it('shows update button for app-container guests', () => {
       renderGuestRow({
         guest: makeGuest({
-          type: 'docker',
-          workloadType: 'docker',
+          type: 'app-container',
+          workloadType: 'app-container',
           dockerHostId: 'host-1',
         }),
         visibleColumnIds: ['name', 'update'],
@@ -511,12 +511,12 @@ describe('GuestRow', () => {
     });
   });
 
-  describe('k8s workload type', () => {
-    it('shows namespace column for k8s guests', () => {
+  describe('pod workload type', () => {
+    it('shows namespace column for pod guests', () => {
       renderGuestRow({
         guest: makeGuest({
-          type: 'k8s',
-          workloadType: 'k8s',
+          type: 'pod',
+          workloadType: 'pod',
           namespace: 'default',
         }),
         visibleColumnIds: ['name', 'namespace'],
@@ -524,11 +524,11 @@ describe('GuestRow', () => {
       expect(screen.getByText('default')).toBeTruthy();
     });
 
-    it('shows context column for k8s guests', () => {
+    it('shows context column for pod guests', () => {
       renderGuestRow({
         guest: makeGuest({
-          type: 'k8s',
-          workloadType: 'k8s',
+          type: 'pod',
+          workloadType: 'pod',
           contextLabel: 'production-cluster',
         }),
         visibleColumnIds: ['name', 'context'],
@@ -710,8 +710,8 @@ describe('VIEW_MODE_COLUMNS', () => {
     expect(VIEW_MODE_COLUMNS.all).toBeInstanceOf(Set);
     expect(VIEW_MODE_COLUMNS.vm).toBeInstanceOf(Set);
     expect(VIEW_MODE_COLUMNS['system-container']).toBeInstanceOf(Set);
-    expect(VIEW_MODE_COLUMNS.docker).toBeInstanceOf(Set);
-    expect(VIEW_MODE_COLUMNS.k8s).toBeInstanceOf(Set);
+    expect(VIEW_MODE_COLUMNS['app-container']).toBeInstanceOf(Set);
+    expect(VIEW_MODE_COLUMNS.pod).toBeInstanceOf(Set);
   });
 
   it('all mode includes info column (merged identifier)', () => {
@@ -727,26 +727,26 @@ describe('VIEW_MODE_COLUMNS', () => {
     expect(VIEW_MODE_COLUMNS.vm!.has('info')).toBe(false);
   });
 
-  it('docker mode includes image and context', () => {
-    expect(VIEW_MODE_COLUMNS.docker!.has('image')).toBe(true);
-    expect(VIEW_MODE_COLUMNS.docker!.has('context')).toBe(true);
+  it('app-container mode includes image and context', () => {
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('image')).toBe(true);
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('context')).toBe(true);
   });
 
-  it('docker mode does not include disk or netIo', () => {
-    expect(VIEW_MODE_COLUMNS.docker!.has('disk')).toBe(false);
-    expect(VIEW_MODE_COLUMNS.docker!.has('netIo')).toBe(false);
+  it('app-container mode does not include disk or netIo', () => {
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('disk')).toBe(false);
+    expect(VIEW_MODE_COLUMNS['app-container']!.has('netIo')).toBe(false);
   });
 
-  it('k8s mode includes namespace and image', () => {
-    expect(VIEW_MODE_COLUMNS.k8s!.has('namespace')).toBe(true);
-    expect(VIEW_MODE_COLUMNS.k8s!.has('image')).toBe(true);
+  it('pod mode includes namespace and image', () => {
+    expect(VIEW_MODE_COLUMNS.pod!.has('namespace')).toBe(true);
+    expect(VIEW_MODE_COLUMNS.pod!.has('image')).toBe(true);
   });
 
-  it('k8s mode is minimal (no disk, uptime, tags, backup)', () => {
-    expect(VIEW_MODE_COLUMNS.k8s!.has('disk')).toBe(false);
-    expect(VIEW_MODE_COLUMNS.k8s!.has('uptime')).toBe(false);
-    expect(VIEW_MODE_COLUMNS.k8s!.has('tags')).toBe(false);
-    expect(VIEW_MODE_COLUMNS.k8s!.has('backup')).toBe(false);
+  it('pod mode is minimal (no disk, uptime, tags, backup)', () => {
+    expect(VIEW_MODE_COLUMNS.pod!.has('disk')).toBe(false);
+    expect(VIEW_MODE_COLUMNS.pod!.has('uptime')).toBe(false);
+    expect(VIEW_MODE_COLUMNS.pod!.has('tags')).toBe(false);
+    expect(VIEW_MODE_COLUMNS.pod!.has('backup')).toBe(false);
   });
 
   it('all view modes include name', () => {
@@ -862,9 +862,9 @@ describe('context column for PVE workloads', () => {
 });
 
 describe('backup column', () => {
-  it('shows dash for docker workloads (no backup support)', () => {
+  it('shows dash for app-container workloads (no backup support)', () => {
     renderGuestRow({
-      guest: makeGuest({ type: 'docker', workloadType: 'docker' }),
+      guest: makeGuest({ type: 'app-container', workloadType: 'app-container' }),
       visibleColumnIds: ['name', 'backup'],
     });
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
@@ -888,11 +888,11 @@ describe('info merged column', () => {
     expect(screen.getByText('200')).toBeTruthy();
   });
 
-  it('shows short image name for docker workloads in info column', () => {
+  it('shows short image name for app-container workloads in info column', () => {
     renderGuestRow({
       guest: makeGuest({
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         image: 'library/nginx:latest',
       }),
       visibleColumnIds: ['name', 'info'],
@@ -901,11 +901,11 @@ describe('info merged column', () => {
     expect(screen.getByText('library/nginx:latest')).toBeTruthy();
   });
 
-  it('shows namespace for k8s workloads in info column', () => {
+  it('shows namespace for pod workloads in info column', () => {
     renderGuestRow({
       guest: makeGuest({
-        type: 'k8s',
-        workloadType: 'k8s',
+        type: 'pod',
+        workloadType: 'pod',
         namespace: 'kube-system',
       }),
       visibleColumnIds: ['name', 'info'],
@@ -916,8 +916,8 @@ describe('info merged column', () => {
   it('shows dash when no info value is available', () => {
     renderGuestRow({
       guest: makeGuest({
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         image: '',
       }),
       visibleColumnIds: ['name', 'info'],
@@ -953,12 +953,12 @@ describe('event propagation', () => {
   });
 });
 
-describe('docker update button visibility', () => {
+describe('app-container update button visibility', () => {
   it('does not show update button when dockerHostId is missing', () => {
     renderGuestRow({
       guest: makeGuest({
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         dockerHostId: '',
       }),
       visibleColumnIds: ['name', 'update'],
@@ -969,8 +969,8 @@ describe('docker update button visibility', () => {
   it('shows update button when dockerHostId is present', () => {
     renderGuestRow({
       guest: makeGuest({
-        type: 'docker',
-        workloadType: 'docker',
+        type: 'app-container',
+        workloadType: 'app-container',
         dockerHostId: 'host-1',
       }),
       visibleColumnIds: ['name', 'update'],

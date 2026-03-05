@@ -136,10 +136,10 @@ describe('GuestDrawer', () => {
       expect(path).toContain('proxmox');
     });
 
-    it('navigates to docker infrastructure for a docker workload', async () => {
+    it('navigates to docker infrastructure for an app-container workload', async () => {
       render(() => (
         <GuestDrawer
-          guest={makeGuest({ workloadType: 'docker', contextLabel: 'my-host' })}
+          guest={makeGuest({ workloadType: 'app-container', contextLabel: 'my-host' })}
           onClose={vi.fn()}
         />
       ));
@@ -522,8 +522,10 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('url-id').textContent).toBe('pve:n1:200');
     });
 
-    it('labels docker guests as "container"', () => {
-      render(() => <GuestDrawer guest={makeGuest({ workloadType: 'docker' })} onClose={vi.fn()} />);
+    it('labels app-container guests as "container"', () => {
+      render(() => (
+        <GuestDrawer guest={makeGuest({ workloadType: 'app-container' })} onClose={vi.fn()} />
+      ));
       expect(screen.getByTestId('url-label').textContent).toBe('container');
     });
 
@@ -568,11 +570,11 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('101');
     });
 
-    it('passes correct resourceType and agentId for docker', () => {
+    it('passes correct resourceType and agentId for app-container', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({
-            workloadType: 'docker',
+            workloadType: 'app-container',
             dockerHostId: 'dh-1',
             id: 'container-abc',
           })}

@@ -42,8 +42,13 @@ describe('workloadTypeBadges', () => {
       });
     });
 
-    describe('Docker types', () => {
-      it('returns Containers badge for docker', () => {
+    describe('App container types', () => {
+      it('returns Containers badge for canonical app-container', () => {
+        const result = getWorkloadTypeBadge('app-container');
+        expect(result.label).toBe('Containers');
+      });
+
+      it('retains docker alias compatibility', () => {
         const result = getWorkloadTypeBadge('docker');
         expect(result.label).toBe('Containers');
       });
@@ -61,19 +66,19 @@ describe('workloadTypeBadges', () => {
       });
     });
 
-    describe('Kubernetes types', () => {
-      it('returns Pod badge for k8s alias input', () => {
+    describe('Pod types', () => {
+      it('returns Pod badge for pod', () => {
+        const result = getWorkloadTypeBadge('pod');
+        expect(result.label).toBe('Pod');
+      });
+
+      it('retains k8s alias compatibility', () => {
         const result = getWorkloadTypeBadge('k8s');
         expect(result.label).toBe('Pod');
       });
 
-      it('returns Pod badge for kubernetes alias input', () => {
+      it('retains kubernetes alias compatibility', () => {
         const result = getWorkloadTypeBadge('kubernetes');
-        expect(result.label).toBe('Pod');
-      });
-
-      it('returns Pod badge for pod', () => {
-        const result = getWorkloadTypeBadge('pod');
         expect(result.label).toBe('Pod');
       });
     });
