@@ -86,6 +86,9 @@ func TestStore_SaveGetListAndNotes(t *testing.T) {
 	if got == nil || got.ServiceName != "Nginx" {
 		t.Fatalf("unexpected discovery: %#v", got)
 	}
+	if got.TargetID != "host1" {
+		t.Fatalf("expected TargetID host1, got %q", got.TargetID)
+	}
 	if !store.Exists(d1.ID) {
 		t.Fatalf("expected discovery to exist")
 	}
@@ -146,6 +149,39 @@ func TestStore_SaveGetListAndNotes(t *testing.T) {
 	}
 	if store.Exists(d1.ID) {
 		t.Fatalf("expected discovery to be deleted")
+	}
+}
+
+func TestStore_SaveCanonicalizesAgentAndTargetIDs(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	d := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeAgent, "agent-1", "agent-1"),
+		ResourceType: ResourceTypeAgent,
+		ResourceID:   "agent-1",
+		HostID:       "agent-1",
+		ServiceName:  "Agent",
+	}
+	if err := store.Save(d); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	got, err := store.Get(d.ID)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected discovery, got nil")
+	}
+	if got.TargetID != "agent-1" {
+		t.Fatalf("expected TargetID agent-1, got %q", got.TargetID)
+	}
+	if got.AgentID != "agent-1" {
+		t.Fatalf("expected AgentID agent-1, got %q", got.AgentID)
 	}
 }
 

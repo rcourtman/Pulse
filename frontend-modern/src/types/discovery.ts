@@ -58,6 +58,8 @@ export interface ResourceDiscovery {
   id: string;
   resource_type: ResourceType;
   resource_id: string;
+  /** Canonical v6 target identifier (agent ID / node ID / cluster ID). */
+  target_id?: string;
   /** Canonical v6 agent identifier for `resource_type: "agent"` payloads. */
   agent_id?: string;
   /** Legacy compatibility field; retained until all producers emit `agent_id`. */
@@ -96,6 +98,8 @@ export interface DiscoverySummary {
   id: string;
   resource_type: ResourceType;
   resource_id: string;
+  /** Canonical v6 target identifier (agent ID / node ID / cluster ID). */
+  target_id?: string;
   /** Canonical v6 agent identifier for `resource_type: "agent"` payloads. */
   agent_id?: string;
   /** Legacy compatibility field; retained until all producers emit `agent_id`. */

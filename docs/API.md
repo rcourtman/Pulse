@@ -269,11 +269,11 @@ Service discovery is used by Pulse Assistant and the UI to inventory web service
 - `PUT /api/discovery/settings` (admin, `settings:write`)
 - `GET /api/discovery/type/{type}`
 - `GET /api/discovery/agent/{agentId}`
-- `GET /api/discovery/{type}/{host}/{id}`
-- `POST /api/discovery/{type}/{host}/{id}` (trigger discovery, optional `force`)
-- `DELETE /api/discovery/{type}/{host}/{id}`
-- `GET /api/discovery/{type}/{host}/{id}/progress`
-- `PUT /api/discovery/{type}/{host}/{id}/notes`
+- `GET /api/discovery/{type}/{targetId}/{resourceId}`
+- `POST /api/discovery/{type}/{targetId}/{resourceId}` (trigger discovery, optional `force`)
+- `DELETE /api/discovery/{type}/{targetId}/{resourceId}`
+- `GET /api/discovery/{type}/{targetId}/{resourceId}/progress`
+- `PUT /api/discovery/{type}/{targetId}/{resourceId}/notes`
 
 ### Test Notification
 `POST /api/test-notification` (auth)

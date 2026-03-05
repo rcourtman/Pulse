@@ -226,19 +226,28 @@ func redactSensitiveFields(d *servicediscovery.ResourceDiscovery) *servicediscov
 	return &redacted
 }
 
-func ensureDiscoveryAgentID(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
+func ensureDiscoveryCanonicalIDs(d *servicediscovery.ResourceDiscovery) *servicediscovery.ResourceDiscovery {
 	if d == nil {
 		return nil
 	}
-	if d.ResourceType != servicediscovery.ResourceTypeAgent {
-		return d
-	}
-	if strings.TrimSpace(d.AgentID) != "" {
-		return d
-	}
 
 	enriched := *d
-	enriched.AgentID = d.HostID
+	changed := false
+	if strings.TrimSpace(enriched.HostID) == "" && strings.TrimSpace(enriched.TargetID) != "" {
+		enriched.HostID = enriched.TargetID
+		changed = true
+	}
+	if strings.TrimSpace(enriched.TargetID) == "" && strings.TrimSpace(enriched.HostID) != "" {
+		enriched.TargetID = enriched.HostID
+		changed = true
+	}
+	if enriched.ResourceType == servicediscovery.ResourceTypeAgent && strings.TrimSpace(enriched.AgentID) == "" {
+		enriched.AgentID = enriched.TargetID
+		changed = true
+	}
+	if !changed {
+		return d
+	}
 	return &enriched
 }
 
@@ -268,18 +277,18 @@ func (h *DiscoveryHandlers) HandleListDiscoveries(w http.ResponseWriter, r *http
 	})
 }
 
-// HandleGetDiscovery handles GET /api/discovery/{type}/{host}/{id}
+// HandleGetDiscovery handles GET /api/discovery/{type}/{target}/{id}
 func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return
 	}
 
-	// Parse path: /api/discovery/{type}/{host}/{id}
+	// Parse path: /api/discovery/{type}/{target}/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/")
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 3 {
-		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{host}/{id}")
+		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{target}/{id}")
 		return
 	}
 
@@ -307,12 +316,12 @@ func (h *DiscoveryHandlers) HandleGetDiscovery(w http.ResponseWriter, r *http.Re
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
-	discovery = ensureDiscoveryAgentID(discovery)
+	discovery = ensureDiscoveryCanonicalIDs(discovery)
 
 	writeDiscoveryJSON(w, discovery)
 }
 
-// HandleTriggerDiscovery handles POST /api/discovery/{type}/{host}/{id}
+// HandleTriggerDiscovery handles POST /api/discovery/{type}/{target}/{id}
 func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -323,7 +332,7 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	path := strings.TrimPrefix(r.URL.Path, "/api/discovery/")
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 3 {
-		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{host}/{id}")
+		writeDiscoveryError(w, http.StatusBadRequest, "Invalid path: expected /api/discovery/{type}/{target}/{id}")
 		return
 	}
 
@@ -373,12 +382,12 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 	if !h.isAdminRequest(r) {
 		discovery = redactSensitiveFields(discovery)
 	}
-	discovery = ensureDiscoveryAgentID(discovery)
+	discovery = ensureDiscoveryCanonicalIDs(discovery)
 
 	writeDiscoveryJSON(w, discovery)
 }
 
-// HandleUpdateNotes handles PUT /api/discovery/{type}/{host}/{id}/notes
+// HandleUpdateNotes handles PUT /api/discovery/{type}/{target}/{id}/notes
 func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -436,12 +445,12 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 	if !isAdmin {
 		discovery = redactSensitiveFields(discovery)
 	}
-	discovery = ensureDiscoveryAgentID(discovery)
+	discovery = ensureDiscoveryCanonicalIDs(discovery)
 
 	writeDiscoveryJSON(w, discovery)
 }
 
-// HandleDeleteDiscovery handles DELETE /api/discovery/{type}/{host}/{id}
+// HandleDeleteDiscovery handles DELETE /api/discovery/{type}/{target}/{id}
 func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
@@ -475,7 +484,7 @@ func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http
 	writeDiscoveryJSON(w, map[string]any{"success": true, "id": discoveryID})
 }
 
-// HandleGetProgress handles GET /api/discovery/{type}/{host}/{id}/progress
+// HandleGetProgress handles GET /api/discovery/{type}/{target}/{id}/progress
 func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")

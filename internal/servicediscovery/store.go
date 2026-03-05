@@ -133,6 +133,15 @@ func normalizeDiscovery(d *ResourceDiscovery) {
 	}
 	d.ResourceType = canonicalStoredResourceType(d.ResourceType)
 	d.ID = canonicalStoredResourceID(d.ID)
+	if strings.TrimSpace(d.HostID) == "" && strings.TrimSpace(d.TargetID) != "" {
+		d.HostID = d.TargetID
+	}
+	if strings.TrimSpace(d.TargetID) == "" && strings.TrimSpace(d.HostID) != "" {
+		d.TargetID = d.HostID
+	}
+	if d.ResourceType == ResourceTypeAgent && strings.TrimSpace(d.AgentID) == "" {
+		d.AgentID = d.TargetID
+	}
 }
 
 // toLegacyID converts a normalized resource ID back to its legacy form for file lookup.
@@ -267,6 +276,15 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 
 	// Persist/cache a defensive copy so callers cannot mutate shared state after Save.
 	toSave := cloneResourceDiscovery(d)
+	if strings.TrimSpace(toSave.HostID) == "" && strings.TrimSpace(toSave.TargetID) != "" {
+		toSave.HostID = toSave.TargetID
+	}
+	if strings.TrimSpace(toSave.TargetID) == "" && strings.TrimSpace(toSave.HostID) != "" {
+		toSave.TargetID = toSave.HostID
+	}
+	if toSave.ResourceType == ResourceTypeAgent && strings.TrimSpace(toSave.AgentID) == "" {
+		toSave.AgentID = toSave.TargetID
+	}
 
 	data, err := marshalDiscovery(toSave)
 	if err != nil {
