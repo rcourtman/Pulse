@@ -618,7 +618,7 @@ func TestStore_Fingerprints_ReturnDefensiveCopies(t *testing.T) {
 
 	fp := &ContainerFingerprint{
 		ResourceID: "docker:host1:web",
-		HostID:     "host1",
+		TargetID:   "host1",
 		Hash:       "abc123",
 		Ports:      []string{"80/tcp"},
 		MountPaths: []string{"/config"},
@@ -710,17 +710,17 @@ func TestStore_GetChangedResources(t *testing.T) {
 	// format that collectFingerprints uses: "type:host:id"
 	dockerFP := &ContainerFingerprint{
 		ResourceID: "docker:host1:nginx",
-		HostID:     "host1",
+		TargetID:   "host1",
 		Hash:       "aaa111",
 	}
 	lxcFP := &ContainerFingerprint{
 		ResourceID: "lxc:node1:101",
-		HostID:     "node1",
+		TargetID:   "node1",
 		Hash:       "bbb222",
 	}
 	vmFP := &ContainerFingerprint{
 		ResourceID: "vm:node1:200",
-		HostID:     "node1",
+		TargetID:   "node1",
 		Hash:       "ccc333",
 	}
 	for _, fp := range []*ContainerFingerprint{dockerFP, lxcFP, vmFP} {
@@ -961,7 +961,7 @@ func TestStore_LoadFingerprintsSkipsOversizedFiles(t *testing.T) {
 
 	valid := &ContainerFingerprint{
 		ResourceID: "docker:host1:nginx",
-		HostID:     "host1",
+		TargetID:   "host1",
 		Hash:       "abc123",
 	}
 	validData, err := json.Marshal(valid)
@@ -1023,8 +1023,8 @@ func TestStore_LoadFingerprints_BackfillsLegacyHostID(t *testing.T) {
 	if fp == nil {
 		t.Fatal("expected fingerprint, got nil")
 	}
-	if fp.HostID != "legacy-host" {
-		t.Fatalf("expected HostID legacy-host, got %q", fp.HostID)
+	if fp.TargetID != "legacy-host" {
+		t.Fatalf("expected TargetID legacy-host, got %q", fp.TargetID)
 	}
 }
 

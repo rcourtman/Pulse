@@ -192,13 +192,13 @@ func unmarshalStoredFingerprint(data []byte, fp *ContainerFingerprint) error {
 	if err := json.Unmarshal(data, fp); err != nil {
 		return err
 	}
-	if strings.TrimSpace(fp.HostID) == "" {
+	if strings.TrimSpace(fp.TargetID) == "" {
 		legacyHostID, err := extractLegacyStringField(data, "host_id")
 		if err != nil {
 			return err
 		}
 		if legacyHostID != "" {
-			fp.HostID = legacyHostID
+			fp.TargetID = legacyHostID
 		}
 	}
 	return nil

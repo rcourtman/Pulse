@@ -13,10 +13,10 @@ import (
 // GenerateDockerFingerprint creates a fingerprint from Docker container metadata.
 // The fingerprint captures key metadata that indicates when a container has changed
 // in ways that would affect discovery results (image, ports, mounts, env keys).
-func GenerateDockerFingerprint(hostID string, container *DockerContainer) *ContainerFingerprint {
+func GenerateDockerFingerprint(targetID string, container *DockerContainer) *ContainerFingerprint {
 	fp := &ContainerFingerprint{
 		ResourceID:    container.Name,
-		HostID:        hostID,
+		TargetID:      targetID,
 		SchemaVersion: FingerprintSchemaVersion,
 		GeneratedAt:   time.Now(),
 		ImageName:     container.Image,
@@ -81,8 +81,8 @@ func (fp *ContainerFingerprint) HasSchemaChanged(other *ContainerFingerprint) bo
 
 // String returns a human-readable representation of the fingerprint.
 func (fp *ContainerFingerprint) String() string {
-	return fmt.Sprintf("Fingerprint{id=%s, host=%s, hash=%s, image=%s, ports=%v}",
-		fp.ResourceID, fp.HostID, fp.Hash, fp.ImageName, fp.Ports)
+	return fmt.Sprintf("Fingerprint{id=%s, target=%s, hash=%s, image=%s, ports=%v}",
+		fp.ResourceID, fp.TargetID, fp.Hash, fp.ImageName, fp.Ports)
 }
 
 // GenerateLXCFingerprint creates a fingerprint from LXC container metadata.
@@ -90,7 +90,7 @@ func (fp *ContainerFingerprint) String() string {
 func GenerateLXCFingerprint(nodeID string, container *Container) *ContainerFingerprint {
 	fp := &ContainerFingerprint{
 		ResourceID:    strconv.Itoa(container.VMID),
-		HostID:        nodeID,
+		TargetID:      nodeID,
 		SchemaVersion: FingerprintSchemaVersion,
 		GeneratedAt:   time.Now(),
 		ImageName:     container.OSTemplate, // OS template is like the "image" for LXCs
@@ -143,7 +143,7 @@ func GenerateLXCFingerprint(nodeID string, container *Container) *ContainerFinge
 func GenerateVMFingerprint(nodeID string, vm *VM) *ContainerFingerprint {
 	fp := &ContainerFingerprint{
 		ResourceID:    strconv.Itoa(vm.VMID),
-		HostID:        nodeID,
+		TargetID:      nodeID,
 		SchemaVersion: FingerprintSchemaVersion,
 		GeneratedAt:   time.Now(),
 		ImageName:     vm.OSName, // OS name is the closest to an "image" for VMs
@@ -191,7 +191,7 @@ func GenerateVMFingerprint(nodeID string, vm *VM) *ContainerFingerprint {
 func GenerateK8sPodFingerprint(clusterID string, pod *KubernetesPod) *ContainerFingerprint {
 	fp := &ContainerFingerprint{
 		ResourceID:    pod.UID,
-		HostID:        clusterID,
+		TargetID:      clusterID,
 		SchemaVersion: FingerprintSchemaVersion,
 		GeneratedAt:   time.Now(),
 	}
