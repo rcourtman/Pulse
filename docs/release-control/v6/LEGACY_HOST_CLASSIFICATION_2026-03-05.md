@@ -82,6 +82,50 @@ It should not be treated as dead migration residue.
   Chat mention prefetch already uses `ReadState.Hosts()` and maps those records to canonical `agent` mentions.
   This is canonical at the read boundary even though the underlying source model is still named `Host`.
 
+## API Runtime Follow-Up
+
+The remaining host-era naming inside `internal/api` is concentrated in compatibility handlers and helper locals.
+It is still part of the supported release path for agent install, lookup, and live metric fallback.
+
+### Must Remain For Release
+
+- `internal/api/agent_ingest.go`
+  `HostAgentHandlers` is still the compatibility boundary for the Pulse Unified Agent runtime.
+  It reads `GetLiveStateSnapshot().Hosts` to:
+  - validate installer lookup requests
+  - resolve config fetch scope
+  - enforce token-to-agent ownership
+- `internal/api/router.go`
+  live metric fallback still resolves canonical `agent` resources through `snap.Hosts`
+  when building instant metric points for runtime reads.
+- `internal/api/host_agents_test.go`
+  keeps the lookup/install compatibility behavior pinned while those handlers still exist.
+
+### Why This Is Not A V6 Leak
+
+- The external resource type at the API boundary is still `agent`, not `host`.
+- The remaining host-era code is operating on compatibility storage names (`models.Host`, `snap.Hosts`)
+  after canonical request normalization has already happened.
+- Existing API tests already pin explicit rejection of removed `host` aliases in:
+  - AI/chat
+  - org shares
+  - reporting
+  - metrics history
+  - resources/discovery
+
+### Post-Release Refactor Targets
+
+These are the next cleanup candidates once the host-agent compatibility/state layer is intentionally renamed or retired:
+
+- `internal/api/router.go`
+  local helpers like `findHost` and comments that still describe the `agent` path in host-era terms
+- `internal/api/agent_ingest.go`
+  `HostAgentHandlers` naming, local `host` variables, and `snap.Hosts` comments
+- `internal/api/host_agents_test.go`
+  test names and fixtures that still describe the canonical agent flow as `host` lookup/config management
+
+These are naming/structure refactors, not release blockers.
+
 ### Post-Release Rename Candidates
 
 These look like rename-only cleanup once the host-agent compatibility/state layer is intentionally retired or renamed:
