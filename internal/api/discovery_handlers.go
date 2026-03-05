@@ -432,11 +432,11 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hostID := parts[1]
+	targetID := parts[1]
 	resourceID := parts[2]
 
 	// Build the full ID
-	discoveryID := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, targetID, resourceID)
 
 	// Parse request body
 	var req servicediscovery.UpdateNotesRequest
@@ -492,10 +492,10 @@ func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http
 		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hostID := parts[1]
+	targetID := parts[1]
 	resourceID := parts[2]
 
-	discoveryID := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, targetID, resourceID)
 
 	if err := h.service.DeleteDiscovery(discoveryID); err != nil {
 		log.Error().Err(err).Str("id", discoveryID).Msg("Failed to delete discovery")
@@ -527,10 +527,10 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 		writeDiscoveryError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hostID := parts[1]
+	targetID := parts[1]
 	resourceID := parts[2]
 
-	discoveryID := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, targetID, resourceID)
 
 	progress := h.service.GetProgress(discoveryID)
 	if progress == nil {
