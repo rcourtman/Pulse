@@ -476,6 +476,33 @@ func TestHandleChat_CanonicalizesMentionTypes(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.
+		On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			reqArg := args.Get(1).(chat.ExecuteRequest)
+			if len(reqArg.Mentions) != 1 {
+				t.Fatalf("mentions len = %d, want 1 (%+v)", len(reqArg.Mentions), reqArg.Mentions)
+			}
+			assert.Equal(t, "agent", reqArg.Mentions[0].Type)
+		})
+
+	body := `{"prompt":"hi","mentions":[{"id":"host:node-1","name":"node-1","type":"host"},{"id":"system-container:pve1:200","name":"ct200","type":"system_container","node":"pve1"},{"id":"docker:agent-1:nginx","name":"nginx","type":"docker_container"},{"id":"agent:node-2","name":"node-2","type":"agent"}]}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestCanonicalizeChatMentionType_DoesNotNormalizeRemovedAliases(t *testing.T) {
 	assert.Equal(t, "host", canonicalizeChatMentionType("host"))
 	assert.Equal(t, "system_container", canonicalizeChatMentionType("system_container"))

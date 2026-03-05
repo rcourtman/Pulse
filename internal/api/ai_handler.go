@@ -627,6 +627,19 @@ func canonicalizeChatMentionType(raw string) string {
 	}
 }
 
+func isUnsupportedLegacyChatMentionType(mentionType string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(mentionType))
+	if unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalized) {
+		return true
+	}
+	switch normalized {
+	case "system_container", "docker_container", "app_container", "docker_host", "kubernetes_cluster", "k8s_cluster":
+		return true
+	default:
+		return false
+	}
+}
+
 // ChatRequest represents a chat request
 type ChatRequest struct {
 	Prompt    string        `json:"prompt"`
@@ -759,6 +772,13 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	for _, m := range req.Mentions {
 		mentionType := canonicalizeChatMentionType(m.Type)
 		if mentionType == "" {
+			continue
+		}
+		if isUnsupportedLegacyChatMentionType(mentionType) {
+			log.Warn().
+				Str("mention_type", mentionType).
+				Str("mention_name", m.Name).
+				Msg("Ignoring unsupported legacy chat mention type")
 			continue
 		}
 		chatMentions = append(chatMentions, chat.StructuredMention{
