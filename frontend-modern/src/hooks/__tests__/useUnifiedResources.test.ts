@@ -134,7 +134,7 @@ describe('useUnifiedResources', () => {
     await waitForResourceCount(() => result!.resources().length);
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/resources?type=agent%2Cpbs%2Cpmg%2Ck8s_cluster%2Ck8s_node&page=1&limit=100',
+      '/api/resources?type=agent%2Cpbs%2Cpmg%2Ck8s-cluster%2Ck8s-node&page=1&limit=100',
       { cache: 'no-store' },
     );
     const originalResourceRef = result!.resources()[0];
@@ -418,7 +418,7 @@ describe('useUnifiedResources', () => {
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/resources?type=storage%2Cpbs%2Cpmg%2Cvm%2Csystem-container%2Cpod%2Cagent%2Ck8s_cluster%2Ck8s_node%2Cphysical_disk%2Cceph&page=1&limit=100',
+      '/api/resources?type=storage%2Cpbs%2Cpmg%2Cvm%2Csystem-container%2Cpod%2Cagent%2Ck8s-cluster%2Ck8s-node%2Cphysical_disk%2Cceph&page=1&limit=100',
       { cache: 'no-store' },
     );
     expect(result!.resources().length).toBeGreaterThanOrEqual(0);
