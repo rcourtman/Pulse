@@ -169,7 +169,6 @@ describe('discovery api', () => {
               resource_id: 'agent-9',
               agent_id: 'agent-9',
               target_id: 'agent-9',
-              host_id: 'legacy-host',
               hostname: 'agent-9.local',
               service_type: 'linux',
               service_name: 'Agent',
