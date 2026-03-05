@@ -52,7 +52,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"container": {
 						Type:        "string",
-						Description: "For logs with source=docker: container name",
+						Description: "Container name. For logs with source=docker, or for exec/file/tail to run inside a Docker container on target_host.",
 					},
 					"unit": {
 						Type:        "string",
@@ -68,7 +68,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"app_container": {
 						Type:        "string",
-						Description: "Read from inside a Docker container (target_host is where Docker runs)",
+						Description: "Deprecated alias for container (Docker container name on target_host).",
 					},
 				},
 				Required: []string{"action", "target_host"},
@@ -106,7 +106,7 @@ func (e *PulseToolExecutor) executeRead(ctx context.Context, args map[string]int
 func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer, _ := args["app_container"].(string)
+	dockerContainer := resolveContainerArg(args)
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required for exec action")), nil
@@ -200,7 +200,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	if dockerContainer != "" {
 		// Validate container name
 		if !isValidContainerName(dockerContainer) {
-			return NewErrorResult(fmt.Errorf("invalid app_container name")), nil
+			return NewErrorResult(fmt.Errorf("invalid container name")), nil
 		}
 		execCommand = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(command))
 	}
@@ -251,7 +251,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 func (e *PulseToolExecutor) executeReadFile(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	path, _ := args["path"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer, _ := args["app_container"].(string)
+	dockerContainer := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for file action")), nil
@@ -316,7 +316,7 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	targetHost, _ := args["target_host"].(string)
 	lines := intArg(args, "lines", 100)
 	grepPattern, _ := args["grep"].(string)
-	dockerContainer, _ := args["app_container"].(string)
+	dockerContainer := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for tail action")), nil
@@ -345,10 +345,10 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	}
 
 	return e.executeReadExec(ctx, map[string]interface{}{
-		"action":        "exec",
-		"command":       command,
-		"target_host":   targetHost,
-		"app_container": dockerContainer,
+		"action":      "exec",
+		"command":     command,
+		"target_host": targetHost,
+		"container":   dockerContainer,
 	})
 }
 

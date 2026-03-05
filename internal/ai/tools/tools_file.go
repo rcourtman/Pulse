@@ -48,13 +48,13 @@ Use this instead of shell commands for editing config files (YAML, JSON, etc.)
 
 Routing: target_host can be a node (delly), a container name (homepage-docker), or a VM name. Commands are automatically routed through the appropriate agent.
 
-Docker container support: Use app_container to access files INSIDE a Docker container. The target_host specifies where Docker is running.
+Docker container support: Use container to access files INSIDE a Docker container. The target_host specifies where Docker runs.
 
 Examples:
 - Read from container: action="read", path="/opt/app/config.yaml", target_host="homepage-docker"
 - Write to host: action="write", path="/tmp/test.txt", content="hello", target_host="delly"
-- Read from Docker: action="read", path="/config/settings.json", target_host="tower", app_container="jellyfin"
-- Write to Docker: action="write", path="/tmp/test.txt", content="hello", target_host="tower", app_container="nginx"`,
+- Read from Docker: action="read", path="/config/settings.json", target_host="tower", container="jellyfin"
+- Write to Docker: action="write", path="/tmp/test.txt", content="hello", target_host="tower", container="nginx"`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -75,9 +75,13 @@ Examples:
 						Type:        "string",
 						Description: "Hostname where the file exists (or where Docker is running)",
 					},
-					"app_container": {
+					"container": {
 						Type:        "string",
 						Description: "Docker container name (for files inside containers)",
+					},
+					"app_container": {
+						Type:        "string",
+						Description: "Deprecated alias for container (Docker container name)",
 					},
 				},
 				Required: []string{"action", "path", "target_host"},
@@ -96,7 +100,7 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 	path, _ := args["path"].(string)
 	content, _ := args["content"].(string)
 	targetHost, _ := args["target_host"].(string)
-	dockerContainer, _ := args["app_container"].(string)
+	dockerContainer := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required")), nil
@@ -110,11 +114,11 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 		return NewErrorResult(fmt.Errorf("path must be absolute (start with /)")), nil
 	}
 
-	// Validate app_container if provided (simple alphanumeric + _ + -)
+	// Validate container if provided (simple alphanumeric + _ + -)
 	if dockerContainer != "" {
 		for _, c := range dockerContainer {
 			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.') {
-				return NewErrorResult(fmt.Errorf("invalid character '%c' in app_container name", c)), nil
+				return NewErrorResult(fmt.Errorf("invalid character '%c' in container name", c)), nil
 			}
 		}
 	}
@@ -216,9 +220,7 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 		"redacted":   redactionCount > 0,
 		"redactions": redactionCount,
 	}
-	if dockerContainer != "" {
-		response["app_container"] = dockerContainer
-	}
+	setContainerResponseFields(response, dockerContainer)
 	// Include execution provenance for observability
 	response["execution"] = buildExecutionProvenance(targetHost, routing)
 	return NewJSONResult(response), nil
@@ -323,15 +325,16 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 			errMsg = result.Stdout
 		}
 		if dockerContainer != "" {
-			return NewJSONResultWithIsError(map[string]interface{}{
-				"success":       false,
-				"action":        "append",
-				"path":          path,
-				"host":          targetHost,
-				"app_container": dockerContainer,
-				"exit_code":     result.ExitCode,
-				"error":         errMsg,
-			}, true), nil
+			response := map[string]interface{}{
+				"success":   false,
+				"action":    "append",
+				"path":      path,
+				"host":      targetHost,
+				"exit_code": result.ExitCode,
+				"error":     errMsg,
+			}
+			setContainerResponseFields(response, dockerContainer)
+			return NewJSONResultWithIsError(response, true), nil
 		}
 		return NewJSONResultWithIsError(map[string]interface{}{
 			"success":   false,
@@ -353,9 +356,7 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		"bytes_written": len(content),
 		"verification":  verify,
 	}
-	if dockerContainer != "" {
-		response["app_container"] = dockerContainer
-	}
+	setContainerResponseFields(response, dockerContainer)
 	// Include execution provenance for observability
 	response["execution"] = buildExecutionProvenance(targetHost, routing)
 	return NewJSONResult(response), nil
@@ -460,15 +461,16 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 			errMsg = result.Stdout
 		}
 		if dockerContainer != "" {
-			return NewJSONResultWithIsError(map[string]interface{}{
-				"success":       false,
-				"action":        "write",
-				"path":          path,
-				"host":          targetHost,
-				"app_container": dockerContainer,
-				"exit_code":     result.ExitCode,
-				"error":         errMsg,
-			}, true), nil
+			response := map[string]interface{}{
+				"success":   false,
+				"action":    "write",
+				"path":      path,
+				"host":      targetHost,
+				"exit_code": result.ExitCode,
+				"error":     errMsg,
+			}
+			setContainerResponseFields(response, dockerContainer)
+			return NewJSONResultWithIsError(response, true), nil
 		}
 		return NewJSONResultWithIsError(map[string]interface{}{
 			"success":   false,
@@ -490,9 +492,7 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		"bytes_written": len(content),
 		"verification":  verify,
 	}
-	if dockerContainer != "" {
-		response["app_container"] = dockerContainer
-	}
+	setContainerResponseFields(response, dockerContainer)
 	// Include execution provenance for observability
 	response["execution"] = buildExecutionProvenance(targetHost, routing)
 	return NewJSONResult(response), nil
