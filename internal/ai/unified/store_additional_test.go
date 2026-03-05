@@ -349,8 +349,8 @@ func TestUnifiedHelpers(t *testing.T) {
 	if determineResourceType("snapshot", nil) != "snapshot" {
 		t.Fatalf("expected snapshot resource type")
 	}
-	if determineResourceType("imageUpdateAvail", nil) != "docker" {
-		t.Fatalf("expected docker resource type")
+	if determineResourceType("imageUpdateAvail", nil) != "app-container" {
+		t.Fatalf("expected app-container resource type")
 	}
 	if determineResourceType("other", map[string]interface{}{"resourceType": "custom"}) != "custom" {
 		t.Fatalf("expected custom resource type")

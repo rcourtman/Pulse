@@ -1026,9 +1026,9 @@ func determineResourceType(alertType string, metadata map[string]interface{}) st
 	case "snapshot", "snapshotAge", "snapshotSize":
 		return "snapshot"
 	case "restartLoop", "oom", "imageUpdateAvail":
-		return "docker"
+		return "app-container"
 	default:
-		return "guest"
+		return "agent"
 	}
 }
 

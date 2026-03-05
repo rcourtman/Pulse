@@ -229,14 +229,14 @@ func TestDetermineResourceType_FallbackWithoutMetadata(t *testing.T) {
 		{name: "snapshot", alertType: "snapshot", expectedType: "snapshot"},
 		{name: "snapshot age", alertType: "snapshotAge", expectedType: "snapshot"},
 		{name: "snapshot size", alertType: "snapshotSize", expectedType: "snapshot"},
-		{name: "restart loop", alertType: "restartLoop", expectedType: "docker"},
-		{name: "oom", alertType: "oom", expectedType: "docker"},
-		{name: "image update", alertType: "imageUpdateAvail", expectedType: "docker"},
-		{name: "cpu default", alertType: "cpu", expectedType: "guest"},
-		{name: "memory default", alertType: "memory", expectedType: "guest"},
-		{name: "disk default", alertType: "disk", expectedType: "guest"},
-		{name: "unknown default", alertType: "unknownType", expectedType: "guest"},
-		{name: "empty default", alertType: "", expectedType: "guest"},
+		{name: "restart loop", alertType: "restartLoop", expectedType: "app-container"},
+		{name: "oom", alertType: "oom", expectedType: "app-container"},
+		{name: "image update", alertType: "imageUpdateAvail", expectedType: "app-container"},
+		{name: "cpu default", alertType: "cpu", expectedType: "agent"},
+		{name: "memory default", alertType: "memory", expectedType: "agent"},
+		{name: "disk default", alertType: "disk", expectedType: "agent"},
+		{name: "unknown default", alertType: "unknownType", expectedType: "agent"},
+		{name: "empty default", alertType: "", expectedType: "agent"},
 	}
 
 	for _, tc := range cases {
@@ -365,8 +365,8 @@ func TestConvertAlert_UnknownAlertType(t *testing.T) {
 	if finding == nil {
 		t.Fatalf("expected non-nil finding")
 	}
-	if finding.ResourceType != "guest" {
-		t.Fatalf("resource type mismatch: got %q want %q", finding.ResourceType, "guest")
+	if finding.ResourceType != "agent" {
+		t.Fatalf("resource type mismatch: got %q want %q", finding.ResourceType, "agent")
 	}
 	if finding.AlertType != "customMetric" {
 		t.Fatalf("alert type mismatch: got %q want %q", finding.AlertType, "customMetric")
