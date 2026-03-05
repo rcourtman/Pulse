@@ -682,6 +682,28 @@ func TestNormalizeOrganizationShareResourceType(t *testing.T) {
 	}
 }
 
+func TestIsUnsupportedOrganizationShareResourceType(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "host unsupported", in: "host", want: true},
+		{name: "mixed case host unsupported", in: " HoSt ", want: true},
+		{name: "agent supported", in: "agent", want: false},
+		{name: "docker host supported", in: "docker-host", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUnsupportedOrganizationShareResourceType(tt.in)
+			if got != tt.want {
+				t.Fatalf("isUnsupportedOrganizationShareResourceType(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeOrganizationShares_DropsLegacyAndUnsupportedResourceTypes(t *testing.T) {
 	shares := []models.OrganizationShare{
 		{
