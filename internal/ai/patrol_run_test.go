@@ -1169,7 +1169,7 @@ func TestIsResourceOnline_VM(t *testing.T) {
 	}
 }
 
-func TestIsResourceOnline_Container(t *testing.T) {
+func TestIsResourceOnline_SystemContainer(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		Containers: []models.Container{
@@ -1177,13 +1177,13 @@ func TestIsResourceOnline_Container(t *testing.T) {
 		},
 	}
 
-	alert := AlertInfo{ResourceID: "ct1", ResourceType: "container"}
+	alert := AlertInfo{ResourceID: "ct1", ResourceType: "system-container"}
 	if !ps.isResourceOnline(alert, state) {
 		t.Error("expected container ct1 to be online")
 	}
 }
 
-func TestIsResourceOnline_Docker(t *testing.T) {
+func TestIsResourceOnline_AppContainer(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		DockerHosts: []models.DockerHost{
@@ -1196,14 +1196,34 @@ func TestIsResourceOnline_Docker(t *testing.T) {
 		},
 	}
 
-	alert := AlertInfo{ResourceID: "dc1", ResourceType: "docker"}
+	alert := AlertInfo{ResourceID: "dc1", ResourceType: "app-container"}
 	if !ps.isResourceOnline(alert, state) {
 		t.Error("expected docker container dc1 to be online")
 	}
 
-	alert = AlertInfo{ResourceID: "dc2", ResourceType: "docker"}
+	alert = AlertInfo{ResourceID: "dc2", ResourceType: "app-container"}
 	if ps.isResourceOnline(alert, state) {
 		t.Error("expected docker container dc2 to be offline")
+	}
+}
+
+func TestIsResourceOnline_Agent(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "h1", Hostname: "host-1", DisplayName: "Host One", Status: "online"},
+			{ID: "h2", Hostname: "host-2", Status: "offline"},
+		},
+	}
+
+	alert := AlertInfo{ResourceID: "h1", ResourceType: "agent"}
+	if !ps.isResourceOnline(alert, state) {
+		t.Error("expected host h1 to be online")
+	}
+
+	alert = AlertInfo{ResourceID: "h2", ResourceType: "agent"}
+	if ps.isResourceOnline(alert, state) {
+		t.Error("expected host h2 to be offline")
 	}
 }
 
@@ -1251,7 +1271,7 @@ func TestGetCurrentMetricValue_NotFound(t *testing.T) {
 	}
 }
 
-func TestGetCurrentMetricValue_Docker(t *testing.T) {
+func TestGetCurrentMetricValue_AppContainer(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		DockerHosts: []models.DockerHost{
@@ -1263,7 +1283,7 @@ func TestGetCurrentMetricValue_Docker(t *testing.T) {
 		},
 	}
 
-	alert := AlertInfo{ResourceID: "dc1", ResourceType: "docker", Type: "cpu"}
+	alert := AlertInfo{ResourceID: "dc1", ResourceType: "app-container", Type: "cpu"}
 	val := ps.getCurrentMetricValue(alert, state)
 	if val != 45.0 {
 		t.Errorf("expected docker CPU 45.0, got %f", val)
@@ -1276,6 +1296,27 @@ func TestGetCurrentMetricValue_Docker(t *testing.T) {
 	}
 }
 
+func TestGetCurrentMetricValue_Agent(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "h1", Hostname: "host-1", CPUUsage: 67.0, Memory: models.Memory{Usage: 54.0}},
+		},
+	}
+
+	alert := AlertInfo{ResourceID: "h1", ResourceType: "agent", Type: "cpu"}
+	val := ps.getCurrentMetricValue(alert, state)
+	if val != 67.0 {
+		t.Errorf("expected host CPU 67.0, got %f", val)
+	}
+
+	alert.Type = "memory"
+	val = ps.getCurrentMetricValue(alert, state)
+	if val != 54.0 {
+		t.Errorf("expected host memory 54.0, got %f", val)
+	}
+}
+
 func TestGetCurrentMetricValue_Storage(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
@@ -1284,7 +1325,7 @@ func TestGetCurrentMetricValue_Storage(t *testing.T) {
 		},
 	}
 
-	alert := AlertInfo{ResourceID: "s1", ResourceType: "Storage", Type: "usage"}
+	alert := AlertInfo{ResourceID: "s1", ResourceType: "storage", Type: "usage"}
 	val := ps.getCurrentMetricValue(alert, state)
 	if val != 72.5 {
 		t.Errorf("expected storage usage 72.5, got %f", val)
@@ -1456,7 +1497,7 @@ func TestGetCurrentMetricValue_CPUScalePercent(t *testing.T) {
 	state = models.StateSnapshot{
 		VMs: []models.VM{{ID: "vm1", CPU: 0.88}},
 	}
-	val = ps.getCurrentMetricValue(AlertInfo{ResourceID: "vm1", ResourceType: "guest", Type: "cpu"}, state)
+	val = ps.getCurrentMetricValue(AlertInfo{ResourceID: "vm1", ResourceType: "vm", Type: "cpu"}, state)
 	if val != 88.0 {
 		t.Errorf("VM CPU: expected 88.0, got %f", val)
 	}
@@ -1465,7 +1506,7 @@ func TestGetCurrentMetricValue_CPUScalePercent(t *testing.T) {
 	state = models.StateSnapshot{
 		Containers: []models.Container{{ID: "ct1", CPU: 0.15}},
 	}
-	val = ps.getCurrentMetricValue(AlertInfo{ResourceID: "ct1", ResourceType: "container", Type: "cpu"}, state)
+	val = ps.getCurrentMetricValue(AlertInfo{ResourceID: "ct1", ResourceType: "system-container", Type: "cpu"}, state)
 	if val != 15.0 {
 		t.Errorf("Container CPU: expected 15.0, got %f", val)
 	}

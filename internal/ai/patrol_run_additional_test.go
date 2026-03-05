@@ -73,7 +73,7 @@ func TestPatrolService_GetResourceCurrentState(t *testing.T) {
 	state := models.StateSnapshot{
 		Storage: []models.Storage{{ID: "s1", Name: "store1", Usage: 75.5, Status: "ok"}},
 	}
-	alert := AlertInfo{ResourceType: "Storage", ResourceID: "s1", ResourceName: "store1"}
+	alert := AlertInfo{ResourceType: "storage", ResourceID: "s1", ResourceName: "store1"}
 	if got := ps.getResourceCurrentState(alert, state); got == "" {
 		t.Fatalf("expected storage state")
 	}

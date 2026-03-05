@@ -1627,7 +1627,17 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.State
 				}
 			}
 		}
-	case "guest", "vm":
+	case "agent":
+		for _, host := range snap.Hosts {
+			if host.ID == alert.ResourceID || host.DisplayName == alert.ResourceName || host.Hostname == alert.ResourceName {
+				if alert.Type == "cpu" {
+					return host.CPUUsage
+				} else if alert.Type == "memory" {
+					return host.Memory.Usage
+				}
+			}
+		}
+	case "vm":
 		for _, vm := range snap.VMs {
 			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
 				if alert.Type == "cpu" {
@@ -1637,7 +1647,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.State
 				}
 			}
 		}
-	case "system-container", "container":
+	case "system-container":
 		for _, ct := range snap.Containers {
 			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
 				if alert.Type == "cpu" {
@@ -1647,7 +1657,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.State
 				}
 			}
 		}
-	case "docker":
+	case "app-container":
 		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
 				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
@@ -1659,7 +1669,7 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.State
 				}
 			}
 		}
-	case "Storage":
+	case "storage":
 		for _, storage := range snap.Storage {
 			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
 				return storage.Usage
@@ -1678,19 +1688,25 @@ func (p *PatrolService) isResourceOnline(alert AlertInfo, snap models.StateSnaps
 				return true
 			}
 		}
-	case "guest", "vm":
+	case "agent":
+		for _, host := range snap.Hosts {
+			if (host.ID == alert.ResourceID || host.DisplayName == alert.ResourceName || host.Hostname == alert.ResourceName) && host.Status == "online" {
+				return true
+			}
+		}
+	case "vm":
 		for _, vm := range snap.VMs {
 			if (vm.ID == alert.ResourceID || vm.Name == alert.ResourceName) && vm.Status == "running" {
 				return true
 			}
 		}
-	case "system-container", "container":
+	case "system-container":
 		for _, ct := range snap.Containers {
 			if (ct.ID == alert.ResourceID || ct.Name == alert.ResourceName) && ct.Status == "running" {
 				return true
 			}
 		}
-	case "docker":
+	case "app-container":
 		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
 				if (container.ID == alert.ResourceID || container.Name == alert.ResourceName) && container.State == "running" {
@@ -1749,7 +1765,7 @@ Respond with ONLY one of:
 // getResourceCurrentState returns a description of the resource's current state
 func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.StateSnapshot) string {
 	switch alert.ResourceType {
-	case "Storage":
+	case "storage":
 		for _, storage := range snap.Storage {
 			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
 				return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", storage.Name, storage.Usage, storage.Status)
@@ -1764,7 +1780,19 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.Sta
 			}
 		}
 		return "Node not found in current state"
-	case "guest", "vm":
+	case "agent":
+		for _, host := range snap.Hosts {
+			hostName := host.DisplayName
+			if hostName == "" {
+				hostName = host.Hostname
+			}
+			if host.ID == alert.ResourceID || hostName == alert.ResourceName || host.Hostname == alert.ResourceName {
+				return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+					hostName, host.CPUUsage, host.Memory.Usage, host.Status)
+			}
+		}
+		return "Agent host not found in current state"
+	case "vm":
 		for _, vm := range snap.VMs {
 			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
 				return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
@@ -1772,7 +1800,7 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.Sta
 			}
 		}
 		return "VM not found in current state"
-	case "system-container", "container":
+	case "system-container":
 		for _, ct := range snap.Containers {
 			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
 				return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
@@ -1780,7 +1808,7 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.Sta
 			}
 		}
 		return "Container not found in current state"
-	case "docker":
+	case "app-container":
 		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
 				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {

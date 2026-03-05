@@ -1702,7 +1702,7 @@ type ConversationMessage struct {
 // ExecuteRequest represents a request to execute an AI prompt
 type ExecuteRequest struct {
 	Prompt       string                 `json:"prompt"`
-	TargetType   string                 `json:"target_type,omitempty"` // "agent", "system-container", "vm", "node"
+	TargetType   string                 `json:"target_type,omitempty"` // "agent", "system-container", "vm"
 	TargetID     string                 `json:"target_id,omitempty"`
 	Context      map[string]interface{} `json:"context,omitempty"`       // Current metrics, state, etc.
 	SystemPrompt string                 `json:"system_prompt,omitempty"` // Override system prompt
