@@ -432,6 +432,34 @@ func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "api", "resources_test.go"),
+			requiredSnippets: []string{
+				`/api/resources?type=host`,
+				`unsupported type filter token(s): host`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_info_test.go"),
+			requiredSnippets: []string{
+				`/api/discovery/info/host`,
+				`unsupported resource type "host"`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_test.go"),
+			requiredSnippets: []string{
+				`/api/discovery/type/host`,
+				`/api/discovery/host/host-1/host-1`,
+				`unsupported resource type "host"`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "api", "docker_agents_routes_more_test.go"),
+			requiredSnippets: []string{
+				`legacy hosts alias status = %d, want 400`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
 			requiredSnippets: []string{
 				`/api/reporting?format=pdf&resourceType=host&resourceId=h-1`,
