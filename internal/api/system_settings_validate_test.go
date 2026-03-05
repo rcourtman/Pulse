@@ -389,30 +389,37 @@ func TestValidateSystemSettings(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "discoveryConfig.environment_override: 'docker_host' is valid",
+			name: "discoveryConfig.environment_override: 'docker-host' is valid",
+			input: map[string]interface{}{
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "docker-host"},
+			},
+			expectError: false,
+		},
+		{
+			name: "discoveryConfig.environment_override: 'docker-bridge' is valid",
+			input: map[string]interface{}{
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "docker-bridge"},
+			},
+			expectError: false,
+		},
+		{
+			name: "discoveryConfig.environment_override: 'lxc-privileged' is valid",
+			input: map[string]interface{}{
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "lxc-privileged"},
+			},
+			expectError: false,
+		},
+		{
+			name: "discoveryConfig.environment_override: 'lxc-unprivileged' is valid",
+			input: map[string]interface{}{
+				"discoveryConfig": map[string]interface{}{"environmentOverride": "lxc-unprivileged"},
+			},
+			expectError: false,
+		},
+		{
+			name: "discoveryConfig.environment_override: legacy underscore alias still accepted",
 			input: map[string]interface{}{
 				"discoveryConfig": map[string]interface{}{"environmentOverride": "docker_host"},
-			},
-			expectError: false,
-		},
-		{
-			name: "discoveryConfig.environment_override: 'docker_bridge' is valid",
-			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environmentOverride": "docker_bridge"},
-			},
-			expectError: false,
-		},
-		{
-			name: "discoveryConfig.environment_override: 'lxc_privileged' is valid",
-			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environmentOverride": "lxc_privileged"},
-			},
-			expectError: false,
-		},
-		{
-			name: "discoveryConfig.environment_override: 'lxc_unprivileged' is valid",
-			input: map[string]interface{}{
-				"discoveryConfig": map[string]interface{}{"environmentOverride": "lxc_unprivileged"},
 			},
 			expectError: false,
 		},
@@ -969,7 +976,7 @@ func TestValidateSystemSettings(t *testing.T) {
 			name: "complex discoveryConfig with multiple valid fields",
 			input: map[string]interface{}{
 				"discoveryConfig": map[string]interface{}{
-					"environmentOverride": "docker_host",
+					"environmentOverride": "docker-host",
 					"subnetAllowlist":     []interface{}{"192.168.1.0/24", "10.0.0.0/8"},
 					"subnetBlocklist":     []interface{}{"169.254.0.0/16"},
 					"maxHostsPerScan":     float64(500),
@@ -1082,6 +1089,21 @@ func TestValidateSystemSettings_BoundaryConditions(t *testing.T) {
 		{
 			name:        "max_concurrent: 5.5 fractional rejected",
 			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"maxConcurrent": 5.5}},
+			expectError: true,
+		},
+		{
+			name:        "max_hosts_per_scan: 5.5 fractional rejected",
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"maxHostsPerScan": 5.5}},
+			expectError: true,
+		},
+		{
+			name:        "dial_timeout_ms: 1.5 fractional rejected",
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"dialTimeoutMs": 1.5}},
+			expectError: true,
+		},
+		{
+			name:        "http_timeout_ms: 2.5 fractional rejected",
+			input:       map[string]interface{}{"discoveryConfig": map[string]interface{}{"httpTimeoutMs": 2.5}},
 			expectError: true,
 		},
 	}

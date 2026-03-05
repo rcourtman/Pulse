@@ -175,6 +175,86 @@ func TestHandleUpdateSystemSettings_Basic(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateSystemSettings_DiscoveryConfigAppliedFromCamelCasePayload(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		Discovery:  config.DefaultDiscoveryConfig(),
+	}
+	persistence := config.NewConfigPersistence(tempDir)
+	monitor := &mockMonitor{}
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
+
+	tokenVal := "testtoken123"
+	tokenHash := internalauth.HashAPIToken(tokenVal)
+	cfg.APITokens = []config.APITokenRecord{
+		{ID: "token1", Hash: tokenHash, Name: "Test Token"},
+	}
+
+	updates := map[string]interface{}{
+		"discoveryConfig": map[string]interface{}{
+			"environmentOverride": "docker_bridge",
+			"subnetAllowlist":     []string{"10.0.0.0/8"},
+			"subnetBlocklist":     []string{"169.254.0.0/16"},
+			"maxHostsPerScan":     77,
+			"maxConcurrent":       11,
+			"enableReverseDns":    false,
+			"scanGateways":        false,
+			"dialTimeoutMs":       1500,
+			"httpTimeoutMs":       2300,
+		},
+	}
+	body, _ := json.Marshal(updates)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", tokenVal)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body: %s", rec.Code, rec.Body.String())
+	}
+
+	loaded, err := persistence.LoadSystemSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+	got := loaded.DiscoveryConfig
+	if got.EnvironmentOverride != "docker-bridge" {
+		t.Fatalf("EnvironmentOverride = %q, want %q", got.EnvironmentOverride, "docker-bridge")
+	}
+	if got.MaxHostsPerScan != 77 {
+		t.Fatalf("MaxHostsPerScan = %d, want 77", got.MaxHostsPerScan)
+	}
+	if got.MaxConcurrent != 11 {
+		t.Fatalf("MaxConcurrent = %d, want 11", got.MaxConcurrent)
+	}
+	if got.EnableReverseDNS {
+		t.Fatalf("EnableReverseDNS = true, want false")
+	}
+	if got.ScanGateways {
+		t.Fatalf("ScanGateways = true, want false")
+	}
+	if got.DialTimeout != 1500 {
+		t.Fatalf("DialTimeout = %d, want 1500", got.DialTimeout)
+	}
+	if got.HTTPTimeout != 2300 {
+		t.Fatalf("HTTPTimeout = %d, want 2300", got.HTTPTimeout)
+	}
+	if len(got.SubnetAllowlist) != 1 || got.SubnetAllowlist[0] != "10.0.0.0/8" {
+		t.Fatalf("SubnetAllowlist = %v, want [10.0.0.0/8]", got.SubnetAllowlist)
+	}
+	if len(got.SubnetBlocklist) != 1 || got.SubnetBlocklist[0] != "169.254.0.0/16" {
+		t.Fatalf("SubnetBlocklist = %v, want [169.254.0.0/16]", got.SubnetBlocklist)
+	}
+
+	if cfg.Discovery.EnvironmentOverride != "docker-bridge" {
+		t.Fatalf("runtime config EnvironmentOverride = %q, want %q", cfg.Discovery.EnvironmentOverride, "docker-bridge")
+	}
+}
+
 func TestHandleUpdateSystemSettings_Unauthorized(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{

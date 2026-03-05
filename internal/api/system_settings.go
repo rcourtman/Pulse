@@ -134,6 +134,113 @@ func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, boo
 	return nil, false
 }
 
+func parseDiscoveryStringArray(value interface{}, field string) ([]string, error) {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("%s must be an array of CIDR strings", field)
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s entries must be strings", field)
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func parseDiscoveryWholeNumber(value interface{}, field string) (int, error) {
+	raw, ok := value.(float64)
+	if !ok {
+		return 0, fmt.Errorf("%s must be a number", field)
+	}
+	if raw != float64(int(raw)) {
+		return 0, fmt.Errorf("%s must be a whole number", field)
+	}
+	return int(raw), nil
+}
+
+func applyDiscoveryConfigOverrides(current config.DiscoveryConfig, cfgMap map[string]interface{}) (config.DiscoveryConfig, error) {
+	if envVal, ok := cfgMap["environmentOverride"]; ok {
+		envStr, ok := envVal.(string)
+		if !ok {
+			return current, fmt.Errorf("discoveryConfig.environmentOverride must be a string")
+		}
+		canonicalEnv, valid := config.CanonicalDiscoveryEnvironment(envStr)
+		if !valid {
+			return current, fmt.Errorf("invalid discovery environment override: %s", envStr)
+		}
+		current.EnvironmentOverride = canonicalEnv
+	}
+
+	if val, ok := cfgMap["subnetAllowlist"]; ok {
+		allowlist, err := parseDiscoveryStringArray(val, "discoveryConfig.subnetAllowlist")
+		if err != nil {
+			return current, err
+		}
+		current.SubnetAllowlist = allowlist
+	}
+
+	if val, ok := cfgMap["subnetBlocklist"]; ok {
+		blocklist, err := parseDiscoveryStringArray(val, "discoveryConfig.subnetBlocklist")
+		if err != nil {
+			return current, err
+		}
+		current.SubnetBlocklist = blocklist
+	}
+
+	if val, ok := cfgMap["maxHostsPerScan"]; ok {
+		maxHosts, err := parseDiscoveryWholeNumber(val, "discoveryConfig.maxHostsPerScan")
+		if err != nil {
+			return current, err
+		}
+		current.MaxHostsPerScan = maxHosts
+	}
+
+	if val, ok := cfgMap["maxConcurrent"]; ok {
+		maxConcurrent, err := parseDiscoveryWholeNumber(val, "discoveryConfig.maxConcurrent")
+		if err != nil {
+			return current, err
+		}
+		current.MaxConcurrent = maxConcurrent
+	}
+
+	if val, ok := cfgMap["enableReverseDns"]; ok {
+		enabled, ok := val.(bool)
+		if !ok {
+			return current, fmt.Errorf("discoveryConfig.enableReverseDns must be a boolean")
+		}
+		current.EnableReverseDNS = enabled
+	}
+
+	if val, ok := cfgMap["scanGateways"]; ok {
+		enabled, ok := val.(bool)
+		if !ok {
+			return current, fmt.Errorf("discoveryConfig.scanGateways must be a boolean")
+		}
+		current.ScanGateways = enabled
+	}
+
+	if val, ok := cfgMap["dialTimeoutMs"]; ok {
+		dialTimeout, err := parseDiscoveryWholeNumber(val, "discoveryConfig.dialTimeoutMs")
+		if err != nil {
+			return current, err
+		}
+		current.DialTimeout = dialTimeout
+	}
+
+	if val, ok := cfgMap["httpTimeoutMs"]; ok {
+		httpTimeout, err := parseDiscoveryWholeNumber(val, "discoveryConfig.httpTimeoutMs")
+		if err != nil {
+			return current, err
+		}
+		current.HTTPTimeout = httpTimeout
+	}
+
+	return config.NormalizeDiscoveryConfig(current), nil
+}
+
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]interface{}) error {
 	if val, ok := rawRequest["pvePollingInterval"]; ok {
@@ -329,8 +436,8 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 			if !ok {
 				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be a number")
 			}
-			if value <= 0 {
-				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be greater than zero")
+			if value <= 0 || value != float64(int(value)) {
+				return fmt.Errorf("discoveryConfig.maxHostsPerScan must be a whole number greater than zero")
 			}
 		}
 
@@ -361,8 +468,8 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 			if !ok {
 				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be a number")
 			}
-			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be greater than zero")
+			if timeout <= 0 || timeout != float64(int(timeout)) {
+				return fmt.Errorf("discoveryConfig.dialTimeoutMs must be a whole number greater than zero")
 			}
 		}
 
@@ -371,8 +478,8 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 			if !ok {
 				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be a number")
 			}
-			if timeout <= 0 {
-				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be greater than zero")
+			if timeout <= 0 || timeout != float64(int(timeout)) {
+				return fmt.Errorf("discoveryConfig.httpTimeoutMs must be a whole number greater than zero")
 			}
 		}
 	}
@@ -603,36 +710,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if cfgMap, ok := discoveryConfigMap(rawRequest); ok && cfgMap != nil {
 		current := config.CloneDiscoveryConfig(settings.DiscoveryConfig)
-
-		if _, ok := cfgMap["environmentOverride"]; ok {
-			current.EnvironmentOverride = updates.DiscoveryConfig.EnvironmentOverride
+		normalizedDiscoveryConfig, err := applyDiscoveryConfigOverrides(current, cfgMap)
+		if err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+			return
 		}
-		if _, ok := cfgMap["subnetAllowlist"]; ok {
-			current.SubnetAllowlist = append([]string(nil), updates.DiscoveryConfig.SubnetAllowlist...)
-		}
-		if _, ok := cfgMap["subnetBlocklist"]; ok {
-			current.SubnetBlocklist = append([]string(nil), updates.DiscoveryConfig.SubnetBlocklist...)
-		}
-		if _, ok := cfgMap["maxHostsPerScan"]; ok {
-			current.MaxHostsPerScan = updates.DiscoveryConfig.MaxHostsPerScan
-		}
-		if _, ok := cfgMap["maxConcurrent"]; ok {
-			current.MaxConcurrent = updates.DiscoveryConfig.MaxConcurrent
-		}
-		if _, ok := cfgMap["enableReverseDns"]; ok {
-			current.EnableReverseDNS = updates.DiscoveryConfig.EnableReverseDNS
-		}
-		if _, ok := cfgMap["scanGateways"]; ok {
-			current.ScanGateways = updates.DiscoveryConfig.ScanGateways
-		}
-		if _, ok := cfgMap["dialTimeoutMs"]; ok {
-			current.DialTimeout = updates.DiscoveryConfig.DialTimeout
-		}
-		if _, ok := cfgMap["httpTimeoutMs"]; ok {
-			current.HTTPTimeout = updates.DiscoveryConfig.HTTPTimeout
-		}
-
-		settings.DiscoveryConfig = config.NormalizeDiscoveryConfig(current)
+		settings.DiscoveryConfig = normalizedDiscoveryConfig
 		discoveryConfigUpdated = true
 	}
 	// Allow clearing of AllowedEmbedOrigins by setting to empty string
