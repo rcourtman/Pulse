@@ -205,7 +205,7 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 		{
 			name:  "docker alert",
 			alert: &alerts.Alert{Type: "docker_health", ResourceID: "docker-1"},
-			want:  "docker",
+			want:  "app-container",
 		},
 		{
 			name:  "storage alert",
@@ -220,7 +220,7 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 		{
 			name:  "kubernetes alert",
 			alert: &alerts.Alert{Type: "kubernetes", ResourceID: "k8s-1"},
-			want:  "kubernetes",
+			want:  "k8s",
 		},
 		{
 			name:  "fallback by resource id",
@@ -230,7 +230,7 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 		{
 			name:  "fallback default",
 			alert: &alerts.Alert{Type: "custom", ResourceID: "guest-1"},
-			want:  "guest",
+			want:  "vm",
 		},
 	}
 

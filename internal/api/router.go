@@ -3023,13 +3023,13 @@ func deriveResourceTypeFromAlert(alert *alerts.Alert) string {
 	case strings.Contains(alertType, "lxc") || strings.Contains(alert.ResourceID, "/lxc/"):
 		return "system-container"
 	case strings.Contains(alertType, "docker"):
-		return "docker"
+		return "app-container"
 	case strings.Contains(alertType, "storage"):
 		return "storage"
 	case strings.Contains(alertType, "pbs"):
 		return "pbs"
 	case strings.Contains(alertType, "kubernetes") || strings.Contains(alertType, "k8s"):
-		return "kubernetes"
+		return "k8s"
 	default:
 		// Try to infer from resource ID patterns
 		if strings.Contains(alert.ResourceID, "/qemu/") {
@@ -3039,9 +3039,9 @@ func deriveResourceTypeFromAlert(alert *alerts.Alert) string {
 			return "system-container"
 		}
 		if strings.Contains(alert.ResourceID, "docker") {
-			return "docker"
+			return "app-container"
 		}
-		return "guest" // Default fallback
+		return "vm" // Default fallback
 	}
 }
 
@@ -7199,7 +7199,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		points := make(map[string]monitoring.MetricPoint)
 
 		switch resourceType {
-		case "vm", "guest":
+		case "vm":
 			vm := findVM(resourceID)
 			if vm == nil {
 				return points
@@ -7277,7 +7277,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			// only has cumulative RXBytes/TXBytes (total since boot), not rates.
 			// The RateTracker in ApplyHostReport calculates rates and stores them in metrics history.
 			// Showing cumulative bytes as if they were rates would be misleading (showing GB instead of KB/s).
-		case "docker", "dockerContainer":
+		case "dockerContainer":
 			container := findDockerContainer(resourceID)
 			if container == nil {
 				return points
@@ -7360,7 +7360,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		switch runtimeResourceType {
-		case "vm", "container", "guest":
+		case "vm", "container":
 			metrics := monitor.GetGuestMetrics(resourceID, duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
@@ -7393,7 +7393,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return nil, "", false
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
-		case "docker", "dockerContainer":
+		case "dockerContainer":
 			metrics := monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
@@ -7441,13 +7441,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		var metrics map[string][]monitoring.MetricPoint
 		switch runtimeResourceType {
-		case "vm", "container", "guest":
+		case "vm", "container":
 			metrics = monitor.GetGuestMetrics(resourceID, duration)
 		case "dockerHost":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
 		case "agent":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
-		case "docker", "dockerContainer":
+		case "dockerContainer":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 		case "storage":
 			metrics = monitor.GetStorageMetrics(resourceID, duration)

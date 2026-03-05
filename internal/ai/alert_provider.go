@@ -14,7 +14,7 @@ type AlertInfo struct {
 	Level        string    `json:"level"`         // warning, critical
 	ResourceID   string    `json:"resource_id"`   // unique resource identifier
 	ResourceName string    `json:"resource_name"` // human-readable name
-	ResourceType string    `json:"resource_type"` // guest, node, storage, docker, etc.
+	ResourceType string    `json:"resource_type"` // canonical v6 resource type
 	Node         string    `json:"node"`          // PVE node (if applicable)
 	Instance     string    `json:"instance"`      // Proxmox instance name
 	Message      string    `json:"message"`       // Alert description
