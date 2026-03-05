@@ -155,7 +155,7 @@ func (h *KubernetesAgentHandlers) HandleDeleteCluster(w http.ResponseWriter, r *
 
 	cluster, err := h.getMonitor(r.Context()).RemoveKubernetesCluster(clusterID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
@@ -186,7 +186,7 @@ func (h *KubernetesAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *
 	}
 
 	if err := h.getMonitor(r.Context()).AllowKubernetesClusterReenroll(clusterID); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "kubernetes_cluster_reenroll_failed", err.Error(), nil)
+		writeErrorResponse(w, http.StatusBadRequest, "k8s_cluster_reenroll_failed", err.Error(), nil)
 		return
 	}
 
@@ -215,7 +215,7 @@ func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *
 
 	cluster, err := h.getMonitor(r.Context()).UnhideKubernetesCluster(clusterID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
@@ -247,7 +247,7 @@ func (h *KubernetesAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWrit
 
 	cluster, err := h.getMonitor(r.Context()).MarkKubernetesClusterPendingUninstall(clusterID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
@@ -293,7 +293,7 @@ func (h *KubernetesAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWrit
 
 	cluster, err := h.getMonitor(r.Context()).SetKubernetesClusterCustomDisplayName(clusterID, customName)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "kubernetes_cluster_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
 	}
 
