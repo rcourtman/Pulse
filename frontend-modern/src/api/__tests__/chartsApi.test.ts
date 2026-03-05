@@ -4,7 +4,7 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
 }));
 
-import { ChartsAPI } from '@/api/charts';
+import { ChartsAPI, toMetricsHistoryAPIResourceType } from '@/api/charts';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 describe('ChartsAPI', () => {
@@ -87,5 +87,23 @@ describe('ChartsAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/metrics-store/history?resourceType=agent&resourceId=agent-1&metric=cpu&range=24h',
     );
+  });
+
+  it('maps canonical kubernetes resource types to the backend k8s history token', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+
+    await ChartsAPI.getMetricsHistory({
+      resourceType: 'pod',
+      resourceId: 'k8s:cluster-a:pod:api-1',
+      metric: 'cpu',
+      range: '24h',
+    });
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/metrics-store/history?resourceType=k8s&resourceId=k8s%3Acluster-a%3Apod%3Aapi-1&metric=cpu&range=24h',
+    );
+    expect(toMetricsHistoryAPIResourceType('k8s-cluster')).toBe('k8s');
+    expect(toMetricsHistoryAPIResourceType('k8s-node')).toBe('k8s');
+    expect(toMetricsHistoryAPIResourceType('pod')).toBe('k8s');
   });
 });

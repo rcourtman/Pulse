@@ -128,7 +128,7 @@ export interface WorkloadsSummaryChartsResponse {
 
 // Persistent metrics history types (SQLite-backed, longer retention)
 export type HistoryTimeRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d';
-export type ResourceType =
+type MetricsHistoryAPIResourceType =
   | 'node'
   | 'vm'
   | 'system-container'
@@ -140,12 +140,37 @@ export type ResourceType =
   | 'agent'
   | 'disk';
 
+export type ResourceType =
+  | 'node'
+  | 'vm'
+  | 'system-container'
+  | 'oci-container'
+  | 'app-container'
+  | 'storage'
+  | 'docker-host'
+  | 'k8s-cluster'
+  | 'k8s-node'
+  | 'pod'
+  | 'agent'
+  | 'disk';
+
 export interface MetricsHistoryParams {
   resourceType: ResourceType;
   resourceId: string;
   metric?: string; // Optional: 'cpu', 'memory', 'disk', etc. Omit for all metrics
   range?: HistoryTimeRange; // Default: '24h'
   maxPoints?: number; // Optional cap on returned points (backend may downsample)
+}
+
+export function toMetricsHistoryAPIResourceType(resourceType: ResourceType): MetricsHistoryAPIResourceType {
+  switch (resourceType) {
+    case 'k8s-cluster':
+    case 'k8s-node':
+    case 'pod':
+      return 'k8s';
+    default:
+      return resourceType;
+  }
 }
 
 export interface SingleMetricHistoryResponse {
@@ -274,7 +299,7 @@ export class ChartsAPI {
     params: MetricsHistoryParams,
   ): Promise<SingleMetricHistoryResponse | AllMetricsHistoryResponse> {
     const searchParams = new URLSearchParams({
-      resourceType: params.resourceType,
+      resourceType: toMetricsHistoryAPIResourceType(params.resourceType),
       resourceId: params.resourceId,
     });
     if (params.metric) {

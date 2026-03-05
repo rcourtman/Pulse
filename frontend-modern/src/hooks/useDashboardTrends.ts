@@ -114,13 +114,35 @@ function asHistoryResourceType(type: string): HistoryResourceType | null {
     'app-container',
     'storage',
     'docker-host',
-    'k8s',
+    'k8s-cluster',
+    'k8s-node',
+    'pod',
     'agent',
     'disk',
   ];
   return historyTypes.includes(normalizedType as HistoryResourceType)
     ? (normalizedType as HistoryResourceType)
     : null;
+}
+
+function canonicalizeMetricsHistoryTargetType(
+  metricsType: string,
+  unifiedType?: UnifiedResourceType,
+): HistoryResourceType | null {
+  const normalized = metricsType.trim().toLowerCase();
+  if (normalized === 'k8s') {
+    switch (unifiedType) {
+      case 'k8s-cluster':
+        return 'k8s-cluster';
+      case 'k8s-node':
+        return 'k8s-node';
+      case 'pod':
+        return 'pod';
+      default:
+        return null;
+    }
+  }
+  return asHistoryResourceType(normalized);
 }
 
 function buildHistoryTargets(
@@ -132,16 +154,16 @@ function buildHistoryTargets(
   const targets: HistoryTarget[] = [];
 
   for (const id of uniqueIds) {
+    const unifiedType = unifiedTypeById.get(id);
     const mt = metricsTargetById.get(id);
     if (mt) {
-      const historyType = asHistoryResourceType(mt.resourceType);
+      const historyType = canonicalizeMetricsHistoryTargetType(mt.resourceType, unifiedType);
       if (historyType) {
         targets.push({ id: mt.resourceId, resourceType: historyType, originalId: id });
         continue;
       }
     }
     // Fallback: derive from unified type
-    const unifiedType = unifiedTypeById.get(id);
     if (!unifiedType) continue;
     const mappedType = mapUnifiedTypeToHistoryType(unifiedType);
     if (!mappedType) continue;
@@ -222,8 +244,9 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
     case 'docker-host':
       return 'docker-host';
     case 'k8s-node':
+      return 'k8s-node';
     case 'k8s-cluster':
-      return 'k8s';
+      return 'k8s-cluster';
     case 'truenas':
       return 'node';
     case 'vm':
@@ -235,7 +258,7 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
     case 'app-container':
       return 'app-container';
     case 'pod':
-      return 'k8s';
+      return 'pod';
     default:
       return null;
   }
