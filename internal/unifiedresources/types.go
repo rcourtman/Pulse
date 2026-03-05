@@ -537,6 +537,12 @@ type DockerData struct {
 	ContainerCount        int                             `json:"containerCount,omitempty"`
 	UpdatesAvailableCount int                             `json:"updatesAvailableCount,omitempty"`
 	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`
+	TokenID               string                          `json:"tokenId,omitempty"`
+	TokenName             string                          `json:"tokenName,omitempty"`
+	TokenHint             string                          `json:"tokenHint,omitempty"`
+	TokenLastUsedAt       *time.Time                      `json:"tokenLastUsedAt,omitempty"`
+	PendingUninstall      bool                            `json:"pendingUninstall,omitempty"`
+	IsLegacy              bool                            `json:"isLegacy,omitempty"`
 	Command               *models.DockerHostCommandStatus `json:"command,omitempty"`
 
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)

@@ -984,6 +984,35 @@ func (v DockerHostView) AgentVersion() string {
 	return v.r.Docker.AgentVersion
 }
 
+func (v DockerHostView) TokenID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.TokenID
+}
+
+func (v DockerHostView) TokenName() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.TokenName
+}
+
+func (v DockerHostView) TokenHint() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.TokenHint
+}
+
+func (v DockerHostView) TokenLastUsedAt() *time.Time {
+	if v.r == nil || v.r.Docker == nil || v.r.Docker.TokenLastUsedAt == nil {
+		return nil
+	}
+	copied := *v.r.Docker.TokenLastUsedAt
+	return &copied
+}
+
 func (v DockerHostView) UptimeSeconds() int64 {
 	if v.r == nil || v.r.Docker == nil {
 		return 0
@@ -1079,6 +1108,22 @@ func (v DockerHostView) ChildCount() int {
 		return 0
 	}
 	return v.r.ChildCount
+}
+
+func (v DockerHostView) PendingUninstall() bool {
+	return v.r != nil && v.r.Docker != nil && v.r.Docker.PendingUninstall
+}
+
+func (v DockerHostView) IsLegacy() bool {
+	return v.r != nil && v.r.Docker != nil && v.r.Docker.IsLegacy
+}
+
+func (v DockerHostView) Command() *models.DockerHostCommandStatus {
+	if v.r == nil || v.r.Docker == nil || v.r.Docker.Command == nil {
+		return nil
+	}
+	copied := *v.r.Docker.Command
+	return &copied
 }
 
 // StoragePoolView wraps a storage resource.

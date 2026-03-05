@@ -8299,10 +8299,29 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
-	host, ok := monitor.GetDockerHost(agentID)
-	if !ok {
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "read_state_unavailable", "Container runtime state is not available", nil)
+		return
+	}
+
+	var host *unifiedresources.DockerHostView
+	for _, candidate := range readState.DockerHosts() {
+		if candidate == nil {
+			continue
+		}
+		if candidate.HostSourceID() == agentID || candidate.ID() == agentID {
+			host = candidate
+			break
+		}
+	}
+	if host == nil {
 		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", "Container runtime not found", nil)
 		return
+	}
+	hostID := host.HostSourceID()
+	if hostID == "" {
+		hostID = host.ID()
 	}
 
 	name := strings.TrimSpace(payload.TokenName)
@@ -8383,7 +8402,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		"token":   rawToken,
 		"record":  toAPITokenDTO(*record),
 		"agent": map[string]any{
-			"id":   host.ID,
+			"id":   hostID,
 			"name": preferredDockerHostName(host),
 		},
 		"installCommand":        installCommand,

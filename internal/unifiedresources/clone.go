@@ -1,5 +1,11 @@
 package unifiedresources
 
+import (
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
+
 func cloneResourcePtr(in *Resource) *Resource {
 	if in == nil {
 		return nil
@@ -43,6 +49,14 @@ func cloneDiscoveryTarget(in *DiscoveryTarget) *DiscoveryTarget {
 }
 
 func cloneMetricsTarget(in *MetricsTarget) *MetricsTarget {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func cloneTimePtr(in *time.Time) *time.Time {
 	if in == nil {
 		return nil
 	}
@@ -125,11 +139,13 @@ func cloneDockerData(in *DockerData) *DockerData {
 	}
 	out := *in
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
+	out.TokenLastUsedAt = cloneTimePtr(in.TokenLastUsedAt)
 	out.Ports = cloneDockerPortMetaSlice(in.Ports)
 	out.Labels = cloneStringMap(in.Labels)
 	out.Networks = cloneDockerNetworkMetaSlice(in.Networks)
 	out.Mounts = cloneDockerMountMetaSlice(in.Mounts)
 	out.UpdateStatus = cloneDockerUpdateStatusMeta(in.UpdateStatus)
+	out.Command = cloneDockerHostCommandStatus(in.Command)
 	out.Swarm = cloneDockerSwarmInfo(in.Swarm)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
 	out.Disks = cloneDiskInfos(in.Disks)
@@ -267,6 +283,14 @@ func cloneDockerUpdateStatusMeta(in *DockerUpdateStatusMeta) *DockerUpdateStatus
 }
 
 func cloneDockerSwarmInfo(in *DockerSwarmInfo) *DockerSwarmInfo {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func cloneDockerHostCommandStatus(in *models.DockerHostCommandStatus) *models.DockerHostCommandStatus {
 	if in == nil {
 		return nil
 	}

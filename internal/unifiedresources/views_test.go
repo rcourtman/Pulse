@@ -548,7 +548,9 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 4, 0, 0, time.UTC)
 	temp := 44.4
 	speed := int64(2500)
+	tokenLastUsedAt := now.Add(-15 * time.Minute)
 	swarm := &DockerSwarmInfo{NodeID: "swarm-node-1", NodeRole: "manager", LocalState: "active", ClusterID: "swarm-1", ClusterName: "prod"}
+	command := &models.DockerHostCommandStatus{ID: "cmd-1", Status: "queued"}
 
 	r := &Resource{
 		ID:         "dockerhost-1",
@@ -559,17 +561,24 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 		Tags:       []string{"docker"},
 		ChildCount: 2,
 		Docker: &DockerData{
-			Hostname:       "docker-host-1",
-			AgentID:        "agent-docker-1",
-			DockerVersion:  "25.0.0",
-			RuntimeVersion: "1.7.0",
-			OS:             "Ubuntu",
-			KernelVersion:  "6.8.0",
-			Architecture:   "amd64",
-			AgentVersion:   "2.0.0",
-			UptimeSeconds:  7200,
-			Temperature:    &temp,
-			Swarm:          swarm,
+			Hostname:         "docker-host-1",
+			AgentID:          "agent-docker-1",
+			DockerVersion:    "25.0.0",
+			RuntimeVersion:   "1.7.0",
+			OS:               "Ubuntu",
+			KernelVersion:    "6.8.0",
+			Architecture:     "amd64",
+			AgentVersion:     "2.0.0",
+			TokenID:          "token-1",
+			TokenName:        "docker-token",
+			TokenHint:        "docke...123",
+			TokenLastUsedAt:  &tokenLastUsedAt,
+			UptimeSeconds:    7200,
+			Temperature:      &temp,
+			PendingUninstall: true,
+			IsLegacy:         true,
+			Command:          command,
+			Swarm:            swarm,
 			NetworkInterfaces: []NetworkInterface{
 				{Name: "eno1", Addresses: []string{"10.0.0.40/24"}, SpeedMbps: &speed},
 			},
@@ -593,6 +602,12 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	}
 	if v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" || v.AgentVersion() != "2.0.0" {
 		t.Fatalf("expected kernel/arch/agentVersion to match, got kernel=%q arch=%q agent=%q", v.KernelVersion(), v.Architecture(), v.AgentVersion())
+	}
+	if v.TokenID() != "token-1" || v.TokenName() != "docker-token" || v.TokenHint() != "docke...123" {
+		t.Fatalf("expected token fields to match, got id=%q name=%q hint=%q", v.TokenID(), v.TokenName(), v.TokenHint())
+	}
+	if v.TokenLastUsedAt() == nil || !v.TokenLastUsedAt().Equal(tokenLastUsedAt) {
+		t.Fatalf("expected token last used at %v, got %v", tokenLastUsedAt, v.TokenLastUsedAt())
 	}
 	if v.UptimeSeconds() != 7200 {
 		t.Fatalf("expected uptime %d, got %d", 7200, v.UptimeSeconds())
@@ -618,6 +633,12 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	}
 	if v.ChildCount() != 2 {
 		t.Fatalf("expected ChildCount %d, got %d", 2, v.ChildCount())
+	}
+	if !v.PendingUninstall() || !v.IsLegacy() {
+		t.Fatalf("expected pending uninstall and legacy flags to be true, got pending=%v legacy=%v", v.PendingUninstall(), v.IsLegacy())
+	}
+	if v.Command() == nil || v.Command().ID != "cmd-1" || v.Command().Status != "queued" {
+		t.Fatalf("expected command accessor to match, got %+v", v.Command())
 	}
 }
 

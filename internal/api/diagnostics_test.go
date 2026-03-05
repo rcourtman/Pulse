@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestIsFallbackMemorySource(t *testing.T) {
@@ -269,57 +269,32 @@ func TestInterfaceToStringSlice(t *testing.T) {
 func TestPreferredDockerHostName(t *testing.T) {
 	tests := []struct {
 		name     string
-		host     models.DockerHost
+		host     *unifiedresources.DockerHostView
 		expected string
 	}{
 		{
-			name: "display name preferred",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "My Docker Host",
-				Hostname:    "docker-host.local",
-				AgentID:     "agent-456",
-			},
+			name:     "display name preferred",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "My Docker Host", "docker-host.local", "agent-456"),
 			expected: "My Docker Host",
 		},
 		{
-			name: "hostname when no display name",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "",
-				Hostname:    "docker-host.local",
-				AgentID:     "agent-456",
-			},
+			name:     "hostname when no display name",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "", "docker-host.local", "agent-456"),
 			expected: "docker-host.local",
 		},
 		{
-			name: "agent ID when no display name or hostname",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "",
-				Hostname:    "",
-				AgentID:     "agent-456",
-			},
+			name:     "agent ID when no display name or hostname",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "", "", "agent-456"),
 			expected: "agent-456",
 		},
 		{
-			name: "ID as fallback",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "",
-				Hostname:    "",
-				AgentID:     "",
-			},
+			name:     "ID as fallback",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "", "", ""),
 			expected: "id-123",
 		},
 		{
-			name: "whitespace-only display name ignored",
-			host: models.DockerHost{
-				ID:          "id-123",
-				DisplayName: "   ",
-				Hostname:    "docker-host.local",
-				AgentID:     "agent-456",
-			},
+			name:     "whitespace-only display name ignored",
+			host:     dockerHostViewForDiagnostics("resource-1", "id-123", "   ", "docker-host.local", "agent-456"),
 			expected: "docker-host.local",
 		},
 	}
@@ -332,6 +307,21 @@ func TestPreferredDockerHostName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func dockerHostViewForDiagnostics(resourceID, hostSourceID, name, hostname, agentID string) *unifiedresources.DockerHostView {
+	r := &unifiedresources.Resource{
+		ID:   resourceID,
+		Type: unifiedresources.ResourceTypeAgent,
+		Name: name,
+		Docker: &unifiedresources.DockerData{
+			HostSourceID: hostSourceID,
+			Hostname:     hostname,
+			AgentID:      agentID,
+		},
+	}
+	view := unifiedresources.NewDockerHostView(r)
+	return &view
 }
 
 func TestFormatTimeMaybe(t *testing.T) {

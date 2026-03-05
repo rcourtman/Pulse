@@ -17,8 +17,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -774,13 +774,15 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 
 	tokenUsage := make(map[string][]string)
 	if monitor != nil {
-		for _, host := range monitor.GetDockerHosts() {
-			name := preferredDockerHostName(host)
-			if strings.TrimSpace(host.TokenID) == "" {
-				continue
+		if readState := monitor.GetUnifiedReadStateOrSnapshot(); readState != nil {
+			for _, host := range readState.DockerHosts() {
+				name := preferredDockerHostName(host)
+				if strings.TrimSpace(host.TokenID()) == "" {
+					continue
+				}
+				tokenID := strings.TrimSpace(host.TokenID())
+				tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
 			}
-			tokenID := strings.TrimSpace(host.TokenID)
-			tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
 		}
 	}
 
@@ -811,7 +813,11 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		return nil
 	}
 
-	hosts := m.GetDockerHosts()
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+	hosts := readState.DockerHosts()
 	diag := &DockerAgentDiagnostic{
 		AgentsTotal:             len(hosts),
 		RecommendedAgentVersion: normalizeVersionLabel(serverVersion),
@@ -844,18 +850,18 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	now := time.Now().UTC()
 	legacyTokenHosts := 0
 	for _, host := range hosts {
-		status := strings.ToLower(strings.TrimSpace(host.Status))
+		status := strings.ToLower(strings.TrimSpace(string(host.Status())))
 		if status == "online" {
 			diag.AgentsOnline++
 		}
-		versionStr := strings.TrimSpace(host.AgentVersion)
+		versionStr := strings.TrimSpace(host.AgentVersion())
 		if versionStr != "" {
 			diag.AgentsReportingVersion++
 		} else {
 			diag.AgentsWithoutVersion++
 		}
 
-		if strings.TrimSpace(host.TokenID) != "" {
+		if strings.TrimSpace(host.TokenID()) != "" {
 			diag.AgentsWithTokenBinding++
 		} else {
 			legacyTokenHosts++
@@ -880,28 +886,28 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 			}
 		}
 
-		if strings.TrimSpace(host.TokenID) == "" {
+		if strings.TrimSpace(host.TokenID()) == "" {
 			issues = append(issues, "Container runtime is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
 		}
 
-		if !host.LastSeen.IsZero() && now.Sub(host.LastSeen.UTC()) > 10*time.Minute {
-			issues = append(issues, fmt.Sprintf("No heartbeat since %s. Verify the agent container is running.", host.LastSeen.UTC().Format(time.RFC3339)))
+		if !host.LastSeen().IsZero() && now.Sub(host.LastSeen().UTC()) > 10*time.Minute {
+			issues = append(issues, fmt.Sprintf("No heartbeat since %s. Verify the agent container is running.", host.LastSeen().UTC().Format(time.RFC3339)))
 		}
 
-		if host.Command != nil {
-			cmdStatus := strings.ToLower(strings.TrimSpace(host.Command.Status))
+		if command := host.Command(); command != nil {
+			cmdStatus := strings.ToLower(strings.TrimSpace(command.Status))
 			switch cmdStatus {
 			case monitoring.DockerCommandStatusQueued, monitoring.DockerCommandStatusDispatched, monitoring.DockerCommandStatusAcknowledged:
 				message := fmt.Sprintf("Command %s is still in progress.", cmdStatus)
-				if !host.Command.UpdatedAt.IsZero() && now.Sub(host.Command.UpdatedAt.UTC()) > 15*time.Minute {
+				if !command.UpdatedAt.IsZero() && now.Sub(command.UpdatedAt.UTC()) > 15*time.Minute {
 					diag.AgentsWithStaleCommand++
-					message = fmt.Sprintf("Command %s has been pending since %s; consider allowing re-enrolment.", cmdStatus, host.Command.UpdatedAt.UTC().Format(time.RFC3339))
+					message = fmt.Sprintf("Command %s has been pending since %s; consider allowing re-enrolment.", cmdStatus, command.UpdatedAt.UTC().Format(time.RFC3339))
 				}
 				issues = append(issues, message)
 			}
 		}
 
-		if host.PendingUninstall {
+		if host.PendingUninstall() {
 			diag.AgentsPendingUninstall++
 			issues = append(issues, "Container runtime is pending uninstall; confirm the agent container stopped or clear the flag.")
 		}
@@ -909,14 +915,18 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		if len(issues) == 0 {
 			continue
 		}
+		hostID := host.HostSourceID()
+		if hostID == "" {
+			hostID = host.ID()
+		}
 
 		diag.Attention = append(diag.Attention, DockerAgentAttention{
-			AgentID:      host.ID,
+			AgentID:      hostID,
 			Name:         preferredDockerHostName(host),
-			Status:       host.Status,
+			Status:       string(host.Status()),
 			AgentVersion: versionStr,
-			TokenHint:    host.TokenHint,
-			LastSeen:     formatTimeMaybe(host.LastSeen),
+			TokenHint:    host.TokenHint(),
+			LastSeen:     formatTimeMaybe(host.LastSeen()),
 			Issues:       issues,
 		})
 	}
@@ -1027,17 +1037,23 @@ func countLegacySSHKeys(dir string) (int, error) {
 	return count, nil
 }
 
-func preferredDockerHostName(host models.DockerHost) string {
-	if name := strings.TrimSpace(host.DisplayName); name != "" {
+func preferredDockerHostName(host *unifiedresources.DockerHostView) string {
+	if host == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(host.Name()); name != "" {
 		return name
 	}
-	if name := strings.TrimSpace(host.Hostname); name != "" {
+	if name := strings.TrimSpace(host.Hostname()); name != "" {
 		return name
 	}
-	if name := strings.TrimSpace(host.AgentID); name != "" {
+	if name := strings.TrimSpace(host.AgentID()); name != "" {
 		return name
 	}
-	return host.ID
+	if name := strings.TrimSpace(host.HostSourceID()); name != "" {
+		return name
+	}
+	return host.ID()
 }
 
 func formatTimeMaybe(t time.Time) string {
