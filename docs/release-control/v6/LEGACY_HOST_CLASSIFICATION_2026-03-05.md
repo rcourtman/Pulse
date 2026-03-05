@@ -141,6 +141,47 @@ These look like rename-only cleanup once the host-agent compatibility/state laye
 
 These are naming debt, not current v6 correctness bugs.
 
+## Monitoring Runtime Follow-Up
+
+The remaining host-era surface in `internal/monitoring` is the active ingest and correlation bridge for
+Pulse Unified Agent reports. It is still required for release.
+
+### Must Remain For Release
+
+- `internal/monitoring/monitor_agents.go`
+  `ApplyHostReport()` still ingests unified-agent reports into `models.Host` compatibility state before
+  unified-resource ingestion and correlation layers consume them.
+- `internal/monitoring/monitor.go`
+  helper paths like `mergeHostAgentSMARTIntoDisks()` and the live host snapshot readers still merge
+  host-agent data into node/disk/runtime views.
+- `internal/monitoring/monitor_helpers.go`
+  `isLegacyAgent()` and the host sensor/Ceph/SMART conversion helpers still bridge agent payloads into the
+  compatibility state model.
+- `internal/monitoring/host_agent_temps.go`
+  still uses host-agent sensor data as the authoritative temperature source for linked nodes.
+- `internal/monitoring/monitor_host_agents_test.go`
+  pins host-agent offline/recovery behavior while this compatibility layer remains live.
+
+### Why This Is Not A V6 Leak
+
+- At the canonical read boundary, those ingested records become unified `agent` resources.
+- The remaining `Host` naming is inside the producer/correlation layer, which is exempt from the
+  `ReadState` consumer-only bans.
+- Monitoring is still the write/ingest side of the architecture, not the canonical v6 read model.
+
+### Post-Release Refactor Targets
+
+These are valid rename/structure candidates after the host-agent compatibility state is intentionally retired:
+
+- `internal/monitoring/monitor_agents.go`
+  function names like `ApplyHostReport`, `RemoveHostAgent`, `LinkHostAgent`, `UnlinkHostAgent`
+- `internal/monitoring/monitor.go`
+  comments and helper locals that still describe canonical `agent` data as `host`
+- `internal/monitoring/host_agent_temps.go`
+  helper names that still encode `host agent` terminology even though the canonical resource type is `agent`
+
+These remain naming debt, not release blockers.
+
 ## Non-Resource Host Terminology
 
 These are unrelated to the removed v5 resource type and should not be treated as migration debt:
