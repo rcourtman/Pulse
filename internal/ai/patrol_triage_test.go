@@ -221,6 +221,9 @@ func TestTriageConnectivityChecks(t *testing.T) {
 }
 
 func TestTriageResourceTypeRejectsLegacyKnownTypeAliases(t *testing.T) {
+	if got := triageResourceType("host", "qemu/100"); got != "vm" {
+		t.Fatalf("expected canonical vm type from resource ID when host alias is provided, got %q", got)
+	}
 	if got := triageResourceType("container", "qemu/100"); got != "vm" {
 		t.Fatalf("expected canonical vm type from resource ID, got %q", got)
 	}

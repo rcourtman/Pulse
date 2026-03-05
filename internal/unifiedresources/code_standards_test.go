@@ -525,6 +525,32 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "ai", "alert_adapter_test.go"),
+			requiredSnippets: []string{
+				`agent host alias rejected`,
+				`input: "host"`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "findings_resource_type_test.go"),
+			requiredSnippets: []string{
+				`{in: "host", want: ""}`,
+				`TestNormalizeFindingResourceTypes_RejectsLegacyAndInfers`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "patrol_triggers_test.go"),
+			requiredSnippets: []string{
+				`AnomalyDetectedPatrolScope("res-host", "host", "cpu", 95, 50)`,
+			},
+		},
+		{
+			path: filepath.Join(repoRoot, "internal", "ai", "patrol_triage_test.go"),
+			requiredSnippets: []string{
+				`triageResourceType("host", "qemu/100")`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "api", "reporting_handlers_test.go"),
 			requiredSnippets: []string{
 				`TestNormalizeReportResourceType_RejectsLegacyAliases`,
