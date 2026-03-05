@@ -32,11 +32,8 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
         return 'system-container';
       case 'docker':
       case 'docker-container':
-      case 'docker_container':
       case 'app-container':
-      case 'app_container':
         return 'app-container';
-      case 'host':
       case 'agent':
         return 'agent';
       default:
