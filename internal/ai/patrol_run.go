@@ -960,14 +960,14 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		}
 		// Normalize to semantic type names; expand subtypes for group matching.
 		switch trimmed {
-		case "docker", "docker_host", "docker_container", "app-container":
+		case "docker", "docker-host", "app-container":
 			typeSet["docker"] = true
-			typeSet["docker_host"] = true
-			typeSet["docker_container"] = true
-		case "k8s", "kubernetes", "kubernetes_cluster":
+			typeSet["docker-host"] = true
+			typeSet["app-container"] = true
+		case "k8s", "kubernetes", "k8s-cluster":
 			typeSet["k8s"] = true
 			typeSet["kubernetes"] = true
-			typeSet["kubernetes_cluster"] = true
+			typeSet["k8s-cluster"] = true
 		case "system-container":
 			typeSet["system-container"] = true
 		case "vm":
@@ -1046,7 +1046,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		}
 	}
 	for _, d := range snap.DockerHosts {
-		if !matchesType("docker", "docker_host", "docker_container") {
+		if !matchesType("docker", "docker-host", "app-container") {
 			continue
 		}
 
@@ -1141,7 +1141,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		if clusterName == "" {
 			clusterName = k.Name
 		}
-		if matchesType("kubernetes", "k8s", "kubernetes_cluster") && matchesID(k.ID, clusterName) {
+		if matchesType("kubernetes", "k8s", "k8s-cluster") && matchesID(k.ID, clusterName) {
 			filtered.KubernetesClusters = append(filtered.KubernetesClusters, k)
 		}
 	}

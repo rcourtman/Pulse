@@ -17,7 +17,7 @@ import (
 type TriageFlag struct {
 	ResourceID   string  // e.g., "node/pve1", "qemu/100"
 	ResourceName string  // e.g., "pve1", "webserver-01"
-	ResourceType string  // "node", "vm", "system-container", "storage", "docker_host", "pbs", "pmg"
+	ResourceType string  // "node", "vm", "system-container", "storage", "docker-host", "pbs", "pmg"
 	Category     string  // "performance", "capacity", "backup", "health", "connectivity", "anomaly"
 	Severity     string  // "critical", "warning", "watch"
 	Reason       string  // Human-readable: "Memory at 92% (threshold: 80%)"
@@ -608,7 +608,7 @@ func FormatTriageBriefing(triage *TriageResult) string {
 		healthyStorage = 0
 	}
 
-	healthyDocker := triage.Summary.TotalDocker - triageUniqueFlaggedByType(triage.Flags, "docker_host")
+	healthyDocker := triage.Summary.TotalDocker - triageUniqueFlaggedByType(triage.Flags, "docker-host")
 	if healthyDocker < 0 {
 		healthyDocker = 0
 	}
@@ -841,10 +841,10 @@ func triageGuestResourceType(knownType, resourceID string) string {
 
 func triageCanonicalResourceType(resourceType string) string {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
-	case "vm", "system-container", "app-container", "node", "storage", "docker_host", "pbs", "pmg", "agent":
+	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent":
 		return strings.ToLower(strings.TrimSpace(resourceType))
 	case "docker":
-		return "docker_host"
+		return "docker-host"
 	default:
 		return ""
 	}
@@ -862,7 +862,7 @@ func triageConnectionResourceType(resourceID string) string {
 	case strings.HasPrefix(id, "storage/"), strings.Contains(id, "storage"):
 		return "storage"
 	case strings.HasPrefix(id, "docker-"), strings.Contains(id, "docker"):
-		return "docker_host"
+		return "docker-host"
 	case strings.HasPrefix(id, "pbs-"), strings.HasPrefix(id, "pbs/"), strings.Contains(id, "pbs"):
 		return "pbs"
 	case strings.HasPrefix(id, "pmg-"), strings.HasPrefix(id, "pmg/"), strings.Contains(id, "pmg"):

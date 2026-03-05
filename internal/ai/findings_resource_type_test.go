@@ -31,7 +31,7 @@ func TestInferFindingResourceType(t *testing.T) {
 			name:         "docker wins over generic container keyword",
 			resourceID:   "docker://app",
 			resourceName: "Docker Container",
-			expected:     "docker_container",
+			expected:     "app-container",
 		},
 		{
 			name:         "lxc keyword maps to system-container",

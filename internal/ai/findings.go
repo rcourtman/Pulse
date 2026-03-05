@@ -294,7 +294,7 @@ func inferFindingResourceType(resourceID, resourceName string) string {
 	case strings.Contains(joined, "storage") || strings.Contains(joined, "pool") || strings.Contains(joined, "zfs"):
 		return "storage"
 	case strings.Contains(joined, "docker"):
-		return "docker_container"
+		return "app-container"
 	case strings.Contains(joined, "lxc") || strings.Contains(joined, "ct") || strings.Contains(joined, "container"):
 		return "system-container"
 	case strings.Contains(joined, "vm"):

@@ -253,7 +253,7 @@ func TestPatrolService_filterStateByScope_DockerContainer(t *testing.T) {
 	}
 	scope := PatrolScope{
 		ResourceIDs:   []string{"c1"},
-		ResourceTypes: []string{"docker_container"},
+		ResourceTypes: []string{"app-container"},
 	}
 
 	filtered := ps.filterStateByScope(state, scope)
@@ -278,7 +278,7 @@ func TestPatrolService_filterStateByScope_KubernetesClusterType(t *testing.T) {
 	}
 	scope := PatrolScope{
 		ResourceIDs:   []string{"k1"},
-		ResourceTypes: []string{"kubernetes_cluster"},
+		ResourceTypes: []string{"k8s-cluster"},
 	}
 
 	filtered := ps.filterStateByScope(state, scope)

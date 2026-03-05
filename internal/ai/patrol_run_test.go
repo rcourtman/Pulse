@@ -101,6 +101,12 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 	state := models.StateSnapshot{
 		VMs:        []models.VM{{ID: "vm1", Name: "vm-1"}},
 		Containers: []models.Container{{ID: "ct1", Name: "ct-1"}},
+		KubernetesClusters: []models.KubernetesCluster{
+			{ID: "k1", Name: "cluster-1"},
+		},
+		DockerHosts: []models.DockerHost{
+			{ID: "dh1", Hostname: "docker-host-1"},
+		},
 	}
 
 	// Legacy alias should not match canonical VM resources.
@@ -129,6 +135,19 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 	filtered = ps.filterStateByScope(state, scope)
 	if len(filtered.Containers) != 0 {
 		t.Errorf("expected legacy 'system_container' alias to be rejected, got %d containers", len(filtered.Containers))
+	}
+
+	// Additional removed aliases should also be rejected.
+	scope = PatrolScope{ResourceTypes: []string{"docker_container"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.DockerHosts) != 0 {
+		t.Errorf("expected legacy 'docker_container' alias to be rejected, got %d docker hosts", len(filtered.DockerHosts))
+	}
+
+	scope = PatrolScope{ResourceTypes: []string{"kubernetes_cluster"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.KubernetesClusters) != 0 {
+		t.Errorf("expected legacy 'kubernetes_cluster' alias to be rejected, got %d kubernetes clusters", len(filtered.KubernetesClusters))
 	}
 }
 
@@ -209,7 +228,7 @@ func TestFilterStateByScope_DockerContainerOnly(t *testing.T) {
 	// Match by container ID only
 	scope := PatrolScope{
 		ResourceIDs:   []string{"c1"},
-		ResourceTypes: []string{"docker_container"},
+		ResourceTypes: []string{"app-container"},
 	}
 	filtered := ps.filterStateByScope(state, scope)
 	if len(filtered.DockerHosts) != 1 {
