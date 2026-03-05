@@ -43,7 +43,7 @@ func NormalizeOrgStatus(status OrgStatus) OrgStatus {
 	}
 }
 
-// NormalizeOrganizationRole canonicalizes role values and maps legacy aliases.
+// NormalizeOrganizationRole canonicalizes role values.
 func NormalizeOrganizationRole(role OrganizationRole) OrganizationRole {
 	switch strings.ToLower(strings.TrimSpace(string(role))) {
 	case string(OrgRoleOwner):
@@ -52,7 +52,7 @@ func NormalizeOrganizationRole(role OrganizationRole) OrganizationRole {
 		return OrgRoleAdmin
 	case string(OrgRoleEditor):
 		return OrgRoleEditor
-	case string(OrgRoleViewer), "member":
+	case string(OrgRoleViewer):
 		return OrgRoleViewer
 	default:
 		return OrganizationRole(strings.ToLower(strings.TrimSpace(string(role))))

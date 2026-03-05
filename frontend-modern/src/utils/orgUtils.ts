@@ -7,13 +7,9 @@ const roleBadgeClasses: Record<OrganizationRole, string> = {
   admin: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   editor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
   viewer: defaultBadgeClass,
-  member: defaultBadgeClass,
 };
 
-export const normalizeRole = (role: OrganizationRole): Exclude<OrganizationRole, 'member'> => {
-  if (role === 'member') return 'viewer';
-  return role;
-};
+export const normalizeRole = (role: OrganizationRole): OrganizationRole => role;
 
 export const canManageOrg = (org: Organization | null, currentUser?: string): boolean => {
   if (!org || !currentUser) return false;

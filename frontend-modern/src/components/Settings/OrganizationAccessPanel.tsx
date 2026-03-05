@@ -20,7 +20,7 @@ interface OrganizationAccessPanelProps {
   currentUser?: string;
 }
 
-const roleOptions: Array<{ value: Exclude<OrganizationRole, 'member'>; label: string }> = [
+const roleOptions: Array<{ value: OrganizationRole; label: string }> = [
   { value: 'viewer', label: 'Viewer' },
   { value: 'editor', label: 'Editor' },
   { value: 'admin', label: 'Admin' },
@@ -33,7 +33,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
   const [org, setOrg] = createSignal<Organization | null>(null);
   const [members, setMembers] = createSignal<OrganizationMember[]>([]);
   const [inviteUserID, setInviteUserID] = createSignal('');
-  const [inviteRole, setInviteRole] = createSignal<Exclude<OrganizationRole, 'member'>>('viewer');
+  const [inviteRole, setInviteRole] = createSignal<OrganizationRole>('viewer');
 
   const activeOrgId = () => getOrgID() || 'default';
 
@@ -62,10 +62,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     }
   };
 
-  const updateRole = async (
-    member: OrganizationMember,
-    role: Exclude<OrganizationRole, 'member'>,
-  ) => {
+  const updateRole = async (member: OrganizationMember, role: OrganizationRole) => {
     const currentOrg = org();
     if (!currentOrg) return;
     const currentRole = normalizeRole(member.role);
@@ -205,7 +202,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                           value={inviteRole()}
                           onChange={(event) =>
                             setInviteRole(
-                              event.currentTarget.value as Exclude<OrganizationRole, 'member'>,
+                              event.currentTarget.value as OrganizationRole,
                             )
                           }
                           class="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -271,10 +268,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                                   onChange={(event) => {
                                     void updateRole(
                                       member,
-                                      event.currentTarget.value as Exclude<
-                                        OrganizationRole,
-                                        'member'
-                                      >,
+                                      event.currentTarget.value as OrganizationRole,
                                     );
                                   }}
                                   disabled={

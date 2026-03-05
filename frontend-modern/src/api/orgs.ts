@@ -1,6 +1,6 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 
-export type OrganizationRole = 'owner' | 'admin' | 'editor' | 'viewer' | 'member';
+export type OrganizationRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
 export interface OrganizationMember {
   userId: string;
@@ -23,7 +23,7 @@ export interface OrganizationShare {
   resourceType: string;
   resourceId: string;
   resourceName?: string;
-  accessRole: Exclude<OrganizationRole, 'owner' | 'member'> | 'viewer';
+  accessRole: Exclude<OrganizationRole, 'owner'> | 'viewer';
   createdAt: string;
   createdBy: string;
 }
@@ -112,7 +112,7 @@ export const OrgsAPI = {
       resourceType: string;
       resourceId: string;
       resourceName?: string;
-      accessRole: Exclude<OrganizationRole, 'owner' | 'member'> | 'viewer';
+      accessRole: Exclude<OrganizationRole, 'owner'> | 'viewer';
     },
   ) =>
     apiFetchJSON<OrganizationShare>(`/api/orgs/${encodeURIComponent(id)}/shares`, {

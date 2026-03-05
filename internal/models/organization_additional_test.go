@@ -33,14 +33,17 @@ func TestOrganizationAccessors(t *testing.T) {
 }
 
 func TestOrganizationRoleNormalization(t *testing.T) {
-	if got := NormalizeOrganizationRole("member"); got != OrgRoleViewer {
-		t.Fatalf("expected member alias to normalize to viewer, got %q", got)
+	if got := NormalizeOrganizationRole("member"); got != OrganizationRole("member") {
+		t.Fatalf("expected member to remain unchanged, got %q", got)
 	}
 	if got := NormalizeOrganizationRole("EDITOR"); got != OrgRoleEditor {
 		t.Fatalf("expected EDITOR to normalize to editor, got %q", got)
 	}
-	if !IsValidOrganizationRole(OrgRoleOwner) || !IsValidOrganizationRole("member") {
-		t.Fatalf("expected owner and member alias to be valid roles")
+	if !IsValidOrganizationRole(OrgRoleOwner) {
+		t.Fatalf("expected owner role to be valid")
+	}
+	if IsValidOrganizationRole("member") {
+		t.Fatalf("expected member to be invalid in v6")
 	}
 	if IsValidOrganizationRole("unknown") {
 		t.Fatalf("expected unknown role to be invalid")

@@ -3,10 +3,6 @@ import { normalizeRole, canManageOrg, roleBadgeClass, formatOrgDate } from '@/ut
 import type { Organization } from '@/api/orgs';
 
 describe('normalizeRole', () => {
-  it('returns viewer for member role', () => {
-    expect(normalizeRole('member')).toBe('viewer');
-  });
-
   it('returns owner for owner role', () => {
     expect(normalizeRole('owner')).toBe('owner');
   });
@@ -80,13 +76,6 @@ describe('canManageOrg', () => {
     expect(canManageOrg(org, 'user-1')).toBe(false);
   });
 
-  it('treats member role as viewer', () => {
-    const org = createOrg({
-      members: [{ userId: 'user-1', role: 'member', addedAt: '2024-01-01T00:00:00Z' }],
-    });
-    expect(canManageOrg(org, 'user-1')).toBe(false);
-  });
-
   it('returns false when user is not in members list', () => {
     const org = createOrg({
       members: [{ userId: 'other-user', role: 'admin', addedAt: '2024-01-01T00:00:00Z' }],
@@ -126,12 +115,6 @@ describe('roleBadgeClass', () => {
 
   it('returns viewer badge class', () => {
     const result = roleBadgeClass('viewer');
-    expect(result).toContain('bg-slate-100');
-    expect(result).toContain('text-slate-700');
-  });
-
-  it('returns member badge class', () => {
-    const result = roleBadgeClass('member');
     expect(result).toContain('bg-slate-100');
     expect(result).toContain('text-slate-700');
   });
