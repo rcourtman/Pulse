@@ -654,7 +654,7 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 			break
 		}
 
-		resourceType, hostID, resourceID, err := ParseResourceID(id)
+		resourceType, targetID, resourceID, err := ParseResourceID(id)
 		if err != nil {
 			failedCount++
 			log.Warn().
@@ -667,9 +667,9 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 		_, err = s.DiscoverResource(ctx, DiscoveryRequest{
 			ResourceType: resourceType,
 			ResourceID:   resourceID,
-			TargetID:     hostID,
-			HostID:       hostID,
-			Hostname:     hostID,
+			TargetID:     targetID,
+			HostID:       targetID,
+			Hostname:     targetID,
 		})
 		if err != nil {
 			failedCount++
@@ -1807,7 +1807,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	return discovery, nil
 }
 
-// normalizeDiscoveryRequest resolves host discovery aliases to a canonical ID.
+// normalizeDiscoveryRequest resolves discovery aliases to a canonical target ID.
 // This prevents duplicate discoveries for the same physical host under different IDs.
 func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]string) DiscoveryRequest {
 	req.TargetID = strings.TrimSpace(req.TargetID)
@@ -2860,12 +2860,12 @@ func (s *Service) GetDiscoveryForAIChat(ctx context.Context, resourceType Resour
 func (s *Service) GetDiscoveriesForAIContext(ctx context.Context, resourceIDs []string) ([]*ResourceDiscovery, error) {
 	var results []*ResourceDiscovery
 	for _, id := range resourceIDs {
-		resourceType, hostID, resourceID, err := ParseResourceID(id)
+		resourceType, targetID, resourceID, err := ParseResourceID(id)
 		if err != nil {
 			log.Debug().Err(err).Str("id", id).Msg("failed to parse resource ID for AI context")
 			continue
 		}
-		discovery, err := s.GetDiscoveryForAIChat(ctx, resourceType, hostID, resourceID)
+		discovery, err := s.GetDiscoveryForAIChat(ctx, resourceType, targetID, resourceID)
 		if err != nil {
 			log.Debug().Err(err).Str("id", id).Msg("failed to get discovery for AI context")
 			continue
