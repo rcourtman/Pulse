@@ -27,7 +27,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
   const [query, setQuery] = createSignal('');
   const infrastructurePath = buildInfrastructurePath();
   const workloadsPath = buildWorkloadsPath();
-  const kubernetesWorkloadsPath = buildWorkloadsPath({ type: 'k8s' });
+  const podWorkloadsPath = buildWorkloadsPath({ type: 'pod' });
   const storagePath = buildStoragePath();
   const recoveryPath = buildRecoveryPath();
 
@@ -52,11 +52,11 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         action: () => navigate(workloadsPath),
       },
       {
-        id: 'nav-workloads-k8s',
-        label: 'Go to Kubernetes Workloads',
-        description: kubernetesWorkloadsPath,
+        id: 'nav-workloads-pods',
+        label: 'Go to Kubernetes Pods',
+        description: podWorkloadsPath,
         keywords: ['k8s', 'kubernetes', 'pods', 'deployments', 'clusters'],
-        action: () => navigate(kubernetesWorkloadsPath),
+        action: () => navigate(podWorkloadsPath),
       },
       {
         id: 'nav-storage',
