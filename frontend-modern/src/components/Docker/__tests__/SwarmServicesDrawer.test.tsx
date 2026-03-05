@@ -753,7 +753,7 @@ describe('SwarmServicesDrawer', () => {
       });
 
       const url = apiFetchJSONMock.mock.calls[0][0] as string;
-      expect(url).toContain('type=docker_service');
+      expect(url).toContain('type=docker-service');
       expect(url).toContain('cluster=my-cluster');
       expect(url).toContain('page=1');
       expect(url).toContain('limit=100');

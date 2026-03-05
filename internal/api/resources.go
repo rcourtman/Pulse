@@ -904,15 +904,15 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 			result[unified.ResourceTypeSystemContainer] = struct{}{}
 		case "app-container", "app-containers":
 			result[unified.ResourceTypeAppContainer] = struct{}{}
-		case "docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services":
+		case "docker-service", "service", "services":
 			result[unified.ResourceTypeDockerService] = struct{}{}
-		case "pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod":
+		case "pod", "pods", "k8s-pod":
 			result[unified.ResourceTypePod] = struct{}{}
-		case "k8s_cluster", "k8s-cluster", "kubernetes_cluster", "kubernetes-cluster":
+		case "k8s-cluster":
 			result[unified.ResourceTypeK8sCluster] = struct{}{}
-		case "k8s_node", "k8s-node", "kubernetes_node", "kubernetes-node":
+		case "k8s-node":
 			result[unified.ResourceTypeK8sNode] = struct{}{}
-		case "k8s_deployment", "k8s-deployment", "kubernetes_deployment", "kubernetes-deployment", "deployment", "deployments":
+		case "k8s-deployment", "deployment", "deployments":
 			result[unified.ResourceTypeK8sDeployment] = struct{}{}
 		case "k8s", "kubernetes":
 			result[unified.ResourceTypeK8sCluster] = struct{}{}
@@ -954,11 +954,11 @@ func isSupportedResourceTypeFilterToken(token string) bool {
 		"vm", "vms",
 		"system-container", "system-containers", "oci-container",
 		"app-container", "app-containers",
-		"docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services",
-		"pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod",
-		"k8s_cluster", "k8s-cluster", "kubernetes_cluster", "kubernetes-cluster",
-		"k8s_node", "k8s-node", "kubernetes_node", "kubernetes-node",
-		"k8s_deployment", "k8s-deployment", "kubernetes_deployment", "kubernetes-deployment", "deployment", "deployments",
+		"docker-service", "service", "services",
+		"pod", "pods", "k8s-pod",
+		"k8s-cluster",
+		"k8s-node",
+		"k8s-deployment", "deployment", "deployments",
 		"k8s", "kubernetes",
 		"storage",
 		"pbs",

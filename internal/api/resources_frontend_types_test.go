@@ -212,9 +212,26 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 
 func TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases(t *testing.T) {
 	unsupported := unsupportedResourceTypeFilterTokens(
-		"vm,lxc,qemu,system-container,system_container,app_container,container,docker-container",
+		"vm,lxc,qemu,system-container,system_container,app_container,container,docker-container,docker_service,swarm_service,k8s_pod,k8s_cluster,k8s_node,k8s_deployment,kubernetes-pod,kubernetes-cluster,kubernetes-node,kubernetes-deployment",
 	)
-	expected := []string{"lxc", "qemu", "system_container", "app_container", "container", "docker-container"}
+	expected := []string{
+		"lxc",
+		"qemu",
+		"system_container",
+		"app_container",
+		"container",
+		"docker-container",
+		"docker_service",
+		"swarm_service",
+		"k8s_pod",
+		"k8s_cluster",
+		"k8s_node",
+		"k8s_deployment",
+		"kubernetes-pod",
+		"kubernetes-cluster",
+		"kubernetes-node",
+		"kubernetes-deployment",
+	}
 	if len(unsupported) != len(expected) {
 		t.Fatalf("unsupportedResourceTypeFilterTokens returned %v, want %v", unsupported, expected)
 	}

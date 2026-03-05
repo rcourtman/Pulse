@@ -827,7 +827,7 @@ func TestResourceListIncludesDockerSwarmServicesAndFiltersByCluster(t *testing.T
 
 	// Unfiltered-by-cluster: expect the service to show up exactly once.
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=docker_service", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=docker-service", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -859,7 +859,7 @@ func TestResourceListIncludesDockerSwarmServicesAndFiltersByCluster(t *testing.T
 
 	// Cluster filter should also return the service.
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=docker_service&cluster=prod-swarm", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=docker-service&cluster=prod-swarm", nil)
 	h.HandleListResources(rec2, req2)
 
 	if rec2.Code != http.StatusOK {

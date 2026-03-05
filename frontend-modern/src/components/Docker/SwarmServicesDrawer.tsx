@@ -68,7 +68,7 @@ const normalize = (value?: string | null) => (value || '').trim();
 
 const buildServicesUrl = (cluster: string, page: number) => {
   const params = new URLSearchParams();
-  params.set('type', 'docker_service');
+  params.set('type', 'docker-service');
   params.set('cluster', cluster);
   params.set('page', String(page));
   params.set('limit', String(PAGE_LIMIT));
