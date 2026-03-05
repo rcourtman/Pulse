@@ -298,6 +298,48 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 	}
 }
 
+func TestRemoveHostAgent_KeepsSharedTokenUsedByDockerRuntime(t *testing.T) {
+	t.Helper()
+
+	tokenID := "shared-token"
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config: &config.Config{
+			APITokens: []config.APITokenRecord{
+				{ID: tokenID, Name: "Shared Token"},
+			},
+		},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-shared"
+	monitor.state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "shared-host.local",
+		TokenID:  tokenID,
+	})
+	monitor.state.UpsertDockerHost(models.DockerHost{
+		ID:       "docker-shared",
+		Hostname: "docker-shared.local",
+		TokenID:  tokenID,
+		Status:   "online",
+	})
+	monitor.hostTokenBindings[tokenID+":shared-host.local"] = hostID
+
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	if got := len(monitor.config.APITokens); got != 1 {
+		t.Fatalf("expected shared API token to remain, got %d tokens", got)
+	}
+	if monitor.config.APITokens[0].ID != tokenID {
+		t.Fatalf("expected shared token %q to remain, got %q", tokenID, monitor.config.APITokens[0].ID)
+	}
+}
+
 func TestEvaluateHostAgentsEmptyHostsList(t *testing.T) {
 	monitor := &Monitor{
 		state:        models.NewState(),

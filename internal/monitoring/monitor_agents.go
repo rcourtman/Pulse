@@ -117,15 +117,22 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 
 	tokenStillUsed := false
 	if tokenID != "" && m.state != nil {
-		for _, other := range m.state.GetHosts() {
-			if strings.TrimSpace(other.TokenID) == tokenID {
+		readState := m.snapshotBackedUnifiedReadState()
+		for _, other := range readState.Hosts() {
+			if other == nil {
+				continue
+			}
+			if strings.TrimSpace(other.TokenID()) == tokenID {
 				tokenStillUsed = true
 				break
 			}
 		}
 		if !tokenStillUsed {
-			for _, other := range m.state.GetDockerHosts() {
-				if strings.TrimSpace(other.TokenID) == tokenID {
+			for _, other := range readState.DockerHosts() {
+				if other == nil {
+					continue
+				}
+				if strings.TrimSpace(other.TokenID()) == tokenID {
 					tokenStillUsed = true
 					break
 				}
@@ -626,6 +633,16 @@ func (m *Monitor) resolveDockerHostView(hostID string) (*unifiedresources.Docker
 	}
 
 	return nil, "", false
+}
+
+func (m *Monitor) snapshotBackedUnifiedReadState() unifiedresources.ReadState {
+	if m == nil || m.state == nil {
+		return nil
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(m.state.GetSnapshot())
+	return unifiedresources.NewMonitorAdapter(registry)
 }
 
 // RebuildTokenBindings reconstructs agent-to-token binding maps from the current
