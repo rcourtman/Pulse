@@ -105,27 +105,27 @@ func TestDockerMetadataHandlers_ContainerMetadata(t *testing.T) {
 	})
 }
 
-func TestDockerMetadataHandlers_HostMetadata(t *testing.T) {
+func TestDockerMetadataHandlers_RuntimeMetadata(t *testing.T) {
 	handler := newDockerMetadataHandler(t)
 
-	t.Run("update-and-get-host", func(t *testing.T) {
+	t.Run("update-and-get-runtime", func(t *testing.T) {
 		meta := config.DockerHostMetadata{
 			CustomDisplayName: "Host A",
 			CustomURL:         "https://portainer.local",
 			Notes:             []string{"note1"},
 		}
 		body, _ := json.Marshal(meta)
-		req := httptest.NewRequest(http.MethodPut, "/api/docker/hosts/metadata/host-1", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/api/docker/runtimes/metadata/host-1", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 
-		handler.HandleUpdateHostMetadata(rec, req)
+		handler.HandleUpdateRuntimeMetadata(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
 		}
 
-		getReq := httptest.NewRequest(http.MethodGet, "/api/docker/hosts/metadata/host-1", nil)
+		getReq := httptest.NewRequest(http.MethodGet, "/api/docker/runtimes/metadata/host-1", nil)
 		getRec := httptest.NewRecorder()
-		handler.HandleGetHostMetadata(getRec, getReq)
+		handler.HandleGetRuntimeMetadata(getRec, getReq)
 		if getRec.Code != http.StatusOK {
 			t.Fatalf("get status = %d, want 200", getRec.Code)
 		}
@@ -138,18 +138,18 @@ func TestDockerMetadataHandlers_HostMetadata(t *testing.T) {
 		}
 	})
 
-	t.Run("merge-host-metadata", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/api/docker/hosts/metadata/host-1", bytes.NewReader([]byte(`{}`)))
+	t.Run("merge-runtime-metadata", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/api/docker/runtimes/metadata/host-1", bytes.NewReader([]byte(`{}`)))
 		rec := httptest.NewRecorder()
 
-		handler.HandleUpdateHostMetadata(rec, req)
+		handler.HandleUpdateRuntimeMetadata(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
 		}
 
-		getReq := httptest.NewRequest(http.MethodGet, "/api/docker/hosts/metadata/host-1", nil)
+		getReq := httptest.NewRequest(http.MethodGet, "/api/docker/runtimes/metadata/host-1", nil)
 		getRec := httptest.NewRecorder()
-		handler.HandleGetHostMetadata(getRec, getReq)
+		handler.HandleGetRuntimeMetadata(getRec, getReq)
 		if getRec.Code != http.StatusOK {
 			t.Fatalf("get status = %d, want 200", getRec.Code)
 		}
@@ -162,11 +162,11 @@ func TestDockerMetadataHandlers_HostMetadata(t *testing.T) {
 		}
 	})
 
-	t.Run("delete-host-metadata", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/docker/hosts/metadata/host-1", nil)
+	t.Run("delete-runtime-metadata", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/api/docker/runtimes/metadata/host-1", nil)
 		rec := httptest.NewRecorder()
 
-		handler.HandleDeleteHostMetadata(rec, req)
+		handler.HandleDeleteRuntimeMetadata(rec, req)
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want 204", rec.Code)
 		}

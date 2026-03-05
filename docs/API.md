@@ -155,10 +155,10 @@ User notes, tags, and custom URLs for resources.
 - `PUT /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
 - `DELETE /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
 
-- `GET /api/docker/hosts/metadata` (admin or `monitoring:read`)
-- `GET /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:read`)
-- `PUT /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:write`)
-- `DELETE /api/docker/hosts/metadata/{hostId}` (admin or `monitoring:write`)
+- `GET /api/docker/runtimes/metadata` (admin or `monitoring:read`)
+- `GET /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:read`)
+- `PUT /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
+- `DELETE /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
 
 ### Version Info
 `GET /api/version`
@@ -997,13 +997,13 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 
 ### Docker Agent Management (Admin)
 - `POST /api/agents/docker/commands/{commandId}/ack` (`docker:report`)
-- `DELETE /api/agents/docker/hosts/{hostId}` (`docker:manage`, supports `?hide=true` or `?force=true`)
-- `POST /api/agents/docker/hosts/{hostId}/allow-reenroll` (`docker:manage`)
-- `PUT /api/agents/docker/hosts/{hostId}/unhide` (`docker:manage`)
-- `PUT /api/agents/docker/hosts/{hostId}/pending-uninstall` (`docker:manage`)
-- `PUT /api/agents/docker/hosts/{hostId}/display-name` (`docker:manage`)
-- `POST /api/agents/docker/hosts/{hostId}/check-updates` (`docker:manage`)
-- `POST /api/agents/docker/hosts/{hostId}/update-all` (`docker:manage`)
+- `DELETE /api/agents/docker/runtimes/{agentId}` (`docker:manage`, supports `?hide=true` or `?force=true`)
+- `POST /api/agents/docker/runtimes/{agentId}/allow-reenroll` (`docker:manage`)
+- `PUT /api/agents/docker/runtimes/{agentId}/unhide` (`docker:manage`)
+- `PUT /api/agents/docker/runtimes/{agentId}/pending-uninstall` (`docker:manage`)
+- `PUT /api/agents/docker/runtimes/{agentId}/display-name` (`docker:manage`)
+- `POST /api/agents/docker/runtimes/{agentId}/check-updates` (`docker:manage`)
+- `POST /api/agents/docker/runtimes/{agentId}/update-all` (`docker:manage`)
 - `POST /api/agents/docker/containers/update` (`docker:manage`)
 
 ### Kubernetes Agent Management (Admin)

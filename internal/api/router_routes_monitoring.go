@@ -80,25 +80,25 @@ func (r *Router) registerMonitoringResourceRoutes(
 		}
 	}))
 
-	// Docker host metadata routes (for managing Docker host custom URLs, e.g., Portainer links)
-	r.mux.HandleFunc("/api/docker/hosts/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, dockerMetadataHandler.HandleGetHostMetadata)))
-	r.mux.HandleFunc("/api/docker/hosts/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+	// Docker runtime metadata routes (for custom display names, URLs, notes).
+	r.mux.HandleFunc("/api/docker/runtimes/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, dockerMetadataHandler.HandleGetRuntimeMetadata)))
+	r.mux.HandleFunc("/api/docker/runtimes/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureScope(w, req, config.ScopeMonitoringRead) {
 				return
 			}
-			dockerMetadataHandler.HandleGetHostMetadata(w, req)
+			dockerMetadataHandler.HandleGetRuntimeMetadata(w, req)
 		case http.MethodPut, http.MethodPost:
 			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
 				return
 			}
-			dockerMetadataHandler.HandleUpdateHostMetadata(w, req)
+			dockerMetadataHandler.HandleUpdateRuntimeMetadata(w, req)
 		case http.MethodDelete:
 			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
 				return
 			}
-			dockerMetadataHandler.HandleDeleteHostMetadata(w, req)
+			dockerMetadataHandler.HandleDeleteRuntimeMetadata(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
