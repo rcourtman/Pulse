@@ -574,6 +574,14 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
+			path: filepath.Join(repoRoot, "internal", "ai", "patrol_run_test.go"),
+			requiredSnippets: []string{
+				`expected legacy 'host' alias to be rejected`,
+				`expected non-canonical 'docker' alias to be rejected`,
+				`expected non-canonical 'agent_raid' alias to be rejected`,
+			},
+		},
+		{
 			path: filepath.Join(repoRoot, "internal", "ai", "patrol_triage_test.go"),
 			requiredSnippets: []string{
 				`triageResourceType("host", "qemu/100")`,

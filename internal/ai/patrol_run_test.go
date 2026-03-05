@@ -127,6 +127,13 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 		t.Errorf("expected legacy 'container' alias to be rejected, got %d containers", len(filtered.Containers))
 	}
 
+	// Removed host alias should not match canonical agent resources.
+	scope = PatrolScope{ResourceTypes: []string{"host"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.Hosts) != 0 {
+		t.Errorf("expected legacy 'host' alias to be rejected, got %d hosts", len(filtered.Hosts))
+	}
+
 	// Canonical v6 type should match containers.
 	scope = PatrolScope{ResourceTypes: []string{"system-container"}}
 	filtered = ps.filterStateByScope(state, scope)
