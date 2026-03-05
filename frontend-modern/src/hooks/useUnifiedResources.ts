@@ -414,12 +414,7 @@ const resolveType = (value?: string): ResourceType => {
       return 'system-container';
     case 'oci-container':
       return 'oci-container';
-    case 'container':
-      return 'system-container';
     case 'app-container':
-    case 'docker-container':
-      return 'app-container';
-    case 'docker_container':
       return 'app-container';
     case 'pod':
       return 'pod';
