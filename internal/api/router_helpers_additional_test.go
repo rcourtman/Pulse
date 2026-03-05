@@ -223,6 +223,24 @@ func TestDeriveResourceTypeFromAlert(t *testing.T) {
 			want:  "k8s",
 		},
 		{
+			name: "metadata canonical resource type",
+			alert: &alerts.Alert{
+				Type:       "custom",
+				ResourceID: "resource-1",
+				Metadata:   map[string]interface{}{"resourceType": "app-container"},
+			},
+			want: "app-container",
+		},
+		{
+			name: "metadata legacy resource type ignored",
+			alert: &alerts.Alert{
+				Type:       "custom",
+				ResourceID: "cluster/qemu/101",
+				Metadata:   map[string]interface{}{"resourceType": "host"},
+			},
+			want: "vm",
+		},
+		{
 			name:  "fallback by resource id",
 			alert: &alerts.Alert{Type: "custom", ResourceID: "cluster/qemu/101"},
 			want:  "vm",

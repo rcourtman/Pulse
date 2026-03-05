@@ -51,21 +51,21 @@ func TestNormalizeMetricsHistoryResourceType_ContainerCanonicalTypes(t *testing.
 			name:         "system container",
 			input:        "system-container",
 			wantResponse: "system-container",
-			wantRuntime:  "container",
+			wantRuntime:  "system-container",
 			wantStore:    []string{"container"},
 		},
 		{
 			name:         "oci container",
 			input:        "oci-container",
 			wantResponse: "oci-container",
-			wantRuntime:  "container",
+			wantRuntime:  "oci-container",
 			wantStore:    []string{"container"},
 		},
 		{
 			name:         "app container",
 			input:        "app-container",
 			wantResponse: "app-container",
-			wantRuntime:  "dockerContainer",
+			wantRuntime:  "app-container",
 			wantStore:    []string{"dockerContainer", "docker"},
 		},
 	}
@@ -112,8 +112,8 @@ func TestNormalizeMetricsHistoryResourceType_DockerHostCanonicalType(t *testing.
 	if responseType != "docker-host" {
 		t.Fatalf("responseType = %q, want %q", responseType, "docker-host")
 	}
-	if runtimeType != "dockerHost" {
-		t.Fatalf("runtimeType = %q, want %q", runtimeType, "dockerHost")
+	if runtimeType != "docker-host" {
+		t.Fatalf("runtimeType = %q, want %q", runtimeType, "docker-host")
 	}
 	if len(storeTypes) != 1 || storeTypes[0] != "dockerHost" {
 		t.Fatalf("storeTypes = %v, want [dockerHost]", storeTypes)

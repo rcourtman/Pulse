@@ -3013,35 +3013,86 @@ func deriveResourceTypeFromAlert(alert *alerts.Alert) string {
 		return ""
 	}
 
-	// Try to derive from alert type
-	alertType := strings.ToLower(alert.Type)
+	// Prefer explicit canonical resource type from alert metadata.
+	if alert.Metadata != nil {
+		if raw, ok := alert.Metadata["resourceType"].(string); ok {
+			switch canonicalAlertResourceTypeToken(raw) {
+			case "vm":
+				return "vm"
+			case "system-container", "oci-container":
+				return "system-container"
+			case "app-container", "docker-host":
+				return "app-container"
+			case "node":
+				return "node"
+			case "storage", "disk":
+				return "storage"
+			case "pbs":
+				return "pbs"
+			case "k8s", "k8s-node", "k8s-cluster":
+				return "k8s"
+			}
+		}
+	}
+
+	// Infer from resource ID patterns.
+	resourceID := strings.ToLower(strings.TrimSpace(alert.ResourceID))
 	switch {
-	case strings.HasPrefix(alertType, "node") || strings.Contains(alert.ResourceID, "/node/"):
+	case strings.Contains(resourceID, "/node/"),
+		strings.HasPrefix(resourceID, "node/"),
+		strings.HasPrefix(resourceID, "node:"):
 		return "node"
-	case strings.Contains(alertType, "qemu") || strings.Contains(alert.ResourceID, "/qemu/"):
+	case strings.Contains(resourceID, "/qemu/"),
+		strings.HasPrefix(resourceID, "vm:"),
+		strings.HasPrefix(resourceID, "vm/"):
 		return "vm"
-	case strings.Contains(alertType, "lxc") || strings.Contains(alert.ResourceID, "/lxc/"):
+	case strings.Contains(resourceID, "/lxc/"),
+		strings.HasPrefix(resourceID, "system-container:"),
+		strings.HasPrefix(resourceID, "system-container/"),
+		strings.HasPrefix(resourceID, "oci-container:"),
+		strings.HasPrefix(resourceID, "oci-container/"):
 		return "system-container"
-	case strings.Contains(alertType, "docker"):
+	case strings.Contains(resourceID, "docker:"),
+		strings.HasPrefix(resourceID, "app-container:"),
+		strings.HasPrefix(resourceID, "app-container/"),
+		strings.HasPrefix(resourceID, "docker-host:"),
+		strings.HasPrefix(resourceID, "docker-host/"),
+		strings.Contains(resourceID, "docker"):
 		return "app-container"
+	case strings.HasPrefix(resourceID, "storage/"), strings.Contains(resourceID, "storage"):
+		return "storage"
+	case strings.HasPrefix(resourceID, "pbs"), strings.Contains(resourceID, "/pbs/"):
+		return "pbs"
+	case strings.Contains(resourceID, "k8s"), strings.Contains(resourceID, "kubernetes"):
+		return "k8s"
+	}
+
+	// Final fallback by alert type for broad non-workload classes.
+	alertType := strings.ToLower(strings.TrimSpace(alert.Type))
+	switch {
+	case strings.HasPrefix(alertType, "node"):
+		return "node"
 	case strings.Contains(alertType, "storage"):
 		return "storage"
 	case strings.Contains(alertType, "pbs"):
 		return "pbs"
-	case strings.Contains(alertType, "kubernetes") || strings.Contains(alertType, "k8s"):
+	case strings.Contains(alertType, "kubernetes"), strings.Contains(alertType, "k8s"):
 		return "k8s"
 	default:
-		// Try to infer from resource ID patterns
-		if strings.Contains(alert.ResourceID, "/qemu/") {
-			return "vm"
-		}
-		if strings.Contains(alert.ResourceID, "/lxc/") {
-			return "system-container"
-		}
-		if strings.Contains(alert.ResourceID, "docker") {
-			return "app-container"
-		}
-		return "vm" // Default fallback
+		return "vm"
+	}
+}
+
+func canonicalAlertResourceTypeToken(raw string) string {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	if normalized == "" || unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalized) {
+		return ""
+	}
+	switch normalized {
+	case "vm", "system-container", "oci-container", "app-container", "node", "storage", "disk", "agent", "docker-host", "pbs", "pmg", "k8s", "k8s-node", "k8s-cluster":
+		return normalized
+	default:
+		return ""
 	}
 }
 
@@ -7213,7 +7264,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["diskwrite"] = monitoring.MetricPoint{Timestamp: now, Value: float64(vm.DiskWrite)}
 			points["netin"] = monitoring.MetricPoint{Timestamp: now, Value: float64(vm.NetworkIn)}
 			points["netout"] = monitoring.MetricPoint{Timestamp: now, Value: float64(vm.NetworkOut)}
-		case "container":
+		case "system-container", "oci-container":
 			ct := findContainer(resourceID)
 			if ct == nil {
 				return points
@@ -7249,7 +7300,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Used)}
 			points["total"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Total)}
 			points["avail"] = monitoring.MetricPoint{Timestamp: now, Value: float64(storage.Free)}
-		case "dockerHost":
+		case "docker-host":
 			host := findDockerHost(resourceID)
 			if host == nil {
 				return points
@@ -7277,7 +7328,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			// only has cumulative RXBytes/TXBytes (total since boot), not rates.
 			// The RateTracker in ApplyHostReport calculates rates and stores them in metrics history.
 			// Showing cumulative bytes as if they were rates would be misleading (showing GB instead of KB/s).
-		case "dockerContainer":
+		case "app-container":
 			container := findDockerContainer(resourceID)
 			if container == nil {
 				return points
@@ -7360,7 +7411,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		switch runtimeResourceType {
-		case "vm", "container":
+		case "vm", "system-container", "oci-container":
 			metrics := monitor.GetGuestMetrics(resourceID, duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
@@ -7371,7 +7422,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return nil, "", false
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
-		case "dockerHost":
+		case "docker-host":
 			metrics := monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
@@ -7393,7 +7444,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return nil, "", false
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
-		case "dockerContainer":
+		case "app-container":
 			metrics := monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
@@ -7441,13 +7492,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		var metrics map[string][]monitoring.MetricPoint
 		switch runtimeResourceType {
-		case "vm", "container":
+		case "vm", "system-container", "oci-container":
 			metrics = monitor.GetGuestMetrics(resourceID, duration)
-		case "dockerHost":
+		case "docker-host":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
 		case "agent":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
-		case "dockerContainer":
+		case "app-container":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 		case "storage":
 			metrics = monitor.GetStorageMetrics(resourceID, duration)
@@ -7745,13 +7796,13 @@ func normalizeMetricsHistoryResourceType(input string) (responseType string, run
 	case "vm":
 		return "vm", "vm", []string{"vm"}, nil
 	case "system-container":
-		return "system-container", "container", []string{"container"}, nil
+		return "system-container", "system-container", []string{"container"}, nil
 	case "oci-container":
-		return "oci-container", "container", []string{"container"}, nil
+		return "oci-container", "oci-container", []string{"container"}, nil
 	case "app-container":
-		return "app-container", "dockerContainer", []string{"dockerContainer", "docker"}, nil
+		return "app-container", "app-container", []string{"dockerContainer", "docker"}, nil
 	case "docker-host":
-		return "docker-host", "dockerHost", []string{"dockerHost"}, nil
+		return "docker-host", "docker-host", []string{"dockerHost"}, nil
 	default:
 		return "", "", nil, fmt.Errorf("unsupported resourceType %q", input)
 	}
