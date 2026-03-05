@@ -35,10 +35,10 @@ type GuestIntelligence struct {
 	Reachable   *bool  // nil = not checked (no agent/no IP), true/false = checked
 }
 
-// discoveryKey indexes service discovery records by (resourceType, hostID, resourceID).
+// discoveryKey indexes service discovery records by (resourceType, targetID, resourceID).
 type discoveryKey struct {
 	resourceType servicediscovery.ResourceType
-	hostID       string
+	targetID     string
 	resourceID   string
 }
 
@@ -80,9 +80,13 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 			log.Warn().Err(err).Msg("AI Patrol: Failed to list discoveries for guest intelligence")
 		} else {
 			for _, d := range discoveries {
+				targetID := d.TargetID
+				if targetID == "" {
+					targetID = d.HostID
+				}
 				key := discoveryKey{
 					resourceType: d.ResourceType,
-					hostID:       d.HostID,
+					targetID:     targetID,
 					resourceID:   d.ResourceID,
 				}
 				discoveryIndex[key] = d
@@ -203,12 +207,20 @@ func gatherGuestsFromReadState(
 		}
 
 		vmidStr := strconv.Itoa(vm.VMID())
-		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Node(), vmidStr}]; ok {
+		if d, ok := discoveryIndex[discoveryKey{
+			resourceType: servicediscovery.ResourceTypeVM,
+			targetID:     vm.Node(),
+			resourceID:   vmidStr,
+		}]; ok {
 			gi.ServiceName = d.ServiceName
 			gi.ServiceType = d.ServiceType
 		}
 		if gi.ServiceName == "" && vm.Instance() != "" && vm.Instance() != vm.Node() {
-			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeVM, vm.Instance(), vmidStr}]; ok {
+			if d, ok := discoveryIndex[discoveryKey{
+				resourceType: servicediscovery.ResourceTypeVM,
+				targetID:     vm.Instance(),
+				resourceID:   vmidStr,
+			}]; ok {
 				gi.ServiceName = d.ServiceName
 				gi.ServiceType = d.ServiceType
 			}
@@ -243,12 +255,20 @@ func gatherGuestsFromReadState(
 		}
 
 		vmidStr := strconv.Itoa(ct.VMID())
-		if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Node(), vmidStr}]; ok {
+		if d, ok := discoveryIndex[discoveryKey{
+			resourceType: servicediscovery.ResourceTypeSystemContainer,
+			targetID:     ct.Node(),
+			resourceID:   vmidStr,
+		}]; ok {
 			gi.ServiceName = d.ServiceName
 			gi.ServiceType = d.ServiceType
 		}
 		if gi.ServiceName == "" && ct.Instance() != "" && ct.Instance() != ct.Node() {
-			if d, ok := discoveryIndex[discoveryKey{servicediscovery.ResourceTypeSystemContainer, ct.Instance(), vmidStr}]; ok {
+			if d, ok := discoveryIndex[discoveryKey{
+				resourceType: servicediscovery.ResourceTypeSystemContainer,
+				targetID:     ct.Instance(),
+				resourceID:   vmidStr,
+			}]; ok {
 				gi.ServiceName = d.ServiceName
 				gi.ServiceType = d.ServiceType
 			}
