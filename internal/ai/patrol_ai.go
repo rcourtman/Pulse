@@ -3053,54 +3053,13 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	sb.WriteString(fmt.Sprintf("- Storage warning: %.0f%%, critical: %.0f%%\n", thresholds.StorageWarning, thresholds.StorageCritical))
 	sb.WriteString("Note: The real-time alerting system monitors these thresholds continuously. Do NOT report findings for threshold breaches — focus on trends, capacity planning, and issues alerts cannot detect.\n\n")
 
-	// Build set of known resource IDs/names for existence checks
-	knownResources := make(map[string]bool)
-	rs := snap.readState
-	if rs != nil {
-		for _, n := range rs.Nodes() {
-			knownResources[n.ID()] = true
-			knownResources[n.Name()] = true
-		}
-		for _, vm := range rs.VMs() {
-			knownResources[vm.ID()] = true
-			knownResources[vm.Name()] = true
-		}
-		for _, ct := range rs.Containers() {
-			knownResources[ct.ID()] = true
-			knownResources[ct.Name()] = true
-		}
-		for _, s := range rs.StoragePools() {
-			knownResources[s.ID()] = true
-			knownResources[s.Name()] = true
-		}
-		for _, dh := range rs.DockerHosts() {
-			knownResources[dh.ID()] = true
-			knownResources[dh.Name()] = true
-			if hn := strings.TrimSpace(dh.Hostname()); hn != "" {
-				knownResources[hn] = true
-			}
-		}
-		for _, h := range rs.Hosts() {
-			knownResources[h.ID()] = true
-			knownResources[h.Name()] = true
-			if hn := strings.TrimSpace(h.Hostname()); hn != "" {
-				knownResources[hn] = true
-			}
-		}
-		for _, pbs := range rs.PBSInstances() {
-			knownResources[pbs.ID()] = true
-			knownResources[pbs.Name()] = true
-		}
-		for _, pmg := range rs.PMGInstances() {
-			knownResources[pmg.ID()] = true
-			knownResources[pmg.Name()] = true
-		}
-		for _, k := range rs.K8sClusters() {
-			knownResources[k.ID()] = true
-			knownResources[k.Name()] = true
-		}
+	scopedResources := patrolKnownResources(snap.readState)
+	stateHasScopedResources := len(scopedResources) > 0
+	globalResources := scopedResources
+	if current := p.currentPatrolRuntimeState(); current.readState != nil {
+		globalResources = patrolKnownResources(current.readState)
 	}
-	stateHasResources := len(knownResources) > 0
+	stateHasGlobalResources := len(globalResources) > 0
 
 	// --- Active Findings to Re-check ---
 	activeFindings := p.findings.GetActive(FindingSeverityInfo)
@@ -3109,8 +3068,12 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 		sb.WriteString("# Active Findings to Re-check\n")
 		sb.WriteString("Verify whether these findings are still valid. Resolve any that are no longer issues.\n\n")
 		for _, f := range activeFindings {
-			// Auto-resolve findings for resources that no longer exist
-			if stateHasResources && !knownResources[f.ResourceID] && !knownResources[f.ResourceName] {
+			inScopedState := !stateHasScopedResources || scopedResources[f.ResourceID] || scopedResources[f.ResourceName]
+			inGlobalState := !stateHasGlobalResources || globalResources[f.ResourceID] || globalResources[f.ResourceName]
+
+			// Auto-resolve findings only when the resource is gone from the full current state.
+			// Scoped patrols should skip out-of-scope findings, not resolve them as deleted.
+			if stateHasGlobalResources && !inGlobalState {
 				if ok := p.findings.ResolveWithReason(f.ID, "Resource no longer exists in infrastructure"); ok {
 					// Notify unified store
 					p.mu.RLock()
@@ -3125,6 +3088,9 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 						Str("resource_name", f.ResourceName).
 						Msg("AI Patrol: Auto-resolved finding for deleted resource")
 				}
+				continue
+			}
+			if !inScopedState {
 				continue
 			}
 
@@ -3166,6 +3132,56 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	}
 
 	return sb.String(), seededFindingIDs
+}
+
+func patrolKnownResources(rs unifiedresources.ReadState) map[string]bool {
+	knownResources := make(map[string]bool)
+	if rs == nil {
+		return knownResources
+	}
+	for _, n := range rs.Nodes() {
+		knownResources[n.ID()] = true
+		knownResources[n.Name()] = true
+	}
+	for _, vm := range rs.VMs() {
+		knownResources[vm.ID()] = true
+		knownResources[vm.Name()] = true
+	}
+	for _, ct := range rs.Containers() {
+		knownResources[ct.ID()] = true
+		knownResources[ct.Name()] = true
+	}
+	for _, s := range rs.StoragePools() {
+		knownResources[s.ID()] = true
+		knownResources[s.Name()] = true
+	}
+	for _, dh := range rs.DockerHosts() {
+		knownResources[dh.ID()] = true
+		knownResources[dh.Name()] = true
+		if hn := strings.TrimSpace(dh.Hostname()); hn != "" {
+			knownResources[hn] = true
+		}
+	}
+	for _, h := range rs.Hosts() {
+		knownResources[h.ID()] = true
+		knownResources[h.Name()] = true
+		if hn := strings.TrimSpace(h.Hostname()); hn != "" {
+			knownResources[hn] = true
+		}
+	}
+	for _, pbs := range rs.PBSInstances() {
+		knownResources[pbs.ID()] = true
+		knownResources[pbs.Name()] = true
+	}
+	for _, pmg := range rs.PMGInstances() {
+		knownResources[pmg.ID()] = true
+		knownResources[pmg.Name()] = true
+	}
+	for _, k := range rs.K8sClusters() {
+		knownResources[k.ID()] = true
+		knownResources[k.Name()] = true
+	}
+	return knownResources
 }
 
 func seedOutlierLabel(name string, cpu, mem, disk float64) (string, bool) {

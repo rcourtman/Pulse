@@ -442,6 +442,57 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	}
 }
 
+func TestSeedFindingsAndContext_ScopedPatrolSkipsOutOfScopeFindingsWithoutResolving(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	inScope := &Finding{
+		ID:           "finding-in-scope",
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		Title:        "Scoped finding",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryGeneral,
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	outOfScope := &Finding{
+		ID:           "finding-out-of-scope",
+		ResourceID:   "node-2",
+		ResourceName: "node-2",
+		Title:        "Out of scope finding",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryGeneral,
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(inScope)
+	ps.findings.Add(outOfScope)
+
+	node1 := ur.NewNodeView(&ur.Resource{ID: "node-1", Name: "node-1"})
+	node2 := ur.NewNodeView(&ur.Resource{ID: "node-2", Name: "node-2"})
+	ps.SetReadState(&mockReadState{nodes: []*ur.NodeView{&node1, &node2}})
+
+	scopedRuntime := newPatrolRuntimeState(models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "node-1"}},
+	})
+	scopedRuntime.readState = &mockReadState{nodes: []*ur.NodeView{&node1}}
+
+	output, seeded := ps.seedFindingsAndContextState(&PatrolScope{ResourceIDs: []string{"node-1"}}, scopedRuntime)
+
+	if outOfScope.ResolvedAt != nil {
+		t.Fatalf("expected out-of-scope finding to remain active, got resolved at %v", outOfScope.ResolvedAt)
+	}
+	if len(seeded) != 1 || seeded[0] != inScope.ID {
+		t.Fatalf("expected only in-scope finding to be seeded, got %v", seeded)
+	}
+	if !strings.Contains(output, inScope.Title) {
+		t.Fatalf("expected in-scope finding in output, got: %s", output)
+	}
+	if strings.Contains(output, outOfScope.Title) {
+		t.Fatalf("expected out-of-scope finding to be omitted, got: %s", output)
+	}
+}
+
 // newTestVMView creates a VMView with Proxmox fields needed for gatherGuestIntelligence tests.
 // sourceID is the legacy guest ID (e.g. "qemu/100") stored in Proxmox.SourceID.
 // status should be a normalized ResourceStatus (e.g. ur.StatusOnline, ur.StatusOffline).
