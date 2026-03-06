@@ -88,9 +88,10 @@ type VariantConfig = {
 const VARIANT_CONFIG: Record<NodeType, VariantConfig> = {
   pve: {
     title: 'Proxmox VE nodes',
-    addLabel: 'Add PVE API Connection',
-    emptyTitle: 'No PVE API connections configured',
-    emptyDescription: 'Add a Proxmox VE API connection when the unified agent is not available',
+    addLabel: 'Add Proxmox VE Connection',
+    emptyTitle: 'No Proxmox VE connections configured',
+    emptyDescription:
+      'Add a Proxmox VE connection when the unified agent is not available on the host',
     scanningLabel: 'Scanning your network for Proxmox VE servers…',
     emptyIcon: Server,
     nameFromServer: (server) => server.hostname || `pve-${server.ip}`,
@@ -98,10 +99,10 @@ const VARIANT_CONFIG: Record<NodeType, VariantConfig> = {
   },
   pbs: {
     title: 'Proxmox Backup Server nodes',
-    addLabel: 'Add PBS API Connection',
-    emptyTitle: 'No PBS API connections configured',
+    addLabel: 'Add Backup Server Connection',
+    emptyTitle: 'No Proxmox Backup Server connections configured',
     emptyDescription:
-      'Add a Proxmox Backup Server API connection when the unified agent is not available',
+      'Add a Proxmox Backup Server connection when the unified agent is not available on the host',
     scanningLabel: 'Scanning your network for Proxmox Backup Servers…',
     emptyIcon: HardDrive,
     nameFromServer: (server) => server.hostname || `pbs-${server.ip}`,
@@ -109,10 +110,10 @@ const VARIANT_CONFIG: Record<NodeType, VariantConfig> = {
   },
   pmg: {
     title: 'Proxmox Mail Gateway nodes',
-    addLabel: 'Add PMG API Connection',
-    emptyTitle: 'No PMG API connections configured',
+    addLabel: 'Add Mail Gateway Connection',
+    emptyTitle: 'No Proxmox Mail Gateway connections configured',
     emptyDescription:
-      'Add a Proxmox Mail Gateway API connection when the unified agent is not available',
+      'Add a Proxmox Mail Gateway connection when the unified agent is not available on the host',
     scanningLabel: 'Scanning your network for Proxmox Mail Gateway servers…',
     emptyIcon: Mail,
     nameFromServer: (server) => server.hostname || `pmg-${server.ip}`,
@@ -330,8 +331,7 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
               Pulse Patrol automation.
             </p>
             <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
-              This page is for API-only connections when you cannot install the unified agent on
-              the host.
+              Use this fallback path only when you cannot install the unified agent on the host.
             </p>
             <button
               type="button"
@@ -529,7 +529,7 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
                                 Discovered
                               </span>
                               <span class="text-xs text-muted">
-                                Click to configure an API connection
+                                Click to configure this connection
                               </span>
                             </div>
                           </div>

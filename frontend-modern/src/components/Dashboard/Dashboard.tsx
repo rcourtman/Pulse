@@ -1442,7 +1442,7 @@ export function Dashboard(props: DashboardProps) {
               </svg>
             }
             title="No infrastructure hosts connected"
-            description="Install the Pulse agent to connect a host and unlock v6 infrastructure data, or add a Proxmox API connection in Settings → Infrastructure or API Connections."
+            description="Install the Pulse agent to connect a host and unlock v6 infrastructure data, or add a Proxmox connection in Settings → Infrastructure → Proxmox."
             actions={
               !kioskMode() ? (
                 <button

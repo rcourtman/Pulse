@@ -11,7 +11,7 @@ import {
 import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure/api',
+  proxmox: '/settings/infrastructure/proxmox',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
@@ -63,7 +63,13 @@ describe('settingsRouting', () => {
     );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure')).toBe('/settings');
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe(
-      '/settings/infrastructure/api/pve',
+      '/settings/infrastructure/proxmox/pve',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/api')).toBe(
+      '/settings/infrastructure/proxmox',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/api/pve')).toBe(
+      '/settings/infrastructure/proxmox/pve',
     );
     expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe('/settings/security/api');
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
@@ -135,6 +141,9 @@ describe('settingsRouting', () => {
       ['/settings/infrastructure/api/pve', 'pve'],
       ['/settings/infrastructure/api/pbs', 'pbs'],
       ['/settings/infrastructure/api/pmg', 'pmg'],
+      ['/settings/infrastructure/proxmox/pve', 'pve'],
+      ['/settings/infrastructure/proxmox/pbs', 'pbs'],
+      ['/settings/infrastructure/proxmox/pmg', 'pmg'],
       ['/settings/infrastructure', null],
       ['/settings', null],
     ];

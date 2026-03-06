@@ -4,7 +4,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {
     title: 'Proxmox',
     description:
-      'Add and manage Proxmox VE, Backup Server, and Mail Gateway connections when you need API-only monitoring.',
+      'Add and manage Proxmox VE, Backup Server, and Mail Gateway connections when the unified agent is not available on the host.',
   },
   agents: {
     title: 'Infrastructure',

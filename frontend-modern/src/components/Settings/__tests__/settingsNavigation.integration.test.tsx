@@ -4,7 +4,7 @@ import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 import { getSettingsTabSaveBehavior, shouldHideSettingsNavItem } from '../settingsTabs';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure/api',
+  proxmox: '/settings/infrastructure/proxmox',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
