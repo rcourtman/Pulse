@@ -73,7 +73,7 @@ describe('AgentLimitWarningBanner', () => {
         /You also have 3 resources connected via API or legacy agents \(2 Proxmox nodes, 1 Docker host\) that do not count toward Host Agents\./i,
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('Install v6 agents')).toHaveAttribute('href', '/settings/workloads');
+    expect(screen.getByText('Install v6 agents')).toHaveAttribute('href', '/settings/infrastructure');
     expect(screen.getByLabelText('Dismiss agent migration notice')).toBeInTheDocument();
   });
 
