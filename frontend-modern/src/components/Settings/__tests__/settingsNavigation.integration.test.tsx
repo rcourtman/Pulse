@@ -81,6 +81,38 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
+  it('hides admin-only tabs for scoped token sessions', () => {
+    expect(
+      shouldHideSettingsNavItem('api', {
+        hasFeature: hasFeatures([]),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+        isTokenAuthenticated: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('security-roles', {
+        hasFeature: hasFeatures(['rbac']),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+        isTokenAuthenticated: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('hides admin-only tabs for non-admin proxy sessions', () => {
+    expect(
+      shouldHideSettingsNavItem('security-audit', {
+        hasFeature: hasFeatures(['audit_logging']),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+        isPlatformAdmin: false,
+        isNonAdminProxy: true,
+      }),
+    ).toBe(true);
+  });
+
   it('keeps paywalled non-organization tabs visible for upsell flows', () => {
     expect(
       shouldHideSettingsNavItem('system-relay', {
@@ -159,7 +191,9 @@ describe('settingsNavigation integration scaffold', () => {
     const onMountBody = onMountMatch![1];
     expect(onMountBody).toContain('loadLicenseStatus');
     expect(onMountBody).not.toContain('runDiagnostics');
+    expect(settingsSource).toContain('baseTabGroups');
     expect(settingsSource).toContain('shouldHideSettingsNavItem');
+    expect(settingsSource).not.toContain('const tabGroups');
   });
 
   it('panel registry covers all dispatchable tabs', async () => {

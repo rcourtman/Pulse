@@ -126,6 +126,12 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'system-network';
     case 'system-general':
       return 'system-general';
+    case 'system-ai':
+      return 'system-ai';
+    case 'system-relay':
+      return 'system-relay';
+    case 'system-pro':
+      return 'system-pro';
     case 'api':
       return 'api';
     case 'organization-overview':

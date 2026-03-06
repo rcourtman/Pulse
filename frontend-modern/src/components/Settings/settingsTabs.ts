@@ -78,6 +78,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
         hideWhenUnavailable: true,
+        hideForTokenAuth: true,
         hostedOnly: true,
         adminOnly: true,
       },
@@ -86,7 +87,16 @@ export const baseTabGroups: SettingsNavGroup[] = [
   {
     id: 'integrations',
     label: 'Integrations',
-    items: [{ id: 'api', label: 'API Access', icon: BadgeCheck }],
+    items: [
+      {
+        id: 'api',
+        label: 'API Access',
+        icon: BadgeCheck,
+        hideForTokenAuth: true,
+        hideForNonAdminProxy: true,
+        adminOnly: true,
+      },
+    ],
   },
   {
     id: 'platform',
@@ -142,30 +152,45 @@ export const baseTabGroups: SettingsNavGroup[] = [
         label: 'Authentication',
         icon: Lock,
         iconProps: { strokeWidth: 2 },
+        hideForTokenAuth: true,
+        hideForNonAdminProxy: true,
+        adminOnly: true,
       },
       {
         id: 'security-sso',
         label: 'Single Sign-On',
         icon: Key,
         iconProps: { strokeWidth: 2 },
+        hideForTokenAuth: true,
+        hideForNonAdminProxy: true,
+        adminOnly: true,
       },
       {
         id: 'security-roles',
         label: 'Roles',
         icon: ShieldCheck,
         iconProps: { strokeWidth: 2 },
+        hideForTokenAuth: true,
+        hideForNonAdminProxy: true,
+        adminOnly: true,
       },
       {
         id: 'security-users',
         label: 'Users',
         icon: Users,
         iconProps: { strokeWidth: 2 },
+        hideForTokenAuth: true,
+        hideForNonAdminProxy: true,
+        adminOnly: true,
       },
       {
         id: 'security-audit',
         label: 'Audit Log',
         icon: Activity,
         iconProps: { strokeWidth: 2 },
+        hideForTokenAuth: true,
+        hideForNonAdminProxy: true,
+        adminOnly: true,
       },
       {
         id: 'security-webhooks',
@@ -173,6 +198,9 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: Globe,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
+        hideForTokenAuth: true,
+        hideForNonAdminProxy: true,
+        adminOnly: true,
       },
       {
         id: 'system-pro',
@@ -188,6 +216,8 @@ export interface SettingsNavVisibilityContext {
   licenseLoaded: () => boolean;
   hostedModeEnabled?: boolean;
   isPlatformAdmin?: boolean;
+  isTokenAuthenticated?: boolean;
+  isNonAdminProxy?: boolean;
 }
 
 const navItemsByTab = new Map<SettingsTab, SettingsNavItem>(
@@ -214,6 +244,14 @@ export function shouldHideSettingsNavItem(
   }
 
   if (item.adminOnly && context.isPlatformAdmin === false) {
+    return true;
+  }
+
+  if (item.hideForTokenAuth && context.isTokenAuthenticated) {
+    return true;
+  }
+
+  if (item.hideForNonAdminProxy && context.isNonAdminProxy) {
     return true;
   }
 

@@ -13,6 +13,8 @@ export interface SettingsNavItem {
   disabled?: boolean;
   locked?: boolean;
   hideWhenUnavailable?: boolean;
+  hideForTokenAuth?: boolean;
+  hideForNonAdminProxy?: boolean;
   hostedOnly?: boolean;
   adminOnly?: boolean;
   badge?: string;
