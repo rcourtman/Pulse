@@ -3,7 +3,6 @@ package ai
 import (
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -30,7 +29,6 @@ type patrolRuntimeState struct {
 	ConnectionHealth        map[string]bool
 	ActiveAlerts            []models.Alert
 	RecentlyResolved        []models.ResolvedAlert
-	LastUpdate              time.Time
 }
 
 func newPatrolRuntimeState(snapshot models.StateSnapshot) patrolRuntimeState {
@@ -60,7 +58,6 @@ func newPatrolRuntimeStateWithProviders(
 		ConnectionHealth:        snapshot.ConnectionHealth,
 		ActiveAlerts:            snapshot.ActiveAlerts,
 		RecentlyResolved:        snapshot.RecentlyResolved,
-		LastUpdate:              snapshot.LastUpdate,
 	}
 }
 
@@ -81,7 +78,6 @@ func (s patrolRuntimeState) snapshot() models.StateSnapshot {
 		ConnectionHealth:   s.ConnectionHealth,
 		ActiveAlerts:       s.ActiveAlerts,
 		RecentlyResolved:   s.RecentlyResolved,
-		LastUpdate:         s.LastUpdate,
 	}
 }
 

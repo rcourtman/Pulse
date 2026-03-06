@@ -942,7 +942,9 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 // filterStateByScope filters a StateSnapshot to only include resources matching the scope.
 func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
-	return p.filterStateByScopeState(p.patrolRuntimeStateForSnapshot(snap), scope).snapshot()
+	filtered := p.filterStateByScopeState(p.patrolRuntimeStateForSnapshot(snap), scope).snapshot()
+	filtered.LastUpdate = snap.LastUpdate
+	return filtered
 }
 
 func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
@@ -1018,7 +1020,6 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 	filtered := patrolRuntimeState{
 		readState:               snap.readState,
 		unifiedResourceProvider: snap.unifiedResourceProvider,
-		LastUpdate:              snap.LastUpdate,
 	}
 	includedResourceIDs := make(map[string]bool)
 	includedGuestVMIDs := make(map[int]bool)
