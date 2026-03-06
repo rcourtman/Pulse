@@ -13,6 +13,7 @@ import {
 } from '@/utils/infrastructureSummaryCache';
 import {
   getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
   getExplicitAgentIdFromResource,
   getPlatformAgentRecord,
   getPlatformDataRecord,
@@ -58,6 +59,8 @@ const getLinkedNodeIdFromResource = (resource: Resource): string | null =>
 
 const getChartKeyCandidates = (resource: Resource): string[] => {
   const candidates = [
+    asTrimmedString(resource.metricsTarget?.resourceId),
+    getActionableDockerRuntimeIdFromResource(resource),
     getAgentIdFromResource(resource),
     asTrimmedString(resource.discoveryTarget?.resourceId),
     asTrimmedString(resource.discoveryTarget?.agentId),

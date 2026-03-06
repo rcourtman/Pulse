@@ -541,6 +541,72 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
+  it('maps docker-host metrics using metricsTarget and hostSourceId identifiers', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {},
+      dockerHostData: {
+        'docker-host-1': {
+          cpu: [
+            { timestamp: now - 60_000, value: 18 },
+            { timestamp: now, value: 21 },
+          ],
+          memory: [
+            { timestamp: now - 60_000, value: 52 },
+            { timestamp: now, value: 55 },
+          ],
+          disk: [
+            { timestamp: now - 60_000, value: 37 },
+            { timestamp: now, value: 39 },
+          ],
+        },
+      },
+      agentData: {},
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    const dockerHost: Resource = {
+      id: 'hash-docker-host-resource-id',
+      type: 'docker-host',
+      name: 'Tower',
+      displayName: 'Tower',
+      platformId: 'tower',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: now,
+      metricsTarget: {
+        resourceType: 'docker-host',
+        resourceId: 'docker-host-1',
+      },
+      platformData: {
+        docker: {
+          hostSourceId: 'docker-host-1',
+        },
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary
+        resources={[dockerHost]}
+        timeRange="1h"
+        focusedResourceId="hash-docker-host-resource-id"
+      />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).not.toContain('No history yet');
+    });
+  });
+
   it('uses linked agent discovery IDs for network chart fallback when resource IDs are hashed', async () => {
     mockGetCharts.mockReset();
     const now = Date.now();
