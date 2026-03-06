@@ -111,10 +111,6 @@ func (p *PatrolService) runDeterministicTriageState(
 	}
 }
 
-func triageThresholdChecks(snap models.StateSnapshot, scopedSet map[string]bool, thresholds PatrolThresholds) []TriageFlag {
-	return triageThresholdChecksState(newPatrolRuntimeState(snap), scopedSet, thresholds)
-}
-
 func triageThresholdChecksState(snap patrolRuntimeState, scopedSet map[string]bool, thresholds PatrolThresholds) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 	if rs := snap.readState; rs != nil {
@@ -499,10 +495,6 @@ func triageAnomalyChecks(intel seedIntelligence) []TriageFlag {
 	return flags
 }
 
-func triageBackupChecks(snap models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
-	return triageBackupChecksState(newPatrolRuntimeState(snap), scopedSet)
-}
-
 func triageBackupChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 	now := time.Now()
@@ -541,10 +533,6 @@ func triageBackupChecksState(snap patrolRuntimeState, scopedSet map[string]bool)
 	}
 
 	return flags
-}
-
-func triageDiskHealthChecks(snap models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
-	return triageDiskHealthChecksState(newPatrolRuntimeState(snap), scopedSet)
 }
 
 func triageDiskHealthChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
@@ -660,10 +648,6 @@ func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, t
 	return flags
 }
 
-func triageAlertChecks(snap models.StateSnapshot, scopedSet map[string]bool) []TriageFlag {
-	return triageAlertChecksState(newPatrolRuntimeState(snap), scopedSet)
-}
-
 func triageAlertChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0, len(snap.ActiveAlerts))
 
@@ -704,10 +688,6 @@ func triageAlertChecksState(snap patrolRuntimeState, scopedSet map[string]bool) 
 	}
 
 	return flags
-}
-
-func triageConnectivityChecks(snap models.StateSnapshot, guestIntel map[string]*GuestIntelligence, scopedSet map[string]bool) []TriageFlag {
-	return triageConnectivityChecksState(newPatrolRuntimeState(snap), guestIntel, scopedSet)
 }
 
 func triageConnectivityChecksState(snap patrolRuntimeState, guestIntel map[string]*GuestIntelligence, scopedSet map[string]bool) []TriageFlag {
@@ -885,10 +865,6 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	sb.WriteString(fmt.Sprintf("PMG: %d instances\n", healthyPMG))
 
 	return sb.String()
-}
-
-func triageBuildSummary(snap models.StateSnapshot, flaggedIDs map[string]bool) TriageSummary {
-	return triageBuildSummaryState(newPatrolRuntimeState(snap), flaggedIDs)
 }
 
 func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool) TriageSummary {

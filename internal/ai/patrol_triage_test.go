@@ -12,7 +12,7 @@ import (
 )
 
 func TestTriageThresholdChecks(t *testing.T) {
-	state := models.StateSnapshot{
+	state := patrolRuntimeState{
 		Nodes: []models.Node{
 			{
 				ID:     "node/pve1",
@@ -23,7 +23,7 @@ func TestTriageThresholdChecks(t *testing.T) {
 		},
 	}
 
-	flags := triageThresholdChecks(state, nil, DefaultPatrolThresholds())
+	flags := triageThresholdChecksState(state, nil, DefaultPatrolThresholds())
 	if len(flags) == 0 {
 		t.Fatalf("expected threshold flags, got none")
 	}
@@ -176,7 +176,7 @@ func TestTriageAnomalyChecks(t *testing.T) {
 
 func TestTriageBackupChecks(t *testing.T) {
 	oldBackup := time.Now().Add(-72 * time.Hour)
-	state := models.StateSnapshot{
+	state := patrolRuntimeState{
 		VMs: []models.VM{
 			{ID: "qemu/100", Name: "vm-never", Status: "running", Template: false, LastBackup: time.Time{}},
 		},
@@ -185,7 +185,7 @@ func TestTriageBackupChecks(t *testing.T) {
 		},
 	}
 
-	flags := triageBackupChecks(state, nil)
+	flags := triageBackupChecksState(state, nil)
 	if len(flags) != 2 {
 		t.Fatalf("expected 2 backup flags, got %d", len(flags))
 	}
@@ -258,7 +258,7 @@ func TestTriageBackupChecksState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T
 }
 
 func TestTriageDiskHealthChecks(t *testing.T) {
-	state := models.StateSnapshot{
+	state := patrolRuntimeState{
 		PhysicalDisks: []models.PhysicalDisk{
 			{ID: "disk-1", DevPath: "/dev/sda", Health: "FAILED", Wearout: 50, Temperature: 40},
 			{ID: "disk-2", DevPath: "/dev/nvme0n1", Health: "PASSED", Wearout: 15, Temperature: 40},
@@ -267,7 +267,7 @@ func TestTriageDiskHealthChecks(t *testing.T) {
 		},
 	}
 
-	flags := triageDiskHealthChecks(state, nil)
+	flags := triageDiskHealthChecksState(state, nil)
 	if len(flags) != 3 {
 		t.Fatalf("expected 3 disk-health flags, got %d", len(flags))
 	}
@@ -360,7 +360,7 @@ func TestTriageDiskHealthChecksState_UsesPhysicalDiskFallback(t *testing.T) {
 }
 
 func TestTriageAlertChecks(t *testing.T) {
-	state := models.StateSnapshot{
+	state := patrolRuntimeState{
 		ActiveAlerts: []models.Alert{
 			{ResourceID: "qemu/100", ResourceName: "web-01", Type: "cpu", Level: "critical", Message: "CPU too high"},
 			{ResourceID: "storage/local", ResourceName: "local", Type: "backup", Level: "warning", Message: "Backup failed"},
@@ -368,7 +368,7 @@ func TestTriageAlertChecks(t *testing.T) {
 		},
 	}
 
-	flags := triageAlertChecks(state, nil)
+	flags := triageAlertChecksState(state, nil)
 	if len(flags) != 3 {
 		t.Fatalf("expected 3 alert flags, got %d", len(flags))
 	}
@@ -391,7 +391,7 @@ func TestTriageAlertChecks(t *testing.T) {
 
 func TestTriageConnectivityChecks(t *testing.T) {
 	reachable := false
-	state := models.StateSnapshot{
+	state := patrolRuntimeState{
 		ConnectionHealth: map[string]bool{
 			"pbs-backup1": false,
 			"node/pve1":   true,
@@ -402,7 +402,7 @@ func TestTriageConnectivityChecks(t *testing.T) {
 		"lxc/200":  {Name: "worker-ct", GuestType: "lxc", Reachable: &reachable},
 	}
 
-	flags := triageConnectivityChecks(state, guestIntel, nil)
+	flags := triageConnectivityChecksState(state, guestIntel, nil)
 	if len(flags) != 3 {
 		t.Fatalf("expected 3 connectivity flags, got %d", len(flags))
 	}
