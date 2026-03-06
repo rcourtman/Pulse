@@ -1559,7 +1559,7 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 
 	// Use a small margin to avoid flapping around exact thresholds.
 	const margin = 0.95
-	metrics, ok := patrolLookupResourceMetrics(snap, rid)
+	metrics, ok := patrolLookupResourceMetricsForType(snap, rid, resourceType)
 	if ok {
 		switch key {
 		case "cpu-high":
@@ -1774,53 +1774,144 @@ func patrolLookupResourceMetrics(snap patrolRuntimeState, resourceID string) (ma
 	return patrolLookupResourceMetricsFromSnapshot(snap, resourceID)
 }
 
+func patrolLookupResourceMetricsForType(snap patrolRuntimeState, resourceID, resourceType string) (map[string]float64, bool) {
+	switch strings.ToLower(strings.TrimSpace(resourceType)) {
+	case "node", "agent":
+		if metrics, ok := patrolLookupNodeMetricsFromReadState(snap, resourceID); ok {
+			return metrics, true
+		}
+		return patrolLookupNodeMetricsFromSnapshot(snap, resourceID)
+	case "vm":
+		if metrics, ok := patrolLookupVMMetricsFromReadState(snap, resourceID); ok {
+			return metrics, true
+		}
+		return patrolLookupVMMetricsFromSnapshot(snap, resourceID)
+	case "container", "system-container":
+		if metrics, ok := patrolLookupContainerMetricsFromReadState(snap, resourceID); ok {
+			return metrics, true
+		}
+		return patrolLookupContainerMetricsFromSnapshot(snap, resourceID)
+	case "storage":
+		if metrics, ok := patrolLookupStorageMetricsFromReadState(snap, resourceID); ok {
+			return metrics, true
+		}
+		return patrolLookupStorageMetricsFromSnapshot(snap, resourceID)
+	default:
+		return patrolLookupResourceMetrics(snap, resourceID)
+	}
+}
+
 func patrolLookupResourceMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
 	if snap.readState == nil {
 		return nil, false
 	}
-	for _, n := range snap.readState.Nodes() {
-		if n.ID() == resourceID || n.Name() == resourceID {
-			metrics := map[string]float64{"cpu": n.CPUPercent(), "memory": n.MemoryPercent()}
-			return metrics, true
-		}
+	if metrics, ok := patrolLookupNodeMetricsFromReadState(snap, resourceID); ok {
+		return metrics, true
 	}
-	for _, vm := range snap.readState.VMs() {
-		if patrolGuestMatches(resourceID, vm.ID(), vm.Name(), vm.VMID()) {
-			metrics := map[string]float64{"cpu": vm.CPUPercent(), "memory": vm.MemoryPercent(), "disk": vm.DiskPercent()}
-			return metrics, true
-		}
+	if metrics, ok := patrolLookupVMMetricsFromReadState(snap, resourceID); ok {
+		return metrics, true
 	}
-	for _, ct := range snap.readState.Containers() {
-		if patrolGuestMatches(resourceID, ct.ID(), ct.Name(), ct.VMID()) {
-			metrics := map[string]float64{"cpu": ct.CPUPercent(), "memory": ct.MemoryPercent(), "disk": ct.DiskPercent()}
-			return metrics, true
-		}
+	if metrics, ok := patrolLookupContainerMetricsFromReadState(snap, resourceID); ok {
+		return metrics, true
 	}
-	for _, s := range snap.readState.StoragePools() {
-		if s.ID() == resourceID || s.Name() == resourceID {
-			metrics := map[string]float64{"usage": s.DiskPercent()}
-			return metrics, true
-		}
+	if metrics, ok := patrolLookupStorageMetricsFromReadState(snap, resourceID); ok {
+		return metrics, true
 	}
 	return nil, false
 }
 
 func patrolLookupResourceMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if metrics, ok := patrolLookupNodeMetricsFromSnapshot(snap, resourceID); ok {
+		return metrics, true
+	}
+	if metrics, ok := patrolLookupVMMetricsFromSnapshot(snap, resourceID); ok {
+		return metrics, true
+	}
+	if metrics, ok := patrolLookupContainerMetricsFromSnapshot(snap, resourceID); ok {
+		return metrics, true
+	}
+	if metrics, ok := patrolLookupStorageMetricsFromSnapshot(snap, resourceID); ok {
+		return metrics, true
+	}
+	return nil, false
+}
+
+func patrolLookupNodeMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if snap.readState == nil {
+		return nil, false
+	}
+	for _, n := range snap.readState.Nodes() {
+		if n.ID() == resourceID || n.Name() == resourceID {
+			return map[string]float64{"cpu": n.CPUPercent(), "memory": n.MemoryPercent()}, true
+		}
+	}
+	return nil, false
+}
+
+func patrolLookupNodeMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
 	for _, n := range snap.Nodes {
 		if n.ID == resourceID || n.Name == resourceID {
 			return map[string]float64{"cpu": n.CPU * 100, "memory": n.Memory.Usage}, true
 		}
 	}
+	return nil, false
+}
+
+func patrolLookupVMMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if snap.readState == nil {
+		return nil, false
+	}
+	for _, vm := range snap.readState.VMs() {
+		if patrolGuestMatches(resourceID, vm.ID(), vm.Name(), vm.VMID()) {
+			return map[string]float64{"cpu": vm.CPUPercent(), "memory": vm.MemoryPercent(), "disk": vm.DiskPercent()}, true
+		}
+	}
+	return nil, false
+}
+
+func patrolLookupVMMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
 	for _, vm := range snap.VMs {
 		if patrolGuestMatches(resourceID, vm.ID, vm.Name, vm.VMID) {
 			return map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}, true
 		}
 	}
+	return nil, false
+}
+
+func patrolLookupContainerMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if snap.readState == nil {
+		return nil, false
+	}
+	for _, ct := range snap.readState.Containers() {
+		if patrolGuestMatches(resourceID, ct.ID(), ct.Name(), ct.VMID()) {
+			return map[string]float64{"cpu": ct.CPUPercent(), "memory": ct.MemoryPercent(), "disk": ct.DiskPercent()}, true
+		}
+	}
+	return nil, false
+}
+
+func patrolLookupContainerMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
 	for _, ct := range snap.Containers {
 		if patrolGuestMatches(resourceID, ct.ID, ct.Name, ct.VMID) {
 			return map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}, true
 		}
 	}
+	return nil, false
+}
+
+func patrolLookupStorageMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if snap.readState == nil {
+		return nil, false
+	}
+	for _, s := range snap.readState.StoragePools() {
+		if s.ID() == resourceID || s.Name() == resourceID {
+			return map[string]float64{"usage": s.DiskPercent()}, true
+		}
+	}
+	return nil, false
+}
+
+func patrolLookupStorageMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
 	for _, s := range snap.Storage {
 		if s.ID == resourceID || s.Name == resourceID {
 			return map[string]float64{"usage": s.Usage}, true

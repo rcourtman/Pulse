@@ -405,6 +405,40 @@ func TestVerifyMetricRecoveredState_UsesReadStateWhenLegacySlicesEmpty(t *testin
 	}
 }
 
+func TestVerifyMetricRecoveredState_UsesTypedLookupWhenIDsCollide(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "shared-id",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 40},
+		},
+	})
+	storageView := unifiedresources.NewStoragePoolView(&unifiedresources.Resource{
+		ID:     "shared-id",
+		Name:   "local",
+		Type:   unifiedresources.ResourceTypeStorage,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 55},
+		},
+	})
+	state.readState = &mockReadState{
+		nodes:   []*unifiedresources.NodeView{&nodeView},
+		storage: []*unifiedresources.StoragePoolView{&storageView},
+	}
+
+	ok, err := verifyMetricRecoveredState(state, PatrolThresholds{StorageWarning: 90}, "disk-high", "shared-id", "storage")
+	if err != nil {
+		t.Fatalf("expected typed storage lookup to succeed despite colliding IDs, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected storage metric to verify as recovered via typed lookup")
+	}
+}
+
 func TestVerifyGuestReachabilityState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetGuestProber(&mockGuestProber{
