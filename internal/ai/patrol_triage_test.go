@@ -39,6 +39,81 @@ func TestTriageThresholdChecks(t *testing.T) {
 	}
 }
 
+func TestTriageThresholdChecksState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	state := patrolRuntimeState{
+		readState: &mockReadState{
+			nodes: []*unifiedresources.NodeView{
+				func() *unifiedresources.NodeView {
+					node := unifiedresources.NewNodeView(&unifiedresources.Resource{
+						ID:     "node/pve1",
+						Name:   "pve1",
+						Type:   unifiedresources.ResourceTypeAgent,
+						Status: unifiedresources.StatusOnline,
+						Proxmox: &unifiedresources.ProxmoxData{
+							NodeName: "pve1",
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							CPU:    &unifiedresources.MetricValue{Percent: 92},
+							Memory: &unifiedresources.MetricValue{Percent: 30},
+						},
+					})
+					return &node
+				}(),
+			},
+			vms: []*unifiedresources.VMView{
+				func() *unifiedresources.VMView {
+					vm := unifiedresources.NewVMView(&unifiedresources.Resource{
+						ID:     "qemu/100",
+						Name:   "vm-1",
+						Type:   unifiedresources.ResourceTypeVM,
+						Status: "running",
+						Proxmox: &unifiedresources.ProxmoxData{
+							SourceID: "qemu/100",
+							VMID:     100,
+							NodeName: "pve1",
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							CPU:    &unifiedresources.MetricValue{Percent: 70},
+							Memory: &unifiedresources.MetricValue{Percent: 92},
+							Disk:   &unifiedresources.MetricValue{Percent: 85},
+						},
+					})
+					return &vm
+				}(),
+			},
+			storage: []*unifiedresources.StoragePoolView{
+				func() *unifiedresources.StoragePoolView {
+					storage := unifiedresources.NewStoragePoolView(&unifiedresources.Resource{
+						ID:     "storage/local",
+						Name:   "local",
+						Type:   unifiedresources.ResourceTypeStorage,
+						Status: unifiedresources.StatusOnline,
+						Metrics: &unifiedresources.ResourceMetrics{
+							Disk: &unifiedresources.MetricValue{Percent: 96},
+						},
+					})
+					return &storage
+				}(),
+			},
+		},
+	}
+
+	flags := triageThresholdChecksState(state, nil, DefaultPatrolThresholds())
+	if len(flags) == 0 {
+		t.Fatalf("expected threshold flags from readState, got none")
+	}
+
+	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "node/pve1" && f.Metric == "cpu" }) == nil {
+		t.Fatalf("expected node CPU flag from readState")
+	}
+	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "qemu/100" && f.Metric == "memory" }) == nil {
+		t.Fatalf("expected VM memory flag from readState")
+	}
+	if triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "storage/local" && f.Metric == "usage" }) == nil {
+		t.Fatalf("expected storage usage flag from readState")
+	}
+}
+
 func TestTriageAnomalyChecks(t *testing.T) {
 	intel := seedIntelligence{
 		anomalies: []baseline.AnomalyReport{
@@ -123,6 +198,62 @@ func TestTriageBackupChecks(t *testing.T) {
 	stale := triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "lxc/200" })
 	if stale == nil || !strings.Contains(stale.Reason, "threshold: 48h") {
 		t.Fatalf("expected stale-backup flag for lxc/200, got %#v", stale)
+	}
+}
+
+func TestTriageBackupChecksState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	oldBackup := time.Now().Add(-72 * time.Hour)
+	state := patrolRuntimeState{
+		readState: &mockReadState{
+			vms: []*unifiedresources.VMView{
+				func() *unifiedresources.VMView {
+					vm := unifiedresources.NewVMView(&unifiedresources.Resource{
+						ID:     "reg-qemu/100",
+						Name:   "vm-never",
+						Type:   unifiedresources.ResourceTypeVM,
+						Status: "running",
+						Proxmox: &unifiedresources.ProxmoxData{
+							SourceID: "qemu/100",
+							VMID:     100,
+							NodeName: "pve1",
+						},
+					})
+					return &vm
+				}(),
+			},
+			containers: []*unifiedresources.ContainerView{
+				func() *unifiedresources.ContainerView {
+					ct := unifiedresources.NewContainerView(&unifiedresources.Resource{
+						ID:     "reg-lxc/200",
+						Name:   "ct-stale",
+						Type:   unifiedresources.ResourceTypeSystemContainer,
+						Status: "running",
+						Proxmox: &unifiedresources.ProxmoxData{
+							SourceID:   "lxc/200",
+							VMID:       200,
+							NodeName:   "pve1",
+							LastBackup: oldBackup,
+						},
+					})
+					return &ct
+				}(),
+			},
+		},
+	}
+
+	flags := triageBackupChecksState(state, nil)
+	if len(flags) != 2 {
+		t.Fatalf("expected 2 backup flags from readState, got %d", len(flags))
+	}
+
+	never := triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "reg-qemu/100" })
+	if never == nil || !strings.Contains(never.Reason, "Never backed up") {
+		t.Fatalf("expected never-backed-up readState flag, got %#v", never)
+	}
+
+	stale := triageFindFlag(flags, func(f TriageFlag) bool { return f.ResourceID == "reg-lxc/200" })
+	if stale == nil || !strings.Contains(stale.Reason, "threshold: 48h") {
+		t.Fatalf("expected stale readState backup flag, got %#v", stale)
 	}
 }
 

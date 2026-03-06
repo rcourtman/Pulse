@@ -115,6 +115,169 @@ func triageThresholdChecks(snap models.StateSnapshot, scopedSet map[string]bool,
 
 func triageThresholdChecksState(snap patrolRuntimeState, scopedSet map[string]bool, thresholds PatrolThresholds) []TriageFlag {
 	flags := make([]TriageFlag, 0)
+	if rs := snap.readState; rs != nil {
+		for _, n := range rs.Nodes() {
+			if !seedIsInScope(scopedSet, n.ID()) {
+				continue
+			}
+
+			cpu := n.CPUPercent()
+			if sev, threshold := triageWarnWatchSeverity(cpu, thresholds.NodeCPUWarning, thresholds.NodeCPUWatch); sev != "" {
+				flags = append(flags, TriageFlag{
+					ResourceID:   n.ID(),
+					ResourceName: n.Name(),
+					ResourceType: "node",
+					Category:     "performance",
+					Severity:     sev,
+					Reason:       fmt.Sprintf("CPU at %.0f%% (threshold: %.0f%%)", cpu, threshold),
+					Metric:       "cpu",
+					Value:        cpu,
+					Threshold:    threshold,
+				})
+			}
+
+			mem := n.MemoryPercent()
+			if sev, threshold := triageWarnWatchSeverity(mem, thresholds.NodeMemWarning, thresholds.NodeMemWatch); sev != "" {
+				flags = append(flags, TriageFlag{
+					ResourceID:   n.ID(),
+					ResourceName: n.Name(),
+					ResourceType: "node",
+					Category:     "performance",
+					Severity:     sev,
+					Reason:       fmt.Sprintf("Memory at %.0f%% (threshold: %.0f%%)", mem, threshold),
+					Metric:       "memory",
+					Value:        mem,
+					Threshold:    threshold,
+				})
+			}
+		}
+
+		for _, vm := range rs.VMs() {
+			if vm.Template() || vm.Status() != "running" || !seedIsInScope(scopedSet, vm.ID()) {
+				continue
+			}
+
+			mem := vm.MemoryPercent()
+			if sev, threshold := triageWarnWatchSeverity(mem, thresholds.GuestMemWarning, thresholds.GuestMemWatch); sev != "" {
+				flags = append(flags, TriageFlag{
+					ResourceID:   vm.ID(),
+					ResourceName: vm.Name(),
+					ResourceType: "vm",
+					Category:     "performance",
+					Severity:     sev,
+					Reason:       fmt.Sprintf("Memory at %.0f%% (threshold: %.0f%%)", mem, threshold),
+					Metric:       "memory",
+					Value:        mem,
+					Threshold:    threshold,
+				})
+			}
+
+			disk := vm.DiskPercent()
+			if sev, threshold := triageCriticalWarnWatchSeverity(disk, thresholds.GuestDiskCrit, thresholds.GuestDiskWarn, thresholds.GuestDiskWatch); sev != "" {
+				flags = append(flags, TriageFlag{
+					ResourceID:   vm.ID(),
+					ResourceName: vm.Name(),
+					ResourceType: "vm",
+					Category:     "capacity",
+					Severity:     sev,
+					Reason:       fmt.Sprintf("Disk at %.0f%% (threshold: %.0f%%)", disk, threshold),
+					Metric:       "disk",
+					Value:        disk,
+					Threshold:    threshold,
+				})
+			}
+
+			cpu := vm.CPUPercent()
+			if cpu > thresholds.NodeCPUWarning {
+				flags = append(flags, TriageFlag{
+					ResourceID:   vm.ID(),
+					ResourceName: vm.Name(),
+					ResourceType: "vm",
+					Category:     "performance",
+					Severity:     "warning",
+					Reason:       fmt.Sprintf("CPU at %.0f%% (threshold: %.0f%%)", cpu, thresholds.NodeCPUWarning),
+					Metric:       "cpu",
+					Value:        cpu,
+					Threshold:    thresholds.NodeCPUWarning,
+				})
+			}
+		}
+
+		for _, ct := range rs.Containers() {
+			if ct.Template() || ct.Status() != "running" || !seedIsInScope(scopedSet, ct.ID()) {
+				continue
+			}
+
+			mem := ct.MemoryPercent()
+			if sev, threshold := triageWarnWatchSeverity(mem, thresholds.GuestMemWarning, thresholds.GuestMemWatch); sev != "" {
+				flags = append(flags, TriageFlag{
+					ResourceID:   ct.ID(),
+					ResourceName: ct.Name(),
+					ResourceType: "system-container",
+					Category:     "performance",
+					Severity:     sev,
+					Reason:       fmt.Sprintf("Memory at %.0f%% (threshold: %.0f%%)", mem, threshold),
+					Metric:       "memory",
+					Value:        mem,
+					Threshold:    threshold,
+				})
+			}
+
+			disk := ct.DiskPercent()
+			if sev, threshold := triageCriticalWarnWatchSeverity(disk, thresholds.GuestDiskCrit, thresholds.GuestDiskWarn, thresholds.GuestDiskWatch); sev != "" {
+				flags = append(flags, TriageFlag{
+					ResourceID:   ct.ID(),
+					ResourceName: ct.Name(),
+					ResourceType: "system-container",
+					Category:     "capacity",
+					Severity:     sev,
+					Reason:       fmt.Sprintf("Disk at %.0f%% (threshold: %.0f%%)", disk, threshold),
+					Metric:       "disk",
+					Value:        disk,
+					Threshold:    threshold,
+				})
+			}
+
+			cpu := ct.CPUPercent()
+			if cpu > thresholds.NodeCPUWarning {
+				flags = append(flags, TriageFlag{
+					ResourceID:   ct.ID(),
+					ResourceName: ct.Name(),
+					ResourceType: "system-container",
+					Category:     "performance",
+					Severity:     "warning",
+					Reason:       fmt.Sprintf("CPU at %.0f%% (threshold: %.0f%%)", cpu, thresholds.NodeCPUWarning),
+					Metric:       "cpu",
+					Value:        cpu,
+					Threshold:    thresholds.NodeCPUWarning,
+				})
+			}
+		}
+
+		for _, s := range rs.StoragePools() {
+			if !seedIsInScope(scopedSet, s.ID()) {
+				continue
+			}
+			usage := s.DiskPercent()
+			if sev, threshold := triageCriticalWarnWatchSeverity(usage, thresholds.StorageCritical, thresholds.StorageWarning, thresholds.StorageWatch); sev != "" {
+				flags = append(flags, TriageFlag{
+					ResourceID:   s.ID(),
+					ResourceName: s.Name(),
+					ResourceType: "storage",
+					Category:     "capacity",
+					Severity:     sev,
+					Reason:       fmt.Sprintf("Usage at %.0f%% (threshold: %.0f%%)", usage, threshold),
+					Metric:       "usage",
+					Value:        usage,
+					Threshold:    threshold,
+				})
+			}
+		}
+
+		if len(rs.Nodes()) > 0 || len(rs.VMs()) > 0 || len(rs.Containers()) > 0 || len(rs.StoragePools()) > 0 {
+			return flags
+		}
+	}
 
 	for _, n := range snap.Nodes {
 		if !seedIsInScope(scopedSet, n.ID) {
@@ -341,6 +504,25 @@ func triageBackupChecks(snap models.StateSnapshot, scopedSet map[string]bool) []
 func triageBackupChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 	now := time.Now()
+	if rs := snap.readState; rs != nil {
+		for _, vm := range rs.VMs() {
+			if vm.Template() || vm.Status() != "running" || !seedIsInScope(scopedSet, vm.ID()) {
+				continue
+			}
+			flags = append(flags, triageBackupFlag(vm.ID(), vm.Name(), "vm", vm.LastBackup(), now)...)
+		}
+
+		for _, ct := range rs.Containers() {
+			if ct.Template() || ct.Status() != "running" || !seedIsInScope(scopedSet, ct.ID()) {
+				continue
+			}
+			flags = append(flags, triageBackupFlag(ct.ID(), ct.Name(), "system-container", ct.LastBackup(), now)...)
+		}
+
+		if len(rs.VMs()) > 0 || len(rs.Containers()) > 0 {
+			return flags
+		}
+	}
 
 	for _, vm := range snap.VMs {
 		if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
