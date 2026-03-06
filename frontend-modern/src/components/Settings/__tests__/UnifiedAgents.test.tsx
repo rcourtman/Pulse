@@ -578,6 +578,29 @@ describe('UnifiedAgents managed agents table', () => {
     expect(screen.getByText('old-docker.local')).toBeInTheDocument();
   });
 
+  it('prefers removed docker entries over matching active runtime rows', async () => {
+    const dockerHost = createDockerHost({
+      id: 'tower-docker',
+      hostname: 'tower.local',
+      displayName: 'Tower',
+    });
+    const removedHost = createRemovedDockerHost({
+      id: 'tower-docker',
+      hostname: 'tower.local',
+      displayName: 'Tower',
+    });
+    setupComponent([], [dockerHost], [], [removedHost]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Removed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Allow re-enroll/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 1 of 1 records.')).toBeInTheDocument();
+  });
+
   it('shows Kubernetes clusters in the unified table', async () => {
     const cluster = createKubernetesCluster({ displayName: 'K8s Alpha' });
     setupComponent([], [], [cluster]);

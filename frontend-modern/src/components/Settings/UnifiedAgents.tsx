@@ -773,6 +773,14 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     return removed.sort((a, b) => b.removedAt - a.removedAt);
   });
 
+  const removedDockerHostIds = createMemo(() => {
+    return new Set(
+      removedDockerHosts()
+        .map((runtime) => runtime.id?.trim())
+        .filter((id): id is string => Boolean(id)),
+    );
+  });
+
   const kubernetesClusters = createMemo(() => {
     const map = new Map<
       string,
@@ -869,6 +877,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       const scopeInfo = getScopeInfo(resolvedAgentId);
       const agentActionId = getAgentActionId(r);
       const dockerActionId = hasDockerSource(r) ? getDockerActionId(r) : undefined;
+      if (dockerActionId && removedDockerHostIds().has(dockerActionId)) {
+        return;
+      }
       const name = r.displayName || hostname;
       const searchText = [name, hostname, r.id, resolvedAgentId, agentActionId, dockerActionId]
         .filter(Boolean)
