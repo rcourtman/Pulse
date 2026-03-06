@@ -1786,6 +1786,14 @@ type patrolPBSDatastoreRow struct {
 	used, total    int64
 }
 
+type patrolDockerHostRow struct {
+	host                string
+	containerCount      int
+	runningCount        int
+	stoppedCount        int
+	unhealthyContainers []string
+}
+
 func patrolNodeInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolNodeInventoryRow {
 	rs := snap.readState
 	if rs != nil {
@@ -1955,6 +1963,83 @@ func patrolPBSDatastoreRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 	return rows
 }
 
+func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolDockerHostRow {
+	rs := snap.readState
+	if rs != nil {
+		containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
+		for _, cv := range rs.DockerContainers() {
+			hostID := strings.TrimSpace(cv.ParentID())
+			if hostID == "" {
+				hostID = strings.TrimSpace(cv.HostSourceID())
+			}
+			if hostID == "" {
+				continue
+			}
+			containersByHost[hostID] = append(containersByHost[hostID], cv)
+		}
+
+		rows := make([]patrolDockerHostRow, 0, len(rs.DockerHosts()))
+		for _, dhv := range rs.DockerHosts() {
+			if !seedIsInScope(scopedSet, dhv.ID()) {
+				continue
+			}
+
+			host := strings.TrimSpace(dhv.Hostname())
+			if host == "" {
+				host = strings.TrimSpace(dhv.Name())
+			}
+
+			row := patrolDockerHostRow{
+				host:           host,
+				containerCount: dhv.ChildCount(),
+			}
+
+			for _, cv := range containersByHost[dhv.ID()] {
+				state := strings.TrimSpace(cv.ContainerState())
+				if state == "running" {
+					row.runningCount++
+				} else {
+					row.stoppedCount++
+				}
+				health := strings.TrimSpace(cv.Health())
+				if health != "" && health != "healthy" && state == "running" {
+					row.unhealthyContainers = append(row.unhealthyContainers, fmt.Sprintf("%s/%s: health=%s", host, cv.Name(), health))
+				}
+			}
+
+			if len(containersByHost[dhv.ID()]) > 0 {
+				row.containerCount = len(containersByHost[dhv.ID()])
+			}
+
+			rows = append(rows, row)
+		}
+		return rows
+	}
+
+	rows := make([]patrolDockerHostRow, 0, len(snap.DockerHosts))
+	for _, dh := range snap.DockerHosts {
+		if !seedIsInScope(scopedSet, dh.ID) {
+			continue
+		}
+		row := patrolDockerHostRow{
+			host:           dh.Hostname,
+			containerCount: len(dh.Containers),
+		}
+		for _, c := range dh.Containers {
+			if c.State == "running" {
+				row.runningCount++
+			} else {
+				row.stoppedCount++
+			}
+			if c.Health != "" && c.Health != "healthy" && c.State == "running" {
+				row.unhealthyContainers = append(row.unhealthyContainers, fmt.Sprintf("%s/%s: health=%s", dh.Hostname, c.Name, c.Health))
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
 func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
 	var sb strings.Builder
 
@@ -2087,93 +2172,18 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 
 	// --- Docker ---
 	if cfg.AnalyzeDocker {
-		rs := snap.readState
-
-		if rs != nil {
-			legacyByID := make(map[string]models.DockerHost, len(snap.DockerHosts))
-			for _, dh := range snap.DockerHosts {
-				legacyByID[dh.ID] = dh
-			}
-
-			dhosts := rs.DockerHosts()
-			if len(dhosts) > 0 {
-				sb.WriteString("# Docker\n")
-				sb.WriteString("| Host | Containers | Running | Stopped |\n")
-				sb.WriteString("|------|------------|---------|--------|\n")
-				for _, dhv := range dhosts {
-					if !seedIsInScope(scopedSet, dhv.ID()) {
-						continue
-					}
-					host := strings.TrimSpace(dhv.Hostname())
-					if host == "" {
-						host = strings.TrimSpace(dhv.Name())
-					}
-					containers := "—"
-					runningStr, stoppedStr := "—", "—"
-
-					if legacy, ok := legacyByID[dhv.ID()]; ok && len(legacy.Containers) > 0 {
-						running, stopped := 0, 0
-						for _, c := range legacy.Containers {
-							if c.State == "running" {
-								running++
-							} else {
-								stopped++
-							}
-						}
-						containers = fmt.Sprintf("%d", len(legacy.Containers))
-						runningStr = fmt.Sprintf("%d", running)
-						stoppedStr = fmt.Sprintf("%d", stopped)
-					} else if dhv.ChildCount() > 0 {
-						containers = fmt.Sprintf("%d", dhv.ChildCount())
-					}
-
-					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", host, containers, runningStr, stoppedStr))
-				}
-
-				// Preserve detailed per-container health output when legacy snapshot contains it.
-				for _, dhv := range dhosts {
-					if !seedIsInScope(scopedSet, dhv.ID()) {
-						continue
-					}
-					legacy, ok := legacyByID[dhv.ID()]
-					if !ok {
-						continue
-					}
-					for _, c := range legacy.Containers {
-						if c.Health != "" && c.Health != "healthy" && c.State == "running" {
-							sb.WriteString(fmt.Sprintf("- %s/%s: health=%s\n", legacy.Hostname, c.Name, c.Health))
-						}
-					}
-				}
-				sb.WriteString("\n")
-			}
-		} else if len(snap.DockerHosts) > 0 {
+		rows := patrolDockerHostRows(snap, scopedSet)
+		if len(rows) > 0 {
 			sb.WriteString("# Docker\n")
 			sb.WriteString("| Host | Containers | Running | Stopped |\n")
 			sb.WriteString("|------|------------|---------|--------|\n")
-			for _, dh := range snap.DockerHosts {
-				if !seedIsInScope(scopedSet, dh.ID) {
-					continue
-				}
-				running, stopped := 0, 0
-				for _, c := range dh.Containers {
-					if c.State == "running" {
-						running++
-					} else {
-						stopped++
-					}
-				}
+			for _, row := range rows {
 				sb.WriteString(fmt.Sprintf("| %s | %d | %d | %d |\n",
-					dh.Hostname, len(dh.Containers), running, stopped))
+					row.host, row.containerCount, row.runningCount, row.stoppedCount))
 			}
-			for _, dh := range snap.DockerHosts {
-				if !seedIsInScope(scopedSet, dh.ID) {
-					continue
-				}
-				for _, c := range dh.Containers {
-					if c.Health != "" && c.Health != "healthy" && c.State == "running" {
-						sb.WriteString(fmt.Sprintf("- %s/%s: health=%s\n", dh.Hostname, c.Name, c.Health))
-					}
+			for _, row := range rows {
+				for _, issue := range row.unhealthyContainers {
+					sb.WriteString("- " + issue + "\n")
 				}
 			}
 			sb.WriteString("\n")
@@ -2894,20 +2904,12 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 	if cfg.AnalyzeKubernetes && rs != nil {
 		k8sViews := rs.K8sClusters()
 		if len(k8sViews) > 0 {
-			legacyByID := make(map[string]models.KubernetesCluster, len(snap.KubernetesClusters))
-			for _, k := range snap.KubernetesClusters {
-				legacyByID[k.ID] = k
-			}
 			sb.WriteString("# Kubernetes Clusters\n")
 			for _, kv := range k8sViews {
 				if !seedIsInScope(scopedSet, kv.ID()) {
 					continue
 				}
-				nodes := kv.ChildCount()
-				if legacy, ok := legacyByID[kv.ID()]; ok && len(legacy.Nodes) > 0 {
-					nodes = len(legacy.Nodes)
-				}
-				sb.WriteString(fmt.Sprintf("- %s (Nodes: %d)\n", kv.Name(), nodes))
+				sb.WriteString(fmt.Sprintf("- %s (Nodes: %d)\n", kv.Name(), kv.ChildCount()))
 			}
 			sb.WriteString("\n")
 		}

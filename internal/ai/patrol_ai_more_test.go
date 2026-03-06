@@ -545,9 +545,43 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 			Disk:   &unifiedresources.MetricValue{Percent: 20},
 		},
 	})
+	dockerHostView := unifiedresources.NewDockerHostView(&unifiedresources.Resource{
+		ID:     "docker-1",
+		Name:   "docker-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Docker: &unifiedresources.DockerData{
+			Hostname: "docker-1",
+		},
+		ChildCount: 2,
+	})
+	parentID := "docker-1"
+	appRunning := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "dc-1",
+		Name:     "web",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOnline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "running",
+			Health:         "unhealthy",
+		},
+	})
+	appStopped := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "dc-2",
+		Name:     "db",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOffline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "exited",
+		},
+	})
 	runtimeState.readState = &mockReadState{
-		nodes: []*unifiedresources.NodeView{&nodeView},
-		vms:   []*unifiedresources.VMView{&vmView},
+		nodes:       []*unifiedresources.NodeView{&nodeView},
+		vms:         []*unifiedresources.VMView{&vmView},
+		dockerHosts: []*unifiedresources.DockerHostView{&dockerHostView},
+		dockerCtrs:  []*unifiedresources.DockerContainerView{&appRunning, &appStopped},
 		pbs: []*unifiedresources.PBSInstanceView{
 			func() *unifiedresources.PBSInstanceView {
 				pbs := unifiedresources.NewPBSInstanceView(&unifiedresources.Resource{
@@ -579,6 +613,9 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 		"| node-1 | online | 55% | 65% | 40%",
 		"# Guest Metrics",
 		"| vm-1 | VM | node-1 | - | 10% | 30% | 20% | running | - | 2h ago |",
+		"# Docker",
+		"| docker-1 | 2 | 1 | 1 |",
+		"docker-1/web: health=unhealthy",
 		"# PBS Datastores",
 		"pbs-1/store: 55% used",
 	} {
