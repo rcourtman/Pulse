@@ -345,6 +345,11 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
 		return
 	}
+	if isPublicTrialSignupEmailDomain(normalizeTrialSignupEmailDomain(data.Email)) {
+		data.ErrorMessage = "Use your work email to start a Pulse Pro trial. Consumer email addresses are not eligible."
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+		return
+	}
 	if h.verificationStore != nil {
 		conflict, err := h.verificationStore.FindIssuedTrialConflict(data.Email, data.Company)
 		if err != nil {

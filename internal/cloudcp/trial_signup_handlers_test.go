@@ -65,6 +65,32 @@ func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
 	}
 }
 
+func TestTrialSignupHandleRequestVerificationRejectsConsumerEmailDomain(t *testing.T) {
+	h, _, sender := newTrialSignupTestHandler(t)
+	form := url.Values{
+		"org_id":     {"default"},
+		"return_url": {"https://pulse.example.com/auth/trial-activate"},
+		"name":       {"Test User"},
+		"email":      {"owner@gmail.com"},
+		"company":    {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleRequestVerification(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if sender.calls != 0 {
+		t.Fatalf("email sender calls=%d, want 0", sender.calls)
+	}
+	if !strings.Contains(rec.Body.String(), "Consumer email addresses are not eligible") {
+		t.Fatalf("expected consumer email rejection message, got %q", rec.Body.String())
+	}
+}
+
 func TestTrialSignupHandleRequestVerificationRejectsEmailThatAlreadyUsedTrial(t *testing.T) {
 	h, store, sender := newTrialSignupTestHandler(t)
 	rawToken := requestTrialVerification(t, h, sender)
