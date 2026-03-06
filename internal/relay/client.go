@@ -166,6 +166,17 @@ func (c *Client) Run(ctx context.Context) error {
 				return ctx.Err()
 			}
 
+			if isSessionResumeRejected(err) {
+				c.mu.Lock()
+				c.lastError = err.Error()
+				c.connected = false
+				c.mu.Unlock()
+
+				consecutiveFailures = 0
+				c.logger.Warn().Err(err).Msg("relay session resume rejected, retrying fresh registration")
+				continue
+			}
+
 			consecutiveFailures = nextConsecutiveFailures(consecutiveFailures, connected)
 			c.mu.Lock()
 			c.lastError = err.Error()
@@ -388,6 +399,7 @@ func (c *Client) register(conn *websocket.Conn) error {
 		ClientVersion:  c.deps.ServerVersion,
 		IdentityPubKey: c.deps.IdentityPubKey,
 	}
+	attemptedSessionResume := false
 
 	// Reuse session token if we have one from a previous connection.
 	// When reconnecting, send the derived instance_id (from the prior
@@ -405,6 +417,7 @@ func (c *Client) register(conn *websocket.Conn) error {
 	if c.sessionToken != "" && c.instanceID != "" {
 		payload.SessionToken = c.sessionToken
 		payload.InstanceHint = c.instanceID
+		attemptedSessionResume = true
 	}
 	c.mu.RUnlock()
 
@@ -458,6 +471,13 @@ func (c *Client) register(conn *websocket.Conn) error {
 		var errPayload ErrorPayload
 		if err := UnmarshalControlPayload(frame.Payload, &errPayload); err != nil {
 			return fmt.Errorf("unmarshal error: %w", err)
+		}
+		if attemptedSessionResume && shouldResetSessionAfterRegisterError(errPayload.Code) {
+			c.mu.Lock()
+			c.sessionToken = ""
+			c.instanceID = ""
+			c.mu.Unlock()
+			return &sessionResumeRejectedError{code: errPayload.Code, message: errPayload.Message}
 		}
 		return fmt.Errorf("relay error (%s): %s", errPayload.Code, errPayload.Message)
 
@@ -873,4 +893,22 @@ func (e *licenseError) Error() string {
 func isLicenseError(err error) bool {
 	_, ok := err.(*licenseError)
 	return ok
+}
+
+type sessionResumeRejectedError struct {
+	code    string
+	message string
+}
+
+func (e *sessionResumeRejectedError) Error() string {
+	return fmt.Sprintf("session resume rejected (%s): %s", e.code, e.message)
+}
+
+func isSessionResumeRejected(err error) bool {
+	var target *sessionResumeRejectedError
+	return errors.As(err, &target)
+}
+
+func shouldResetSessionAfterRegisterError(code string) bool {
+	return code == ErrCodeAuthFailed || code == ErrCodeNotFound
 }
