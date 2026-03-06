@@ -569,18 +569,18 @@ describe('UnifiedAgents managed agents table', () => {
     });
 
     expect(screen.getAllByText('Active infrastructure').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Monitoring stopped').length).toBeGreaterThan(0);
+    expect(screen.getByText('Recovery queue')).toBeInTheDocument();
     expect(screen.getByText('Active Host')).toBeInTheDocument();
     expect(screen.getByText('old-docker.local')).toBeInTheDocument();
     expect(screen.getByText('Docker runtime')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Pulse is currently ignoring reports from these items\. Allow reconnect when you want them to appear as active again\./i,
+        /Infrastructure with monitoring stopped stays out of active inventory until reconnect is allowed\./i,
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /The software on the remote system may still be running until you remove it there\./i,
+        /Pulse is intentionally ignoring reports from these items\. This does not uninstall software on the remote system\./i,
       ),
     ).toBeInTheDocument();
   });
@@ -602,7 +602,7 @@ describe('UnifiedAgents managed agents table', () => {
       expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText('Monitoring stopped').length).toBeGreaterThan(0);
+    expect(screen.getByText('Recovery queue')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Allow reconnect/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Stop monitoring' })).not.toBeInTheDocument();
     expect(screen.getByText('Showing 1 of 1 records.')).toBeInTheDocument();

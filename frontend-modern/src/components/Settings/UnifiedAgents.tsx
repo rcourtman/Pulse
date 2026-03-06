@@ -2506,10 +2506,10 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
             <div class="space-y-3 pt-2">
               <div class="flex items-center justify-between gap-3">
                 <div>
-                  <h3 class="text-sm font-semibold text-base-content">Monitoring stopped</h3>
+                  <h3 class="text-sm font-semibold text-base-content">Recovery queue</h3>
                   <p class="text-xs text-muted">
-                    Pulse is currently ignoring reports from these items. Allow reconnect when you
-                    want them to appear as active again.
+                    Infrastructure with monitoring stopped stays out of active inventory until
+                    reconnect is allowed.
                   </p>
                 </div>
                 <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
@@ -2527,29 +2527,26 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                   </div>
                 }
               >
-                <div class="space-y-3">
-                  <For each={filteredMonitoringStoppedRows()}>
-                    {(row) => (
-                      <div class="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-4 dark:border-amber-800 dark:bg-amber-950/30">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div class="min-w-0 space-y-2">
+                <div class="rounded-lg border border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30">
+                  <div class="border-b border-amber-200 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:text-amber-100">
+                    Pulse is intentionally ignoring reports from these items. This does not
+                    uninstall software on the remote system.
+                  </div>
+                  <div class="divide-y divide-amber-200/80 dark:divide-amber-800/80">
+                    <For each={filteredMonitoringStoppedRows()}>
+                      {(row) => (
+                        <div class="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div class="min-w-0 space-y-1">
                             <div class="flex flex-wrap items-center gap-2">
-                              <h4 class="text-sm font-semibold text-base-content">{row.name}</h4>
+                              <h4 class="truncate text-sm font-semibold text-base-content">
+                                {row.name}
+                              </h4>
                               <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
                                 {getRemovedItemLabel(row)}
                               </span>
-                              <For each={row.capabilities}>
-                                {(cap) => (
-                                  <span
-                                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
-                                  >
-                                    {getCapabilityLabel(cap)}
-                                  </span>
-                                )}
-                              </For>
                             </div>
-
-                            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                            <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                              <span>{row.capabilities.map(getCapabilityLabel).join(', ')}</span>
                               <Show
                                 when={
                                   row.displayName &&
@@ -2560,21 +2557,15 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                                 <span>Hostname: {row.hostname}</span>
                               </Show>
                               <span>
-                                Stopped in Pulse{' '}
+                                Stopped{' '}
                                 {row.removedAt
                                   ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
                                   : 'at an unknown time'}
                               </span>
                             </div>
-
-                            <p class="max-w-3xl text-sm text-muted">
-                              Pulse is ignoring new reports from this {getRemovedItemLabel(row).toLowerCase()}.
-                              The software on the remote system may still be running until you
-                              remove it there.
-                            </p>
                           </div>
 
-                          <div class="flex min-w-[210px] flex-col items-start gap-2 lg:items-end">
+                          <div class="flex items-center gap-3 lg:flex-shrink-0">
                             <button
                               onClick={() =>
                                 row.capabilities.includes('docker')
@@ -2591,15 +2582,14 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                             >
                               {ALLOW_RECONNECT_LABEL}
                             </button>
-                            <p class="text-xs text-muted lg:text-right">
-                              Use this when you want the same {getRemovedItemLabel(row).toLowerCase()} to
-                              appear as active again.
-                            </p>
+                            <span class="text-xs text-muted">
+                              Ready to return to active monitoring
+                            </span>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </For>
+                      )}
+                    </For>
+                  </div>
                 </div>
               </Show>
             </div>
