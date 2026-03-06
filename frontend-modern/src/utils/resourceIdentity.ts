@@ -1,0 +1,140 @@
+import type { Resource } from '@/types/resource';
+import {
+  getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
+  getActionableKubernetesClusterIdFromResource,
+  getPlatformAgentRecord,
+  getPlatformDataRecord,
+} from '@/utils/agentResources';
+
+export type ResourceIdentityRow = {
+  label: string;
+  value: string;
+};
+
+const asTrimmedString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const formatIdentityTarget = (resourceType?: string, resourceId?: string): string | null => {
+  const type = asTrimmedString(resourceType);
+  const id = asTrimmedString(resourceId);
+  return type && id ? `${type}:${id}` : null;
+};
+
+export const getPrimaryResourceIdentity = (resource: Resource): string => {
+  const metricsIdentity = formatIdentityTarget(
+    resource.metricsTarget?.resourceType,
+    resource.metricsTarget?.resourceId,
+  );
+  if (metricsIdentity) return metricsIdentity;
+
+  const discoveryIdentity = formatIdentityTarget(
+    resource.discoveryTarget?.resourceType,
+    resource.discoveryTarget?.resourceId,
+  );
+  if (discoveryIdentity) return discoveryIdentity;
+
+  const dockerRuntimeId = getActionableDockerRuntimeIdFromResource(resource);
+  if (resource.type === 'docker-host' && dockerRuntimeId) {
+    return `docker-host:${dockerRuntimeId}`;
+  }
+
+  const kubernetesId = getActionableKubernetesClusterIdFromResource(resource);
+  if (
+    kubernetesId &&
+    (resource.type === 'k8s-cluster' || resource.type === 'k8s-node' || resource.type === 'pod')
+  ) {
+    return `k8s:${kubernetesId}`;
+  }
+
+  const agentId = getActionableAgentIdFromResource(resource);
+  if (agentId) return `agent:${agentId}`;
+
+  const platformData = getPlatformDataRecord(resource);
+  const pbs = platformData?.pbs as Record<string, unknown> | undefined;
+  const pmg = platformData?.pmg as Record<string, unknown> | undefined;
+  const pbsInstanceId = asTrimmedString(pbs?.instanceId);
+  if (pbsInstanceId) return `pbs:${pbsInstanceId}`;
+  const pmgInstanceId = asTrimmedString(pmg?.instanceId);
+  if (pmgInstanceId) return `pmg:${pmgInstanceId}`;
+
+  return resource.id;
+};
+
+export const getResourceIdentityAliases = (resource: Resource): string[] => {
+  const platformData = getPlatformDataRecord(resource);
+  const platformAgent = getPlatformAgentRecord(resource);
+  const proxmox = platformData?.proxmox as Record<string, unknown> | undefined;
+  const pbs = platformData?.pbs as Record<string, unknown> | undefined;
+  const pmg = platformData?.pmg as Record<string, unknown> | undefined;
+
+  const raw = [
+    resource.metricsTarget?.resourceId,
+    resource.discoveryTarget?.agentId,
+    resource.discoveryTarget?.resourceId,
+    getActionableDockerRuntimeIdFromResource(resource),
+    getActionableKubernetesClusterIdFromResource(resource),
+    getActionableAgentIdFromResource(resource),
+    asTrimmedString(platformData?.linkedAgentId),
+    asTrimmedString(proxmox?.nodeName),
+    asTrimmedString(platformAgent?.agentId),
+    asTrimmedString(platformAgent?.hostname),
+    asTrimmedString(pbs?.instanceId),
+    asTrimmedString(pbs?.hostname),
+    asTrimmedString(pmg?.instanceId),
+    asTrimmedString(pmg?.hostname),
+    resource.identity?.hostname,
+    resource.identity?.machineId,
+  ];
+
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const value of raw) {
+    if (!value) continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const normalized = trimmed.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    deduped.push(trimmed);
+  }
+
+  return deduped;
+};
+
+export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIdentityRow[] => {
+  const rows: ResourceIdentityRow[] = [];
+  if (resource.identity?.hostname) {
+    rows.push({ label: 'Hostname', value: resource.identity.hostname });
+  }
+  if (resource.identity?.machineId) {
+    rows.push({ label: 'Machine ID', value: resource.identity.machineId });
+  }
+  if (resource.clusterId) {
+    rows.push({ label: 'Cluster', value: resource.clusterId });
+  }
+  if (resource.parentId) {
+    rows.push({ label: 'Parent', value: resource.parentId });
+  }
+
+  const discoveryIdentity = formatIdentityTarget(
+    resource.discoveryTarget?.resourceType,
+    resource.discoveryTarget?.resourceId,
+  );
+  if (discoveryIdentity) {
+    rows.push({ label: 'Discovery', value: discoveryIdentity });
+  }
+
+  const metricsIdentity = formatIdentityTarget(
+    resource.metricsTarget?.resourceType,
+    resource.metricsTarget?.resourceId,
+  );
+  if (metricsIdentity) {
+    rows.push({ label: 'Metrics Target', value: metricsIdentity });
+  }
+
+  return rows;
+};

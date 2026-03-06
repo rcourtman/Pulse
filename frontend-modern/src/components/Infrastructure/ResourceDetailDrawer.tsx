@@ -14,6 +14,11 @@ import {
 } from './resourceBadges';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
+import {
+  getPrimaryResourceIdentity,
+  getPrimaryResourceIdentityRows,
+  getResourceIdentityAliases,
+} from '@/utils/resourceIdentity';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
@@ -310,68 +315,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       title: sources.join(' • '),
     };
   });
-  const identityAliasValues = createMemo(() => {
-    const data = platformData();
-    const pbs = data?.pbs;
-    const pmg = data?.pmg;
-    const proxmox = data?.proxmox;
-    const agent = data?.agent;
-    const raw = [
-      props.resource.metricsTarget?.resourceId,
-      props.resource.discoveryTarget?.agentId,
-      props.resource.discoveryTarget?.resourceId,
-      dockerHostData()?.hostSourceId,
-      proxmox?.nodeName,
-      agent?.agentId,
-      agent?.hostname,
-      pbs?.instanceId,
-      pbs?.hostname,
-      pmg?.instanceId,
-      pmg?.hostname,
-      props.resource.identity?.hostname,
-      props.resource.identity?.machineId,
-    ];
-    const seen = new Set<string>();
-    const deduped: string[] = [];
-    for (const value of raw) {
-      if (!value) continue;
-      const trimmed = value.trim();
-      if (!trimmed) continue;
-      const normalized = trimmed.toLowerCase();
-      if (seen.has(normalized)) continue;
-      seen.add(normalized);
-      deduped.push(trimmed);
-    }
-    return deduped;
-  });
-  const primaryIdentityRows = createMemo(() => {
-    const rows: Array<{ label: string; value: string }> = [];
-    if (props.resource.identity?.hostname) {
-      rows.push({ label: 'Hostname', value: props.resource.identity.hostname });
-    }
-    if (props.resource.identity?.machineId) {
-      rows.push({ label: 'Machine ID', value: props.resource.identity.machineId });
-    }
-    if (props.resource.clusterId) {
-      rows.push({ label: 'Cluster', value: props.resource.clusterId });
-    }
-    if (props.resource.parentId) {
-      rows.push({ label: 'Parent', value: props.resource.parentId });
-    }
-    if (props.resource.discoveryTarget?.resourceType) {
-      rows.push({
-        label: 'Discovery',
-        value: `${props.resource.discoveryTarget.resourceType}:${props.resource.discoveryTarget.resourceId}`,
-      });
-    }
-    if (props.resource.metricsTarget?.resourceType && props.resource.metricsTarget.resourceId) {
-      rows.push({
-        label: 'Metrics Target',
-        value: `${props.resource.metricsTarget.resourceType}:${props.resource.metricsTarget.resourceId}`,
-      });
-    }
-    return rows;
-  });
+  const identityAliasValues = createMemo(() => getResourceIdentityAliases(props.resource));
+  const primaryIdentityRows = createMemo(() => getPrimaryResourceIdentityRows(props.resource));
   const identityCardHasRichData = createMemo(
     () =>
       primaryIdentityRows().length > 0 ||
@@ -388,23 +333,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
-  const headerIdentity = createMemo(() => {
-    if (props.resource.metricsTarget?.resourceType && props.resource.metricsTarget.resourceId) {
-      return `${props.resource.metricsTarget.resourceType}:${props.resource.metricsTarget.resourceId}`;
-    }
-    if (props.resource.discoveryTarget?.resourceType && props.resource.discoveryTarget.resourceId) {
-      return `${props.resource.discoveryTarget.resourceType}:${props.resource.discoveryTarget.resourceId}`;
-    }
-    const agentId = platformData()?.agent?.agentId;
-    if (agentId) {
-      return `agent:${agentId}`;
-    }
-    const dockerHostId = dockerHostData()?.hostSourceId;
-    if (dockerHostId) {
-      return `docker-host:${dockerHostId}`;
-    }
-    return props.resource.id;
-  });
+  const headerIdentity = createMemo(() => getPrimaryResourceIdentity(props.resource));
   const relatedLinks = createMemo(() => {
     const links: Array<{ href: string; label: string; ariaLabel: string }> = [];
     const workloads = workloadsHref();
