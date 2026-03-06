@@ -85,6 +85,7 @@ Relay infrastructure and protocol support for mobile connectivity to Pulse insta
 The license system was rebuilt from simple tier checks into a full entitlement framework.
 
 - **`/api/license/entitlements` endpoint** — the canonical way for the frontend and API clients to determine feature availability. Returns capabilities, quantitative limits with usage state (ok/warning/enforced), subscription state, upgrade reasons, trial info, and hosted mode flag.
+- **v5 → v6 license exchange bridge** — valid Pulse v5 Pro/Lifetime JWT-style licenses can now be exchanged into the v6 activation/grant model. Existing upgraded instances auto-exchange persisted v5 licenses on startup when no v6 activation state exists yet, and the v6 activation form can also accept a valid v5 key as migration input.
 - **Subscription state machine** with lifecycle states: `trial`, `active`, `grace`, `expired`, `suspended`, `canceled`. Each state defines full/degraded/locked operation behavior.
 - **Pluggable entitlement sources** — JWT-based for self-hosted deployments, database-backed for hosted/SaaS.
 - **Local trial lifecycle** — trial state managed locally via billing state files, no phone-home required. Trial countdown with `trial_expires_at` and `trial_days_remaining`.
@@ -96,6 +97,10 @@ The license system was rebuilt from simple tier checks into a full entitlement f
 - **Upgrade reason engine** — generates actionable upgrade prompts based on current usage patterns.
 - **In-app pricing page** at `/pricing` with Community/Pro/Cloud tier comparison table, feature matrix, and "Start Free 14-day Trial" CTA.
 - **Trial banner** — global countdown banner with urgency coloring (blue > 3 days, amber 1–3 days, red < 1 day) and upgrade link.
+
+Migration fallback:
+
+- If a valid v5 license cannot be exchanged automatically, Pulse guides the user to retrieve the migrated activation key from their Pulse account or contact support. Invalid or malformed keys are still rejected normally.
 
 ### Organizations + Multi-Tenant (Enterprise, Opt-In)
 

@@ -72,6 +72,21 @@ Pulse v6 feature gating is driven by the entitlements endpoint:
 
 If a trial is enabled and started, Pulse writes local billing-state (no phone-home) and entitlements reflect the trial lifecycle.
 
+#### v5 License Migration
+
+Pulse v6 uses the activation/grant model for active licensing, but it can migrate valid Pulse v5 Pro and Lifetime JWT-style licenses.
+
+- If you upgrade an existing v5 instance and Pulse finds a persisted v5 license with no v6 activation state yet, v6 will try to auto-exchange it on startup.
+- If auto-exchange cannot complete, your old key is left in place and the instance will prompt you to retry activation manually.
+- In the v6 license panel, you can paste either:
+  - a Pulse v6 activation key, or
+  - a valid Pulse v5 Pro/Lifetime license key, which Pulse will try to exchange automatically
+- If the exchange service cannot complete the migration, retrieve the migrated activation key from your Pulse account or contact support.
+
+Practical recommendation:
+
+- Before upgrading, keep console access and your original purchase email/license record available in case the exchange service is unavailable and you need the account fallback path.
+
 ### Multi-Tenant (Opt-In)
 
 Multi-tenant mode is opt-in and additionally license-gated:
