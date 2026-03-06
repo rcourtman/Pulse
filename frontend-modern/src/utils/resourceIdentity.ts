@@ -1,4 +1,4 @@
-import type { Agent } from '@/types/api';
+import type { Agent, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
   getActionableAgentIdFromResource,
@@ -127,6 +127,32 @@ export const getAgentLikeIdentityAliases = (agent: Agent): string[] => {
     asTrimmedString(platformAgent?.hostname),
   ]);
 };
+
+export const getAgentLikeMetadataIds = (agent: Agent): string[] => {
+  const agentRecord = agent as unknown as Record<string, unknown>;
+  const discoveryTarget = agentRecord.discoveryTarget as Record<string, unknown> | undefined;
+  const platformData = agentRecord.platformData as Record<string, unknown> | undefined;
+  const platformAgent = platformData?.agent as Record<string, unknown> | undefined;
+
+  return dedupeTrimmedValues([
+    asTrimmedString(agent.id),
+    asTrimmedString(discoveryTarget?.resourceId),
+    asTrimmedString(discoveryTarget?.agentId),
+    asTrimmedString(platformData?.linkedAgentId),
+    asTrimmedString(platformAgent?.agentId),
+    asTrimmedString(platformData?.agentId),
+  ]);
+};
+
+export const getInfrastructureMetadataId = (node: Pick<Node, 'id' | 'name' | 'linkedAgentId'>, agent?: Agent): string => {
+  const agentMetadataId = agent ? getAgentLikeMetadataIds(agent)[0] : undefined;
+  return agentMetadataId || asTrimmedString(node.linkedAgentId) || node.id || node.name;
+};
+
+export const getInfrastructureDiscoveryHostname = (
+  node: Pick<Node, 'name'>,
+  agent?: Pick<Agent, 'hostname'>,
+): string => asTrimmedString(agent?.hostname) || node.name;
 
 export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIdentityRow[] => {
   const rows: ResourceIdentityRow[] = [];

@@ -7,6 +7,10 @@ import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
 import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
 import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import {
+  getInfrastructureDiscoveryHostname,
+  getInfrastructureMetadataId,
+} from '@/utils/resourceIdentity';
 
 interface InfrastructureDetailsDrawerProps {
   node: Node;
@@ -17,8 +21,8 @@ interface InfrastructureDetailsDrawerProps {
 
 export const InfrastructureDetailsDrawer: Component<InfrastructureDetailsDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
-  const metadataId = () => props.agent?.id || props.node.linkedAgentId || props.node.id || props.node.name;
-  const discoveryHostname = () => props.agent?.hostname || props.node.name;
+  const metadataId = () => getInfrastructureMetadataId(props.node, props.agent);
+  const discoveryHostname = () => getInfrastructureDiscoveryHostname(props.node, props.agent);
 
   const switchTab = (tab: 'overview' | 'discovery') => {
     setActiveTab(tab);

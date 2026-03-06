@@ -118,4 +118,38 @@ describe('InfrastructureDetailsDrawer', () => {
       }),
     );
   });
+
+  it('falls back to canonical agent metadata ids when the agent id is not the best identifier', async () => {
+    discoveryTabMock.mockClear();
+    webInterfaceUrlFieldMock.mockClear();
+
+    render(() => (
+      <InfrastructureDetailsDrawer
+        node={makeNode({ linkedAgentId: 'agent-linked-1' })}
+        agent={
+          makeAgent({
+            id: 'agent-explicit-1',
+            hostname: 'pve1.explicit',
+            platformData: {
+              linkedAgentId: 'agent-linked-1',
+            },
+          }) as Agent
+        }
+      />
+    ));
+
+    expect(webInterfaceUrlFieldMock).toHaveBeenCalledWith(
+      expect.objectContaining({ metadataId: 'agent-explicit-1' }),
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Discovery' }));
+
+    expect(discoveryTabMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent-explicit-1',
+        resourceId: 'agent-explicit-1',
+        hostname: 'pve1.explicit',
+      }),
+    );
+  });
 });

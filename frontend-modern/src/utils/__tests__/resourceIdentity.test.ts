@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   getAgentLikeIdentityAliases,
+  getAgentLikeMetadataIds,
+  getInfrastructureDiscoveryHostname,
+  getInfrastructureMetadataId,
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
 } from '@/utils/resourceIdentity';
-import type { Agent } from '@/types/api';
+import type { Agent, Node } from '@/types/api';
 
 const makeResource = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -158,5 +161,53 @@ describe('resourceIdentity', () => {
       'tower.local',
       'tower.internal',
     ]);
+  });
+
+  it('builds agent-like metadata ids without hostnames', () => {
+    const agent = {
+      id: 'agent-explicit',
+      hostname: 'tower.local',
+      status: 'online',
+      lastSeen: Date.now(),
+      platformData: {
+        linkedAgentId: 'agent-linked',
+        agent: {
+          agentId: 'agent-platform',
+          hostname: 'tower.internal',
+        },
+      },
+      discoveryTarget: {
+        resourceType: 'agent',
+        resourceId: 'agent-discovery',
+        agentId: 'agent-discovery',
+      },
+    } as unknown as Agent;
+
+    expect(getAgentLikeMetadataIds(agent)).toEqual([
+      'agent-explicit',
+      'agent-discovery',
+      'agent-linked',
+      'agent-platform',
+    ]);
+  });
+
+  it('resolves infrastructure metadata ids and discovery hostnames', () => {
+    const node = {
+      id: 'node-1',
+      name: 'pve1',
+      linkedAgentId: 'agent-linked',
+    } as Pick<Node, 'id' | 'name' | 'linkedAgentId'>;
+
+    const agent = {
+      id: 'agent-explicit',
+      hostname: 'pve1.local',
+      status: 'online',
+      lastSeen: Date.now(),
+    } as Agent;
+
+    expect(getInfrastructureMetadataId(node, agent)).toBe('agent-explicit');
+    expect(getInfrastructureMetadataId(node)).toBe('agent-linked');
+    expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('pve1.local');
+    expect(getInfrastructureDiscoveryHostname({ name: 'pve1' })).toBe('pve1');
   });
 });
