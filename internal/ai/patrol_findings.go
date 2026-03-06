@@ -1525,10 +1525,6 @@ func isValidJSON(s string) bool {
 	return json.Unmarshal([]byte(trimmed), &v) == nil
 }
 
-func verifyBackupFresh(snap models.StateSnapshot, guestID string) (bool, error) {
-	return verifyBackupFreshState(newPatrolRuntimeState(snap), guestID)
-}
-
 func verifyBackupFreshState(snap patrolRuntimeState, guestID string) (bool, error) {
 	vmID := strings.TrimSpace(guestID)
 	if vmID == "" {
@@ -1546,10 +1542,6 @@ func verifyBackupFreshState(snap patrolRuntimeState, guestID string) (bool, erro
 		return true, nil
 	}
 	return false, nil
-}
-
-func verifyMetricRecovered(snap models.StateSnapshot, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
-	return verifyMetricRecoveredState(newPatrolRuntimeState(snap), thresholds, key, resourceID, resourceType)
 }
 
 func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
