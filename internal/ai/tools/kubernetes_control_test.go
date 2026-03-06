@@ -13,6 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func newConfiguredKubernetesExecutor(snapshot models.StateSnapshot, mutate func(*ExecutorConfig)) *PulseToolExecutor {
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(snapshot)
+
+	cfg := ExecutorConfig{UnifiedResourceProvider: adapter}
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	return NewPulseToolExecutor(cfg)
+}
+
 func TestValidateKubernetesResourceID(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -60,7 +71,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, cluster, err := exec.findAgentForKubernetesCluster("nonexistent")
 		assert.Error(t, err)
 		assert.Empty(t, agentID)
@@ -74,7 +85,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: ""},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, cluster, err := exec.findAgentForKubernetesCluster("cluster-1")
 		assert.Error(t, err)
 		assert.Empty(t, agentID)
@@ -88,7 +99,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, cluster, err := exec.findAgentForKubernetesCluster("c1")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
@@ -102,7 +113,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", DisplayName: "Production", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, _, err := exec.findAgentForKubernetesCluster("Production")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
@@ -114,7 +125,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", CustomDisplayName: "My Cluster", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+		exec := newConfiguredKubernetesExecutor(state, nil)
 		agentID, _, err := exec.findAgentForKubernetesCluster("My Cluster")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
@@ -126,10 +137,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", CustomDisplayName: "My Cluster", AgentID: "agent-1", Server: "https://k8s.example", Context: "prod"},
 			},
 		}
-		adapter := unifiedresources.NewMonitorAdapter(nil)
-		adapter.PopulateFromSnapshot(snapshot)
-
-		exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
+		exec := newConfiguredKubernetesExecutor(snapshot, nil)
 		agentID, cluster, err := exec.findAgentForKubernetesCluster("My Cluster")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
@@ -193,9 +201,8 @@ func TestExecuteKubernetesScale(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			ControlLevel:  ControlLevelReadOnly,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.ControlLevel = ControlLevelReadOnly
 		})
 		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -212,9 +219,8 @@ func TestExecuteKubernetesScale(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1", DisplayName: "Cluster One"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			ControlLevel:  ControlLevelControlled,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.ControlLevel = ControlLevelControlled
 		})
 		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -243,10 +249,9 @@ func TestExecuteKubernetesScale(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -289,10 +294,9 @@ func TestExecuteKubernetesRestart(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesRestart(ctx, map[string]interface{}{
 			"cluster":    "cluster-1",
@@ -333,10 +337,9 @@ func TestExecuteKubernetesDeletePod(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesDeletePod(ctx, map[string]interface{}{
 			"cluster": "cluster-1",
@@ -378,10 +381,9 @@ func TestExecuteKubernetesExec(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
 			"cluster": "cluster-1",
@@ -410,10 +412,9 @@ func TestExecuteKubernetesExec(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
 			"cluster":   "cluster-1",
@@ -443,10 +444,9 @@ func TestExecuteKubernetesExec(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
 			"cluster": "cluster-1",
@@ -486,10 +486,9 @@ func TestExecuteKubernetesExec(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelControlled,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelControlled
 		})
 
 		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
@@ -538,10 +537,9 @@ func TestExecuteKubernetesExec(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelControlled,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelControlled
 		})
 
 		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
@@ -596,10 +594,9 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelControlled, // Even in controlled mode
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelControlled
 		})
 		result, err := exec.executeKubernetesLogs(ctx, map[string]interface{}{
 			"cluster": "cluster-1",
@@ -629,10 +626,9 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesLogs(ctx, map[string]interface{}{
 			"cluster":   "cluster-1",
@@ -658,10 +654,9 @@ func TestExecuteKubernetesLogs(t *testing.T) {
 				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
 			},
 		}
-		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
 		})
 		result, err := exec.executeKubernetesLogs(ctx, map[string]interface{}{
 			"cluster": "cluster-1",

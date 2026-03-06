@@ -99,15 +99,18 @@ func TestPulseToolExecutor_ListTools(t *testing.T) {
 	stateTools := execWithState.ListTools()
 	// With state provider, pulse_query should be available
 	assert.True(t, containsTool(stateTools, "pulse_query"))
+	assert.False(t, containsTool(stateTools, "pulse_kubernetes"))
 
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(models.StateSnapshot{
-		Nodes: []models.Node{{ID: "node-1", Name: "pve1", Status: "online"}},
+		Nodes:              []models.Node{{ID: "node-1", Name: "pve1", Status: "online"}},
+		KubernetesClusters: []models.KubernetesCluster{{ID: "cluster-1", Name: "cluster-1"}},
 	})
 	execWithUnifiedReadState := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
 	unifiedTools := execWithUnifiedReadState.ListTools()
 	assert.True(t, containsTool(unifiedTools, "pulse_query"))
 	assert.True(t, containsTool(unifiedTools, "pulse_pmg"))
+	assert.True(t, containsTool(unifiedTools, "pulse_kubernetes"))
 }
 
 func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
@@ -127,15 +130,18 @@ func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
 	// And pulse_query should be available with state provider
 	assert.True(t, execWithProviders.isToolAvailable("pulse_query"))
 	assert.True(t, execWithProviders.isToolAvailable("pulse_pmg"))
+	assert.False(t, execWithProviders.isToolAvailable("pulse_kubernetes"))
 
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(models.StateSnapshot{
-		PMGInstances: []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+		PMGInstances:       []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+		KubernetesClusters: []models.KubernetesCluster{{ID: "cluster-1", Name: "cluster-1"}},
 	})
 	execWithUnifiedReadState := NewPulseToolExecutor(ExecutorConfig{
 		UnifiedResourceProvider: adapter,
 	})
 	assert.True(t, execWithUnifiedReadState.isToolAvailable("pulse_pmg"))
+	assert.True(t, execWithUnifiedReadState.isToolAvailable("pulse_kubernetes"))
 }
 
 func TestPulseToolExecutor_GetReadStatePrefersUnifiedResourceProvider(t *testing.T) {

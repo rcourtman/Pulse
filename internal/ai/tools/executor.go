@@ -541,10 +541,7 @@ func normalizeExecutorOrgID(orgID string) string {
 }
 
 func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
-	if e.readState != nil {
-		return e.readState
-	}
-	if readState, ok := e.unifiedResourceProvider.(unifiedresources.ReadState); ok && readState != nil {
+	if readState := e.getCanonicalReadState(); readState != nil {
 		return readState
 	}
 	if e.stateProvider == nil {
@@ -558,12 +555,26 @@ func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
 	return rr
 }
 
+func (e *PulseToolExecutor) getCanonicalReadState() unifiedresources.ReadState {
+	if e.readState != nil {
+		return e.readState
+	}
+	if readState, ok := e.unifiedResourceProvider.(unifiedresources.ReadState); ok && readState != nil {
+		return readState
+	}
+	return nil
+}
+
 func (e *PulseToolExecutor) hasReadState() bool {
 	if e.readState != nil || e.stateProvider != nil {
 		return true
 	}
 	readState, ok := e.unifiedResourceProvider.(unifiedresources.ReadState)
 	return ok && readState != nil
+}
+
+func (e *PulseToolExecutor) hasCanonicalReadState() bool {
+	return e.getCanonicalReadState() != nil
 }
 
 // SetContext sets the current execution context
@@ -749,7 +760,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_docker":
 		return e.hasReadState() || e.updatesProvider != nil
 	case "pulse_kubernetes":
-		return e.hasReadState()
+		return e.hasCanonicalReadState()
 	case "pulse_alerts":
 		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.hasReadState()
 	case "pulse_read":

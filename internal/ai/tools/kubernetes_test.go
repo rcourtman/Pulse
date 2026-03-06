@@ -6,9 +6,16 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newKubernetesExecutor(snapshot models.StateSnapshot) *PulseToolExecutor {
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(snapshot)
+	return NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
+}
 
 func TestExecuteGetKubernetesClusters(t *testing.T) {
 	ctx := context.Background()
@@ -17,7 +24,7 @@ func TestExecuteGetKubernetesClusters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "read state not available", result.Content[0].Text)
 
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec = newKubernetesExecutor(models.StateSnapshot{})
 	result, err = exec.executeGetKubernetesClusters(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "No Kubernetes clusters found. Kubernetes monitoring may not be configured.", result.Content[0].Text)
@@ -38,7 +45,7 @@ func TestExecuteGetKubernetesClusters(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesClusters(ctx)
 	require.NoError(t, err)
 
@@ -51,7 +58,7 @@ func TestExecuteGetKubernetesClusters(t *testing.T) {
 
 func TestExecuteGetKubernetesNodes(t *testing.T) {
 	ctx := context.Background()
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec := newKubernetesExecutor(models.StateSnapshot{})
 	result, err := exec.executeGetKubernetesNodes(ctx, map[string]interface{}{})
 	require.NoError(t, err)
 	assert.True(t, result.IsError)
@@ -76,7 +83,7 @@ func TestExecuteGetKubernetesNodes(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesNodes(ctx, map[string]interface{}{
 		"cluster": "Custom One",
 	})
@@ -90,7 +97,7 @@ func TestExecuteGetKubernetesNodes(t *testing.T) {
 
 func TestExecuteGetKubernetesPods(t *testing.T) {
 	ctx := context.Background()
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec := newKubernetesExecutor(models.StateSnapshot{})
 	result, err := exec.executeGetKubernetesPods(ctx, map[string]interface{}{})
 	require.NoError(t, err)
 	assert.True(t, result.IsError)
@@ -120,7 +127,7 @@ func TestExecuteGetKubernetesPods(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesPods(ctx, map[string]interface{}{
 		"cluster":   "cluster-1",
 		"namespace": "default",
@@ -138,7 +145,7 @@ func TestExecuteGetKubernetesPods(t *testing.T) {
 
 func TestExecuteGetKubernetesDeployments(t *testing.T) {
 	ctx := context.Background()
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
+	exec := newKubernetesExecutor(models.StateSnapshot{})
 	result, err := exec.executeGetKubernetesDeployments(ctx, map[string]interface{}{})
 	require.NoError(t, err)
 	assert.True(t, result.IsError)
@@ -157,7 +164,7 @@ func TestExecuteGetKubernetesDeployments(t *testing.T) {
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = newKubernetesExecutor(state)
 	result, err = exec.executeGetKubernetesDeployments(ctx, map[string]interface{}{
 		"cluster":   "cluster-1",
 		"namespace": "default",
