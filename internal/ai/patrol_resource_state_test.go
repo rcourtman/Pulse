@@ -40,7 +40,7 @@ func TestGetResourceCurrentState(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		stateText := ps.getResourceCurrentState(tc.alert, state)
+		stateText := ps.getResourceCurrentStateState(tc.alert, patrolRuntimeStateForTest(ps, state))
 		if !strings.Contains(stateText, tc.assert) {
 			t.Fatalf("expected %q in state text, got %q", tc.assert, stateText)
 		}
@@ -57,17 +57,17 @@ func TestGetCurrentMetricValue_DockerAndStorage(t *testing.T) {
 	}
 
 	storageAlert := AlertInfo{ResourceType: "storage", ResourceID: "storage-1"}
-	if got := ps.getCurrentMetricValue(storageAlert, state); got != 77 {
+	if got := ps.getCurrentMetricValueState(storageAlert, patrolRuntimeStateForTest(ps, state)); got != 77 {
 		t.Fatalf("expected storage usage 77, got %.1f", got)
 	}
 
 	dockerCPU := AlertInfo{ResourceType: "app-container", ResourceID: "dc-1", Type: "cpu"}
-	if got := ps.getCurrentMetricValue(dockerCPU, state); got != 12.3 {
+	if got := ps.getCurrentMetricValueState(dockerCPU, patrolRuntimeStateForTest(ps, state)); got != 12.3 {
 		t.Fatalf("expected docker cpu 12.3, got %.1f", got)
 	}
 
 	dockerMem := AlertInfo{ResourceType: "app-container", ResourceID: "dc-1", Type: "memory"}
-	if got := ps.getCurrentMetricValue(dockerMem, state); got != 45.6 {
+	if got := ps.getCurrentMetricValueState(dockerMem, patrolRuntimeStateForTest(ps, state)); got != 45.6 {
 		t.Fatalf("expected docker memory 45.6, got %.1f", got)
 	}
 }

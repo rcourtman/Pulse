@@ -59,7 +59,7 @@ func TestPatrolService_AskAIAboutAlert(t *testing.T) {
 	}
 	state := models.StateSnapshot{Nodes: []models.Node{{ID: "node1", Name: "node1", CPU: 10}}}
 
-	resolved, reason := ps.askAIAboutAlert(context.Background(), alert, state, aiSvc)
+	resolved, reason := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc)
 	if !resolved {
 		t.Fatalf("expected alert to resolve")
 	}
@@ -74,12 +74,12 @@ func TestPatrolService_GetResourceCurrentState(t *testing.T) {
 		Storage: []models.Storage{{ID: "s1", Name: "store1", Usage: 75.5, Status: "ok"}},
 	}
 	alert := AlertInfo{ResourceType: "storage", ResourceID: "s1", ResourceName: "store1"}
-	if got := ps.getResourceCurrentState(alert, state); got == "" {
+	if got := ps.getResourceCurrentStateState(alert, patrolRuntimeStateForTest(ps, state)); got == "" {
 		t.Fatalf("expected storage state")
 	}
 
 	alert = AlertInfo{ResourceType: "unknown"}
-	if got := ps.getResourceCurrentState(alert, state); got == "" {
+	if got := ps.getResourceCurrentStateState(alert, patrolRuntimeStateForTest(ps, state)); got == "" {
 		t.Fatalf("expected fallback for unknown resource")
 	}
 }

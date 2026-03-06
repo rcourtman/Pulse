@@ -1463,12 +1463,12 @@ func TestIsResourceOnline_Node(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "n1", ResourceType: "node"}
-	if !ps.isResourceOnline(alert, state) {
+	if !ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected node n1 to be online")
 	}
 
 	alert = AlertInfo{ResourceID: "n2", ResourceType: "node"}
-	if ps.isResourceOnline(alert, state) {
+	if ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected node n2 to be offline")
 	}
 }
@@ -1483,12 +1483,12 @@ func TestIsResourceOnline_VM(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "vm1", ResourceType: "vm"}
-	if !ps.isResourceOnline(alert, state) {
+	if !ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected VM vm1 to be online")
 	}
 
 	alert = AlertInfo{ResourceID: "vm2", ResourceType: "vm"}
-	if ps.isResourceOnline(alert, state) {
+	if ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected VM vm2 to be offline")
 	}
 }
@@ -1502,7 +1502,7 @@ func TestIsResourceOnline_SystemContainer(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "ct1", ResourceType: "system-container"}
-	if !ps.isResourceOnline(alert, state) {
+	if !ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected container ct1 to be online")
 	}
 }
@@ -1521,12 +1521,12 @@ func TestIsResourceOnline_AppContainer(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "dc1", ResourceType: "app-container"}
-	if !ps.isResourceOnline(alert, state) {
+	if !ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected docker container dc1 to be online")
 	}
 
 	alert = AlertInfo{ResourceID: "dc2", ResourceType: "app-container"}
-	if ps.isResourceOnline(alert, state) {
+	if ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected docker container dc2 to be offline")
 	}
 }
@@ -1541,12 +1541,12 @@ func TestIsResourceOnline_Agent(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "h1", ResourceType: "agent"}
-	if !ps.isResourceOnline(alert, state) {
+	if !ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected host h1 to be online")
 	}
 
 	alert = AlertInfo{ResourceID: "h2", ResourceType: "agent"}
-	if ps.isResourceOnline(alert, state) {
+	if ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected host h2 to be offline")
 	}
 }
@@ -1556,7 +1556,7 @@ func TestIsResourceOnline_UnknownType(t *testing.T) {
 	state := models.StateSnapshot{}
 
 	alert := AlertInfo{ResourceID: "x", ResourceType: "unknown"}
-	if ps.isResourceOnline(alert, state) {
+	if ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
 		t.Error("expected unknown type to return false")
 	}
 }
@@ -1572,13 +1572,13 @@ func TestGetCurrentMetricValue_Node(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "n1", ResourceType: "node", Type: "cpu"}
-	val := ps.getCurrentMetricValue(alert, state)
+	val := ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != 75.0 {
 		t.Errorf("expected CPU 75.0 (0.75 * 100), got %f", val)
 	}
 
 	alert.Type = "memory"
-	val = ps.getCurrentMetricValue(alert, state)
+	val = ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != 60.0 {
 		t.Errorf("expected memory 60.0, got %f", val)
 	}
@@ -1589,7 +1589,7 @@ func TestGetCurrentMetricValue_NotFound(t *testing.T) {
 	state := models.StateSnapshot{}
 
 	alert := AlertInfo{ResourceID: "missing", ResourceType: "node", Type: "cpu"}
-	val := ps.getCurrentMetricValue(alert, state)
+	val := ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != -1 {
 		t.Errorf("expected -1 for not found, got %f", val)
 	}
@@ -1608,13 +1608,13 @@ func TestGetCurrentMetricValue_AppContainer(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "dc1", ResourceType: "app-container", Type: "cpu"}
-	val := ps.getCurrentMetricValue(alert, state)
+	val := ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != 45.0 {
 		t.Errorf("expected docker CPU 45.0, got %f", val)
 	}
 
 	alert.Type = "memory"
-	val = ps.getCurrentMetricValue(alert, state)
+	val = ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != 30.0 {
 		t.Errorf("expected docker memory 30.0, got %f", val)
 	}
@@ -1629,13 +1629,13 @@ func TestGetCurrentMetricValue_Agent(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "h1", ResourceType: "agent", Type: "cpu"}
-	val := ps.getCurrentMetricValue(alert, state)
+	val := ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != 67.0 {
 		t.Errorf("expected host CPU 67.0, got %f", val)
 	}
 
 	alert.Type = "memory"
-	val = ps.getCurrentMetricValue(alert, state)
+	val = ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != 54.0 {
 		t.Errorf("expected host memory 54.0, got %f", val)
 	}
@@ -1650,7 +1650,7 @@ func TestGetCurrentMetricValue_Storage(t *testing.T) {
 	}
 
 	alert := AlertInfo{ResourceID: "s1", ResourceType: "storage", Type: "usage"}
-	val := ps.getCurrentMetricValue(alert, state)
+	val := ps.getCurrentMetricValueState(alert, patrolRuntimeStateForTest(ps, state))
 	if val != 72.5 {
 		t.Errorf("expected storage usage 72.5, got %f", val)
 	}
@@ -1777,7 +1777,7 @@ func TestShouldResolveAlert_StorageUsageDropped(t *testing.T) {
 		StartTime:    time.Now().Add(-1 * time.Hour),
 	}
 
-	shouldResolve, reason := ps.shouldResolveAlert(nil, alert, state, nil)
+	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
 	if !shouldResolve {
 		t.Error("expected alert to be resolved (usage dropped below threshold)")
 	}
@@ -1804,7 +1804,7 @@ func TestShouldResolveAlert_CPUDropped(t *testing.T) {
 		StartTime:    time.Now().Add(-30 * time.Minute),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlert(nil, alert, state, nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
 	if !shouldResolve {
 		t.Error("expected alert to be resolved (CPU dropped)")
 	}
@@ -1826,7 +1826,7 @@ func TestShouldResolveAlert_OfflineNowOnline(t *testing.T) {
 		StartTime:    time.Now().Add(-1 * time.Hour),
 	}
 
-	shouldResolve, reason := ps.shouldResolveAlert(nil, alert, state, nil)
+	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
 	if !shouldResolve {
 		t.Error("expected offline alert to be resolved (resource now online)")
 	}
@@ -1849,7 +1849,7 @@ func TestShouldResolveAlert_NoMatch(t *testing.T) {
 		StartTime:    time.Now().Add(-30 * time.Minute),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlert(nil, alert, state, nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
 	if shouldResolve {
 		t.Error("expected alert NOT to be resolved when resource not found")
 	}
@@ -1873,7 +1873,7 @@ func TestShouldResolveAlert_StorageStillHigh(t *testing.T) {
 		StartTime:    time.Now().Add(-1 * time.Hour),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlert(nil, alert, state, nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
 	if shouldResolve {
 		t.Error("expected alert NOT to be resolved (storage usage still above threshold)")
 	}
@@ -1900,7 +1900,7 @@ func TestShouldResolveAlert_CPUScaleRegression(t *testing.T) {
 		StartTime:    time.Now().Add(-30 * time.Minute),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlert(nil, alert, state, nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
 	if shouldResolve {
 		t.Error("expected CPU alert NOT to be resolved (95% is still above 90% threshold)")
 	}
@@ -1913,7 +1913,7 @@ func TestGetCurrentMetricValue_CPUScalePercent(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{{ID: "n1", CPU: 0.42}},
 	}
-	val := ps.getCurrentMetricValue(AlertInfo{ResourceID: "n1", ResourceType: "node", Type: "cpu"}, state)
+	val := ps.getCurrentMetricValueState(AlertInfo{ResourceID: "n1", ResourceType: "node", Type: "cpu"}, patrolRuntimeStateForTest(ps, state))
 	if val != 42.0 {
 		t.Errorf("node CPU: expected 42.0, got %f", val)
 	}
@@ -1922,7 +1922,7 @@ func TestGetCurrentMetricValue_CPUScalePercent(t *testing.T) {
 	state = models.StateSnapshot{
 		VMs: []models.VM{{ID: "vm1", CPU: 0.88}},
 	}
-	val = ps.getCurrentMetricValue(AlertInfo{ResourceID: "vm1", ResourceType: "vm", Type: "cpu"}, state)
+	val = ps.getCurrentMetricValueState(AlertInfo{ResourceID: "vm1", ResourceType: "vm", Type: "cpu"}, patrolRuntimeStateForTest(ps, state))
 	if val != 88.0 {
 		t.Errorf("VM CPU: expected 88.0, got %f", val)
 	}
@@ -1931,7 +1931,7 @@ func TestGetCurrentMetricValue_CPUScalePercent(t *testing.T) {
 	state = models.StateSnapshot{
 		Containers: []models.Container{{ID: "ct1", CPU: 0.15}},
 	}
-	val = ps.getCurrentMetricValue(AlertInfo{ResourceID: "ct1", ResourceType: "system-container", Type: "cpu"}, state)
+	val = ps.getCurrentMetricValueState(AlertInfo{ResourceID: "ct1", ResourceType: "system-container", Type: "cpu"}, patrolRuntimeStateForTest(ps, state))
 	if val != 15.0 {
 		t.Errorf("Container CPU: expected 15.0, got %f", val)
 	}
@@ -1943,7 +1943,7 @@ func TestReviewAndResolveAlerts_NilResolver(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{}
 
-	result := ps.reviewAndResolveAlerts(nil, state, true)
+	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true)
 	if result != 0 {
 		t.Errorf("expected 0 resolved with nil resolver, got %d", result)
 	}
@@ -1957,7 +1957,7 @@ func TestReviewAndResolveAlerts_NoActiveAlerts(t *testing.T) {
 	ps.mu.Unlock()
 
 	state := models.StateSnapshot{}
-	result := ps.reviewAndResolveAlerts(nil, state, true)
+	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true)
 	if result != 0 {
 		t.Errorf("expected 0 resolved with no alerts, got %d", result)
 	}
@@ -1984,7 +1984,7 @@ func TestReviewAndResolveAlerts_SkipsRecentAlerts(t *testing.T) {
 		Nodes: []models.Node{{ID: "n1", Name: "node-1", Status: "online"}},
 	}
 
-	result := ps.reviewAndResolveAlerts(nil, state, true)
+	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true)
 	if result != 0 {
 		t.Errorf("expected 0 resolved (alert too recent), got %d", result)
 	}

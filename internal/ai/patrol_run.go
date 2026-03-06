@@ -1674,10 +1674,6 @@ func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
 // reviewAndResolveAlerts uses AI to review active alerts and resolve those where the issue is fixed.
 // This is the core of autonomous alert management - the AI looks at each alert, checks current state,
 // and determines if the underlying issue has been resolved.
-func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models.StateSnapshot, llmAllowed bool) int {
-	return p.reviewAndResolveAlertsState(ctx, p.patrolRuntimeStateForSnapshot(state), llmAllowed)
-}
-
 func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state patrolRuntimeState, llmAllowed bool) int {
 	p.mu.RLock()
 	resolver := p.alertResolver
@@ -1746,10 +1742,6 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 
 // shouldResolveAlert determines if an alert should be auto-resolved based on current state.
 // Returns (shouldResolve, reason)
-func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
-	return p.shouldResolveAlertState(ctx, alert, p.patrolRuntimeStateForSnapshot(snap), aiService)
-}
-
 func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
 	// First, try smart heuristic checks based on alert type
 	switch alert.Type {
@@ -1796,10 +1788,6 @@ func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert Alert
 }
 
 // getCurrentMetricValue gets the current value of the metric that triggered the alert
-func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.StateSnapshot) float64 {
-	return p.getCurrentMetricValueState(alert, p.patrolRuntimeStateForSnapshot(snap))
-}
-
 type patrolAlertResourceState struct {
 	resourceType string
 	name         string
@@ -2055,10 +2043,6 @@ func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolR
 }
 
 // isResourceOnline checks if a resource that triggered an offline alert is now online
-func (p *PatrolService) isResourceOnline(alert AlertInfo, snap models.StateSnapshot) bool {
-	return p.isResourceOnlineState(alert, p.patrolRuntimeStateForSnapshot(snap))
-}
-
 func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntimeState) bool {
 	resource := lookupPatrolAlertResourceState(alert, snap)
 	if !resource.found {
@@ -2075,10 +2059,6 @@ func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntim
 }
 
 // askAIAboutAlert uses the AI to determine if an alert should be resolved
-func (p *PatrolService) askAIAboutAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
-	return p.askAIAboutAlertState(ctx, alert, p.patrolRuntimeStateForSnapshot(snap), aiService)
-}
-
 func (p *PatrolService) askAIAboutAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
 	// Build a focused prompt for the AI
 	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
@@ -2123,10 +2103,6 @@ Respond with ONLY one of:
 }
 
 // getResourceCurrentState returns a description of the resource's current state
-func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.StateSnapshot) string {
-	return p.getResourceCurrentStateState(alert, p.patrolRuntimeStateForSnapshot(snap))
-}
-
 func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patrolRuntimeState) string {
 	resource := lookupPatrolAlertResourceState(alert, snap)
 	if !resource.found {

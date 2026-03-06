@@ -24,7 +24,7 @@ func TestShouldResolveAlert_UsageAndMissing(t *testing.T) {
 	state := models.StateSnapshot{
 		Storage: []models.Storage{{ID: "storage-1", Usage: 80}},
 	}
-	resolved, reason := ps.shouldResolveAlert(context.Background(), usageAlert, state, nil)
+	resolved, reason := ps.shouldResolveAlertState(context.Background(), usageAlert, patrolRuntimeStateForTest(ps, state), nil)
 	if !resolved || !strings.Contains(reason, "usage dropped") {
 		t.Fatalf("expected usage alert to resolve, got resolved=%v reason=%q", resolved, reason)
 	}
@@ -37,7 +37,7 @@ func TestShouldResolveAlert_UsageAndMissing(t *testing.T) {
 		Threshold:  90,
 		StartTime:  now.Add(-25 * time.Hour),
 	}
-	resolved, reason = ps.shouldResolveAlert(context.Background(), missingAlert, state, nil)
+	resolved, reason = ps.shouldResolveAlertState(context.Background(), missingAlert, patrolRuntimeStateForTest(ps, state), nil)
 	if !resolved || !strings.Contains(reason, "resource no longer present") {
 		t.Fatalf("expected missing storage alert to resolve, got resolved=%v reason=%q", resolved, reason)
 	}
@@ -60,7 +60,7 @@ func TestShouldResolveAlert_CPUAndOffline(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{{ID: "node-1", Name: "node-1", CPU: 0.10, Status: "online"}},
 	}
-	resolved, reason := ps.shouldResolveAlert(context.Background(), cpuAlert, state, nil)
+	resolved, reason := ps.shouldResolveAlertState(context.Background(), cpuAlert, patrolRuntimeStateForTest(ps, state), nil)
 	if !resolved || !strings.Contains(reason, "cpu dropped") {
 		t.Fatalf("expected cpu alert to resolve, got resolved=%v reason=%q", resolved, reason)
 	}
@@ -74,7 +74,7 @@ func TestShouldResolveAlert_CPUAndOffline(t *testing.T) {
 		StartTime:    now.Add(-30 * time.Minute),
 	}
 	state.VMs = []models.VM{{ID: "vm-1", Name: "vm-1", Status: "running"}}
-	resolved, reason = ps.shouldResolveAlert(context.Background(), offlineAlert, state, nil)
+	resolved, reason = ps.shouldResolveAlertState(context.Background(), offlineAlert, patrolRuntimeStateForTest(ps, state), nil)
 	if !resolved || !strings.Contains(reason, "resource is now online") {
 		t.Fatalf("expected offline alert to resolve, got resolved=%v reason=%q", resolved, reason)
 	}
@@ -106,7 +106,7 @@ func TestReviewAndResolveAlerts(t *testing.T) {
 	}
 
 	state := models.StateSnapshot{Storage: []models.Storage{{ID: "storage-1", Usage: 70}}}
-	resolved := ps.reviewAndResolveAlerts(context.Background(), state, false)
+	resolved := ps.reviewAndResolveAlertsState(context.Background(), patrolRuntimeStateForTest(ps, state), false)
 	if resolved != 1 {
 		t.Fatalf("expected 1 alert resolved, got %d", resolved)
 	}
