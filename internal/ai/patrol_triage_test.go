@@ -465,7 +465,7 @@ func TestTriageQuietInfra(t *testing.T) {
 		thresholds: DefaultPatrolThresholds(),
 	}
 
-	triage := p.RunDeterministicTriage(context.Background(), models.StateSnapshot{}, nil, nil)
+	triage := p.runDeterministicTriageState(context.Background(), patrolRuntimeStateForTest(p, models.StateSnapshot{}), nil, nil)
 	if triage == nil {
 		t.Fatalf("expected triage result, got nil")
 	}
@@ -495,7 +495,7 @@ func TestTriageNotQuietWithActiveFindings(t *testing.T) {
 		thresholds: DefaultPatrolThresholds(),
 	}
 
-	triage := p.RunDeterministicTriage(context.Background(), models.StateSnapshot{}, nil, nil)
+	triage := p.runDeterministicTriageState(context.Background(), patrolRuntimeStateForTest(p, models.StateSnapshot{}), nil, nil)
 	if triage == nil {
 		t.Fatalf("expected triage result, got nil")
 	}
@@ -535,7 +535,7 @@ func TestTriageDeduplication(t *testing.T) {
 		},
 	}
 
-	triage := p.RunDeterministicTriage(context.Background(), state, nil, nil)
+	triage := p.runDeterministicTriageState(context.Background(), patrolRuntimeStateForTest(p, state), nil, nil)
 	if triage == nil {
 		t.Fatalf("expected triage result, got nil")
 	}
@@ -569,7 +569,7 @@ func TestTriageDeduplicationDistinctMetrics(t *testing.T) {
 		},
 	}
 
-	triage := p.RunDeterministicTriage(context.Background(), state, nil, nil)
+	triage := p.runDeterministicTriageState(context.Background(), patrolRuntimeStateForTest(p, state), nil, nil)
 	if triage == nil {
 		t.Fatalf("expected triage result, got nil")
 	}

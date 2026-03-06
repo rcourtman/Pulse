@@ -19,7 +19,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -1153,17 +1152,6 @@ type seedForecast struct {
 	name, resourceID, metric, severity string
 	daysToFull                         int
 	dailyChange, current               float64
-}
-
-// buildTriageSeedContext builds a focused seed context from deterministic triage output.
-// Unlike buildSeedContext, this includes only flagged resource details plus required context.
-func (p *PatrolService) buildTriageSeedContext(
-	triage *TriageResult,
-	snap models.StateSnapshot,
-	scope *PatrolScope,
-	guestIntel map[string]*GuestIntelligence,
-) (string, []string) {
-	return p.buildTriageSeedContextState(triage, p.patrolRuntimeStateForSnapshot(snap), scope, guestIntel)
 }
 
 func (p *PatrolService) buildTriageSeedContextState(

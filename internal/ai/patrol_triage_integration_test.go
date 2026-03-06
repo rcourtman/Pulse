@@ -14,7 +14,7 @@ func TestRunAIAnalysis_TriageQuietSkipsLLM(t *testing.T) {
 	ps := NewPatrolService(&Service{}, nil)
 	state := models.StateSnapshot{}
 
-	triage := ps.RunDeterministicTriage(context.Background(), state, nil, nil)
+	triage := ps.runDeterministicTriageState(context.Background(), patrolRuntimeStateForTest(ps, state), nil, nil)
 	if triage == nil {
 		t.Fatal("expected triage result")
 	}
@@ -43,7 +43,7 @@ func TestBuildTriageSeedContext_FlaggedOnly(t *testing.T) {
 	}
 	triage := triageIntegrationResult(state, flaggedIDs)
 
-	seed, _ := ps.buildTriageSeedContext(triage, state, nil, nil)
+	seed, _ := ps.buildTriageSeedContextState(triage, patrolRuntimeStateForTest(ps, state), nil, nil)
 	if !strings.Contains(seed, "# Deterministic Triage Results") {
 		t.Fatalf("expected triage briefing header, got:\n%s", seed)
 	}
@@ -69,7 +69,7 @@ func TestBuildTriageSeedContext_SmallOutput(t *testing.T) {
 	}
 	triage := triageIntegrationResult(state, flaggedIDs)
 
-	triageSeed, _ := ps.buildTriageSeedContext(triage, state, nil, nil)
+	triageSeed, _ := ps.buildTriageSeedContextState(triage, patrolRuntimeStateForTest(ps, state), nil, nil)
 	fullSeed, _ := ps.buildSeedContextState(patrolRuntimeStateForTest(ps, state), nil, nil)
 
 	if len(fullSeed) == 0 {

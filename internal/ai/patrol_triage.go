@@ -51,16 +51,6 @@ type TriageSummary struct {
 	FlaggedCount       int
 }
 
-// RunDeterministicTriage runs deterministic checks and returns triage output for seed/context use.
-func (p *PatrolService) RunDeterministicTriage(
-	ctx context.Context,
-	snap models.StateSnapshot,
-	scope *PatrolScope,
-	guestIntel map[string]*GuestIntelligence,
-) *TriageResult {
-	return p.runDeterministicTriageState(ctx, p.patrolRuntimeStateForSnapshot(snap), scope, guestIntel)
-}
-
 func (p *PatrolService) runDeterministicTriageState(
 	ctx context.Context,
 	snap patrolRuntimeState,
