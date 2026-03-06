@@ -4,6 +4,12 @@ import { AgentProfilesPanel } from '../AgentProfilesPanel';
 import type { Resource } from '@/types/resource';
 
 let mockResources: Resource[] = [];
+let mockWsStore: {
+  state: {
+    removedDockerHosts?: Array<{ id: string; removedAt: number }>;
+    removedKubernetesClusters?: Array<{ id: string; removedAt: number }>;
+  };
+};
 
 const listProfilesMock = vi.fn();
 const listAssignmentsMock = vi.fn();
@@ -14,6 +20,10 @@ vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     resources: () => mockResources,
   }),
+}));
+
+vi.mock('@/App', () => ({
+  useWebSocket: () => mockWsStore,
 }));
 
 vi.mock('@/stores/license', () => ({
@@ -107,8 +117,35 @@ const makeDockerRuntimeResource = (overrides: Partial<Resource> = {}): Resource 
   ...overrides,
 });
 
+const makeKubernetesClusterResource = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'k8s-cluster-resource-id',
+  type: 'k8s-cluster',
+  name: 'cluster-1',
+  displayName: 'Cluster One',
+  platformId: 'cluster-1',
+  platformType: 'k8s',
+  sourceType: 'agent',
+  status: 'healthy',
+  lastSeen: Date.now(),
+  identity: { hostname: 'cluster-1' },
+  kubernetes: {
+    clusterId: 'cluster-1',
+    agentId: 'cluster-agent-1',
+  },
+  platformData: {
+    kubernetes: { clusterId: 'cluster-1', agentId: 'cluster-agent-1' },
+  },
+  ...overrides,
+});
+
 beforeEach(() => {
   mockResources = [makeAgentResource()];
+  mockWsStore = {
+    state: {
+      removedDockerHosts: [],
+      removedKubernetesClusters: [],
+    },
+  };
   listProfilesMock.mockReset();
   listAssignmentsMock.mockReset();
   assignProfileMock.mockReset();
@@ -220,5 +257,42 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     await screen.findByText('PVE Node One');
     expect(screen.queryByText('Docker Runtime One')).not.toBeInTheDocument();
     expect(screen.getAllByRole('combobox')).toHaveLength(1);
+  });
+
+  it('excludes offline assignable resources from agent assignments', async () => {
+    mockResources = [makeAgentResource({ displayName: 'Offline Agent', status: 'offline' })];
+
+    render(() => <AgentProfilesPanel />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Offline Agent')).not.toBeInTheDocument();
+    });
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+  });
+
+  it('excludes monitoring-stopped docker runtimes from agent assignments', async () => {
+    mockResources = [makeDockerRuntimeResource()];
+    mockWsStore.state.removedDockerHosts = [
+      { id: 'docker-runtime-1', removedAt: Date.now() - 1_000 },
+    ];
+
+    render(() => <AgentProfilesPanel />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Docker Runtime One')).not.toBeInTheDocument();
+    });
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+  });
+
+  it('excludes monitoring-stopped kubernetes clusters from agent assignments', async () => {
+    mockResources = [makeKubernetesClusterResource()];
+    mockWsStore.state.removedKubernetesClusters = [{ id: 'cluster-1', removedAt: Date.now() }];
+
+    render(() => <AgentProfilesPanel />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Cluster One')).not.toBeInTheDocument();
+    });
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
   });
 });

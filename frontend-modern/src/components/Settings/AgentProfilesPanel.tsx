@@ -1,4 +1,5 @@
 import { Component, createSignal, createMemo, createEffect, onMount, Show, For } from 'solid-js';
+import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -28,6 +29,8 @@ import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentP
 import type { Resource } from '@/types/resource';
 import {
   getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
+  getActionableKubernetesClusterIdFromResource,
   isAgentProfileAssignableResource,
 } from '@/utils/agentResources';
 import Plus from 'lucide-solid/icons/plus';
@@ -41,6 +44,7 @@ import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 export const AgentProfilesPanel: Component = () => {
   const { resources } = useResources();
+  const { state } = useWebSocket();
   const resourcePriority = (resource: Resource): number => {
     switch (resource.type) {
       case 'agent':
@@ -114,10 +118,43 @@ export const AgentProfilesPanel: Component = () => {
   const [formDescription, setFormDescription] = createSignal('');
   const [formSettings, setFormSettings] = createSignal<Record<string, unknown>>({});
 
-  // Connected agents from WebSocket state
+  const connectedFromStatus = (status: string | undefined | null) => {
+    if (!status) return false;
+    const value = status.toLowerCase();
+    return value === 'online' || value === 'running' || value === 'healthy';
+  };
+
+  const removedDockerHostIds = createMemo(() => {
+    return new Set(
+      (state.removedDockerHosts || [])
+        .map((runtime) => runtime.id?.trim())
+        .filter((id): id is string => Boolean(id)),
+    );
+  });
+
+  const removedKubernetesClusterIds = createMemo(() => {
+    return new Set(
+      (state.removedKubernetesClusters || [])
+        .map((cluster) => cluster.id?.trim())
+        .filter((id): id is string => Boolean(id)),
+    );
+  });
+
   const connectedAgents = createMemo(() => {
     const sorted = resources()
       .filter(isAgentProfileAssignableResource)
+      .filter((resource) => connectedFromStatus(resource.status))
+      .filter((resource) => {
+        if (resource.type === 'docker-host') {
+          const runtimeId = getActionableDockerRuntimeIdFromResource(resource);
+          return !removedDockerHostIds().has(runtimeId);
+        }
+        if (resource.type === 'k8s-cluster') {
+          const clusterId = getActionableKubernetesClusterIdFromResource(resource);
+          return !removedKubernetesClusterIds().has(clusterId);
+        }
+        return true;
+      })
       .map((resource) => ({ resource, assignmentId: getActionableAgentIdFromResource(resource) }))
       .filter((entry): entry is { resource: Resource; assignmentId: string } =>
         Boolean(entry.assignmentId),

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
+  getActionableKubernetesClusterIdFromResource,
   getExplicitAgentIdFromResource,
   hasAgentFacet,
   isAgentFacetInfrastructureResource,
@@ -76,6 +78,28 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('agent-from-target');
+  });
+
+  it('resolves actionable docker runtime and kubernetes cluster ids', () => {
+    expect(
+      getActionableDockerRuntimeIdFromResource(
+        makeResource({
+          type: 'docker-host',
+          platformData: {
+            docker: { hostSourceId: 'docker-runtime-1' },
+          },
+        }),
+      ),
+    ).toBe('docker-runtime-1');
+
+    expect(
+      getActionableKubernetesClusterIdFromResource(
+        makeResource({
+          type: 'k8s-cluster',
+          kubernetes: { clusterId: 'cluster-1' },
+        }),
+      ),
+    ).toBe('cluster-1');
   });
 
   it('detects agent facets without relying on node-only typing', () => {

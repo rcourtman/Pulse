@@ -1,5 +1,9 @@
 import type { Resource, ResourceType } from '@/types/resource';
-import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
+import {
+  getAgentDiscoveryResourceId,
+  isAgentDiscoveryResourceType,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
 
 const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>([
   'agent',
@@ -49,6 +53,46 @@ export const getActionableAgentIdFromResource = (resource: Resource): string | u
   getExplicitAgentIdFromResource(resource) ||
   getAgentDiscoveryResourceId(resource.discoveryTarget) ||
   asTrimmedString(resource.discoveryTarget?.agentId);
+
+export const getActionableDockerRuntimeIdFromResource = (
+  resource: Resource,
+): string | undefined => {
+  const platformData = getPlatformDataRecord(resource);
+  const docker = asRecord(platformData?.docker);
+
+  if (
+    isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
+    resource.discoveryTarget?.resourceId
+  ) {
+    return resource.discoveryTarget.resourceId;
+  }
+
+  return (
+    asTrimmedString(docker?.hostSourceId) ||
+    asTrimmedString(platformData?.hostSourceId) ||
+    (resource.type === 'docker-host'
+      ? asTrimmedString(resource.discoveryTarget?.agentId) || resource.id
+      : undefined)
+  );
+};
+
+export const getActionableKubernetesClusterIdFromResource = (
+  resource: Resource,
+): string | undefined => {
+  const platformData = getPlatformDataRecord(resource);
+  const kubernetes = asRecord(platformData?.kubernetes);
+
+  if (resource.discoveryTarget?.resourceType === 'k8s' && resource.discoveryTarget.resourceId) {
+    return resource.discoveryTarget.resourceId;
+  }
+
+  return (
+    asTrimmedString(resource.kubernetes?.clusterId) ||
+    asTrimmedString(kubernetes?.clusterId) ||
+    asTrimmedString(platformData?.clusterId) ||
+    (resource.type === 'k8s-cluster' ? resource.id : undefined)
+  );
+};
 
 export const hasAgentFacet = (resource: Resource): boolean =>
   Boolean(
