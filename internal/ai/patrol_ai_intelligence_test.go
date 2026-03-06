@@ -422,6 +422,9 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	if err := knowledgeStore.SaveNote("node-1", "node-1", "node", "config", "Pinned", "keep settings"); err != nil {
 		t.Fatalf("failed to save knowledge note: %v", err)
 	}
+	if err := knowledgeStore.SaveNote("node-2", "node-2", "node", "config", "Ignore", "out of scope"); err != nil {
+		t.Fatalf("failed to save out-of-scope knowledge note: %v", err)
+	}
 	ps.knowledgeStore = knowledgeStore
 
 	// Set up readState so seedFindingsAndContext can build knownResources
@@ -452,6 +455,9 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	}
 	if strings.Contains(output, dismissedOutOfScope.Title) {
 		t.Fatalf("expected out-of-scope dismissed feedback to be omitted, got: %s", output)
+	}
+	if strings.Contains(output, "out of scope") {
+		t.Fatalf("expected out-of-scope knowledge note to be omitted, got: %s", output)
 	}
 	if !strings.Contains(output, "# User Notes") || !strings.Contains(output, "Saved Knowledge") {
 		t.Fatalf("expected knowledge context, got: %s", output)

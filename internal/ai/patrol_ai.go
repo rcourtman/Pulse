@@ -3119,8 +3119,12 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	p.mu.RUnlock()
 	if knowledgeStore != nil {
 		var knowledgeContext string
-		if scope != nil && len(scope.ResourceIDs) > 0 {
-			knowledgeContext = knowledgeStore.FormatForContextForResources(scope.ResourceIDs)
+		scopedKnowledgeIDs := patrolScopedKnowledgeResourceIDs(snap.readState)
+		if len(scopedKnowledgeIDs) == 0 && scope != nil {
+			scopedKnowledgeIDs = append(scopedKnowledgeIDs, scope.ResourceIDs...)
+		}
+		if len(scopedKnowledgeIDs) > 0 {
+			knowledgeContext = knowledgeStore.FormatForContextForResources(scopedKnowledgeIDs)
 		} else {
 			knowledgeContext = knowledgeStore.FormatAllForContext()
 		}
@@ -3182,6 +3186,46 @@ func patrolKnownResources(rs unifiedresources.ReadState) map[string]bool {
 		knownResources[k.Name()] = true
 	}
 	return knownResources
+}
+
+func patrolScopedKnowledgeResourceIDs(rs unifiedresources.ReadState) []string {
+	if rs == nil {
+		return nil
+	}
+	ids := make([]string, 0)
+	add := func(id string) {
+		if strings.TrimSpace(id) != "" {
+			ids = append(ids, id)
+		}
+	}
+	for _, n := range rs.Nodes() {
+		add(n.ID())
+	}
+	for _, vm := range rs.VMs() {
+		add(vm.ID())
+	}
+	for _, ct := range rs.Containers() {
+		add(ct.ID())
+	}
+	for _, s := range rs.StoragePools() {
+		add(s.ID())
+	}
+	for _, dh := range rs.DockerHosts() {
+		add(dh.ID())
+	}
+	for _, h := range rs.Hosts() {
+		add(h.ID())
+	}
+	for _, pbs := range rs.PBSInstances() {
+		add(pbs.ID())
+	}
+	for _, pmg := range rs.PMGInstances() {
+		add(pmg.ID())
+	}
+	for _, k := range rs.K8sClusters() {
+		add(k.ID())
+	}
+	return ids
 }
 
 func seedOutlierLabel(name string, cpu, mem, disk float64) (string, bool) {
