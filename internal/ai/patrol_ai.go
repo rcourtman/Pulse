@@ -1780,6 +1780,12 @@ type patrolGuestInventoryRow struct {
 	reachable                 string
 }
 
+type patrolPBSDatastoreRow struct {
+	instance, name string
+	usage          float64
+	used, total    int64
+}
+
 func patrolNodeInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolNodeInventoryRow {
 	rs := snap.readState
 	if rs != nil {
@@ -1904,6 +1910,49 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 		})
 	}
 	return guests
+}
+
+func patrolPBSDatastoreRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPBSDatastoreRow {
+	rs := snap.readState
+	if rs != nil {
+		rows := make([]patrolPBSDatastoreRow, 0)
+		for _, pbs := range rs.PBSInstances() {
+			if !seedIsInScope(scopedSet, pbs.ID()) {
+				continue
+			}
+			instanceName := strings.TrimSpace(pbs.Name())
+			if instanceName == "" {
+				instanceName = strings.TrimSpace(pbs.ID())
+			}
+			for _, ds := range pbs.Datastores() {
+				rows = append(rows, patrolPBSDatastoreRow{
+					instance: instanceName,
+					name:     ds.Name,
+					usage:    ds.UsagePercent,
+					used:     ds.Used,
+					total:    ds.Total,
+				})
+			}
+		}
+		return rows
+	}
+
+	rows := make([]patrolPBSDatastoreRow, 0)
+	for _, pbs := range snap.PBSInstances {
+		if !seedIsInScope(scopedSet, pbs.ID) {
+			continue
+		}
+		for _, ds := range pbs.Datastores {
+			rows = append(rows, patrolPBSDatastoreRow{
+				instance: pbs.Name,
+				name:     ds.Name,
+				usage:    ds.Usage,
+				used:     ds.Used,
+				total:    ds.Total,
+			})
+		}
+	}
+	return rows
 }
 
 func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
@@ -2292,16 +2341,17 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 	}
 
 	// --- PBS Instances ---
-	if cfg.AnalyzePBS && len(snap.PBSInstances) > 0 {
-		sb.WriteString("# PBS Datastores\n")
-		for _, pbs := range snap.PBSInstances {
-			for _, ds := range pbs.Datastores {
+	if cfg.AnalyzePBS {
+		rows := patrolPBSDatastoreRows(snap, scopedSet)
+		if len(rows) > 0 {
+			sb.WriteString("# PBS Datastores\n")
+			for _, row := range rows {
 				sb.WriteString(fmt.Sprintf("- %s/%s: %.0f%% used (%s / %s)\n",
-					pbs.Name, ds.Name, ds.Usage,
-					seedFormatBytes(ds.Used), seedFormatBytes(ds.Total)))
+					row.instance, row.name, row.usage,
+					seedFormatBytes(row.used), seedFormatBytes(row.total)))
 			}
+			sb.WriteString("\n")
 		}
-		sb.WriteString("\n")
 	}
 
 	return sb.String()

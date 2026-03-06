@@ -548,6 +548,27 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 	runtimeState.readState = &mockReadState{
 		nodes: []*unifiedresources.NodeView{&nodeView},
 		vms:   []*unifiedresources.VMView{&vmView},
+		pbs: []*unifiedresources.PBSInstanceView{
+			func() *unifiedresources.PBSInstanceView {
+				pbs := unifiedresources.NewPBSInstanceView(&unifiedresources.Resource{
+					ID:     "pbs-1",
+					Name:   "pbs-1",
+					Type:   unifiedresources.ResourceTypePBS,
+					Status: unifiedresources.StatusOnline,
+					PBS: &unifiedresources.PBSData{
+						Datastores: []unifiedresources.PBSDatastoreMeta{
+							{
+								Name:         "store",
+								Used:         550 * 1024 * 1024,
+								Total:        1000 * 1024 * 1024,
+								UsagePercent: 55,
+							},
+						},
+					},
+				})
+				return &pbs
+			}(),
+		},
 	}
 
 	ps.SetReadState(nil)
@@ -558,6 +579,8 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 		"| node-1 | online | 55% | 65% | 40%",
 		"# Guest Metrics",
 		"| vm-1 | VM | node-1 | - | 10% | 30% | 20% | running | - | 2h ago |",
+		"# PBS Datastores",
+		"pbs-1/store: 55% used",
 	} {
 		if !strings.Contains(out, part) {
 			t.Fatalf("expected runtime-state-backed output to contain %q, got: %s", part, out)
