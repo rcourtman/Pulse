@@ -1042,7 +1042,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       }
       // Remove docker runtime registration if present
       if (capabilities.includes('docker') && ids.dockerId) {
-        await MonitoringAPI.deleteDockerRuntime(ids.dockerId);
+        await MonitoringAPI.deleteDockerRuntime(ids.dockerId, { force: true });
         removed = true;
       }
       if (removed) {

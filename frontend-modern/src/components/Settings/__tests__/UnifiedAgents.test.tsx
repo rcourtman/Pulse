@@ -614,6 +614,29 @@ describe('UnifiedAgents managed agents table', () => {
     expect(notificationSuccessMock).toHaveBeenCalledWith('Agent removed from Pulse');
     expect(refetchResourcesMock).toHaveBeenCalled();
   });
+
+  it('force-removes docker runtimes from Pulse inventory', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    deleteDockerRuntimeMock.mockResolvedValue({});
+
+    const dockerHost = createDockerHost({ displayName: 'Tower', status: 'online' });
+    setupComponent([], [dockerHost]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tower')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(
+      () => expect(deleteDockerRuntimeMock).toHaveBeenCalledWith('docker-host-1', { force: true }),
+      { interval: 0 },
+    );
+    await waitFor(() => expect(screen.queryByText('Tower')).not.toBeInTheDocument(), {
+      interval: 0,
+    });
+    expect(notificationSuccessMock).toHaveBeenCalledWith('Agent removed from Pulse');
+  });
 });
 
 describe('UnifiedAgents platform commands', () => {
