@@ -107,6 +107,7 @@ func TestPulseToolExecutor_ListTools(t *testing.T) {
 	execWithUnifiedReadState := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
 	unifiedTools := execWithUnifiedReadState.ListTools()
 	assert.True(t, containsTool(unifiedTools, "pulse_query"))
+	assert.True(t, containsTool(unifiedTools, "pulse_pmg"))
 }
 
 func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
@@ -125,6 +126,16 @@ func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
 	assert.True(t, execWithProviders.isToolAvailable("pulse_metrics"))
 	// And pulse_query should be available with state provider
 	assert.True(t, execWithProviders.isToolAvailable("pulse_query"))
+	assert.True(t, execWithProviders.isToolAvailable("pulse_pmg"))
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		PMGInstances: []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
+	})
+	execWithUnifiedReadState := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: adapter,
+	})
+	assert.True(t, execWithUnifiedReadState.isToolAvailable("pulse_pmg"))
 }
 
 func TestPulseToolExecutor_GetReadStatePrefersUnifiedResourceProvider(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,6 +55,17 @@ func TestExecuteGetPMGStatus(t *testing.T) {
 	require.Len(t, resp.Instances, 1)
 	assert.Equal(t, "gateway-1", resp.Instances[0].Name)
 	assert.Equal(t, 1, resp.Total)
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(state)
+	exec = NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
+
+	result, err = exec.executeGetPMGStatus(ctx, map[string]interface{}{})
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+	require.Len(t, resp.Instances, 1)
+	assert.Equal(t, "gateway-1", resp.Instances[0].Name)
 }
 
 func TestExecuteGetMailStats(t *testing.T) {

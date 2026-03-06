@@ -51,7 +51,7 @@ func (e *PulseToolExecutor) executePMG(ctx context.Context, args map[string]inte
 }
 
 func (e *PulseToolExecutor) executeGetPMGStatus(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	if !e.hasReadState() {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -127,7 +127,7 @@ func (e *PulseToolExecutor) executeGetPMGStatus(_ context.Context, args map[stri
 }
 
 func (e *PulseToolExecutor) executeGetMailStats(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	if !e.hasReadState() {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -205,7 +205,7 @@ func (e *PulseToolExecutor) executeGetMailStats(_ context.Context, args map[stri
 }
 
 func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	if !e.hasReadState() {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -282,7 +282,7 @@ func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[str
 }
 
 func (e *PulseToolExecutor) executeGetSpamStats(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+	if !e.hasReadState() {
 		return NewTextResult("State provider not available."), nil
 	}
 

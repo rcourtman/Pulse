@@ -763,7 +763,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_knowledge":
 		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil || e.topologyProvider != nil
 	case "pulse_pmg":
-		return e.stateProvider != nil
+		return e.hasReadState()
 	case "patrol_report_finding", "patrol_resolve_finding", "patrol_get_findings":
 		// Always available when registered; handler checks patrolFindingCreator at runtime
 		return e.GetPatrolFindingCreator() != nil
