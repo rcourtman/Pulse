@@ -1,6 +1,5 @@
 export type SettingsTab =
   | 'proxmox'
-  | 'docker'
   | 'agents'
   | 'system-general'
   | 'system-network'
@@ -29,7 +28,10 @@ export type AgentKey = 'pve' | 'pbs' | 'pmg';
 export const DEFAULT_SETTINGS_TAB: SettingsTab = 'agents';
 const LEGACY_INFRASTRUCTURE_PREFIX = '/settings/infrastructure';
 const LEGACY_AGENTS_PREFIX = '/settings/workloads';
+const LEGACY_DOCKER_PREFIX = '/settings/workloads/docker';
 const PROXMOX_API_PREFIX = '/settings/infrastructure/api';
+const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
+const SECURITY_API_PREFIX = '/settings/security/api';
 
 const normalizeSettingsPath = (path: string): string => {
   const trimmed = (path || '').trim();
@@ -49,6 +51,9 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === LEGACY_INFRASTRUCTURE_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
   }
+  if (normalizedPath === LEGACY_DOCKER_PREFIX) {
+    return settingsTabPath(DEFAULT_SETTINGS_TAB);
+  }
   if (normalizedPath === `${LEGACY_INFRASTRUCTURE_PREFIX}/pve`) {
     return `${PROXMOX_API_PREFIX}/pve`;
   }
@@ -58,6 +63,9 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === `${LEGACY_INFRASTRUCTURE_PREFIX}/pmg`) {
     return `${PROXMOX_API_PREFIX}/pmg`;
   }
+  if (normalizedPath === LEGACY_INTEGRATIONS_API_PREFIX) {
+    return SECURITY_API_PREFIX;
+  }
   return normalizedPath;
 }
 
@@ -65,7 +73,6 @@ export function deriveTabFromPath(path: string): SettingsTab {
   const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
 
   if (canonicalPath === '/settings') return 'agents';
-  if (canonicalPath.includes('/settings/workloads/docker')) return 'docker';
   if (canonicalPath.includes(PROXMOX_API_PREFIX)) return 'proxmox';
 
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';
@@ -82,7 +89,8 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/organization/billing')) return 'organization-billing';
   if (canonicalPath.includes('/settings/organization')) return 'organization-overview';
 
-  if (canonicalPath.includes('/settings/integrations/api')) return 'api';
+  if (canonicalPath.includes(SECURITY_API_PREFIX)) return 'api';
+  if (canonicalPath.includes(LEGACY_INTEGRATIONS_API_PREFIX)) return 'api';
 
   if (canonicalPath.includes('/settings/security-overview')) return 'security-overview';
   if (canonicalPath.includes('/settings/security-auth')) return 'security-auth';
@@ -116,8 +124,6 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'agents';
     case 'proxmox':
       return 'proxmox';
-    case 'docker':
-      return 'docker';
     case 'system-recovery':
       return 'system-recovery';
     case 'system-updates':
@@ -134,6 +140,8 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'system-pro';
     case 'api':
       return 'api';
+    case 'docker':
+      return 'agents';
     case 'organization-overview':
       return 'organization-overview';
     case 'organization-access':
@@ -169,8 +177,6 @@ export function settingsTabPath(tab: SettingsTab): string {
       return PROXMOX_API_PREFIX;
     case 'agents':
       return '/settings';
-    case 'docker':
-      return '/settings/workloads/docker';
     case 'system-recovery':
       return '/settings/system-recovery';
     case 'organization-overview':
@@ -184,7 +190,7 @@ export function settingsTabPath(tab: SettingsTab): string {
     case 'organization-billing-admin':
       return '/settings/organization/billing-admin';
     case 'api':
-      return '/settings/integrations/api';
+      return SECURITY_API_PREFIX;
     case 'system-relay':
       return '/settings/system-relay';
     default:

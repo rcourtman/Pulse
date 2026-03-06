@@ -18,7 +18,6 @@ import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 
-import Container from 'lucide-solid/icons/container';
 import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
 import CreditCard from 'lucide-solid/icons/credit-card';
@@ -28,12 +27,11 @@ import type { SettingsTab } from './settingsTypes';
 
 export const baseTabGroups: SettingsNavGroup[] = [
   {
-    id: 'resources',
-    label: 'Resources',
+    id: 'infrastructure',
+    label: 'Infrastructure',
     items: [
-      { id: 'agents', label: 'Infrastructure', icon: Bot, iconProps: { strokeWidth: 2 } },
-      { id: 'proxmox', label: 'API Connections', icon: ProxmoxIcon },
-      { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
+      { id: 'agents', label: 'Unified Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
+      { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
     ],
   },
   {
@@ -85,22 +83,9 @@ export const baseTabGroups: SettingsNavGroup[] = [
     ],
   },
   {
-    id: 'integrations',
-    label: 'Integrations',
+    id: 'system',
+    label: 'System',
     items: [
-      {
-        id: 'api',
-        label: 'API Access',
-        icon: BadgeCheck,
-        requiredCapability: 'apiAccessRead',
-      },
-    ],
-  },
-  {
-    id: 'platform',
-    label: 'Platform Administration',
-    items: [
-      // System grouped tab items
       {
         id: 'system-general',
         label: 'General',
@@ -136,19 +121,27 @@ export const baseTabGroups: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
       },
       {
-        id: 'system-relay',
-        label: 'Remote Access',
-        icon: RadioTower,
-        iconProps: { strokeWidth: 2 },
-        features: ['relay'],
-        requiredCapability: 'relayRead',
+        id: 'system-pro',
+        label: 'Pulse Pro',
+        icon: PulseLogoIcon,
       },
-      // Security grouped tab items
+    ],
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    items: [
       {
         id: 'security-overview',
         label: 'Security Overview',
         icon: Shield,
         iconProps: { strokeWidth: 2 },
+      },
+      {
+        id: 'api',
+        label: 'API Access',
+        icon: BadgeCheck,
+        requiredCapability: 'apiAccessRead',
       },
       {
         id: 'security-auth',
@@ -194,9 +187,12 @@ export const baseTabGroups: SettingsNavGroup[] = [
         requiredCapability: 'auditWebhooksRead',
       },
       {
-        id: 'system-pro',
-        label: 'Pulse Pro',
-        icon: PulseLogoIcon,
+        id: 'system-relay',
+        label: 'Remote Access',
+        icon: RadioTower,
+        iconProps: { strokeWidth: 2 },
+        features: ['relay'],
+        requiredCapability: 'relayRead',
       },
     ],
   },

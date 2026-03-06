@@ -12,7 +12,6 @@ import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/api',
-  docker: '/settings/workloads/docker',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
@@ -26,7 +25,7 @@ const canonicalTabPaths = {
   'organization-billing': '/settings/organization/billing',
   'organization-billing-admin': '/settings/organization/billing-admin',
   'organization-sharing': '/settings/organization/sharing',
-  api: '/settings/integrations/api',
+  api: '/settings/security/api',
   'security-overview': '/settings/security-overview',
   'security-auth': '/settings/security-auth',
   'security-sso': '/settings/security-sso',
@@ -58,6 +57,7 @@ describe('settingsRouting', () => {
 
   it('resolves only canonical settings paths', () => {
     expect(resolveCanonicalSettingsPath('/settings/workloads')).toBe('/settings');
+    expect(resolveCanonicalSettingsPath('/settings/workloads/docker')).toBe('/settings');
     expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
       '/settings/system-updates',
     );
@@ -65,6 +65,7 @@ describe('settingsRouting', () => {
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe(
       '/settings/infrastructure/api/pve',
     );
+    expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe('/settings/security/api');
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
   });
 
@@ -86,7 +87,7 @@ describe('settingsRouting', () => {
       ['?tab=agents', 'agents'],
       ['?tab=workloads', 'agents'],
       ['?tab=proxmox', 'proxmox'],
-      ['?tab=docker', 'docker'],
+      ['?tab=docker', 'agents'],
       ['?tab=system-ai', 'system-ai'],
       ['?tab=system-relay', 'system-relay'],
       ['?tab=system-pro', 'system-pro'],

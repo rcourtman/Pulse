@@ -2,19 +2,14 @@ import type { SettingsHeaderMetaMap } from './settingsTypes';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {
-    title: 'API Connections',
+    title: 'Proxmox',
     description:
-      'Manage API-only integrations for Proxmox VE, Backup Server, and Mail Gateway.',
-  },
-  docker: {
-    title: 'Docker Workloads',
-    description:
-      'Configure Docker-specific workload controls and update behavior across monitored resources.',
+      'Add and manage Proxmox VE, Backup Server, and Mail Gateway connections when you need API-only monitoring.',
   },
   agents: {
     title: 'Infrastructure',
     description:
-      'Install and manage unified agents, the default monitoring gateway for infrastructure and workloads.',
+      'Install and manage unified agents, runtime behavior, and the recommended path for bringing infrastructure and workloads into Pulse.',
   },
   'system-general': {
     title: 'General Settings',
@@ -68,7 +63,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   api: {
     title: 'API Access',
-    description: 'Generate and manage scoped tokens for agents, automation, and integrations.',
+    description:
+      'Generate and manage scoped Pulse tokens for agents, automation, and external integrations.',
   },
   'security-overview': {
     title: 'Security Overview',

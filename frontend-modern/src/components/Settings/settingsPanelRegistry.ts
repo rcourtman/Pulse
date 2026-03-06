@@ -58,7 +58,6 @@ export type SettingsPanelRegistry = Record<SettingsDispatchableTab, SettingsPane
 
 export interface SettingsPanelRegistryContext {
   agentsPanel: Component;
-  dockerPanel: Component;
   systemGeneralPanel: Component;
   systemAiPanel: Component;
   systemProPanel: Component;
@@ -82,9 +81,6 @@ export const createSettingsPanelRegistry = (
 ): SettingsPanelRegistry => ({
   agents: {
     component: context.agentsPanel,
-  },
-  docker: {
-    component: context.dockerPanel,
   },
   'system-general': {
     component: context.systemGeneralPanel,

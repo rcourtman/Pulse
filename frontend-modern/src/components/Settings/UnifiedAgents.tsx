@@ -1138,7 +1138,7 @@ export const UnifiedAgents: Component = () => {
                 onClick={() => navigate('/settings/infrastructure/api')}
                 class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100 underline"
               >
-                Need API-only setup? Open API Connections →
+                Need API-only setup? Open Proxmox →
               </button>
             </div>
           </div>

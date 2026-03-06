@@ -4,7 +4,7 @@ import type { SettingsTab } from './settingsRouting';
 
 export type { SettingsTab } from './settingsRouting';
 
-export type SettingsNavGroupId = 'resources' | 'organization' | 'integrations' | 'platform';
+export type SettingsNavGroupId = 'infrastructure' | 'organization' | 'system' | 'security';
 
 export interface SettingsNavItem {
   id: SettingsTab;

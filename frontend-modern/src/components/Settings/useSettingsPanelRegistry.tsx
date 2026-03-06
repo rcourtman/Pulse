@@ -116,22 +116,18 @@ interface UseSettingsPanelRegistryParams {
 export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams) {
   const settingsCapabilities = createMemo(() => params.securityStatus()?.settingsCapabilities ?? null);
 
-  const agentsPanel: Component = () => (
-    <>
-      <UnifiedAgents />
-      <AgentProfilesPanel />
-    </>
-  );
-
-  const dockerPanel: Component = () => (
-    <Card padding="lg" class="mb-6">
+  const DockerRuntimeSettingsCard: Component = () => (
+    <Card padding="lg">
       <div class="space-y-4">
         <div class="space-y-1">
-          <h3 class="text-base font-semibold text-base-content">Docker Settings</h3>
-          <p class="text-sm text-muted">Server-wide settings for Docker container management.</p>
+          <h3 class="text-base font-semibold text-base-content">Docker Runtime Controls</h3>
+          <p class="text-sm text-muted">
+            Manage server-wide Docker runtime behavior alongside the rest of your infrastructure
+            onboarding and monitoring setup.
+          </p>
         </div>
 
-        <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-border bg-surface-hover">
+        <div class="flex items-start justify-between gap-4 rounded-md border border-border bg-surface-hover p-4">
           <div class="flex-1 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content">Hide Docker Update Buttons</span>
@@ -159,9 +155,8 @@ export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams)
             </div>
             <p class="text-xs text-muted">
               When enabled, the "Update" button on Docker containers will be hidden across all
-              views. Update detection will still work, allowing you to see which containers have
-              updates available. Use this in production environments where you prefer Pulse to be
-              read-only.
+              views. Update detection still runs, so Pulse can continue showing which containers
+              have updates available.
             </p>
             <p class="text-xs text-muted mt-1">
               Can also be set via environment variable:{' '}
@@ -200,6 +195,14 @@ export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams)
         </div>
       </div>
     </Card>
+  );
+
+  const agentsPanel: Component = () => (
+    <div class="space-y-6">
+      <UnifiedAgents />
+      <DockerRuntimeSettingsCard />
+      <AgentProfilesPanel />
+    </div>
   );
 
   const systemAiPanel: Component = () => (
@@ -261,7 +264,6 @@ export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams)
   return createMemo(() =>
     createSettingsPanelRegistry({
       agentsPanel,
-      dockerPanel,
       systemGeneralPanel,
       systemAiPanel,
       systemProPanel,

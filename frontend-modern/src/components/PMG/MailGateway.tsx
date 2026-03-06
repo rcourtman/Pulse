@@ -424,7 +424,7 @@ const MailGateway: Component = () => {
                 </svg>
               }
               title="No Mail Gateways configured"
-              description="Add a Proxmox Mail Gateway via Settings → API Connections to start collecting mail analytics and security metrics."
+              description="Add a Proxmox Mail Gateway via Settings → Infrastructure → Proxmox to start collecting mail analytics and security metrics."
             />
           </Card>
         </Show>

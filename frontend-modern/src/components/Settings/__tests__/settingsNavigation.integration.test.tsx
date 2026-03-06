@@ -5,7 +5,6 @@ import { getSettingsTabSaveBehavior, shouldHideSettingsNavItem } from '../settin
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/api',
-  docker: '/settings/workloads/docker',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
@@ -19,7 +18,7 @@ const canonicalTabPaths = {
   'organization-billing': '/settings/organization/billing',
   'organization-billing-admin': '/settings/organization/billing-admin',
   'organization-sharing': '/settings/organization/sharing',
-  api: '/settings/integrations/api',
+  api: '/settings/security/api',
   'security-overview': '/settings/security-overview',
   'security-auth': '/settings/security-auth',
   'security-sso': '/settings/security-sso',
