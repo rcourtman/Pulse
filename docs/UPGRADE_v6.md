@@ -70,7 +70,7 @@ Pulse v6 feature gating is driven by the entitlements endpoint:
 
 - `GET /api/license/entitlements`
 
-If a trial is enabled and started, Pulse writes local billing-state (no phone-home) and entitlements reflect the trial lifecycle.
+For self-hosted v6, `POST /api/license/trial/start` initiates hosted signup rather than minting a local trial directly. Pulse only reflects trial lifecycle entitlements after the hosted control plane returns a signed activation token to `/auth/trial-activate`.
 
 #### v5 License Migration
 
