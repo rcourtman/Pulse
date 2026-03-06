@@ -960,15 +960,14 @@ func patrolLogResourceIDs(ids []string) []string {
 	return trimmed
 }
 
-// filterStateByScope filters a StateSnapshot to only include resources matching the scope.
-func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
-	filtered := p.filterStateByScopeState(p.patrolRuntimeStateForSnapshot(snap), scope).snapshot()
-	filtered.LastUpdate = snap.LastUpdate
-	return filtered
+type patrolScopeMatcher struct {
+	resourceIDSet map[string]bool
+	typeSet       map[string]bool
+	hasIDs        bool
+	hasTypes      bool
 }
 
-func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
-	// Build lookup sets for efficient matching
+func newPatrolScopeMatcher(scope PatrolScope) patrolScopeMatcher {
 	resourceIDSet := make(map[string]bool)
 	for _, id := range scope.ResourceIDs {
 		trimmed := strings.TrimSpace(id)
@@ -984,8 +983,6 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		if trimmed == "" {
 			return
 		}
-		// Strict v6 matching: only canonical patrol scope types are accepted.
-		// app-container and docker-host intentionally share docker-host resources.
 		switch trimmed {
 		case "docker-host", "app-container":
 			typeSet["docker-host"] = true
@@ -995,8 +992,6 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		case "system-container", "vm", "node", "storage", "agent", "pbs", "pmg", "physical_disk":
 			typeSet[trimmed] = true
 		default:
-			// Unknown/legacy values are preserved to fail closed in matching.
-			// This prevents accidental broadening when callers pass invalid types.
 			typeSet[trimmed] = true
 		}
 	}
@@ -1004,272 +999,324 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		addScopeType(t)
 	}
 
-	hasIDs := len(resourceIDSet) > 0
-	hasTypes := len(typeSet) > 0
+	return patrolScopeMatcher{
+		resourceIDSet: resourceIDSet,
+		typeSet:       typeSet,
+		hasIDs:        len(resourceIDSet) > 0,
+		hasTypes:      len(typeSet) > 0,
+	}
+}
 
-	matchesType := func(candidates ...string) bool {
-		if !hasTypes {
+func (m patrolScopeMatcher) matchesType(candidates ...string) bool {
+	if !m.hasTypes {
+		return true
+	}
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if m.typeSet[strings.ToLower(candidate)] {
 			return true
 		}
-		for _, candidate := range candidates {
-			if candidate == "" {
-				continue
-			}
-			if typeSet[strings.ToLower(candidate)] {
-				return true
+	}
+	return false
+}
+
+func (m patrolScopeMatcher) matchesID(candidates ...string) bool {
+	if !m.hasIDs {
+		return true
+	}
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if m.resourceIDSet[candidate] {
+			return true
+		}
+	}
+	return false
+}
+
+type patrolScopedFilterState struct {
+	filtered            patrolRuntimeState
+	includedResourceIDs map[string]bool
+	includedGuestVMIDs  map[int]bool
+}
+
+func newPatrolScopedFilterState(snap patrolRuntimeState) patrolScopedFilterState {
+	return patrolScopedFilterState{
+		filtered: patrolRuntimeState{
+			readState:               snap.readState,
+			unifiedResourceProvider: snap.unifiedResourceProvider,
+		},
+		includedResourceIDs: make(map[string]bool),
+		includedGuestVMIDs:  make(map[int]bool),
+	}
+}
+
+func (s *patrolScopedFilterState) includeResourceID(ids ...string) {
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		s.includedResourceIDs[id] = true
+	}
+}
+
+func (s *patrolScopedFilterState) includeGuestVMID(vmid int) {
+	if vmid > 0 {
+		s.includedGuestVMIDs[vmid] = true
+	}
+}
+
+func patrolDockerScopeName(d models.DockerHost) string {
+	hostName := d.CustomDisplayName
+	if hostName == "" {
+		hostName = d.DisplayName
+	}
+	if hostName == "" {
+		hostName = d.Hostname
+	}
+	return hostName
+}
+
+func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (models.DockerHost, []string, bool) {
+	if !matcher.matchesType("docker-host", "app-container") {
+		return models.DockerHost{}, nil, false
+	}
+
+	hostMatches := matcher.matchesID(d.ID, patrolDockerScopeName(d), d.Hostname, d.DisplayName, d.CustomDisplayName)
+	if !matcher.hasIDs {
+		included := make([]string, 0, len(d.Containers)+1)
+		if matcher.typeSet["docker-host"] || !matcher.hasTypes {
+			included = append(included, d.ID)
+		}
+		if matcher.typeSet["app-container"] || !matcher.hasTypes {
+			for _, c := range d.Containers {
+				included = append(included, c.ID)
 			}
 		}
+		return d, included, true
+	}
+
+	matchedContainers := make([]models.DockerContainer, 0)
+	for _, c := range d.Containers {
+		if matcher.matchesID(c.ID, c.Name) {
+			matchedContainers = append(matchedContainers, c)
+		}
+	}
+
+	if hostMatches {
+		included := make([]string, 0, len(d.Containers)+1)
+		if matcher.typeSet["docker-host"] || !matcher.hasTypes {
+			included = append(included, d.ID)
+		}
+		if matcher.typeSet["app-container"] || !matcher.hasTypes {
+			for _, c := range d.Containers {
+				included = append(included, c.ID)
+			}
+		}
+		return d, included, true
+	}
+	if len(matchedContainers) > 0 {
+		hostCopy := d
+		hostCopy.Containers = matchedContainers
+		included := make([]string, 0, len(matchedContainers))
+		for _, c := range matchedContainers {
+			included = append(included, c.ID)
+		}
+		return hostCopy, included, true
+	}
+
+	return models.DockerHost{}, nil, false
+}
+
+func scopePatrolPBSInstance(pbs models.PBSInstance, matcher patrolScopeMatcher) bool {
+	if !matcher.matchesType("pbs") {
 		return false
 	}
 
-	matchesID := func(candidates ...string) bool {
-		if !hasIDs {
-			return true
-		}
-		for _, candidate := range candidates {
-			if candidate == "" {
-				continue
-			}
-			if resourceIDSet[candidate] {
-				return true
-			}
-		}
-		return false
+	pbsName := pbs.Name
+	if pbsName == "" {
+		pbsName = pbs.Host
 	}
+	pbsMatches := matcher.matchesID(pbs.ID, pbs.Name, pbsName, pbs.Host)
+	if !matcher.hasIDs {
+		return true
+	}
+	if !pbsMatches {
+		for _, ds := range pbs.Datastores {
+			if matcher.matchesID(pbs.ID+":"+ds.Name, ds.Name) {
+				pbsMatches = true
+				break
+			}
+		}
+	}
+	if !pbsMatches {
+		for _, job := range pbs.BackupJobs {
+			if matcher.matchesID(pbs.ID+":job:"+job.ID, job.ID) {
+				pbsMatches = true
+				break
+			}
+		}
+	}
+	if !pbsMatches {
+		for _, job := range pbs.VerifyJobs {
+			if matcher.matchesID(pbs.ID+":verify:"+job.ID, job.ID) {
+				pbsMatches = true
+				break
+			}
+		}
+	}
+	return pbsMatches
+}
 
-	filtered := patrolRuntimeState{
-		readState:               snap.readState,
-		unifiedResourceProvider: snap.unifiedResourceProvider,
+func patrolKubernetesScopeName(k models.KubernetesCluster) string {
+	clusterName := k.CustomDisplayName
+	if clusterName == "" {
+		clusterName = k.DisplayName
 	}
-	includedResourceIDs := make(map[string]bool)
-	includedGuestVMIDs := make(map[int]bool)
-	includeResourceID := func(ids ...string) {
-		for _, id := range ids {
-			if strings.TrimSpace(id) == "" {
-				continue
-			}
-			includedResourceIDs[id] = true
-		}
+	if clusterName == "" {
+		clusterName = k.Name
 	}
-	includeGuestVMID := func(vmid int) {
-		if vmid > 0 {
-			includedGuestVMIDs[vmid] = true
-		}
-	}
+	return clusterName
+}
 
-	// Filter each resource type
-	for _, n := range snap.Nodes {
-		if matchesType("node") && matchesID(n.ID, n.Name) {
-			filtered.Nodes = append(filtered.Nodes, n)
-			includeResourceID(n.ID)
-		}
-	}
-	for _, vm := range snap.VMs {
-		if matchesType("vm") && matchesID(vm.ID, vm.Name) {
-			filtered.VMs = append(filtered.VMs, vm)
-			includeResourceID(vm.ID)
-			includeGuestVMID(vm.VMID)
-		}
-	}
-	for _, c := range snap.Containers {
-		if matchesType("system-container") && matchesID(c.ID, c.Name) {
-			filtered.Containers = append(filtered.Containers, c)
-			includeResourceID(c.ID)
-			includeGuestVMID(c.VMID)
-		}
-	}
-	for _, d := range snap.DockerHosts {
-		if !matchesType("docker-host", "app-container") {
-			continue
-		}
-
-		hostName := d.CustomDisplayName
-		if hostName == "" {
-			hostName = d.DisplayName
-		}
-		if hostName == "" {
-			hostName = d.Hostname
-		}
-
-		hostMatches := matchesID(d.ID, hostName, d.Hostname, d.DisplayName, d.CustomDisplayName)
-		if !hasIDs {
-			filtered.DockerHosts = append(filtered.DockerHosts, d)
-			if typeSet["docker-host"] || !hasTypes {
-				includeResourceID(d.ID)
-			}
-			if typeSet["app-container"] || !hasTypes {
-				for _, c := range d.Containers {
-					includeResourceID(c.ID)
-				}
-			}
-			continue
-		}
-
-		var matchedContainers []models.DockerContainer
-		for _, c := range d.Containers {
-			if matchesID(c.ID, c.Name) {
-				matchedContainers = append(matchedContainers, c)
-			}
-		}
-
-		if hostMatches {
-			filtered.DockerHosts = append(filtered.DockerHosts, d)
-			if typeSet["docker-host"] || !hasTypes {
-				includeResourceID(d.ID)
-			}
-			if typeSet["app-container"] || !hasTypes {
-				for _, c := range d.Containers {
-					includeResourceID(c.ID)
-				}
-			}
-			continue
-		}
-		if len(matchedContainers) > 0 {
-			hostCopy := d
-			hostCopy.Containers = matchedContainers
-			filtered.DockerHosts = append(filtered.DockerHosts, hostCopy)
-			for _, c := range matchedContainers {
-				includeResourceID(c.ID)
-			}
-		}
-	}
-	for _, s := range snap.Storage {
-		if matchesType("storage") && matchesID(s.ID, s.Name) {
-			filtered.Storage = append(filtered.Storage, s)
-			includeResourceID(s.ID)
-		}
-	}
-	for _, disk := range snap.PhysicalDisks {
-		if matchesType("physical_disk") && matchesID(disk.ID, disk.DevPath, disk.Model) {
-			filtered.PhysicalDisks = append(filtered.PhysicalDisks, disk)
-			includeResourceID(disk.ID, disk.DevPath)
-		}
-	}
-	for _, pbs := range snap.PBSInstances {
-		if !matchesType("pbs") {
-			continue
-		}
-
-		pbsName := pbs.Name
-		if pbsName == "" {
-			pbsName = pbs.Host
-		}
-		pbsMatches := matchesID(pbs.ID, pbs.Name, pbsName, pbs.Host)
-		if !hasIDs {
-			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
-			continue
-		}
-		if !pbsMatches {
-			for _, ds := range pbs.Datastores {
-				if matchesID(pbs.ID+":"+ds.Name, ds.Name) {
-					pbsMatches = true
-					break
-				}
-			}
-		}
-		if !pbsMatches {
-			for _, job := range pbs.BackupJobs {
-				if matchesID(pbs.ID+":job:"+job.ID, job.ID) {
-					pbsMatches = true
-					break
-				}
-			}
-		}
-		if !pbsMatches {
-			for _, job := range pbs.VerifyJobs {
-				if matchesID(pbs.ID+":verify:"+job.ID, job.ID) {
-					pbsMatches = true
-					break
-				}
-			}
-		}
-		if pbsMatches {
-			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
-			includeResourceID(pbs.ID)
-		}
-	}
-	for _, pmg := range snap.PMGInstances {
-		if !matchesType("pmg") {
-			continue
-		}
-		if matchesID(pmg.ID, pmg.Name, pmg.Host) {
-			filtered.PMGInstances = append(filtered.PMGInstances, pmg)
-			includeResourceID(pmg.ID)
-		}
-	}
-	for _, h := range snap.Hosts {
-		if matchesType("agent") && matchesID(h.ID, h.DisplayName, h.Hostname) {
-			filtered.Hosts = append(filtered.Hosts, h)
-			includeResourceID(h.ID)
-		}
-	}
-	for _, k := range snap.KubernetesClusters {
-		clusterName := k.CustomDisplayName
-		if clusterName == "" {
-			clusterName = k.DisplayName
-		}
-		if clusterName == "" {
-			clusterName = k.Name
-		}
-		if matchesType("k8s-cluster") && matchesID(k.ID, clusterName) {
-			filtered.KubernetesClusters = append(filtered.KubernetesClusters, k)
-			includeResourceID(k.ID)
-		}
-	}
-
+func copyScopedPatrolMetadata(dst *patrolRuntimeState, snap patrolRuntimeState, includedResourceIDs map[string]bool, includedGuestVMIDs map[int]bool) {
 	if len(snap.ActiveAlerts) > 0 {
-		filtered.ActiveAlerts = make([]models.Alert, 0, len(snap.ActiveAlerts))
+		dst.ActiveAlerts = make([]models.Alert, 0, len(snap.ActiveAlerts))
 		for _, alert := range snap.ActiveAlerts {
 			if includedResourceIDs[alert.ResourceID] {
-				filtered.ActiveAlerts = append(filtered.ActiveAlerts, alert)
+				dst.ActiveAlerts = append(dst.ActiveAlerts, alert)
 			}
 		}
 	}
 	if len(snap.RecentlyResolved) > 0 {
-		filtered.RecentlyResolved = make([]models.ResolvedAlert, 0, len(snap.RecentlyResolved))
+		dst.RecentlyResolved = make([]models.ResolvedAlert, 0, len(snap.RecentlyResolved))
 		for _, resolved := range snap.RecentlyResolved {
 			if includedResourceIDs[resolved.ResourceID] {
-				filtered.RecentlyResolved = append(filtered.RecentlyResolved, resolved)
+				dst.RecentlyResolved = append(dst.RecentlyResolved, resolved)
 			}
 		}
 	}
 	if len(snap.ConnectionHealth) > 0 {
-		filtered.ConnectionHealth = make(map[string]bool, len(snap.ConnectionHealth))
+		dst.ConnectionHealth = make(map[string]bool, len(snap.ConnectionHealth))
 		for resourceID, healthy := range snap.ConnectionHealth {
 			if includedResourceIDs[resourceID] {
-				filtered.ConnectionHealth[resourceID] = healthy
+				dst.ConnectionHealth[resourceID] = healthy
 			}
 		}
 	}
-	if len(includedGuestVMIDs) > 0 {
-		filtered.PVEBackups.BackupTasks = make([]models.BackupTask, 0, len(snap.PVEBackups.BackupTasks))
-		for _, backupTask := range snap.PVEBackups.BackupTasks {
-			if includedGuestVMIDs[backupTask.VMID] {
-				filtered.PVEBackups.BackupTasks = append(filtered.PVEBackups.BackupTasks, backupTask)
-			}
+	if len(includedGuestVMIDs) == 0 {
+		return
+	}
+
+	dst.PVEBackups.BackupTasks = make([]models.BackupTask, 0, len(snap.PVEBackups.BackupTasks))
+	for _, backupTask := range snap.PVEBackups.BackupTasks {
+		if includedGuestVMIDs[backupTask.VMID] {
+			dst.PVEBackups.BackupTasks = append(dst.PVEBackups.BackupTasks, backupTask)
 		}
-		filtered.PVEBackups.StorageBackups = make([]models.StorageBackup, 0, len(snap.PVEBackups.StorageBackups))
-		for _, storageBackup := range snap.PVEBackups.StorageBackups {
-			if includedGuestVMIDs[storageBackup.VMID] {
-				filtered.PVEBackups.StorageBackups = append(filtered.PVEBackups.StorageBackups, storageBackup)
-			}
+	}
+	dst.PVEBackups.StorageBackups = make([]models.StorageBackup, 0, len(snap.PVEBackups.StorageBackups))
+	for _, storageBackup := range snap.PVEBackups.StorageBackups {
+		if includedGuestVMIDs[storageBackup.VMID] {
+			dst.PVEBackups.StorageBackups = append(dst.PVEBackups.StorageBackups, storageBackup)
 		}
-		filtered.PVEBackups.GuestSnapshots = make([]models.GuestSnapshot, 0, len(snap.PVEBackups.GuestSnapshots))
-		for _, guestSnapshot := range snap.PVEBackups.GuestSnapshots {
-			if includedGuestVMIDs[guestSnapshot.VMID] {
-				filtered.PVEBackups.GuestSnapshots = append(filtered.PVEBackups.GuestSnapshots, guestSnapshot)
-			}
+	}
+	dst.PVEBackups.GuestSnapshots = make([]models.GuestSnapshot, 0, len(snap.PVEBackups.GuestSnapshots))
+	for _, guestSnapshot := range snap.PVEBackups.GuestSnapshots {
+		if includedGuestVMIDs[guestSnapshot.VMID] {
+			dst.PVEBackups.GuestSnapshots = append(dst.PVEBackups.GuestSnapshots, guestSnapshot)
 		}
-		filtered.PBSBackups = make([]models.PBSBackup, 0, len(snap.PBSBackups))
-		for _, backup := range snap.PBSBackups {
-			vmid, err := strconv.Atoi(backup.VMID)
-			if err == nil && includedGuestVMIDs[vmid] {
-				filtered.PBSBackups = append(filtered.PBSBackups, backup)
-			}
+	}
+	dst.PBSBackups = make([]models.PBSBackup, 0, len(snap.PBSBackups))
+	for _, backup := range snap.PBSBackups {
+		vmid, err := strconv.Atoi(backup.VMID)
+		if err == nil && includedGuestVMIDs[vmid] {
+			dst.PBSBackups = append(dst.PBSBackups, backup)
+		}
+	}
+}
+
+// filterStateByScope filters a StateSnapshot to only include resources matching the scope.
+func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
+	filtered := p.filterStateByScopeState(p.patrolRuntimeStateForSnapshot(snap), scope).snapshot()
+	filtered.LastUpdate = snap.LastUpdate
+	return filtered
+}
+
+func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
+	matcher := newPatrolScopeMatcher(scope)
+	filterState := newPatrolScopedFilterState(snap)
+
+	// Filter each resource type
+	for _, n := range snap.Nodes {
+		if matcher.matchesType("node") && matcher.matchesID(n.ID, n.Name) {
+			filterState.filtered.Nodes = append(filterState.filtered.Nodes, n)
+			filterState.includeResourceID(n.ID)
+		}
+	}
+	for _, vm := range snap.VMs {
+		if matcher.matchesType("vm") && matcher.matchesID(vm.ID, vm.Name) {
+			filterState.filtered.VMs = append(filterState.filtered.VMs, vm)
+			filterState.includeResourceID(vm.ID)
+			filterState.includeGuestVMID(vm.VMID)
+		}
+	}
+	for _, c := range snap.Containers {
+		if matcher.matchesType("system-container") && matcher.matchesID(c.ID, c.Name) {
+			filterState.filtered.Containers = append(filterState.filtered.Containers, c)
+			filterState.includeResourceID(c.ID)
+			filterState.includeGuestVMID(c.VMID)
+		}
+	}
+	for _, d := range snap.DockerHosts {
+		scopedHost, includeIDs, ok := scopePatrolDockerHost(d, matcher)
+		if ok {
+			filterState.filtered.DockerHosts = append(filterState.filtered.DockerHosts, scopedHost)
+			filterState.includeResourceID(includeIDs...)
+		}
+	}
+	for _, s := range snap.Storage {
+		if matcher.matchesType("storage") && matcher.matchesID(s.ID, s.Name) {
+			filterState.filtered.Storage = append(filterState.filtered.Storage, s)
+			filterState.includeResourceID(s.ID)
+		}
+	}
+	for _, disk := range snap.PhysicalDisks {
+		if matcher.matchesType("physical_disk") && matcher.matchesID(disk.ID, disk.DevPath, disk.Model) {
+			filterState.filtered.PhysicalDisks = append(filterState.filtered.PhysicalDisks, disk)
+			filterState.includeResourceID(disk.ID, disk.DevPath)
+		}
+	}
+	for _, pbs := range snap.PBSInstances {
+		if scopePatrolPBSInstance(pbs, matcher) {
+			filterState.filtered.PBSInstances = append(filterState.filtered.PBSInstances, pbs)
+			filterState.includeResourceID(pbs.ID)
+		}
+	}
+	for _, pmg := range snap.PMGInstances {
+		if matcher.matchesType("pmg") && matcher.matchesID(pmg.ID, pmg.Name, pmg.Host) {
+			filterState.filtered.PMGInstances = append(filterState.filtered.PMGInstances, pmg)
+			filterState.includeResourceID(pmg.ID)
+		}
+	}
+	for _, h := range snap.Hosts {
+		if matcher.matchesType("agent") && matcher.matchesID(h.ID, h.DisplayName, h.Hostname) {
+			filterState.filtered.Hosts = append(filterState.filtered.Hosts, h)
+			filterState.includeResourceID(h.ID)
+		}
+	}
+	for _, k := range snap.KubernetesClusters {
+		if matcher.matchesType("k8s-cluster") && matcher.matchesID(k.ID, patrolKubernetesScopeName(k)) {
+			filterState.filtered.KubernetesClusters = append(filterState.filtered.KubernetesClusters, k)
+			filterState.includeResourceID(k.ID)
 		}
 	}
 
-	return filtered.withDerivedProviders()
+	copyScopedPatrolMetadata(&filterState.filtered, snap, filterState.includedResourceIDs, filterState.includedGuestVMIDs)
+
+	return filterState.filtered.withDerivedProviders()
 }
 
 // GetStatus returns the current patrol status
