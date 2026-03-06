@@ -193,91 +193,7 @@ load_cloud_secrets() {
   fi
 }
 
-force_trial_expiry_on_container() {
-  ssh_cmd "pct exec ${PVE_CTID} -- sh -lc '
-set -eu
-if [ ! -f /etc/pulse/billing.json ]; then
-  echo \"missing /etc/pulse/billing.json\" >&2
-  exit 1
-fi
-tmp=\$(mktemp)
-jq '\''.subscription_state = \"trial\" | .trial_ends_at = ((now|floor)-7200) | .integrity = \"\"'\'' /etc/pulse/billing.json > \"\$tmp\"
-mv \"\$tmp\" /etc/pulse/billing.json
-systemctl restart pulse.service
-'"
-}
-
-verify_trial_expired_via_api() {
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-
-  local cookies_file="${tmp_dir}/cookies.txt"
-  local login_body="${tmp_dir}/login.json"
-  local entitlements_body="${tmp_dir}/entitlements.json"
-
-  local login_code
-  login_code="$(
-    curl -sS -o "${login_body}" -w '%{http_code}' \
-      -c "${cookies_file}" \
-      -H 'Content-Type: application/json' \
-      --data "{\"username\":\"${PULSE_E2E_USERNAME}\",\"password\":\"${PULSE_E2E_PASSWORD}\"}" \
-      "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/login"
-  )"
-  if [[ "${login_code}" != "200" ]]; then
-    echo "ERROR: lifecycle login failed with HTTP ${login_code}" >&2
-    exit 1
-  fi
-
-  local state=""
-  local attempts=0
-  while [[ "${attempts}" -lt 30 ]]; do
-    attempts=$((attempts + 1))
-    local code
-    code="$(
-      curl -sS -o "${entitlements_body}" -w '%{http_code}' \
-        -b "${cookies_file}" \
-        "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/license/entitlements"
-    )"
-    if [[ "${code}" == "200" ]]; then
-      state="$(jq -r '.subscription_state // empty' "${entitlements_body}")"
-      if [[ "${state}" == "expired" ]]; then
-        break
-      fi
-    fi
-    sleep 1
-  done
-
-  if [[ "${state}" != "expired" ]]; then
-    echo "ERROR: expected subscription_state=expired after forced trial expiry" >&2
-    cat "${entitlements_body}" >&2 || true
-    exit 1
-  fi
-
-  local trial_eligible valid days_remaining has_autofix
-  trial_eligible="$(jq -r 'if has("trial_eligible") then (.trial_eligible|tostring) else "" end' "${entitlements_body}")"
-  valid="$(jq -r 'if has("valid") then (.valid|tostring) else "" end' "${entitlements_body}")"
-  days_remaining="$(jq -r '.days_remaining // empty' "${entitlements_body}")"
-  has_autofix="$(jq -r '(.capabilities // []) | index("ai_autofix") != null' "${entitlements_body}")"
-  if [[ "${valid}" != "false" ]]; then
-    echo "ERROR: expected valid=false after trial expiry, got ${valid}" >&2
-    exit 1
-  fi
-  if [[ "${days_remaining}" != "0" ]]; then
-    echo "ERROR: expected days_remaining=0 after trial expiry, got ${days_remaining}" >&2
-    exit 1
-  fi
-  if [[ "${has_autofix}" != "false" ]]; then
-    echo "ERROR: expected ai_autofix capability removed after trial expiry" >&2
-    exit 1
-  fi
-  if [[ "${trial_eligible}" != "false" ]]; then
-    echo "ERROR: expected trial_eligible=false after trial expiry, got ${trial_eligible}" >&2
-    exit 1
-  fi
-  rm -rf "${tmp_dir}" >/dev/null 2>&1 || true
-}
-
-TOTAL_STEPS=9
+TOTAL_STEPS=8
 INFRA_JOURNEYS_AVAILABLE=false
 # TrueNAS requires both host AND API key; relay requires host.
 # At least one fully-configured journey must be present to add infra steps.
@@ -291,7 +207,7 @@ if [[ -n "${PULSE_E2E_RELAY_HOST}" ]]; then
 fi
 if [[ "${TRUENAS_READY}" == "true" || "${RELAY_READY}" == "true" ]]; then
   INFRA_JOURNEYS_AVAILABLE=true
-  TOTAL_STEPS=11
+  TOTAL_STEPS=10
 fi
 
 echo "[1/${TOTAL_STEPS}] Discovering container IP"
@@ -320,18 +236,13 @@ wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 wait_http_ready "http://127.0.0.1:${LOCAL_CP_PORT}/healthz"
 run_eval_scenarios "${TRIAL_SCENARIO}"
 
-echo "[7/${TOTAL_STEPS}] Forcing trial expiry and validating downgrade contract"
-force_trial_expiry_on_container
-wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
-verify_trial_expired_via_api
-
-echo "[8/${TOTAL_STEPS}] Restoring clean baseline for cloud lifecycle"
+echo "[7/${TOTAL_STEPS}] Restoring clean baseline for cloud lifecycle"
 rollback_and_start_services
 enable_cp_dockerless_provisioning
 wait_http_ready "http://127.0.0.1:${LOCAL_PULSE_PORT}/api/health"
 wait_http_ready "http://127.0.0.1:${LOCAL_CP_PORT}/healthz"
 
-echo "[9/${TOTAL_STEPS}] Running ${CLOUD_SCENARIOS}"
+echo "[8/${TOTAL_STEPS}] Running ${CLOUD_SCENARIOS}"
 run_eval_scenarios "${CLOUD_SCENARIOS}"
 
 # --- Infrastructure journeys (TrueNAS + relay) ---

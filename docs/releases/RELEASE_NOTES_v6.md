@@ -88,7 +88,7 @@ The license system was rebuilt from simple tier checks into a full entitlement f
 - **v5 → v6 license exchange bridge** — valid Pulse v5 Pro/Lifetime JWT-style licenses can now be exchanged into the v6 activation/grant model. Existing upgraded instances auto-exchange persisted v5 licenses on startup when no v6 activation state exists yet, and the v6 activation form can also accept a valid v5 key as migration input.
 - **Subscription state machine** with lifecycle states: `trial`, `active`, `grace`, `expired`, `suspended`, `canceled`. Each state defines full/degraded/locked operation behavior.
 - **Pluggable entitlement sources** — JWT-based for self-hosted deployments, database-backed for hosted/SaaS.
-- **Local trial lifecycle** — trial state managed locally via billing state files, no phone-home required. Trial countdown with `trial_expires_at` and `trial_days_remaining`.
+- **Hosted trial authority** — `POST /api/license/trial/start` now initiates hosted signup only. The local instance redeems signed activation tokens via `/auth/trial-activate`, and local billing state is cache/redeem state rather than trial issuance authority.
 - **Quantitative limit enforcement** for nodes and users, with warning and hard-block thresholds.
 - **Capability alias and deprecation framework** — legacy feature keys are transparently mapped to canonical replacements with deprecation warnings.
 - **Certificate Revocation List** cache with fail-open semantics and 72-hour staleness TTL.

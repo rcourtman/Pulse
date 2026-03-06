@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Live trial-signup contract probe for self-hosted Pulse + control-plane.
+# Live trial-signup initiation contract probe for self-hosted Pulse + control-plane.
 # Intended to run inside the target environment (for example inside an LXC).
 
 PULSE_BASE_URL="${PULSE_BASE_URL:-http://127.0.0.1:7655}"
@@ -25,6 +25,7 @@ cookies_file="${tmp_dir}/cookies.txt"
 login_body="${tmp_dir}/login.json"
 entitlements_body="${tmp_dir}/entitlements.json"
 start_body="${tmp_dir}/trial_start.json"
+second_start_body="${tmp_dir}/trial_start_second.json"
 
 wait_for_http() {
   local url="$1"
@@ -83,7 +84,7 @@ if [ "${trial_eligible}" != "true" ]; then
   exit 1
 fi
 
-echo "[4/6] Verify local trial start succeeds (no credit card required)"
+echo "[4/6] Verify hosted trial signup initiation returns a control-plane redirect"
 start_code="$(
   curl -sS -o "${start_body}" -w '%{http_code}' \
     -X POST \
@@ -91,15 +92,24 @@ start_code="$(
     -H "X-CSRF-Token: ${csrf_token}" \
     "${PULSE_BASE_URL}/api/license/trial/start"
 )"
-assert_code "200" "${start_code}" "POST /api/license/trial/start"
+assert_code "409" "${start_code}" "POST /api/license/trial/start"
 
-start_sub_state="$(jq -r '.subscription_state // empty' "${start_body}")"
-if [ "${start_sub_state}" != "trial" ]; then
-  echo "ERROR: expected subscription_state=trial, got ${start_sub_state:-<empty>}"
+start_code_name="$(jq -r '.code // empty' "${start_body}")"
+if [ "${start_code_name}" != "trial_signup_required" ]; then
+  echo "ERROR: expected code=trial_signup_required, got ${start_code_name:-<empty>}"
+  exit 1
+fi
+action_url="$(jq -r '.details.action_url // empty' "${start_body}")"
+if [ -z "${action_url}" ]; then
+  echo "ERROR: expected action_url in trial start response"
+  exit 1
+fi
+if ! printf '%s' "${action_url}" | grep -q '/start-pro-trial'; then
+  echo "ERROR: expected action_url to target hosted start-pro-trial page, got ${action_url}"
   exit 1
 fi
 
-echo "[5/6] Verify post-trial entitlements reflect active trial"
+echo "[5/6] Verify local entitlements remain unchanged before hosted activation"
 post_entitlements_code="$(
   curl -sS -o "${entitlements_body}" -w '%{http_code}' \
     -b "${cookies_file}" \
@@ -107,24 +117,34 @@ post_entitlements_code="$(
 )"
 assert_code "200" "${post_entitlements_code}" "GET /api/license/entitlements (post-trial)"
 post_trial_eligible="$(jq -r '.trial_eligible // empty' "${entitlements_body}")"
-if [ "${post_trial_eligible}" != "false" ]; then
-  echo "ERROR: expected trial_eligible=false after trial start"
+if [ "${post_trial_eligible}" != "true" ]; then
+  echo "ERROR: expected trial_eligible=true before hosted activation completes"
+  exit 1
+fi
+post_sub_state="$(jq -r '.subscription_state // empty' "${entitlements_body}")"
+if [ "${post_sub_state}" != "expired" ]; then
+  echo "ERROR: expected subscription_state=expired before hosted activation, got ${post_sub_state:-<empty>}"
   exit 1
 fi
 
-echo "[6/6] Verify second trial start is rejected (already used)"
+echo "[6/6] Verify duplicate initiation is rate limited"
 second_start_code="$(
-  curl -sS -o "${start_body}" -w '%{http_code}' \
+  curl -sS -o "${second_start_body}" -w '%{http_code}' \
     -X POST \
     -b "${cookies_file}" \
     -H "X-CSRF-Token: ${csrf_token}" \
     "${PULSE_BASE_URL}/api/license/trial/start"
 )"
-assert_code "409" "${second_start_code}" "POST /api/license/trial/start (second attempt)"
+assert_code "429" "${second_start_code}" "POST /api/license/trial/start (second attempt)"
+second_code_name="$(jq -r '.code // empty' "${second_start_body}")"
+if [ "${second_code_name}" != "trial_rate_limited" ]; then
+  echo "ERROR: expected code=trial_rate_limited on second attempt, got ${second_code_name:-<empty>}"
+  exit 1
+fi
 
-echo "PASS: trial signup contract validated"
+echo "PASS: hosted trial signup initiation contract validated"
 echo "  login_code=${login_code}"
 echo "  entitlements_before_code=${entitlements_code}"
-echo "  trial_start_code=${start_code} (state=${start_sub_state})"
+echo "  trial_start_code=${start_code} (code=${start_code_name})"
 echo "  post_trial_entitlements_code=${post_entitlements_code}"
-echo "  second_trial_start_code=${second_start_code}"
+echo "  second_trial_start_code=${second_start_code} (code=${second_code_name})"

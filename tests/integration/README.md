@@ -28,9 +28,10 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Logged-out login page (full page + form card)
   - Authenticated Settings → Authentication page
 - `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
-  - Start local 14-day Pro trial via API (no credit card required)
-  - Verify Pro entitlements activate with trial expiry/countdown state (not lifetime)
-  - Verify second trial start is rejected
+  - Start hosted Pro trial initiation via API
+  - Verify response points to hosted `/start-pro-trial`
+  - Verify local entitlements remain unchanged until activation
+  - Verify duplicate initiation is rate limited
 - `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
   - Public `/cloud/signup` form creates a real Stripe sandbox checkout session
   - Checkout completes and returns to hosted signup completion page
@@ -109,13 +110,13 @@ npm test
 ```
 
 ### Snapshot-Clean Proxmox LXC Trial SAT
-For real trial workflow validation against a fresh LXC each run:
+For hosted trial initiation validation against a fresh LXC each run:
 
 - Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
 - Probe script: `tests/integration/scripts/trial-signup-contract.sh`
 - Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
   - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
-  - Includes post-trial expiry downgrade verification and cloud subscription cancellation lifecycle verification
+  - Includes hosted trial initiation validation and cloud subscription cancellation lifecycle verification
 
 Example:
 ```bash

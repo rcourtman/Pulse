@@ -10,8 +10,13 @@ type EntitlementPayload = {
   is_lifetime?: boolean;
 };
 
+type TrialStartPayload = {
+  code?: string;
+  details?: Record<string, string>;
+};
+
 test.describe.serial('Trial signup return flow', () => {
-  test('starts local trial without credit card and activates entitlements', async ({ page }, testInfo) => {
+  test('initiates hosted trial signup and preserves local entitlements until activation', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only trial workflow coverage');
 
     await ensureAuthenticated(page);
@@ -29,60 +34,43 @@ test.describe.serial('Trial signup return flow', () => {
       'Expected trial_eligible=true before test.',
     ).toBe(true);
 
-    // Start trial via API (no credit card required).
+    // Start hosted trial via API.
     const startRes = await apiRequest(page, '/api/license/trial/start', {
       method: 'POST',
     });
-    expect(startRes.ok(), `trial start failed: HTTP ${startRes.status()}`).toBeTruthy();
+    expect(startRes.status(), `trial start failed: HTTP ${startRes.status()}`).toBe(409);
 
-    const startPayload = await startRes.json();
-    expect(startPayload.subscription_state).toBe('trial');
+    const startPayload = (await startRes.json()) as TrialStartPayload;
+    expect(startPayload.code).toBe('trial_signup_required');
 
-    // Verify entitlements reflect active trial.
-    await expect.poll(async () => {
-      const res = await apiRequest(page, '/api/license/entitlements');
-      if (!res.ok()) {
-        return 0;
-      }
-      const payload = (await res.json()) as EntitlementPayload;
-      return payload.trial_days_remaining ?? 0;
-    }, { timeout: 30_000 }).toBeGreaterThan(0);
+    const actionUrl = startPayload.details?.action_url ?? '';
+    expect(actionUrl).toContain('/start-pro-trial');
+    const parsedActionUrl = new URL(actionUrl);
+    expect(parsedActionUrl.searchParams.get('org_id')).toBe('default');
+    expect(parsedActionUrl.searchParams.get('return_url')).toContain('/auth/trial-activate');
 
+    // Verify entitlements remain unchanged until the hosted flow returns.
     const postRes = await apiRequest(page, '/api/license/entitlements');
     expect(postRes.ok(), `entitlements post-check failed: HTTP ${postRes.status()}`).toBeTruthy();
     const post = (await postRes.json()) as EntitlementPayload;
-    expect(post.subscription_state).toBe('trial');
-    expect(post.tier).toBe('pro');
-    expect(post.valid).toBe(true);
+    expect(post.subscription_state).toBe('expired');
+    expect(post.tier).toBe('free');
+    expect(post.valid).toBe(false);
     expect(post.is_lifetime ?? false).toBe(false);
-    expect(post.trial_eligible).toBe(false);
+    expect(post.trial_eligible).toBe(true);
 
-    // Verify UI reflects trial state.
+    // Verify UI still reflects the unactivated local state.
     await page.goto('/settings');
     await page.getByRole('button', { name: /pulse pro/i }).first().click();
     await expect(page.getByRole('heading', { name: 'Current License' })).toBeVisible();
+    await expect(page.getByText(/No Pro license is active/i)).toBeVisible();
 
-    const expiresValue = page
-      .locator('p')
-      .filter({ hasText: /^Expires$/ })
-      .first()
-      .locator('xpath=following-sibling::p[1]');
-    await expect(expiresValue).not.toHaveText(/Never/i);
-
-    const daysRemainingValue = page
-      .locator('p')
-      .filter({ hasText: /^Days Remaining$/ })
-      .first()
-      .locator('xpath=following-sibling::p[1]');
-    const daysRemainingText = (await daysRemainingValue.innerText()).trim();
-    const daysRemaining = Number.parseInt(daysRemainingText, 10);
-    expect(Number.isNaN(daysRemaining)).toBeFalsy();
-    expect(daysRemaining).toBeGreaterThan(0);
-
-    // Verify second trial start is rejected.
+    // Verify duplicate initiation is rate limited.
     const secondRes = await apiRequest(page, '/api/license/trial/start', {
       method: 'POST',
     });
-    expect(secondRes.status()).toBe(409);
+    expect(secondRes.status()).toBe(429);
+    const secondPayload = (await secondRes.json()) as TrialStartPayload;
+    expect(secondPayload.code).toBe('trial_rate_limited');
   });
 });

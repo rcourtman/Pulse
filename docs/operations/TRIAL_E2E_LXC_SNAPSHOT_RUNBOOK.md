@@ -6,10 +6,9 @@ Goal: every eval run starts from the exact same filesystem and runtime state, so
 
 ## Scope
 
-- Validates local trial start (no credit card required)
-- Validates post-trial entitlements and idempotency (second start rejected)
-- Validates real Stripe sandbox checkout completion for Pulse Pro trial
-- Validates post-trial downgrade behavior by forcing trial expiry and asserting entitlements
+- Validates hosted trial initiation from a self-hosted Pulse instance
+- Validates initiation does not mint local entitlements before activation
+- Validates initiation rate limiting and idempotent redirect behavior
 - Validates real Stripe sandbox checkout completion for Pulse Cloud signup
 - Validates cloud post-checkout lifecycle transition to canceled state
 - Validates post-checkout trial activation state in Pulse (`/settings?trial=activated`)
@@ -80,9 +79,9 @@ This script asserts:
 
 1. Login succeeds.
 2. Pre-trial entitlements are fetched and trial is eligible.
-3. `POST /api/license/trial/start` returns `200` and starts a local trial (no credit card required).
-4. Post-trial entitlements reflect active trial (`trial_eligible=false`).
-5. Second trial start is rejected with `409` (already used).
+3. `POST /api/license/trial/start` returns `409` with `trial_signup_required` and a hosted `action_url`.
+4. Post-initiation entitlements remain locally unactivated (`trial_eligible=true`, `subscription_state=expired`).
+5. Second immediate trial start is rejected with `429` (rate limited).
 
 Run inside container:
 
@@ -102,7 +101,7 @@ for i in 1 2 3; do
 done
 ```
 
-If each run prints `PASS: trial signup contract validated`, state pollution between runs is eliminated.
+If each run prints `PASS: hosted trial signup initiation contract validated`, state pollution between runs is eliminated.
 
 ## Full Sandbox E2E (Playwright)
 
@@ -127,6 +126,8 @@ PULSE_E2E_CP_BINARY=/tmp/pulse-control-plane-e2e-linux-amd64 \
 ```
 
 `run-lxc-sandbox-evals.sh` will copy the binary into `/opt/pulse-test/bin/pulse-control-plane` inside the container after each snapshot rollback.
+
+For full hosted Pro checkout completion, run a separate control-plane/browser flow that can consume the verification email and finish Stripe sandbox checkout. The local LXC probe above validates the self-hosted handoff contract only.
 
 Use Stripe sandbox test card defaults unless overridden:
 
