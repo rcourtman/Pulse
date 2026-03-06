@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
@@ -1576,6 +1577,21 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 			}
 			return value < thresholds.GuestMemWarning*margin, nil
 		case "disk-high":
+			if resourceType == "physical_disk" {
+				if disk, exists := patrolLookupPhysicalDiskVerificationState(snap, rid); exists {
+					if disk.health != "" && !strings.EqualFold(disk.health, "PASSED") {
+						return false, nil
+					}
+					if disk.wearout >= 0 && disk.wearout < 20 {
+						return false, nil
+					}
+					if disk.temperature > 55 {
+						return false, nil
+					}
+					return true, nil
+				}
+				break
+			}
 			if resourceType == "storage" {
 				if value, exists := metrics["usage"]; exists {
 					return value < thresholds.StorageWarning*margin, nil
@@ -1590,6 +1606,46 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 
 	// If we can't locate the resource, verification is inconclusive.
 	return false, fmt.Errorf("%w: resource not found for metric verification (%s)", aicontracts.ErrVerificationUnknown, rid)
+}
+
+type patrolPhysicalDiskVerification struct {
+	health      string
+	wearout     int
+	temperature int
+}
+
+func patrolLookupPhysicalDiskVerificationState(snap patrolRuntimeState, resourceID string) (patrolPhysicalDiskVerification, bool) {
+	if snap.unifiedResourceProvider != nil {
+		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			if disk.PhysicalDisk == nil {
+				continue
+			}
+			if strings.TrimSpace(disk.ID) != resourceID &&
+				strings.TrimSpace(disk.Name) != resourceID &&
+				strings.TrimSpace(disk.PhysicalDisk.DevPath) != resourceID &&
+				strings.TrimSpace(disk.PhysicalDisk.Model) != resourceID {
+				continue
+			}
+			return patrolPhysicalDiskVerification{
+				health:      strings.TrimSpace(disk.PhysicalDisk.Health),
+				wearout:     disk.PhysicalDisk.Wearout,
+				temperature: disk.PhysicalDisk.Temperature,
+			}, true
+		}
+	}
+	for _, disk := range snap.PhysicalDisks {
+		if strings.TrimSpace(disk.ID) != resourceID &&
+			strings.TrimSpace(disk.Model) != resourceID &&
+			strings.TrimSpace(disk.DevPath) != resourceID {
+			continue
+		}
+		return patrolPhysicalDiskVerification{
+			health:      strings.TrimSpace(disk.Health),
+			wearout:     disk.Wearout,
+			temperature: disk.Temperature,
+		}, true
+	}
+	return patrolPhysicalDiskVerification{}, false
 }
 
 func (p *PatrolService) verifyGuestReachability(ctx context.Context, snap models.StateSnapshot, guestID string) (bool, error) {
@@ -1640,9 +1696,10 @@ type patrolGuestRuntimeDetails struct {
 
 func patrolActionabilityResourceMetrics(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
 	if metrics, ok := patrolActionabilityMetricsFromReadState(snap); ok {
-		return metrics, true
+		return patrolAugmentActionabilityMetricsWithPhysicalDisks(metrics, snap), true
 	}
-	return patrolActionabilityMetricsFromSnapshot(snap)
+	metrics, ok := patrolActionabilityMetricsFromSnapshot(snap)
+	return patrolAugmentActionabilityMetricsWithPhysicalDisks(metrics, snap), ok
 }
 
 func patrolActionabilityMetricsFromReadState(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
@@ -1707,6 +1764,25 @@ func patrolActionabilityMetricsFromSnapshot(snap patrolRuntimeState) (map[string
 		patrolRegisterResourceMetrics(resourceMetrics, m, s.ID, s.Name)
 	}
 	return resourceMetrics, hasInventory
+}
+
+func patrolAugmentActionabilityMetricsWithPhysicalDisks(dest map[string]map[string]float64, snap patrolRuntimeState) map[string]map[string]float64 {
+	if dest == nil {
+		dest = make(map[string]map[string]float64)
+	}
+	if snap.unifiedResourceProvider != nil {
+		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			if disk.PhysicalDisk == nil {
+				continue
+			}
+			patrolRegisterResourceMetrics(dest, map[string]float64{}, disk.ID, disk.Name, disk.PhysicalDisk.DevPath, disk.PhysicalDisk.Model)
+		}
+		return dest
+	}
+	for _, disk := range snap.PhysicalDisks {
+		patrolRegisterResourceMetrics(dest, map[string]float64{}, disk.ID, disk.Model, disk.DevPath)
+	}
+	return dest
 }
 
 func patrolLookupGuestRuntimeDetails(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
@@ -1796,6 +1872,11 @@ func patrolLookupResourceMetricsForType(snap patrolRuntimeState, resourceID, res
 			return metrics, true
 		}
 		return patrolLookupStorageMetricsFromSnapshot(snap, resourceID)
+	case "physical_disk":
+		if metrics, ok := patrolLookupPhysicalDiskMetricsState(snap, resourceID); ok {
+			return metrics, true
+		}
+		return nil, false
 	default:
 		return patrolLookupResourceMetrics(snap, resourceID)
 	}
@@ -1916,6 +1997,13 @@ func patrolLookupStorageMetricsFromSnapshot(snap patrolRuntimeState, resourceID 
 		if s.ID == resourceID || s.Name == resourceID {
 			return map[string]float64{"usage": s.Usage}, true
 		}
+	}
+	return nil, false
+}
+
+func patrolLookupPhysicalDiskMetricsState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if _, ok := patrolLookupPhysicalDiskVerificationState(snap, resourceID); ok {
+		return map[string]float64{}, true
 	}
 	return nil, false
 }

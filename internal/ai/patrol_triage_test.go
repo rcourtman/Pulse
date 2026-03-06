@@ -321,6 +321,9 @@ func TestTriageDiskHealthChecksState_PrefersUnifiedProvider(t *testing.T) {
 	if len(flags) != 1 {
 		t.Fatalf("expected 1 disk-health flag from unified provider, got %d", len(flags))
 	}
+	if flags[0].ResourceType != "physical_disk" {
+		t.Fatalf("expected unified-provider disk flag to use physical_disk, got %#v", flags[0])
+	}
 	if !strings.Contains(flags[0].Reason, "Disk health reported FAILED") {
 		t.Fatalf("expected unified-provider flag to use disk health reason, got %#v", flags[0])
 	}
@@ -340,17 +343,17 @@ func TestTriageDiskHealthChecksState_UsesPhysicalDiskFallback(t *testing.T) {
 		t.Fatalf("expected 3 disk-health flags from physical-disk fallback, got %d", len(flags))
 	}
 	if triageFindFlag(flags, func(f TriageFlag) bool {
-		return f.ResourceID == "disk-1" && strings.Contains(f.Reason, "Disk health reported FAILED")
+		return f.ResourceID == "disk-1" && f.ResourceType == "physical_disk" && strings.Contains(f.Reason, "Disk health reported FAILED")
 	}) == nil {
 		t.Fatalf("expected failed health flag from physical-disk fallback, got %#v", flags)
 	}
 	if triageFindFlag(flags, func(f TriageFlag) bool {
-		return f.ResourceID == "disk-2" && strings.Contains(f.Reason, "wearout at 15% remaining")
+		return f.ResourceID == "disk-2" && f.ResourceType == "physical_disk" && strings.Contains(f.Reason, "wearout at 15% remaining")
 	}) == nil {
 		t.Fatalf("expected wearout flag from physical-disk fallback, got %#v", flags)
 	}
 	if triageFindFlag(flags, func(f TriageFlag) bool {
-		return f.ResourceID == "disk-3" && strings.Contains(f.Reason, "Disk temperature 60")
+		return f.ResourceID == "disk-3" && f.ResourceType == "physical_disk" && strings.Contains(f.Reason, "Disk temperature 60")
 	}) == nil {
 		t.Fatalf("expected temperature flag from physical-disk fallback, got %#v", flags)
 	}

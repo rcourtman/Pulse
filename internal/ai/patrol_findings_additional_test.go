@@ -439,6 +439,88 @@ func TestVerifyMetricRecoveredState_UsesTypedLookupWhenIDsCollide(t *testing.T) 
 	}
 }
 
+func TestVerifyMetricRecoveredState_UsesPhysicalDiskVerification(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	state.unifiedResourceProvider = &mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{
+					ID:   "disk-1",
+					Name: "disk-1",
+					Type: unifiedresources.ResourceTypePhysicalDisk,
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+						DevPath:     "/dev/sda",
+						Health:      "PASSED",
+						Wearout:     90,
+						Temperature: 40,
+					},
+				},
+			}
+		},
+	}
+
+	ok, err := verifyMetricRecoveredState(state, PatrolThresholds{}, "disk-high", "disk-1", "physical_disk")
+	if err != nil {
+		t.Fatalf("expected physical disk verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected healthy physical disk to verify as recovered")
+	}
+}
+
+func TestIsActionable_ReadStateWithPhysicalDiskInventoryDoesNotRejectDiskFinding(t *testing.T) {
+	patrol := NewPatrolService(nil, nil)
+	adapter := patrolFindingCreatorAdapter{
+		patrol: patrol,
+		snap: patrolRuntimeState{
+			readState: &mockReadState{
+				nodes: []*unifiedresources.NodeView{
+					func() *unifiedresources.NodeView {
+						v := unifiedresources.NewNodeView(&unifiedresources.Resource{
+							ID:   "node-1",
+							Name: "node-1",
+							Type: unifiedresources.ResourceTypeAgent,
+						})
+						return &v
+					}(),
+				},
+			},
+			unifiedResourceProvider: &mockUnifiedResourceProvider{
+				getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+					if t != unifiedresources.ResourceTypePhysicalDisk {
+						return nil
+					}
+					return []unifiedresources.Resource{
+						{
+							ID:   "disk-1",
+							Name: "disk-1",
+							Type: unifiedresources.ResourceTypePhysicalDisk,
+							PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+								DevPath: "/dev/sda",
+								Health:  "FAILED",
+							},
+						},
+					}
+				},
+			},
+		},
+	}
+
+	if !adapter.isActionable(&Finding{
+		ResourceID:   "disk-1",
+		ResourceName: "/dev/sda",
+		ResourceType: "physical_disk",
+		Severity:     FindingSeverityWarning,
+		Key:          "disk-high",
+		Title:        "Disk health warning",
+	}) {
+		t.Fatal("expected physical disk finding to remain actionable when disk inventory exists")
+	}
+}
+
 func TestVerifyGuestReachabilityState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.SetGuestProber(&mockGuestProber{

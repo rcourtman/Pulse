@@ -622,7 +622,7 @@ func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, t
 		flags = append(flags, TriageFlag{
 			ResourceID:   resourceID,
 			ResourceName: resourceName,
-			ResourceType: "storage",
+			ResourceType: "physical_disk",
 			Category:     "health",
 			Severity:     "critical",
 			Reason:       fmt.Sprintf("Disk health reported %s", health),
@@ -633,7 +633,7 @@ func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, t
 		flags = append(flags, TriageFlag{
 			ResourceID:   resourceID,
 			ResourceName: resourceName,
-			ResourceType: "storage",
+			ResourceType: "physical_disk",
 			Category:     "health",
 			Severity:     "warning",
 			Reason:       fmt.Sprintf("SSD wearout at %d%% remaining", wearout),
@@ -646,7 +646,7 @@ func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, t
 		flags = append(flags, TriageFlag{
 			ResourceID:   resourceID,
 			ResourceName: resourceName,
-			ResourceType: "storage",
+			ResourceType: "physical_disk",
 			Category:     "health",
 			Severity:     "warning",
 			Reason:       fmt.Sprintf("Disk temperature %d°C", temperature),
