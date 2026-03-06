@@ -1655,6 +1655,8 @@ type patrolGuestInventoryRow struct {
 	id                        string
 	name, gType, node, status string
 	cpu, mem, disk            float64
+	vmid                      int
+	ip                        string
 	lastBackup                time.Time
 	service                   string
 	reachable                 string
@@ -1772,6 +1774,8 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				cpu:        vmv.CPUPercent(),
 				mem:        vmv.MemoryPercent(),
 				disk:       vmv.DiskPercent(),
+				vmid:       vmv.VMID(),
+				ip:         patrolFirstIP(vmv.IPAddresses()),
 				lastBackup: vmv.LastBackup(),
 				service:    formatService(gi),
 				reachable:  formatReachable(reachableFromIntel(gi)),
@@ -1791,6 +1795,8 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				cpu:        ctv.CPUPercent(),
 				mem:        ctv.MemoryPercent(),
 				disk:       ctv.DiskPercent(),
+				vmid:       ctv.VMID(),
+				ip:         patrolFirstIP(ctv.IPAddresses()),
 				lastBackup: ctv.LastBackup(),
 				service:    formatService(gi),
 				reachable:  formatReachable(reachableFromIntel(gi)),
@@ -1814,6 +1820,8 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			cpu:        vm.CPU * 100,
 			mem:        vm.Memory.Usage,
 			disk:       vm.Disk.Usage,
+			vmid:       vm.VMID,
+			ip:         patrolFirstIP(vm.IPAddresses),
 			lastBackup: vm.LastBackup,
 			service:    formatService(gi),
 			reachable:  formatReachable(reachableFromIntel(gi)),
@@ -1833,6 +1841,8 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			cpu:        ct.CPU * 100,
 			mem:        ct.Memory.Usage,
 			disk:       ct.Disk.Usage,
+			vmid:       ct.VMID,
+			ip:         patrolFirstIP(ct.IPAddresses),
 			lastBackup: ct.LastBackup,
 			service:    formatService(gi),
 			reachable:  formatReachable(reachableFromIntel(gi)),

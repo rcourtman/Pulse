@@ -1771,67 +1771,19 @@ func patrolLookupGuestRuntimeDetailsWithVisitor(guestID string, walk func(patrol
 func patrolVisitGuestRuntimeDetails(snap patrolRuntimeState, visit patrolGuestRuntimeDetailsVisitor) bool {
 	rows := patrolGuestInventoryRows(snap, nil, nil)
 	for _, guest := range rows {
-		if !visit([]string{guest.id, guest.name}, patrolGuestRuntimeDetails{
+		identifiers := []string{guest.id, guest.name}
+		if guest.vmid > 0 {
+			identifiers = append(identifiers, fmt.Sprintf("%d", guest.vmid))
+		}
+		if !visit(identifiers, patrolGuestRuntimeDetails{
 			lastBackup: guest.lastBackup,
 			node:       guest.node,
+			ip:         guest.ip,
 		}) {
 			return true
 		}
 	}
-
-	if snap.readState != nil {
-		for _, vm := range snap.readState.VMs() {
-			if vm.Template() {
-				continue
-			}
-			if !visit([]string{vm.ID(), vm.Name(), fmt.Sprintf("%d", vm.VMID())}, patrolGuestRuntimeDetails{
-				lastBackup: vm.LastBackup(),
-				node:       vm.Node(),
-				ip:         patrolFirstIP(vm.IPAddresses()),
-			}) {
-				return true
-			}
-		}
-		for _, ct := range snap.readState.Containers() {
-			if ct.Template() {
-				continue
-			}
-			if !visit([]string{ct.ID(), ct.Name(), fmt.Sprintf("%d", ct.VMID())}, patrolGuestRuntimeDetails{
-				lastBackup: ct.LastBackup(),
-				node:       ct.Node(),
-				ip:         patrolFirstIP(ct.IPAddresses()),
-			}) {
-				return true
-			}
-		}
-		return len(rows) > 0 || len(snap.readState.VMs()) > 0 || len(snap.readState.Containers()) > 0
-	}
-
-	for _, vm := range snap.VMs {
-		if vm.Template {
-			continue
-		}
-		if !visit([]string{vm.ID, vm.Name, fmt.Sprintf("%d", vm.VMID)}, patrolGuestRuntimeDetails{
-			lastBackup: vm.LastBackup,
-			node:       vm.Node,
-			ip:         patrolFirstIP(vm.IPAddresses),
-		}) {
-			return true
-		}
-	}
-	for _, ct := range snap.Containers {
-		if ct.Template {
-			continue
-		}
-		if !visit([]string{ct.ID, ct.Name, fmt.Sprintf("%d", ct.VMID)}, patrolGuestRuntimeDetails{
-			lastBackup: ct.LastBackup,
-			node:       ct.Node,
-			ip:         patrolFirstIP(ct.IPAddresses),
-		}) {
-			return true
-		}
-	}
-	return len(rows) > 0 || len(snap.VMs) > 0 || len(snap.Containers) > 0
+	return len(rows) > 0
 }
 
 func patrolLookupMetricsWithVisitor(resourceID string, walk func(patrolMetricVisitor) bool) (map[string]float64, bool) {
