@@ -1614,38 +1614,12 @@ type patrolPhysicalDiskVerification struct {
 	temperature int
 }
 
+type patrolPhysicalDiskVisitor func(identifiers []string, verification patrolPhysicalDiskVerification) bool
+
 func patrolLookupPhysicalDiskVerificationState(snap patrolRuntimeState, resourceID string) (patrolPhysicalDiskVerification, bool) {
-	if snap.unifiedResourceProvider != nil {
-		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
-			if disk.PhysicalDisk == nil {
-				continue
-			}
-			if strings.TrimSpace(disk.ID) != resourceID &&
-				strings.TrimSpace(disk.Name) != resourceID &&
-				strings.TrimSpace(disk.PhysicalDisk.DevPath) != resourceID &&
-				strings.TrimSpace(disk.PhysicalDisk.Model) != resourceID {
-				continue
-			}
-			return patrolPhysicalDiskVerification{
-				health:      strings.TrimSpace(disk.PhysicalDisk.Health),
-				wearout:     disk.PhysicalDisk.Wearout,
-				temperature: disk.PhysicalDisk.Temperature,
-			}, true
-		}
-	}
-	for _, disk := range snap.PhysicalDisks {
-		if strings.TrimSpace(disk.ID) != resourceID &&
-			strings.TrimSpace(disk.Model) != resourceID &&
-			strings.TrimSpace(disk.DevPath) != resourceID {
-			continue
-		}
-		return patrolPhysicalDiskVerification{
-			health:      strings.TrimSpace(disk.Health),
-			wearout:     disk.Wearout,
-			temperature: disk.Temperature,
-		}, true
-	}
-	return patrolPhysicalDiskVerification{}, false
+	return patrolLookupPhysicalDiskVerificationWithVisitor(resourceID, func(visit patrolPhysicalDiskVisitor) bool {
+		return patrolVisitPhysicalDiskVerification(snap, visit)
+	})
 }
 
 func (p *PatrolService) verifyGuestReachability(ctx context.Context, snap models.StateSnapshot, guestID string) (bool, error) {
@@ -1693,6 +1667,8 @@ type patrolGuestRuntimeDetails struct {
 	node       string
 	ip         string
 }
+
+type patrolGuestRuntimeDetailsVisitor func(identifiers []string, details patrolGuestRuntimeDetails) bool
 
 type patrolMetricVisitor func(identifiers []string, metrics map[string]float64) bool
 
@@ -1749,54 +1725,15 @@ func patrolLookupGuestRuntimeDetails(snap patrolRuntimeState, guestID string) (p
 }
 
 func patrolLookupGuestRuntimeDetailsFromReadState(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
-	if snap.readState == nil {
-		return patrolGuestRuntimeDetails{}, false
-	}
-	for _, vm := range snap.readState.VMs() {
-		if !patrolGuestMatches(guestID, vm.ID(), vm.Name(), vm.VMID()) {
-			continue
-		}
-		return patrolGuestRuntimeDetails{
-			lastBackup: vm.LastBackup(),
-			node:       vm.Node(),
-			ip:         patrolFirstIP(vm.IPAddresses()),
-		}, true
-	}
-	for _, ct := range snap.readState.Containers() {
-		if !patrolGuestMatches(guestID, ct.ID(), ct.Name(), ct.VMID()) {
-			continue
-		}
-		return patrolGuestRuntimeDetails{
-			lastBackup: ct.LastBackup(),
-			node:       ct.Node(),
-			ip:         patrolFirstIP(ct.IPAddresses()),
-		}, true
-	}
-	return patrolGuestRuntimeDetails{}, false
+	return patrolLookupGuestRuntimeDetailsWithVisitor(guestID, func(visit patrolGuestRuntimeDetailsVisitor) bool {
+		return patrolVisitGuestRuntimeDetailsFromReadState(snap, visit)
+	})
 }
 
 func patrolLookupGuestRuntimeDetailsFromSnapshot(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
-	for _, vm := range snap.VMs {
-		if !patrolGuestMatches(guestID, vm.ID, vm.Name, vm.VMID) {
-			continue
-		}
-		return patrolGuestRuntimeDetails{
-			lastBackup: vm.LastBackup,
-			node:       vm.Node,
-			ip:         patrolFirstIP(vm.IPAddresses),
-		}, true
-	}
-	for _, ct := range snap.Containers {
-		if !patrolGuestMatches(guestID, ct.ID, ct.Name, ct.VMID) {
-			continue
-		}
-		return patrolGuestRuntimeDetails{
-			lastBackup: ct.LastBackup,
-			node:       ct.Node,
-			ip:         patrolFirstIP(ct.IPAddresses),
-		}, true
-	}
-	return patrolGuestRuntimeDetails{}, false
+	return patrolLookupGuestRuntimeDetailsWithVisitor(guestID, func(visit patrolGuestRuntimeDetailsVisitor) bool {
+		return patrolVisitGuestRuntimeDetailsFromSnapshot(snap, visit)
+	})
 }
 
 func patrolLookupResourceMetrics(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
@@ -1903,6 +1840,124 @@ func patrolLookupPhysicalDiskMetricsState(snap patrolRuntimeState, resourceID st
 		return map[string]float64{}, true
 	}
 	return nil, false
+}
+
+func patrolLookupPhysicalDiskVerificationWithVisitor(resourceID string, walk func(patrolPhysicalDiskVisitor) bool) (patrolPhysicalDiskVerification, bool) {
+	found := false
+	var result patrolPhysicalDiskVerification
+	walk(func(identifiers []string, verification patrolPhysicalDiskVerification) bool {
+		for _, identifier := range identifiers {
+			if strings.TrimSpace(identifier) != strings.TrimSpace(resourceID) {
+				continue
+			}
+			result = verification
+			found = true
+			return false
+		}
+		return true
+	})
+	return result, found
+}
+
+func patrolVisitPhysicalDiskVerification(snap patrolRuntimeState, visit patrolPhysicalDiskVisitor) bool {
+	hasInventory := false
+	if snap.unifiedResourceProvider != nil {
+		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			if disk.PhysicalDisk == nil {
+				continue
+			}
+			hasInventory = true
+			if !visit([]string{disk.ID, disk.Name, disk.PhysicalDisk.DevPath, disk.PhysicalDisk.Model}, patrolPhysicalDiskVerification{
+				health:      strings.TrimSpace(disk.PhysicalDisk.Health),
+				wearout:     disk.PhysicalDisk.Wearout,
+				temperature: disk.PhysicalDisk.Temperature,
+			}) {
+				return true
+			}
+		}
+		return hasInventory
+	}
+	for _, disk := range snap.PhysicalDisks {
+		hasInventory = true
+		if !visit([]string{disk.ID, disk.Model, disk.DevPath}, patrolPhysicalDiskVerification{
+			health:      strings.TrimSpace(disk.Health),
+			wearout:     disk.Wearout,
+			temperature: disk.Temperature,
+		}) {
+			return true
+		}
+	}
+	return hasInventory
+}
+
+func patrolLookupGuestRuntimeDetailsWithVisitor(guestID string, walk func(patrolGuestRuntimeDetailsVisitor) bool) (patrolGuestRuntimeDetails, bool) {
+	found := false
+	var result patrolGuestRuntimeDetails
+	walk(func(identifiers []string, details patrolGuestRuntimeDetails) bool {
+		for _, identifier := range identifiers {
+			if strings.TrimSpace(identifier) != strings.TrimSpace(guestID) {
+				continue
+			}
+			result = details
+			found = true
+			return false
+		}
+		return true
+	})
+	return result, found
+}
+
+func patrolVisitGuestRuntimeDetailsFromReadState(snap patrolRuntimeState, visit patrolGuestRuntimeDetailsVisitor) bool {
+	if snap.readState == nil {
+		return false
+	}
+	hasInventory := false
+	for _, vm := range snap.readState.VMs() {
+		hasInventory = true
+		if !visit([]string{vm.ID(), vm.Name(), fmt.Sprintf("%d", vm.VMID())}, patrolGuestRuntimeDetails{
+			lastBackup: vm.LastBackup(),
+			node:       vm.Node(),
+			ip:         patrolFirstIP(vm.IPAddresses()),
+		}) {
+			return true
+		}
+	}
+	for _, ct := range snap.readState.Containers() {
+		hasInventory = true
+		if !visit([]string{ct.ID(), ct.Name(), fmt.Sprintf("%d", ct.VMID())}, patrolGuestRuntimeDetails{
+			lastBackup: ct.LastBackup(),
+			node:       ct.Node(),
+			ip:         patrolFirstIP(ct.IPAddresses()),
+		}) {
+			return true
+		}
+	}
+	return hasInventory
+}
+
+func patrolVisitGuestRuntimeDetailsFromSnapshot(snap patrolRuntimeState, visit patrolGuestRuntimeDetailsVisitor) bool {
+	hasInventory := false
+	for _, vm := range snap.VMs {
+		hasInventory = true
+		if !visit([]string{vm.ID, vm.Name, fmt.Sprintf("%d", vm.VMID)}, patrolGuestRuntimeDetails{
+			lastBackup: vm.LastBackup,
+			node:       vm.Node,
+			ip:         patrolFirstIP(vm.IPAddresses),
+		}) {
+			return true
+		}
+	}
+	for _, ct := range snap.Containers {
+		hasInventory = true
+		if !visit([]string{ct.ID, ct.Name, fmt.Sprintf("%d", ct.VMID)}, patrolGuestRuntimeDetails{
+			lastBackup: ct.LastBackup,
+			node:       ct.Node,
+			ip:         patrolFirstIP(ct.IPAddresses),
+		}) {
+			return true
+		}
+	}
+	return hasInventory
 }
 
 func patrolLookupMetricsWithVisitor(resourceID string, walk func(patrolMetricVisitor) bool) (map[string]float64, bool) {
