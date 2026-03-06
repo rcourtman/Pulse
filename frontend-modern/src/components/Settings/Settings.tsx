@@ -4,9 +4,7 @@ import {
   onMount,
   Show,
   Suspense,
-  createEffect,
   createMemo,
-  onCleanup,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
@@ -15,13 +13,13 @@ import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
 import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
 import { eventBus } from '@/stores/events';
-import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
 import { getSettingsTabSaveBehavior } from './settingsTabs';
 import { useBackupTransferFlow } from './useBackupTransferFlow';
 import { useDiscoverySettingsState } from './useDiscoverySettingsState';
 import { useInfrastructureSettingsState } from './useInfrastructureSettingsState';
 import { useSettingsAccess } from './useSettingsAccess';
 import { useSettingsPanelRegistry } from './useSettingsPanelRegistry';
+import { useSettingsShellState } from './useSettingsShellState';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 
@@ -46,20 +44,18 @@ const Settings: Component<SettingsProps> = (props) => {
     navigate,
     location,
     });
-
-  const headerMeta = () =>
-    SETTINGS_HEADER_META[activeTab()] ?? {
-      title: 'Settings',
-      description: 'Manage Pulse configuration.',
-    };
-
-  // Sidebar always starts expanded for discoverability (issue #764)
-  // Users can collapse during session but it resets on page reload
-  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = createSignal(
-    typeof window !== 'undefined' ? window.innerWidth < 1024 : false,
-  );
-  const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+  const {
+    headerMeta,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
+    showPasswordModal,
+    setShowPasswordModal,
+    searchQuery,
+    setSearchQuery,
+    assignSearchInputRef,
+  } = useSettingsShellState({ activeTab });
   const pbsInstancesFromResources = createMemo(() =>
     (state.resources || [])
       .filter((resource) => resource.type === 'pbs')
@@ -100,8 +96,6 @@ const Settings: Component<SettingsProps> = (props) => {
   // Security
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
-  const [searchQuery, setSearchQuery] = createSignal('');
-  let searchInputRef: HTMLInputElement | undefined;
   const {
     securityStatus,
     securityStatusLoading,
@@ -385,38 +379,6 @@ const Settings: Component<SettingsProps> = (props) => {
       return settingsPanelRegistry()[currentTab];
   });
 
-  createEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSearchQuery('');
-        searchInputRef?.blur();
-        return;
-      }
-
-      if (
-        document.activeElement?.tagName === 'INPUT' ||
-        document.activeElement?.tagName === 'TEXTAREA'
-      ) {
-        return;
-      }
-      if (e.metaKey || e.ctrlKey || e.altKey || e.key.length > 1) {
-        if (e.key !== 'Backspace') return;
-      }
-
-      if (searchInputRef) {
-        e.preventDefault();
-        searchInputRef.focus();
-        if (e.key === 'Backspace') {
-          setSearchQuery((prev) => prev.slice(0, -1));
-        } else {
-          setSearchQuery((prev) => prev + e.key);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
-  });
-
   onMount(() => {
     loadLicenseStatus();
   });
@@ -435,9 +397,7 @@ const Settings: Component<SettingsProps> = (props) => {
         setSidebarCollapsed={setSidebarCollapsed}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        assignSearchInputRef={(el) => {
-          searchInputRef = el;
-        }}
+        assignSearchInputRef={assignSearchInputRef}
         filteredTabGroups={filteredTabGroups}
         flatTabs={flatTabs}
         activeTab={activeTab}
