@@ -24,6 +24,7 @@ const (
 	trialSignupDefaultOrgID            = "default"
 	trialSignupTrialDays               = 14
 	trialSignupVerificationTTL         = 20 * time.Minute
+	trialSignupActivationTokenTTL      = 10 * time.Minute
 	stripeCheckoutSessionIDPlaceholder = "{CHECKOUT_SESSION_ID}"
 	trialSignupCheckoutIssuer          = "pulse-pro-trial-checkout"
 	trialSignupCheckoutAudience        = "pulse-pro-trial-checkout"
@@ -727,7 +728,7 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		InstanceHost: instanceHost,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
 			Subject:   sessionID,
 		},
 	})
@@ -736,7 +737,7 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		http.Error(w, "failed to generate activation token", http.StatusInternalServerError)
 		return
 	}
-	token, _, err = h.verificationStore.StoreOrLoadActivationToken(requestID, token, now)
+	token, _, err = h.verificationStore.StoreOrRotateActivationToken(requestID, token, now, trialSignupActivationTokenTTL)
 	if err != nil {
 		log.Error().Err(err).Str("request_id", requestID).Msg("failed to persist trial activation token")
 		http.Error(w, "failed to persist activation token", http.StatusInternalServerError)

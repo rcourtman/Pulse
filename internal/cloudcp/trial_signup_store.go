@@ -603,7 +603,7 @@ func (s *TrialSignupStore) FindPendingVerificationByEmail(email string, now time
 	return rec, nil
 }
 
-func (s *TrialSignupStore) StoreOrLoadActivationToken(id, token string, issuedAt time.Time) (string, bool, error) {
+func (s *TrialSignupStore) StoreOrRotateActivationToken(id, token string, issuedAt time.Time, ttl time.Duration) (string, bool, error) {
 	if s == nil {
 		return "", false, fmt.Errorf("trial signup store not configured")
 	}
@@ -616,6 +616,10 @@ func (s *TrialSignupStore) StoreOrLoadActivationToken(id, token string, issuedAt
 		return "", false, fmt.Errorf("activation token is required")
 	}
 	issuedAt = issuedAt.UTC()
+	if ttl <= 0 {
+		return "", false, fmt.Errorf("activation token ttl is required")
+	}
+	rotateBefore := issuedAt.Add(-ttl).Unix()
 
 	s.mu.Lock()
 	db := s.db
@@ -628,16 +632,18 @@ func (s *TrialSignupStore) StoreOrLoadActivationToken(id, token string, issuedAt
 	res, err := db.Exec(
 		`UPDATE trial_signup_requests
 		 SET activation_token = CASE
-		       WHEN activation_token = '' THEN ?
+		       WHEN activation_token = '' OR activation_issued_at IS NULL OR activation_issued_at <= ? THEN ?
 		       ELSE activation_token
 		     END,
 		     activation_issued_at = CASE
-		       WHEN activation_issued_at IS NULL THEN ?
+		       WHEN activation_token = '' OR activation_issued_at IS NULL OR activation_issued_at <= ? THEN ?
 		       ELSE activation_issued_at
 		     END
 		 WHERE request_id = ?
 		   AND verified_at IS NOT NULL`,
+		rotateBefore,
 		token,
+		rotateBefore,
 		issuedAt.Unix(),
 		id,
 	)
@@ -668,7 +674,7 @@ func (s *TrialSignupStore) StoreOrLoadActivationToken(id, token string, issuedAt
 	if storedToken == "" {
 		return "", false, ErrTrialSignupRecordNotFound
 	}
-	return storedToken, storedToken == token, nil
+	return storedToken, storedToken == token && rec.ActivationIssuedAt.Equal(issuedAt), nil
 }
 
 func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {

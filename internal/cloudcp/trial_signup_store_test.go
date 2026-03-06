@@ -218,7 +218,7 @@ func TestTrialSignupStoreFindPendingVerificationByEmail(t *testing.T) {
 	}
 }
 
-func TestTrialSignupStoreStoreOrLoadActivationToken(t *testing.T) {
+func TestTrialSignupStoreStoreOrRotateActivationToken(t *testing.T) {
 	store, err := NewTrialSignupStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewTrialSignupStore: %v", err)
@@ -243,9 +243,9 @@ func TestTrialSignupStoreStoreOrLoadActivationToken(t *testing.T) {
 		t.Fatalf("ConsumeVerification: %v", err)
 	}
 
-	storedToken, firstIssue, err := store.StoreOrLoadActivationToken(record.ID, "token-one", now)
+	storedToken, firstIssue, err := store.StoreOrRotateActivationToken(record.ID, "token-one", now, trialSignupActivationTokenTTL)
 	if err != nil {
-		t.Fatalf("StoreOrLoadActivationToken(first): %v", err)
+		t.Fatalf("StoreOrRotateActivationToken(first): %v", err)
 	}
 	if !firstIssue {
 		t.Fatal("expected first activation token issuance to report firstIssue=true")
@@ -254,14 +254,25 @@ func TestTrialSignupStoreStoreOrLoadActivationToken(t *testing.T) {
 		t.Fatalf("storedToken=%q, want %q", storedToken, "token-one")
 	}
 
-	storedToken, firstIssue, err = store.StoreOrLoadActivationToken(record.ID, "token-two", now.Add(time.Minute))
+	storedToken, firstIssue, err = store.StoreOrRotateActivationToken(record.ID, "token-two", now.Add(time.Minute), trialSignupActivationTokenTTL)
 	if err != nil {
-		t.Fatalf("StoreOrLoadActivationToken(second): %v", err)
+		t.Fatalf("StoreOrRotateActivationToken(second): %v", err)
 	}
 	if firstIssue {
 		t.Fatal("expected repeat activation token load to report firstIssue=false")
 	}
 	if storedToken != "token-one" {
 		t.Fatalf("storedToken=%q, want existing token %q", storedToken, "token-one")
+	}
+
+	storedToken, firstIssue, err = store.StoreOrRotateActivationToken(record.ID, "token-three", now.Add(trialSignupActivationTokenTTL+time.Minute), trialSignupActivationTokenTTL)
+	if err != nil {
+		t.Fatalf("StoreOrRotateActivationToken(third): %v", err)
+	}
+	if !firstIssue {
+		t.Fatal("expected expired activation token to be rotated")
+	}
+	if storedToken != "token-three" {
+		t.Fatalf("storedToken=%q, want rotated token %q", storedToken, "token-three")
 	}
 }

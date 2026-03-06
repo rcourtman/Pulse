@@ -556,6 +556,104 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	}
 }
 
+func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	baseNow := time.Unix(1710000000, 0).UTC()
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		Name:                  "Test User",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             baseNow,
+		VerificationExpiresAt: baseNow.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, baseNow)
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+
+	now := baseNow
+	h := NewTrialSignupHandlers(&CPConfig{
+		StripeAPIKey:              "sk_test_123",
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+	}, nil, store)
+	h.now = func() time.Time { return now }
+	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		return &stripe.CheckoutSession{
+			ID:            id,
+			Status:        stripe.CheckoutSessionStatusComplete,
+			Mode:          stripe.CheckoutSessionModeSubscription,
+			CustomerEmail: "owner@example.com",
+			Metadata: map[string]string{
+				"org_id":           "default",
+				"return_url":       "https://pulse.example.com/auth/trial-activate",
+				"trial_request_id": record.ID,
+				"signup_source":    "pulse_pro_trial",
+				"email_verified":   "true",
+			},
+		}, nil
+	}
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_rotate", nil)
+	firstRec := httptest.NewRecorder()
+	h.HandleTrialSignupComplete(firstRec, firstReq)
+	if firstRec.Code != http.StatusSeeOther {
+		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusSeeOther, firstRec.Body.String())
+	}
+	firstLocation := firstRec.Header().Get("Location")
+	firstParsed, err := url.Parse(firstLocation)
+	if err != nil {
+		t.Fatalf("parse first redirect: %v", err)
+	}
+	firstIssuedToken := strings.TrimSpace(firstParsed.Query().Get("token"))
+	if firstIssuedToken == "" {
+		t.Fatal("expected first activation token")
+	}
+
+	now = now.Add(trialSignupActivationTokenTTL + time.Minute)
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_rotate", nil)
+	secondRec := httptest.NewRecorder()
+	h.HandleTrialSignupComplete(secondRec, secondReq)
+	if secondRec.Code != http.StatusSeeOther {
+		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusSeeOther, secondRec.Body.String())
+	}
+	secondLocation := secondRec.Header().Get("Location")
+	secondParsed, err := url.Parse(secondLocation)
+	if err != nil {
+		t.Fatalf("parse second redirect: %v", err)
+	}
+	secondIssuedToken := strings.TrimSpace(secondParsed.Query().Get("token"))
+	if secondIssuedToken == "" {
+		t.Fatal("expected second activation token")
+	}
+	if secondIssuedToken == firstIssuedToken {
+		t.Fatal("expected expired activation token to be rotated")
+	}
+
+	claims, err := pkglicensing.VerifyTrialActivationToken(secondIssuedToken, pub, "pulse.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyTrialActivationToken: %v", err)
+	}
+	if claims.Subject != "cs_test_rotate" {
+		t.Fatalf("claims.Subject=%q, want %q", claims.Subject, "cs_test_rotate")
+	}
+}
+
 func TestTrialSignupHandleCompleteRejectsDuplicateIssuedEmail(t *testing.T) {
 	h, store, sender := newTrialSignupTestHandler(t)
 	h.cfg.StripeAPIKey = "sk_test_123"
