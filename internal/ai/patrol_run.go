@@ -1940,19 +1940,6 @@ func patrolVisitAlertResourceStateFromReadState(alert AlertInfo, snap patrolRunt
 				})
 			}
 		}
-	case "app-container":
-		for _, container := range snap.readState.DockerContainers() {
-			if patrolAlertNameMatches(alert, container.ID(), container.Name()) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "app-container",
-					name:         container.Name(),
-					status:       container.ContainerState(),
-					cpu:          container.CPUPercent(),
-					memory:       container.MemoryPercent(),
-					found:        true,
-				})
-			}
-		}
 	}
 	return false
 }
@@ -2025,21 +2012,6 @@ func patrolVisitAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRunti
 					memory:       ct.Memory.Usage,
 					found:        true,
 				})
-			}
-		}
-	case "app-container":
-		for _, host := range snap.DockerHosts {
-			for _, container := range host.Containers {
-				if patrolAlertNameMatches(alert, container.ID, container.Name) {
-					return !visit(patrolAlertResourceState{
-						resourceType: "app-container",
-						name:         container.Name,
-						status:       container.State,
-						cpu:          container.CPUPercent,
-						memory:       container.MemoryPercent,
-						found:        true,
-					})
-				}
 			}
 		}
 	}
