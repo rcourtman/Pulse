@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import {
+  getAgentLikeIdentityAliases,
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
 } from '@/utils/resourceIdentity';
+import type { Agent } from '@/types/api';
 
 const makeResource = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -124,6 +126,37 @@ describe('resourceIdentity', () => {
       { label: 'Parent', value: 'parent-1' },
       { label: 'Discovery', value: 'agent:agent-1' },
       { label: 'Metrics Target', value: 'docker-host:docker-host-1' },
+    ]);
+  });
+
+  it('builds agent-like aliases for legacy summary/detail surfaces', () => {
+    const agent = {
+      id: 'agent-explicit',
+      hostname: 'tower.local',
+      displayName: 'Tower',
+      status: 'online',
+      lastSeen: Date.now(),
+      platformData: {
+        linkedAgentId: 'agent-linked',
+        agent: {
+          agentId: 'agent-platform',
+          hostname: 'tower.internal',
+        },
+      },
+      discoveryTarget: {
+        resourceType: 'agent',
+        resourceId: 'agent-discovery',
+        agentId: 'agent-discovery',
+      },
+    } as unknown as Agent;
+
+    expect(getAgentLikeIdentityAliases(agent)).toEqual([
+      'agent-explicit',
+      'agent-discovery',
+      'agent-linked',
+      'agent-platform',
+      'tower.local',
+      'tower.internal',
     ]);
   });
 });

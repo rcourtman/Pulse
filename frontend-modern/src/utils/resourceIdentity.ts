@@ -1,3 +1,4 @@
+import type { Agent } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
   getActionableAgentIdFromResource,
@@ -16,6 +17,22 @@ const asTrimmedString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const dedupeTrimmedValues = (values: Array<string | undefined>): string[] => {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const value of values) {
+    if (!value) continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const normalized = trimmed.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    deduped.push(trimmed);
+  }
+
+  return deduped;
 };
 
 const formatIdentityTarget = (resourceType?: string, resourceId?: string): string | null => {
@@ -90,19 +107,25 @@ export const getResourceIdentityAliases = (resource: Resource): string[] => {
     resource.identity?.machineId,
   ];
 
-  const seen = new Set<string>();
-  const deduped: string[] = [];
-  for (const value of raw) {
-    if (!value) continue;
-    const trimmed = value.trim();
-    if (!trimmed) continue;
-    const normalized = trimmed.toLowerCase();
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    deduped.push(trimmed);
-  }
+  return dedupeTrimmedValues(raw);
+};
 
-  return deduped;
+export const getAgentLikeIdentityAliases = (agent: Agent): string[] => {
+  const agentRecord = agent as unknown as Record<string, unknown>;
+  const discoveryTarget = agentRecord.discoveryTarget as Record<string, unknown> | undefined;
+  const platformData = agentRecord.platformData as Record<string, unknown> | undefined;
+  const platformAgent = platformData?.agent as Record<string, unknown> | undefined;
+
+  return dedupeTrimmedValues([
+    asTrimmedString(agent.id),
+    asTrimmedString(discoveryTarget?.resourceId),
+    asTrimmedString(discoveryTarget?.agentId),
+    asTrimmedString(platformData?.linkedAgentId),
+    asTrimmedString(platformAgent?.agentId),
+    asTrimmedString(platformData?.agentId),
+    asTrimmedString(agent.hostname),
+    asTrimmedString(platformAgent?.hostname),
+  ]);
 };
 
 export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIdentityRow[] => {

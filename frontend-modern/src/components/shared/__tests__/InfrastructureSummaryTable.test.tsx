@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render } from '@solidjs/testing-library';
+import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { InfrastructureSummaryTable } from '@/components/shared/InfrastructureSummaryTable';
-import type { Node } from '@/types/api';
+import type { Agent, Node } from '@/types/api';
 
 const enhancedCpuBarMock = vi.fn();
+const infrastructureDetailsDrawerMock = vi.fn();
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -56,7 +57,10 @@ vi.mock('@/components/Dashboard/StackedDiskBar', () => ({
 }));
 
 vi.mock('@/components/shared/InfrastructureDetailsDrawer', () => ({
-  InfrastructureDetailsDrawer: () => <div data-testid="infra-details-drawer">drawer</div>,
+  InfrastructureDetailsDrawer: (props: unknown) => {
+    infrastructureDetailsDrawerMock(props);
+    return <div data-testid="infra-details-drawer">drawer</div>;
+  },
 }));
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
@@ -69,6 +73,15 @@ const makeNode = (overrides: Partial<Node> = {}): Node => ({
   memory: { total: 8, used: 4, free: 4, usage: 50 },
   disk: { total: 100, used: 25, free: 75, usage: 25 },
   linkedAgentId: undefined,
+  ...overrides,
+});
+
+const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
+  id: 'agent-1',
+  hostname: 'pve1.local',
+  displayName: 'Agent 1',
+  status: 'online',
+  lastSeen: Date.now(),
   ...overrides,
 });
 
@@ -109,5 +122,41 @@ describe('InfrastructureSummaryTable', () => {
         ([props]) => (props as { resourceId?: string }).resourceId === 'node:node-2',
       ),
     ).toBe(true);
+  });
+
+  it('matches drawer agents by shared linked-agent aliases', () => {
+    infrastructureDetailsDrawerMock.mockClear();
+
+    const { container } = render(() => (
+      <InfrastructureSummaryTable
+        nodes={[makeNode({ linkedAgentId: 'agent-linked' })]}
+        agents={[
+          makeAgent({
+            id: 'agent-explicit',
+            platformData: {
+              linkedAgentId: 'agent-linked',
+              agent: {
+                hostname: 'pve1.internal',
+              },
+            },
+          }) as Agent,
+        ]}
+        selectedNode="node-1"
+        currentTab="dashboard"
+        onNodeClick={vi.fn()}
+      />
+    ));
+
+    const expandToggle = container.querySelector('div.cursor-pointer.transition-transform');
+    expect(expandToggle).toBeTruthy();
+    fireEvent.click(expandToggle!);
+
+    return waitFor(() => {
+      expect(infrastructureDetailsDrawerMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agent: expect.objectContaining({ id: 'agent-explicit' }),
+        }),
+      );
+    });
   });
 });

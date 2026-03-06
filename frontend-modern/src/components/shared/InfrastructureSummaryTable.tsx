@@ -24,6 +24,7 @@ import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { getAgentLikeIdentityAliases } from '@/utils/resourceIdentity';
 
 // Lazy load InfrastructureDetailsDrawer to avoid circular dependencies and reduce bundle size
 const InfrastructureDetailsDrawer = lazy(() =>
@@ -39,23 +40,6 @@ const asTrimmedString = (value: unknown): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-const getAgentCandidateIds = (agent: Agent): string[] => {
-  const agentRecord = agent as unknown as Record<string, unknown>;
-  const discoveryTarget = asRecord(agentRecord.discoveryTarget);
-  const platformData = asRecord(agentRecord.platformData);
-  const platformAgent = asRecord(platformData?.agent);
-
-  const candidates = [
-    asTrimmedString(agent.id),
-    asTrimmedString(discoveryTarget?.resourceId),
-    asTrimmedString(discoveryTarget?.agentId),
-    asTrimmedString(platformAgent?.agentId),
-    asTrimmedString(platformData?.agentId),
-  ].filter((value): value is string => Boolean(value));
-
-  return Array.from(new Set(candidates));
-};
-
 const getAgentLinkedNodeId = (agent: Agent): string | undefined => {
   const agentRecord = agent as unknown as Record<string, unknown>;
   const platformData = asRecord(agentRecord.platformData);
@@ -68,14 +52,15 @@ const getAgentLinkedNodeId = (agent: Agent): string | undefined => {
   );
 };
 
-const getAgentNameCandidates = (agent: Agent): string[] => {
-  const agentRecord = agent as unknown as Record<string, unknown>;
-  const platformData = asRecord(agentRecord.platformData);
-  const platformAgent = asRecord(platformData?.agent);
-  const names = [asTrimmedString(agent.hostname), asTrimmedString(platformAgent?.hostname)].filter(
-    (value): value is string => Boolean(value),
-  );
-  return Array.from(new Set(names));
+const normalizeIdentifier = (value: string): string[] => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return [];
+  const variants = new Set<string>([normalized]);
+  const dotIndex = normalized.indexOf('.');
+  if (dotIndex > 0) {
+    variants.add(normalized.slice(0, dotIndex));
+  }
+  return Array.from(variants);
 };
 
 interface InfrastructureSummaryTableProps {
@@ -543,7 +528,7 @@ export const InfrastructureSummaryTable: Component<InfrastructureSummaryTablePro
                 const linkedAgentId = node.linkedAgentId;
                 if (linkedAgentId) {
                   const byId = agents.find((agent) =>
-                    getAgentCandidateIds(agent).includes(linkedAgentId),
+                    getAgentLikeIdentityAliases(agent).includes(linkedAgentId),
                   );
                   if (byId) return byId;
                 }
@@ -558,7 +543,10 @@ export const InfrastructureSummaryTable: Component<InfrastructureSummaryTablePro
                   if (!nodeName) {
                     return false;
                   }
-                  return getAgentNameCandidates(agent).includes(nodeName);
+                  const aliases = getAgentLikeIdentityAliases(agent).flatMap((value) =>
+                    normalizeIdentifier(value),
+                  );
+                  return aliases.includes(nodeName.toLowerCase());
                 });
               };
               const metricsKey = isPVEItem && node?.linkedAgentId
