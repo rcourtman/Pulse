@@ -26,6 +26,7 @@ interface NodeModalProps {
   onClose: () => void;
   nodeType: 'pve' | 'pbs' | 'pmg';
   editingNode?: NodeConfig;
+  prefillNode?: Partial<NodeConfig>;
   onSave: (nodeData: Partial<NodeConfig>) => void;
   showBackToDiscovery?: boolean;
   onBackToDiscovery?: () => void;
@@ -97,6 +98,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const showTemperatureMonitoringSection = () =>
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
+  const isEditingExistingNode = () => Boolean(props.editingNode?.id);
 
   // Under agents-only counting, PVE/PBS/PMG connections don't count toward
   // the agent limit, so the node modal never shows a limit warning.
@@ -156,6 +158,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     const nodeType = props.nodeType;
     const isOpen = props.isOpen;
     const editingNode = props.editingNode;
+    const prefillNode = props.prefillNode;
 
     // Force reset if resetKey changed
     if (key !== undefined && key !== previousResetKey) {
@@ -183,7 +186,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     previousNodeType = nodeType;
 
     // Reset when opening for new node
-    if (isOpen && !editingNode) {
+    if (isOpen && !editingNode && !prefillNode) {
       setFormData(() => getCleanFormData(props.nodeType));
       setQuickSetupCommand('');
       setQuickSetupToken('');
@@ -200,7 +203,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   createEffect(() => {
     // Only populate form if we have an editing node AND it matches the current node type
     // This prevents PVE data from being used when adding a PBS node
-    const node = props.editingNode;
+    const node = props.editingNode ?? props.prefillNode;
     if (!node || node.type !== props.nodeType) {
       previousFormSourceSignature = null;
       return;
@@ -230,7 +233,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       name: node.name || '',
       host: node.host || '',
       guestURL: ('guestURL' in node ? node.guestURL : '') || '',
-      authType: node.hasPassword ? 'password' : 'token',
+      authType:
+        node.type === 'pmg' ? 'password' : node.hasPassword ? 'password' : 'token',
       setupMode: node.source === 'agent' ? 'agent' : 'auto',
       user: username,
       password: '',
@@ -367,7 +371,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     }
 
     // If editing an existing node and no new credentials provided, use stored credentials
-    if (props.editingNode) {
+    if (isEditingExistingNode()) {
       const hasNewPassword = data.authType === 'password' && data.password;
       const hasNewToken = data.authType === 'token' && data.tokenValue;
 
@@ -377,7 +381,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         setTestResult(null);
 
         try {
-          const result = await NodesAPI.testExistingNode(props.editingNode.id);
+          const result = await NodesAPI.testExistingNode(props.editingNode!.id);
           setTestResult({
             status: 'success',
             message: result.message || 'Connection successful',
@@ -486,7 +490,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 {/* Header */}
                 <div class="flex items-center justify-between p-4 border-b border-border">
                   <SectionHeader
-                    title={`${props.editingNode ? 'Edit' : 'Add'} ${nodeProductName()} node`}
+                    title={`${isEditingExistingNode() ? 'Edit' : 'Add'} ${nodeProductName()} node`}
                     size="md"
                     class="flex-1"
                   />
@@ -677,7 +681,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         <div class={formField}>
                           <label class={labelClass('flex items-center gap-2')}>
                             Password
-                            <Show when={!props.editingNode}>
+                            <Show when={!isEditingExistingNode()}>
                               <span class="text-red-500">*</span>
                             </Show>
                           </label>
@@ -686,9 +690,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             value={formData().password}
                             onInput={(e) => updateField('password', e.currentTarget.value)}
                             placeholder={
-                              props.editingNode ? 'Leave blank to keep existing' : 'Password'
+                              isEditingExistingNode() ? 'Leave blank to keep existing' : 'Password'
                             }
-                            required={formData().authType === 'password' && !props.editingNode}
+                            required={
+                              formData().authType === 'password' && !isEditingExistingNode()
+                            }
                             class={controlClass()}
                           />
                         </div>
@@ -2082,7 +2088,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <div class={formField}>
                             <label class={labelClass('flex items-center gap-2')}>
                               Token Value
-                              <Show when={!props.editingNode}>
+                              <Show when={!isEditingExistingNode()}>
                                 <span class="text-red-500">*</span>
                               </Show>
                             </label>
@@ -2091,11 +2097,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               value={formData().tokenValue}
                               onInput={(e) => updateField('tokenValue', e.currentTarget.value)}
                               placeholder={
-                                props.editingNode
+                                isEditingExistingNode()
                                   ? 'Leave blank to keep existing'
                                   : 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
                               }
-                              required={formData().authType === 'token' && !props.editingNode}
+                              required={
+                                formData().authType === 'token' && !isEditingExistingNode()
+                              }
                               class={controlClass('font-mono')}
                             />
                             <p class={formHelpText}>
@@ -2489,7 +2497,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       type="submit"
                       class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                     >
-                      {props.editingNode ? 'Update' : 'Add'} Node
+                      {isEditingExistingNode() ? 'Update' : 'Add'} Node
                     </button>
                   </div>
                 </div>

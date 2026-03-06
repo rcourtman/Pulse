@@ -6,6 +6,7 @@ const extractedModules = [
   '../settingsTabs.ts',
   '../settingsHeaderMeta.ts',
   '../settingsFeatureGates.ts',
+  '../ProxmoxSettingsPanel.tsx',
   '../useSettingsNavigation.ts',
   '../useSystemSettingsState.ts',
   '../useInfrastructureSettingsState.ts',
@@ -18,6 +19,7 @@ const requiredImportSources = [
   './settingsHeaderMeta',
   './settingsFeatureGates',
   './settingsPanelRegistry',
+  './ProxmoxSettingsPanel',
   './useBackupTransferFlow',
   './useInfrastructureSettingsState',
   './useSystemSettingsState',
@@ -26,7 +28,10 @@ const requiredImportSources = [
 
 describe('Settings architecture guardrails', () => {
   it('keeps extracted settings modules present on disk', () => {
-    const settingsModuleFiles = import.meta.glob('../*.ts');
+    const settingsModuleFiles = {
+      ...import.meta.glob('../*.ts'),
+      ...import.meta.glob('../*.tsx'),
+    };
 
     for (const modulePath of extractedModules) {
       expect(

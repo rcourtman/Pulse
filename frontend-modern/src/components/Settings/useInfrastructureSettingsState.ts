@@ -19,7 +19,7 @@ import type { ClusterEndpoint, NodeConfig, NodeConfigWithStatus } from '@/types/
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { SettingsTab } from './settingsTypes';
 
-interface DiscoveredServer {
+export interface DiscoveredServer {
   ip: string;
   port: number;
   type: 'pve' | 'pbs' | 'pmg';
@@ -38,7 +38,7 @@ type RawDiscoveredServer = {
   release?: string;
 };
 
-interface DiscoveryScanStatus {
+export interface DiscoveryScanStatus {
   scanning: boolean;
   subnet?: string;
   lastScanStartedAt?: number;
@@ -46,7 +46,7 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
-type NodeType = 'pve' | 'pbs' | 'pmg';
+export type NodeType = 'pve' | 'pbs' | 'pmg';
 
 type InfrastructureEventBus = {
   on<T extends EventType>(event: T, handler: (data?: EventDataMap[T]) => void): () => void;
