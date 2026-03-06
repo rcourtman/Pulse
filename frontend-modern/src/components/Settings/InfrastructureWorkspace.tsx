@@ -43,7 +43,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
   const [activeView, setActiveView] = createSignal<InfrastructureWorkspaceView>(
     inferViewFromPath(location.pathname),
   );
-  const [showInventory, setShowInventory] = createSignal(false);
+  const [showManagement, setShowManagement] = createSignal(false);
 
   createEffect(() => {
     if (location.pathname.startsWith('/settings/infrastructure/proxmox')) {
@@ -112,6 +112,23 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
             <div class="text-sm text-muted">
               {activeViewMeta().description}
             </div>
+
+            <div class="flex flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div class="space-y-1">
+                <div class="text-sm font-medium text-base-content">Already connected something?</div>
+                <p class="text-sm text-muted">
+                  Open management tools for existing agents, direct Proxmox links, Docker runtime
+                  policy, and agent profiles.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowManagement((current) => !current)}
+                class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+              >
+                {showManagement() ? 'Hide management tools' : 'Manage existing infrastructure'}
+              </button>
+            </div>
           </div>
         </div>
       </Card>
@@ -126,28 +143,14 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
         </Match>
       </Switch>
 
-      <Card padding="lg" class="rounded-xl border border-border shadow-sm">
-        <div class="space-y-4">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="space-y-1">
-              <div class="flex items-center gap-2 text-base font-semibold text-base-content">
-                <Boxes class="h-4 w-4" />
-                Connected infrastructure
-              </div>
-              <p class="text-sm text-muted">
-                View installed agents, direct Proxmox links, Docker policy, and agent profiles.
-              </p>
+      <Show when={showManagement()}>
+        <Card padding="lg" class="rounded-xl border border-border shadow-sm">
+          <div class="space-y-6">
+            <div class="flex items-center gap-2 text-base font-semibold text-base-content">
+              <Boxes class="h-4 w-4" />
+              Existing infrastructure
             </div>
-            <button
-              type="button"
-              onClick={() => setShowInventory((current) => !current)}
-              class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-            >
-              {showInventory() ? 'Hide details' : 'Show details'}
-            </button>
-          </div>
 
-          <Show when={showInventory()}>
             <div class="space-y-6 border-t border-border pt-4">
               <UnifiedAgents embedded showInstaller={false} />
 
@@ -205,9 +208,9 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
 
               <AgentProfilesPanel />
             </div>
-          </Show>
-        </div>
-      </Card>
+          </div>
+        </Card>
+      </Show>
     </div>
   );
 };
