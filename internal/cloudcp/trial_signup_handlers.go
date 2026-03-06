@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"html/template"
+	"net"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -790,12 +791,42 @@ func isValidTrialReturnURL(raw string) bool {
 	if !parsed.IsAbs() || strings.TrimSpace(parsed.Host) == "" {
 		return false
 	}
+	if parsed.EscapedPath() != "/auth/trial-activate" {
+		return false
+	}
+	if strings.TrimSpace(parsed.RawQuery) != "" || strings.TrimSpace(parsed.Fragment) != "" {
+		return false
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return false
+	}
 	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https":
+	case "https":
 		return true
+	case "http":
+		return isAllowedInsecureTrialReturnHost(host)
 	default:
 		return false
 	}
+}
+
+func isAllowedInsecureTrialReturnHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".local") {
+		return true
+	}
+	if !strings.Contains(host, ".") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
 
 func normalizeTrialOrgID(raw string) string {

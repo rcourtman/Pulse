@@ -1023,3 +1023,29 @@ func extractQueryValueFromURL(t *testing.T, rawURL, key string) string {
 	}
 	return strings.TrimSpace(parsed.Query().Get(key))
 }
+
+func TestIsValidTrialReturnURL(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "https callback", raw: "https://pulse.example.com/auth/trial-activate", want: true},
+		{name: "private http callback", raw: "http://192.168.0.98:7655/auth/trial-activate", want: true},
+		{name: "localhost http callback", raw: "http://localhost:7655/auth/trial-activate", want: true},
+		{name: "local dns http callback", raw: "http://pulse.local:7655/auth/trial-activate", want: true},
+		{name: "wrong path", raw: "https://pulse.example.com/settings", want: false},
+		{name: "query not allowed", raw: "https://pulse.example.com/auth/trial-activate?next=1", want: false},
+		{name: "fragment not allowed", raw: "https://pulse.example.com/auth/trial-activate#token=x", want: false},
+		{name: "public http not allowed", raw: "http://pulse.example.com/auth/trial-activate", want: false},
+		{name: "arbitrary https path under callback prefix not allowed", raw: "https://pulse.example.com/auth/trial-activate/extra", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isValidTrialReturnURL(tt.raw); got != tt.want {
+				t.Fatalf("isValidTrialReturnURL(%q)=%v, want %v", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
