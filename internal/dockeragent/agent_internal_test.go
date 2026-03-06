@@ -1286,6 +1286,11 @@ func TestDetectHostRemovedError(t *testing.T) {
 			body: []byte(`{"error": "host was removed"}`),
 			want: "",
 		},
+		{
+			name: "monitoring stopped error is detected",
+			body: []byte(`{"error": "docker host \"host-1\" had monitoring stopped at 2025-11-02T13:45:15Z and cannot report again", "code": "invalid_report"}`),
+			want: `docker host "host-1" had monitoring stopped at 2025-11-02T13:45:15Z and cannot report again`,
+		},
 	}
 
 	for _, tt := range tests {

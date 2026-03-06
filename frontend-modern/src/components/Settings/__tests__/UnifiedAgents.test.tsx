@@ -595,9 +595,9 @@ describe('UnifiedAgents managed agents table', () => {
       expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Removed')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Allow re-enroll/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Monitoring stopped').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Allow reconnect/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Stop monitoring' })).not.toBeInTheDocument();
     expect(screen.getByText('Showing 1 of 1 records.')).toBeInTheDocument();
   });
 
@@ -628,13 +628,15 @@ describe('UnifiedAgents managed agents table', () => {
       expect(screen.getByText('Tower')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop monitoring' }));
 
     await waitFor(() => expect(deleteAgentMock).toHaveBeenCalledWith('host-1'), { interval: 0 });
     await waitFor(() => expect(screen.queryByText('Tower')).not.toBeInTheDocument(), {
       interval: 0,
     });
-    expect(notificationSuccessMock).toHaveBeenCalledWith('Agent removed from Pulse');
+    expect(notificationSuccessMock).toHaveBeenCalledWith(
+      'Monitoring stopped for Tower. Pulse will ignore future reports until reconnect is allowed.',
+    );
     expect(refetchResourcesMock).toHaveBeenCalled();
   });
 
@@ -649,7 +651,7 @@ describe('UnifiedAgents managed agents table', () => {
       expect(screen.getByText('Tower')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop monitoring' }));
 
     await waitFor(
       () => expect(deleteDockerRuntimeMock).toHaveBeenCalledWith('docker-host-1', { force: true }),
@@ -658,7 +660,9 @@ describe('UnifiedAgents managed agents table', () => {
     await waitFor(() => expect(screen.queryByText('Tower')).not.toBeInTheDocument(), {
       interval: 0,
     });
-    expect(notificationSuccessMock).toHaveBeenCalledWith('Agent removed from Pulse');
+    expect(notificationSuccessMock).toHaveBeenCalledWith(
+      'Monitoring stopped for Tower. Pulse will ignore future reports until reconnect is allowed.',
+    );
   });
 });
 

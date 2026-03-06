@@ -135,7 +135,7 @@ func TestSendReportHostRemoved(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"docker host \"5316f5e1\" was removed at 2025-11-02T13:45:15Z and cannot report again","code":"invalid_report"}`))
+		_, _ = w.Write([]byte(`{"error":"docker host \"5316f5e1\" had monitoring stopped at 2025-11-02T13:45:15Z and cannot report again","code":"invalid_report"}`))
 	}))
 	defer server.Close()
 

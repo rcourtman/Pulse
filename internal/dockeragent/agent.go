@@ -911,7 +911,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 				Str("hostID", a.hostID).
 				Str("pulseURL", target.URL).
 				Str("detail", hostRemoved).
-				Msg("Pulse rejected docker report because this host was previously removed. Allow the host to re-enroll from the Pulse UI or rerun the installer with a docker:manage token.")
+				Msg("Pulse rejected docker report because monitoring was previously stopped for this host. Allow reconnect from the Pulse UI or rerun the installer with a docker:manage token.")
 			return ErrStopRequested
 		}
 		errMsg := strings.TrimSpace(string(bodyBytes))
@@ -1335,7 +1335,9 @@ func detectHostRemovedError(body []byte) string {
 	if strings.ToLower(payload.Code) != "invalid_report" {
 		return ""
 	}
-	if !strings.Contains(strings.ToLower(payload.Error), "was removed") {
+	lowerError := strings.ToLower(payload.Error)
+	if !strings.Contains(lowerError, "was removed") &&
+		!strings.Contains(lowerError, "monitoring stopped") {
 		return ""
 	}
 	return payload.Error

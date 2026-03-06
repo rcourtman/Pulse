@@ -894,8 +894,8 @@ func TestApplyDockerReport_RemovedHostRejection(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for removed host")
 	}
-	if err != nil && !strings.Contains(err.Error(), "was removed") {
-		t.Errorf("expected 'was removed' in error message, got: %v", err)
+	if err != nil && !strings.Contains(err.Error(), "monitoring stopped") {
+		t.Errorf("expected 'monitoring stopped' in error message, got: %v", err)
 	}
 }
 

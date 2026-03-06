@@ -96,6 +96,10 @@ type UnifiedAgentRow = {
   };
 };
 
+const getInventorySubjectLabel = (name?: string, fallback?: string) => name || fallback || 'this host';
+const MONITORING_STOPPED_STATUS_LABEL = 'Monitoring stopped';
+const ALLOW_RECONNECT_LABEL = 'Allow reconnect';
+
 const INSTALL_PROFILE_OPTIONS: {
   value: InstallProfile;
   label: string;
@@ -1036,10 +1040,12 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
   const handleRemoveAgent = async (
     ids: { agentId?: string; dockerId?: string },
     capabilities: AgentCapability[],
+    subjectLabel?: string,
   ) => {
+    const subject = getInventorySubjectLabel(subjectLabel, 'this host');
     if (
       !confirm(
-        'Are you sure you want to remove this agent? This will stop monitoring but will not uninstall the agent from the remote machine.',
+        `Stop monitoring ${subject} in Pulse? The host will keep running remotely, but Pulse will ignore future reports until reconnect is allowed.`,
       )
     )
       return;
@@ -1058,32 +1064,36 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       }
       if (removed) {
         reconcileRemovedAgent(ids, capabilities);
-        notificationStore.success('Agent removed from Pulse');
+        notificationStore.success(
+          `Monitoring stopped for ${subject}. Pulse will ignore future reports until reconnect is allowed.`,
+        );
       } else {
-        notificationStore.error('No agent IDs available for removal');
+        notificationStore.error('No host identifiers are available to stop monitoring.');
       }
     } catch (err) {
-      logger.error('Failed to remove agent', err);
-      notificationStore.error('Failed to remove agent');
+      logger.error('Failed to stop monitoring host', err);
+      notificationStore.error(`Failed to stop monitoring ${subject}.`);
     }
   };
 
-  const handleAllowReenroll = async (agentId: string, hostname?: string) => {
+  const handleAllowReconnect = async (agentId: string, hostname?: string) => {
+    const subject = getInventorySubjectLabel(hostname, agentId);
     try {
       await MonitoringAPI.allowDockerRuntimeReenroll(agentId);
       notificationStore.success(
-        `Re-enrollment allowed for ${hostname || agentId}. Restart the agent to reconnect.`,
+        `Reconnect allowed for ${subject}. Pulse will accept reports from it again.`,
       );
     } catch (err) {
-      logger.error('Failed to allow re-enrollment', err);
-      notificationStore.error('Failed to allow re-enrollment');
+      logger.error('Failed to allow reconnect for host', err);
+      notificationStore.error(`Failed to allow reconnect for ${subject}.`);
     }
   };
 
-  const handleRemoveKubernetesCluster = async (clusterId: string) => {
+  const handleRemoveKubernetesCluster = async (clusterId: string, clusterName?: string) => {
+    const subject = getInventorySubjectLabel(clusterName, 'this cluster');
     if (
       !confirm(
-        'Are you sure you want to remove this Kubernetes cluster? This will stop monitoring but will not uninstall the agent from the cluster.',
+        `Stop monitoring ${subject} in Pulse? The cluster will keep running, but Pulse will ignore future reports until reconnect is allowed.`,
       )
     )
       return;
@@ -1091,22 +1101,23 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     try {
       await MonitoringAPI.deleteKubernetesCluster(clusterId);
       reconcileRemovedKubernetesCluster(clusterId);
-      notificationStore.success('Kubernetes cluster removed from Pulse');
+      notificationStore.success(
+        `Monitoring stopped for ${subject}. Pulse will ignore future reports until reconnect is allowed.`,
+      );
     } catch (err) {
-      logger.error('Failed to remove Kubernetes cluster', err);
-      notificationStore.error('Failed to remove Kubernetes cluster');
+      logger.error('Failed to stop monitoring kubernetes cluster', err);
+      notificationStore.error(`Failed to stop monitoring ${subject}.`);
     }
   };
 
-  const handleAllowKubernetesReenroll = async (clusterId: string, name?: string) => {
+  const handleAllowKubernetesReconnect = async (clusterId: string, name?: string) => {
+    const subject = getInventorySubjectLabel(name, clusterId);
     try {
       await MonitoringAPI.allowKubernetesClusterReenroll(clusterId);
-      notificationStore.success(
-        `Re-enrollment allowed for ${name || clusterId}. Restart the agent to reconnect.`,
-      );
+      notificationStore.success(`Reconnect allowed for ${subject}. Pulse will accept reports from it again.`);
     } catch (err) {
-      logger.error('Failed to allow kubernetes re-enrollment', err);
-      notificationStore.error('Failed to allow kubernetes re-enrollment');
+      logger.error('Failed to allow reconnect for kubernetes cluster', err);
+      notificationStore.error(`Failed to allow reconnect for ${subject}.`);
     }
   };
 
@@ -1771,8 +1782,8 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
           title={props.embedded ? 'Connected infrastructure' : 'Agent Inventory'}
           description={
             props.embedded
-              ? 'Review active and removed agent-managed infrastructure, including Docker and Kubernetes coverage.'
-              : 'Review active and removed agents, including Kubernetes clusters.'
+              ? 'Review active infrastructure and items with monitoring stopped, including Docker and Kubernetes coverage.'
+              : 'Review active agents and clusters with monitoring stopped.'
           }
           icon={<Users class="w-5 h-5" strokeWidth={2} />}
           bodyClass="space-y-4"
@@ -1863,7 +1874,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
             >
               <option value="all">All statuses</option>
               <option value="active">Active</option>
-              <option value="removed">Removed/Blocked</option>
+              <option value="removed">Monitoring stopped</option>
             </select>
           </div>
           <div class="space-y-1">
@@ -2020,7 +2031,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                   <span
                     class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}
                   >
-                    {isRemoved() ? 'Removed' : row.healthStatus || 'unknown'}
+                    {isRemoved() ? MONITORING_STOPPED_STATUS_LABEL : row.healthStatus || 'unknown'}
                   </span>
                 );
               },
@@ -2176,8 +2187,8 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                 const lastSeenLabel = () => {
                   if (isRemoved()) {
                     return row.removedAt
-                      ? `Removed ${formatRelativeTime(row.removedAt)}`
-                      : 'Removed';
+                      ? `Monitoring stopped ${formatRelativeTime(row.removedAt)}`
+                      : MONITORING_STOPPED_STATUS_LABEL;
                   }
                   return row.lastSeen ? formatRelativeTime(row.lastSeen) : '—';
                 };
@@ -2219,23 +2230,24 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                               handleRemoveAgent(
                                 { agentId: row.agentActionId, dockerId: row.dockerActionId },
                                 row.capabilities,
+                                row.name,
                               )
                             }
                             disabled={!canRemove()}
                             title={!canRemove() ? 'Agent ID unavailable for removal' : undefined}
                             class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
                           >
-                            Remove
+                            Stop monitoring
                           </button>
                         }
                       >
                         <button
                           onClick={() =>
-                            handleRemoveKubernetesCluster(row.kubernetesActionId || row.id)
+                            handleRemoveKubernetesCluster(row.kubernetesActionId || row.id, row.name)
                           }
                           class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
                         >
-                          Remove
+                          Stop monitoring
                         </button>
                       </Show>
                     }
@@ -2245,24 +2257,27 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                       fallback={
                         <button
                           onClick={() =>
-                            handleAllowKubernetesReenroll(
+                            handleAllowKubernetesReconnect(
                               row.kubernetesActionId || row.id,
                               row.name,
                             )
                           }
                           class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
                         >
-                          Allow re-enroll
+                          {ALLOW_RECONNECT_LABEL}
                         </button>
                       }
                     >
                       <button
                         onClick={() =>
-                          handleAllowReenroll(row.dockerActionId || row.id, row.hostname)
+                          handleAllowReconnect(
+                            row.dockerActionId || row.id,
+                            row.displayName || row.hostname || row.name,
+                          )
                         }
                         class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
                       >
-                        Allow re-enroll
+                        {ALLOW_RECONNECT_LABEL}
                       </button>
                     </Show>
                   </Show>
@@ -2369,8 +2384,13 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                     </Show>
                     <Show when={row.status === 'removed' && row.removedAt}>
                       <div class="text-xs text-muted">
-                        Removed {formatRelativeTime(row.removedAt)} (
+                        Monitoring stopped {formatRelativeTime(row.removedAt)} (
                         {formatAbsoluteTime(row.removedAt)})
+                      </div>
+                    </Show>
+                    <Show when={row.status === 'removed'}>
+                      <div class="text-xs text-muted">
+                        Pulse is ignoring new reports from this item until reconnect is allowed.
                       </div>
                     </Show>
                     <Show

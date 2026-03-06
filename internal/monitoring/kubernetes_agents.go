@@ -53,7 +53,7 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 			Str("k8sClusterID", identifier).
 			Time("removedAt", removedAt).
 			Msg("Rejecting report from deliberately removed Kubernetes cluster")
-		return models.KubernetesCluster{}, fmt.Errorf("kubernetes cluster %q was removed at %v and cannot report again. Use Allow re-enroll in Settings -> Agents -> Removed Kubernetes Clusters or rerun the installer with a kubernetes:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
+		return models.KubernetesCluster{}, fmt.Errorf("kubernetes cluster %q had monitoring stopped at %v and cannot report again. Use Allow reconnect in Settings -> Infrastructure or rerun the installer with a kubernetes:manage token to clear this block", identifier, removedAt.Format(time.RFC3339))
 	}
 
 	// Enforce token uniqueness: each token can only be bound to one cluster agent

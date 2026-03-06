@@ -944,7 +944,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		appendNote(fmt.Sprintf("%d container runtime(s) have not reported an agent version yet. Reinstall the agent to enable the new command system.", diag.AgentsWithoutVersion))
 	}
 	if diag.AgentsWithStaleCommand > 0 {
-		appendNote(fmt.Sprintf("%d container runtime command(s) appear stuck. Use the 'Allow re-enroll' action in Settings → Agents to reset them.", diag.AgentsWithStaleCommand))
+		appendNote(fmt.Sprintf("%d container runtime command(s) appear stuck. Use the 'Allow reconnect' action in Settings → Infrastructure to reset them.", diag.AgentsWithStaleCommand))
 	}
 	if diag.AgentsPendingUninstall > 0 {
 		appendNote(fmt.Sprintf("%d container runtime(s) are pending uninstall. Confirm the uninstall or clear the flag from Settings → Agents.", diag.AgentsPendingUninstall))
