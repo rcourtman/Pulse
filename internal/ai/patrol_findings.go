@@ -659,7 +659,7 @@ type patrolFindingCreatorAdapter struct {
 }
 
 func newPatrolFindingCreatorAdapter(p *PatrolService, snap models.StateSnapshot) *patrolFindingCreatorAdapter {
-	return newPatrolFindingCreatorAdapterState(p, newPatrolRuntimeState(snap))
+	return newPatrolFindingCreatorAdapterState(p, p.patrolRuntimeStateForSnapshot(snap))
 }
 
 func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState) *patrolFindingCreatorAdapter {
@@ -1640,7 +1640,7 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 }
 
 func (p *PatrolService) verifyGuestReachability(ctx context.Context, snap models.StateSnapshot, guestID string) (bool, error) {
-	return p.verifyGuestReachabilityState(ctx, newPatrolRuntimeState(snap), guestID)
+	return p.verifyGuestReachabilityState(ctx, p.patrolRuntimeStateForSnapshot(snap), guestID)
 }
 
 func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap patrolRuntimeState, guestID string) (bool, error) {

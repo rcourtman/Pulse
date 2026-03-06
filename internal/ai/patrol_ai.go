@@ -202,7 +202,7 @@ func CleanThinkingTokens(content string) string {
 // The LLM investigates using MCP tools and reports findings via patrol_report_finding.
 // An optional scope focuses the patrol on specific resources.
 func (p *PatrolService) runAIAnalysis(ctx context.Context, snap models.StateSnapshot, scope *PatrolScope) (*AIAnalysisResult, error) {
-	return p.runAIAnalysisState(ctx, newPatrolRuntimeState(snap), scope)
+	return p.runAIAnalysisState(ctx, p.patrolRuntimeStateForSnapshot(snap), scope)
 }
 
 func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRuntimeState, scope *PatrolScope) (*AIAnalysisResult, error) {
@@ -1167,7 +1167,7 @@ func (p *PatrolService) buildTriageSeedContext(
 	scope *PatrolScope,
 	guestIntel map[string]*GuestIntelligence,
 ) (string, []string) {
-	return p.buildTriageSeedContextState(triage, newPatrolRuntimeState(snap), scope, guestIntel)
+	return p.buildTriageSeedContextState(triage, p.patrolRuntimeStateForSnapshot(snap), scope, guestIntel)
 }
 
 func (p *PatrolService) buildTriageSeedContextState(
@@ -1218,7 +1218,7 @@ func (p *PatrolService) buildTriageSeedContextState(
 // connection health, and baselines/trends so the model can analyze without tool calls.
 // Tools remain available for targeted deep-dives.
 func (p *PatrolService) buildSeedContext(snap models.StateSnapshot, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
-	return p.buildSeedContextState(newPatrolRuntimeState(snap), scope, guestIntel)
+	return p.buildSeedContextState(p.patrolRuntimeStateForSnapshot(snap), scope, guestIntel)
 }
 
 func (p *PatrolService) buildSeedContextState(snap patrolRuntimeState, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
@@ -1461,7 +1461,7 @@ func (p *PatrolService) seedPreviousRun(now time.Time) string {
 // seedPrecomputeIntelligence pre-computes anomalies, forecasts, predictions, changes,
 // and correlations used by multiple seed context sections.
 func (p *PatrolService) seedPrecomputeIntelligence(snap models.StateSnapshot, scopedSet map[string]bool, now time.Time) seedIntelligence {
-	return p.seedPrecomputeIntelligenceState(newPatrolRuntimeState(snap), scopedSet, now)
+	return p.seedPrecomputeIntelligenceState(p.patrolRuntimeStateForSnapshot(snap), scopedSet, now)
 }
 
 func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState, scopedSet map[string]bool, now time.Time) seedIntelligence {
@@ -1471,8 +1471,9 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 	pd := p.patternDetector
 	cd := p.changeDetector
 	corrDet := p.correlationDetector
-	rs := p.readState
 	p.mu.RUnlock()
+
+	rs := snap.readState
 
 	var intel seedIntelligence
 	intel.hasBaselineStore = bs != nil
@@ -1760,7 +1761,7 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 
 // seedResourceInventory builds the node, guest, docker, storage, ceph, and PBS sections.
 func (p *PatrolService) seedResourceInventory(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
-	return p.seedResourceInventoryState(newPatrolRuntimeState(snap), scopedSet, cfg, now, isQuiet, guestIntel)
+	return p.seedResourceInventoryState(p.patrolRuntimeStateForSnapshot(snap), scopedSet, cfg, now, isQuiet, guestIntel)
 }
 
 func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
@@ -1776,9 +1777,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 			pendingUpdates   int
 		}
 
-		p.mu.RLock()
-		rs := p.readState
-		p.mu.RUnlock()
+		rs := snap.readState
 
 		var scopedNodes []nodeRow
 		if rs != nil {
@@ -1880,9 +1879,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 	var guests []guestRow
 
 	if cfg.AnalyzeGuests {
-		p.mu.RLock()
-		rs := p.readState
-		p.mu.RUnlock()
+		rs := snap.readState
 
 		if rs != nil {
 			for _, vmv := range rs.VMs() {
@@ -2009,9 +2006,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 
 	// --- Docker ---
 	if cfg.AnalyzeDocker {
-		p.mu.RLock()
-		rs := p.readState
-		p.mu.RUnlock()
+		rs := snap.readState
 
 		if rs != nil {
 			legacyByID := make(map[string]models.DockerHost, len(snap.DockerHosts))
@@ -2106,9 +2101,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 
 	// --- Storage Pools ---
 	if cfg.AnalyzeStorage {
-		p.mu.RLock()
-		urp := p.unifiedResourceProvider
-		p.mu.RUnlock()
+		urp := snap.unifiedResourceProvider
 		if urp != nil {
 			storageResources := urp.GetByType(unifiedresources.ResourceTypeStorage)
 			if len(storageResources) > 0 {
@@ -2239,9 +2232,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 	}
 
 	// --- Ceph Clusters ---
-	p.mu.RLock()
-	urp := p.unifiedResourceProvider
-	p.mu.RUnlock()
+	urp := snap.unifiedResourceProvider
 	if urp != nil {
 		cephResources := urp.GetByType(unifiedresources.ResourceTypeCeph)
 		if len(cephResources) > 0 {
@@ -2287,7 +2278,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 // seedResourceInventorySummary builds a compact, always-condensed inventory snapshot.
 // Unlike seedResourceInventory quiet mode, this summary condenses even when scoped.
 func (p *PatrolService) seedResourceInventorySummary(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, guestIntel map[string]*GuestIntelligence) string {
-	return p.seedResourceInventorySummaryState(newPatrolRuntimeState(snap), scopedSet, cfg, now, guestIntel)
+	return p.seedResourceInventorySummaryState(p.patrolRuntimeStateForSnapshot(snap), scopedSet, cfg, now, guestIntel)
 }
 
 func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, guestIntel map[string]*GuestIntelligence) string {
@@ -2303,9 +2294,7 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 
 	// --- Nodes ---
 	if cfg.AnalyzeNodes {
-		p.mu.RLock()
-		rs := p.readState
-		p.mu.RUnlock()
+		rs := snap.readState
 
 		nodes := make([]compactResource, 0, len(snap.Nodes))
 		if rs != nil {
@@ -2373,9 +2362,7 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 
 	// --- Guests ---
 	if cfg.AnalyzeGuests {
-		p.mu.RLock()
-		rs := p.readState
-		p.mu.RUnlock()
+		rs := snap.readState
 
 		guests := []compactResource{}
 		if rs != nil {
@@ -2469,9 +2456,7 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 			usage        float64
 		}
 
-		p.mu.RLock()
-		urp := p.unifiedResourceProvider
-		p.mu.RUnlock()
+		urp := snap.unifiedResourceProvider
 
 		rows := []storageRow{}
 		if urp != nil {
@@ -2553,7 +2538,7 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 }
 
 func (p *PatrolService) seedPMGSnapshotString(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) string {
-	return p.seedPMGSnapshotStringState(newPatrolRuntimeState(snap), scopedSet, cfg, isQuiet)
+	return p.seedPMGSnapshotStringState(p.patrolRuntimeStateForSnapshot(snap), scopedSet, cfg, isQuiet)
 }
 
 func (p *PatrolService) seedPMGSnapshotStringState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) string {
@@ -2568,9 +2553,7 @@ func (p *PatrolService) seedPMGSnapshotState(sb *strings.Builder, snap patrolRun
 		return
 	}
 
-	p.mu.RLock()
-	rs := p.readState
-	p.mu.RUnlock()
+	rs := snap.readState
 
 	if rs == nil {
 		return
@@ -2639,7 +2622,7 @@ func (p *PatrolService) seedPMGSnapshotState(sb *strings.Builder, snap patrolRun
 
 // seedBackupAnalysis builds the backup status section.
 func (p *PatrolService) seedBackupAnalysis(snap models.StateSnapshot, now time.Time) string {
-	return p.seedBackupAnalysisState(newPatrolRuntimeState(snap), now)
+	return p.seedBackupAnalysisState(p.patrolRuntimeStateForSnapshot(snap), now)
 }
 
 func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now time.Time) string {
@@ -2650,9 +2633,7 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 	guestBackups := make(map[string]*backupInfo)
 
 	vmidToName := make(map[int]string)
-	p.mu.RLock()
-	rs := p.readState
-	p.mu.RUnlock()
+	rs := snap.readState
 	// Uses canonical ReadState view surface — legacy state fallbacks removed.
 	if rs == nil {
 		log.Warn().Msg("seedBackupAnalysis: ReadState not wired, backup analysis will be incomplete")
@@ -2788,23 +2769,19 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 
 // seedHealthAndAlerts builds the disk health, alerts, connection health, kubernetes, and hosts sections.
 func (p *PatrolService) seedHealthAndAlerts(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time) string {
-	return p.seedHealthAndAlertsState(newPatrolRuntimeState(snap), scopedSet, cfg, now)
+	return p.seedHealthAndAlertsState(p.patrolRuntimeStateForSnapshot(snap), scopedSet, cfg, now)
 }
 
 func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time) string {
 	var sb strings.Builder
 
-	p.mu.RLock()
-	rs := p.readState
-	p.mu.RUnlock()
+	rs := snap.readState
 	if rs == nil && (cfg.AnalyzeKubernetes || cfg.AnalyzeHosts) {
 		log.Warn().Msg("seedHealthAndAlerts: ReadState not wired, Kubernetes/Hosts sections will be omitted")
 	}
 
 	// --- Disk Health ---
-	p.mu.RLock()
-	diskURP := p.unifiedResourceProvider
-	p.mu.RUnlock()
+	diskURP := snap.unifiedResourceProvider
 	if diskURP != nil {
 		diskResources := diskURP.GetByType(unifiedresources.ResourceTypePhysicalDisk)
 		if len(diskResources) > 0 {
@@ -3030,7 +3007,7 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 
 // seedFindingsAndContext builds the thresholds, active findings, dismissed findings, and user notes sections.
 func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, snap models.StateSnapshot) (string, []string) {
-	return p.seedFindingsAndContextState(scope, newPatrolRuntimeState(snap))
+	return p.seedFindingsAndContextState(scope, p.patrolRuntimeStateForSnapshot(snap))
 }
 
 func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap patrolRuntimeState) (string, []string) {
@@ -3050,9 +3027,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 
 	// Build set of known resource IDs/names for existence checks
 	knownResources := make(map[string]bool)
-	p.mu.RLock()
-	rs := p.readState
-	p.mu.RUnlock()
+	rs := snap.readState
 	if rs != nil {
 		for _, n := range rs.Nodes() {
 			knownResources[n.ID()] = true

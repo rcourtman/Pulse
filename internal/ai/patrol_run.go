@@ -268,10 +268,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	state := p.currentPatrolRuntimeState()
 
-	// Snapshot readState under lock to avoid races with SetReadState.
-	p.mu.RLock()
-	rs := p.readState
-	p.mu.RUnlock()
+	rs := state.readState
 
 	// Helper to track findings
 	// Note: Only warning+ severity findings count toward newFindings since watch/info are filtered from UI
@@ -942,7 +939,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 // filterStateByScope filters a StateSnapshot to only include resources matching the scope.
 func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
-	return p.filterStateByScopeState(newPatrolRuntimeState(snap), scope).snapshot()
+	return p.filterStateByScopeState(p.patrolRuntimeStateForSnapshot(snap), scope).snapshot()
 }
 
 func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
@@ -1016,11 +1013,13 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 	}
 
 	filtered := patrolRuntimeState{
-		LastUpdate:       snap.LastUpdate,
-		ConnectionHealth: snap.ConnectionHealth,
-		Stats:            snap.Stats,
-		ActiveAlerts:     snap.ActiveAlerts,
-		RecentlyResolved: snap.RecentlyResolved,
+		readState:               snap.readState,
+		unifiedResourceProvider: snap.unifiedResourceProvider,
+		LastUpdate:              snap.LastUpdate,
+		ConnectionHealth:        snap.ConnectionHealth,
+		Stats:                   snap.Stats,
+		ActiveAlerts:            snap.ActiveAlerts,
+		RecentlyResolved:        snap.RecentlyResolved,
 	}
 
 	// Filter each resource type
@@ -1506,7 +1505,7 @@ func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
 // This is the core of autonomous alert management - the AI looks at each alert, checks current state,
 // and determines if the underlying issue has been resolved.
 func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models.StateSnapshot, llmAllowed bool) int {
-	return p.reviewAndResolveAlertsState(ctx, newPatrolRuntimeState(state), llmAllowed)
+	return p.reviewAndResolveAlertsState(ctx, p.patrolRuntimeStateForSnapshot(state), llmAllowed)
 }
 
 func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state patrolRuntimeState, llmAllowed bool) int {
@@ -1578,7 +1577,7 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 // shouldResolveAlert determines if an alert should be auto-resolved based on current state.
 // Returns (shouldResolve, reason)
 func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
-	return p.shouldResolveAlertState(ctx, alert, newPatrolRuntimeState(snap), aiService)
+	return p.shouldResolveAlertState(ctx, alert, p.patrolRuntimeStateForSnapshot(snap), aiService)
 }
 
 func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
@@ -1628,7 +1627,7 @@ func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert Alert
 
 // getCurrentMetricValue gets the current value of the metric that triggered the alert
 func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.StateSnapshot) float64 {
-	return p.getCurrentMetricValueState(alert, newPatrolRuntimeState(snap))
+	return p.getCurrentMetricValueState(alert, p.patrolRuntimeStateForSnapshot(snap))
 }
 
 func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolRuntimeState) float64 {
@@ -1697,7 +1696,7 @@ func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolR
 
 // isResourceOnline checks if a resource that triggered an offline alert is now online
 func (p *PatrolService) isResourceOnline(alert AlertInfo, snap models.StateSnapshot) bool {
-	return p.isResourceOnlineState(alert, newPatrolRuntimeState(snap))
+	return p.isResourceOnlineState(alert, p.patrolRuntimeStateForSnapshot(snap))
 }
 
 func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntimeState) bool {
@@ -1740,7 +1739,7 @@ func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntim
 
 // askAIAboutAlert uses the AI to determine if an alert should be resolved
 func (p *PatrolService) askAIAboutAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
-	return p.askAIAboutAlertState(ctx, alert, newPatrolRuntimeState(snap), aiService)
+	return p.askAIAboutAlertState(ctx, alert, p.patrolRuntimeStateForSnapshot(snap), aiService)
 }
 
 func (p *PatrolService) askAIAboutAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
@@ -1788,7 +1787,7 @@ Respond with ONLY one of:
 
 // getResourceCurrentState returns a description of the resource's current state
 func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.StateSnapshot) string {
-	return p.getResourceCurrentStateState(alert, newPatrolRuntimeState(snap))
+	return p.getResourceCurrentStateState(alert, p.patrolRuntimeStateForSnapshot(snap))
 }
 
 func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patrolRuntimeState) string {

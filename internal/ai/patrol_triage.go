@@ -56,7 +56,7 @@ func (p *PatrolService) RunDeterministicTriage(
 	scope *PatrolScope,
 	guestIntel map[string]*GuestIntelligence,
 ) *TriageResult {
-	return p.runDeterministicTriageState(ctx, newPatrolRuntimeState(snap), scope, guestIntel)
+	return p.runDeterministicTriageState(ctx, p.patrolRuntimeStateForSnapshot(snap), scope, guestIntel)
 }
 
 func (p *PatrolService) runDeterministicTriageState(

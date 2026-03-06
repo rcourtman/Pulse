@@ -628,6 +628,74 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 	}
 }
 
+func TestSeedHealthAndAlertsState_UsesRuntimeStateProviders(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{
+		ConnectionHealth: map[string]bool{
+			"node-1": true,
+			"node-2": false,
+		},
+		KubernetesClusters: []models.KubernetesCluster{
+			{ID: "k8s-1", Name: "k1", Nodes: []models.KubernetesNode{{Name: "n1"}}},
+		},
+	})
+
+	k8sView := unifiedresources.NewK8sClusterView(&unifiedresources.Resource{
+		ID: "k8s-1", Name: "k1", Type: unifiedresources.ResourceTypeK8sCluster,
+		ChildCount: 1,
+	})
+	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID: "host-1", Name: "host-1", Type: unifiedresources.ResourceTypeAgent,
+		Agent: &unifiedresources.AgentData{Hostname: "host-1"},
+	})
+	runtimeState.readState = &mockReadState{
+		k8sClusters: []*unifiedresources.K8sClusterView{&k8sView},
+		hosts:       []*unifiedresources.HostView{&hostView},
+	}
+	runtimeState.unifiedResourceProvider = &mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{
+					Name:       "disk",
+					Type:       unifiedresources.ResourceTypePhysicalDisk,
+					ParentName: "node-1",
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+						DevPath:     "/dev/sda",
+						Model:       "disk",
+						Health:      "FAILED",
+						Wearout:     10,
+						Temperature: 60,
+					},
+				},
+			}
+		},
+	}
+
+	// Clear service-level providers to prove this path uses the captured runtime state.
+	ps.SetReadState(nil)
+	ps.SetUnifiedResourceProvider(nil)
+
+	out := ps.seedHealthAndAlertsState(runtimeState, nil, cfg, now)
+	for _, part := range []string{
+		"# Disk Health",
+		"/dev/sda",
+		"# Connections",
+		"Disconnected: node-2",
+		"# Kubernetes Clusters",
+		"# Hosts",
+	} {
+		if !strings.Contains(out, part) {
+			t.Fatalf("expected runtime-state-backed output to contain %q, got: %s", part, out)
+		}
+	}
+}
+
 func TestSeedIntelligenceContext_EmptyAnomalies(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	out := ps.seedIntelligenceContext(seedIntelligence{hasBaselineStore: true}, time.Now())
