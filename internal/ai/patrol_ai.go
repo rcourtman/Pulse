@@ -1382,10 +1382,10 @@ func buildScopeSection(scope *PatrolScope, effectiveScopeIDs []string) string {
 		sb.WriteString(fmt.Sprintf("Context: %s\n", scope.Context))
 	}
 	if len(scope.ResourceIDs) > 0 {
-		sb.WriteString(fmt.Sprintf("Focus resources: %s\n", strings.Join(scope.ResourceIDs, ", ")))
+		sb.WriteString(fmt.Sprintf("Requested resources: %s\n", strings.Join(scope.ResourceIDs, ", ")))
 	}
 	if len(scope.ResourceTypes) > 0 {
-		sb.WriteString(fmt.Sprintf("Resource types: %s\n", strings.Join(scope.ResourceTypes, ", ")))
+		sb.WriteString(fmt.Sprintf("Requested resource types: %s\n", strings.Join(scope.ResourceTypes, ", ")))
 	}
 	if len(effectiveScopeIDs) > 0 {
 		sb.WriteString(fmt.Sprintf("Effective scope: %d %s (%s)\n",

@@ -57,10 +57,10 @@ func TestPatrolService_buildSeedContext_ScopeSection(t *testing.T) {
 	if !strings.Contains(seed, "Context: CPU alert") {
 		t.Fatalf("expected context in scope section, got:\n%s", seed)
 	}
-	if !strings.Contains(seed, "Focus resources: node-1") {
+	if !strings.Contains(seed, "Requested resources: node-1") {
 		t.Fatalf("expected resource IDs in scope section, got:\n%s", seed)
 	}
-	if !strings.Contains(seed, "Resource types: node") {
+	if !strings.Contains(seed, "Requested resource types: node") {
 		t.Fatalf("expected resource types in scope section, got:\n%s", seed)
 	}
 	if !strings.Contains(seed, "Effective scope: 1 resource (node-1)") {
