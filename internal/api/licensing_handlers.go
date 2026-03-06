@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -505,8 +503,16 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	if replayStore == nil {
 		replayStore = &jtiReplayStore{configDir: h.mtPersistence.BaseDataDir()}
 	}
-	tokenHash := sha256.Sum256([]byte(token))
-	replayID := "trial_activate:" + hex.EncodeToString(tokenHash[:])
+	replaySubject := strings.TrimSpace(claims.Subject)
+	if replaySubject == "" {
+		replaySubject = strings.TrimSpace(claims.ID)
+	}
+	if replaySubject == "" {
+		log.Warn().Msg("Trial activation token missing subject and jti")
+		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		return
+	}
+	replayID := "trial_activate:" + replaySubject
 	expiresAt := time.Now().UTC().Add(15 * time.Minute)
 	if claims.ExpiresAt != nil {
 		expiresAt = claims.ExpiresAt.Time

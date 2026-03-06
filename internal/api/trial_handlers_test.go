@@ -272,3 +272,64 @@ func TestTrialActivation_ReplayTokenRejected(t *testing.T) {
 		t.Fatalf("replay redirect=%q, want %q", got, "/settings?trial=replayed")
 	}
 }
+
+func TestTrialActivation_ReissuedTokenForSameSessionRejected(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	expiresAt := jwt.NewNumericDate(time.Now().Add(10 * time.Minute))
+	firstToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:        "default",
+		Email:        "owner@example.com",
+		InstanceHost: "pulse.example.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "cs_same_session",
+			ExpiresAt: expiresAt,
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken(first): %v", err)
+	}
+	secondToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:        "default",
+		Email:        "owner@example.com",
+		InstanceHost: "pulse.example.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "cs_same_session",
+			ExpiresAt: expiresAt,
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken(second): %v", err)
+	}
+	if firstToken == secondToken {
+		t.Fatalf("expected distinct signed tokens for same session subject")
+	}
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(firstToken), nil)
+	firstReq.Host = "pulse.example.com"
+	firstRec := httptest.NewRecorder()
+	h.HandleTrialActivation(firstRec, firstReq)
+	if firstRec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("first status=%d, want %d", firstRec.Code, http.StatusTemporaryRedirect)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(secondToken), nil)
+	secondReq.Host = "pulse.example.com"
+	secondRec := httptest.NewRecorder()
+	h.HandleTrialActivation(secondRec, secondReq)
+
+	if secondRec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("second status=%d, want %d", secondRec.Code, http.StatusTemporaryRedirect)
+	}
+	if got := secondRec.Header().Get("Location"); got != "/settings?trial=replayed" {
+		t.Fatalf("second redirect=%q, want %q", got, "/settings?trial=replayed")
+	}
+}
