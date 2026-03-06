@@ -1652,6 +1652,7 @@ type patrolNodeInventoryRow struct {
 }
 
 type patrolGuestInventoryRow struct {
+	id                        string
 	name, gType, node, status string
 	cpu, mem, disk            float64
 	lastBackup                time.Time
@@ -1763,6 +1764,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			}
 			gi := guestIntel[vmv.ID()]
 			guests = append(guests, patrolGuestInventoryRow{
+				id:         vmv.ID(),
 				name:       vmv.Name(),
 				gType:      "VM",
 				node:       vmv.Node(),
@@ -1781,6 +1783,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			}
 			gi := guestIntel[ctv.ID()]
 			guests = append(guests, patrolGuestInventoryRow{
+				id:         ctv.ID(),
 				name:       ctv.Name(),
 				gType:      "Container",
 				node:       ctv.Node(),
@@ -1803,6 +1806,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 		}
 		gi := guestIntel[vm.ID]
 		guests = append(guests, patrolGuestInventoryRow{
+			id:         vm.ID,
 			name:       vm.Name,
 			gType:      "VM",
 			node:       vm.Node,
@@ -1821,6 +1825,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 		}
 		gi := guestIntel[ct.ID]
 		guests = append(guests, patrolGuestInventoryRow{
+			id:         ct.ID,
 			name:       ct.Name,
 			gType:      "Container",
 			node:       ct.Node,
@@ -1957,6 +1962,67 @@ func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []
 }
 
 func patrolStoragePoolRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolStoragePoolRow {
+	rs := snap.readState
+	if rs != nil {
+		storagePools := rs.StoragePools()
+		rows := make([]patrolStoragePoolRow, 0, len(storagePools))
+		for _, spv := range storagePools {
+			if !seedIsInScope(scopedSet, spv.ID()) {
+				continue
+			}
+
+			name := strings.TrimSpace(spv.Name())
+			if name == "" {
+				name = strings.TrimSpace(spv.ID())
+			}
+			stype := strings.TrimSpace(spv.StorageType())
+			if stype == "" {
+				stype = "-"
+			}
+
+			node := strings.TrimSpace(spv.Node())
+			if node == "" && spv.Shared() {
+				node = "shared"
+			}
+
+			status := "active"
+			switch spv.Status() {
+			case unifiedresources.StatusOffline:
+				status = "inactive"
+			case unifiedresources.StatusUnknown:
+				status = "unknown"
+			case unifiedresources.StatusWarning:
+				status = "warning"
+			}
+			if spv.IsZFS() && strings.TrimSpace(spv.ZFSPoolState()) != "" {
+				status = strings.TrimSpace(spv.ZFSPoolState())
+			}
+
+			used := spv.DiskUsed()
+			total := spv.DiskTotal()
+			zfsRead := spv.ZFSReadErrors()
+			zfsWrite := spv.ZFSWriteErrors()
+			zfsCksum := spv.ZFSChecksumErrors()
+
+			rows = append(rows, patrolStoragePoolRow{
+				id:           spv.ID(),
+				name:         name,
+				stype:        stype,
+				node:         node,
+				status:       status,
+				used:         used,
+				total:        total,
+				hasBytes:     total > 0,
+				usage:        spv.DiskPercent(),
+				zfsRead:      zfsRead,
+				zfsWrite:     zfsWrite,
+				zfsCksum:     zfsCksum,
+				hasZFSErrors: spv.IsZFS() && (zfsRead > 0 || zfsWrite > 0 || zfsCksum > 0),
+			})
+		}
+		return rows
+	}
+
 	urp := snap.unifiedResourceProvider
 	if urp != nil {
 		storageResources := urp.GetByType(unifiedresources.ResourceTypeStorage)
