@@ -72,6 +72,12 @@ func Run(ctx context.Context, version string) error {
 	}
 	defer magicLinkSvc.Close()
 
+	trialSignupStore, err := NewTrialSignupStore(cfg.ControlPlaneDir())
+	if err != nil {
+		return fmt.Errorf("init trial signup store: %w", err)
+	}
+	defer trialSignupStore.Close()
+
 	// Initialize email sender
 	var emailSender email.Sender
 	if cfg.ResendAPIKey != "" {
@@ -99,13 +105,14 @@ func Run(ctx context.Context, version string) error {
 	mux := http.NewServeMux()
 	provisioner := cpstripe.NewProvisioner(reg, cfg.TenantsDir(), dockerMgr, magicLinkSvc, cfg.BaseURL, emailSender, cfg.EmailFrom, cfg.AllowDockerlessProvisioning)
 	deps := &Deps{
-		Config:      cfg,
-		Registry:    reg,
-		Docker:      dockerMgr,
-		MagicLinks:  magicLinkSvc,
-		Provisioner: provisioner,
-		Version:     version,
-		EmailSender: emailSender,
+		Config:           cfg,
+		Registry:         reg,
+		Docker:           dockerMgr,
+		MagicLinks:       magicLinkSvc,
+		TrialSignupStore: trialSignupStore,
+		Provisioner:      provisioner,
+		Version:          version,
+		EmailSender:      emailSender,
 	}
 	RegisterRoutes(mux, deps)
 

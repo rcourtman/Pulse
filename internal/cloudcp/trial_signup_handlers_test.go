@@ -10,13 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	stripe "github.com/stripe/stripe-go/v82"
 )
 
 func TestTrialSignupHandleStartProTrialRendersVerificationForm(t *testing.T) {
-	h := NewTrialSignupHandlers(&CPConfig{}, nil)
+	h := NewTrialSignupHandlers(&CPConfig{}, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com:7655/auth/trial-activate", nil)
 	rec := httptest.NewRecorder()
 
@@ -38,7 +37,7 @@ func TestTrialSignupHandleStartProTrialRendersVerificationForm(t *testing.T) {
 }
 
 func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
-	h, _ := newTrialSignupTestHandler(t)
+	h, _, sender := newTrialSignupTestHandler(t)
 	form := url.Values{
 		"org_id":     {"default"},
 		"return_url": {"https://pulse.example.com/auth/trial-activate"},
@@ -55,29 +54,49 @@ func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if h.emailSender.(*captureEmailSender).calls != 1 {
-		t.Fatalf("email sender calls=%d, want 1", h.emailSender.(*captureEmailSender).calls)
+	if sender.calls != 1 {
+		t.Fatalf("email sender calls=%d, want 1", sender.calls)
 	}
 	if !strings.Contains(rec.Body.String(), "Check owner@example.com for a verification link") {
 		t.Fatalf("expected verification sent message")
 	}
-	if !strings.Contains(h.emailSender.(*captureEmailSender).msg.Text, "/trial-signup/verify?token=") {
+	if !strings.Contains(sender.msg.Text, "/trial-signup/verify?token=") {
 		t.Fatalf("expected verification email to contain verify URL")
 	}
 }
 
-func TestTrialSignupHandleVerifyEmailRendersVerifiedState(t *testing.T) {
-	h, priv := newTrialSignupTestHandler(t)
-	token := mustSignTrialVerificationToken(t, h, priv, trialSignupVerificationClaims{
-		OrgID:            "default",
-		ReturnURL:        "https://pulse.example.com/auth/trial-activate",
-		Name:             "Test User",
-		Email:            "owner@example.com",
-		Company:          "Pulse Labs",
-		RegisteredClaims: registeredClaimsFor(h.now().UTC()),
-	})
+func TestTrialSignupHandleVerifyEmailConsumesSingleUseToken(t *testing.T) {
+	h, _, sender := newTrialSignupTestHandler(t)
+	rawToken := requestTrialVerification(t, h, sender)
 
-	req := httptest.NewRequest(http.MethodGet, "/trial-signup/verify?token="+url.QueryEscape(token), nil)
+	firstReq := httptest.NewRequest(http.MethodGet, "/trial-signup/verify?token="+url.QueryEscape(rawToken), nil)
+	firstRec := httptest.NewRecorder()
+	h.HandleVerifyEmail(firstRec, firstReq)
+	if firstRec.Code != http.StatusSeeOther {
+		t.Fatalf("first verify status=%d, want %d body=%q", firstRec.Code, http.StatusSeeOther, firstRec.Body.String())
+	}
+	location := firstRec.Header().Get("Location")
+	if !strings.Contains(location, "/trial-signup/verify?verified=") {
+		t.Fatalf("location=%q, want verified redirect", location)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/trial-signup/verify?token="+url.QueryEscape(rawToken), nil)
+	secondRec := httptest.NewRecorder()
+	h.HandleVerifyEmail(secondRec, secondReq)
+	if secondRec.Code != http.StatusBadRequest {
+		t.Fatalf("second verify status=%d, want %d body=%q", secondRec.Code, http.StatusBadRequest, secondRec.Body.String())
+	}
+	if !strings.Contains(secondRec.Body.String(), "invalid or expired") {
+		t.Fatalf("expected invalid link message, got %q", secondRec.Body.String())
+	}
+}
+
+func TestTrialSignupHandleVerifyEmailRendersVerifiedState(t *testing.T) {
+	h, _, sender := newTrialSignupTestHandler(t)
+	rawToken := requestTrialVerification(t, h, sender)
+	verifiedToken := verifyTrialRequest(t, h, rawToken)
+
+	req := httptest.NewRequest(http.MethodGet, "/trial-signup/verify?verified="+url.QueryEscape(verifiedToken), nil)
 	rec := httptest.NewRecorder()
 
 	h.HandleVerifyEmail(rec, req)
@@ -92,7 +111,7 @@ func TestTrialSignupHandleVerifyEmailRendersVerifiedState(t *testing.T) {
 }
 
 func TestTrialSignupHandleCheckoutRejectsUnverifiedRequest(t *testing.T) {
-	h, _ := newTrialSignupTestHandler(t)
+	h, _, _ := newTrialSignupTestHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(url.Values{}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -108,7 +127,7 @@ func TestTrialSignupHandleCheckoutRejectsUnverifiedRequest(t *testing.T) {
 }
 
 func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
-	h, priv := newTrialSignupTestHandler(t)
+	h, store, sender := newTrialSignupTestHandler(t)
 	capturedSuccessURL := ""
 	capturedCancelURL := ""
 	h.cfg.StripeAPIKey = "sk_test_123"
@@ -123,23 +142,18 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 		if got := strings.TrimSpace(params.Metadata["email_verified"]); got != "true" {
 			t.Fatalf("metadata email_verified=%q, want %q", got, "true")
 		}
+		if strings.TrimSpace(params.Metadata["trial_request_id"]) == "" {
+			t.Fatalf("expected trial_request_id metadata")
+		}
 		capturedSuccessURL = strings.TrimSpace(stripe.StringValue(params.SuccessURL))
 		capturedCancelURL = strings.TrimSpace(stripe.StringValue(params.CancelURL))
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
 	}
 
-	verifiedToken := mustSignTrialVerificationToken(t, h, priv, trialSignupVerificationClaims{
-		OrgID:            "default",
-		ReturnURL:        "https://pulse.example.com/auth/trial-activate",
-		Name:             "Test User",
-		Email:            "owner@example.com",
-		Company:          "Pulse Labs",
-		RegisteredClaims: registeredClaimsFor(h.now().UTC()),
-	})
+	rawToken := requestTrialVerification(t, h, sender)
+	verifiedToken := verifyTrialRequest(t, h, rawToken)
 
-	form := url.Values{
-		"verified_token": {verifiedToken},
-	}
+	form := url.Values{"verified_token": {verifiedToken}}
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -147,7 +161,7 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 	h.HandleCheckout(rec, req)
 
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusSeeOther, rec.Body.String())
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
 	if loc := rec.Header().Get("Location"); loc != "https://checkout.stripe.com/c/pay/cs_test" {
 		t.Fatalf("location=%q, want stripe checkout URL", loc)
@@ -155,8 +169,17 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 	if !strings.Contains(capturedSuccessURL, "session_id={CHECKOUT_SESSION_ID}") {
 		t.Fatalf("success_url=%q, expected unescaped Stripe session placeholder", capturedSuccessURL)
 	}
-	if !strings.Contains(capturedCancelURL, "/trial-signup/verify?") || !strings.Contains(capturedCancelURL, "cancelled=1") {
-		t.Fatalf("cancel_url=%q, expected verify page return", capturedCancelURL)
+	if !strings.Contains(capturedCancelURL, "/trial-signup/verify?") || !strings.Contains(capturedCancelURL, "verified=") || !strings.Contains(capturedCancelURL, "cancelled=1") {
+		t.Fatalf("cancel_url=%q, expected verified page return", capturedCancelURL)
+	}
+
+	recordID := parseVerifiedTokenRequestID(t, h, verifiedToken)
+	record, err := store.GetRecord(recordID)
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if record.CheckoutStartedAt.IsZero() {
+		t.Fatalf("expected checkout_started_at to be recorded")
 	}
 }
 
@@ -169,7 +192,7 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil)
+	}, nil, nil)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
@@ -210,37 +233,100 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	}
 }
 
-func newTrialSignupTestHandler(t *testing.T) (*TrialSignupHandlers, ed25519.PrivateKey) {
+func newTrialSignupTestHandler(t *testing.T) (*TrialSignupHandlers, *TrialSignupStore, *captureEmailSender) {
 	t.Helper()
 
-	_, priv, err := ed25519.GenerateKey(nil)
+	_, activationPriv, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		t.Fatalf("GenerateKey: %v", err)
+		t.Fatalf("GenerateKey activation: %v", err)
 	}
+	_, checkoutPriv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey checkout: %v", err)
+	}
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
 	sender := &captureEmailSender{}
 	h := NewTrialSignupHandlers(&CPConfig{
 		BaseURL:                   "https://cloud.example.com",
-		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(activationPriv),
+		TrialCheckoutPrivateKey:   base64.StdEncoding.EncodeToString(checkoutPriv),
 		EmailFrom:                 "noreply@pulserelay.pro",
-	}, sender)
+	}, sender, store)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
-	return h, priv
+	return h, store, sender
 }
 
-func mustSignTrialVerificationToken(t *testing.T, h *TrialSignupHandlers, privateKey ed25519.PrivateKey, claims trialSignupVerificationClaims) string {
+func requestTrialVerification(t *testing.T, h *TrialSignupHandlers, sender *captureEmailSender) string {
 	t.Helper()
 
-	token, err := h.signTrialSignupVerificationToken(privateKey, claims)
-	if err != nil {
-		t.Fatalf("signTrialSignupVerificationToken: %v", err)
+	form := url.Values{
+		"org_id":     {"default"},
+		"return_url": {"https://pulse.example.com/auth/trial-activate"},
+		"name":       {"Test User"},
+		"email":      {"owner@example.com"},
+		"company":    {"Pulse Labs"},
 	}
-	return token
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleRequestVerification(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("request verification status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	rawToken := extractQueryValueFromTextURL(t, sender.msg.Text, "token")
+	if rawToken == "" {
+		t.Fatalf("expected token in verification email body")
+	}
+	return rawToken
 }
 
-func registeredClaimsFor(now time.Time) jwt.RegisteredClaims {
-	return jwt.RegisteredClaims{
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupVerificationTTL)),
-		Subject:   "owner@example.com",
+func verifyTrialRequest(t *testing.T, h *TrialSignupHandlers, rawToken string) string {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/trial-signup/verify?token="+url.QueryEscape(rawToken), nil)
+	rec := httptest.NewRecorder()
+	h.HandleVerifyEmail(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("verify request status=%d body=%q", rec.Code, rec.Body.String())
 	}
+	verifiedToken := extractQueryValueFromURL(t, rec.Header().Get("Location"), "verified")
+	if verifiedToken == "" {
+		t.Fatalf("expected verified token in redirect URL")
+	}
+	return verifiedToken
+}
+
+func parseVerifiedTokenRequestID(t *testing.T, h *TrialSignupHandlers, verifiedToken string) string {
+	t.Helper()
+	claims, err := h.verifyTrialSignupCheckoutToken(verifiedToken)
+	if err != nil {
+		t.Fatalf("verifyTrialSignupCheckoutToken: %v", err)
+	}
+	return claims.RequestID
+}
+
+func extractQueryValueFromTextURL(t *testing.T, text, key string) string {
+	t.Helper()
+	start := strings.Index(text, "https://")
+	if start == -1 {
+		t.Fatalf("no URL found in %q", text)
+	}
+	rawURL := strings.Fields(text[start:])[0]
+	return extractQueryValueFromURL(t, rawURL, key)
+}
+
+func extractQueryValueFromURL(t *testing.T, rawURL, key string) string {
+	t.Helper()
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		t.Fatalf("Parse URL %q: %v", rawURL, err)
+	}
+	return strings.TrimSpace(parsed.Query().Get(key))
 }

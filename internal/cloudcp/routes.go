@@ -19,13 +19,14 @@ import (
 
 // Deps holds shared dependencies injected into HTTP handlers.
 type Deps struct {
-	Config      *CPConfig
-	Registry    *registry.TenantRegistry
-	Docker      *docker.Manager // nil if Docker is unavailable
-	MagicLinks  *cpauth.Service // control plane magic link service
-	Provisioner *cpstripe.Provisioner
-	Version     string
-	EmailSender email.Sender
+	Config           *CPConfig
+	Registry         *registry.TenantRegistry
+	Docker           *docker.Manager // nil if Docker is unavailable
+	MagicLinks       *cpauth.Service // control plane magic link service
+	TrialSignupStore *TrialSignupStore
+	Provisioner      *cpstripe.Provisioner
+	Version          string
+	EmailSender      email.Sender
 }
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
@@ -92,7 +93,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	}
 
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
-	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender)
+	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore)
 	mux.Handle("/start-pro-trial", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
 	mux.Handle("/api/trial-signup/request-verification", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
 	mux.Handle("/trial-signup/verify", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))

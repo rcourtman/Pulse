@@ -16,6 +16,11 @@ func TestRegisterRoutes_AccountAndTenantMethodDispatch(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
+	trialStore, err := NewTrialSignupStore(dir)
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -25,8 +30,9 @@ func TestRegisterRoutes_AccountAndTenantMethodDispatch(t *testing.T) {
 			BaseURL:             "https://cloud.example.com",
 			StripeWebhookSecret: "whsec_test",
 		},
-		Registry: reg,
-		Version:  "test",
+		Registry:         reg,
+		TrialSignupStore: trialStore,
+		Version:          "test",
 	})
 
 	tests := []struct {
@@ -93,6 +99,11 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
+	trialStore, err := NewTrialSignupStore(dir)
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -102,8 +113,9 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 			BaseURL:             "https://cloud.example.com",
 			StripeWebhookSecret: "whsec_test",
 		},
-		Registry: reg,
-		Version:  "test",
+		Registry:         reg,
+		TrialSignupStore: trialStore,
+		Version:          "test",
 	})
 
 	pageReq := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com/auth/trial-activate", nil)
@@ -145,6 +157,11 @@ func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 		t.Fatalf("NewTenantRegistry: %v", err)
 	}
 	t.Cleanup(func() { _ = reg.Close() })
+	trialStore, err := NewTrialSignupStore(dir)
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { trialStore.Close() })
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
@@ -154,8 +171,9 @@ func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 			BaseURL:             "https://cloud.example.com",
 			StripeWebhookSecret: "whsec_test",
 		},
-		Registry: reg,
-		Version:  "test",
+		Registry:         reg,
+		TrialSignupStore: trialStore,
+		Version:          "test",
 	})
 
 	signupPageReq := httptest.NewRequest(http.MethodGet, "/signup", nil)

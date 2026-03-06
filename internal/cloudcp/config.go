@@ -38,6 +38,7 @@ type CPConfig struct {
 	CloudPowerPriceID                 string // Cloud Power tier price ID (optional)
 	CloudMaxPriceID                   string // Cloud Max tier price ID (optional)
 	TrialActivationPrivateKey         string
+	TrialCheckoutPrivateKey           string
 	RequireEmailProvider              bool
 	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
@@ -122,6 +123,7 @@ func LoadConfig() (*CPConfig, error) {
 		CloudPowerPriceID:                 strings.TrimSpace(os.Getenv("CP_CLOUD_POWER_PRICE_ID")),
 		CloudMaxPriceID:                   strings.TrimSpace(os.Getenv("CP_CLOUD_MAX_PRICE_ID")),
 		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
+		TrialCheckoutPrivateKey:           strings.TrimSpace(os.Getenv("CP_TRIAL_CHECKOUT_PRIVATE_KEY")),
 		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
@@ -191,6 +193,12 @@ func (c *CPConfig) validate() error {
 	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialSignupPriceID) == "" {
 		return fmt.Errorf("CP_TRIAL_SIGNUP_PRICE_ID is required when STRIPE_API_KEY is configured")
+	}
+	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
+		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
+	}
+	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialCheckoutPrivateKey) == "" {
+		return fmt.Errorf("CP_TRIAL_CHECKOUT_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
 	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" {
 		stripeMode := stripeSecretKeyMode(c.StripeAPIKey)

@@ -24,8 +24,8 @@ const (
 	trialSignupTrialDays               = 14
 	trialSignupVerificationTTL         = 20 * time.Minute
 	stripeCheckoutSessionIDPlaceholder = "{CHECKOUT_SESSION_ID}"
-	trialSignupVerificationIssuer      = "pulse-pro-trial-email-verify"
-	trialSignupVerificationAudience    = "pulse-pro-trial-checkout"
+	trialSignupCheckoutIssuer          = "pulse-pro-trial-checkout"
+	trialSignupCheckoutAudience        = "pulse-pro-trial-checkout"
 )
 
 var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Parse(`<!DOCTYPE html>
@@ -252,6 +252,7 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
 type TrialSignupHandlers struct {
 	cfg                   *CPConfig
 	emailSender           cpemail.Sender
+	verificationStore     *TrialSignupStore
 	createCheckoutSession func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 	getCheckoutSession    func(id string, params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 	now                   func() time.Time
@@ -272,19 +273,16 @@ type trialSignupPageData struct {
 	Nonce            string
 }
 
-type trialSignupVerificationClaims struct {
-	OrgID     string `json:"org_id"`
-	ReturnURL string `json:"return_url"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Company   string `json:"company,omitempty"`
+type trialSignupCheckoutClaims struct {
+	RequestID string `json:"request_id"`
 	jwt.RegisteredClaims
 }
 
-func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender) *TrialSignupHandlers {
+func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender, verificationStore *TrialSignupStore) *TrialSignupHandlers {
 	return &TrialSignupHandlers{
 		cfg:                   cfg,
 		emailSender:           emailSender,
+		verificationStore:     verificationStore,
 		createCheckoutSession: stripesession.New,
 		getCheckoutSession:    stripesession.Get,
 		now:                   func() time.Time { return time.Now().UTC() },
@@ -346,40 +344,29 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
 		return
 	}
-	if h.emailSender == nil || h.cfg == nil || strings.TrimSpace(h.cfg.EmailFrom) == "" {
+	if h.emailSender == nil || h.cfg == nil || strings.TrimSpace(h.cfg.EmailFrom) == "" || h.verificationStore == nil {
 		data.ErrorMessage = "Email verification is not configured yet. Please contact support."
 		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
 		return
 	}
 
-	privateKey, err := h.trialActivationPrivateKey()
-	if err != nil {
-		log.Error().Err(err).Msg("trial signup verification key unavailable")
-		data.ErrorMessage = "Trial verification is unavailable right now. Please try again shortly."
-		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
-		return
-	}
-
-	token, err := h.signTrialSignupVerificationToken(privateKey, trialSignupVerificationClaims{
-		OrgID:     data.OrgID,
-		ReturnURL: data.ReturnURL,
-		Name:      data.Name,
-		Email:     data.Email,
-		Company:   data.Company,
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(h.now().UTC()),
-			ExpiresAt: jwt.NewNumericDate(h.now().UTC().Add(trialSignupVerificationTTL)),
-			Subject:   data.Email,
-		},
+	token, err := h.verificationStore.CreateVerification(&TrialSignupRecord{
+		OrgID:                 data.OrgID,
+		ReturnURL:             data.ReturnURL,
+		Name:                  data.Name,
+		Email:                 data.Email,
+		Company:               data.Company,
+		CreatedAt:             h.now().UTC(),
+		VerificationExpiresAt: h.now().UTC().Add(trialSignupVerificationTTL),
 	})
 	if err != nil {
-		log.Error().Err(err).Str("email", data.Email).Msg("trial signup verification token signing failed")
-		data.ErrorMessage = "Unable to create the verification link. Please try again."
+		log.Error().Err(err).Str("email", data.Email).Msg("trial signup verification record creation failed")
+		data.ErrorMessage = "Unable to prepare the verification link. Please try again."
 		h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
 		return
 	}
 
-	verifyURL := buildTrialSignupVerifyURL(h.cfg.BaseURL, token, false)
+	verifyURL := buildTrialSignupVerificationURL(h.cfg.BaseURL, token)
 	if err := h.sendTrialVerificationEmail(data.Email, verifyURL); err != nil {
 		log.Error().Err(err).Str("email", data.Email).Msg("trial signup verification email send failed")
 		data.ErrorMessage = "Unable to send the verification email. Please try again."
@@ -398,10 +385,49 @@ func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	token := strings.TrimSpace(r.URL.Query().Get("token"))
-	claims, err := h.verifyTrialSignupVerificationToken(token)
+	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
+		record, err := h.verificationStore.ConsumeVerification(token, h.now().UTC())
+		if err != nil {
+			log.Warn().Err(err).Msg("trial signup verification token invalid")
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
+				ErrorMessage: "That verification link is invalid or expired. Request a fresh email from Pulse and try again.",
+				ReturnTarget: "your Pulse instance",
+			})
+			return
+		}
+		checkoutPrivateKey, err := h.trialCheckoutPrivateKey()
+		if err != nil {
+			log.Error().Err(err).Msg("trial checkout private key unavailable")
+			h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, trialSignupPageData{
+				ErrorMessage: "Trial checkout is unavailable right now. Please try again shortly.",
+				ReturnTarget: summarizeTrialReturnTarget(record.ReturnURL),
+			})
+			return
+		}
+		verifiedToken, err := h.signTrialSignupCheckoutToken(checkoutPrivateKey, trialSignupCheckoutClaims{
+			RequestID: record.ID,
+			RegisteredClaims: jwt.RegisteredClaims{
+				IssuedAt:  jwt.NewNumericDate(h.now().UTC()),
+				ExpiresAt: jwt.NewNumericDate(h.now().UTC().Add(trialSignupVerificationTTL)),
+				Subject:   record.ID,
+			},
+		})
+		if err != nil {
+			log.Error().Err(err).Str("request_id", record.ID).Msg("trial checkout token signing failed")
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, trialSignupPageData{
+				ErrorMessage: "Unable to continue to trial checkout. Please try again.",
+				ReturnTarget: summarizeTrialReturnTarget(record.ReturnURL),
+			})
+			return
+		}
+		http.Redirect(w, r, buildTrialSignupVerifiedURL(h.cfg.BaseURL, verifiedToken, false), http.StatusSeeOther)
+		return
+	}
+
+	verifiedToken := strings.TrimSpace(r.URL.Query().Get("verified"))
+	record, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
 	if err != nil {
-		log.Warn().Err(err).Msg("trial signup verification token invalid")
+		log.Warn().Err(err).Msg("trial signup verified state invalid")
 		h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
 			ErrorMessage: "That verification link is invalid or expired. Request a fresh email from Pulse and try again.",
 			ReturnTarget: "your Pulse instance",
@@ -410,15 +436,15 @@ func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.R
 	}
 
 	h.renderTrialSignupPage(w, r, http.StatusOK, trialSignupPageData{
-		OrgID:         claims.OrgID,
-		ReturnURL:     claims.ReturnURL,
-		ReturnTarget:  summarizeTrialReturnTarget(claims.ReturnURL),
-		Name:          claims.Name,
-		Email:         claims.Email,
-		Company:       claims.Company,
+		OrgID:         record.OrgID,
+		ReturnURL:     record.ReturnURL,
+		ReturnTarget:  summarizeTrialReturnTarget(record.ReturnURL),
+		Name:          record.Name,
+		Email:         record.Email,
+		Company:       record.Company,
 		Cancelled:     strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
 		Verified:      true,
-		VerifiedToken: token,
+		VerifiedToken: verifiedToken,
 	})
 }
 
@@ -434,7 +460,7 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 	}
 
 	verifiedToken := strings.TrimSpace(r.FormValue("verified_token"))
-	claims, err := h.verifyTrialSignupVerificationToken(verifiedToken)
+	record, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
 	if err != nil {
 		log.Warn().Err(err).Msg("trial signup checkout requested without valid verified token")
 		h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
@@ -445,12 +471,12 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 	}
 
 	data := trialSignupPageData{
-		OrgID:         claims.OrgID,
-		ReturnURL:     claims.ReturnURL,
-		ReturnTarget:  summarizeTrialReturnTarget(claims.ReturnURL),
-		Name:          claims.Name,
-		Email:         claims.Email,
-		Company:       claims.Company,
+		OrgID:         record.OrgID,
+		ReturnURL:     record.ReturnURL,
+		ReturnTarget:  summarizeTrialReturnTarget(record.ReturnURL),
+		Name:          record.Name,
+		Email:         record.Email,
+		Company:       record.Company,
 		Verified:      true,
 		VerifiedToken: verifiedToken,
 	}
@@ -468,7 +494,7 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
 	successURL := buildTrialSignupSuccessURL(h.cfg.BaseURL)
-	cancelURL := buildTrialSignupVerifyURL(h.cfg.BaseURL, verifiedToken, true)
+	cancelURL := buildTrialSignupVerifiedURL(h.cfg.BaseURL, verifiedToken, true)
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:                    stripe.String(string(stripe.CheckoutSessionModeSubscription)),
@@ -491,13 +517,14 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 			},
 		},
 		Metadata: map[string]string{
-			"org_id":         data.OrgID,
-			"return_url":     data.ReturnURL,
-			"name":           data.Name,
-			"email":          data.Email,
-			"company":        data.Company,
-			"signup_source":  "pulse_pro_trial",
-			"email_verified": "true",
+			"org_id":           data.OrgID,
+			"return_url":       data.ReturnURL,
+			"name":             data.Name,
+			"email":            data.Email,
+			"company":          data.Company,
+			"trial_request_id": record.ID,
+			"signup_source":    "pulse_pro_trial",
+			"email_verified":   "true",
 		},
 	}
 
@@ -510,6 +537,9 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		data.ErrorMessage = "Unable to create checkout session. Please try again."
 		h.renderTrialSignupPage(w, r, http.StatusBadGateway, data)
 		return
+	}
+	if err := h.verificationStore.MarkCheckoutStarted(record.ID, h.now().UTC()); err != nil {
+		log.Warn().Err(err).Str("request_id", record.ID).Msg("trial signup checkout start could not be recorded")
 	}
 
 	http.Redirect(w, r, session.URL, http.StatusSeeOther)
@@ -617,44 +647,40 @@ func (h *TrialSignupHandlers) trialActivationPrivateKey() (ed25519.PrivateKey, e
 	return pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialActivationPrivateKey))
 }
 
-func (h *TrialSignupHandlers) signTrialSignupVerificationToken(privateKey ed25519.PrivateKey, claims trialSignupVerificationClaims) (string, error) {
+func (h *TrialSignupHandlers) trialCheckoutPrivateKey() (ed25519.PrivateKey, error) {
+	if h == nil || h.cfg == nil {
+		return nil, pkglicensing.ErrTrialActivationPrivateKeyMissing
+	}
+	return pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialCheckoutPrivateKey))
+}
+
+func (h *TrialSignupHandlers) signTrialSignupCheckoutToken(privateKey ed25519.PrivateKey, claims trialSignupCheckoutClaims) (string, error) {
 	if len(privateKey) != ed25519.PrivateKeySize {
 		return "", pkglicensing.ErrTrialActivationPrivateKeyInvalid
 	}
-	claims.OrgID = normalizeTrialOrgID(claims.OrgID)
-	claims.ReturnURL = strings.TrimSpace(claims.ReturnURL)
-	claims.Name = strings.TrimSpace(claims.Name)
-	claims.Email = strings.TrimSpace(claims.Email)
-	claims.Company = strings.TrimSpace(claims.Company)
-	if !isValidTrialReturnURL(claims.ReturnURL) {
-		return "", url.InvalidHostError("invalid return_url")
-	}
-	if claims.Name == "" {
-		return "", jwt.ErrTokenMalformed
-	}
-	if !isValidTrialEmail(claims.Email) {
+	claims.RequestID = strings.TrimSpace(claims.RequestID)
+	if claims.RequestID == "" {
 		return "", jwt.ErrTokenMalformed
 	}
 	if claims.IssuedAt == nil {
 		now := h.now().UTC()
 		claims.IssuedAt = jwt.NewNumericDate(now)
-		claims.ExpiresAt = jwt.NewNumericDate(now.Add(trialSignupVerificationTTL))
 	}
 	if claims.ExpiresAt == nil {
 		claims.ExpiresAt = jwt.NewNumericDate(h.now().UTC().Add(trialSignupVerificationTTL))
 	}
 	if strings.TrimSpace(claims.Issuer) == "" {
-		claims.Issuer = trialSignupVerificationIssuer
+		claims.Issuer = trialSignupCheckoutIssuer
 	}
 	if len(claims.Audience) == 0 {
-		claims.Audience = jwt.ClaimStrings{trialSignupVerificationAudience}
+		claims.Audience = jwt.ClaimStrings{trialSignupCheckoutAudience}
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 	return token.SignedString(privateKey)
 }
 
-func (h *TrialSignupHandlers) verifyTrialSignupVerificationToken(token string) (*trialSignupVerificationClaims, error) {
-	privateKey, err := h.trialActivationPrivateKey()
+func (h *TrialSignupHandlers) verifyTrialSignupCheckoutToken(token string) (*trialSignupCheckoutClaims, error) {
+	privateKey, err := h.trialCheckoutPrivateKey()
 	if err != nil {
 		return nil, err
 	}
@@ -663,7 +689,7 @@ func (h *TrialSignupHandlers) verifyTrialSignupVerificationToken(token string) (
 		return nil, pkglicensing.ErrTrialActivationPublicKeyInvalid
 	}
 
-	claims := &trialSignupVerificationClaims{}
+	claims := &trialSignupCheckoutClaims{}
 	parsed, err := jwt.ParseWithClaims(
 		strings.TrimSpace(token),
 		claims,
@@ -674,8 +700,8 @@ func (h *TrialSignupHandlers) verifyTrialSignupVerificationToken(token string) (
 			return publicKey, nil
 		},
 		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
-		jwt.WithIssuer(trialSignupVerificationIssuer),
-		jwt.WithAudience(trialSignupVerificationAudience),
+		jwt.WithIssuer(trialSignupCheckoutIssuer),
+		jwt.WithAudience(trialSignupCheckoutAudience),
 		jwt.WithTimeFunc(func() time.Time { return h.now().UTC() }),
 	)
 	if err != nil {
@@ -684,15 +710,29 @@ func (h *TrialSignupHandlers) verifyTrialSignupVerificationToken(token string) (
 	if !parsed.Valid {
 		return nil, jwt.ErrTokenInvalidClaims
 	}
-	claims.OrgID = normalizeTrialOrgID(claims.OrgID)
-	claims.ReturnURL = strings.TrimSpace(claims.ReturnURL)
-	claims.Name = strings.TrimSpace(claims.Name)
-	claims.Email = strings.TrimSpace(claims.Email)
-	claims.Company = strings.TrimSpace(claims.Company)
-	if !isValidTrialReturnURL(claims.ReturnURL) || claims.Name == "" || !isValidTrialEmail(claims.Email) {
+	claims.RequestID = strings.TrimSpace(claims.RequestID)
+	if claims.RequestID == "" {
 		return nil, jwt.ErrTokenInvalidClaims
 	}
 	return claims, nil
+}
+
+func (h *TrialSignupHandlers) lookupVerifiedTrialSignupRecord(verifiedToken string) (*TrialSignupRecord, error) {
+	claims, err := h.verifyTrialSignupCheckoutToken(verifiedToken)
+	if err != nil {
+		return nil, err
+	}
+	if h.verificationStore == nil {
+		return nil, ErrTrialSignupRecordNotFound
+	}
+	record, err := h.verificationStore.GetRecord(claims.RequestID)
+	if err != nil {
+		return nil, err
+	}
+	if record.VerifiedAt.IsZero() {
+		return nil, ErrTrialSignupVerificationInvalid
+	}
+	return record, nil
 }
 
 func (h *TrialSignupHandlers) sendTrialVerificationEmail(email, verifyURL string) error {
@@ -778,10 +818,18 @@ func buildTrialSignupSuccessURL(baseURL string) string {
 	return parsed.String()
 }
 
-func buildTrialSignupVerifyURL(baseURL, token string, cancelled bool) string {
+func buildTrialSignupVerificationURL(baseURL, token string) string {
 	query := url.Values{}
 	if strings.TrimSpace(token) != "" {
 		query.Set("token", strings.TrimSpace(token))
+	}
+	return buildCPURL(baseURL, "/trial-signup/verify", query)
+}
+
+func buildTrialSignupVerifiedURL(baseURL, verifiedToken string, cancelled bool) string {
+	query := url.Values{}
+	if strings.TrimSpace(verifiedToken) != "" {
+		query.Set("verified", strings.TrimSpace(verifiedToken))
 	}
 	if cancelled {
 		query.Set("cancelled", "1")

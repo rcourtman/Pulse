@@ -14,6 +14,12 @@ func setRequiredCPEnv(t *testing.T) {
 	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 }
 
+func setTrialSigningEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY", "test-activation-key")
+	t.Setenv("CP_TRIAL_CHECKOUT_PRIVATE_KEY", "test-checkout-key")
+}
+
 func TestLoadConfig_MissingRequired(t *testing.T) {
 	// Clear relevant env vars
 	for _, key := range []string{
@@ -204,6 +210,7 @@ func TestLoadConfig_RequiresLiveStripeKeyInProduction(t *testing.T) {
 	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 	t.Setenv("STRIPE_API_KEY", "sk_test_123")
 	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_123")
+	setTrialSigningEnv(t)
 
 	_, err := LoadConfig()
 	if err == nil {
@@ -220,12 +227,30 @@ func TestLoadConfig_RequiresTestStripeKeyInStaging(t *testing.T) {
 	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 	t.Setenv("STRIPE_API_KEY", "sk_live_123")
 	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_123")
+	setTrialSigningEnv(t)
 
 	_, err := LoadConfig()
 	if err == nil {
 		t.Fatal("expected error when CP_ENV=staging and STRIPE_API_KEY is live mode")
 	}
 	if !strings.Contains(err.Error(), "must be a test key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_RequiresTrialCheckoutKeyWhenStripeEnabled(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_123")
+	t.Setenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY", "activation")
+	t.Setenv("CP_TRIAL_CHECKOUT_PRIVATE_KEY", "")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when STRIPE_API_KEY is set but CP_TRIAL_CHECKOUT_PRIVATE_KEY is missing")
+	}
+	if !strings.Contains(err.Error(), "CP_TRIAL_CHECKOUT_PRIVATE_KEY is required") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
