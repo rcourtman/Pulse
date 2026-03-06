@@ -246,6 +246,113 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 	}
 }
 
+func TestSeedPrecomputeIntelligenceState_UsesRuntimeReadState(t *testing.T) {
+	now := time.Now()
+	ps := NewPatrolService(nil, nil)
+
+	bs := baseline.NewStore(baseline.StoreConfig{MinSamples: 1})
+	baselinePoints := []baseline.MetricPoint{
+		{Value: 10, Timestamp: now.Add(-5 * time.Hour)},
+		{Value: 10, Timestamp: now.Add(-4 * time.Hour)},
+		{Value: 10, Timestamp: now.Add(-3 * time.Hour)},
+		{Value: 10, Timestamp: now.Add(-2 * time.Hour)},
+		{Value: 10, Timestamp: now.Add(-1 * time.Hour)},
+	}
+	_ = bs.Learn("node-1", "node", "cpu", baselinePoints)
+	_ = bs.Learn("node-1", "node", "memory", baselinePoints)
+	_ = bs.Learn("vm-1", "vm", "memory", baselinePoints)
+	_ = bs.Learn("vm-1", "vm", "disk", baselinePoints)
+	_ = bs.Learn("ct-1", "container", "memory", baselinePoints)
+	_ = bs.Learn("ct-1", "container", "disk", baselinePoints)
+	_ = bs.Learn("storage-1", "storage", "usage", baselinePoints)
+	ps.SetBaselineStore(bs)
+
+	series := func(start float64) []models.MetricPoint {
+		return []models.MetricPoint{
+			{Value: start, Timestamp: now.Add(-5 * time.Hour)},
+			{Value: start + 2, Timestamp: now.Add(-4 * time.Hour)},
+			{Value: start + 4, Timestamp: now.Add(-3 * time.Hour)},
+			{Value: start + 6, Timestamp: now.Add(-2 * time.Hour)},
+			{Value: start + 8, Timestamp: now.Add(-1 * time.Hour)},
+		}
+	}
+	ps.SetMetricsHistoryProvider(&precomputeMetricsHistoryProvider{
+		metrics: map[string][]models.MetricPoint{
+			"node-1:memory": series(70),
+			"vm-1:memory":   series(60),
+			"vm-1:disk":     series(50),
+			"ct-1:memory":   series(55),
+			"ct-1:disk":     series(45),
+		},
+		storage: map[string][]models.MetricPoint{
+			"storage-1:usage": series(65),
+		},
+	})
+
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{ActiveAlerts: []models.Alert{{ID: "alert-1"}}})
+	nodeView := ur.NewNodeView(&ur.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   ur.ResourceTypeAgent,
+		Status: ur.StatusOnline,
+		Metrics: &ur.ResourceMetrics{
+			CPU:    &ur.MetricValue{Percent: 80},
+			Memory: &ur.MetricValue{Percent: 80},
+		},
+	})
+	vmView := ur.NewVMView(&ur.Resource{
+		ID:     "vm-1",
+		Name:   "vm-1",
+		Type:   ur.ResourceTypeVM,
+		Status: "running",
+		Metrics: &ur.ResourceMetrics{
+			CPU:    &ur.MetricValue{Percent: 20},
+			Memory: &ur.MetricValue{Percent: 70},
+			Disk:   &ur.MetricValue{Percent: 60},
+		},
+	})
+	ctView := ur.NewContainerView(&ur.Resource{
+		ID:     "ct-1",
+		Name:   "ct-1",
+		Type:   ur.ResourceTypeSystemContainer,
+		Status: "running",
+		Metrics: &ur.ResourceMetrics{
+			CPU:    &ur.MetricValue{Percent: 10},
+			Memory: &ur.MetricValue{Percent: 65},
+			Disk:   &ur.MetricValue{Percent: 55},
+		},
+	})
+	storageView := ur.NewStoragePoolView(&ur.Resource{
+		ID:     "storage-1",
+		Name:   "local",
+		Type:   ur.ResourceTypeStorage,
+		Status: ur.StatusOnline,
+		Metrics: &ur.ResourceMetrics{
+			Disk: &ur.MetricValue{Percent: 85},
+		},
+	})
+	runtimeState.readState = &mockReadState{
+		nodes:      []*ur.NodeView{&nodeView},
+		vms:        []*ur.VMView{&vmView},
+		containers: []*ur.ContainerView{&ctView},
+		storage:    []*ur.StoragePoolView{&storageView},
+	}
+
+	ps.SetReadState(nil)
+
+	scoped := map[string]bool{"node-1": true, "vm-1": true, "ct-1": true, "storage-1": true}
+	intel := ps.seedPrecomputeIntelligenceState(runtimeState, scoped, now)
+	if !intel.hasBaselineStore {
+		t.Fatalf("expected baseline store flag to be true")
+	}
+	if len(intel.anomalies) == 0 {
+		t.Fatalf("expected anomalies from runtime readState")
+	}
+	if len(intel.forecasts) == 0 {
+		t.Fatalf("expected forecasts from runtime readState")
+	}
+}
+
 func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	now := time.Now()
 	ps := NewPatrolService(nil, nil)

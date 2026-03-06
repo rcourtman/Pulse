@@ -1473,135 +1473,49 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 	corrDet := p.correlationDetector
 	p.mu.RUnlock()
 
-	rs := snap.readState
-
 	var intel seedIntelligence
 	intel.hasBaselineStore = bs != nil
+	nodeSources := patrolPrecomputeNodeSources(snap, scopedSet)
+	guestSources := patrolPrecomputeGuestSources(snap, scopedSet)
+	storageSources := patrolPrecomputeStorageSources(snap, scopedSet)
 
 	// Anomalies
 	if bs != nil {
-		if rs != nil {
-			for _, nv := range rs.Nodes() {
-				if !seedIsInScope(scopedSet, nv.ID()) {
-					continue
+		for _, n := range nodeSources {
+			metrics := map[string]float64{"cpu": n.cpuFraction, "memory": n.memPercent}
+			anomalies := bs.CheckResourceAnomaliesReadOnly(n.id, metrics)
+			for i := range anomalies {
+				if anomalies[i].ResourceName == "" {
+					anomalies[i].ResourceName = n.name
 				}
-				metrics := map[string]float64{
-					// Baselines historically use CPU as 0-1 fraction.
-					"cpu":    nv.CPUPercent() / 100,
-					"memory": nv.MemoryPercent(),
-				}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(nv.ID(), metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = nv.Name()
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-			for _, vmv := range rs.VMs() {
-				if vmv.Template() || vmv.Status() != "running" || !seedIsInScope(scopedSet, vmv.ID()) {
-					continue
-				}
-				metrics := map[string]float64{"memory": vmv.MemoryPercent(), "disk": vmv.DiskPercent()}
-				if cpu := vmv.CPUPercent(); cpu > 0 {
-					metrics["cpu"] = cpu / 100
-				}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(vmv.ID(), metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = vmv.Name()
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
+			intel.anomalies = append(intel.anomalies, anomalies...)
+		}
+		for _, g := range guestSources {
+			if g.template || g.status != "running" {
+				continue
 			}
-			for _, ctv := range rs.Containers() {
-				if ctv.Template() || ctv.Status() != "running" || !seedIsInScope(scopedSet, ctv.ID()) {
-					continue
-				}
-				metrics := map[string]float64{"memory": ctv.MemoryPercent(), "disk": ctv.DiskPercent()}
-				if cpu := ctv.CPUPercent(); cpu > 0 {
-					metrics["cpu"] = cpu / 100
-				}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(ctv.ID(), metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = ctv.Name()
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
+			metrics := map[string]float64{"memory": g.memPercent, "disk": g.diskPercent}
+			if g.cpuFraction > 0 {
+				metrics["cpu"] = g.cpuFraction
 			}
-			for _, spv := range rs.StoragePools() {
-				if !seedIsInScope(scopedSet, spv.ID()) {
-					continue
+			anomalies := bs.CheckResourceAnomaliesReadOnly(g.id, metrics)
+			for i := range anomalies {
+				if anomalies[i].ResourceName == "" {
+					anomalies[i].ResourceName = g.name
 				}
-				metrics := map[string]float64{"usage": spv.DiskPercent()}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(spv.ID(), metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = spv.Name()
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-		} else {
-			for _, n := range snap.Nodes {
-				if !seedIsInScope(scopedSet, n.ID) {
-					continue
+			intel.anomalies = append(intel.anomalies, anomalies...)
+		}
+		for _, s := range storageSources {
+			metrics := map[string]float64{"usage": s.usagePercent}
+			anomalies := bs.CheckResourceAnomaliesReadOnly(s.id, metrics)
+			for i := range anomalies {
+				if anomalies[i].ResourceName == "" {
+					anomalies[i].ResourceName = s.name
 				}
-				metrics := map[string]float64{"cpu": n.CPU, "memory": n.Memory.Usage}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(n.ID, metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = n.Name
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-			for _, vm := range snap.VMs {
-				if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
-					continue
-				}
-				metrics := map[string]float64{"memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
-				if vm.CPU > 0 {
-					metrics["cpu"] = vm.CPU
-				}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(vm.ID, metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = vm.Name
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
-			}
-			for _, ct := range snap.Containers {
-				if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
-					continue
-				}
-				metrics := map[string]float64{"memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
-				if ct.CPU > 0 {
-					metrics["cpu"] = ct.CPU
-				}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(ct.ID, metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = ct.Name
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
-			}
-			for _, s := range snap.Storage {
-				if !seedIsInScope(scopedSet, s.ID) {
-					continue
-				}
-				metrics := map[string]float64{"usage": s.Usage}
-				anomalies := bs.CheckResourceAnomaliesReadOnly(s.ID, metrics)
-				for i := range anomalies {
-					if anomalies[i].ResourceName == "" {
-						anomalies[i].ResourceName = s.Name
-					}
-				}
-				intel.anomalies = append(intel.anomalies, anomalies...)
-			}
+			intel.anomalies = append(intel.anomalies, anomalies...)
 		}
 	}
 
@@ -1628,85 +1542,26 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 				})
 			}
 		}
-		if rs != nil {
-			for _, nv := range rs.Nodes() {
-				if !seedIsInScope(scopedSet, nv.ID()) {
-					continue
-				}
-				if pts := mh.GetNodeMetrics(nv.ID(), "memory", 48*time.Hour); len(pts) >= 5 {
-					addForecast(nv.ID(), nv.Name(), "memory", pts, nv.MemoryPercent())
-				}
+		for _, n := range nodeSources {
+			if pts := mh.GetNodeMetrics(n.id, "memory", 48*time.Hour); len(pts) >= 5 {
+				addForecast(n.id, n.name, "memory", pts, n.memPercent)
 			}
-			for _, vmv := range rs.VMs() {
-				if vmv.Template() || vmv.Status() != "running" || !seedIsInScope(scopedSet, vmv.ID()) {
-					continue
-				}
-				if pts := mh.GetGuestMetrics(vmv.ID(), "memory", 48*time.Hour); len(pts) >= 5 {
-					addForecast(vmv.ID(), vmv.Name(), "memory", pts, vmv.MemoryPercent())
-				}
-				if pts := mh.GetGuestMetrics(vmv.ID(), "disk", 48*time.Hour); len(pts) >= 5 {
-					addForecast(vmv.ID(), vmv.Name(), "disk", pts, vmv.DiskPercent())
-				}
+		}
+		for _, g := range guestSources {
+			if g.template || g.status != "running" {
+				continue
 			}
-			for _, ctv := range rs.Containers() {
-				if ctv.Template() || ctv.Status() != "running" || !seedIsInScope(scopedSet, ctv.ID()) {
-					continue
-				}
-				if pts := mh.GetGuestMetrics(ctv.ID(), "memory", 48*time.Hour); len(pts) >= 5 {
-					addForecast(ctv.ID(), ctv.Name(), "memory", pts, ctv.MemoryPercent())
-				}
-				if pts := mh.GetGuestMetrics(ctv.ID(), "disk", 48*time.Hour); len(pts) >= 5 {
-					addForecast(ctv.ID(), ctv.Name(), "disk", pts, ctv.DiskPercent())
-				}
+			if pts := mh.GetGuestMetrics(g.id, "memory", 48*time.Hour); len(pts) >= 5 {
+				addForecast(g.id, g.name, "memory", pts, g.memPercent)
 			}
-			for _, spv := range rs.StoragePools() {
-				if !seedIsInScope(scopedSet, spv.ID()) {
-					continue
-				}
-				allMetrics := mh.GetAllStorageMetrics(spv.ID(), 48*time.Hour)
-				if pts, ok := allMetrics["usage"]; ok && len(pts) >= 5 {
-					addForecast(spv.ID(), spv.Name(), "usage", pts, spv.DiskPercent())
-				}
+			if pts := mh.GetGuestMetrics(g.id, "disk", 48*time.Hour); len(pts) >= 5 {
+				addForecast(g.id, g.name, "disk", pts, g.diskPercent)
 			}
-		} else {
-			for _, n := range snap.Nodes {
-				if !seedIsInScope(scopedSet, n.ID) {
-					continue
-				}
-				if pts := mh.GetNodeMetrics(n.ID, "memory", 48*time.Hour); len(pts) >= 5 {
-					addForecast(n.ID, n.Name, "memory", pts, n.Memory.Usage)
-				}
-			}
-			for _, vm := range snap.VMs {
-				if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
-					continue
-				}
-				if pts := mh.GetGuestMetrics(vm.ID, "memory", 48*time.Hour); len(pts) >= 5 {
-					addForecast(vm.ID, vm.Name, "memory", pts, vm.Memory.Usage)
-				}
-				if pts := mh.GetGuestMetrics(vm.ID, "disk", 48*time.Hour); len(pts) >= 5 {
-					addForecast(vm.ID, vm.Name, "disk", pts, vm.Disk.Usage)
-				}
-			}
-			for _, ct := range snap.Containers {
-				if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
-					continue
-				}
-				if pts := mh.GetGuestMetrics(ct.ID, "memory", 48*time.Hour); len(pts) >= 5 {
-					addForecast(ct.ID, ct.Name, "memory", pts, ct.Memory.Usage)
-				}
-				if pts := mh.GetGuestMetrics(ct.ID, "disk", 48*time.Hour); len(pts) >= 5 {
-					addForecast(ct.ID, ct.Name, "disk", pts, ct.Disk.Usage)
-				}
-			}
-			for _, s := range snap.Storage {
-				if !seedIsInScope(scopedSet, s.ID) {
-					continue
-				}
-				allMetrics := mh.GetAllStorageMetrics(s.ID, 48*time.Hour)
-				if pts, ok := allMetrics["usage"]; ok && len(pts) >= 5 {
-					addForecast(s.ID, s.Name, "usage", pts, s.Usage)
-				}
+		}
+		for _, s := range storageSources {
+			allMetrics := mh.GetAllStorageMetrics(s.id, 48*time.Hour)
+			if pts, ok := allMetrics["usage"]; ok && len(pts) >= 5 {
+				addForecast(s.id, s.name, "usage", pts, s.usagePercent)
 			}
 		}
 	}
@@ -1792,6 +1647,26 @@ type patrolDockerHostRow struct {
 	runningCount        int
 	stoppedCount        int
 	unhealthyContainers []string
+}
+
+type patrolPrecomputeNodeSource struct {
+	id, name    string
+	cpuFraction float64
+	memPercent  float64
+}
+
+type patrolPrecomputeGuestSource struct {
+	id, name    string
+	template    bool
+	status      string
+	cpuFraction float64
+	memPercent  float64
+	diskPercent float64
+}
+
+type patrolPrecomputeStorageSource struct {
+	id, name     string
+	usagePercent float64
 }
 
 func patrolNodeInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolNodeInventoryRow {
@@ -2036,6 +1911,137 @@ func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []
 			}
 		}
 		rows = append(rows, row)
+	}
+	return rows
+}
+
+func patrolPrecomputeNodeSources(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPrecomputeNodeSource {
+	rs := snap.readState
+	if rs != nil {
+		rows := make([]patrolPrecomputeNodeSource, 0, len(rs.Nodes()))
+		for _, nv := range rs.Nodes() {
+			if !seedIsInScope(scopedSet, nv.ID()) {
+				continue
+			}
+			rows = append(rows, patrolPrecomputeNodeSource{
+				id:          nv.ID(),
+				name:        nv.Name(),
+				cpuFraction: nv.CPUPercent() / 100,
+				memPercent:  nv.MemoryPercent(),
+			})
+		}
+		return rows
+	}
+
+	rows := make([]patrolPrecomputeNodeSource, 0, len(snap.Nodes))
+	for _, n := range snap.Nodes {
+		if !seedIsInScope(scopedSet, n.ID) {
+			continue
+		}
+		rows = append(rows, patrolPrecomputeNodeSource{
+			id:          n.ID,
+			name:        n.Name,
+			cpuFraction: n.CPU,
+			memPercent:  n.Memory.Usage,
+		})
+	}
+	return rows
+}
+
+func patrolPrecomputeGuestSources(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPrecomputeGuestSource {
+	rs := snap.readState
+	if rs != nil {
+		rows := make([]patrolPrecomputeGuestSource, 0, len(rs.VMs())+len(rs.Containers()))
+		for _, vmv := range rs.VMs() {
+			if !seedIsInScope(scopedSet, vmv.ID()) {
+				continue
+			}
+			rows = append(rows, patrolPrecomputeGuestSource{
+				id:          vmv.ID(),
+				name:        vmv.Name(),
+				template:    vmv.Template(),
+				status:      string(vmv.Status()),
+				cpuFraction: vmv.CPUPercent() / 100,
+				memPercent:  vmv.MemoryPercent(),
+				diskPercent: vmv.DiskPercent(),
+			})
+		}
+		for _, ctv := range rs.Containers() {
+			if !seedIsInScope(scopedSet, ctv.ID()) {
+				continue
+			}
+			rows = append(rows, patrolPrecomputeGuestSource{
+				id:          ctv.ID(),
+				name:        ctv.Name(),
+				template:    ctv.Template(),
+				status:      string(ctv.Status()),
+				cpuFraction: ctv.CPUPercent() / 100,
+				memPercent:  ctv.MemoryPercent(),
+				diskPercent: ctv.DiskPercent(),
+			})
+		}
+		return rows
+	}
+
+	rows := make([]patrolPrecomputeGuestSource, 0, len(snap.VMs)+len(snap.Containers))
+	for _, vm := range snap.VMs {
+		if !seedIsInScope(scopedSet, vm.ID) {
+			continue
+		}
+		rows = append(rows, patrolPrecomputeGuestSource{
+			id:          vm.ID,
+			name:        vm.Name,
+			template:    vm.Template,
+			status:      vm.Status,
+			cpuFraction: vm.CPU,
+			memPercent:  vm.Memory.Usage,
+			diskPercent: vm.Disk.Usage,
+		})
+	}
+	for _, ct := range snap.Containers {
+		if !seedIsInScope(scopedSet, ct.ID) {
+			continue
+		}
+		rows = append(rows, patrolPrecomputeGuestSource{
+			id:          ct.ID,
+			name:        ct.Name,
+			template:    ct.Template,
+			status:      ct.Status,
+			cpuFraction: ct.CPU,
+			memPercent:  ct.Memory.Usage,
+			diskPercent: ct.Disk.Usage,
+		})
+	}
+	return rows
+}
+
+func patrolPrecomputeStorageSources(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPrecomputeStorageSource {
+	rs := snap.readState
+	if rs != nil {
+		rows := make([]patrolPrecomputeStorageSource, 0, len(rs.StoragePools()))
+		for _, spv := range rs.StoragePools() {
+			if !seedIsInScope(scopedSet, spv.ID()) {
+				continue
+			}
+			rows = append(rows, patrolPrecomputeStorageSource{
+				id:           spv.ID(),
+				name:         spv.Name(),
+				usagePercent: spv.DiskPercent(),
+			})
+		}
+		return rows
+	}
+
+	rows := make([]patrolPrecomputeStorageSource, 0, len(snap.Storage))
+	for _, s := range snap.Storage {
+		if !seedIsInScope(scopedSet, s.ID) {
+			continue
+		}
+		rows = append(rows, patrolPrecomputeStorageSource{
+			id:           s.ID,
+			name:         s.Name,
+			usagePercent: s.Usage,
+		})
 	}
 	return rows
 }
