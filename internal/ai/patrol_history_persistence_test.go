@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -462,29 +463,31 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 
 	runs := []PatrolRunRecord{
 		{
-			ID:               "run-1",
-			StartedAt:        time.Now().Add(-2 * time.Minute),
-			CompletedAt:      time.Now().Add(-1 * time.Minute),
-			Duration:         time.Minute,
-			Type:             "manual",
-			ResourcesChecked: 10,
-			NodesChecked:     2,
-			GuestsChecked:    5,
-			DockerChecked:    1,
-			StorageChecked:   1,
-			HostsChecked:     0,
-			PBSChecked:       0,
-			NewFindings:      1,
-			ExistingFindings: 2,
-			ResolvedFindings: 1,
-			AutoFixCount:     0,
-			FindingsSummary:  "summary",
-			FindingIDs:       []string{"f1", "f2"},
-			ErrorCount:       0,
-			Status:           "ok",
-			AIAnalysis:       "analysis",
-			InputTokens:      100,
-			OutputTokens:     200,
+			ID:                        "run-1",
+			StartedAt:                 time.Now().Add(-2 * time.Minute),
+			CompletedAt:               time.Now().Add(-1 * time.Minute),
+			Duration:                  time.Minute,
+			Type:                      "manual",
+			ScopeResourceIDs:          []string{"node-1"},
+			EffectiveScopeResourceIDs: []string{"node-1", "qemu/101"},
+			ResourcesChecked:          10,
+			NodesChecked:              2,
+			GuestsChecked:             5,
+			DockerChecked:             1,
+			StorageChecked:            1,
+			HostsChecked:              0,
+			PBSChecked:                0,
+			NewFindings:               1,
+			ExistingFindings:          2,
+			ResolvedFindings:          1,
+			AutoFixCount:              0,
+			FindingsSummary:           "summary",
+			FindingIDs:                []string{"f1", "f2"},
+			ErrorCount:                0,
+			Status:                    "ok",
+			AIAnalysis:                "analysis",
+			InputTokens:               100,
+			OutputTokens:              200,
 		},
 	}
 
@@ -501,6 +504,9 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 	}
 	if loaded[0].Duration != runs[0].Duration {
 		t.Fatalf("expected duration %v, got %v", runs[0].Duration, loaded[0].Duration)
+	}
+	if strings.Join(loaded[0].EffectiveScopeResourceIDs, ",") != strings.Join(runs[0].EffectiveScopeResourceIDs, ",") {
+		t.Fatalf("expected effective scope IDs %v, got %v", runs[0].EffectiveScopeResourceIDs, loaded[0].EffectiveScopeResourceIDs)
 	}
 }
 

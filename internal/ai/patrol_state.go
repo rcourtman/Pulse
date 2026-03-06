@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -280,5 +281,14 @@ func patrolRuntimeResourceIDs(s patrolRuntimeState) []string {
 		add(k.ID)
 	}
 
+	return ids
+}
+
+func patrolRuntimeSortedResourceIDs(s patrolRuntimeState) []string {
+	ids := patrolRuntimeResourceIDs(s)
+	if len(ids) == 0 {
+		return nil
+	}
+	sort.Strings(ids)
 	return ids
 }
