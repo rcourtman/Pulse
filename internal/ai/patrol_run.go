@@ -2096,40 +2096,57 @@ func patrolLookupGuestAlertResourceState(alert AlertInfo, snap patrolRuntimeStat
 	return patrolAlertResourceState{}, false
 }
 
-func patrolLookupAgentAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+type patrolHostAlertRow struct {
+	id, name, hostname, status string
+	cpu, memory                float64
+}
+
+func patrolHostAlertRows(snap patrolRuntimeState) []patrolHostAlertRow {
 	if snap.readState != nil {
-		for _, host := range snap.readState.Hosts() {
-			if !patrolAlertNameMatches(alert, host.ID(), host.Name(), host.Hostname()) {
-				continue
-			}
-			name := host.Hostname()
-			if name == "" {
-				name = host.Name()
-			}
-			return patrolAlertResourceState{
-				resourceType: "agent",
-				name:         name,
-				status:       string(host.Status()),
-				cpu:          host.CPUPercent(),
-				memory:       host.MemoryPercent(),
-				found:        true,
-			}, true
+		hosts := snap.readState.Hosts()
+		rows := make([]patrolHostAlertRow, 0, len(hosts))
+		for _, host := range hosts {
+			rows = append(rows, patrolHostAlertRow{
+				id:       host.ID(),
+				name:     host.Name(),
+				hostname: host.Hostname(),
+				status:   string(host.Status()),
+				cpu:      host.CPUPercent(),
+				memory:   host.MemoryPercent(),
+			})
 		}
+		return rows
 	}
+
+	rows := make([]patrolHostAlertRow, 0, len(snap.Hosts))
 	for _, host := range snap.Hosts {
-		if !patrolAlertNameMatches(alert, host.ID, host.DisplayName, host.Hostname) {
+		rows = append(rows, patrolHostAlertRow{
+			id:       host.ID,
+			name:     host.DisplayName,
+			hostname: host.Hostname,
+			status:   host.Status,
+			cpu:      host.CPUUsage,
+			memory:   host.Memory.Usage,
+		})
+	}
+	return rows
+}
+
+func patrolLookupAgentAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+	for _, host := range patrolHostAlertRows(snap) {
+		if !patrolAlertNameMatches(alert, host.id, host.name, host.hostname) {
 			continue
 		}
-		name := host.DisplayName
+		name := host.hostname
 		if name == "" {
-			name = host.Hostname
+			name = host.name
 		}
 		return patrolAlertResourceState{
 			resourceType: "agent",
 			name:         name,
-			status:       host.Status,
-			cpu:          host.CPUUsage,
-			memory:       host.Memory.Usage,
+			status:       host.status,
+			cpu:          host.cpu,
+			memory:       host.memory,
 			found:        true,
 		}, true
 	}
