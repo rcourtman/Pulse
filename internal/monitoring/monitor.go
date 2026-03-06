@@ -2896,32 +2896,79 @@ func (m *Monitor) GetUnifiedResources() []unifiedresources.Resource {
 	return store.GetAll()
 }
 
+type monitorUnifiedStateView struct {
+	resources []unifiedresources.Resource
+	readState unifiedresources.ReadState
+	freshness time.Time
+}
+
+func monitorUnifiedStateViewFromSnapshot(snapshot models.StateSnapshot) monitorUnifiedStateView {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	return monitorUnifiedStateView{
+		resources: registry.List(),
+		readState: adapter,
+		freshness: snapshot.LastUpdate,
+	}
+}
+
+func monitorUnifiedStateViewFromResources(resources []unifiedresources.Resource, freshness time.Time) monitorUnifiedStateView {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(resources)
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	return monitorUnifiedStateView{
+		resources: registry.List(),
+		readState: adapter,
+		freshness: freshness,
+	}
+}
+
+func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
+	if m == nil {
+		return monitorUnifiedStateView{}
+	}
+
+	if mock.IsMockEnabled() {
+		return monitorUnifiedStateViewFromSnapshot(m.GetState())
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	state := m.state
+	m.mu.RUnlock()
+
+	if store == nil {
+		return monitorUnifiedStateViewFromSnapshot(m.GetState())
+	}
+
+	resources := store.GetAll()
+	freshness := time.Time{}
+	if state != nil {
+		freshness = state.GetLastUpdate()
+	}
+
+	if readState, ok := store.(unifiedresources.ReadState); ok {
+		return monitorUnifiedStateView{
+			resources: resources,
+			readState: readState,
+			freshness: freshness,
+		}
+	}
+
+	if len(resources) > 0 || state == nil {
+		return monitorUnifiedStateViewFromResources(resources, freshness)
+	}
+
+	return monitorUnifiedStateViewFromSnapshot(m.GetState())
+}
+
 // UnifiedResourceSnapshot returns a canonical unified-resource seed plus the
 // associated freshness marker. It respects mock mode by falling back to the
 // current mock-aware state snapshot instead of the live resource store.
 func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
-	if m == nil {
-		return nil, time.Time{}
-	}
-
-	if mock.IsMockEnabled() {
-		snapshot := m.GetState()
-		registry := unifiedresources.NewRegistry(nil)
-		registry.IngestSnapshot(snapshot)
-		return registry.List(), snapshot.LastUpdate
-	}
-
-	if resources := m.GetUnifiedResources(); resources != nil {
-		if m.state == nil {
-			return resources, time.Time{}
-		}
-		return resources, m.state.GetLastUpdate()
-	}
-
-	snapshot := m.GetState()
-	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(snapshot)
-	return registry.List(), snapshot.LastUpdate
+	view := m.currentUnifiedStateView()
+	return view.resources, view.freshness
 }
 
 // GetUnifiedReadState returns a typed unified read-state provider when the
@@ -2950,16 +2997,7 @@ func (m *Monitor) GetUnifiedReadState() unifiedresources.ReadState {
 // ephemeral snapshot-backed adapter to preserve read access without exposing
 // direct state reads to consumer packages.
 func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
-	if m == nil {
-		return nil
-	}
-	if readState := m.GetUnifiedReadState(); readState != nil {
-		return readState
-	}
-	snapshot := m.GetState()
-	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(snapshot)
-	return unifiedresources.NewMonitorAdapter(registry)
+	return m.currentUnifiedStateView().readState
 }
 
 // shouldSkipNodeMetrics returns true if we should skip detailed metric polling
