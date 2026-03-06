@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestShouldResolveAlert_UsageAndMissing(t *testing.T) {
@@ -40,6 +41,29 @@ func TestShouldResolveAlert_UsageAndMissing(t *testing.T) {
 	resolved, reason = ps.shouldResolveAlertState(context.Background(), missingAlert, patrolRuntimeStateForTest(ps, state), nil)
 	if !resolved || !strings.Contains(reason, "resource no longer present") {
 		t.Fatalf("expected missing storage alert to resolve, got resolved=%v reason=%q", resolved, reason)
+	}
+}
+
+func TestShouldResolveAlert_UsageUsesReadState(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	now := time.Now()
+	alert := AlertInfo{
+		ID:         "alert-usage-readstate",
+		Type:       "usage",
+		ResourceID: "storage-1",
+		Value:      92,
+		Threshold:  90,
+		StartTime:  now.Add(-2 * time.Hour),
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Storage: []models.Storage{{ID: "storage-1", Usage: 80}},
+	})
+
+	resolved, reason := ps.shouldResolveAlertState(context.Background(), alert, patrolRuntimeState{readState: registry}, nil)
+	if !resolved || !strings.Contains(reason, "usage dropped") {
+		t.Fatalf("expected usage alert to resolve from readState, got resolved=%v reason=%q", resolved, reason)
 	}
 }
 

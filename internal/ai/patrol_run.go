@@ -1929,17 +1929,17 @@ func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert Alert
 	// First, try smart heuristic checks based on alert type
 	switch alert.Type {
 	case "usage": // Storage usage alert
-		// Find the storage in current snapshot
-		for _, storage := range snap.Storage {
-			if storage.ID == alert.ResourceID {
-				// If current usage is below the threshold (with some margin), resolve
-				if storage.Usage < alert.Threshold*0.95 { // 5% margin below threshold
-					return true, fmt.Sprintf("storage usage dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
-						alert.Value, storage.Usage, alert.Threshold)
-				}
-				// Still high, don't resolve
-				return false, ""
+		storageAlert := alert
+		if strings.TrimSpace(storageAlert.ResourceType) == "" || strings.EqualFold(strings.TrimSpace(storageAlert.ResourceType), "usage") {
+			storageAlert.ResourceType = "storage"
+		}
+		resource := lookupPatrolAlertResourceState(storageAlert, snap)
+		if resource.found {
+			if resource.disk < alert.Threshold*0.95 { // 5% margin below threshold
+				return true, fmt.Sprintf("storage usage dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
+					alert.Value, resource.disk, alert.Threshold)
 			}
+			return false, ""
 		}
 		// Storage not found in current snapshot - might have been removed
 		// Resolve after 24 hours if resource is gone
