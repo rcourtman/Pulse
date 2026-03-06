@@ -3,6 +3,16 @@ import { fireEvent, render, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 
+const responsiveMetricCellMock = vi.fn();
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 vi.mock('@/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({
     isMobile: () => false,
@@ -11,7 +21,10 @@ vi.mock('@/hooks/useBreakpoint', () => ({
 }));
 
 vi.mock('@/components/shared/responsive', () => ({
-  ResponsiveMetricCell: () => <div data-testid="metric-cell">metric</div>,
+  ResponsiveMetricCell: (props: unknown) => {
+    responsiveMetricCellMock(props);
+    return <div data-testid="metric-cell">metric</div>;
+  },
 }));
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
@@ -33,6 +46,48 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('UnifiedResourceTable workloads links', () => {
+  it('passes canonical metrics keys to metric cells for docker-host resources', async () => {
+    responsiveMetricCellMock.mockClear();
+
+    render(() => (
+      <UnifiedResourceTable
+        resources={[
+          baseResource({
+            id: 'hash-docker-resource',
+            type: 'docker-host',
+            name: 'Tower',
+            displayName: 'Tower',
+            platformType: 'docker',
+            sourceType: 'agent',
+            metricsTarget: {
+              resourceType: 'docker-host',
+              resourceId: 'docker-host-1',
+            },
+            platformData: {
+              sources: ['docker'],
+              docker: {
+                hostSourceId: 'docker-host-1',
+              },
+            },
+            cpu: { current: 0.21 },
+            memory: { current: 0.52, total: 8, used: 4 },
+            disk: { current: 0.33 },
+          }),
+        ]}
+        expandedResourceId={null}
+        onExpandedResourceChange={vi.fn()}
+        groupingMode="flat"
+      />
+    ));
+
+    expect(responsiveMetricCellMock).toHaveBeenCalled();
+    expect(
+      responsiveMetricCellMock.mock.calls.some(
+        ([props]) => (props as { resourceId?: string }).resourceId === 'dockerHost:docker-host-1',
+      ),
+    ).toBe(true);
+  });
+
   it('renders workloads links for supported resource types and prevents row toggle on link click', async () => {
     const onExpandedResourceChange = vi.fn();
     const resources: Resource[] = [

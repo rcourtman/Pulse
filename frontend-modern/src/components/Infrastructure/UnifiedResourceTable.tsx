@@ -16,7 +16,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
-import { buildMetricKey } from '@/utils/metricsKeys';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getAgentStatusIndicator } from '@/utils/status';
 import type { Disk } from '@/types/api';
@@ -547,7 +547,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     const statusIndicator = createMemo(() =>
                       getAgentStatusIndicator({ status: resource.status }),
                     );
-                    const metricsKey = createMemo(() => buildMetricKey('agent', resource.id));
+                    const metricsKey = createMemo(() => buildMetricKeyForUnifiedResource(resource));
 
                     const cpuPercentValue = createMemo(() =>
                       resource.cpu ? Math.round(getCpuPercent(resource)) : null,

@@ -2,7 +2,12 @@
  * Tests for metricsKeys utility functions
  */
 import { describe, expect, it } from 'vitest';
-import { buildMetricKey, getMetricKeyPrefix, type MetricResourceKind } from '@/utils/metricsKeys';
+import {
+  buildMetricKey,
+  buildMetricKeyForUnifiedResource,
+  getMetricKeyPrefix,
+  type MetricResourceKind,
+} from '@/utils/metricsKeys';
 
 describe('metricsKeys', () => {
   describe('buildMetricKey', () => {
@@ -64,6 +69,37 @@ describe('metricsKeys', () => {
       const nodeKeys = keys.filter((k) => k.startsWith(nodePrefix));
 
       expect(nodeKeys).toEqual(['node:pve1', 'node:pve2']);
+    });
+  });
+
+  describe('buildMetricKeyForUnifiedResource', () => {
+    it('prefers canonical metricsTarget ids for docker-host resources', () => {
+      expect(
+        buildMetricKeyForUnifiedResource({
+          id: 'hash-resource-id',
+          type: 'docker-host',
+          metricsTarget: { resourceType: 'docker-host', resourceId: 'docker-host-1' },
+        } as any),
+      ).toBe('dockerHost:docker-host-1');
+    });
+
+    it('maps kubernetes metrics targets onto the k8s namespace', () => {
+      expect(
+        buildMetricKeyForUnifiedResource({
+          id: 'hash-k8s-resource-id',
+          type: 'k8s-cluster',
+          metricsTarget: { resourceType: 'k8s', resourceId: 'cluster-1' },
+        } as any),
+      ).toBe('k8s:cluster-1');
+    });
+
+    it('falls back to unified resource type when metricsTarget is absent', () => {
+      expect(
+        buildMetricKeyForUnifiedResource({
+          id: 'agent-1',
+          type: 'agent',
+        } as any),
+      ).toBe('agent:agent-1');
     });
   });
 });
