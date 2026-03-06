@@ -189,6 +189,11 @@ scripts/agent/
 docs/internal/
 docs/architecture/
 docs/release-control/
+!docs/release-control/
+docs/release-control/*
+!docs/release-control/v6/
+docs/release-control/v6/*
+!docs/release-control/v6/PRE_RELEASE_CHECKLIST.md
 scripts/release_control/
 .agent/
 
