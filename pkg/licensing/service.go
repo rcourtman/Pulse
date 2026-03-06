@@ -154,7 +154,10 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 		return s.ActivateWithKey(licenseKey)
 	}
 	if !isLicenseValidationDevMode() {
-		return nil, fmt.Errorf("legacy JWT activation is not supported in v6; use an activation key")
+		if !looksLikeLegacyJWTLicense(licenseKey) {
+			return nil, fmt.Errorf("legacy JWT activation is not supported in v6; use an activation key")
+		}
+		return s.ActivateLegacyLicense(licenseKey)
 	}
 
 	license, err := ValidateLicense(licenseKey)
@@ -195,6 +198,17 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 	return snapshot, nil
 }
 
+func looksLikeLegacyJWTLicense(licenseKey string) bool {
+	parts := strings.Split(strings.TrimSpace(licenseKey), ".")
+	return len(parts) == 3 && parts[0] != "" && parts[1] != "" && parts[2] != ""
+}
+
+// IsLicenseValidationDevMode reports whether legacy JWT validation is enabled
+// for development and test fixtures.
+func IsLicenseValidationDevMode() bool {
+	return isLicenseValidationDevMode()
+}
+
 // ActivateWithKey activates a license using an activation key from the license server.
 // It creates an installation, receives a relay grant, parses it, and sets the
 // resulting license as active. The activation state is persisted for background refresh.
@@ -229,6 +243,49 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 		return nil, fmt.Errorf("activation failed: %w", err)
 	}
 
+	return s.applyActivationResponse(resp, fingerprint, client.BaseURL(), persistence)
+}
+
+// ActivateLegacyLicense exchanges a legacy v5 JWT-style license for a v6 activation.
+func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, error) {
+	s.mu.RLock()
+	client := s.serverClient
+	persistence := s.persistence
+	s.mu.RUnlock()
+
+	if client == nil {
+		return nil, fmt.Errorf("activation unavailable: license server client not configured")
+	}
+
+	fingerprint, err := generateFingerprint()
+	if err != nil {
+		return nil, fmt.Errorf("generate instance fingerprint: %w", err)
+	}
+
+	hostname, _ := os.Hostname()
+	req := ExchangeLegacyLicenseRequest{
+		LegacyLicenseKey:    legacyLicenseKey,
+		InstanceFingerprint: fingerprint,
+		InstanceName:        hostname,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	resp, err := client.ExchangeLegacyLicense(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("activation failed: %w", err)
+	}
+
+	return s.applyActivationResponse(resp, fingerprint, client.BaseURL(), persistence)
+}
+
+func (s *Service) applyActivationResponse(
+	resp *ActivateInstallationResponse,
+	fingerprint string,
+	serverURL string,
+	persistence *Persistence,
+) (*License, error) {
 	// Parse the grant JWT to extract claims.
 	gc, err := verifyAndParseGrantJWT(resp.Grant.JWT)
 	if err != nil {
@@ -248,7 +305,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 		GrantJTI:            resp.Grant.JTI,
 		GrantExpiresAt:      resp.Grant.ParseExpiresAt(),
 		InstanceFingerprint: fingerprint,
-		LicenseServerURL:    client.BaseURL(),
+		LicenseServerURL:    serverURL,
 		ActivatedAt:         now,
 		LastRefreshedAt:     now,
 	}
@@ -904,4 +961,25 @@ func GenerateLicenseForTesting(email string, tier Tier, expiresIn time.Duration)
 	signature := base64.RawURLEncoding.EncodeToString([]byte("test-signature-not-valid"))
 
 	return header + "." + payload + "." + signature, nil
+}
+
+// GenerateGrantJWTForTesting creates a signed grant JWT and returns the matching
+// public key so tests can install it via SetPublicKey before verification.
+// DO NOT USE IN PRODUCTION.
+func GenerateGrantJWTForTesting(claims GrantClaims) (string, ed25519.PublicKey, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", nil, fmt.Errorf("generate grant test key pair: %w", err)
+	}
+
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA"}`))
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		return "", nil, fmt.Errorf("marshal grant test claims: %w", err)
+	}
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signedData := []byte(header + "." + payload)
+	signature := ed25519.Sign(privateKey, signedData)
+
+	return header + "." + payload + "." + base64.RawURLEncoding.EncodeToString(signature), publicKey, nil
 }

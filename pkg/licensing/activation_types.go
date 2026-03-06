@@ -106,6 +106,15 @@ type ActivateInstallationRequest struct {
 	ClientVersion       string `json:"client_version,omitempty"`
 }
 
+// ExchangeLegacyLicenseRequest is the payload sent to POST /v1/licenses/exchange.
+// It converts a legacy v5 JWT-style license into the v6 activation/grant model.
+type ExchangeLegacyLicenseRequest struct {
+	LegacyLicenseKey    string `json:"legacy_license_key"`
+	InstanceName        string `json:"instance_name,omitempty"`
+	InstanceFingerprint string `json:"instance_fingerprint"`
+	ClientVersion       string `json:"client_version,omitempty"`
+}
+
 // ActivateInstallationResponse is the payload returned from the activation endpoint.
 // The response is nested: license, installation, grant, refresh_policy are top-level keys.
 type ActivateInstallationResponse struct {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func createTestHandler(t *testing.T) *LicenseHandlers {
@@ -288,8 +289,53 @@ func TestHandleActivateLicense_InvalidKey(t *testing.T) {
 	}
 }
 
-func TestHandleActivateLicense_RejectsLegacyJWTInStrictV6(t *testing.T) {
+func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID: "lic_exchanged",
+		Tier:      "pro",
+		State:     "active",
+		Features:  []string{"relay"},
+		MaxAgents: 10,
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "legacy-jwt@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	license.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { license.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"license": map[string]any{
+				"license_id": "lic_exchanged",
+				"state":      "active",
+				"tier":       "pro",
+				"features":   []string{"relay"},
+				"max_agents": 10,
+			},
+			"installation": map[string]any{
+				"installation_id":    "inst_exchanged",
+				"installation_token": "pit_live_exchanged",
+				"status":             "active",
+			},
+			"grant": map[string]any{
+				"jwt":        grantJWT,
+				"jti":        "grant_exchanged",
+				"expires_at": time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 	handler := createTestHandler(t)
 	licenseKey, err := license.GenerateLicenseForTesting("legacy-jwt@example.com", license.TierPro, 24*time.Hour)
@@ -303,22 +349,19 @@ func TestHandleActivateLicense_RejectsLegacyJWTInStrictV6(t *testing.T) {
 
 	handler.HandleActivateLicense(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
 	var resp ActivateLicenseResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
-	if resp.Success {
-		t.Fatalf("expected Success=false for legacy JWT in strict v6 mode")
+	if !resp.Success {
+		t.Fatalf("expected Success=true for legacy JWT exchange, got message %q", resp.Message)
 	}
-	if !strings.Contains(resp.Message, "activation key") {
-		t.Fatalf("expected activation-key guidance in error message, got %q", resp.Message)
-	}
-	if !strings.Contains(strings.ToLower(resp.Message), "v5") {
-		t.Fatalf("expected v5 migration guidance in error message, got %q", resp.Message)
+	if svc := handler.Service(context.Background()); svc == nil || !svc.IsActivated() {
+		t.Fatalf("expected service activation state after exchange")
 	}
 }
 

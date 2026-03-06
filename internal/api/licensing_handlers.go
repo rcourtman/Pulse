@@ -237,6 +237,35 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		}
 	}
 
+	// Strict v6 automatically exchanges persisted legacy JWT licenses into the
+	// activation/grant model on startup when no activation state exists yet.
+	if persistence != nil && !isLicenseValidationDevModeFromLicensing() && !service.IsActivated() {
+		legacyJWT, loadErr := persistence.Load()
+		if loadErr != nil {
+			if !os.IsNotExist(loadErr) {
+				log.Warn().Str("org_id", orgID).Err(loadErr).Msg("Failed to load persisted legacy license")
+			}
+		} else if strings.TrimSpace(legacyJWT) != "" {
+			if _, err := service.Activate(legacyJWT); err != nil {
+				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to auto-exchange persisted legacy license")
+			} else if service.IsActivated() {
+				service.StartGrantRefresh(context.Background())
+				if feedToken := revocationFeedToken(); feedToken != "" {
+					service.StartRevocationPoll(context.Background(), feedToken)
+				}
+				if err := persistence.Delete(); err != nil {
+					log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to delete migrated legacy license persistence")
+				}
+				if current := service.Current(); current != nil {
+					log.Info().
+						Str("org_id", orgID).
+						Str("license_id", current.Claims.LicenseID).
+						Msg("Auto-exchanged persisted legacy license")
+				}
+			}
+		}
+	}
+
 	// Use LoadOrStore to avoid racing with concurrent first requests for the same org.
 	// If another goroutine stored first, use its service and let ours be GC'd.
 	actual, loaded := h.services.LoadOrStore(orgID, service)

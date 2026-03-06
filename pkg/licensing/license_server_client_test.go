@@ -187,6 +187,75 @@ func TestClientActivate(t *testing.T) {
 	})
 }
 
+func TestClientExchangeLegacyLicense(t *testing.T) {
+	t.Run("successful exchange", func(t *testing.T) {
+		grantJWT := makeTestGrantJWT(t, &GrantClaims{
+			LicenseID: "lic_legacy",
+			Tier:      "lifetime",
+			State:     "active",
+			IssuedAt:  1000,
+			ExpiresAt: 2000,
+		})
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Method = %q, want POST", r.Method)
+			}
+			if r.URL.Path != "/v1/licenses/exchange" {
+				t.Errorf("Path = %q, want /v1/licenses/exchange", r.URL.Path)
+			}
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
+			}
+			if r.Header.Get("Idempotency-Key") == "" {
+				t.Error("missing Idempotency-Key header")
+			}
+
+			var req ExchangeLegacyLicenseRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Errorf("decode request: %v", err)
+			}
+			if req.LegacyLicenseKey != "header.payload.signature" {
+				t.Errorf("LegacyLicenseKey = %q, want header.payload.signature", req.LegacyLicenseKey)
+			}
+
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(ActivateInstallationResponse{
+				License: ActivateResponseLicense{
+					LicenseID: "lic_legacy",
+					State:     "active",
+					Tier:      "lifetime",
+				},
+				Installation: ActivateResponseInstallation{
+					InstallationID:    "inst_legacy",
+					InstallationToken: "pit_live_legacy",
+					Status:            "active",
+				},
+				Grant: GrantEnvelope{
+					JWT:       grantJWT,
+					JTI:       "grant_legacy",
+					ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		resp, err := client.ExchangeLegacyLicense(context.Background(), ExchangeLegacyLicenseRequest{
+			LegacyLicenseKey:    "header.payload.signature",
+			InstanceFingerprint: "fp-legacy",
+		})
+		if err != nil {
+			t.Fatalf("ExchangeLegacyLicense failed: %v", err)
+		}
+		if resp.Installation.InstallationID != "inst_legacy" {
+			t.Errorf("InstallationID = %q, want inst_legacy", resp.Installation.InstallationID)
+		}
+		if resp.Grant.JTI != "grant_legacy" {
+			t.Errorf("Grant.JTI = %q, want grant_legacy", resp.Grant.JTI)
+		}
+	})
+}
+
 func TestClientRefreshGrant(t *testing.T) {
 	t.Run("successful refresh", func(t *testing.T) {
 		newGrantJWT := makeTestGrantJWT(t, &GrantClaims{

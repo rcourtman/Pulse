@@ -134,6 +134,10 @@ func newLicenseServerClientFromLicensing(baseURL string) *pkglicensing.LicenseSe
 	return pkglicensing.NewLicenseServerClient(baseURL)
 }
 
+func isLicenseValidationDevModeFromLicensing() bool {
+	return pkglicensing.IsLicenseValidationDevMode()
+}
+
 func newLicenseEvaluatorForBillingStoreFromLicensing(store billingStoreModel, orgID string, cacheTTL time.Duration) *licenseEvaluator {
 	return pkglicensing.NewEvaluator(pkglicensing.NewDatabaseSource(store, orgID, cacheTTL))
 }

@@ -13,8 +13,63 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-func TestGetTenantComponents_IgnoresPersistedLegacyJWT(t *testing.T) {
-	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID: "lic_migrated",
+		Tier:      "pro",
+		State:     "active",
+		Features:  []string{"relay"},
+		MaxAgents: 10,
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "user@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	pkglicensing.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	var exchangeCalled atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		exchangeCalled.Add(1)
+
+		var req pkglicensing.ExchangeLegacyLicenseRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode exchange request: %v", err)
+		}
+		if req.LegacyLicenseKey == "" {
+			t.Fatal("expected legacy license key in exchange request")
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+			License: pkglicensing.ActivateResponseLicense{
+				LicenseID: "lic_migrated",
+				State:     "active",
+				Tier:      "pro",
+				Features:  []string{"relay"},
+				MaxAgents: 10,
+			},
+			Installation: pkglicensing.ActivateResponseInstallation{
+				InstallationID:    "inst_migrated",
+				InstallationToken: "pit_live_migrated",
+				Status:            "active",
+			},
+			Grant: pkglicensing.GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_migrated",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -44,18 +99,22 @@ func TestGetTenantComponents_IgnoresPersistedLegacyJWT(t *testing.T) {
 		t.Fatal("expected non-nil service")
 	}
 
-	// Strict v6: persisted legacy JWTs are not auto-loaded on startup.
-	if svc.Current() != nil {
-		t.Fatal("expected no active license from persisted legacy JWT on startup")
+	if !svc.IsActivated() {
+		t.Fatal("expected persisted legacy JWT to auto-exchange into activation state")
 	}
-	if svc.IsActivated() {
-		t.Error("expected IsActivated=false when no activation state is present")
+	if exchangeCalled.Load() != 1 {
+		t.Fatalf("expected one exchange call, got %d", exchangeCalled.Load())
 	}
-
-	// Persisted legacy JWT is left untouched for explicit/manual migration handling.
-	loaded, _ := persistence.Load()
-	if loaded == "" {
-		t.Error("expected persisted legacy JWT to remain on disk")
+	if current := svc.Current(); current == nil || current.Claims.LicenseID != "lic_migrated" {
+		t.Fatalf("expected migrated license to be active, got %#v", current)
+	}
+	if legacyLeft, err := persistence.Load(); err == nil && legacyLeft != "" {
+		t.Fatalf("expected migrated legacy JWT persistence to be removed, got %q", legacyLeft)
+	}
+	if activationState, err := persistence.LoadActivationState(); err != nil {
+		t.Fatalf("load activation state: %v", err)
+	} else if activationState == nil {
+		t.Fatal("expected activation state after legacy exchange")
 	}
 
 	handlers.StopAllBackgroundLoops()

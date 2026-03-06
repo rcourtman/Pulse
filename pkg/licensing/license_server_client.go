@@ -71,6 +71,39 @@ func (c *LicenseServerClient) Activate(ctx context.Context, req ActivateInstalla
 	return &result, nil
 }
 
+// ExchangeLegacyLicense converts a legacy v5 JWT-style license into a v6 activation.
+// The response shape matches normal activation so the runtime can persist activation
+// state and start using grant refresh immediately.
+func (c *LicenseServerClient) ExchangeLegacyLicense(ctx context.Context, req ExchangeLegacyLicenseRequest) (*ActivateInstallationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal exchange request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/licenses/exchange", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create exchange request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("exchange request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var result ActivateInstallationResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode exchange response: %w", err)
+	}
+	return &result, nil
+}
+
 // RefreshGrant calls the license server to refresh a relay grant.
 // The installationToken is sent as a Bearer token in the Authorization header.
 func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, installationToken string, req RefreshGrantRequest) (*RefreshGrantResponse, error) {
