@@ -31,4 +31,15 @@ describe('resourceStateAdapters nodeFromResource', () => {
 
     expect(node?.linkedAgentId).toBe('agent-canonical');
   });
+
+  it('falls back to the actionable agent identity when linkedAgentId is absent', () => {
+    const node = nodeFromResource(
+      createNodeResource({
+        proxmox: { nodeName: 'pve-node-1' },
+        agent: { agentId: 'agent-from-facet' },
+      }),
+    );
+
+    expect(node?.linkedAgentId).toBe('agent-from-facet');
+  });
 });

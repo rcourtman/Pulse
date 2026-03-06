@@ -21,6 +21,7 @@ import type {
   Temperature,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
@@ -173,6 +174,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
   const cpuInfo = asRecord(proxmox?.cpuInfo);
   const instance = asString(proxmox?.instance) || resource.platformId || resource.id;
   const name = asString(proxmox?.nodeName) || resource.name || resource.id;
+  const linkedAgentId = asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);
 
   return {
     id: resource.id,
@@ -211,7 +213,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     connectionHealth: asString(proxmox?.connectionHealth) || resource.status || 'unknown',
     isClusterMember: asBoolean(proxmox?.isClusterMember),
     clusterName: asString(proxmox?.clusterName),
-    linkedAgentId: asString(platform?.linkedAgentId),
+    linkedAgentId,
   };
 };
 
