@@ -17,6 +17,7 @@ const requiredImportSources = [
   './settingsTabs',
   './settingsHeaderMeta',
   './settingsFeatureGates',
+  './settingsPanelRegistry',
   './useSettingsNavigation',
 ] as const;
 
@@ -43,11 +44,16 @@ describe('Settings architecture guardrails', () => {
     }
   });
 
-  it('keeps panel registry extracted until dispatch is migrated', async () => {
+  it('routes dispatchable settings tabs through the extracted panel registry', async () => {
     const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
 
     expect(registrySource).toContain('createSettingsPanelRegistry');
     expect(registrySource).toContain("'security-webhooks'");
+    expect(settingsSource).toContain('createSettingsPanelRegistry');
+    expect(settingsSource).toContain('activeSettingsPanelEntry');
+    expect(settingsSource).toContain('<Dynamic component={entry().component}');
+    expect(settingsSource).not.toContain("<Show when={activeTab() === 'system-general'}>");
+    expect(settingsSource).not.toContain("<Show when={activeTab() === 'security-webhooks'}>");
   });
 
   it('does not re-inline extracted tab and header metadata definitions', () => {

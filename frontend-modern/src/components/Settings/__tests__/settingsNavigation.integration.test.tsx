@@ -193,6 +193,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(onMountBody).not.toContain('runDiagnostics');
     expect(settingsSource).toContain('baseTabGroups');
     expect(settingsSource).toContain('shouldHideSettingsNavItem');
+    expect(settingsSource).toContain('createSettingsPanelRegistry');
     expect(settingsSource).not.toContain('const tabGroups');
   });
 

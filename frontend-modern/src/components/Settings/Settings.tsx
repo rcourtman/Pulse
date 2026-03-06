@@ -4,11 +4,13 @@ import {
   onMount,
   For,
   Show,
+  Suspense,
   createEffect,
   createMemo,
   onCleanup,
   on,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { notificationStore } from '@/stores/notifications';
@@ -27,25 +29,9 @@ import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
-import { NetworkSettingsPanel } from './NetworkSettingsPanel';
-import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
-import { RecoverySettingsPanel } from './RecoverySettingsPanel';
 import { ProLicensePanel } from './ProLicensePanel';
 import { AgentLedgerPanel } from './AgentLedgerPanel';
-import { SecurityAuthPanel } from './SecurityAuthPanel';
-import { APIAccessPanel } from './APIAccessPanel';
-import { SecurityOverviewPanel } from './SecurityOverviewPanel';
-import { RelaySettingsPanel } from './RelaySettingsPanel';
-import OrganizationOverviewPanel from './OrganizationOverviewPanel';
-import OrganizationAccessPanel from './OrganizationAccessPanel';
-import OrganizationSharingPanel from './OrganizationSharingPanel';
-import OrganizationBillingPanel from './OrganizationBillingPanel';
-import BillingAdminPanel from './BillingAdminPanel';
-import AuditLogPanel from './AuditLogPanel';
-import { AuditWebhookPanel } from './AuditWebhookPanel';
-import RolesPanel from './RolesPanel';
-import UserAssignmentsPanel from './UserAssignmentsPanel';
 
 import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
 import { SettingsSectionNav } from './SettingsSectionNav';
@@ -69,6 +55,7 @@ import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
+import { createSettingsPanelRegistry } from './settingsPanelRegistry';
 import { baseTabGroups, getSettingsNavItem, shouldHideSettingsNavItem } from './settingsTabs';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
@@ -555,6 +542,267 @@ const Settings: Component<SettingsProps> = (props) => {
   });
 
   const settingsCapabilities = createMemo(() => securityStatus()?.settingsCapabilities ?? null);
+  const agentsPanel: Component = () => (
+    <>
+      <UnifiedAgents />
+      <AgentProfilesPanel />
+    </>
+  );
+  const dockerPanel: Component = () => (
+    <Card padding="lg" class="mb-6">
+      <div class="space-y-4">
+        <div class="space-y-1">
+          <h3 class="text-base font-semibold text-base-content">Docker Settings</h3>
+          <p class="text-sm text-muted">Server-wide settings for Docker container management.</p>
+        </div>
+
+        <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-border bg-surface-hover">
+          <div class="flex-1 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-base-content">Hide Docker Update Buttons</span>
+              <Show when={disableDockerUpdateActionsLocked()}>
+                <span
+                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                  title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"
+                >
+                  <svg
+                    class="w-3 h-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                  ENV
+                </span>
+              </Show>
+            </div>
+            <p class="text-xs text-muted">
+              When enabled, the "Update" button on Docker containers will be hidden across all
+              views. Update detection will still work, allowing you to see which containers have
+              updates available. Use this in production environments where you prefer Pulse to be
+              read-only.
+            </p>
+            <p class="text-xs text-muted mt-1">
+              Can also be set via environment variable:{' '}
+              <code class="px-1 py-0.5 rounded bg-surface-hover text-base-content">
+                PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
+              </code>
+            </p>
+          </div>
+          <div class="flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
+              disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
+              class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                disableDockerUpdateActions() ? 'bg-blue-600' : 'bg-surface-alt'
+              } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
+              role="switch"
+              aria-checked={disableDockerUpdateActions()}
+              title={
+                disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined
+              }
+            >
+              <span
+                class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                  disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+  const systemAiPanel: Component = () => (
+    <div class="space-y-6">
+      <AISettings />
+      <AICostDashboard />
+    </div>
+  );
+  const systemGeneralPanel: Component = () => (
+    <>
+      <Show when={!initialLoadComplete()}>
+        <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
+          Loading configuration...
+        </div>
+      </Show>
+      <Show when={initialLoadComplete()}>
+        <GeneralSettingsPanel
+          darkMode={props.darkMode}
+          themePreference={props.themePreference}
+          setThemePreference={props.setThemePreference}
+          pvePollingInterval={pvePollingInterval}
+          setPVEPollingInterval={setPVEPollingInterval}
+          pvePollingSelection={pvePollingSelection}
+          setPVEPollingSelection={setPVEPollingSelection}
+          pvePollingCustomSeconds={pvePollingCustomSeconds}
+          setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
+          pvePollingEnvLocked={pvePollingEnvLocked}
+          setHasUnsavedChanges={setHasUnsavedChanges}
+          disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
+          disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
+          savingUpgradeMetrics={savingUpgradeMetrics}
+          handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
+          telemetryEnabled={telemetryEnabled}
+          telemetryEnabledLocked={telemetryEnabledLocked}
+          savingTelemetry={savingTelemetry}
+          handleTelemetryEnabledChange={handleTelemetryEnabledChange}
+        />
+      </Show>
+    </>
+  );
+  const systemProPanel: Component = () => (
+    <div class="space-y-6">
+      <ProLicensePanel />
+      <AgentLedgerPanel />
+    </div>
+  );
+  const securitySsoPanel: Component = () => (
+    <div class="space-y-6">
+      <SSOProvidersPanel
+        onConfigUpdated={loadSecurityStatus}
+        canManage={settingsCapabilities()?.singleSignOnWrite === true}
+      />
+    </div>
+  );
+  const settingsPanelRegistry = createMemo(() =>
+    createSettingsPanelRegistry({
+      agentsPanel,
+      dockerPanel,
+      systemGeneralPanel,
+      systemAiPanel,
+      systemProPanel,
+      securitySsoPanel,
+      getNetworkPanelProps: () => ({
+        discoveryEnabled,
+        discoveryMode,
+        discoverySubnetDraft,
+        discoverySubnetError,
+        savingDiscoverySettings,
+        envOverrides,
+        allowedOrigins,
+        setAllowedOrigins,
+        allowEmbedding,
+        setAllowEmbedding,
+        allowedEmbedOrigins,
+        setAllowedEmbedOrigins,
+        webhookAllowedPrivateCIDRs,
+        setWebhookAllowedPrivateCIDRs,
+        publicURL,
+        setPublicURL,
+        handleDiscoveryEnabledChange,
+        handleDiscoveryModeChange,
+        setDiscoveryMode,
+        setDiscoverySubnetDraft,
+        setDiscoverySubnetError,
+        setLastCustomSubnet,
+        commitDiscoverySubnet,
+        setHasUnsavedChanges,
+        parseSubnetList,
+        normalizeSubnetList,
+        isValidCIDR,
+        currentDraftSubnetValue,
+        discoverySubnetInputRef: (el: HTMLInputElement) => {
+          discoverySubnetInputRef = el;
+        },
+      }),
+      getUpdatesPanelProps: () => ({
+        versionInfo,
+        updateInfo,
+        checkingForUpdates,
+        updateChannel,
+        setUpdateChannel,
+        autoUpdateEnabled,
+        setAutoUpdateEnabled,
+        autoUpdateCheckInterval,
+        setAutoUpdateCheckInterval,
+        autoUpdateTime,
+        setAutoUpdateTime,
+        checkForUpdates,
+        setHasUnsavedChanges,
+        updatePlan,
+        onInstallUpdate: handleInstallUpdate,
+        isInstalling: isInstallingUpdate,
+      }),
+      getRecoveryPanelProps: () => ({
+        backupPollingEnabled,
+        setBackupPollingEnabled,
+        backupPollingInterval,
+        setBackupPollingInterval,
+        backupPollingCustomMinutes,
+        setBackupPollingCustomMinutes,
+        backupPollingUseCustom,
+        setBackupPollingUseCustom,
+        backupPollingEnvLocked,
+        backupIntervalSelectValue,
+        backupIntervalSummary,
+        setHasUnsavedChanges,
+        showExportDialog,
+        setShowExportDialog,
+        showImportDialog,
+        setShowImportDialog,
+        setUseCustomPassphrase,
+        securityStatus,
+      }),
+      getOrganizationOverviewPanelProps: () => ({}),
+      getOrganizationAccessPanelProps: () => ({}),
+      getOrganizationSharingPanelProps: () => ({}),
+      getOrganizationBillingPanelProps: () => ({
+        nodeUsage: organizationAgentUsage(),
+        guestUsage: organizationGuestUsage(),
+      }),
+      getApiAccessPanelProps: () => ({
+        currentTokenHint: securityStatus()?.apiTokenHint,
+        onTokensChanged: () => {
+          void loadSecurityStatus();
+        },
+        refreshing: securityStatusLoading(),
+        canManage: settingsCapabilities()?.apiAccessWrite === true,
+      }),
+      getSecurityOverviewPanelProps: () => ({
+        securityStatus,
+        securityStatusLoading,
+      }),
+      getSecurityAuthPanelProps: () => ({
+        securityStatus,
+        securityStatusLoading,
+        versionInfo,
+        showQuickSecuritySetup,
+        setShowQuickSecuritySetup,
+        showQuickSecurityWizard,
+        setShowQuickSecurityWizard,
+        showPasswordModal,
+        setShowPasswordModal,
+        hideLocalLogin,
+        hideLocalLoginLocked,
+        savingHideLocalLogin,
+        handleHideLocalLoginChange,
+        loadSecurityStatus,
+        canManage: settingsCapabilities()?.authenticationWrite === true,
+      }),
+      getRelayPanelProps: () => ({
+        canManage: settingsCapabilities()?.relayWrite === true,
+      }),
+      getAuditWebhookPanelProps: () => ({
+        canManage: settingsCapabilities()?.auditWebhooksWrite === true,
+      }),
+    }),
+  );
+  const activeSettingsPanelEntry = createMemo(() => {
+    const currentTab = activeTab();
+    if (currentTab === 'proxmox') {
+      return null;
+    }
+
+    return settingsPanelRegistry()[currentTab];
+  });
 
   const flatTabs = createMemo(() => visibleTabGroups().flatMap((group) => group.items));
 
@@ -2963,335 +3211,18 @@ const Settings: Component<SettingsProps> = (props) => {
                   </div>
                 </div>
               </Show>
-              {/* Unified Agents Tab */}
-              <Show when={activeTab() === 'agents'}>
-                <UnifiedAgents />
-
-                {/* Agent Profiles (Pro Feature) */}
-                <AgentProfilesPanel />
-              </Show>
-
-              {/* Docker Tab */}
-              <Show when={activeTab() === 'docker'}>
-                {/* Docker Settings Card */}
-                <Card padding="lg" class="mb-6">
-                  <div class="space-y-4">
-                    <div class="space-y-1">
-                      <h3 class="text-base font-semibold text-base-content">Docker Settings</h3>
-                      <p class="text-sm text-muted">
-                        Server-wide settings for Docker container management.
-                      </p>
-                    </div>
-
-                    {/* Hide Docker Update Buttons Toggle */}
-                    <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-border bg-surface-hover">
-                      <div class="flex-1 space-y-1">
-                        <div class="flex items-center gap-2">
-                          <span class="text-sm font-medium text-base-content">
-                            Hide Docker Update Buttons
-                          </span>
-                          <Show when={disableDockerUpdateActionsLocked()}>
-                            <span
-                              class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                              title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"
-                            >
-                              <svg
-                                class="w-3 h-3"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                stroke-width="2"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                                />
-                              </svg>
-                              ENV
-                            </span>
-                          </Show>
-                        </div>
-                        <p class="text-xs text-muted">
-                          When enabled, the "Update" button on Docker containers will be hidden
-                          across all views. Update detection will still work, allowing you to see
-                          which containers have updates available. Use this in production
-                          environments where you prefer Pulse to be read-only.
-                        </p>
-                        <p class="text-xs text-muted mt-1">
-                          Can also be set via environment variable:{' '}
-                          <code class="px-1 py-0.5 rounded bg-surface-hover text-base-content">
-                            PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
-                          </code>
-                        </p>
+              <Show when={activeTab() !== 'proxmox' && activeSettingsPanelEntry()}>
+                {(entry) => (
+                  <Suspense
+                    fallback={
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
+                        Loading settings...
                       </div>
-                      <div class="flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())
-                          }
-                          disabled={
-                            disableDockerUpdateActionsLocked() || savingDockerUpdateActions()
-                          }
-                          class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                            disableDockerUpdateActions() ? 'bg-blue-600' : 'bg-surface-alt'
-                          } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          role="switch"
-                          aria-checked={disableDockerUpdateActions()}
-                          title={
-                            disableDockerUpdateActionsLocked()
-                              ? 'Locked by environment variable'
-                              : undefined
-                          }
-                        >
-                          <span
-                            class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                              disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              </Show>
-
-              {/* System General Tab */}
-              <Show when={activeTab() === 'system-general'}>
-                <Show when={!initialLoadComplete()}>
-                  <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
-                    Loading configuration...
-                  </div>
-                </Show>
-                <Show when={initialLoadComplete()}>
-                  <GeneralSettingsPanel
-                    darkMode={props.darkMode}
-                    themePreference={props.themePreference}
-                    setThemePreference={props.setThemePreference}
-                    pvePollingInterval={pvePollingInterval}
-                    setPVEPollingInterval={setPVEPollingInterval}
-                    pvePollingSelection={pvePollingSelection}
-                    setPVEPollingSelection={setPVEPollingSelection}
-                    pvePollingCustomSeconds={pvePollingCustomSeconds}
-                    setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
-                    pvePollingEnvLocked={pvePollingEnvLocked}
-                    setHasUnsavedChanges={setHasUnsavedChanges}
-                    disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
-                    disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
-                    savingUpgradeMetrics={savingUpgradeMetrics}
-                    handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
-                    telemetryEnabled={telemetryEnabled}
-                    telemetryEnabledLocked={telemetryEnabledLocked}
-                    savingTelemetry={savingTelemetry}
-                    handleTelemetryEnabledChange={handleTelemetryEnabledChange}
-                  />
-                </Show>
-              </Show>
-
-              {/* System Network Tab */}
-              <Show when={activeTab() === 'system-network'}>
-                <NetworkSettingsPanel
-                  discoveryEnabled={discoveryEnabled}
-                  discoveryMode={discoveryMode}
-                  discoverySubnetDraft={discoverySubnetDraft}
-                  discoverySubnetError={discoverySubnetError}
-                  savingDiscoverySettings={savingDiscoverySettings}
-                  envOverrides={envOverrides}
-                  allowedOrigins={allowedOrigins}
-                  setAllowedOrigins={setAllowedOrigins}
-                  allowEmbedding={allowEmbedding}
-                  setAllowEmbedding={setAllowEmbedding}
-                  allowedEmbedOrigins={allowedEmbedOrigins}
-                  setAllowedEmbedOrigins={setAllowedEmbedOrigins}
-                  webhookAllowedPrivateCIDRs={webhookAllowedPrivateCIDRs}
-                  setWebhookAllowedPrivateCIDRs={setWebhookAllowedPrivateCIDRs}
-                  publicURL={publicURL}
-                  setPublicURL={setPublicURL}
-                  handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
-                  handleDiscoveryModeChange={handleDiscoveryModeChange}
-                  setDiscoveryMode={setDiscoveryMode}
-                  setDiscoverySubnetDraft={setDiscoverySubnetDraft}
-                  setDiscoverySubnetError={setDiscoverySubnetError}
-                  setLastCustomSubnet={setLastCustomSubnet}
-                  commitDiscoverySubnet={commitDiscoverySubnet}
-                  setHasUnsavedChanges={setHasUnsavedChanges}
-                  parseSubnetList={parseSubnetList}
-                  normalizeSubnetList={normalizeSubnetList}
-                  isValidCIDR={isValidCIDR}
-                  currentDraftSubnetValue={currentDraftSubnetValue}
-                  discoverySubnetInputRef={(el) => {
-                    discoverySubnetInputRef = el;
-                  }}
-                />
-              </Show>
-
-              {/* System Updates Tab */}
-              <Show when={activeTab() === 'system-updates'}>
-                <UpdatesSettingsPanel
-                  versionInfo={versionInfo}
-                  updateInfo={updateInfo}
-                  checkingForUpdates={checkingForUpdates}
-                  updateChannel={updateChannel}
-                  setUpdateChannel={setUpdateChannel}
-                  autoUpdateEnabled={autoUpdateEnabled}
-                  setAutoUpdateEnabled={setAutoUpdateEnabled}
-                  autoUpdateCheckInterval={autoUpdateCheckInterval}
-                  setAutoUpdateCheckInterval={setAutoUpdateCheckInterval}
-                  autoUpdateTime={autoUpdateTime}
-                  setAutoUpdateTime={setAutoUpdateTime}
-                  checkForUpdates={checkForUpdates}
-                  setHasUnsavedChanges={setHasUnsavedChanges}
-                  updatePlan={updatePlan}
-                  onInstallUpdate={handleInstallUpdate}
-                  isInstalling={isInstallingUpdate}
-                />
-              </Show>
-
-              {/* System Recovery Tab */}
-              <Show when={activeTab() === 'system-recovery'}>
-                <RecoverySettingsPanel
-                  backupPollingEnabled={backupPollingEnabled}
-                  setBackupPollingEnabled={setBackupPollingEnabled}
-                  backupPollingInterval={backupPollingInterval}
-                  setBackupPollingInterval={setBackupPollingInterval}
-                  backupPollingCustomMinutes={backupPollingCustomMinutes}
-                  setBackupPollingCustomMinutes={setBackupPollingCustomMinutes}
-                  backupPollingUseCustom={backupPollingUseCustom}
-                  setBackupPollingUseCustom={setBackupPollingUseCustom}
-                  backupPollingEnvLocked={backupPollingEnvLocked}
-                  backupIntervalSelectValue={backupIntervalSelectValue}
-                  backupIntervalSummary={backupIntervalSummary}
-                  setHasUnsavedChanges={setHasUnsavedChanges}
-                  showExportDialog={showExportDialog}
-                  setShowExportDialog={setShowExportDialog}
-                  showImportDialog={showImportDialog}
-                  setShowImportDialog={setShowImportDialog}
-                  setUseCustomPassphrase={setUseCustomPassphrase}
-                  securityStatus={securityStatus}
-                />
-              </Show>
-
-              {/* AI Assistant Tab */}
-              <Show when={activeTab() === 'system-ai'}>
-                <div class="space-y-6">
-                  <AISettings />
-                  <AICostDashboard />
-                </div>
-              </Show>
-
-              {/* Relay Settings Tab */}
-              <Show when={activeTab() === 'system-relay'}>
-                <RelaySettingsPanel canManage={settingsCapabilities()?.relayWrite === true} />
-              </Show>
-
-              {/* Pulse Pro License Tab */}
-              <Show when={activeTab() === 'system-pro'}>
-                <div class="space-y-6">
-                  <ProLicensePanel />
-                  <AgentLedgerPanel />
-                </div>
-              </Show>
-
-              {/* Organization Overview Tab */}
-              <Show when={activeTab() === 'organization-overview'}>
-                <OrganizationOverviewPanel />
-              </Show>
-
-              {/* Organization Access Tab */}
-              <Show when={activeTab() === 'organization-access'}>
-                <OrganizationAccessPanel />
-              </Show>
-
-              {/* Organization Sharing Tab */}
-              <Show when={activeTab() === 'organization-sharing'}>
-                <OrganizationSharingPanel />
-              </Show>
-
-              {/* Organization Billing Tab */}
-              <Show when={activeTab() === 'organization-billing'}>
-                <OrganizationBillingPanel
-                  nodeUsage={organizationAgentUsage()}
-                  guestUsage={organizationGuestUsage()}
-                />
-              </Show>
-
-              {/* Billing Admin Tab */}
-              <Show when={activeTab() === 'organization-billing-admin'}>
-                <BillingAdminPanel />
-              </Show>
-
-              {/* API Access */}
-              <Show when={activeTab() === 'api'}>
-                <APIAccessPanel
-                  currentTokenHint={securityStatus()?.apiTokenHint}
-                  onTokensChanged={() => {
-                    void loadSecurityStatus();
-                  }}
-                  refreshing={securityStatusLoading()}
-                  canManage={settingsCapabilities()?.apiAccessWrite === true}
-                />
-              </Show>
-
-              {/* Security Overview Tab */}
-              <Show when={activeTab() === 'security-overview'}>
-                <SecurityOverviewPanel
-                  securityStatus={securityStatus}
-                  securityStatusLoading={securityStatusLoading}
-                />
-              </Show>
-
-              {/* Security Authentication Tab */}
-              <Show when={activeTab() === 'security-auth'}>
-                <SecurityAuthPanel
-                  securityStatus={securityStatus}
-                  securityStatusLoading={securityStatusLoading}
-                  versionInfo={versionInfo}
-                  showQuickSecuritySetup={showQuickSecuritySetup}
-                  setShowQuickSecuritySetup={setShowQuickSecuritySetup}
-                  showQuickSecurityWizard={showQuickSecurityWizard}
-                  setShowQuickSecurityWizard={setShowQuickSecurityWizard}
-                  showPasswordModal={showPasswordModal}
-                  setShowPasswordModal={setShowPasswordModal}
-                  hideLocalLogin={hideLocalLogin}
-                  hideLocalLoginLocked={hideLocalLoginLocked}
-                  savingHideLocalLogin={savingHideLocalLogin}
-                  handleHideLocalLoginChange={handleHideLocalLoginChange}
-                  loadSecurityStatus={loadSecurityStatus}
-                  canManage={settingsCapabilities()?.authenticationWrite === true}
-                />
-              </Show>
-
-              {/* Security Single Sign-On Tab */}
-              <Show when={activeTab() === 'security-sso'}>
-                <div class="space-y-6">
-                  <SSOProvidersPanel
-                    onConfigUpdated={loadSecurityStatus}
-                    canManage={settingsCapabilities()?.singleSignOnWrite === true}
-                  />
-                </div>
-              </Show>
-
-              {/* Security Roles Tab */}
-              <Show when={activeTab() === 'security-roles'}>
-                <RolesPanel />
-              </Show>
-
-              {/* Security User Assignments Tab */}
-              <Show when={activeTab() === 'security-users'}>
-                <UserAssignmentsPanel />
-              </Show>
-
-              {/* Security Audit Log Tab */}
-              <Show when={activeTab() === 'security-audit'}>
-                <AuditLogPanel />
-              </Show>
-
-              {/* Security Webhooks Tab */}
-              <Show when={activeTab() === 'security-webhooks'}>
-                <AuditWebhookPanel
-                  canManage={settingsCapabilities()?.auditWebhooksWrite === true}
-                />
+                    }
+                  >
+                    <Dynamic component={entry().component} {...(entry().getProps?.() ?? {})} />
+                  </Suspense>
+                )}
               </Show>
             </div>
           </div>

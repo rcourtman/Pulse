@@ -1,6 +1,5 @@
 import { lazy } from 'solid-js';
 import type { Component } from 'solid-js';
-import type { GeneralSettingsPanel as GeneralSettingsPanelType } from './GeneralSettingsPanel';
 import type { NetworkSettingsPanel as NetworkSettingsPanelType } from './NetworkSettingsPanel';
 import type { UpdatesSettingsPanel as UpdatesSettingsPanelType } from './UpdatesSettingsPanel';
 import type { RecoverySettingsPanel as RecoverySettingsPanelType } from './RecoverySettingsPanel';
@@ -11,11 +10,10 @@ import type OrganizationBillingPanelType from './OrganizationBillingPanel';
 import type { APIAccessPanel as APIAccessPanelType } from './APIAccessPanel';
 import type { SecurityOverviewPanel as SecurityOverviewPanelType } from './SecurityOverviewPanel';
 import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthPanel';
+import type { RelaySettingsPanel as RelaySettingsPanelType } from './RelaySettingsPanel';
+import type { AuditWebhookPanel as AuditWebhookPanelType } from './AuditWebhookPanel';
 import type { SettingsTab } from './settingsTypes';
 
-const GeneralSettingsPanel = lazy(() =>
-  import('./GeneralSettingsPanel').then((m) => ({ default: m.GeneralSettingsPanel })),
-);
 const NetworkSettingsPanel = lazy(() =>
   import('./NetworkSettingsPanel').then((m) => ({ default: m.NetworkSettingsPanel })),
 );
@@ -27,9 +25,6 @@ const RecoverySettingsPanel = lazy(() =>
 );
 const RelaySettingsPanel = lazy(() =>
   import('./RelaySettingsPanel').then((m) => ({ default: m.RelaySettingsPanel })),
-);
-const ProLicensePanel = lazy(() =>
-  import('./ProLicensePanel').then((m) => ({ default: m.ProLicensePanel })),
 );
 const OrganizationOverviewPanel = lazy(() => import('./OrganizationOverviewPanel'));
 const OrganizationAccessPanel = lazy(() => import('./OrganizationAccessPanel'));
@@ -64,9 +59,10 @@ export type SettingsPanelRegistry = Record<SettingsDispatchableTab, SettingsPane
 export interface SettingsPanelRegistryContext {
   agentsPanel: Component;
   dockerPanel: Component;
+  systemGeneralPanel: Component;
   systemAiPanel: Component;
+  systemProPanel: Component;
   securitySsoPanel: Component;
-  getGeneralPanelProps: () => Parameters<typeof GeneralSettingsPanelType>[0];
   getNetworkPanelProps: () => Parameters<typeof NetworkSettingsPanelType>[0];
   getUpdatesPanelProps: () => Parameters<typeof UpdatesSettingsPanelType>[0];
   getRecoveryPanelProps: () => Parameters<typeof RecoverySettingsPanelType>[0];
@@ -77,6 +73,8 @@ export interface SettingsPanelRegistryContext {
   getApiAccessPanelProps: () => Parameters<typeof APIAccessPanelType>[0];
   getSecurityOverviewPanelProps: () => Parameters<typeof SecurityOverviewPanelType>[0];
   getSecurityAuthPanelProps: () => Parameters<typeof SecurityAuthPanelType>[0];
+  getRelayPanelProps: () => Parameters<typeof RelaySettingsPanelType>[0];
+  getAuditWebhookPanelProps: () => Parameters<typeof AuditWebhookPanelType>[0];
 }
 
 export const createSettingsPanelRegistry = (
@@ -89,8 +87,7 @@ export const createSettingsPanelRegistry = (
     component: context.dockerPanel,
   },
   'system-general': {
-    component: GeneralSettingsPanel,
-    getProps: context.getGeneralPanelProps,
+    component: context.systemGeneralPanel,
   },
   'system-network': {
     component: NetworkSettingsPanel,
@@ -109,9 +106,10 @@ export const createSettingsPanelRegistry = (
   },
   'system-relay': {
     component: RelaySettingsPanel,
+    getProps: context.getRelayPanelProps,
   },
   'system-pro': {
-    component: ProLicensePanel,
+    component: context.systemProPanel,
   },
   'organization-overview': {
     component: OrganizationOverviewPanel,
@@ -158,5 +156,6 @@ export const createSettingsPanelRegistry = (
   },
   'security-webhooks': {
     component: AuditWebhookPanel,
+    getProps: context.getAuditWebhookPanelProps,
   },
 });
