@@ -5,6 +5,7 @@ package servicediscovery
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -12,14 +13,79 @@ import (
 type ResourceType string
 
 const (
-	ResourceTypeVM                    ResourceType = "vm"
-	ResourceTypeSystemContainer       ResourceType = "system-container"
-	ResourceTypeDocker                ResourceType = "docker"
-	ResourceTypeK8s                   ResourceType = "k8s"
-	ResourceTypeAgent                 ResourceType = "agent"
+	ResourceTypeVM              ResourceType = "vm"
+	ResourceTypeSystemContainer ResourceType = "system-container"
+	ResourceTypeDocker          ResourceType = "docker"
+	ResourceTypeK8s             ResourceType = "k8s"
+	ResourceTypeAgent           ResourceType = "agent"
+
+	// Scan-only execution targets for Docker running inside another canonical resource.
 	ResourceTypeDockerVM              ResourceType = "docker_vm"               // Docker on a VM
 	ResourceTypeDockerSystemContainer ResourceType = "docker_system-container" // Docker in a system container
 )
+
+const (
+	legacyResourceTypeHost      ResourceType = "host"
+	legacyResourceTypeLXC       ResourceType = "lxc"
+	legacyResourceTypeDockerLXC ResourceType = "docker_lxc"
+)
+
+type resourceTypeClass string
+
+const (
+	resourceTypeClassCanonical     resourceTypeClass = "canonical"
+	resourceTypeClassExecutionOnly resourceTypeClass = "execution-only"
+	resourceTypeClassLegacyAlias   resourceTypeClass = "legacy-alias"
+	resourceTypeClassUnknown       resourceTypeClass = "unknown"
+)
+
+func classifyResourceType(rt ResourceType) resourceTypeClass {
+	switch NormalizeResourceType(rt) {
+	case ResourceTypeVM, ResourceTypeSystemContainer, ResourceTypeDocker, ResourceTypeK8s, ResourceTypeAgent:
+		return resourceTypeClassCanonical
+	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
+		return resourceTypeClassExecutionOnly
+	case legacyResourceTypeHost, legacyResourceTypeLXC, legacyResourceTypeDockerLXC:
+		return resourceTypeClassLegacyAlias
+	default:
+		return resourceTypeClassUnknown
+	}
+}
+
+// NormalizeResourceType keeps resource type handling whitespace-stable without
+// rewriting legacy or scan-only vocabulary into canonical types.
+func NormalizeResourceType(rt ResourceType) ResourceType {
+	return ResourceType(strings.TrimSpace(string(rt)))
+}
+
+// IsCanonicalDiscoveryType reports whether the resource type is part of the
+// canonical v6 discovery model and may be persisted or queried as discovery data.
+func (rt ResourceType) IsCanonicalDiscoveryType() bool {
+	return classifyResourceType(rt) == resourceTypeClassCanonical
+}
+
+// IsExecutionOnlyDiscoveryType reports whether the resource type is only valid
+// for internal scan execution routing and must not be stored as a discovery type.
+func (rt ResourceType) IsExecutionOnlyDiscoveryType() bool {
+	return classifyResourceType(rt) == resourceTypeClassExecutionOnly
+}
+
+// ValidateCanonicalDiscoveryResourceType enforces that service-discovery
+// persistence and query paths use canonical v6 resource vocabulary only.
+func ValidateCanonicalDiscoveryResourceType(rt ResourceType) error {
+	rt = NormalizeResourceType(rt)
+
+	switch classifyResourceType(rt) {
+	case resourceTypeClassCanonical:
+		return nil
+	case resourceTypeClassExecutionOnly:
+		return fmt.Errorf("resource type %q is an execution-only scan type, not a canonical discovery resource type", rt)
+	case resourceTypeClassLegacyAlias:
+		return fmt.Errorf("resource type %q is a legacy alias, not a canonical discovery resource type", rt)
+	default:
+		return fmt.Errorf("resource type %q is not a recognized discovery resource type", rt)
+	}
+}
 
 // FactCategory categorizes discovery facts.
 type FactCategory string

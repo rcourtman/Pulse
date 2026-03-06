@@ -95,11 +95,6 @@ func cloneContainerFingerprint(src *ContainerFingerprint) *ContainerFingerprint 
 	return &cloned
 }
 
-// NormalizeResourceType keeps persisted resource types strict/canonical for v6.
-func NormalizeResourceType(rt ResourceType) ResourceType {
-	return rt
-}
-
 func canonicalStoredResourceType(rt ResourceType) ResourceType {
 	return NormalizeResourceType(rt)
 }

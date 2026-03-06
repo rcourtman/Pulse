@@ -1481,6 +1481,9 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	}
 
 	req = normalizeDiscoveryRequestAliases(req)
+	if err := ValidateCanonicalDiscoveryResourceType(req.ResourceType); err != nil {
+		return nil, fmt.Errorf("discover resource %q: %w", req.ResourceType, err)
+	}
 
 	originalReq := req
 	aliasIDs := make([]string, 0, 2)
@@ -2511,6 +2514,11 @@ func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 }
 
 func (s *Service) GetDiscoveryByResource(resourceType ResourceType, targetID, resourceID string) (*ResourceDiscovery, error) {
+	resourceType = NormalizeResourceType(resourceType)
+	if err := ValidateCanonicalDiscoveryResourceType(resourceType); err != nil {
+		return nil, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, targetID, resourceID, err)
+	}
+
 	req := DiscoveryRequest{
 		ResourceType: resourceType,
 		TargetID:     targetID,
@@ -2556,6 +2564,11 @@ func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 
 // ListDiscoveriesByType returns discoveries for a specific resource type.
 func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceDiscovery, error) {
+	resourceType = NormalizeResourceType(resourceType)
+	if err := ValidateCanonicalDiscoveryResourceType(resourceType); err != nil {
+		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
+	}
+
 	discoveries, err := s.store.ListByType(resourceType)
 	if err != nil {
 		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
@@ -2807,7 +2820,10 @@ func canonicalRequestTargetID(req DiscoveryRequest) string {
 }
 
 func normalizeDiscoveryRequestAliases(req DiscoveryRequest) DiscoveryRequest {
+	req.ResourceType = NormalizeResourceType(req.ResourceType)
 	req.TargetID = canonicalRequestTargetID(req)
+	req.ResourceID = strings.TrimSpace(req.ResourceID)
+	req.Hostname = strings.TrimSpace(req.Hostname)
 	return req
 }
 

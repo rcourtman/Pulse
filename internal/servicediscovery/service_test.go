@@ -462,6 +462,62 @@ func TestService_DiscoverResource_RecentAndNoAnalyzer(t *testing.T) {
 	}
 }
 
+func TestService_DiscoverResource_RejectsNonCanonicalResourceTypes(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+	service := NewService(store, nil, DefaultConfig())
+
+	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDockerVM,
+		TargetID:     "node1",
+		ResourceID:   "101:web",
+		Force:        true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "execution-only") {
+		t.Fatalf("expected execution-only resource type error, got %v", err)
+	}
+
+	got, err := store.Get(MakeResourceID(ResourceTypeDockerVM, "node1", "101:web"))
+	if err != nil {
+		t.Fatalf("unexpected store get error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected no persisted discovery for rejected execution-only type, got %#v", got)
+	}
+
+	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: legacyResourceTypeHost,
+		TargetID:     "host1",
+		ResourceID:   "host1",
+		Force:        true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "legacy alias") {
+		t.Fatalf("expected legacy alias resource type error, got %v", err)
+	}
+}
+
+func TestService_QueryByTypeRejectsNonCanonicalResourceTypes(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+	service := NewService(store, nil, DefaultConfig())
+
+	_, err = service.GetDiscoveryByResource(ResourceTypeDockerSystemContainer, "node1", "101:web")
+	if err == nil || !strings.Contains(err.Error(), "execution-only") {
+		t.Fatalf("expected execution-only query error, got %v", err)
+	}
+
+	_, err = service.ListDiscoveriesByType(legacyResourceTypeLXC)
+	if err == nil || !strings.Contains(err.Error(), "legacy alias") {
+		t.Fatalf("expected legacy alias list error, got %v", err)
+	}
+}
+
 func TestService_getResourceMetadata(t *testing.T) {
 	state := StateSnapshot{
 		VMs: []VM{
