@@ -6,6 +6,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
@@ -13,6 +15,115 @@ func TestAgentCountNilMonitor(t *testing.T) {
 	got := agentCount(nil)
 	if got != 0 {
 		t.Fatalf("expected 0 for nil monitor, got %d", got)
+	}
+}
+
+func TestLegacyConnectionCountsFromReadState(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "pve-1",
+			Resource: unifiedresources.Resource{
+				ID:      "pve-1",
+				Name:    "pve-1",
+				Type:    unifiedresources.ResourceTypeAgent,
+				Status:  unifiedresources.StatusOnline,
+				Proxmox: &unifiedresources.ProxmoxData{},
+			},
+		},
+		{
+			SourceID: "pve-2",
+			Resource: unifiedresources.Resource{
+				ID:      "pve-2",
+				Name:    "pve-2",
+				Type:    unifiedresources.ResourceTypeAgent,
+				Status:  unifiedresources.StatusOnline,
+				Proxmox: &unifiedresources.ProxmoxData{},
+				Agent:   &unifiedresources.AgentData{},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceDocker, []unifiedresources.IngestRecord{
+		{
+			SourceID: "docker-1",
+			Resource: unifiedresources.Resource{
+				ID:     "docker-1",
+				Name:   "docker-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Status: unifiedresources.StatusOnline,
+				Docker: &unifiedresources.DockerData{},
+			},
+		},
+		{
+			SourceID: "docker-2",
+			Resource: unifiedresources.Resource{
+				ID:     "docker-2",
+				Name:   "docker-2",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Status: unifiedresources.StatusOnline,
+				Docker: &unifiedresources.DockerData{},
+				Agent:  &unifiedresources.AgentData{},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceK8s, []unifiedresources.IngestRecord{
+		{
+			SourceID: "k8s-1",
+			Resource: unifiedresources.Resource{
+				ID:         "k8s-1",
+				Name:       "prod",
+				Type:       unifiedresources.ResourceTypeK8sCluster,
+				Status:     unifiedresources.StatusOnline,
+				Kubernetes: &unifiedresources.K8sData{AgentID: "legacy-k8s-1"},
+			},
+		},
+	})
+
+	counts := legacyConnectionCountsFromReadState(unifiedresources.NewMonitorAdapter(registry))
+	if counts.ProxmoxNodes != 1 {
+		t.Fatalf("expected proxmox_nodes=1, got %d", counts.ProxmoxNodes)
+	}
+	if counts.DockerHosts != 1 {
+		t.Fatalf("expected docker_hosts=1, got %d", counts.DockerHosts)
+	}
+	if counts.KubernetesClusters != 1 {
+		t.Fatalf("expected kubernetes_clusters=1, got %d", counts.KubernetesClusters)
+	}
+}
+
+func TestLegacyConnectionCountsUsesSnapshotFallback(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "pve-1",
+			Resource: unifiedresources.Resource{
+				ID:      "pve-1",
+				Name:    "pve-1",
+				Type:    unifiedresources.ResourceTypeAgent,
+				Status:  unifiedresources.StatusOnline,
+				Proxmox: &unifiedresources.ProxmoxData{},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceK8s, []unifiedresources.IngestRecord{
+		{
+			SourceID: "k8s-1",
+			Resource: unifiedresources.Resource{
+				ID:         "k8s-1",
+				Name:       "prod",
+				Type:       unifiedresources.ResourceTypeK8sCluster,
+				Status:     unifiedresources.StatusOnline,
+				Kubernetes: &unifiedresources.K8sData{AgentID: "legacy-k8s-1"},
+			},
+		},
+	})
+
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+
+	counts := legacyConnectionCounts(monitor)
+	if counts.ProxmoxNodes != 1 || counts.KubernetesClusters != 1 {
+		t.Fatalf("unexpected legacy counts from monitor: %+v", counts)
 	}
 }
 

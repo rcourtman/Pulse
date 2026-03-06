@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
@@ -82,6 +83,11 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(status, "", entitlementUsageSnapshot{
 		Nodes:  12,
 		Guests: 44,
+		LegacyConnections: pkglicensing.LegacyConnectionCounts{
+			ProxmoxNodes:       2,
+			DockerHosts:        1,
+			KubernetesClusters: 3,
+		},
 	}, nil)
 
 	var agentLimit *LimitStatus
@@ -106,6 +112,12 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if guestLimit.Current != 44 {
 		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
+	}
+	if payload.LegacyConnections.ProxmoxNodes != 2 {
+		t.Fatalf("expected proxmox_nodes 2, got %d", payload.LegacyConnections.ProxmoxNodes)
+	}
+	if !payload.HasMigrationGap {
+		t.Fatal("expected has_migration_gap=true when legacy connections are present")
 	}
 }
 

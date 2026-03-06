@@ -71,6 +71,11 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
 		Nodes:  12,
 		Guests: 44,
+		LegacyConnections: LegacyConnectionCounts{
+			ProxmoxNodes:       2,
+			DockerHosts:        1,
+			KubernetesClusters: 3,
+		},
 	}, nil)
 
 	var agentLimit *LimitStatus
@@ -95,6 +100,21 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if guestLimit.Current != 44 {
 		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
+	}
+	if payload.LegacyConnections.ProxmoxNodes != 2 {
+		t.Fatalf("expected proxmox_nodes 2, got %d", payload.LegacyConnections.ProxmoxNodes)
+	}
+	if payload.LegacyConnections.DockerHosts != 1 {
+		t.Fatalf("expected docker_hosts 1, got %d", payload.LegacyConnections.DockerHosts)
+	}
+	if payload.LegacyConnections.KubernetesClusters != 3 {
+		t.Fatalf(
+			"expected kubernetes_clusters 3, got %d",
+			payload.LegacyConnections.KubernetesClusters,
+		)
+	}
+	if !payload.HasMigrationGap {
+		t.Fatal("expected has_migration_gap=true when legacy connections are present")
 	}
 }
 
@@ -194,6 +214,12 @@ func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
 	payload := BuildEntitlementPayloadWithUsage(nil, "", EntitlementUsageSnapshot{}, nil)
 	if payload.MaxHistoryDays != TierHistoryDays[TierFree] {
 		t.Fatalf("expected MaxHistoryDays=%d for nil status, got %d", TierHistoryDays[TierFree], payload.MaxHistoryDays)
+	}
+	if payload.HasMigrationGap {
+		t.Fatal("expected has_migration_gap=false for nil status payload")
+	}
+	if payload.LegacyConnections.Total() != 0 {
+		t.Fatalf("expected zero legacy connections for nil status payload, got %+v", payload.LegacyConnections)
 	}
 }
 

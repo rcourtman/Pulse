@@ -213,6 +213,9 @@ export const STORAGE_KEYS = {
   GITHUB_STAR_FIRST_SEEN: 'pulse-github-star-first-seen',
   GITHUB_STAR_SNOOZED_UNTIL: 'pulse-github-star-snoozed-until',
 
+  // Billing / migration guidance
+  AGENT_MIGRATION_NOTICE_DISMISSED: 'pulse-agent-migration-notice-dismissed',
+
   // Audit log
   AUDIT_AUTO_VERIFY: 'pulse-audit-auto-verify',
   AUDIT_AUTO_VERIFY_LIMIT: 'pulse-audit-auto-verify-limit',

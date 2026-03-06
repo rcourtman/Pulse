@@ -10,9 +10,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -126,6 +128,35 @@ func agentCount(monitor *monitoring.Monitor) int {
 		return len(rs.Hosts())
 	}
 	return len(monitor.GetLiveHostsSnapshot())
+}
+
+func legacyConnectionCounts(monitor *monitoring.Monitor) pkglicensing.LegacyConnectionCounts {
+	if monitor == nil {
+		return pkglicensing.LegacyConnectionCounts{}
+	}
+	return legacyConnectionCountsFromReadState(monitor.GetUnifiedReadStateOrSnapshot())
+}
+
+func legacyConnectionCountsFromReadState(rs unifiedresources.ReadState) pkglicensing.LegacyConnectionCounts {
+	counts := pkglicensing.LegacyConnectionCounts{}
+	if rs == nil {
+		return counts
+	}
+
+	for _, infra := range rs.Infrastructure() {
+		if infra == nil {
+			continue
+		}
+		if infra.HasProxmox() && !infra.HasAgent() {
+			counts.ProxmoxNodes++
+		}
+		if infra.HasDocker() && !infra.HasAgent() {
+			counts.DockerHosts++
+		}
+	}
+
+	counts.KubernetesClusters = int64(len(rs.K8sClusters()))
+	return counts
 }
 
 func writeMaxAgentsLimitExceeded(w http.ResponseWriter, current, limit int) {

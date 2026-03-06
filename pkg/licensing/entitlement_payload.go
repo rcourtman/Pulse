@@ -69,6 +69,14 @@ type EntitlementPayload struct {
 	// OverflowDaysRemaining is set when the onboarding overflow (+1 host) is active.
 	// Indicates the number of days remaining in the 14-day overflow window.
 	OverflowDaysRemaining *int `json:"overflow_days_remaining,omitempty"`
+
+	// LegacyConnections counts connected legacy/API resources that do not count
+	// toward the v6 host-agent billing limit.
+	LegacyConnections LegacyConnectionCounts `json:"legacy_connections"`
+
+	// HasMigrationGap indicates legacy/API-connected infrastructure is present and
+	// should be explained in the upgrade UI.
+	HasMigrationGap bool `json:"has_migration_gap"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.
@@ -99,9 +107,20 @@ type UpgradeReason struct {
 	ActionURL string `json:"action_url,omitempty"`
 }
 
+type LegacyConnectionCounts struct {
+	ProxmoxNodes       int64 `json:"proxmox_nodes"`
+	DockerHosts        int64 `json:"docker_hosts"`
+	KubernetesClusters int64 `json:"kubernetes_clusters"`
+}
+
+func (c LegacyConnectionCounts) Total() int64 {
+	return c.ProxmoxNodes + c.DockerHosts + c.KubernetesClusters
+}
+
 type EntitlementUsageSnapshot struct {
-	Nodes  int64
-	Guests int64
+	Nodes             int64
+	Guests            int64
+	LegacyConnections LegacyConnectionCounts
 }
 
 // BuildEntitlementPayload constructs the normalized payload from LicenseStatus.
@@ -133,18 +152,20 @@ func BuildEntitlementPayloadWithUsage(
 	}
 
 	payload := EntitlementPayload{
-		Capabilities:   append([]string(nil), status.Features...),
-		Limits:         []LimitStatus{},
-		Tier:           string(status.Tier),
-		UpgradeReasons: []UpgradeReason{},
-		Valid:          status.Valid,
-		LicensedEmail:  status.Email,
-		ExpiresAt:      status.ExpiresAt,
-		IsLifetime:     status.IsLifetime,
-		DaysRemaining:  status.DaysRemaining,
-		InGracePeriod:  status.InGracePeriod,
-		GracePeriodEnd: status.GracePeriodEnd,
-		MaxHistoryDays: maxHistDays,
+		Capabilities:      append([]string(nil), status.Features...),
+		Limits:            []LimitStatus{},
+		Tier:              string(status.Tier),
+		UpgradeReasons:    []UpgradeReason{},
+		Valid:             status.Valid,
+		LicensedEmail:     status.Email,
+		ExpiresAt:         status.ExpiresAt,
+		IsLifetime:        status.IsLifetime,
+		DaysRemaining:     status.DaysRemaining,
+		InGracePeriod:     status.InGracePeriod,
+		GracePeriodEnd:    status.GracePeriodEnd,
+		MaxHistoryDays:    maxHistDays,
+		LegacyConnections: usage.LegacyConnections,
+		HasMigrationGap:   usage.LegacyConnections.Total() > 0,
 	}
 
 	if payload.Capabilities == nil {

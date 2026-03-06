@@ -97,11 +97,13 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 	if h.mtMonitor != nil {
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
 			usage.Nodes = int64(agentCount(monitor))
+			usage.LegacyConnections = legacyConnectionCounts(monitor)
 			monitorResolved = true
 		}
 	}
 	if !monitorResolved && orgID == "default" && h.monitor != nil {
 		usage.Nodes = int64(agentCount(h.monitor))
+		usage.LegacyConnections = legacyConnectionCounts(h.monitor)
 	}
 
 	// Guest metadata for guest limit tracking.

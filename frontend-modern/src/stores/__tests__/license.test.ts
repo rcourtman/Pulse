@@ -5,6 +5,7 @@ import {
   startProTrial,
   isPro,
   hasFeature,
+  hasMigrationGap,
   isMultiTenantEnabled,
   isHostedModeEnabled,
   getUpgradeReason,
@@ -13,6 +14,7 @@ import {
   getUpgradeActionUrlOrFallback,
   getLimit,
   isRangeLocked,
+  legacyConnections,
   maxHistoryDays,
   entitlements,
   licenseLoaded,
@@ -34,6 +36,12 @@ describe('license store', () => {
       { key: 'reason2', reason: 'Reason 2', action_url: '/upgrade/reason2' },
     ],
     hosted_mode: false,
+    legacy_connections: {
+      proxmox_nodes: 2,
+      docker_hosts: 1,
+      kubernetes_clusters: 0,
+    },
+    has_migration_gap: true,
   };
 
   const mockFreeEntitlements: LicenseEntitlements = {
@@ -80,7 +88,13 @@ describe('license store', () => {
       upgrade_reasons: [],
       tier: 'free',
       hosted_mode: false,
-      trial_eligible: false,
+      trial_eligible: true,
+      legacy_connections: {
+        proxmox_nodes: 0,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+      },
+      has_migration_gap: false,
     });
   });
 
@@ -204,6 +218,36 @@ describe('license store', () => {
       vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
       await loadLicenseStatus(true);
       expect(getUpgradeReason('unknown')).toBeUndefined();
+    });
+  });
+
+  describe('migration helpers', () => {
+    it('returns legacy connection counts from entitlements', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+      await loadLicenseStatus(true);
+
+      expect(legacyConnections()).toEqual({
+        proxmox_nodes: 2,
+        docker_hosts: 1,
+        kubernetes_clusters: 0,
+      });
+      expect(hasMigrationGap()).toBe(true);
+    });
+
+    it('falls back to zero legacy counts when absent', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockFreeEntitlements,
+        legacy_connections: undefined,
+        has_migration_gap: undefined,
+      });
+      await loadLicenseStatus(true);
+
+      expect(legacyConnections()).toEqual({
+        proxmox_nodes: 0,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+      });
+      expect(hasMigrationGap()).toBe(false);
     });
   });
 

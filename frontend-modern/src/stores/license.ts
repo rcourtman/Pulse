@@ -1,5 +1,9 @@
 import { createSignal, createMemo, createRoot } from 'solid-js';
-import { LicenseAPI, type LicenseEntitlements } from '@/api/license';
+import {
+  LicenseAPI,
+  type EntitlementLegacyConnections,
+  type LicenseEntitlements,
+} from '@/api/license';
 import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
 
@@ -47,6 +51,12 @@ export async function loadLicenseStatus(force = false): Promise<void> {
       tier: 'free',
       hosted_mode: false,
       trial_eligible: true,
+      legacy_connections: {
+        proxmox_nodes: 0,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+      },
+      has_migration_gap: false,
     });
     setLoaded(true);
   } finally {
@@ -153,6 +163,20 @@ export function getLimit(key: string) {
   const current = entitlements();
   if (!current?.limits?.length) return undefined;
   return current.limits.find((limit) => limit.key === key);
+}
+
+export function legacyConnections(): EntitlementLegacyConnections {
+  return (
+    entitlements()?.legacy_connections ?? {
+      proxmox_nodes: 0,
+      docker_hosts: 0,
+      kubernetes_clusters: 0,
+    }
+  );
+}
+
+export function hasMigrationGap(): boolean {
+  return Boolean(entitlements()?.has_migration_gap);
 }
 
 /** Default max history days when entitlements aren't loaded yet. */

@@ -31,6 +31,12 @@ export interface EntitlementUpgradeReason {
   action_url?: string;
 }
 
+export interface EntitlementLegacyConnections {
+  proxmox_nodes: number;
+  docker_hosts: number;
+  kubernetes_clusters: number;
+}
+
 // Mirrors internal/api/entitlement_handlers.go:EntitlementPayload
 export interface LicenseEntitlements {
   capabilities: string[];
@@ -53,6 +59,8 @@ export interface LicenseEntitlements {
   trial_eligibility_reason?: string;
   max_history_days?: number;
   overflow_days_remaining?: number;
+  legacy_connections?: EntitlementLegacyConnections;
+  has_migration_gap?: boolean;
 }
 
 export interface ActivateLicenseResponse {
