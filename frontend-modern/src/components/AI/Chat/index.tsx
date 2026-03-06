@@ -23,6 +23,10 @@ import {
   getActionableAgentIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
@@ -489,9 +493,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     for (const runtime of dockerHosts) {
       const dockerActionId = getDockerActionId(runtime);
-      const displayName =
-        runtime.displayName || runtime.identity?.hostname || runtime.name || runtime.id;
-      const hostnameOrId = runtime.identity?.hostname || runtime.name || runtime.id;
+      const displayName = getPreferredResourceDisplayName(runtime);
+      const hostnameOrId = getPreferredResourceHostname(runtime) || runtime.id;
       const runtimeStatus =
         runtime.status === 'online' || runtime.status === 'running'
           ? 'online'
@@ -531,8 +534,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Add standalone agents
     for (const agentResource of agentResources) {
       const agentActionId = getAgentActionId(agentResource);
-      const name =
-        agentResource.displayName || agentResource.identity?.hostname || agentResource.name;
+      const name = getPreferredResourceDisplayName(agentResource);
       const agentStatus =
         agentResource.status === 'online' || agentResource.status === 'running'
           ? 'online'
