@@ -3154,7 +3154,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 		}
 		if len(scopedKnowledgeIDs) > 0 {
 			knowledgeContext = knowledgeStore.FormatForContextForResources(scopedKnowledgeIDs)
-		} else {
+		} else if scope == nil {
 			knowledgeContext = knowledgeStore.FormatAllForContext()
 		}
 		if knowledgeContext != "" {

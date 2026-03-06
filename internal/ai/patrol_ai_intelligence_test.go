@@ -515,6 +515,42 @@ func TestSeedFindingsAndContext_ScopedPatrolSkipsOutOfScopeFindingsWithoutResolv
 	}
 }
 
+func TestSeedFindingsAndContext_ScopedPatrolWithoutRuntimeResourcesOmitsGlobalKnowledge(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	knowledgeStore, err := knowledge.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create knowledge store: %v", err)
+	}
+	if err := knowledgeStore.SaveNote("node-1", "node-1", "node", "config", "Pinned", "keep settings"); err != nil {
+		t.Fatalf("failed to save knowledge note: %v", err)
+	}
+	ps.knowledgeStore = knowledgeStore
+
+	output, _ := ps.seedFindingsAndContextState(&PatrolScope{ResourceTypes: []string{"node"}}, newPatrolRuntimeState(models.StateSnapshot{}))
+	if strings.Contains(output, "# User Notes") || strings.Contains(output, "keep settings") {
+		t.Fatalf("expected scoped patrol without runtime resources to omit global knowledge, got: %s", output)
+	}
+}
+
+func TestSeedFindingsAndContext_ScopedPatrolExplicitIDsStillUseKnowledgeFallback(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	knowledgeStore, err := knowledge.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create knowledge store: %v", err)
+	}
+	if err := knowledgeStore.SaveNote("node-1", "node-1", "node", "config", "Pinned", "keep settings"); err != nil {
+		t.Fatalf("failed to save knowledge note: %v", err)
+	}
+	ps.knowledgeStore = knowledgeStore
+
+	output, _ := ps.seedFindingsAndContextState(&PatrolScope{ResourceIDs: []string{"node-1"}}, newPatrolRuntimeState(models.StateSnapshot{}))
+	if !strings.Contains(output, "# User Notes") || !strings.Contains(output, "keep settings") {
+		t.Fatalf("expected explicit scoped patrol to retain knowledge fallback, got: %s", output)
+	}
+}
+
 // newTestVMView creates a VMView with Proxmox fields needed for gatherGuestIntelligence tests.
 // sourceID is the legacy guest ID (e.g. "qemu/100") stored in Proxmox.SourceID.
 // status should be a normalized ResourceStatus (e.g. ur.StatusOnline, ur.StatusOffline).
