@@ -102,6 +102,9 @@ describe('AgentLimitWarningBanner', () => {
     fireEvent.click(screen.getByLabelText('Dismiss agent migration notice'));
 
     expect(screen.queryByText(/Host Agents:/i)).not.toBeInTheDocument();
-    expect(localStorage.getItem(STORAGE_KEYS.AGENT_MIGRATION_NOTICE_DISMISSED)).toBe('true');
+    const orgId = sessionStorage.getItem(STORAGE_KEYS.ORG_ID) ?? 'default';
+    expect(localStorage.getItem(`${STORAGE_KEYS.AGENT_MIGRATION_NOTICE_DISMISSED}:${orgId}`)).toBe(
+      'true',
+    );
   });
 });

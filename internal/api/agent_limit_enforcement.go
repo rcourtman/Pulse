@@ -147,15 +147,25 @@ func legacyConnectionCountsFromReadState(rs unifiedresources.ReadState) pkglicen
 		if infra == nil {
 			continue
 		}
-		if infra.HasProxmox() && !infra.HasAgent() {
-			counts.ProxmoxNodes++
+		hasV6Agent := infra.HasAgent()
+		if hasV6Agent {
+			continue // merged resource already has a v6 host agent — not legacy
 		}
-		if infra.HasDocker() && !infra.HasAgent() {
+		// Count each infra resource at most once toward legacy total.
+		// Prefer the more specific facet: Proxmox > Docker.
+		if infra.HasProxmox() {
+			counts.ProxmoxNodes++
+		} else if infra.HasDocker() {
 			counts.DockerHosts++
 		}
 	}
 
-	counts.KubernetesClusters = int64(len(rs.K8sClusters()))
+	// K8s clusters are not counted as legacy connections because the
+	// KubernetesCluster model does not yet carry a legacy/unified signal.
+	// All K8s clusters currently report through the same agent path, so
+	// we cannot distinguish v5 from v6 — safer to omit than to show a
+	// false migration gap.
+
 	return counts
 }
 

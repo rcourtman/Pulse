@@ -86,8 +86,8 @@ func TestLegacyConnectionCountsFromReadState(t *testing.T) {
 	if counts.DockerHosts != 1 {
 		t.Fatalf("expected docker_hosts=1, got %d", counts.DockerHosts)
 	}
-	if counts.KubernetesClusters != 1 {
-		t.Fatalf("expected kubernetes_clusters=1, got %d", counts.KubernetesClusters)
+	if counts.KubernetesClusters != 0 {
+		t.Fatalf("expected kubernetes_clusters=0 (K8s not counted as legacy), got %d", counts.KubernetesClusters)
 	}
 }
 
@@ -122,8 +122,11 @@ func TestLegacyConnectionCountsUsesSnapshotFallback(t *testing.T) {
 	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
 
 	counts := legacyConnectionCounts(monitor)
-	if counts.ProxmoxNodes != 1 || counts.KubernetesClusters != 1 {
-		t.Fatalf("unexpected legacy counts from monitor: %+v", counts)
+	if counts.ProxmoxNodes != 1 {
+		t.Fatalf("expected proxmox_nodes=1, got %d", counts.ProxmoxNodes)
+	}
+	if counts.KubernetesClusters != 0 {
+		t.Fatalf("expected kubernetes_clusters=0 (K8s not counted as legacy), got %d", counts.KubernetesClusters)
 	}
 }
 

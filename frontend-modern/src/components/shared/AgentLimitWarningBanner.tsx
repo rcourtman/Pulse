@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createMemo } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import {
   entitlements,
@@ -7,7 +7,7 @@ import {
   hasMigrationGap,
   legacyConnections,
 } from '@/stores/license';
-import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   trackUpgradeClicked,
   trackUpgradeMetricEvent,
@@ -18,10 +18,23 @@ export const AgentLimitWarningBanner: Component = () => {
   // No onMount load — TrialBanner (mounted above) already calls loadLicenseStatus().
 
   const nodeLimit = createMemo(() => getLimit('max_agents'));
-  const [migrationDismissed, setMigrationDismissed] = createLocalStorageBooleanSignal(
-    STORAGE_KEYS.AGENT_MIGRATION_NOTICE_DISMISSED,
-    false,
-  );
+
+  // Org-scoped dismissal so multi-tenant users don't accidentally hide the
+  // notice for a different org.
+  const dismissalKey = createMemo(() => {
+    const orgId = sessionStorage.getItem(STORAGE_KEYS.ORG_ID) ?? 'default';
+    return `${STORAGE_KEYS.AGENT_MIGRATION_NOTICE_DISMISSED}:${orgId}`;
+  });
+  const [dismissed, setDismissed] = createSignal(false);
+  // Hydrate from localStorage on key change.
+  createEffect(() => {
+    setDismissed(localStorage.getItem(dismissalKey()) === 'true');
+  });
+  const migrationDismissed = () => dismissed();
+  const setMigrationDismissed = (v: boolean) => {
+    localStorage.setItem(dismissalKey(), String(v));
+    setDismissed(v);
+  };
 
   const isUrgent = createMemo(() => {
     const state = nodeLimit()?.state;
