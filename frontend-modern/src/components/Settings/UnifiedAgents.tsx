@@ -237,7 +237,13 @@ const buildCommandsByPlatform = (
   },
 });
 
-export const UnifiedAgents: Component = () => {
+interface UnifiedAgentsProps {
+  embedded?: boolean;
+  showInstaller?: boolean;
+  showInventory?: boolean;
+}
+
+export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
   const { state } = useWebSocket();
   const { byType, resources } = useResources();
   const navigate = useNavigate();
@@ -796,6 +802,8 @@ export const UnifiedAgents: Component = () => {
     });
   });
   const hasLinkedAgents = createMemo(() => linkedAgents().length > 0);
+  const showInstaller = () => props.showInstaller ?? true;
+  const showInventory = () => props.showInventory ?? true;
 
   const unifiedRows = createMemo<UnifiedAgentRow[]>(() => {
     const rows: UnifiedAgentRow[] = [];
@@ -1110,12 +1118,17 @@ export const UnifiedAgents: Component = () => {
 
   return (
     <div class="space-y-6">
-      <SettingsPanel
-        title="Infrastructure"
-        description="Primary setup hub for unified agents across systems, Docker, Kubernetes, Proxmox, and related infrastructure."
-        icon={<Server class="w-5 h-5" strokeWidth={2} />}
-        bodyClass="space-y-5"
-      >
+      <Show when={showInstaller()}>
+        <SettingsPanel
+          title={props.embedded ? 'Install on a host' : 'Infrastructure'}
+          description={
+            props.embedded
+              ? 'Use the unified agent as the default path for hosts, Docker, Kubernetes, and agent-managed Proxmox.'
+              : 'Primary setup hub for unified agents across systems, Docker, Kubernetes, Proxmox, and related infrastructure.'
+          }
+          icon={<Server class="w-5 h-5" strokeWidth={2} />}
+          bodyClass="space-y-5"
+        >
         <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
           <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
           <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
@@ -1124,27 +1137,29 @@ export const UnifiedAgents: Component = () => {
           </p>
         </div>
 
-        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
-          <div class="flex items-start gap-3">
-            <ProxmoxIcon class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
-            <div class="flex-1">
-              <p class="text-sm">
-                Proxmox nodes can be added here with the unified agent for extra capabilities like
-                temperature monitoring and Pulse Patrol automation (auto-creates the required token
-                and links the node).
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate('/settings/infrastructure/proxmox')}
-                class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100 underline"
-              >
-                Need direct setup instead? Open Proxmox →
-              </button>
+          <Show when={!props.embedded}>
+            <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
+              <div class="flex items-start gap-3">
+                <ProxmoxIcon class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                <div class="flex-1">
+                  <p class="text-sm">
+                    Proxmox nodes can be added here with the unified agent for extra capabilities
+                    like temperature monitoring and Pulse Patrol automation (auto-creates the
+                    required token and links the node).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/settings/infrastructure/proxmox')}
+                    class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100 underline"
+                  >
+                    Need direct setup instead? Open Proxmox →
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </Show>
 
-        <div class="space-y-5">
+          <div class="space-y-5">
           <Show when={requiresToken()}>
             <div class="space-y-3">
               <div class="space-y-1">
@@ -1681,15 +1696,21 @@ export const UnifiedAgents: Component = () => {
               </div>
             </div>
           </div>
-        </div>
-      </SettingsPanel>
+          </div>
+        </SettingsPanel>
+      </Show>
 
-      <SettingsPanel
-        title="Agent Inventory"
-        description="Review active and removed agents, including Kubernetes clusters."
-        icon={<Users class="w-5 h-5" strokeWidth={2} />}
-        bodyClass="space-y-4"
-      >
+      <Show when={showInventory()}>
+        <SettingsPanel
+          title={props.embedded ? 'Connected infrastructure' : 'Agent Inventory'}
+          description={
+            props.embedded
+              ? 'Review active and removed agent-managed infrastructure, including Docker and Kubernetes coverage.'
+              : 'Review active and removed agents, including Kubernetes clusters.'
+          }
+          icon={<Users class="w-5 h-5" strokeWidth={2} />}
+          bodyClass="space-y-4"
+        >
         <Show when={hasLinkedAgents()}>
           <div class="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900">
             <svg
@@ -2383,7 +2404,8 @@ export const UnifiedAgents: Component = () => {
             );
           }}
         />
-      </SettingsPanel>
+        </SettingsPanel>
+      </Show>
     </div>
   );
 };

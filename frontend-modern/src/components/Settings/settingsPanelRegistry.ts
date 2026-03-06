@@ -12,6 +12,7 @@ import type { SecurityOverviewPanel as SecurityOverviewPanelType } from './Secur
 import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthPanel';
 import type { RelaySettingsPanel as RelaySettingsPanelType } from './RelaySettingsPanel';
 import type { AuditWebhookPanel as AuditWebhookPanelType } from './AuditWebhookPanel';
+import type { InfrastructureWorkspace as InfrastructureWorkspaceType } from './InfrastructureWorkspace';
 import type { SettingsTab } from './settingsTypes';
 
 const NetworkSettingsPanel = lazy(() =>
@@ -46,6 +47,9 @@ const AuditLogPanel = lazy(() => import('./AuditLogPanel'));
 const AuditWebhookPanel = lazy(() =>
   import('./AuditWebhookPanel').then((m) => ({ default: m.AuditWebhookPanel })),
 );
+const InfrastructureWorkspace = lazy(() =>
+  import('./InfrastructureWorkspace').then((m) => ({ default: m.InfrastructureWorkspace })),
+);
 
 export interface SettingsPanelRegistryEntry {
   component: Component<any>;
@@ -57,7 +61,7 @@ export type SettingsDispatchableTab = Exclude<SettingsTab, 'proxmox'>;
 export type SettingsPanelRegistry = Record<SettingsDispatchableTab, SettingsPanelRegistryEntry>;
 
 export interface SettingsPanelRegistryContext {
-  agentsPanel: Component;
+  getInfrastructurePanelProps: () => Parameters<typeof InfrastructureWorkspaceType>[0];
   systemGeneralPanel: Component;
   systemAiPanel: Component;
   systemProPanel: Component;
@@ -80,7 +84,8 @@ export const createSettingsPanelRegistry = (
   context: SettingsPanelRegistryContext,
 ): SettingsPanelRegistry => ({
   agents: {
-    component: context.agentsPanel,
+    component: InfrastructureWorkspace,
+    getProps: context.getInfrastructurePanelProps,
   },
   'system-general': {
     component: context.systemGeneralPanel,

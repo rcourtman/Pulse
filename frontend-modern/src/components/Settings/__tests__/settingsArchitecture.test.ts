@@ -4,9 +4,11 @@ import settingsSource from '../Settings.tsx?raw';
 const extractedModules = [
   '../settingsTypes.ts',
   '../settingsTabs.ts',
+  '../DockerRuntimeSettingsCard.tsx',
   '../settingsHeaderMeta.ts',
   '../settingsFeatureGates.ts',
   '../BackupTransferDialogs.tsx',
+  '../InfrastructureWorkspace.tsx',
   '../ProxmoxSettingsPanel.tsx',
   '../SettingsDialogs.tsx',
   '../SettingsPageShell.tsx',
@@ -23,7 +25,6 @@ const extractedModules = [
 
 const requiredImportSources = [
   './settingsTabs',
-  './ProxmoxSettingsPanel',
   './SettingsDialogs',
   './SettingsPageShell',
   './useBackupTransferFlow',
@@ -69,6 +70,7 @@ describe('Settings architecture guardrails', () => {
     const shellHookSource = (await import('../useSettingsShellState.ts?raw')).default;
 
     expect(registrySource).toContain('createSettingsPanelRegistry');
+    expect(registrySource).toContain('InfrastructureWorkspace');
     expect(registrySource).toContain("'security-webhooks'");
     expect(accessHookSource).toContain('shouldHideSettingsNavItem');
     expect(accessHookSource).toContain('tabFeatureRequirements');
@@ -79,6 +81,7 @@ describe('Settings architecture guardrails', () => {
     expect(settingsSource).toContain('useSettingsShellState');
     expect(settingsSource).toContain('activeSettingsPanelEntry');
     expect(settingsSource).toContain('<Dynamic component={entry().component}');
+    expect(settingsSource).not.toContain('<ProxmoxSettingsPanel');
     expect(settingsSource).not.toContain("<Show when={activeTab() === 'system-general'}>");
     expect(settingsSource).not.toContain("<Show when={activeTab() === 'security-webhooks'}>");
   });

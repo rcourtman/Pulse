@@ -9,7 +9,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
-import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
 import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
 import { eventBus } from '@/stores/events';
@@ -369,6 +368,53 @@ const Settings: Component<SettingsProps> = (props) => {
     hideLocalLoginLocked,
     savingHideLocalLogin,
     handleHideLocalLoginChange,
+    getInfrastructurePanelProps: () => ({
+      selectedAgent,
+      onSelectAgent: handleSelectAgent,
+      initialLoadComplete,
+      discoveryEnabled,
+      discoveryMode,
+      discoveryScanStatus,
+      discoveredNodes,
+      savingDiscoverySettings,
+      envOverrides,
+      agentStateResources: () =>
+        (state.resources ?? []).filter((resource) => resource.type === 'agent'),
+      pbsInstances: pbsInstancesFromResources,
+      pmgInstances: pmgInstancesFromResources,
+      pveNodes,
+      pbsNodes,
+      pmgNodes,
+      temperatureMonitoringEnabled,
+      triggerDiscoveryScan,
+      loadDiscoveredNodes,
+      handleDiscoveryEnabledChange,
+      testNodeConnection,
+      requestDeleteNode,
+      refreshClusterNodes,
+      setShowNodeModal,
+      editingNode,
+      setEditingNode,
+      setCurrentNodeType,
+      modalResetKey,
+      setModalResetKey,
+      isNodeModalVisible,
+      securityStatus,
+      resolveTemperatureMonitoringEnabled,
+      temperatureMonitoringLocked,
+      savingTemperatureSetting,
+      handleTemperatureMonitoringChange,
+      handleNodeTemperatureMonitoringChange,
+      saveNode,
+      showDeleteNodeModal,
+      cancelDeleteNode,
+      deleteNode,
+      deleteNodeLoading,
+      nodePendingDeleteLabel,
+      nodePendingDeleteHost,
+      nodePendingDeleteType,
+      nodePendingDeleteTypeLabel,
+    }),
   });
   const activeSettingsPanelEntry = createMemo(() => {
     const currentTab = activeTab();
@@ -409,59 +455,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </div>
               }
             >
-              <div class="space-y-8">
-                <Dynamic component={entry().component} {...(entry().getProps?.() ?? {})} />
-                <Show when={activeTab() === 'agents'}>
-                  <ProxmoxSettingsPanel
-                    selectedAgent={selectedAgent}
-                    onSelectAgent={handleSelectAgent}
-                    initialLoadComplete={initialLoadComplete}
-                    discoveryEnabled={discoveryEnabled}
-                    discoveryMode={discoveryMode}
-                    discoveryScanStatus={discoveryScanStatus}
-                    discoveredNodes={discoveredNodes}
-                    savingDiscoverySettings={savingDiscoverySettings}
-                    envOverrides={envOverrides}
-                    agentStateResources={() =>
-                      (state.resources ?? []).filter((resource) => resource.type === 'agent')
-                    }
-                    pbsInstances={pbsInstancesFromResources}
-                    pmgInstances={pmgInstancesFromResources}
-                    pveNodes={pveNodes}
-                    pbsNodes={pbsNodes}
-                    pmgNodes={pmgNodes}
-                    temperatureMonitoringEnabled={temperatureMonitoringEnabled}
-                    triggerDiscoveryScan={triggerDiscoveryScan}
-                    loadDiscoveredNodes={loadDiscoveredNodes}
-                    handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
-                    testNodeConnection={testNodeConnection}
-                    requestDeleteNode={requestDeleteNode}
-                    refreshClusterNodes={refreshClusterNodes}
-                    setShowNodeModal={setShowNodeModal}
-                    editingNode={editingNode}
-                    setEditingNode={setEditingNode}
-                    setCurrentNodeType={setCurrentNodeType}
-                    modalResetKey={modalResetKey}
-                    setModalResetKey={setModalResetKey}
-                    isNodeModalVisible={isNodeModalVisible}
-                    securityStatus={securityStatus}
-                    resolveTemperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled}
-                    temperatureMonitoringLocked={temperatureMonitoringLocked}
-                    savingTemperatureSetting={savingTemperatureSetting}
-                    handleTemperatureMonitoringChange={handleTemperatureMonitoringChange}
-                    handleNodeTemperatureMonitoringChange={handleNodeTemperatureMonitoringChange}
-                    saveNode={saveNode}
-                    showDeleteNodeModal={showDeleteNodeModal}
-                    cancelDeleteNode={cancelDeleteNode}
-                    deleteNode={deleteNode}
-                    deleteNodeLoading={deleteNodeLoading}
-                    nodePendingDeleteLabel={nodePendingDeleteLabel}
-                    nodePendingDeleteHost={nodePendingDeleteHost}
-                    nodePendingDeleteType={nodePendingDeleteType}
-                    nodePendingDeleteTypeLabel={nodePendingDeleteTypeLabel}
-                  />
-                </Show>
-              </div>
+              <Dynamic component={entry().component} {...(entry().getProps?.() ?? {})} />
             </Suspense>
           )}
         </Show>

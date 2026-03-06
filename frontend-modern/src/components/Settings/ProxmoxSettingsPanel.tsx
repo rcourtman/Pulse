@@ -27,7 +27,7 @@ import type {
 
 type DiscoveryMode = 'auto' | 'custom';
 
-interface ProxmoxSettingsPanelProps {
+export interface ProxmoxSettingsPanelProps {
   selectedAgent: Accessor<NodeType>;
   onSelectAgent: (agent: NodeType) => void;
   initialLoadComplete: Accessor<boolean>;
@@ -72,6 +72,7 @@ interface ProxmoxSettingsPanelProps {
   nodePendingDeleteHost: () => string;
   nodePendingDeleteType: () => string;
   nodePendingDeleteTypeLabel: () => string;
+  embedded?: boolean;
 }
 
 type VariantConfig = {
@@ -333,13 +334,15 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
             <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
               Use this fallback path only when you cannot install the unified agent on the host.
             </p>
-            <button
-              type="button"
-              onClick={() => navigate('/settings')}
-              class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
-            >
-              Open infrastructure setup →
-            </button>
+            <Show when={!props.embedded}>
+              <button
+                type="button"
+                onClick={() => navigate('/settings')}
+                class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
+              >
+                Open infrastructure setup →
+              </button>
+            </Show>
           </div>
         </div>
       </div>
