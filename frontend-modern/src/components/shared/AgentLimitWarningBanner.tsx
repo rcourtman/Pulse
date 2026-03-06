@@ -139,7 +139,7 @@ export const AgentLimitWarningBanner: Component = () => {
               <Show when={migrationGap()}>
                 <a
                   class="text-xs font-medium underline underline-offset-2 hover:opacity-90"
-                  href="/settings/infrastructure"
+                  href="/settings/workloads"
                   onClick={() =>
                     trackUpgradeClicked('agent_limit_banner_install_v6_agents', 'max_agents')
                   }
