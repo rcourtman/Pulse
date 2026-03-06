@@ -1,4 +1,4 @@
-import { Component, createEffect, createMemo, createSignal, Match, Switch } from 'solid-js';
+import { Component, createEffect, createSignal, Match, Switch } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
@@ -6,30 +6,6 @@ import { ProxmoxSettingsPanel, type ProxmoxSettingsPanelProps } from './ProxmoxS
 import { UnifiedAgents } from './UnifiedAgents';
 
 type InfrastructureWorkspaceView = 'install' | 'direct' | 'inventory';
-
-const VIEW_META: Record<
-  InfrastructureWorkspaceView,
-  {
-    label: string;
-    description: string;
-  }
-> = {
-  install: {
-    label: 'Install on a host',
-    description:
-      'Use one installer for hosts, Docker, Kubernetes, and agent-managed Proxmox. This is the normal onboarding path.',
-  },
-  direct: {
-    label: 'Direct Proxmox',
-    description:
-      'Use direct PVE, PBS, or PMG connections only when the unified agent cannot run on the target host.',
-  },
-  inventory: {
-    label: 'Connected infrastructure',
-    description:
-      'Review connected infrastructure, the recovery queue, direct Proxmox coverage, and agent profiles.',
-  },
-};
 
 const inferViewFromPath = (pathname: string): InfrastructureWorkspaceView =>
   pathname.startsWith('/settings/infrastructure/proxmox') ? 'direct' : 'install';
@@ -60,24 +36,9 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
     }
   };
 
-  const activeViewMeta = createMemo(() => VIEW_META[activeView()]);
-
   return (
     <div class="space-y-6">
-      <div class="space-y-4">
-        <div class="space-y-2">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-            Infrastructure
-          </p>
-          <h2 class="text-[1.75rem] font-semibold leading-tight text-base-content">
-            Add and manage infrastructure
-          </h2>
-          <p class="max-w-3xl text-sm leading-6 text-muted">
-            Start with the unified agent. Use direct Proxmox connections only when the agent
-            cannot run on the target host.
-          </p>
-        </div>
-
+      <div class="space-y-3">
         <div class="border-b border-border">
           <div class="flex flex-wrap items-center gap-6">
             <button
@@ -115,8 +76,6 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
             </button>
           </div>
         </div>
-
-        <div class="text-sm text-muted">{activeViewMeta().description}</div>
       </div>
 
       <Switch>

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import settingsSource from '../Settings.tsx?raw';
+import settingsShellSource from '../SettingsPageShell.tsx?raw';
+import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 
 const extractedModules = [
   '../settingsTypes.ts',
@@ -113,5 +115,13 @@ describe('Settings architecture guardrails', () => {
       ),
     );
     expect(staticImports.length).toBe(0);
+  });
+
+  it('keeps page-level settings header chrome inside SettingsPageShell', () => {
+    expect(settingsShellSource).toContain('<PageHeader');
+    expect(infrastructureWorkspaceSource).not.toContain('<PageHeader');
+    expect(infrastructureWorkspaceSource).not.toMatch(/<h[12][^>]*>/);
+    expect(infrastructureWorkspaceSource).not.toContain('Add and manage infrastructure');
+    expect(infrastructureWorkspaceSource).not.toContain('tracking-[0.22em]');
   });
 });
