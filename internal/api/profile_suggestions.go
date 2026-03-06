@@ -16,15 +16,17 @@ import (
 
 // ProfileSuggestionHandler handles AI-assisted profile suggestions
 type ProfileSuggestionHandler struct {
-	mtPersistence *config.MultiTenantPersistence
-	aiHandler     *AIHandler
+	mtPersistence     *config.MultiTenantPersistence
+	legacyPersistence *config.ConfigPersistence
+	aiHandler         *AIHandler
 }
 
 // NewProfileSuggestionHandler creates a new suggestion handler
-func NewProfileSuggestionHandler(mtp *config.MultiTenantPersistence, aiHandler *AIHandler) *ProfileSuggestionHandler {
+func NewProfileSuggestionHandler(mtp *config.MultiTenantPersistence, legacyPersistence *config.ConfigPersistence, aiHandler *AIHandler) *ProfileSuggestionHandler {
 	return &ProfileSuggestionHandler{
-		mtPersistence: mtp,
-		aiHandler:     aiHandler,
+		mtPersistence:     mtp,
+		legacyPersistence: legacyPersistence,
+		aiHandler:         aiHandler,
 	}
 }
 
@@ -72,18 +74,22 @@ func (h *ProfileSuggestionHandler) HandleSuggestProfile(w http.ResponseWriter, r
 	contextParts := []string{}
 
 	// Add existing profiles for reference (if persistence is available)
+	var persistence *config.ConfigPersistence
 	if h.mtPersistence != nil {
 		orgID := GetOrgID(r.Context())
-		persistence, err := h.mtPersistence.GetPersistence(orgID)
-		if err == nil {
-			profiles, err := persistence.LoadAgentProfiles()
-			if err == nil && len(profiles) > 0 {
-				profileNames := make([]string, len(profiles))
-				for i, p := range profiles {
-					profileNames[i] = p.Name
-				}
-				contextParts = append(contextParts, fmt.Sprintf("Existing profiles: %s", strings.Join(profileNames, ", ")))
+		persistence, _ = h.mtPersistence.GetPersistence(orgID)
+	}
+	if persistence == nil {
+		persistence = h.legacyPersistence
+	}
+	if persistence != nil {
+		profiles, err := persistence.LoadAgentProfiles()
+		if err == nil && len(profiles) > 0 {
+			profileNames := make([]string, len(profiles))
+			for i, p := range profiles {
+				profileNames[i] = p.Name
 			}
+			contextParts = append(contextParts, fmt.Sprintf("Existing profiles: %s", strings.Join(profileNames, ", ")))
 		}
 	}
 

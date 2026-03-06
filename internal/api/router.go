@@ -278,6 +278,7 @@ func (r *Router) setupRoutes() {
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.resourceHandlers = NewResourceHandlers()
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
+	r.configProfileHandler.SetLegacyPersistence(r.persistence)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
 	r.licenseHandlers.SetLegacyPersistence(r.persistence)
 	// Wire license service provider so middleware can access per-tenant license services
@@ -1483,6 +1484,7 @@ func (r *Router) setupRoutes() {
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
+	r.aiHandler.SetLegacyRuntime(r.config, r.persistence)
 
 	// AI-powered infrastructure discovery handlers
 	// Note: The actual service is wired up later via SetDiscoveryService

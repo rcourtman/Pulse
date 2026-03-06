@@ -260,6 +260,17 @@ func (h *AIHandler) loadAIConfig(ctx context.Context) *config.AIConfig {
 	return cfg
 }
 
+// SetLegacyRuntime wires the single-tenant runtime config and persistence explicitly.
+// This is needed in v5 single-tenant mode where MultiTenantPersistence is nil.
+func (h *AIHandler) SetLegacyRuntime(cfg *config.Config, persistence AIPersistence) {
+	if cfg != nil {
+		h.legacyConfig = cfg
+	}
+	if persistence != nil {
+		h.legacyPersistence = persistence
+	}
+}
+
 // SetMultiTenantPersistence updates the persistence manager
 func (h *AIHandler) SetMultiTenantPersistence(mtp *config.MultiTenantPersistence) {
 	h.mtPersistence = mtp

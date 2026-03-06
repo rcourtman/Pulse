@@ -21,7 +21,7 @@ func withOrgContext(req *http.Request) *http.Request {
 }
 
 func TestProfileSuggestionHandler_MethodNotAllowed(t *testing.T) {
-	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), &AIHandler{})
+	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, &AIHandler{})
 	req := withOrgContext(httptest.NewRequest(http.MethodGet, "/api/admin/profiles/suggestions", nil))
 	rr := httptest.NewRecorder()
 
@@ -37,7 +37,7 @@ func TestProfileSuggestionHandler_ServiceUnavailable(t *testing.T) {
 	mockSvc.On("IsRunning").Return(false)
 	aiHandler := &AIHandler{legacyService: mockSvc}
 
-	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), aiHandler)
+	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, aiHandler)
 	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"test"}`))))
 	rr := httptest.NewRecorder()
 
@@ -52,7 +52,7 @@ func TestProfileSuggestionHandler_InvalidRequest(t *testing.T) {
 	mockSvc := new(MockAIService)
 	mockSvc.On("IsRunning").Return(true)
 	aiHandler := &AIHandler{legacyService: mockSvc}
-	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), aiHandler)
+	handler := NewProfileSuggestionHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, aiHandler)
 
 	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte("{bad"))))
 	rr := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestProfileSuggestionHandler_SuccessAndParseFailure(t *testing.T) {
 	}, nil).Once()
 
 	aiHandler := &AIHandler{legacyService: mockSvc}
-	handler := NewProfileSuggestionHandler(mtPersistence, aiHandler)
+	handler := NewProfileSuggestionHandler(mtPersistence, nil, aiHandler)
 
 	req := withOrgContext(httptest.NewRequest(http.MethodPost, "/api/admin/profiles/suggestions", bytes.NewReader([]byte(`{"prompt":"build a profile"}`))))
 	rr := httptest.NewRecorder()

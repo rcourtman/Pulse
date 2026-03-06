@@ -18,6 +18,7 @@ import (
 // ConfigProfileHandler handles configuration profile operations
 type ConfigProfileHandler struct {
 	mtPersistence     *config.MultiTenantPersistence
+	legacyPersistence *config.ConfigPersistence
 	validator         *models.ProfileValidator
 	mu                sync.RWMutex
 	suggestionHandler *ProfileSuggestionHandler
@@ -31,15 +32,26 @@ func NewConfigProfileHandler(mtp *config.MultiTenantPersistence) *ConfigProfileH
 	}
 }
 
+// SetLegacyPersistence sets the single-tenant persistence fallback.
+func (h *ConfigProfileHandler) SetLegacyPersistence(p *config.ConfigPersistence) {
+	h.legacyPersistence = p
+}
+
 // getPersistence resolves the persistence instance for the current tenant
 func (h *ConfigProfileHandler) getPersistence(ctx context.Context) (*config.ConfigPersistence, error) {
-	orgID := GetOrgID(ctx)
-	return h.mtPersistence.GetPersistence(orgID)
+	if h.mtPersistence != nil {
+		orgID := GetOrgID(ctx)
+		return h.mtPersistence.GetPersistence(orgID)
+	}
+	if h.legacyPersistence != nil {
+		return h.legacyPersistence, nil
+	}
+	return nil, fmt.Errorf("no persistence available")
 }
 
 // SetAIHandler sets the AI handler for profile suggestions
 func (h *ConfigProfileHandler) SetAIHandler(aiHandler *AIHandler) {
-	h.suggestionHandler = NewProfileSuggestionHandler(h.mtPersistence, aiHandler)
+	h.suggestionHandler = NewProfileSuggestionHandler(h.mtPersistence, h.legacyPersistence, aiHandler)
 }
 
 // ServeHTTP implements the http.Handler interface
