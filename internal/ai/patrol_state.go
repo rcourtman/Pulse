@@ -103,9 +103,24 @@ func (s patrolRuntimeState) snapshot() models.StateSnapshot {
 	}
 }
 
+func (s patrolRuntimeState) resourceSnapshot() models.StateSnapshot {
+	return models.StateSnapshot{
+		Nodes:              s.Nodes,
+		VMs:                s.VMs,
+		Containers:         s.Containers,
+		PhysicalDisks:      s.PhysicalDisks,
+		DockerHosts:        s.DockerHosts,
+		KubernetesClusters: s.KubernetesClusters,
+		Hosts:              s.Hosts,
+		Storage:            s.Storage,
+		PBSInstances:       s.PBSInstances,
+		PMGInstances:       s.PMGInstances,
+	}
+}
+
 func (s patrolRuntimeState) withDerivedProviders() patrolRuntimeState {
 	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(s.snapshot())
+	registry.IngestSnapshot(s.resourceSnapshot())
 	s.readState = registry
 	s.unifiedResourceProvider = unifiedresources.NewUnifiedAIAdapter(registry)
 	return s

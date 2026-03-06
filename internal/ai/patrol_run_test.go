@@ -677,6 +677,44 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 	}
 }
 
+func TestPatrolRuntimeState_WithDerivedProviders_UsesResourceInventoryOnly(t *testing.T) {
+	state := patrolRuntimeState{
+		Nodes: []models.Node{
+			{ID: "node-1", Name: "node-a"},
+		},
+		ActiveAlerts: []models.Alert{
+			{ResourceID: "node-1"},
+		},
+		ConnectionHealth: map[string]bool{
+			"node-1": true,
+		},
+		PVEBackups: models.PVEBackups{
+			BackupTasks: []models.BackupTask{{ID: "bt-1", VMID: 101}},
+		},
+		PBSBackups: []models.PBSBackup{{ID: "pb-1", VMID: "101"}},
+	}
+
+	derived := state.withDerivedProviders()
+	if derived.readState == nil || derived.unifiedResourceProvider == nil {
+		t.Fatal("expected derived providers to be rebuilt")
+	}
+	if got := len(derived.readState.Nodes()); got != 1 {
+		t.Fatalf("expected 1 node in derived readState, got %d", got)
+	}
+	if got := len(derived.readState.VMs()); got != 0 {
+		t.Fatalf("expected no VM inventory from metadata-only fields, got %d", got)
+	}
+	if len(derived.ActiveAlerts) != 1 || derived.ActiveAlerts[0].ResourceID != "node-1" {
+		t.Fatalf("expected active alerts to remain on patrol runtime state, got %+v", derived.ActiveAlerts)
+	}
+	if !derived.ConnectionHealth["node-1"] {
+		t.Fatalf("expected connection health to remain on patrol runtime state, got %+v", derived.ConnectionHealth)
+	}
+	if len(derived.PVEBackups.BackupTasks) != 1 || len(derived.PBSBackups) != 1 {
+		t.Fatalf("expected backup metadata to remain on patrol runtime state, got %+v / %+v", derived.PVEBackups.BackupTasks, derived.PBSBackups)
+	}
+}
+
 func TestFilterStateByScope_WhitespaceInIDs(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
