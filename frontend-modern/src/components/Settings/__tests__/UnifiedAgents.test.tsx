@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
@@ -39,6 +40,8 @@ const listAssignmentsMock = vi.fn();
 const trackAgentInstallTokenGeneratedMock = vi.fn();
 const trackAgentInstallCommandCopiedMock = vi.fn();
 const trackAgentInstallProfileSelectedMock = vi.fn();
+const refetchResourcesMock = vi.fn();
+const [mockResources, setMockResources] = createSignal<any[]>([]);
 
 vi.mock('@/App', () => ({
   useWebSocket: () => mockWsStore,
@@ -170,18 +173,14 @@ const toK8sClusterResource = (k: any) => ({
 
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
-    byType: (type: string) => {
-      if (type === 'k8s-cluster') {
-        return (mockWsStore?.state?.kubernetesClusters || []).map(toK8sClusterResource);
-      }
-      return [];
+    byType: (type: string) => mockResources().filter((resource) => resource.type === type),
+    resources: () => mockResources(),
+    mutate: (value: any[] | ((prev: any[]) => any[])) => {
+      const next = typeof value === 'function' ? value(mockResources()) : value;
+      setMockResources(next);
+      return next;
     },
-    resources: () => {
-      const all: any[] = [];
-      for (const h of mockWsStore?.state?.hosts || []) all.push(toAgentResource(h));
-      for (const d of mockWsStore?.state?.dockerHosts || []) all.push(toDockerRuntimeResource(d));
-      return all;
-    },
+    refetch: (...args: unknown[]) => refetchResourcesMock(...args),
   }),
 }));
 
@@ -279,6 +278,12 @@ const setupComponent = (
   removedDockerHosts: RemovedDockerHost[] = [],
   removedKubernetesClusters: RemovedKubernetesCluster[] = [],
 ) => {
+  setMockResources([
+    ...hosts.map(toAgentResource),
+    ...dockerHosts.map(toDockerRuntimeResource),
+    ...kubernetesClusters.map(toK8sClusterResource),
+  ]);
+
   const [state] = createStore({
     hosts,
     dockerHosts,
@@ -315,6 +320,8 @@ beforeEach(() => {
   trackAgentInstallTokenGeneratedMock.mockReset();
   trackAgentInstallCommandCopiedMock.mockReset();
   trackAgentInstallProfileSelectedMock.mockReset();
+  refetchResourcesMock.mockReset();
+  refetchResourcesMock.mockResolvedValue(mockResources());
   clipboardSpy.mockReset().mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(
@@ -585,6 +592,27 @@ describe('UnifiedAgents managed agents table', () => {
     fireEvent.change(capSelect, { target: { value: 'kubernetes' } });
 
     expect(screen.getByText('K8s Alpha')).toBeInTheDocument();
+  });
+
+  it('removes an agent row immediately after successful deletion', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    deleteAgentMock.mockResolvedValue(undefined);
+
+    const host = createAgent({ displayName: 'Tower' });
+    setupComponent([host]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tower')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(deleteAgentMock).toHaveBeenCalledWith('host-1'), { interval: 0 });
+    await waitFor(() => expect(screen.queryByText('Tower')).not.toBeInTheDocument(), {
+      interval: 0,
+    });
+    expect(notificationSuccessMock).toHaveBeenCalledWith('Agent removed from Pulse');
+    expect(refetchResourcesMock).toHaveBeenCalled();
   });
 });
 

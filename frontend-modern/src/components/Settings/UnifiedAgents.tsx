@@ -245,7 +245,7 @@ interface UnifiedAgentsProps {
 
 export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
   const { state } = useWebSocket();
-  const { byType, resources } = useResources();
+  const { byType, resources, mutate: mutateResources, refetch: refetchResources } = useResources();
   const navigate = useNavigate();
 
   const pd = (r: Resource) =>
@@ -581,6 +581,59 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     if (r.type === 'agent' || r.type === 'pbs' || r.type === 'pmg' || r.proxmox)
       caps.push('proxmox');
     return caps;
+  };
+
+  const matchesRemovedAgent = (
+    resource: Resource,
+    ids: { agentId?: string; dockerId?: string },
+    capabilities: AgentCapability[],
+  ) => {
+    if (capabilities.includes('agent') && ids.agentId) {
+      const agentId = ids.agentId;
+      if (
+        resource.id === agentId ||
+        getAgentId(resource) === agentId ||
+        getAgentActionId(resource) === agentId
+      ) {
+        return true;
+      }
+    }
+
+    if (capabilities.includes('docker') && ids.dockerId) {
+      const dockerId = ids.dockerId;
+      if (resource.id === dockerId || getDockerActionId(resource) === dockerId) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const reconcileRemovedAgent = (
+    ids: { agentId?: string; dockerId?: string },
+    capabilities: AgentCapability[],
+  ) => {
+    mutateResources((prev) =>
+      prev.filter((resource) => !matchesRemovedAgent(resource, ids, capabilities)),
+    );
+    void refetchResources().catch((err) => {
+      logger.debug('Failed to refresh resources after agent removal', err);
+    });
+  };
+
+  const reconcileRemovedKubernetesCluster = (clusterId: string) => {
+    mutateResources((prev) =>
+      prev.filter(
+        (resource) =>
+          !(
+            resource.type === 'k8s-cluster' &&
+            (getKubernetesActionId(resource) === clusterId || resource.id === clusterId)
+          ),
+      ),
+    );
+    void refetchResources().catch((err) => {
+      logger.debug('Failed to refresh resources after kubernetes removal', err);
+    });
   };
 
   /**
@@ -993,6 +1046,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
         removed = true;
       }
       if (removed) {
+        reconcileRemovedAgent(ids, capabilities);
         notificationStore.success('Agent removed from Pulse');
       } else {
         notificationStore.error('No agent IDs available for removal');
@@ -1025,6 +1079,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
 
     try {
       await MonitoringAPI.deleteKubernetesCluster(clusterId);
+      reconcileRemovedKubernetesCluster(clusterId);
       notificationStore.success('Kubernetes cluster removed from Pulse');
     } catch (err) {
       logger.error('Failed to remove Kubernetes cluster', err);

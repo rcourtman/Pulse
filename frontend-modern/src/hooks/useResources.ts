@@ -45,6 +45,12 @@ export interface UseResourcesReturn {
   /** All unified resources */
   resources: Accessor<Resource[]>;
 
+  /** Force a network refresh of unified resources */
+  refetch: () => Promise<Resource[]>;
+
+  /** Apply a local resource reconciliation */
+  mutate: (value: Resource[] | ((prev: Resource[]) => Resource[])) => Resource[];
+
   /** Infrastructure resources only (nodes, agents, docker-hosts) */
   infra: Accessor<Resource[]>;
 
@@ -100,6 +106,21 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
     // Test override path: read directly from provided store
     return wsStore.state.resources ?? [];
   });
+
+  const refetch = async (): Promise<Resource[]> => {
+    if (unifiedHook) {
+      return unifiedHook.refetch();
+    }
+    return resources();
+  };
+
+  const mutate = (value: Resource[] | ((prev: Resource[]) => Resource[])): Resource[] => {
+    if (unifiedHook) {
+      return unifiedHook.mutate(value);
+    }
+    const current = resources();
+    return typeof value === 'function' ? value(current) : value;
+  };
 
   // Pre-filtered memos for common use cases
   const infra = createMemo<Resource[]>(() => {
@@ -220,6 +241,8 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
 
   return {
     resources,
+    refetch,
+    mutate,
     infra,
     workloads,
     byType,
