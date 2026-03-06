@@ -4,6 +4,10 @@ import type { Resource } from '@/types/resource';
 import type { GroupHeaderMeta } from '@/components/Alerts/ResourceTable';
 import type { Resource as TableResource } from '@/components/Alerts/ResourceTable';
 import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
+import {
   PMG_THRESHOLD_COLUMNS,
   PMG_KEY_TO_NORMALIZED,
   PMG_NORMALIZED_TO_KEY,
@@ -342,8 +346,7 @@ export function useThresholdsData(
     const seen = new Set<string>();
 
     const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
-      const originalName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const originalName = getPreferredResourceDisplayName(host);
       const friendlyName = getFriendlyNodeName(originalName);
       const override = overridesMap.get(host.id);
       const disableConnectivity = (override as Override | undefined)?.disableConnectivity || false;
@@ -358,7 +361,7 @@ export function useThresholdsData(
         rawName: originalName,
         type: 'dockerHost' as const,
         resourceType: 'Container Runtime',
-        node: host.identity?.hostname ?? host.name,
+        node: getPreferredResourceHostname(host) || host.name,
         instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
         status,
         hasOverride: disableConnectivity,
@@ -431,12 +434,12 @@ export function useThresholdsData(
     const seen = new Set<string>();
 
     (props.dockerHosts ?? []).forEach((host) => {
-      const hostLabel = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const hostLabel = getPreferredResourceDisplayName(host);
       const friendlyHostName = getFriendlyNodeName(hostLabel);
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
-      const hostHostname = host.identity?.hostname ?? host.name;
+      const hostHostname = getPreferredResourceHostname(host) || host.name;
       const containers = dockerContainersByHostId().get(host.id) ?? [];
 
       containers.forEach((container) => {
@@ -571,8 +574,7 @@ export function useThresholdsData(
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
-      const originalName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const originalName = getPreferredResourceDisplayName(host);
       const friendlyName = getFriendlyNodeName(originalName);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
@@ -580,7 +582,7 @@ export function useThresholdsData(
         status: host.status,
       };
 
-      const hostname = host.identity?.hostname ?? host.name;
+      const hostname = getPreferredResourceHostname(host) || host.name;
       [friendlyName, originalName, hostname, host.id]
         .filter((key: string): key is string => Boolean(key && key.trim()))
         .forEach((key: string) => {

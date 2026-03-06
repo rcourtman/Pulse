@@ -20,6 +20,10 @@ import {
   getAgentDiscoveryResourceId,
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
 
 // Workaround for eslint false-positive when `For` is used only in JSX
 const __ensureForUsage = For;
@@ -716,8 +720,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
       const idCandidates = dockerHostOverrideIdCandidates(host);
-      const originalName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const originalName = getPreferredResourceDisplayName(host);
       const friendlyName = getFriendlyNodeName(originalName);
       const override = findOverrideByCandidates(overridesMap, idCandidates);
       const resourceId = override?.id || idCandidates[0] || host.id;
@@ -733,7 +736,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         rawName: originalName,
         type: 'dockerHost' as const,
         resourceType: 'Container Runtime',
-        node: host.identity?.hostname ?? host.name,
+        node: getPreferredResourceHostname(host) || host.name,
         instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
         status,
         hasOverride: disableConnectivity,
@@ -804,12 +807,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     (props.dockerHosts ?? []).forEach((host) => {
       const dockerHostIds = dockerHostOverrideIdCandidates(host);
       const dockerHostIdForActions = dockerHostIds[0] || host.id;
-      const hostLabel = host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const hostLabel = getPreferredResourceDisplayName(host);
       const friendlyHostName = getFriendlyNodeName(hostLabel);
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
-      const hostHostname = host.identity?.hostname ?? host.name;
+      const hostHostname = getPreferredResourceHostname(host) || host.name;
       const containers = dockerContainersByHostId().get(host.id) ?? [];
 
       containers.forEach((container) => {
@@ -940,8 +943,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
-      const originalName =
-        host.displayName?.trim() || host.identity?.hostname || host.name || host.id;
+      const originalName = getPreferredResourceDisplayName(host);
       const friendlyName = getFriendlyNodeName(originalName);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
@@ -949,7 +951,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         status: host.status,
       };
 
-      const hostname = host.identity?.hostname ?? host.name;
+      const hostname = getPreferredResourceHostname(host) || host.name;
       [friendlyName, originalName, hostname, host.id]
         .filter((key): key is string => Boolean(key && key.trim()))
         .forEach((key) => {
