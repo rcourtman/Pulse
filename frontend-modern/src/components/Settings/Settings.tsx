@@ -12,18 +12,16 @@ import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { logger } from '@/utils/logger';
-import { ChangePasswordModal } from './ChangePasswordModal';
 import { UnifiedAgents } from './UnifiedAgents';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
-import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
-import { BackupTransferDialogs } from './BackupTransferDialogs';
 import { ProLicensePanel } from './ProLicensePanel';
 import { AgentLedgerPanel } from './AgentLedgerPanel';
 import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
+import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
@@ -820,27 +818,14 @@ const Settings: Component<SettingsProps> = (props) => {
         </Show>
       </SettingsPageShell>
 
-      {/* Update Confirmation Modal */}
-      <UpdateConfirmationModal
-        isOpen={showUpdateConfirmation()}
-        onClose={() => setShowUpdateConfirmation(false)}
-        onConfirm={handleConfirmUpdate}
-        currentVersion={versionInfo()?.version || 'Unknown'}
-        latestVersion={updateInfo()?.latestVersion || ''}
-        plan={
-          updatePlan() || {
-            canAutoUpdate: false,
-            requiresRoot: false,
-            rollbackSupport: false,
-          }
-        }
-        isApplying={isInstallingUpdate()}
-        isPrerelease={updateInfo()?.isPrerelease}
-        isMajorUpgrade={updateInfo()?.isMajorUpgrade}
-        warning={updateInfo()?.warning}
-      />
-
-      <BackupTransferDialogs
+      <SettingsDialogs
+        showUpdateConfirmation={showUpdateConfirmation}
+        closeUpdateConfirmation={() => setShowUpdateConfirmation(false)}
+        handleConfirmUpdate={handleConfirmUpdate}
+        versionInfo={versionInfo}
+        updateInfo={updateInfo}
+        updatePlan={updatePlan}
+        isInstallingUpdate={isInstallingUpdate}
         securityStatus={securityStatus}
         exportPassphrase={exportPassphrase}
         setExportPassphrase={setExportPassphrase}
@@ -861,14 +846,10 @@ const Settings: Component<SettingsProps> = (props) => {
         closeImportDialog={closeImportDialog}
         closeApiTokenModal={closeApiTokenModal}
         handleApiTokenAuthenticate={handleApiTokenAuthenticate}
-      />
-
-      <ChangePasswordModal
-        isOpen={showPasswordModal()}
-        onClose={() => {
+        showPasswordModal={showPasswordModal}
+        closePasswordModal={() => {
           setShowPasswordModal(false);
-          // Refresh security status after password change
-          loadSecurityStatus();
+          void loadSecurityStatus();
         }}
       />
     </>
