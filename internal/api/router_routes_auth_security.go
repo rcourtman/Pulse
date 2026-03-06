@@ -209,22 +209,12 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			}
 			isTrustedNetwork := isTrustedNetwork(clientIP, trustedNetworks)
 
-			// Determine whether the caller is authenticated before exposing sensitive fields
-			// Also track token scopes for kiosk/limited-access scenarios
-			//
-			// SECURITY: Do NOT check ?token= query param here - this public endpoint would
-			// act as a token validity oracle, allowing attackers to probe for valid tokens
-			// without rate limiting. Only check session cookies and X-API-Token header.
-			isAuthenticated := false
-			var tokenScopes []string
-			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
-				isAuthenticated = true
-			} else if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
-				if record, ok := r.config.ValidateAPIToken(token); ok {
-					isAuthenticated = true
-					tokenScopes = record.Scopes
-				}
-			}
+			// Determine whether the caller is authenticated before exposing sensitive fields.
+			// SECURITY: Do NOT check bearer or query-string tokens here. This endpoint is
+			// intentionally limited to session cookies, proxy auth, and X-API-Token.
+			authSnapshot := r.buildSecurityStatusAuthSnapshot(req)
+			isAuthenticated := authSnapshot.authenticated
+			tokenScopes := authSnapshot.tokenScopes()
 
 			// Create token hint if token exists (only revealed to authenticated callers)
 			apiTokenHint := ""
@@ -288,6 +278,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				"ssoSessionUsername":          ssoSessionUsername,
 				"hideLocalLogin":              r.config.HideLocalLogin,
 				"agentUrl":                    agentURL,
+				"settingsCapabilities":        r.securityStatusSettingsCapabilitiesFromSnapshot(authSnapshot),
 			}
 
 			if isAuthenticated {

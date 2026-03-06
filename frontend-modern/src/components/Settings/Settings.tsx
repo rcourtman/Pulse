@@ -69,7 +69,7 @@ import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
-import { baseTabGroups, shouldHideSettingsNavItem } from './settingsTabs';
+import { baseTabGroups, getSettingsNavItem, shouldHideSettingsNavItem } from './settingsTabs';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
 import { tabFeatureRequirements } from './settingsFeatureGates';
@@ -536,15 +536,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const visibleTabGroups = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
-    const tokenScopes = securityStatus()?.tokenScopes ?? [];
-    const isTokenAuthenticated = tokenScopes.length > 0;
-    const isNonAdminProxy =
-      Boolean(securityStatus()?.hasProxyAuth) && securityStatus()?.proxyAuthIsAdmin === false;
-    const isPlatformAdmin = isTokenAuthenticated
-      ? false
-      : securityStatus()?.hasProxyAuth
-        ? securityStatus()?.proxyAuthIsAdmin === true
-        : undefined;
+    const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
 
     return baseTabGroups
       .map((group) => ({
@@ -555,9 +547,7 @@ const Settings: Component<SettingsProps> = (props) => {
               hasFeature,
               licenseLoaded,
               hostedModeEnabled,
-              isPlatformAdmin,
-              isTokenAuthenticated,
-              isNonAdminProxy,
+              settingsCapabilities,
             }),
         ),
       }))
@@ -587,7 +577,11 @@ const Settings: Component<SettingsProps> = (props) => {
   createEffect(() => {
     const currentTab = activeTab();
     const requiresFeatureResolution = Boolean(tabFeatureRequirements[currentTab]?.length);
-    if (requiresFeatureResolution && !licenseLoaded()) {
+    const requiresCapabilityResolution = Boolean(getSettingsNavItem(currentTab)?.requiredCapability);
+    if (
+      (requiresFeatureResolution && !licenseLoaded()) ||
+      (requiresCapabilityResolution && securityStatusLoading())
+    ) {
       return;
     }
 

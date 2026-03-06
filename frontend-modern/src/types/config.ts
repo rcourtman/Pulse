@@ -98,6 +98,18 @@ export interface PulseConfig {
 /**
  * API response for security status
  */
+export interface SecurityStatusSettingsCapabilities {
+  apiAccess: boolean;
+  authentication: boolean;
+  singleSignOn: boolean;
+  roles: boolean;
+  users: boolean;
+  auditLog: boolean;
+  auditWebhooks: boolean;
+  relay: boolean;
+  billingAdmin: boolean;
+}
+
 export interface SecurityStatus {
   hasAuthentication: boolean;
   apiTokenConfigured: boolean;
@@ -134,6 +146,7 @@ export interface SecurityStatus {
   ssoProviders?: SSOProviderInfo[];
   // Token auth scopes (for kiosk/limited-access mode)
   tokenScopes?: string[];
+  settingsCapabilities?: SecurityStatusSettingsCapabilities;
 }
 
 /**

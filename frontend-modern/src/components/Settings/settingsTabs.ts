@@ -16,6 +16,7 @@ import Globe from 'lucide-solid/icons/globe';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
+import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 
 import Container from 'lucide-solid/icons/container';
 import Building2 from 'lucide-solid/icons/building-2';
@@ -78,9 +79,8 @@ export const baseTabGroups: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
         hideWhenUnavailable: true,
-        hideForTokenAuth: true,
         hostedOnly: true,
-        adminOnly: true,
+        requiredCapability: 'billingAdmin',
       },
     ],
   },
@@ -92,9 +92,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         id: 'api',
         label: 'API Access',
         icon: BadgeCheck,
-        hideForTokenAuth: true,
-        hideForNonAdminProxy: true,
-        adminOnly: true,
+        requiredCapability: 'apiAccess',
       },
     ],
   },
@@ -139,6 +137,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: RadioTower,
         iconProps: { strokeWidth: 2 },
         features: ['relay'],
+        requiredCapability: 'relay',
       },
       // Security grouped tab items
       {
@@ -152,45 +151,35 @@ export const baseTabGroups: SettingsNavGroup[] = [
         label: 'Authentication',
         icon: Lock,
         iconProps: { strokeWidth: 2 },
-        hideForTokenAuth: true,
-        hideForNonAdminProxy: true,
-        adminOnly: true,
+        requiredCapability: 'authentication',
       },
       {
         id: 'security-sso',
         label: 'Single Sign-On',
         icon: Key,
         iconProps: { strokeWidth: 2 },
-        hideForTokenAuth: true,
-        hideForNonAdminProxy: true,
-        adminOnly: true,
+        requiredCapability: 'singleSignOn',
       },
       {
         id: 'security-roles',
         label: 'Roles',
         icon: ShieldCheck,
         iconProps: { strokeWidth: 2 },
-        hideForTokenAuth: true,
-        hideForNonAdminProxy: true,
-        adminOnly: true,
+        requiredCapability: 'roles',
       },
       {
         id: 'security-users',
         label: 'Users',
         icon: Users,
         iconProps: { strokeWidth: 2 },
-        hideForTokenAuth: true,
-        hideForNonAdminProxy: true,
-        adminOnly: true,
+        requiredCapability: 'users',
       },
       {
         id: 'security-audit',
         label: 'Audit Log',
         icon: Activity,
         iconProps: { strokeWidth: 2 },
-        hideForTokenAuth: true,
-        hideForNonAdminProxy: true,
-        adminOnly: true,
+        requiredCapability: 'auditLog',
       },
       {
         id: 'security-webhooks',
@@ -198,9 +187,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: Globe,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
-        hideForTokenAuth: true,
-        hideForNonAdminProxy: true,
-        adminOnly: true,
+        requiredCapability: 'auditWebhooks',
       },
       {
         id: 'system-pro',
@@ -215,14 +202,16 @@ export interface SettingsNavVisibilityContext {
   hasFeature: (feature: string) => boolean;
   licenseLoaded: () => boolean;
   hostedModeEnabled?: boolean;
-  isPlatformAdmin?: boolean;
-  isTokenAuthenticated?: boolean;
-  isNonAdminProxy?: boolean;
+  settingsCapabilities?: Partial<SecurityStatusSettingsCapabilities> | null;
 }
 
 const navItemsByTab = new Map<SettingsTab, SettingsNavItem>(
   baseTabGroups.flatMap((group) => group.items.map((item) => [item.id, item] as const)),
 );
+
+export function getSettingsNavItem(tab: SettingsTab): SettingsNavItem | undefined {
+  return navItemsByTab.get(tab);
+}
 
 function hasRequiredFeatures(
   item: SettingsNavItem | undefined,
@@ -243,15 +232,7 @@ export function shouldHideSettingsNavItem(
     return true;
   }
 
-  if (item.adminOnly && context.isPlatformAdmin === false) {
-    return true;
-  }
-
-  if (item.hideForTokenAuth && context.isTokenAuthenticated) {
-    return true;
-  }
-
-  if (item.hideForNonAdminProxy && context.isNonAdminProxy) {
+  if (item.requiredCapability && context.settingsCapabilities?.[item.requiredCapability] !== true) {
     return true;
   }
 

@@ -69,6 +69,7 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures(['multi_tenant']),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
+        settingsCapabilities: { billingAdmin: true },
       }),
     ).toBe(true);
 
@@ -77,17 +78,18 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures(['multi_tenant']),
         licenseLoaded: () => true,
         hostedModeEnabled: true,
+        settingsCapabilities: { billingAdmin: true },
       }),
     ).toBe(false);
   });
 
-  it('hides admin-only tabs for scoped token sessions', () => {
+  it('hides tabs when the backend denies the required capability', () => {
     expect(
       shouldHideSettingsNavItem('api', {
         hasFeature: hasFeatures([]),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
-        isTokenAuthenticated: true,
+        settingsCapabilities: { apiAccess: false },
       }),
     ).toBe(true);
 
@@ -96,29 +98,18 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures(['rbac']),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
-        isTokenAuthenticated: true,
+        settingsCapabilities: { roles: false },
       }),
     ).toBe(true);
   });
 
-  it('hides admin-only tabs for non-admin proxy sessions', () => {
+  it('shows restricted tabs when the backend grants the required capability', () => {
     expect(
       shouldHideSettingsNavItem('security-audit', {
         hasFeature: hasFeatures(['audit_logging']),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
-        isPlatformAdmin: false,
-        isNonAdminProxy: true,
-      }),
-    ).toBe(true);
-  });
-
-  it('keeps paywalled non-organization tabs visible for upsell flows', () => {
-    expect(
-      shouldHideSettingsNavItem('system-relay', {
-        hasFeature: hasFeatures([]),
-        licenseLoaded: () => true,
-        hostedModeEnabled: false,
+        settingsCapabilities: { auditLog: true },
       }),
     ).toBe(false);
   });

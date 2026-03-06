@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import type { SettingsTab } from './settingsRouting';
 
 export type { SettingsTab } from './settingsRouting';
@@ -13,10 +14,8 @@ export interface SettingsNavItem {
   disabled?: boolean;
   locked?: boolean;
   hideWhenUnavailable?: boolean;
-  hideForTokenAuth?: boolean;
-  hideForNonAdminProxy?: boolean;
   hostedOnly?: boolean;
-  adminOnly?: boolean;
+  requiredCapability?: keyof SecurityStatusSettingsCapabilities;
   badge?: string;
   features?: string[];
   permissions?: string[];
