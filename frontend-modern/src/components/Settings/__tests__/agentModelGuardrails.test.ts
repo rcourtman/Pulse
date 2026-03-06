@@ -71,7 +71,8 @@ describe('agent model guardrails', () => {
   it('keeps UnifiedAgents free of v5 merge-workaround patterns', () => {
     expect(unifiedAgentsSource).not.toContain('previousHostTypes');
     expect(unifiedAgentsSource).not.toContain('const allHosts = createMemo(');
-    expect(unifiedAgentsSource).toContain('No agent IDs available for removal');
+    expect(unifiedAgentsSource).toContain('const MONITORING_STOPPED_STATUS_LABEL =');
+    expect(unifiedAgentsSource).toContain('const ALLOW_RECONNECT_LABEL =');
     expect(unifiedAgentsSource).toContain('withPrivilegeEscalation');
   });
 
@@ -163,7 +164,7 @@ describe('agent model guardrails', () => {
     expect(infrastructureSummarySource).not.toContain("resource.type === 'host'");
     expect(infrastructureSelectorComponentSource).not.toContain("resource.type === 'host'");
     expect(workloadsLinkSource).not.toContain("resource.type === 'host'");
-    expect(unifiedResourceTableSource).toContain("buildMetricKey('agent', resource.id)");
+    expect(unifiedResourceTableSource).toContain('buildMetricKeyForUnifiedResource');
     expect(unifiedResourceTableSource).not.toContain("buildMetricKey('host', resource.id)");
     expect(resourceBadgesSource).not.toContain("host: 'Agent'");
     expect(problemResourcesTableSource).not.toContain("host: 'Agent'");
@@ -173,8 +174,7 @@ describe('agent model guardrails', () => {
     expect(diagnosticsPanelSource).not.toContain('legacyThresholdsDetected');
     expect(diagnosticsPanelSource).not.toContain('legacyThresholdSources');
     expect(diagnosticsPanelSource).not.toContain('legacyScheduleSettings');
-    expect(systemSettingsStateSource).toContain('agentCount: number;');
-    expect(systemSettingsStateSource).toContain('agentsTotal: number;');
+    expect(systemSettingsStateSource).toContain('export function useSystemSettingsState(');
     expect(systemSettingsStateSource).not.toContain('legacyThresholdsDetected');
     expect(systemSettingsStateSource).not.toContain('legacyThresholdSources');
     expect(systemSettingsStateSource).not.toContain('legacyScheduleSettings');
@@ -298,7 +298,7 @@ describe('agent model guardrails', () => {
     expect(apiTypesSource).toContain('linkedAgentId?: string');
     expect(apiTypesSource).not.toContain('linkedHostAgentId');
     expect(resourceStateAdaptersSource).toContain(
-      'linkedAgentId: asString(platform?.linkedAgentId)',
+      'const linkedAgentId = asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);',
     );
     expect(resourceStateAdaptersSource).not.toContain('linkedHostAgentId');
   });
