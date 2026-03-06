@@ -518,8 +518,8 @@ func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	if resource.DiscoveryTarget == nil {
 		t.Fatalf("expected discovery target for kubernetes pod")
 	}
-	if resource.DiscoveryTarget.ResourceType != "k8s" {
-		t.Fatalf("discovery target type = %q, want k8s", resource.DiscoveryTarget.ResourceType)
+	if resource.DiscoveryTarget.ResourceType != string(unified.ResourceTypePod) {
+		t.Fatalf("discovery target type = %q, want %q", resource.DiscoveryTarget.ResourceType, unified.ResourceTypePod)
 	}
 	if resource.DiscoveryTarget.AgentID != "agent-1" {
 		t.Fatalf("discovery target agentID = %q, want agent-1", resource.DiscoveryTarget.AgentID)
@@ -527,9 +527,15 @@ func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	if resource.DiscoveryTarget.ResourceID != "pod-1" {
 		t.Fatalf("discovery target resourceID = %q, want pod-1", resource.DiscoveryTarget.ResourceID)
 	}
+	if resource.MetricsTarget == nil {
+		t.Fatalf("expected metrics target for kubernetes pod")
+	}
+	if resource.MetricsTarget.ResourceType != string(unified.ResourceTypePod) {
+		t.Fatalf("metrics target type = %q, want %q", resource.MetricsTarget.ResourceType, unified.ResourceTypePod)
+	}
 }
 
-func TestResourceListFiltersKubernetesNamespace(t *testing.T) {
+func TestResourceListFiltersCanonicalKubernetesNamespace(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		KubernetesClusters: []models.KubernetesCluster{
@@ -559,7 +565,7 @@ func TestResourceListFiltersKubernetesNamespace(t *testing.T) {
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=k8s&namespace=default", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=pod,k8s-deployment&namespace=default", nil)
 	h.HandleListResources(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -589,6 +595,7 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 	tests := []struct {
 		name           string
 		resource       unified.Resource
+		wantType       unified.ResourceType
 		wantResourceID string
 	}{
 		{
@@ -604,6 +611,7 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 					PodUID:    "pod-uid-1",
 				},
 			},
+			wantType:       unified.ResourceTypePod,
 			wantResourceID: "pod-uid-1",
 		},
 		{
@@ -617,6 +625,7 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 					ClusterID: "cluster-a",
 				},
 			},
+			wantType:       unified.ResourceTypeK8sCluster,
 			wantResourceID: "cluster-a",
 		},
 		{
@@ -631,6 +640,7 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 					Namespace: "default",
 				},
 			},
+			wantType:       unified.ResourceTypeK8sDeployment,
 			wantResourceID: "default/web",
 		},
 	}
@@ -641,8 +651,8 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 			if target == nil {
 				t.Fatalf("expected discovery target")
 			}
-			if target.ResourceType != "k8s" {
-				t.Fatalf("resource type = %q, want k8s", target.ResourceType)
+			if target.ResourceType != string(tt.wantType) {
+				t.Fatalf("resource type = %q, want %q", target.ResourceType, tt.wantType)
 			}
 			if target.AgentID != "agent-k8s-1" {
 				t.Fatalf("agentID = %q, want agent-k8s-1", target.AgentID)
@@ -767,7 +777,7 @@ func TestK8sNamespacesEndpointAggregatesPodsAndDeployments(t *testing.T) {
 	}
 }
 
-func TestResourceTypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
+func TestResourceListRejectsLegacyKubernetesTypeAlias(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		KubernetesClusters: []models.KubernetesCluster{
@@ -804,6 +814,60 @@ func TestResourceTypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=k8s", nil)
 	h.HandleListResources(rec, req)
 
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "unsupported type filter token(s): k8s") {
+		t.Fatalf("unexpected response body: %s", body)
+	}
+}
+
+func TestResourceListReturnsCanonicalKubernetesMetricsTargets(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:       "cluster-1",
+				AgentID:  "agent-1",
+				Name:     "prod-k8s",
+				Status:   "online",
+				LastSeen: now,
+				Nodes: []models.KubernetesNode{
+					{
+						UID:   "node-1",
+						Name:  "worker-1",
+						Ready: true,
+					},
+				},
+				Pods: []models.KubernetesPod{
+					{
+						UID:       "pod-1",
+						Name:      "api-7f8d",
+						Namespace: "default",
+						Phase:     "Running",
+					},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{
+						UID:             "dep-1",
+						Name:            "web",
+						Namespace:       "default",
+						DesiredReplicas: 2,
+						ReadyReplicas:   2,
+					},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=pod,k8s-node,k8s-deployment", nil)
+	h.HandleListResources(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
@@ -812,9 +876,31 @@ func TestResourceTypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-
 	if len(resp.Data) != 3 {
-		t.Fatalf("expected 3 kubernetes resources for k8s alias, got %d", len(resp.Data))
+		t.Fatalf("expected 3 kubernetes resources, got %d", len(resp.Data))
+	}
+
+	wantByType := map[unified.ResourceType]unified.ResourceType{
+		unified.ResourceTypePod:           unified.ResourceTypePod,
+		unified.ResourceTypeK8sNode:       unified.ResourceTypeK8sNode,
+		unified.ResourceTypeK8sDeployment: unified.ResourceTypeK8sDeployment,
+	}
+	for _, resource := range resp.Data {
+		wantTargetType, ok := wantByType[resource.Type]
+		if !ok {
+			t.Fatalf("unexpected resource type in response: %q", resource.Type)
+		}
+		if resource.MetricsTarget == nil {
+			t.Fatalf("expected metrics target for %q", resource.Type)
+		}
+		if resource.MetricsTarget.ResourceType != string(wantTargetType) {
+			t.Fatalf(
+				"metrics target type for %q = %q, want %q",
+				resource.Type,
+				resource.MetricsTarget.ResourceType,
+				wantTargetType,
+			)
+		}
 	}
 }
 

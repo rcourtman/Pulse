@@ -172,6 +172,15 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 		{name: "unsupported system_container ignored by parser", input: "system_container", want: map[unified.ResourceType]struct{}{}},
 		{name: "unsupported app_container ignored by parser", input: "app_container", want: map[unified.ResourceType]struct{}{}},
 		{name: "unsupported container ignored by parser", input: "container", want: map[unified.ResourceType]struct{}{}},
+		{name: "pod", input: "pod", want: map[unified.ResourceType]struct{}{unified.ResourceTypePod: {}}},
+		{name: "pods", input: "pods", want: map[unified.ResourceType]struct{}{unified.ResourceTypePod: {}}},
+		{name: "k8s cluster", input: "k8s-cluster", want: map[unified.ResourceType]struct{}{unified.ResourceTypeK8sCluster: {}}},
+		{name: "k8s node", input: "k8s-node", want: map[unified.ResourceType]struct{}{unified.ResourceTypeK8sNode: {}}},
+		{name: "k8s deployment", input: "k8s-deployment", want: map[unified.ResourceType]struct{}{unified.ResourceTypeK8sDeployment: {}}},
+		{name: "unsupported k8s umbrella ignored by parser", input: "k8s", want: map[unified.ResourceType]struct{}{}},
+		{name: "unsupported kubernetes umbrella ignored by parser", input: "kubernetes", want: map[unified.ResourceType]struct{}{}},
+		{name: "unsupported k8s-pod ignored by parser", input: "k8s-pod", want: map[unified.ResourceType]struct{}{}},
+		{name: "unsupported deployment alias ignored by parser", input: "deployment", want: map[unified.ResourceType]struct{}{}},
 		{name: "pool", input: "pool", want: map[unified.ResourceType]struct{}{unified.ResourceTypeCeph: {}}},
 		{name: "vm", input: "vm", want: map[unified.ResourceType]struct{}{unified.ResourceTypeVM: {}}},
 		// CSV with multiple types
@@ -212,7 +221,7 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 
 func TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases(t *testing.T) {
 	unsupported := unsupportedResourceTypeFilterTokens(
-		"vm,lxc,qemu,system-container,system_container,app_container,container,docker-container,docker_service,swarm_service,k8s_pod,k8s_cluster,k8s_node,k8s_deployment,kubernetes-pod,kubernetes-cluster,kubernetes-node,kubernetes-deployment",
+		"vm,lxc,qemu,system-container,system_container,app_container,container,docker-container,docker_service,swarm_service,k8s,kubernetes,k8s-pod,deployment,deployments,k8s_pod,k8s_cluster,k8s_node,k8s_deployment,kubernetes-pod,kubernetes-cluster,kubernetes-node,kubernetes-deployment",
 	)
 	expected := []string{
 		"lxc",
@@ -223,6 +232,11 @@ func TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases(t *testing.T) {
 		"docker-container",
 		"docker_service",
 		"swarm_service",
+		"k8s",
+		"kubernetes",
+		"k8s-pod",
+		"deployment",
+		"deployments",
 		"k8s_pod",
 		"k8s_cluster",
 		"k8s_node",

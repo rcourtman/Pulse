@@ -936,43 +936,8 @@ func paginate(resources []unified.Resource, page, limit int) ([]unified.Resource
 func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 	result := make(map[unified.ResourceType]struct{})
 	for _, part := range splitCSV(raw) {
-		switch part {
-		case "agent", "agents", "node", "nodes", "docker-host":
-			// "agent", "node", and "docker-host" are frontend facets that all
-			// resolve to ResourceTypeAgent in unified resources.
-			result[unified.ResourceTypeAgent] = struct{}{}
-		case "vm", "vms":
-			result[unified.ResourceTypeVM] = struct{}{}
-		case "system-container", "system-containers", "oci-container":
-			result[unified.ResourceTypeSystemContainer] = struct{}{}
-		case "app-container", "app-containers":
-			result[unified.ResourceTypeAppContainer] = struct{}{}
-		case "docker-service", "service", "services":
-			result[unified.ResourceTypeDockerService] = struct{}{}
-		case "pod", "pods", "k8s-pod":
-			result[unified.ResourceTypePod] = struct{}{}
-		case "k8s-cluster":
-			result[unified.ResourceTypeK8sCluster] = struct{}{}
-		case "k8s-node":
-			result[unified.ResourceTypeK8sNode] = struct{}{}
-		case "k8s-deployment", "deployment", "deployments":
-			result[unified.ResourceTypeK8sDeployment] = struct{}{}
-		case "k8s", "kubernetes":
-			result[unified.ResourceTypeK8sCluster] = struct{}{}
-			result[unified.ResourceTypeK8sNode] = struct{}{}
-			result[unified.ResourceTypePod] = struct{}{}
-			result[unified.ResourceTypeK8sDeployment] = struct{}{}
-		case "storage":
-			result[unified.ResourceTypeStorage] = struct{}{}
-		case "pbs":
-			result[unified.ResourceTypePBS] = struct{}{}
-		case "pmg":
-			result[unified.ResourceTypePMG] = struct{}{}
-		case "ceph", "pool":
-			// "pool" is the frontend name for Ceph resources
-			result[unified.ResourceTypeCeph] = struct{}{}
-		case "physical_disk", "physical-disk", "physicaldisk", "disk":
-			result[unified.ResourceTypePhysicalDisk] = struct{}{}
+		for _, resourceType := range resourceTypeFilterAdapter(part) {
+			result[resourceType] = struct{}{}
 		}
 	}
 	return result
@@ -992,25 +957,43 @@ func unsupportedResourceTypeFilterTokens(raw string) []string {
 }
 
 func isSupportedResourceTypeFilterToken(token string) bool {
+	return len(resourceTypeFilterAdapter(token)) > 0
+}
+
+func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 	switch token {
-	case "agent", "agents", "node", "nodes", "docker-host",
-		"vm", "vms",
-		"system-container", "system-containers", "oci-container",
-		"app-container", "app-containers",
-		"docker-service", "service", "services",
-		"pod", "pods", "k8s-pod",
-		"k8s-cluster",
-		"k8s-node",
-		"k8s-deployment", "deployment", "deployments",
-		"k8s", "kubernetes",
-		"storage",
-		"pbs",
-		"pmg",
-		"ceph", "pool",
-		"physical_disk", "physical-disk", "physicaldisk", "disk":
-		return true
+	case "agent", "agents", "node", "nodes", "docker-host":
+		// These API facets all resolve to the same canonical host-family type.
+		return []unified.ResourceType{unified.ResourceTypeAgent}
+	case "vm", "vms":
+		return []unified.ResourceType{unified.ResourceTypeVM}
+	case "system-container", "system-containers", "oci-container":
+		return []unified.ResourceType{unified.ResourceTypeSystemContainer}
+	case "app-container", "app-containers":
+		return []unified.ResourceType{unified.ResourceTypeAppContainer}
+	case "docker-service", "service", "services":
+		return []unified.ResourceType{unified.ResourceTypeDockerService}
+	case "pod", "pods":
+		return []unified.ResourceType{unified.ResourceTypePod}
+	case "k8s-cluster", "k8s-clusters":
+		return []unified.ResourceType{unified.ResourceTypeK8sCluster}
+	case "k8s-node", "k8s-nodes":
+		return []unified.ResourceType{unified.ResourceTypeK8sNode}
+	case "k8s-deployment", "k8s-deployments":
+		return []unified.ResourceType{unified.ResourceTypeK8sDeployment}
+	case "storage":
+		return []unified.ResourceType{unified.ResourceTypeStorage}
+	case "pbs":
+		return []unified.ResourceType{unified.ResourceTypePBS}
+	case "pmg":
+		return []unified.ResourceType{unified.ResourceTypePMG}
+	case "ceph", "pool":
+		// "pool" is the frontend name for Ceph resources.
+		return []unified.ResourceType{unified.ResourceTypeCeph}
+	case "physical_disk", "physical-disk", "physicaldisk", "disk":
+		return []unified.ResourceType{unified.ResourceTypePhysicalDisk}
 	default:
-		return false
+		return nil
 	}
 }
 
@@ -1094,7 +1077,8 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 // frontendResourceType maps backend ResourceType values to API/frontend type
 // strings while preserving canonical v6 workload naming.
 func frontendResourceType(r unified.Resource) unified.ResourceType {
-	switch unified.CanonicalResourceType(r.Type) {
+	canonicalType := unified.CanonicalResourceType(r.Type)
+	switch canonicalType {
 	case unified.ResourceTypeAgent:
 		if r.Proxmox != nil {
 			return "node"
@@ -1110,8 +1094,8 @@ func frontendResourceType(r unified.Resource) unified.ResourceType {
 	case unified.ResourceTypeCeph:
 		return "pool"
 	default:
-		// VM, Pod, K8s types, Storage, PBS, PMG, DockerService already match frontend expectations.
-		return r.Type
+		// Other resource types already match their canonical API names.
+		return canonicalType
 	}
 }
 
@@ -1182,11 +1166,19 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 		}
 	case unified.ResourceTypePod:
 		if st, ok := bySource[unified.SourceK8s]; ok {
-			return &unified.MetricsTarget{ResourceType: "k8s", ResourceID: st.SourceID}
+			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypePod), ResourceID: st.SourceID}
 		}
-	case unified.ResourceTypeK8sCluster, unified.ResourceTypeK8sNode:
+	case unified.ResourceTypeK8sCluster:
 		if st, ok := bySource[unified.SourceK8s]; ok {
-			return &unified.MetricsTarget{ResourceType: "k8s", ResourceID: st.SourceID}
+			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypeK8sCluster), ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypeK8sNode:
+		if st, ok := bySource[unified.SourceK8s]; ok {
+			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypeK8sNode), ResourceID: st.SourceID}
+		}
+	case unified.ResourceTypeK8sDeployment:
+		if st, ok := bySource[unified.SourceK8s]; ok {
+			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypeK8sDeployment), ResourceID: st.SourceID}
 		}
 	case unified.ResourceTypePBS:
 		if st, ok := bySource[unified.SourcePBS]; ok {
@@ -1216,13 +1208,13 @@ func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	case unified.ResourceTypeCeph:
 		return cephDiscoveryTarget(resource)
 	case unified.ResourceTypeK8sCluster:
-		return kubernetesDiscoveryTarget(resource, "cluster")
+		return kubernetesDiscoveryTarget(resource)
 	case unified.ResourceTypeK8sNode:
-		return kubernetesDiscoveryTarget(resource, "node")
+		return kubernetesDiscoveryTarget(resource)
 	case unified.ResourceTypePod:
-		return kubernetesDiscoveryTarget(resource, "pod")
+		return kubernetesDiscoveryTarget(resource)
 	case unified.ResourceTypeK8sDeployment:
-		return kubernetesDiscoveryTarget(resource, "deployment")
+		return kubernetesDiscoveryTarget(resource)
 	case unified.ResourceTypePhysicalDisk:
 		return physicalDiskDiscoveryTarget(resource)
 	default:
@@ -1301,7 +1293,7 @@ func proxmoxGuestDiscoveryTarget(resource unified.Resource, resourceType string)
 		return nil
 	}
 	return &unified.DiscoveryTarget{
-		ResourceType: resourceType,
+		ResourceType: string(resourceType),
 		AgentID:      hostID,
 		ResourceID:   resourceID,
 		Hostname: firstNonEmptyTrimmed(
@@ -1312,10 +1304,11 @@ func proxmoxGuestDiscoveryTarget(resource unified.Resource, resourceType string)
 	}
 }
 
-func kubernetesDiscoveryTarget(resource unified.Resource, kind string) *unified.DiscoveryTarget {
+func kubernetesDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 	if resource.Kubernetes == nil {
 		return nil
 	}
+	resourceType := unified.CanonicalResourceType(resource.Type)
 
 	hostID := firstNonEmptyTrimmed(
 		resource.Kubernetes.AgentID,
@@ -1327,38 +1320,40 @@ func kubernetesDiscoveryTarget(resource unified.Resource, kind string) *unified.
 	}
 
 	resourceID := ""
-	switch kind {
-	case "cluster":
+	switch resourceType {
+	case unified.ResourceTypeK8sCluster:
 		resourceID = firstNonEmptyTrimmed(
 			resource.Kubernetes.ClusterID,
 			resource.Kubernetes.ClusterName,
 			resource.Name,
 		)
-	case "node":
+	case unified.ResourceTypeK8sNode:
 		resourceID = firstNonEmptyTrimmed(
 			resource.Kubernetes.NodeUID,
 			resource.Kubernetes.NodeName,
 			resource.Name,
 		)
-	case "deployment":
+	case unified.ResourceTypeK8sDeployment:
 		resourceID = firstNonEmptyTrimmed(
 			resource.Kubernetes.DeploymentUID,
 			kubernetesNamespacedName(resource.Kubernetes.Namespace, resource.Name),
 			resource.Name,
 		)
-	default:
+	case unified.ResourceTypePod:
 		resourceID = firstNonEmptyTrimmed(
 			resource.Kubernetes.PodUID,
 			kubernetesNamespacedName(resource.Kubernetes.Namespace, resource.Name),
 			resource.Name,
 		)
+	default:
+		return nil
 	}
 	if resourceID == "" {
 		return nil
 	}
 
 	return &unified.DiscoveryTarget{
-		ResourceType: "k8s",
+		ResourceType: string(resourceType),
 		AgentID:      hostID,
 		ResourceID:   resourceID,
 		Hostname: firstNonEmptyTrimmed(
