@@ -11,13 +11,9 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
   <div class="rounded-xl border border-border bg-surface p-5 shadow-sm">
     <div class="space-y-4">
       <div class="space-y-1">
-        <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-          Policy
-        </div>
         <h3 class="text-base font-semibold text-base-content">Docker Runtime Controls</h3>
         <p class="text-sm text-muted">
-          Manage server-wide Docker runtime behavior alongside the rest of your infrastructure
-          management workflow.
+          Manage Docker-wide behavior for this Pulse instance.
         </p>
       </div>
 
