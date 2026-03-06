@@ -28,9 +28,9 @@ const VIEW_META: Record<
       'Use direct PVE, PBS, or PMG connections only when the unified agent cannot run on the target host.',
   },
   inventory: {
-    label: 'Inventory',
+    label: 'Connected infrastructure',
     description:
-      'Review existing agents, direct Proxmox links, Docker runtime policy, and agent profiles.',
+      'Review connected infrastructure, the recovery queue, direct Proxmox coverage, and agent profiles.',
   },
 };
 
@@ -118,7 +118,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
                 }`}
               >
                 <Boxes class="h-4 w-4" />
-                Inventory
+                Connected
               </button>
             </div>
           </div>
