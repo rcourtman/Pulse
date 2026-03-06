@@ -10,8 +10,6 @@ type previousGuestContext struct {
 }
 
 func (m *Monitor) previousGuestContextForInstance(instanceName string) previousGuestContext {
-	snapshot := m.GetState()
-
 	ctx := previousGuestContext{
 		vms:                make([]models.VM, 0),
 		containers:         make([]models.Container, 0),
@@ -19,13 +17,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		hostAgentsByVMID:   make(map[string]models.Host),
 	}
 
-	for _, vm := range snapshot.VMs {
+	for _, vm := range m.VMsSnapshot() {
 		if vm.Instance == instanceName {
 			ctx.vms = append(ctx.vms, vm)
 		}
 	}
 
-	for _, ct := range snapshot.Containers {
+	for _, ct := range m.ContainersSnapshot() {
 		if ct.Instance != instanceName {
 			continue
 		}
@@ -35,7 +33,7 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		}
 	}
 
-	for _, host := range snapshot.Hosts {
+	for _, host := range m.HostsSnapshot() {
 		if host.LinkedVMID == "" || host.Status != "online" || host.Memory.Total <= 0 {
 			continue
 		}
@@ -46,10 +44,9 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 }
 
 func (m *Monitor) previousNodesForInstance(instanceName string) (map[string]models.Memory, []models.Node) {
-	snapshot := m.GetState()
 	prevNodeMemory := make(map[string]models.Memory)
 	prevInstanceNodes := make([]models.Node, 0)
-	for _, existingNode := range snapshot.Nodes {
+	for _, existingNode := range m.NodesSnapshot() {
 		if existingNode.Instance != instanceName {
 			continue
 		}
