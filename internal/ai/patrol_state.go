@@ -28,7 +28,6 @@ type patrolRuntimeState struct {
 	PBSBackups              []models.PBSBackup
 	PVEBackups              models.PVEBackups
 	ConnectionHealth        map[string]bool
-	Stats                   models.Stats
 	ActiveAlerts            []models.Alert
 	RecentlyResolved        []models.ResolvedAlert
 	LastUpdate              time.Time
@@ -59,7 +58,6 @@ func newPatrolRuntimeStateWithProviders(
 		PBSBackups:              snapshot.PBSBackups,
 		PVEBackups:              snapshot.PVEBackups,
 		ConnectionHealth:        snapshot.ConnectionHealth,
-		Stats:                   snapshot.Stats,
 		ActiveAlerts:            snapshot.ActiveAlerts,
 		RecentlyResolved:        snapshot.RecentlyResolved,
 		LastUpdate:              snapshot.LastUpdate,
@@ -81,7 +79,6 @@ func (s patrolRuntimeState) snapshot() models.StateSnapshot {
 		PBSBackups:         s.PBSBackups,
 		PVEBackups:         s.PVEBackups,
 		ConnectionHealth:   s.ConnectionHealth,
-		Stats:              s.Stats,
 		ActiveAlerts:       s.ActiveAlerts,
 		RecentlyResolved:   s.RecentlyResolved,
 		LastUpdate:         s.LastUpdate,

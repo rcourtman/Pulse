@@ -1019,7 +1019,6 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		readState:               snap.readState,
 		unifiedResourceProvider: snap.unifiedResourceProvider,
 		LastUpdate:              snap.LastUpdate,
-		Stats:                   snap.Stats,
 	}
 	includedResourceIDs := make(map[string]bool)
 	includedGuestVMIDs := make(map[int]bool)
