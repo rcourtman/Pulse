@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -592,6 +593,45 @@ type ActivateLicenseRequest = activateLicenseRequestModel
 // ActivateLicenseResponse is the response for license activation.
 type ActivateLicenseResponse = activateLicenseResponseModel
 
+// userFriendlyActivationError maps internal activation errors to user-facing messages.
+// The raw error should already be logged before calling this function.
+func userFriendlyActivationError(err error) string {
+	switch {
+	case errors.Is(err, errMalformedLicenseSentinel):
+		return "The license key format is not valid. Please check for typos and try again."
+	case errors.Is(err, errInvalidLicenseSentinel):
+		return "The license key is not valid. Please check for typos and try again."
+	case errors.Is(err, errSignatureInvalidSentinel):
+		return "The license key could not be verified. Please ensure you are using the correct key."
+	case errors.Is(err, errExpiredLicenseSentinel):
+		return "This license has expired. Contact support for renewal options."
+	case errors.Is(err, errNoPublicKeySentinel):
+		return "License verification is temporarily unavailable. Please try again later."
+	}
+
+	// License server errors from the activation key flow.
+	var serverErr *licenseServerErrorModel
+	if errors.As(err, &serverErr) {
+		if serverErr.Retryable {
+			return "The license server is temporarily unavailable. Please try again in a few minutes."
+		}
+		if serverErr.Message != "" {
+			return serverErr.Message
+		}
+	}
+
+	// Known non-sentinel patterns.
+	msg := err.Error()
+	if strings.Contains(msg, "activation key") {
+		return "This license format is not supported. Please use an activation key from your Pulse account."
+	}
+	if strings.Contains(msg, "license server client not configured") {
+		return "License activation is temporarily unavailable. Please try again later or contact support."
+	}
+
+	return "License activation failed. Please try again or contact support if the problem persists."
+}
+
 // HandleActivateLicense handles POST /api/license/activate
 // Validates and activates a license key.
 func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.Request) {
@@ -644,7 +684,7 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(ActivateLicenseResponse{
 			Success: false,
-			Message: err.Error(),
+			Message: userFriendlyActivationError(err),
 		})
 		return
 	}

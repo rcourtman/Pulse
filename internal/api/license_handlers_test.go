@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -374,6 +375,147 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	}
 	if resp.Status.Email != "pro@example.com" {
 		t.Fatalf("expected email %q, got %q", "pro@example.com", resp.Status.Email)
+	}
+}
+
+// ========================================
+// userFriendlyActivationError tests
+// ========================================
+
+func TestUserFriendlyActivationError_NoGoErrorChainSyntax(t *testing.T) {
+	// These are real errors that service.Activate() can produce.
+	// None of the user-facing messages should contain Go error chain syntax,
+	// JWT terminology, or internal system terms.
+	cases := []struct {
+		name  string
+		err   error
+		check func(t *testing.T, msg string)
+	}{
+		{
+			name: "malformed license (header encoding)",
+			err:  fmt.Errorf("validate license: %w: invalid header encoding", license.ErrMalformedLicense),
+			check: func(t *testing.T, msg string) {
+				if strings.Contains(msg, "header encoding") {
+					t.Errorf("message leaks internal detail: %q", msg)
+				}
+				if strings.Contains(msg, "validate license:") {
+					t.Errorf("message contains Go error chain syntax: %q", msg)
+				}
+			},
+		},
+		{
+			name: "malformed license (empty jwt segment)",
+			err:  fmt.Errorf("validate license: %w: empty jwt segment", license.ErrMalformedLicense),
+			check: func(t *testing.T, msg string) {
+				if strings.Contains(msg, "jwt") {
+					t.Errorf("message leaks JWT terminology: %q", msg)
+				}
+			},
+		},
+		{
+			name: "signature invalid",
+			err:  fmt.Errorf("validate license: %w", license.ErrSignatureInvalid),
+			check: func(t *testing.T, msg string) {
+				if strings.Contains(msg, "signature") {
+					t.Errorf("message leaks signature terminology: %q", msg)
+				}
+			},
+		},
+		{
+			name: "expired license",
+			err:  fmt.Errorf("validate license: %w: expired on 2025-01-01 (grace period ended 2025-01-08)", license.ErrExpiredLicense),
+			check: func(t *testing.T, msg string) {
+				if strings.Contains(msg, "grace period") {
+					t.Errorf("message leaks grace period detail: %q", msg)
+				}
+			},
+		},
+		{
+			name: "invalid license",
+			err:  license.ErrInvalidLicense,
+			check: func(t *testing.T, msg string) {
+				if msg == license.ErrInvalidLicense.Error() {
+					t.Errorf("message is raw sentinel error: %q", msg)
+				}
+			},
+		},
+		{
+			name: "license server client not configured",
+			err:  fmt.Errorf("activation unavailable: license server client not configured"),
+			check: func(t *testing.T, msg string) {
+				if strings.Contains(msg, "license server client") {
+					t.Errorf("message leaks internal detail: %q", msg)
+				}
+			},
+		},
+		{
+			name: "generate instance fingerprint",
+			err:  fmt.Errorf("generate instance fingerprint: some system error"),
+			check: func(t *testing.T, msg string) {
+				if strings.Contains(msg, "fingerprint") {
+					t.Errorf("message leaks fingerprint detail: %q", msg)
+				}
+			},
+		},
+		{
+			name: "legacy JWT rejection",
+			err:  fmt.Errorf("legacy JWT activation is not supported in v6; use an activation key"),
+			check: func(t *testing.T, msg string) {
+				if strings.Contains(msg, "JWT") {
+					t.Errorf("message leaks JWT terminology: %q", msg)
+				}
+				if !strings.Contains(msg, "activation key") {
+					t.Errorf("message should mention activation key: %q", msg)
+				}
+			},
+		},
+	}
+
+	// Forbidden patterns that must never appear in any user-facing error.
+	forbidden := []string{"jwt segment", "header encoding", "signature encoding",
+		"fingerprint", "license server client", "validate license:", "parse grant"}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := userFriendlyActivationError(tc.err)
+			tc.check(t, msg)
+
+			// No message should contain nested colon-delimited chains (X: Y: Z).
+			colonParts := strings.Split(msg, ": ")
+			if len(colonParts) > 2 {
+				t.Errorf("message contains Go error chain syntax (nested colons): %q", msg)
+			}
+
+			for _, pattern := range forbidden {
+				if strings.Contains(strings.ToLower(msg), pattern) {
+					t.Errorf("message contains forbidden pattern %q: %q", pattern, msg)
+				}
+			}
+		})
+	}
+}
+
+func TestUserFriendlyActivationError_ServerError(t *testing.T) {
+	retryableErr := fmt.Errorf("activation failed: %w", &licenseServerErrorModel{
+		StatusCode: 503,
+		Code:       "service_unavailable",
+		Message:    "Service temporarily unavailable",
+		Retryable:  true,
+	})
+	msg := userFriendlyActivationError(retryableErr)
+	if !strings.Contains(msg, "try again") {
+		t.Errorf("retryable server error should suggest retry: %q", msg)
+	}
+
+	nonRetryableErr := fmt.Errorf("activation failed: %w", &licenseServerErrorModel{
+		StatusCode: 422,
+		Code:       "key_already_used",
+		Message:    "This activation key has already been used on another instance",
+		Retryable:  false,
+	})
+	msg = userFriendlyActivationError(nonRetryableErr)
+	if msg != "This activation key has already been used on another instance" {
+		t.Errorf("non-retryable server error should pass through server message, got: %q", msg)
 	}
 }
 

@@ -11,6 +11,17 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing/metering"
 )
 
+// Sentinel errors for user-friendly activation error mapping.
+var (
+	errMalformedLicenseSentinel = pkglicensing.ErrMalformedLicense
+	errInvalidLicenseSentinel   = pkglicensing.ErrInvalidLicense
+	errSignatureInvalidSentinel = pkglicensing.ErrSignatureInvalid
+	errExpiredLicenseSentinel   = pkglicensing.ErrExpiredLicense
+	errNoPublicKeySentinel      = pkglicensing.ErrNoPublicKey
+)
+
+type licenseServerErrorModel = pkglicensing.LicenseServerError
+
 type licenseService = pkglicensing.Service
 type licenseModel = pkglicensing.License
 type licenseStatus = pkglicensing.LicenseStatus
