@@ -181,6 +181,7 @@ const stringToMappings = (input: string) => {
 
 interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
+  canManage?: boolean;
 }
 
 export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
@@ -206,6 +207,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const [loadingPreview, setLoadingPreview] = createSignal(false);
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
+  const canManage = () => props.canManage !== false;
   const [startingTrial, setStartingTrial] = createSignal(false);
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
@@ -278,6 +280,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   });
 
   const openAddModal = (type: 'oidc' | 'saml') => {
+    if (!canManage()) return;
     setEditingProvider(null);
     setForm(emptyForm());
     setForm('type', type);
@@ -286,6 +289,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   };
 
   const openEditModal = async (provider: SSOProvider) => {
+    if (!canManage()) return;
     setEditingProvider(provider);
     try {
       const { apiFetch } = await import('@/utils/apiClient');
@@ -332,6 +336,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
   const handleSave = async (e?: Event) => {
     e?.preventDefault();
+    if (!canManage()) return;
     setSaving(true);
 
     try {
@@ -407,6 +412,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   };
 
   const handleDelete = async (providerId: string) => {
+    if (!canManage()) return;
     try {
       const { apiFetch } = await import('@/utils/apiClient');
       const response = await apiFetch(`/api/security/sso/providers/${providerId}`, {
@@ -428,6 +434,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   };
 
   const handleToggleEnabled = async (provider: SSOProvider) => {
+    if (!canManage()) return;
     try {
       const { apiFetch } = await import('@/utils/apiClient');
       const response = await apiFetch(`/api/security/sso/providers/${provider.id}`, {
@@ -661,6 +668,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             <button
               type="button"
               onClick={() => openAddModal('oidc')}
+              disabled={!canManage()}
               class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5"
             >
               <Plus class="w-4 h-4" />
@@ -670,6 +678,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={() => openAddModal('saml')}
+                disabled={!canManage()}
                 class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
@@ -680,6 +689,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={() => setShowSamlUpsell(true)}
+                disabled={!canManage()}
                 class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
@@ -690,6 +700,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         }
         bodyClass="space-y-6"
       >
+        <Show when={!canManage()}>
+          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            Single sign-on is read-only for this account. You can review configured providers but
+            cannot add, edit, enable, or delete them.
+          </div>
+        </Show>
+
         {/* Content */}
         <Show when={loading()}>
           <div class="flex items-center gap-3 text-sm text-muted">
@@ -742,11 +759,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <Toggle
                         checked={provider.enabled}
                         onChange={() => handleToggleEnabled(provider)}
+                        disabled={!canManage()}
                         containerClass="items-center"
                       />
                       <button
                         type="button"
                         onClick={() => openEditModal(provider)}
+                        disabled={!canManage()}
                         class="p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors"
                         title="Edit provider"
                       >
@@ -755,6 +774,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => setDeleteConfirm(provider.id)}
+                        disabled={!canManage()}
                         class="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
                         title="Delete provider"
                       >

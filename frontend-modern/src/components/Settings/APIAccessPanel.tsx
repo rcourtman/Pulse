@@ -7,6 +7,7 @@ interface APIAccessPanelProps {
   currentTokenHint?: string;
   onTokensChanged: () => void;
   refreshing: boolean;
+  canManage: boolean;
 }
 
 export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
@@ -39,6 +40,7 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
         currentTokenHint={props.currentTokenHint}
         onTokensChanged={props.onTokensChanged}
         refreshing={props.refreshing}
+        canManage={props.canManage}
       />
     </div>
   );

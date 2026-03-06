@@ -554,6 +554,8 @@ const Settings: Component<SettingsProps> = (props) => {
       .filter((group) => group.items.length > 0);
   });
 
+  const settingsCapabilities = createMemo(() => securityStatus()?.settingsCapabilities ?? null);
+
   const flatTabs = createMemo(() => visibleTabGroups().flatMap((group) => group.items));
 
   const filteredTabGroups = createMemo(() => {
@@ -577,7 +579,9 @@ const Settings: Component<SettingsProps> = (props) => {
   createEffect(() => {
     const currentTab = activeTab();
     const requiresFeatureResolution = Boolean(tabFeatureRequirements[currentTab]?.length);
-    const requiresCapabilityResolution = Boolean(getSettingsNavItem(currentTab)?.requiredCapability);
+    const requiresCapabilityResolution = Boolean(
+      getSettingsNavItem(currentTab)?.requiredCapability,
+    );
     if (
       (requiresFeatureResolution && !licenseLoaded()) ||
       (requiresCapabilityResolution && securityStatusLoading())
@@ -2519,8 +2523,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                 No PBS API connections configured
                               </p>
                               <p class="text-sm text-muted">
-                                Add a Proxmox Backup Server API connection when the unified agent
-                                is not available
+                                Add a Proxmox Backup Server API connection when the unified agent is
+                                not available
                               </p>
                             </div>
                           </Show>
@@ -2802,8 +2806,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                 No PMG API connections configured
                               </p>
                               <p class="text-sm text-muted">
-                                Add a Proxmox Mail Gateway API connection when the unified agent
-                                is not available
+                                Add a Proxmox Mail Gateway API connection when the unified agent is
+                                not available
                               </p>
                             </div>
                           </Show>
@@ -3178,7 +3182,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Relay Settings Tab */}
               <Show when={activeTab() === 'system-relay'}>
-                <RelaySettingsPanel />
+                <RelaySettingsPanel canManage={settingsCapabilities()?.relayWrite === true} />
               </Show>
 
               {/* Pulse Pro License Tab */}
@@ -3225,6 +3229,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     void loadSecurityStatus();
                   }}
                   refreshing={securityStatusLoading()}
+                  canManage={settingsCapabilities()?.apiAccessWrite === true}
                 />
               </Show>
 
@@ -3253,13 +3258,17 @@ const Settings: Component<SettingsProps> = (props) => {
                   savingHideLocalLogin={savingHideLocalLogin}
                   handleHideLocalLoginChange={handleHideLocalLoginChange}
                   loadSecurityStatus={loadSecurityStatus}
+                  canManage={settingsCapabilities()?.authenticationWrite === true}
                 />
               </Show>
 
               {/* Security Single Sign-On Tab */}
               <Show when={activeTab() === 'security-sso'}>
                 <div class="space-y-6">
-                  <SSOProvidersPanel onConfigUpdated={loadSecurityStatus} />
+                  <SSOProvidersPanel
+                    onConfigUpdated={loadSecurityStatus}
+                    canManage={settingsCapabilities()?.singleSignOnWrite === true}
+                  />
                 </div>
               </Show>
 
@@ -3280,7 +3289,9 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Security Webhooks Tab */}
               <Show when={activeTab() === 'security-webhooks'}>
-                <AuditWebhookPanel />
+                <AuditWebhookPanel
+                  canManage={settingsCapabilities()?.auditWebhooksWrite === true}
+                />
               </Show>
             </div>
           </div>

@@ -99,14 +99,19 @@ export interface PulseConfig {
  * API response for security status
  */
 export interface SecurityStatusSettingsCapabilities {
-  apiAccess: boolean;
-  authentication: boolean;
-  singleSignOn: boolean;
+  apiAccessRead: boolean;
+  apiAccessWrite: boolean;
+  authenticationRead: boolean;
+  authenticationWrite: boolean;
+  singleSignOnRead: boolean;
+  singleSignOnWrite: boolean;
   roles: boolean;
   users: boolean;
   auditLog: boolean;
-  auditWebhooks: boolean;
-  relay: boolean;
+  auditWebhooksRead: boolean;
+  auditWebhooksWrite: boolean;
+  relayRead: boolean;
+  relayWrite: boolean;
   billingAdmin: boolean;
 }
 

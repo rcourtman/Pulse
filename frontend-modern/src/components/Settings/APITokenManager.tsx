@@ -42,6 +42,7 @@ interface APITokenManagerProps {
   currentTokenHint?: string;
   onTokensChanged?: () => void;
   refreshing?: boolean;
+  canManage?: boolean;
 }
 
 const SCOPES_DOC_URL =
@@ -105,10 +106,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const agentActionIdForResource = (resource: Resource): string => {
-    return (
-      getActionableAgentIdFromResource(resource) ||
-      resource.id
-    );
+    return getActionableAgentIdFromResource(resource) || resource.id;
   };
 
   const dockerActionIdForResource = (resource: Resource): string => {
@@ -204,6 +202,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [nameInput, setNameInput] = createSignal('');
   const tokenRevealState = useTokenRevealState();
   const [selectedScopes, setSelectedScopes] = createSignal<string[]>([]);
+  const canManage = () => props.canManage !== false;
 
   type ScopeGroup = (typeof API_SCOPE_OPTIONS)[number]['group'];
   type ScopeOption = (typeof API_SCOPE_OPTIONS)[number];
@@ -362,6 +361,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   });
 
   const handleGenerate = async () => {
+    if (!canManage()) return;
     setIsGenerating(true);
     try {
       const trimmedName = nameInput().trim() || undefined;
@@ -411,6 +411,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const handleDelete = async (record: APITokenRecord) => {
+    if (!canManage()) return;
     const dockerUsage = dockerTokenUsage().get(record.id);
     const agentUsage = agentTokenUsage().get(record.id);
     const displayName = tokenNameForDialog(record);
@@ -509,6 +510,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             <button
               type="button"
               onClick={focusCreateSection}
+              disabled={!canManage()}
               class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
             >
               <svg
@@ -523,6 +525,17 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               New token
             </button>
           </div>
+
+          <Show when={!canManage()}>
+            <Card
+              tone="info"
+              padding="sm"
+              class="border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200"
+            >
+              Token management is read-only for this account. You can review existing tokens but
+              cannot create or revoke them.
+            </Card>
+          </Show>
 
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div class="rounded-md border border-border p-4 text-sm shadow-sm">
@@ -611,6 +624,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             <div class="flex items-center gap-3 text-xs">
               <button
                 onClick={reopenTokenDialog}
+                disabled={!canManage()}
                 class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
               >
                 Show
@@ -671,6 +685,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             No tokens yet.{' '}
             <button
               onClick={focusCreateSection}
+              disabled={!canManage()}
               class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
             >
               Create one
@@ -690,6 +705,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             <button
               type="button"
               onClick={focusCreateSection}
+              disabled={!canManage()}
               class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900"
             >
               Generate new
@@ -829,6 +845,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   render: (token) => (
                     <button
                       onClick={() => handleDelete(token)}
+                      disabled={!canManage()}
                       class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
                     >
                       Revoke
@@ -863,7 +880,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             />
             <button
               onClick={handleGenerate}
-              disabled={isGenerating()}
+              disabled={!canManage() || isGenerating()}
               class="inline-flex min-h-10 sm:min-h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
             >
               {isGenerating() ? 'Generating…' : 'Generate'}
@@ -880,6 +897,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 value={nameInput()}
                 onInput={(e) => setNameInput(e.currentTarget.value)}
                 placeholder="e.g. Container pipeline"
+                disabled={!canManage()}
                 class="w-full min-h-10 sm:min-h-10 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-500"
               />
             </div>
@@ -893,6 +911,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   type="button"
                   class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2.5 py-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
                   onClick={clearScopes}
+                  disabled={!canManage()}
                   title="Legacy wildcard – all permissions"
                 >
                   Clear selection
@@ -904,6 +923,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   type="button"
                   class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${isFullAccessSelected() ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
                   onClick={clearScopes}
+                  disabled={!canManage()}
                   title="Legacy wildcard – all permissions"
                 >
                   Full access
@@ -915,6 +935,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                       type="button"
                       class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${presetMatchesSelection(preset.scopes) ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
                       onClick={() => applyScopePreset(preset.scopes)}
+                      disabled={!canManage()}
                       title={preset.description}
                     >
                       {preset.label}
@@ -951,6 +972,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                                     return [...prev, option.value];
                                   });
                                 }}
+                                disabled={!canManage()}
                                 title={option.description}
                               >
                                 {option.label}

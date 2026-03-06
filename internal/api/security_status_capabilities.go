@@ -10,15 +10,20 @@ import (
 )
 
 type securityStatusSettingsCapabilities struct {
-	APIAccess      bool `json:"apiAccess"`
-	Authentication bool `json:"authentication"`
-	SingleSignOn   bool `json:"singleSignOn"`
-	Roles          bool `json:"roles"`
-	Users          bool `json:"users"`
-	AuditLog       bool `json:"auditLog"`
-	AuditWebhooks  bool `json:"auditWebhooks"`
-	Relay          bool `json:"relay"`
-	BillingAdmin   bool `json:"billingAdmin"`
+	APIAccessRead       bool `json:"apiAccessRead"`
+	APIAccessWrite      bool `json:"apiAccessWrite"`
+	AuthenticationRead  bool `json:"authenticationRead"`
+	AuthenticationWrite bool `json:"authenticationWrite"`
+	SingleSignOnRead    bool `json:"singleSignOnRead"`
+	SingleSignOnWrite   bool `json:"singleSignOnWrite"`
+	Roles               bool `json:"roles"`
+	Users               bool `json:"users"`
+	AuditLog            bool `json:"auditLog"`
+	AuditWebhooksRead   bool `json:"auditWebhooksRead"`
+	AuditWebhooksWrite  bool `json:"auditWebhooksWrite"`
+	RelayRead           bool `json:"relayRead"`
+	RelayWrite          bool `json:"relayWrite"`
+	BillingAdmin        bool `json:"billingAdmin"`
 }
 
 type securityStatusAuthSnapshot struct {
@@ -195,23 +200,27 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	}
 
 	canAdminSettings := snapshot.canAccessAdminSurface(config.ScopeSettingsRead, config.ScopeSettingsWrite)
+	canReadSettings := snapshot.canAccessAdminSurface(config.ScopeSettingsRead)
 	canManageUsers := r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers)
 	canReadAudit := snapshot.passesPrivilegedSessionGate() &&
 		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceAuditLogs, config.ScopeSettingsRead)
-	canManageAudit := snapshot.passesPrivilegedSessionGate() &&
-		r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsRead, config.ScopeSettingsWrite)
 	canManageRoles := snapshot.passesPrivilegedSessionGate() && canManageUsers
 
 	return securityStatusSettingsCapabilities{
-		APIAccess:      r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead, config.ScopeSettingsWrite),
-		Authentication: canAdminSettings,
-		SingleSignOn:   r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead, config.ScopeSettingsWrite),
-		Roles:          canManageRoles,
-		Users:          canManageRoles,
-		AuditLog:       canReadAudit,
-		AuditWebhooks:  canManageAudit,
-		Relay:          canAdminSettings,
-		BillingAdmin:   r.canAccessPlatformAdminSurface(snapshot),
+		APIAccessRead:       r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
+		APIAccessWrite:      r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
+		AuthenticationRead:  canReadSettings,
+		AuthenticationWrite: canAdminSettings,
+		SingleSignOnRead:    r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
+		SingleSignOnWrite:   r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
+		Roles:               canManageRoles,
+		Users:               canManageRoles,
+		AuditLog:            canReadAudit,
+		AuditWebhooksRead:   snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsRead),
+		AuditWebhooksWrite:  snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsWrite),
+		RelayRead:           canReadSettings,
+		RelayWrite:          canAdminSettings,
+		BillingAdmin:        r.canAccessPlatformAdminSurface(snapshot),
 	}
 }
 

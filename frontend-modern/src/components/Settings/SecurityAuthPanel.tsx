@@ -34,6 +34,7 @@ interface SecurityAuthPanelProps {
   savingHideLocalLogin: Accessor<boolean>;
   handleHideLocalLoginChange: (enabled: boolean) => Promise<void>;
   loadSecurityStatus: () => Promise<void>;
+  canManage: boolean;
 }
 
 export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
@@ -68,6 +69,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
+                disabled={!props.canManage}
                 class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800 whitespace-nowrap"
               >
                 Setup
@@ -82,7 +84,13 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               Pulse instance.
             </p>
 
-            <Show when={props.showQuickSecuritySetup()}>
+            <Show when={!props.canManage}>
+              <p class="text-xs text-amber-700 dark:text-amber-300 mb-4">
+                This account can view authentication status but cannot configure it.
+              </p>
+            </Show>
+
+            <Show when={props.canManage && props.showQuickSecuritySetup()}>
               <QuickSecuritySetup
                 onConfigured={() => {
                   props.setShowQuickSecuritySetup(false);
@@ -110,6 +118,11 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
         >
           {/* Content */}
           <div class="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
+            <Show when={!props.canManage}>
+              <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                Authentication settings are read-only for this account.
+              </div>
+            </Show>
             <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <button
                 type="button"
@@ -118,6 +131,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                   e.stopPropagation();
                   props.setShowPasswordModal(true);
                 }}
+                disabled={!props.canManage}
                 class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 Change password
@@ -125,6 +139,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
+                disabled={!props.canManage}
                 class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
               >
                 Rotate credentials
@@ -144,13 +159,15 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               onChange={(e: ToggleChangeEvent) =>
                 props.handleHideLocalLoginChange(e.currentTarget.checked)
               }
-              disabled={props.hideLocalLoginLocked() || props.savingHideLocalLogin()}
+              disabled={
+                !props.canManage || props.hideLocalLoginLocked() || props.savingHideLocalLogin()
+              }
               locked={props.hideLocalLoginLocked()}
               lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"
             />
           </div>
 
-          <Show when={props.showQuickSecurityWizard()}>
+          <Show when={props.canManage && props.showQuickSecurityWizard()}>
             <div class="p-4 sm:p-6">
               <QuickSecuritySetup
                 mode="rotate"

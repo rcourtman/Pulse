@@ -1,4 +1,4 @@
-import { createSignal, For, onMount, Show, createEffect } from 'solid-js';
+import { createSignal, For, onMount, Show, createEffect, type Component } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
 import Globe from 'lucide-solid/icons/globe';
 import Plus from 'lucide-solid/icons/plus';
@@ -19,12 +19,17 @@ import {
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
-export function AuditWebhookPanel() {
+interface AuditWebhookPanelProps {
+  canManage?: boolean;
+}
+
+export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
   const [webhookUrls, setWebhookUrls] = createSignal<string[]>([]);
   const [newUrl, setNewUrl] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [loading, setLoading] = createSignal(true);
   const [startingTrial, setStartingTrial] = createSignal(false);
+  const canManage = () => props.canManage !== false;
 
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
@@ -82,6 +87,7 @@ export function AuditWebhookPanel() {
   };
 
   const handleAddWebhook = async () => {
+    if (!canManage()) return;
     const url = newUrl().trim();
     if (!url) return;
 
@@ -103,6 +109,7 @@ export function AuditWebhookPanel() {
   };
 
   const handleRemoveWebhook = async (url: string) => {
+    if (!canManage()) return;
     const updated = webhookUrls().filter((u) => u !== url);
     await saveWebhooks(updated);
   };
@@ -180,6 +187,12 @@ export function AuditWebhookPanel() {
         bodyClass="divide-y divide-border"
       >
         <div class="space-y-6 p-4 sm:p-6">
+          <Show when={!canManage()}>
+            <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+              Audit webhook configuration is read-only for this account.
+            </div>
+          </Show>
+
           <p class="text-sm text-muted leading-relaxed">
             Pulse can send a signed event payload whenever security-relevant activity occurs
             (logins, settings changes, RBAC updates, and similar audit events).
@@ -201,6 +214,7 @@ export function AuditWebhookPanel() {
                     </div>
                     <button
                       onClick={() => handleRemoveWebhook(url)}
+                      disabled={!canManage()}
                       class="p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
                       title="Remove webhook endpoint"
                     >
@@ -226,10 +240,11 @@ export function AuditWebhookPanel() {
               value={newUrl()}
               onInput={(e) => setNewUrl(e.currentTarget.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
+              disabled={!canManage()}
             />
             <button
               onClick={handleAddWebhook}
-              disabled={saving() || !newUrl().trim()}
+              disabled={!canManage() || saving() || !newUrl().trim()}
               class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-2 transition-colors"
             >
               <Plus size={18} />
@@ -257,4 +272,4 @@ export function AuditWebhookPanel() {
       </Card>
     </div>
   );
-}
+};

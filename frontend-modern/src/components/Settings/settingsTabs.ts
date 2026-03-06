@@ -92,7 +92,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         id: 'api',
         label: 'API Access',
         icon: BadgeCheck,
-        requiredCapability: 'apiAccess',
+        requiredCapability: 'apiAccessRead',
       },
     ],
   },
@@ -137,7 +137,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: RadioTower,
         iconProps: { strokeWidth: 2 },
         features: ['relay'],
-        requiredCapability: 'relay',
+        requiredCapability: 'relayRead',
       },
       // Security grouped tab items
       {
@@ -151,14 +151,14 @@ export const baseTabGroups: SettingsNavGroup[] = [
         label: 'Authentication',
         icon: Lock,
         iconProps: { strokeWidth: 2 },
-        requiredCapability: 'authentication',
+        requiredCapability: 'authenticationRead',
       },
       {
         id: 'security-sso',
         label: 'Single Sign-On',
         icon: Key,
         iconProps: { strokeWidth: 2 },
-        requiredCapability: 'singleSignOn',
+        requiredCapability: 'singleSignOnRead',
       },
       {
         id: 'security-roles',
@@ -187,7 +187,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: Globe,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
-        requiredCapability: 'auditWebhooks',
+        requiredCapability: 'auditWebhooksRead',
       },
       {
         id: 'system-pro',

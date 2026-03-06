@@ -89,7 +89,7 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures([]),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
-        settingsCapabilities: { apiAccess: false },
+        settingsCapabilities: { apiAccessRead: false },
       }),
     ).toBe(true);
 
@@ -110,6 +110,15 @@ describe('settingsNavigation integration scaffold', () => {
         licenseLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilities: { auditLog: true },
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldHideSettingsNavItem('system-relay', {
+        hasFeature: hasFeatures(['relay']),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+        settingsCapabilities: { relayRead: true, relayWrite: false },
       }),
     ).toBe(false);
   });

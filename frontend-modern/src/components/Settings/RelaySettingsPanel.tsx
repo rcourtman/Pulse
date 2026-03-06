@@ -20,7 +20,11 @@ import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
 import { logger } from '@/utils/logger';
 import QRCode from 'qrcode';
 
-export const RelaySettingsPanel: Component = () => {
+interface RelaySettingsPanelProps {
+  canManage?: boolean;
+}
+
+export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) => {
   const [config, setConfig] = createSignal<RelayConfig | null>(null);
   const [status, setStatus] = createSignal<RelayStatus | null>(null);
   const [loading, setLoading] = createSignal(true);
@@ -31,6 +35,7 @@ export const RelaySettingsPanel: Component = () => {
   const [pairingPayload, setPairingPayload] = createSignal<OnboardingQRResponse | null>(null);
   const [pairingQRCode, setPairingQRCode] = createSignal<string | null>(null);
   const [startingTrial, setStartingTrial] = createSignal(false);
+  const canManage = () => props.canManage !== false;
 
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
@@ -126,6 +131,7 @@ export const RelaySettingsPanel: Component = () => {
   });
 
   const handleToggleEnabled = async (enabled: boolean) => {
+    if (!canManage()) return;
     setSaving(true);
     try {
       await RelayAPI.updateConfig({ enabled });
@@ -148,6 +154,7 @@ export const RelaySettingsPanel: Component = () => {
   };
 
   const handleSaveServerUrl = async () => {
+    if (!canManage()) return;
     const url = serverUrl().trim();
     if (!url) return;
     setSaving(true);
@@ -164,6 +171,7 @@ export const RelaySettingsPanel: Component = () => {
   };
 
   const handlePairNewDevice = async () => {
+    if (!canManage()) return;
     setShowPairing(true);
     setPairingLoading(true);
     try {
@@ -269,6 +277,16 @@ export const RelaySettingsPanel: Component = () => {
       icon={<RadioTower size={20} strokeWidth={2} />}
     >
       <Show when={!loading()} fallback={<div class="text-sm ">Loading configuration...</div>}>
+        <Show when={!canManage()}>
+          <Card
+            tone="info"
+            padding="md"
+            class="border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200"
+          >
+            Remote access settings are read-only for this account.
+          </Card>
+        </Show>
+
         <Card tone="info" padding="md">
           <p class="text-sm text-base-content font-medium">Pulse Mobile rollout is coming soon</p>
           <p class="text-xs text-muted mt-1">
@@ -318,7 +336,7 @@ export const RelaySettingsPanel: Component = () => {
             <Toggle
               checked={config()?.enabled ?? false}
               onChange={(e) => void handleToggleEnabled(e.currentTarget.checked)}
-              disabled={saving()}
+              disabled={!canManage() || saving()}
               containerClass="self-end sm:self-auto"
             />
           </div>
@@ -334,9 +352,9 @@ export const RelaySettingsPanel: Component = () => {
               value={serverUrl()}
               onInput={(e) => setServerUrl(e.currentTarget.value)}
               placeholder="wss://relay.example.com/ws/instance"
-              disabled={saving()}
+              disabled={!canManage() || saving()}
             />
-            <Show when={serverUrl() !== config()?.server_url}>
+            <Show when={canManage() && serverUrl() !== config()?.server_url}>
               <button
                 class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 sm:self-auto self-end"
                 onClick={() => void handleSaveServerUrl()}
@@ -374,7 +392,7 @@ export const RelaySettingsPanel: Component = () => {
                   <button
                     class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
                     onClick={() => void handlePairNewDevice()}
-                    disabled={saving() || pairingLoading()}
+                    disabled={!canManage() || saving() || pairingLoading()}
                   >
                     {pairingLoading()
                       ? 'Generating QR code...'
@@ -386,7 +404,7 @@ export const RelaySettingsPanel: Component = () => {
                     <button
                       class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-base-content bg-surface-hover hover:bg-surface-hover rounded-md disabled:opacity-50"
                       onClick={() => void handleCopyPairingPayload()}
-                      disabled={pairingLoading()}
+                      disabled={!canManage() || pairingLoading()}
                     >
                       Copy Payload
                     </button>

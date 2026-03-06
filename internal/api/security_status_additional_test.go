@@ -165,29 +165,84 @@ func TestSecurityStatusExposesSettingsCapabilitiesForScopedToken(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if !payload.SettingsCapabilities.APIAccess {
-		t.Fatalf("expected apiAccess capability for scoped admin token")
+	if !payload.SettingsCapabilities.APIAccessRead || !payload.SettingsCapabilities.APIAccessWrite {
+		t.Fatalf("expected api access capabilities for scoped admin token")
 	}
-	if !payload.SettingsCapabilities.Authentication {
-		t.Fatalf("expected authentication capability for settings admin token")
+	if !payload.SettingsCapabilities.AuthenticationRead {
+		t.Fatalf("expected authentication read capability for settings admin token")
 	}
-	if !payload.SettingsCapabilities.SingleSignOn {
-		t.Fatalf("expected singleSignOn capability for scoped admin token")
+	if !payload.SettingsCapabilities.AuthenticationWrite {
+		t.Fatalf("expected authentication write capability for settings admin token")
+	}
+	if !payload.SettingsCapabilities.SingleSignOnRead || !payload.SettingsCapabilities.SingleSignOnWrite {
+		t.Fatalf("expected single sign-on capabilities for scoped admin token")
 	}
 	if !payload.SettingsCapabilities.Roles || !payload.SettingsCapabilities.Users {
 		t.Fatalf("expected RBAC capabilities for scoped admin token")
 	}
-	if !payload.SettingsCapabilities.AuditLog || !payload.SettingsCapabilities.AuditWebhooks {
-		t.Fatalf("expected audit capabilities for scoped admin token")
+	if !payload.SettingsCapabilities.AuditLog {
+		t.Fatalf("expected audit log capability for scoped admin token")
 	}
-	if !payload.SettingsCapabilities.Relay {
-		t.Fatalf("expected relay capability for settings admin token")
+	if !payload.SettingsCapabilities.AuditWebhooksRead || !payload.SettingsCapabilities.AuditWebhooksWrite {
+		t.Fatalf("expected audit webhook capabilities for scoped admin token")
+	}
+	if !payload.SettingsCapabilities.RelayRead || !payload.SettingsCapabilities.RelayWrite {
+		t.Fatalf("expected relay capabilities for settings admin token")
 	}
 	if payload.SettingsCapabilities.BillingAdmin {
 		t.Fatalf("did not expect billingAdmin capability for API token")
 	}
 	if len(payload.TokenScopes) != 2 {
 		t.Fatalf("expected token scopes in response, got %#v", payload.TokenScopes)
+	}
+}
+
+func TestSecurityStatusSplitsReadAndWriteSettingsCapabilities(t *testing.T) {
+	prevAuthorizer := auth.GetAuthorizer()
+	auth.SetAuthorizer(&allowRulesAuthorizer{
+		rules: map[string]bool{
+			"admin:users":      true,
+			"read:audit_logs":  true,
+			"admin:audit_logs": true,
+		},
+	})
+	defer auth.SetAuthorizer(prevAuthorizer)
+
+	rawToken := "status-read-only-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload struct {
+		SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !payload.SettingsCapabilities.APIAccessRead || payload.SettingsCapabilities.APIAccessWrite {
+		t.Fatalf("expected api access to be read-only, got %#v", payload.SettingsCapabilities)
+	}
+	if !payload.SettingsCapabilities.AuthenticationRead || payload.SettingsCapabilities.AuthenticationWrite {
+		t.Fatalf("expected authentication to be read-only, got %#v", payload.SettingsCapabilities)
+	}
+	if !payload.SettingsCapabilities.SingleSignOnRead || payload.SettingsCapabilities.SingleSignOnWrite {
+		t.Fatalf("expected single sign-on to be read-only, got %#v", payload.SettingsCapabilities)
+	}
+	if !payload.SettingsCapabilities.AuditWebhooksRead || payload.SettingsCapabilities.AuditWebhooksWrite {
+		t.Fatalf("expected audit webhooks to be read-only, got %#v", payload.SettingsCapabilities)
+	}
+	if !payload.SettingsCapabilities.RelayRead || payload.SettingsCapabilities.RelayWrite {
+		t.Fatalf("expected relay to be read-only, got %#v", payload.SettingsCapabilities)
 	}
 }
 
@@ -228,17 +283,17 @@ func TestSecurityStatusUsesRBACForProxyCapabilities(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if payload.SettingsCapabilities.Authentication {
+	if payload.SettingsCapabilities.AuthenticationRead {
 		t.Fatalf("did not expect authentication capability for non-admin proxy user")
 	}
-	if !payload.SettingsCapabilities.SingleSignOn {
-		t.Fatalf("expected SSO capability for RBAC-authorized proxy user")
+	if !payload.SettingsCapabilities.SingleSignOnRead || !payload.SettingsCapabilities.SingleSignOnWrite {
+		t.Fatalf("expected SSO capabilities for RBAC-authorized proxy user")
 	}
 	if !payload.SettingsCapabilities.Roles || !payload.SettingsCapabilities.Users {
 		t.Fatalf("expected RBAC management capabilities for RBAC-authorized proxy user")
 	}
-	if payload.SettingsCapabilities.Relay {
-		t.Fatalf("did not expect relay capability for non-admin proxy user")
+	if payload.SettingsCapabilities.RelayRead || payload.SettingsCapabilities.RelayWrite {
+		t.Fatalf("did not expect relay capabilities for non-admin proxy user")
 	}
 }
 
@@ -276,8 +331,11 @@ func TestSecurityStatusRestrictsSessionCapabilitiesToConfiguredAdmin(t *testing.
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if payload.SettingsCapabilities.Authentication {
+	if payload.SettingsCapabilities.AuthenticationRead {
 		t.Fatalf("did not expect authentication capability for non-admin session user")
+	}
+	if payload.SettingsCapabilities.AuthenticationWrite {
+		t.Fatalf("did not expect authentication write capability for non-admin session user")
 	}
 	if payload.SettingsCapabilities.Roles || payload.SettingsCapabilities.Users {
 		t.Fatalf("did not expect RBAC capabilities for non-admin session user")
