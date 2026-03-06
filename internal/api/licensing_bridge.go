@@ -71,6 +71,7 @@ const (
 	conversionEventTrialStarted            = pkglicensing.EventTrialStarted
 	conversionEventLicenseActivated        = pkglicensing.EventLicenseActivated
 	conversionEventLicenseActivationFailed = pkglicensing.EventLicenseActivationFailed
+	conversionEventCheckoutStarted         = pkglicensing.EventCheckoutStarted
 	conversionEventCheckoutCompleted       = pkglicensing.EventCheckoutCompleted
 	conversionEventLimitBlocked            = pkglicensing.EventLimitBlocked
 )

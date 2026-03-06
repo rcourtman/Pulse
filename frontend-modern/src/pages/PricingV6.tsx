@@ -10,8 +10,12 @@ import {
 } from '@/components/shared/Table';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import { getUpgradeActionUrlOrFallback, loadLicenseStatus, entitlements } from '@/stores/license';
-import { LicenseAPI } from '@/api/license';
+import {
+  entitlements,
+  getUpgradeActionUrlOrFallback,
+  loadLicenseStatus,
+  startProTrial,
+} from '@/stores/license';
 import { showToast } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 
@@ -372,32 +376,26 @@ export default function PricingV6() {
     setStartingTrial(true);
 
     try {
-      const res = await LicenseAPI.startTrial();
-      if (res.ok) {
-        showToast('success', 'Pro trial started (14 days).');
-        await loadLicenseStatus(true);
+      const result = await startProTrial();
+      if (result.outcome === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = result.actionUrl;
+        }
         return;
       }
-
-      if (res.status === 429) {
+      showToast('success', 'Pro trial started (14 days).');
+      await loadLicenseStatus(true);
+    } catch (error) {
+      const statusCode = (error as { status?: number } | null)?.status;
+      if (statusCode === 429) {
         setTrialMessage('Try again later.');
         return;
       }
-
-      if (res.status === 409) {
+      if (statusCode === 409) {
         setTrialCtaMode('upgrade');
+        setTrialMessage('Trial already used.');
         return;
       }
-
-      let errText = 'Failed to start trial.';
-      try {
-        const body = (await res.json()) as { error?: string; message?: string };
-        errText = body.error || body.message || errText;
-      } catch (error) {
-        logger.debug('[PricingV6] Failed to parse trial start error payload', error);
-      }
-      setTrialMessage(errText);
-    } catch (error) {
       logger.warn('[PricingV6] Trial start request failed', error);
       setTrialMessage('Failed to start trial.');
     } finally {

@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,11 +15,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestHostedLifecycle(t *testing.T) {
@@ -90,23 +95,46 @@ func TestHostedLifecycle(t *testing.T) {
 	t.Run("Trial_Start_Countdown_Expiry", func(t *testing.T) {
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
-		handlers := NewLicenseHandlers(mtp, false) // self-hosted trial path
+		handlers := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
 
 		ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 
-		startReq := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-		startRec := httptest.NewRecorder()
-		handlers.HandleStartTrial(startRec, startReq)
-		if startRec.Code != http.StatusOK {
-			t.Fatalf("trial start status=%d, want %d: %s", startRec.Code, http.StatusOK, startRec.Body.String())
+		pub, priv, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			t.Fatalf("GenerateKey: %v", err)
+		}
+		t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+		token, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+			OrgID:        "default",
+			Email:        "owner@example.com",
+			InstanceHost: "pulse.example.com",
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			},
+		})
+		if err != nil {
+			t.Fatalf("SignTrialActivationToken: %v", err)
 		}
 
-		var state entitlements.BillingState
-		if err := json.NewDecoder(startRec.Body).Decode(&state); err != nil {
-			t.Fatalf("decode trial start response: %v", err)
+		startReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil).WithContext(ctx)
+		startReq.Host = "pulse.example.com"
+		startRec := httptest.NewRecorder()
+		handlers.HandleTrialActivation(startRec, startReq)
+		if startRec.Code != http.StatusTemporaryRedirect {
+			t.Fatalf("trial activation status=%d, want %d: %s", startRec.Code, http.StatusTemporaryRedirect, startRec.Body.String())
+		}
+		if got := startRec.Header().Get("Location"); got != "/settings?trial=activated" {
+			t.Fatalf("trial activation redirect=%q, want %q", got, "/settings?trial=activated")
+		}
+
+		billingStore := config.NewFileBillingStore(baseDir)
+		state, err := billingStore.GetBillingState("default")
+		if err != nil || state == nil {
+			t.Fatalf("GetBillingState(default) failed: %v state=%v", err, state)
 		}
 		if state.SubscriptionState != entitlements.SubStateTrial {
-			t.Fatalf("trial start subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
+			t.Fatalf("trial activation subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
 		}
 
 		entReq1 := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
@@ -128,7 +156,6 @@ func TestHostedLifecycle(t *testing.T) {
 		}
 
 		// Manually expire the trial by moving TrialEndsAt into the past.
-		billingStore := config.NewFileBillingStore(baseDir)
 		loaded, err := billingStore.GetBillingState("default")
 		if err != nil || loaded == nil {
 			t.Fatalf("GetBillingState(default) failed: %v state=%v", err, loaded)
@@ -167,32 +194,79 @@ func TestHostedLifecycle(t *testing.T) {
 	t.Run("One_Trial_Per_Org_Enforcement", func(t *testing.T) {
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
-		handlers := NewLicenseHandlers(mtp, false)
+		handlers := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
+
+		pub, priv, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			t.Fatalf("GenerateKey: %v", err)
+		}
+		t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
 
 		org1 := "trial-org-1"
 		ctx1 := context.WithValue(context.Background(), OrgIDContextKey, org1)
 
-		req1 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx1)
-		rec1 := httptest.NewRecorder()
-		handlers.HandleStartTrial(rec1, req1)
-		if rec1.Code != http.StatusOK {
-			t.Fatalf("org1 first start status=%d, want %d: %s", rec1.Code, http.StatusOK, rec1.Body.String())
+		token1, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+			OrgID:        org1,
+			Email:        "owner1@example.com",
+			InstanceHost: "pulse.example.com",
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			},
+		})
+		if err != nil {
+			t.Fatalf("SignTrialActivationToken(org1): %v", err)
 		}
 
-		req2 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx1)
+		req1 := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token1), nil).WithContext(ctx1)
+		req1.Host = "pulse.example.com"
+		rec1 := httptest.NewRecorder()
+		handlers.HandleTrialActivation(rec1, req1)
+		if rec1.Code != http.StatusTemporaryRedirect {
+			t.Fatalf("org1 first activation status=%d, want %d: %s", rec1.Code, http.StatusTemporaryRedirect, rec1.Body.String())
+		}
+
+		token2, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+			OrgID:        org1,
+			Email:        "owner1@example.com",
+			InstanceHost: "pulse.example.com",
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			},
+		})
+		if err != nil {
+			t.Fatalf("SignTrialActivationToken(org1 second): %v", err)
+		}
+
+		req2 := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token2), nil).WithContext(ctx1)
+		req2.Host = "pulse.example.com"
 		rec2 := httptest.NewRecorder()
-		handlers.HandleStartTrial(rec2, req2)
-		if rec2.Code != http.StatusConflict {
-			t.Fatalf("org1 second start status=%d, want %d: %s", rec2.Code, http.StatusConflict, rec2.Body.String())
+		handlers.HandleTrialActivation(rec2, req2)
+		if rec2.Code != http.StatusTemporaryRedirect {
+			t.Fatalf("org1 second activation status=%d, want %d: %s", rec2.Code, http.StatusTemporaryRedirect, rec2.Body.String())
+		}
+		if got := rec2.Header().Get("Location"); got != "/settings?trial=ineligible" {
+			t.Fatalf("org1 second activation redirect=%q, want %q", got, "/settings?trial=ineligible")
 		}
 
 		org2 := "trial-org-2"
 		ctx2 := context.WithValue(context.Background(), OrgIDContextKey, org2)
-		req3 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx2)
+		token3, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+			OrgID:        org2,
+			Email:        "owner2@example.com",
+			InstanceHost: "pulse.example.com",
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			},
+		})
+		if err != nil {
+			t.Fatalf("SignTrialActivationToken(org2): %v", err)
+		}
+		req3 := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token3), nil).WithContext(ctx2)
+		req3.Host = "pulse.example.com"
 		rec3 := httptest.NewRecorder()
-		handlers.HandleStartTrial(rec3, req3)
-		if rec3.Code != http.StatusOK {
-			t.Fatalf("org2 start status=%d, want %d: %s", rec3.Code, http.StatusOK, rec3.Body.String())
+		handlers.HandleTrialActivation(rec3, req3)
+		if rec3.Code != http.StatusTemporaryRedirect {
+			t.Fatalf("org2 activation status=%d, want %d: %s", rec3.Code, http.StatusTemporaryRedirect, rec3.Body.String())
 		}
 	})
 

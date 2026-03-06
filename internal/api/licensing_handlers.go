@@ -162,6 +162,34 @@ func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
 	return baseURL + "/auth/trial-activate"
 }
 
+func trialSignupActionURLForRequest(r *http.Request, cfg *config.Config, orgID string) (string, error) {
+	returnURL := trialCallbackURLForRequest(r, cfg)
+	if returnURL == "" {
+		return "", fmt.Errorf("trial callback URL is unavailable")
+	}
+
+	signupBaseURL := ""
+	if cfg != nil {
+		signupBaseURL = strings.TrimSpace(cfg.ProTrialSignupURL)
+	}
+	signupURL := strings.TrimSpace(proTrialSignupURLFromLicensing(signupBaseURL))
+	if signupURL == "" {
+		return "", fmt.Errorf("trial signup URL is unavailable")
+	}
+
+	parsed, err := url.Parse(signupURL)
+	if err != nil {
+		return "", fmt.Errorf("parse trial signup URL: %w", err)
+	}
+
+	query := parsed.Query()
+	query.Set("org_id", strings.TrimSpace(orgID))
+	query.Set("return_url", returnURL)
+	parsed.RawQuery = query.Encode()
+
+	return parsed.String(), nil
+}
+
 func normalizeHostForTrial(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -354,7 +382,8 @@ func (h *LicenseHandlers) FeatureService(ctx context.Context) licenseFeatureChec
 }
 
 // HandleStartTrial handles POST /api/license/trial/start.
-// This is a one-time, 14-day Pro trial stored locally in billing.json (no phone-home).
+// SaaS trials are initiated through hosted signup; the local instance only redeems
+// a signed activation token via /auth/trial-activate.
 func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -401,27 +430,22 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	state := buildProTrialBillingStateFromLicensing(time.Now())
-
-	if err := billingStore.SaveBillingState(orgID, state); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "billing_state_save_failed", "Failed to save billing state", nil)
+	actionURL, err := trialSignupActionURLForRequest(r, h.cfg, orgID)
+	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("Trial signup redirect unavailable")
+		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
 		return
 	}
 
-	// Ensure the in-memory service reflects the trial immediately.
-	// Note: JWT licenses (if present) still take precedence over evaluator.
-	if svc.Current() == nil {
-		eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0)
-		svc.SetEvaluator(eval)
-	}
-
 	h.emitConversionEvent(orgID, conversionEvent{
-		Type:    conversionEventTrialStarted,
+		Type:    conversionEventCheckoutStarted,
 		Surface: "license_api",
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(state)
+	writeErrorResponse(w, http.StatusConflict, "trial_signup_required", "Complete hosted signup to start your trial", map[string]string{
+		"org_id":     orgID,
+		"action_url": actionURL,
+	})
 }
 
 // HandleTrialActivation handles GET /auth/trial-activate.

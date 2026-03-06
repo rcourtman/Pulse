@@ -20,183 +20,118 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-func TestTrialStart_DefaultOrgWritesBillingJSONAndEnablesTrialEntitlements(t *testing.T) {
+func TestTrialStart_DefaultOrgReturnsHostedSignupRedirect(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false)
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		PublicURL:         "https://pulse.example.com",
+		ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=test",
+	})
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-
-	// Warm the cached service to cover the "service already exists" path.
-	if _, _, err := h.getTenantComponents(ctx); err != nil {
-		t.Fatalf("getTenantComponents: %v", err)
-	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
 	rec := httptest.NewRecorder()
 	h.HandleStartTrial(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
 	}
 
-	var state entitlements.BillingState
-	if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
+	var resp APIError
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if state.SubscriptionState != entitlements.SubStateTrial {
-		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
+	if resp.Code != "trial_signup_required" {
+		t.Fatalf("code=%q, want %q", resp.Code, "trial_signup_required")
 	}
-	if state.TrialStartedAt == nil || state.TrialEndsAt == nil {
-		t.Fatalf("expected trial_started_at and trial_ends_at to be populated, got started=%v ends=%v", state.TrialStartedAt, state.TrialEndsAt)
+	actionURL := resp.Details["action_url"]
+	if actionURL == "" {
+		t.Fatal("expected action_url in trial signup response")
 	}
-	if *state.TrialEndsAt <= *state.TrialStartedAt {
-		t.Fatalf("trial_ends_at (%d) must be after trial_started_at (%d)", *state.TrialEndsAt, *state.TrialStartedAt)
+	parsed, err := url.Parse(actionURL)
+	if err != nil {
+		t.Fatalf("parse action_url: %v", err)
 	}
-
-	contains := func(values []string, key string) bool {
-		for _, v := range values {
-			if v == key {
-				return true
-			}
-		}
-		return false
+	if got := parsed.Scheme + "://" + parsed.Host + parsed.Path; got != "https://billing.example.com/start-pro-trial" {
+		t.Fatalf("action_url base=%q, want %q", got, "https://billing.example.com/start-pro-trial")
 	}
-	if !contains(state.Capabilities, license.FeatureRelay) {
-		t.Fatalf("expected billing capabilities to include %q, got %v", license.FeatureRelay, state.Capabilities)
+	if got := parsed.Query().Get("source"); got != "test" {
+		t.Fatalf("action_url source=%q, want %q", got, "test")
 	}
-	if !contains(state.Capabilities, license.FeatureAIAutoFix) {
-		t.Fatalf("expected billing capabilities to include %q, got %v", license.FeatureAIAutoFix, state.Capabilities)
+	if got := parsed.Query().Get("org_id"); got != "default" {
+		t.Fatalf("action_url org_id=%q, want %q", got, "default")
+	}
+	if got := parsed.Query().Get("return_url"); got != "https://pulse.example.com/auth/trial-activate" {
+		t.Fatalf("action_url return_url=%q, want %q", got, "https://pulse.example.com/auth/trial-activate")
 	}
 
 	billingPath := filepath.Join(baseDir, "billing.json")
-	if _, err := os.Stat(billingPath); err != nil {
-		t.Fatalf("expected billing.json at %s: %v", billingPath, err)
-	}
-
-	entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
-	entRec := httptest.NewRecorder()
-	h.HandleEntitlements(entRec, entReq)
-	if entRec.Code != http.StatusOK {
-		t.Fatalf("entitlements status=%d, want %d: %s", entRec.Code, http.StatusOK, entRec.Body.String())
-	}
-
-	var payload EntitlementPayload
-	if err := json.NewDecoder(entRec.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode entitlements payload: %v", err)
-	}
-	if payload.SubscriptionState != string(license.SubStateTrial) {
-		t.Fatalf("payload.subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateTrial)
-	}
-	if payload.TrialExpiresAt == nil || payload.TrialDaysRemaining == nil {
-		t.Fatalf("expected trial fields populated, got expires_at=%v days=%v", payload.TrialExpiresAt, payload.TrialDaysRemaining)
-	}
-	if *payload.TrialExpiresAt != *state.TrialEndsAt {
-		t.Fatalf("payload.trial_expires_at=%d, want %d", *payload.TrialExpiresAt, *state.TrialEndsAt)
-	}
-	if *payload.TrialDaysRemaining < 13 || *payload.TrialDaysRemaining > 14 {
-		t.Fatalf("payload.trial_days_remaining=%d, want 13-14", *payload.TrialDaysRemaining)
-	}
-	if payload.TrialEligible {
-		t.Fatalf("payload.trial_eligible=%v, want false", payload.TrialEligible)
-	}
-	if payload.TrialEligibilityReason != "already_used" {
-		t.Fatalf("payload.trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "already_used")
-	}
-	if !contains(payload.Capabilities, license.FeatureRelay) {
-		t.Fatalf("expected payload capabilities to include %q, got %v", license.FeatureRelay, payload.Capabilities)
-	}
-
-	statusReq := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
-	statusRec := httptest.NewRecorder()
-	h.HandleLicenseStatus(statusRec, statusReq)
-	if statusRec.Code != http.StatusOK {
-		t.Fatalf("license status status=%d, want %d: %s", statusRec.Code, http.StatusOK, statusRec.Body.String())
-	}
-
-	var status license.LicenseStatus
-	if err := json.NewDecoder(statusRec.Body).Decode(&status); err != nil {
-		t.Fatalf("decode license status payload: %v", err)
-	}
-	if !status.Valid {
-		t.Fatalf("status.valid=%v, want true", status.Valid)
-	}
-	if status.Tier != license.TierPro {
-		t.Fatalf("status.tier=%q, want %q", status.Tier, license.TierPro)
-	}
-	if status.ExpiresAt == nil {
-		t.Fatal("status.expires_at=nil, want trial expiration timestamp")
-	}
-	if status.DaysRemaining < 13 || status.DaysRemaining > 14 {
-		t.Fatalf("status.days_remaining=%d, want 13-14", status.DaysRemaining)
+	if _, err := os.Stat(billingPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no billing.json to be written, stat err=%v", err)
 	}
 }
 
-func TestTrialStart_LocalTrialStartAlwaysEnabled(t *testing.T) {
+func TestTrialStart_FailsClosedWithoutCallbackURL(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false)
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		ProTrialSignupURL: "https://billing.example.com/start-pro-trial",
+	})
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	req.Host = ""
 	rec := httptest.NewRecorder()
 	h.HandleStartTrial(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
 	}
 
-	var state entitlements.BillingState
-	if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
+	var resp APIError
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if state.SubscriptionState != entitlements.SubStateTrial {
-		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
+	if resp.Code != "trial_signup_unavailable" {
+		t.Fatalf("code=%q, want %q", resp.Code, "trial_signup_unavailable")
 	}
 }
 
-func TestTrialStart_RejectsSecondAttemptWithoutEnvVars(t *testing.T) {
-	// Verifies that even without env vars, the first trial start succeeds
-	// but the second is rejected (eligibility check blocks it).
+func TestTrialStart_RejectsAlreadyUsedTrial(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false)
+	h := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-
-	req1 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	rec1 := httptest.NewRecorder()
-	h.HandleStartTrial(rec1, req1)
-	if rec1.Code != http.StatusOK {
-		t.Fatalf("first status=%d, want %d: %s", rec1.Code, http.StatusOK, rec1.Body.String())
+	now := time.Now()
+	startedAt := now.Add(-2 * time.Hour).Unix()
+	endsAt := now.Add(12 * time.Hour).Unix()
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		Capabilities:      append([]string(nil), license.TierFeatures[license.TierPro]...),
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       "trial",
+		SubscriptionState: entitlements.SubStateTrial,
+		TrialStartedAt:    &startedAt,
+		TrialEndsAt:       &endsAt,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
 	}
 
-	req2 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	rec2 := httptest.NewRecorder()
-	h.HandleStartTrial(rec2, req2)
-	if rec2.Code != http.StatusConflict {
-		t.Fatalf("second status=%d, want %d: %s", rec2.Code, http.StatusConflict, rec2.Body.String())
-	}
-}
-
-func TestTrialStart_RejectsSecondAttemptForSameOrg(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-	h := NewLicenseHandlers(mtp, false)
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
-
-	req1 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	rec1 := httptest.NewRecorder()
-	h.HandleStartTrial(rec1, req1)
-	if rec1.Code != http.StatusOK {
-		t.Fatalf("first status=%d, want %d: %s", rec1.Code, http.StatusOK, rec1.Body.String())
+	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleStartTrial(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusConflict, rec.Body.String())
 	}
 
-	req2 := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
-	rec2 := httptest.NewRecorder()
-	h.HandleStartTrial(rec2, req2)
-	if rec2.Code != http.StatusConflict {
-		t.Fatalf("second status=%d, want %d: %s", rec2.Code, http.StatusConflict, rec2.Body.String())
+	var resp APIError
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Code != "trial_already_used" {
+		t.Fatalf("code=%q, want %q", resp.Code, "trial_already_used")
 	}
 }
 
