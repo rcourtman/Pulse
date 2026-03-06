@@ -14,6 +14,11 @@ import {
   canonicalDiscoveryResourceType,
   isAgentDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
+import {
+  getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
+  getActionableKubernetesClusterIdFromResource,
+} from '@/utils/agentResources';
 
 export type ProxmoxPlatformData = {
   nodeName?: string;
@@ -172,12 +177,13 @@ export type DiscoveryConfig = {
   targetLabel: string;
 };
 
-export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
-  const asString = (value: unknown): string | undefined =>
-    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-  const asNumber = (value: unknown): number | undefined =>
-    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+const asString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 
+const asNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
   const explicitDiscoveryTarget = resource.discoveryTarget;
   const explicitDiscoveryAgentId = asString(
     (explicitDiscoveryTarget as { agentId?: unknown } | undefined)?.agentId,
@@ -189,7 +195,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     explicitDiscoveryAgentId &&
     explicitDiscoveryTarget.resourceId
   ) {
-    const explicitResourceType = canonicalDiscoveryResourceType(explicitDiscoveryTarget.resourceType);
+    const explicitResourceType = canonicalDiscoveryResourceType(
+      explicitDiscoveryTarget.resourceType,
+    );
     const resourceType = (() => {
       switch (explicitResourceType) {
         case 'agent':
@@ -244,9 +252,13 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     asString(resource.proxmox?.nodeName) ||
     platformData?.proxmox?.nodeName ||
     asString((platformData as { nodeName?: unknown } | undefined)?.nodeName);
+  const actionableAgentId = getActionableAgentIdFromResource(resource);
+  const actionableDockerHostId = getActionableDockerRuntimeIdFromResource(resource);
+  const actionableKubernetesId = getActionableKubernetesClusterIdFromResource(resource);
   const kubernetesAgentId =
     asString(resource.kubernetes?.agentId) ||
     asString(kubernetesPlatformData?.agentId) ||
+    actionableKubernetesId ||
     asString(resource.kubernetes?.clusterId) ||
     asString(kubernetesPlatformData?.clusterId) ||
     asString(resource.clusterId) ||
@@ -267,9 +279,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       return namespace && podName ? `${namespace}/${podName}` : undefined;
     })();
   const agentLookupId =
-    asString(dockerPlatformData?.hostSourceId) ||
-    asString(resource.agent?.agentId) ||
-    asString(platformData?.agent?.agentId) ||
+    actionableDockerHostId ||
+    actionableKubernetesId ||
+    actionableAgentId ||
     proxmoxNodeName ||
     platformData?.agent?.hostname ||
     asString(dockerPlatformData?.hostname) ||
@@ -280,8 +292,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
   const agentLikeId = agentLookupId;
   const workloadAgentId =
     proxmoxNodeName ||
-    asString(dockerPlatformData?.hostSourceId) ||
+    actionableDockerHostId ||
     kubernetesAgentId ||
+    actionableAgentId ||
     asString(resource.parentName) ||
     resource.parentId ||
     resource.platformId ||
@@ -412,6 +425,9 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
   const lastSeen = Number.isFinite(resource.lastSeen)
     ? new Date(resource.lastSeen).toISOString()
     : new Date().toISOString();
+  const linkedAgentId =
+    asString((platformData as { linkedAgentId?: unknown } | undefined)?.linkedAgentId) ||
+    getActionableAgentIdFromResource(resource);
 
   return {
     id: resource.id,
@@ -436,6 +452,7 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
     },
     lastSeen,
     connectionHealth: resource.status ?? 'unknown',
+    linkedAgentId,
   } as Node;
 };
 
@@ -456,9 +473,10 @@ export const toAgentFromResource = (
   ].find((value) => typeof value === 'number' && value > 0);
 
   const hostname = agent.hostname ?? resource.platformId ?? resource.name ?? resource.id;
+  const agentId = getActionableAgentIdFromResource(resource) || resource.id;
 
   return {
-    id: resource.id,
+    id: agentId,
     hostname,
     displayName: resource.displayName ?? hostname,
     platform: agent.platform,

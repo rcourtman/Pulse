@@ -4,7 +4,38 @@ import {
   healthToneClass,
   formatInteger,
   formatSourceType,
+  toAgentFromResource,
+  toNodeFromProxmox,
 } from '@/components/Infrastructure/resourceDetailMappers';
+import type { Resource } from '@/types/resource';
+
+const createHybridHostResource = (): Resource =>
+  ({
+    id: 'resource:host:hash-1',
+    type: 'agent',
+    name: 'tower',
+    displayName: 'Tower',
+    platformId: 'tower',
+    platformType: 'proxmox-pve',
+    sourceType: 'hybrid',
+    status: 'online',
+    lastSeen: Date.now(),
+    cpu: { current: 15 },
+    memory: { total: 1024, used: 256, free: 768 },
+    disk: { total: 2048, used: 512, free: 1536 },
+    platformData: {
+      proxmox: {
+        nodeName: 'pve-node-1',
+      },
+      agent: {
+        agentId: 'agent-canonical',
+        agentVersion: '1.2.3',
+        hostname: 'tower.local',
+        osName: 'Unraid',
+        kernelVersion: '6.1.0',
+      },
+    },
+  }) as Resource;
 
 describe('resourceDetailMappers', () => {
   describe('normalizeHealthLabel', () => {
@@ -142,6 +173,23 @@ describe('resourceDetailMappers', () => {
 
     it('returns unknown source type as-is', () => {
       expect(formatSourceType('unknown-source' as any)).toBe('unknown-source');
+    });
+  });
+
+  describe('toNodeFromProxmox', () => {
+    it('preserves canonical linkedAgentId for hybrid hosts', () => {
+      const node = toNodeFromProxmox(createHybridHostResource());
+
+      expect(node?.linkedAgentId).toBe('agent-canonical');
+    });
+  });
+
+  describe('toAgentFromResource', () => {
+    it('uses the canonical actionable agent id instead of the hashed resource id', () => {
+      const agent = toAgentFromResource(createHybridHostResource());
+
+      expect(agent?.id).toBe('agent-canonical');
+      expect(agent?.id).not.toBe('resource:host:hash-1');
     });
   });
 });
