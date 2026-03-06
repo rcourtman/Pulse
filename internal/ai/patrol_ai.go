@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -1713,6 +1714,11 @@ type patrolPrecomputeStorageSource struct {
 	usagePercent float64
 }
 
+type patrolConnectionHealthEntry struct {
+	resourceID string
+	healthy    bool
+}
+
 func patrolNodeInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolNodeInventoryRow {
 	rs := snap.readState
 	if rs != nil {
@@ -2265,6 +2271,49 @@ func patrolPrecomputeStorageSources(snap patrolRuntimeState, scopedSet map[strin
 		})
 	}
 	return rows
+}
+
+func patrolActiveAlertsInScope(snap patrolRuntimeState, scopedSet map[string]bool) []models.Alert {
+	if scopedSet == nil {
+		return snap.ActiveAlerts
+	}
+	alerts := make([]models.Alert, 0, len(snap.ActiveAlerts))
+	for _, alert := range snap.ActiveAlerts {
+		if seedIsInScope(scopedSet, alert.ResourceID) {
+			alerts = append(alerts, alert)
+		}
+	}
+	return alerts
+}
+
+func patrolResolvedAlertsInScope(snap patrolRuntimeState, scopedSet map[string]bool) []models.ResolvedAlert {
+	if scopedSet == nil {
+		return snap.RecentlyResolved
+	}
+	alerts := make([]models.ResolvedAlert, 0, len(snap.RecentlyResolved))
+	for _, resolved := range snap.RecentlyResolved {
+		if seedIsInScope(scopedSet, resolved.Alert.ResourceID) {
+			alerts = append(alerts, resolved)
+		}
+	}
+	return alerts
+}
+
+func patrolConnectionHealthEntries(snap patrolRuntimeState, scopedSet map[string]bool) []patrolConnectionHealthEntry {
+	if len(snap.ConnectionHealth) == 0 {
+		return nil
+	}
+	entries := make([]patrolConnectionHealthEntry, 0, len(snap.ConnectionHealth))
+	for resourceID, healthy := range snap.ConnectionHealth {
+		if !seedIsInScope(scopedSet, resourceID) {
+			continue
+		}
+		entries = append(entries, patrolConnectionHealthEntry{
+			resourceID: resourceID,
+			healthy:    healthy,
+		})
+	}
+	return entries
 }
 
 func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
@@ -2993,9 +3042,9 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 	}
 
 	// --- Active Alerts ---
-	if len(snap.ActiveAlerts) > 0 {
+	if alerts := patrolActiveAlertsInScope(snap, scopedSet); len(alerts) > 0 {
 		sb.WriteString("# Active Alerts\n")
-		for _, a := range snap.ActiveAlerts {
+		for _, a := range alerts {
 			since := seedFormatTimeAgo(now, a.StartTime)
 			sb.WriteString(fmt.Sprintf("- [%s] %s — since %s\n", a.Level, a.Message, since))
 		}
@@ -3003,9 +3052,9 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 	}
 
 	// --- Recently Resolved Alerts ---
-	if len(snap.RecentlyResolved) > 0 {
+	if alerts := patrolResolvedAlertsInScope(snap, scopedSet); len(alerts) > 0 {
 		sb.WriteString("# Recently Resolved Alerts\n")
-		for _, r := range snap.RecentlyResolved {
+		for _, r := range alerts {
 			ago := seedFormatTimeAgo(now, r.ResolvedTime)
 			sb.WriteString(fmt.Sprintf("- %s — resolved %s\n", r.Alert.Message, ago))
 		}
@@ -3013,23 +3062,23 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 	}
 
 	// --- Connection Health ---
-	if len(snap.ConnectionHealth) > 0 {
+	if entries := patrolConnectionHealthEntries(snap, scopedSet); len(entries) > 0 {
 		allConnected := true
 		var disconnected []string
-		for name, healthy := range snap.ConnectionHealth {
-			if !healthy {
+		for _, entry := range entries {
+			if !entry.healthy {
 				allConnected = false
-				disconnected = append(disconnected, name)
+				disconnected = append(disconnected, entry.resourceID)
 			}
 		}
 		sb.WriteString("# Connections\n")
 		if allConnected {
-			sb.WriteString(fmt.Sprintf("All %d instances connected.\n", len(snap.ConnectionHealth)))
+			sb.WriteString(fmt.Sprintf("All %d instances connected.\n", len(entries)))
 		} else {
 			sort.Strings(disconnected)
 			sb.WriteString(fmt.Sprintf("Disconnected: %s\n", strings.Join(disconnected, ", ")))
 			sb.WriteString(fmt.Sprintf("Connected: %d/%d\n",
-				len(snap.ConnectionHealth)-len(disconnected), len(snap.ConnectionHealth)))
+				len(entries)-len(disconnected), len(entries)))
 		}
 		sb.WriteString("\n")
 	}

@@ -325,13 +325,10 @@ func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, t
 }
 
 func triageAlertChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
-	flags := make([]TriageFlag, 0, len(snap.ActiveAlerts))
+	alerts := patrolActiveAlertsInScope(snap, scopedSet)
+	flags := make([]TriageFlag, 0, len(alerts))
 
-	for _, alert := range snap.ActiveAlerts {
-		if !seedIsInScope(scopedSet, alert.ResourceID) {
-			continue
-		}
-
+	for _, alert := range alerts {
 		severity := "watch"
 		switch strings.ToLower(strings.TrimSpace(alert.Level)) {
 		case "critical":
@@ -369,14 +366,14 @@ func triageAlertChecksState(snap patrolRuntimeState, scopedSet map[string]bool) 
 func triageConnectivityChecksState(snap patrolRuntimeState, guestIntel map[string]*GuestIntelligence, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
-	for resourceID, healthy := range snap.ConnectionHealth {
-		if healthy || !seedIsInScope(scopedSet, resourceID) {
+	for _, entry := range patrolConnectionHealthEntries(snap, scopedSet) {
+		if entry.healthy {
 			continue
 		}
 		flags = append(flags, TriageFlag{
-			ResourceID:   resourceID,
-			ResourceName: triageResourceName(resourceID, resourceID),
-			ResourceType: triageConnectionResourceType(resourceID),
+			ResourceID:   entry.resourceID,
+			ResourceName: triageResourceName(entry.resourceID, entry.resourceID),
+			ResourceType: triageConnectionResourceType(entry.resourceID),
 			Category:     "connectivity",
 			Severity:     "critical",
 			Reason:       "Instance disconnected",
