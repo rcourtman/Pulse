@@ -18,6 +18,7 @@ import {
   getPlatformDataRecord,
   hasAgentFacet,
 } from '@/utils/agentResources';
+import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
 import {
   SUMMARY_TIME_RANGES,
   SUMMARY_TIME_RANGE_LABEL,
@@ -37,6 +38,16 @@ const normalizeResourceIdentifier = (value?: string | null): string[] => {
   }
   return Array.from(variants);
 };
+
+const getNormalizedResourceIdentifiers = (resource: Resource): Set<string> =>
+  new Set<string>([
+    ...normalizeResourceIdentifier(resource.id),
+    ...normalizeResourceIdentifier(resource.platformId),
+    ...normalizeResourceIdentifier(resource.name),
+    ...normalizeResourceIdentifier(resource.displayName),
+    ...normalizeResourceIdentifier(resource.identity?.hostname),
+    ...getResourceIdentityAliases(resource).flatMap((value) => normalizeResourceIdentifier(value)),
+  ]);
 
 const asTrimmedString = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
@@ -376,12 +387,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         .map((value) => value?.trim().toLowerCase())
         .filter((value): value is string => Boolean(value)),
     );
-    const resourceNameCandidates = new Set<string>([
-      ...normalizeResourceIdentifier(resource.platformId),
-      ...normalizeResourceIdentifier(resource.name),
-      ...normalizeResourceIdentifier(resource.displayName),
-      ...normalizeResourceIdentifier(resource.identity?.hostname),
-    ]);
+    const resourceNameCandidates = getNormalizedResourceIdentifiers(resource);
 
     // Find an agent resource that matches this infrastructure resource
     // by linked node ID, hostname, or name
@@ -394,8 +400,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         ? nodeRefCandidates.has(normalizedLinkedNodeId)
         : false;
       // Match by hostname: agent hostname matches this resource
-      const agentResourceName = agentResource.identity?.hostname ?? agentResource.name;
-      const agentResourceNames = normalizeResourceIdentifier(agentResourceName);
+      const agentResourceNames = Array.from(getNormalizedResourceIdentifiers(agentResource));
       const hostnameMatch = agentResourceNames.some((candidate) =>
         resourceNameCandidates.has(candidate),
       );

@@ -799,4 +799,99 @@ describe('InfrastructureSummary range behavior', () => {
       expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
     });
   });
+
+  it('matches loaded agent resources by shared identity aliases when names diverge', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {
+        'node-2': {
+          cpu: [
+            { timestamp: now - 60_000, value: 20 },
+            { timestamp: now, value: 25 },
+          ],
+          memory: [
+            { timestamp: now - 60_000, value: 40 },
+            { timestamp: now, value: 45 },
+          ],
+          disk: [
+            { timestamp: now - 60_000, value: 35 },
+            { timestamp: now, value: 40 },
+          ],
+          netin: [],
+          netout: [],
+        },
+      },
+      dockerHostData: {},
+      agentData: {
+        'agent-host-5': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [
+            { timestamp: now - 60_000, value: 1024 },
+            { timestamp: now, value: 2048 },
+          ],
+          netout: [
+            { timestamp: now - 60_000, value: 512 },
+            { timestamp: now, value: 1536 },
+          ],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    mockHostAgentResources = [
+      {
+        id: 'hash-agent-resource',
+        type: 'agent',
+        name: 'unhelpful-internal-name',
+        displayName: 'Merged Host',
+        platformId: 'internal-platform-id',
+        platformType: 'agent',
+        sourceType: 'agent',
+        status: 'online',
+        lastSeen: now,
+        platformData: {
+          agent: {
+            agentId: 'agent-host-5',
+            hostname: 'tower.local',
+          },
+        },
+      },
+    ];
+
+    const proxmoxNodeHost: Resource = {
+      id: 'node-2',
+      type: 'agent',
+      name: 'pve-node-2',
+      displayName: 'PVE Node 2',
+      platformId: 'pve-node-2',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: now,
+      identity: {
+        hostname: 'tower.local',
+      },
+      platformData: {
+        sources: ['proxmox'],
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
+    });
+  });
 });
