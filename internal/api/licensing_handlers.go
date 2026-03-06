@@ -651,8 +651,8 @@ func userFriendlyActivationError(err error) string {
 
 	// Known non-sentinel patterns.
 	msg := err.Error()
-	if strings.Contains(msg, "activation key") {
-		return "This looks like a legacy Pulse v5 license key. Pulse v6 requires an activation key from your Pulse account. If you purchased Pro or Lifetime on v5 and do not see a migrated activation key, contact support."
+	if strings.Contains(msg, "supported v6 activation key") || strings.Contains(msg, "migratable v5 license") {
+		return "This key is not a valid Pulse v6 activation key or a supported Pulse v5 license for migration. Paste a v6 activation key, or a valid v5 Pro/Lifetime license and Pulse will exchange it automatically."
 	}
 	if strings.Contains(msg, "license server client not configured") {
 		return "License activation is temporarily unavailable. Please try again later or contact support."

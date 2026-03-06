@@ -155,7 +155,7 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 	}
 	if !isLicenseValidationDevMode() {
 		if !looksLikeLegacyJWTLicense(licenseKey) {
-			return nil, fmt.Errorf("legacy JWT activation is not supported in v6; use an activation key")
+			return nil, fmt.Errorf("license key is not a supported v6 activation key or migratable v5 license")
 		}
 		return s.ActivateLegacyLicense(licenseKey)
 	}

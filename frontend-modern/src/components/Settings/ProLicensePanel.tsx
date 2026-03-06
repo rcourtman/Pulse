@@ -305,9 +305,10 @@ export const ProLicensePanel: Component = () => {
             onInput={(event) => setLicenseKey(event.currentTarget.value)}
           />
           <p class={formHelpText}>
-            Paste a Pulse v6 activation key. Legacy Pulse v5 license keys are not accepted
-            directly in v6. If you purchased Pro or Lifetime on v5, first retrieve your migrated
-            activation key from your Pulse account. By activating a license, you agree to the{' '}
+            Paste a Pulse v6 activation key, or a legacy Pulse v5 Pro/Lifetime license key and
+            Pulse will exchange it automatically during activation. If automatic migration cannot
+            complete, retrieve the migrated activation key from your Pulse account or contact
+            support. By activating a license, you agree to the{' '}
             <a
               href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md"
               target="_blank"
@@ -322,9 +323,9 @@ export const ProLicensePanel: Component = () => {
             <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
               <p class="font-medium">Legacy v5 license detected</p>
               <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                Pulse v6 uses activation keys. If you bought Pro or Lifetime on v5, retrieve the
-                migrated activation key from your Pulse account. If none is shown there, contact
-                support before activating.
+                Pulse will try to exchange this key into the v6 activation model automatically. If
+                the exchange cannot complete, retrieve the migrated activation key from your Pulse
+                account or contact support.
               </p>
             </div>
           </Show>

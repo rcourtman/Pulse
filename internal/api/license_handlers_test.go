@@ -504,17 +504,20 @@ func TestUserFriendlyActivationError_NoGoErrorChainSyntax(t *testing.T) {
 			},
 		},
 		{
-			name: "legacy JWT rejection",
-			err:  fmt.Errorf("legacy JWT activation is not supported in v6; use an activation key"),
+			name: "unsupported activation format",
+			err:  fmt.Errorf("license key is not a supported v6 activation key or migratable v5 license"),
 			check: func(t *testing.T, msg string) {
 				if strings.Contains(msg, "JWT") {
 					t.Errorf("message leaks JWT terminology: %q", msg)
 				}
-				if !strings.Contains(strings.ToLower(msg), "v5") {
-					t.Errorf("message should mention v5 migration: %q", msg)
+				if !strings.Contains(strings.ToLower(msg), "v6 activation key") {
+					t.Errorf("message should mention v6 activation keys: %q", msg)
 				}
-				if !strings.Contains(msg, "activation key") {
-					t.Errorf("message should mention activation key: %q", msg)
+				if !strings.Contains(strings.ToLower(msg), "v5 license") {
+					t.Errorf("message should mention v5 migration support: %q", msg)
+				}
+				if !strings.Contains(strings.ToLower(msg), "exchange it automatically") {
+					t.Errorf("message should mention automatic exchange: %q", msg)
 				}
 			},
 		},

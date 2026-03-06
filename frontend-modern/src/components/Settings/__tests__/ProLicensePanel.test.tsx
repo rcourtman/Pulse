@@ -216,7 +216,7 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('Legacy v5 license detected')).toBeInTheDocument();
     expect(
-      screen.getByText(/retrieve your migrated activation key from your Pulse account/i),
+      screen.getByText(/exchange this key into the v6 activation model automatically/i),
     ).toBeInTheDocument();
   });
 });
