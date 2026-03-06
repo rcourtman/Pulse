@@ -1817,6 +1817,8 @@ type patrolAlertResourceState struct {
 	found        bool
 }
 
+type patrolAlertResourceVisitor func(patrolAlertResourceState) bool
+
 func patrolAlertNameMatches(alert AlertInfo, ids ...string) bool {
 	for _, id := range ids {
 		if strings.TrimSpace(id) == "" {
@@ -1840,33 +1842,56 @@ func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) pa
 }
 
 func lookupPatrolAlertResourceStateFromReadState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+	return patrolLookupAlertResourceStateWithVisitor(func(visit patrolAlertResourceVisitor) bool {
+		return patrolVisitAlertResourceStateFromReadState(alert, snap, visit)
+	})
+}
+
+func lookupPatrolAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+	return patrolLookupAlertResourceStateWithVisitor(func(visit patrolAlertResourceVisitor) bool {
+		return patrolVisitAlertResourceStateFromSnapshot(alert, snap, visit)
+	})
+}
+
+func patrolLookupAlertResourceStateWithVisitor(walk func(patrolAlertResourceVisitor) bool) (patrolAlertResourceState, bool) {
+	var result patrolAlertResourceState
+	found := false
+	walk(func(state patrolAlertResourceState) bool {
+		result = state
+		found = true
+		return false
+	})
+	return result, found
+}
+
+func patrolVisitAlertResourceStateFromReadState(alert AlertInfo, snap patrolRuntimeState, visit patrolAlertResourceVisitor) bool {
 	if snap.readState == nil {
-		return patrolAlertResourceState{}, false
+		return false
 	}
 	switch alert.ResourceType {
 	case "storage":
 		for _, storage := range snap.readState.StoragePools() {
 			if patrolAlertNameMatches(alert, storage.ID(), storage.Name()) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "storage",
 					name:         storage.Name(),
 					status:       string(storage.Status()),
 					disk:         storage.DiskPercent(),
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "node":
 		for _, node := range snap.readState.Nodes() {
 			if patrolAlertNameMatches(alert, node.ID(), node.Name()) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "node",
 					name:         node.Name(),
 					status:       string(node.Status()),
 					cpu:          node.CPUPercent(),
 					memory:       node.MemoryPercent(),
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "agent":
@@ -1876,84 +1901,84 @@ func lookupPatrolAlertResourceStateFromReadState(alert AlertInfo, snap patrolRun
 				if name == "" {
 					name = host.Name()
 				}
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "agent",
 					name:         name,
 					status:       string(host.Status()),
 					cpu:          host.CPUPercent(),
 					memory:       host.MemoryPercent(),
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "vm":
 		for _, vm := range snap.readState.VMs() {
 			if patrolAlertNameMatches(alert, vm.ID(), vm.Name()) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "vm",
 					name:         vm.Name(),
 					status:       string(vm.Status()),
 					cpu:          vm.CPUPercent(),
 					memory:       vm.MemoryPercent(),
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "system-container":
 		for _, ct := range snap.readState.Containers() {
 			if patrolAlertNameMatches(alert, ct.ID(), ct.Name()) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "system-container",
 					name:         ct.Name(),
 					status:       string(ct.Status()),
 					cpu:          ct.CPUPercent(),
 					memory:       ct.MemoryPercent(),
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "app-container":
 		for _, container := range snap.readState.DockerContainers() {
 			if patrolAlertNameMatches(alert, container.ID(), container.Name()) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "app-container",
 					name:         container.Name(),
 					status:       container.ContainerState(),
 					cpu:          container.CPUPercent(),
 					memory:       container.MemoryPercent(),
 					found:        true,
-				}, true
+				})
 			}
 		}
 	}
-	return patrolAlertResourceState{}, false
+	return false
 }
 
-func lookupPatrolAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+func patrolVisitAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRuntimeState, visit patrolAlertResourceVisitor) bool {
 	switch alert.ResourceType {
 	case "storage":
 		for _, storage := range snap.Storage {
 			if patrolAlertNameMatches(alert, storage.ID, storage.Name) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "storage",
 					name:         storage.Name,
 					status:       storage.Status,
 					disk:         storage.Usage,
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "node":
 		for _, node := range snap.Nodes {
 			if patrolAlertNameMatches(alert, node.ID, node.Name) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "node",
 					name:         node.Name,
 					status:       node.Status,
 					cpu:          node.CPU * 100,
 					memory:       node.Memory.Usage,
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "agent":
@@ -1963,59 +1988,59 @@ func lookupPatrolAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRunt
 				if name == "" {
 					name = host.Hostname
 				}
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "agent",
 					name:         name,
 					status:       host.Status,
 					cpu:          host.CPUUsage,
 					memory:       host.Memory.Usage,
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "vm":
 		for _, vm := range snap.VMs {
 			if patrolAlertNameMatches(alert, vm.ID, vm.Name) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "vm",
 					name:         vm.Name,
 					status:       vm.Status,
 					cpu:          vm.CPU * 100,
 					memory:       vm.Memory.Usage,
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "system-container":
 		for _, ct := range snap.Containers {
 			if patrolAlertNameMatches(alert, ct.ID, ct.Name) {
-				return patrolAlertResourceState{
+				return !visit(patrolAlertResourceState{
 					resourceType: "system-container",
 					name:         ct.Name,
 					status:       ct.Status,
 					cpu:          ct.CPU * 100,
 					memory:       ct.Memory.Usage,
 					found:        true,
-				}, true
+				})
 			}
 		}
 	case "app-container":
 		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
 				if patrolAlertNameMatches(alert, container.ID, container.Name) {
-					return patrolAlertResourceState{
+					return !visit(patrolAlertResourceState{
 						resourceType: "app-container",
 						name:         container.Name,
 						status:       container.State,
 						cpu:          container.CPUPercent,
 						memory:       container.MemoryPercent,
 						found:        true,
-					}, true
+					})
 				}
 			}
 		}
 	}
-	return patrolAlertResourceState{}, false
+	return false
 }
 
 func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolRuntimeState) float64 {
