@@ -388,6 +388,23 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
+  const headerIdentity = createMemo(() => {
+    if (props.resource.metricsTarget?.resourceType && props.resource.metricsTarget.resourceId) {
+      return `${props.resource.metricsTarget.resourceType}:${props.resource.metricsTarget.resourceId}`;
+    }
+    if (props.resource.discoveryTarget?.resourceType && props.resource.discoveryTarget.resourceId) {
+      return `${props.resource.discoveryTarget.resourceType}:${props.resource.discoveryTarget.resourceId}`;
+    }
+    const agentId = platformData()?.agent?.agentId;
+    if (agentId) {
+      return `agent:${agentId}`;
+    }
+    const dockerHostId = dockerHostData()?.hostSourceId;
+    if (dockerHostId) {
+      return `docker-host:${dockerHostId}`;
+    }
+    return props.resource.id;
+  });
   const relatedLinks = createMemo(() => {
     const links: Array<{ href: string; label: string; ariaLabel: string }> = [];
     const workloads = workloadsHref();
@@ -529,8 +546,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               {displayName()}
             </div>
           </div>
-          <div class="text-[11px] text-muted truncate" title={props.resource.id}>
-            {props.resource.id}
+          <div class="text-[11px] text-muted truncate" title={headerIdentity()}>
+            {headerIdentity()}
           </div>
           <div class="flex flex-wrap gap-1.5">
             <Show when={typeBadge()}>

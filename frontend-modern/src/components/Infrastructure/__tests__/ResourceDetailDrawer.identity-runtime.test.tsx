@@ -156,12 +156,17 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByText, getAllByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { container, getByText, getAllByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
 
     expect(getByText('Metrics Target')).toBeInTheDocument();
-    expect(getByText('docker-host:docker-host-1')).toBeInTheDocument();
+    expect(getAllByText('docker-host:docker-host-1').length).toBeGreaterThan(1);
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('docker-host-1').length).toBeGreaterThan(0);
+    expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')?.textContent).toBe(
+      'docker-host:docker-host-1',
+    );
   });
 
   it('renders aliases inline when few exist and collapses when many exist', () => {
