@@ -106,6 +106,9 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 		PBSInstances: []models.PBSInstance{
 			{ID: "pbs1", Name: "pbs-main", Datastores: []models.PBSDatastore{{Name: "ds1"}}},
 		},
+		PMGInstances: []models.PMGInstance{
+			{ID: "pmg1", Name: "pmg-main", Host: "pmg.local"},
+		},
 		KubernetesClusters: []models.KubernetesCluster{
 			{ID: "k1", Name: "cluster-1"},
 		},
@@ -184,6 +187,12 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 	filtered = ps.filterStateByScope(state, scope)
 	if len(filtered.Hosts) != 0 {
 		t.Errorf("expected non-canonical 'agent_raid' alias to be rejected, got %d hosts", len(filtered.Hosts))
+	}
+
+	scope = PatrolScope{ResourceTypes: []string{"pmg"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.PMGInstances) != 1 {
+		t.Errorf("expected canonical 'pmg' to match PMG instances, got %d", len(filtered.PMGInstances))
 	}
 }
 
@@ -466,6 +475,10 @@ func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
 			{ID: "s1", Name: "local", Usage: 42},
 			{ID: "s2", Name: "backup", Usage: 10},
 		},
+		PMGInstances: []models.PMGInstance{
+			{ID: "pmg1", Name: "pmg-main", Host: "pmg.local"},
+			{ID: "pmg2", Name: "pmg-edge", Host: "pmg2.local"},
+		},
 	}
 
 	filtered := ps.filterStateByScopeState(state, PatrolScope{
@@ -490,6 +503,26 @@ func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
 	}
 	if got := len(filtered.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeStorage)); got != 1 {
 		t.Fatalf("expected 1 scoped storage resource in provider, got %d", got)
+	}
+
+	filteredPMG := ps.filterStateByScopeState(state, PatrolScope{
+		ResourceIDs:   []string{"pmg.local"},
+		ResourceTypes: []string{"pmg"},
+	})
+	if got := len(filteredPMG.PMGInstances); got != 1 {
+		t.Fatalf("expected 1 scoped PMG instance, got %d", got)
+	}
+	if filteredPMG.PMGInstances[0].ID != "pmg1" {
+		t.Fatalf("expected scoped PMG instance pmg1, got %s", filteredPMG.PMGInstances[0].ID)
+	}
+	if filteredPMG.readState == nil {
+		t.Fatal("expected scoped PMG readState to be rebuilt")
+	}
+	if got := len(filteredPMG.readState.PMGInstances()); got != 1 {
+		t.Fatalf("expected 1 scoped PMG instance in readState, got %d", got)
+	}
+	if got := len(filteredPMG.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePMG)); got != 1 {
+		t.Fatalf("expected 1 scoped PMG resource in provider, got %d", got)
 	}
 }
 

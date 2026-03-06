@@ -993,7 +993,7 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 			typeSet["app-container"] = true
 		case "k8s-cluster":
 			typeSet["k8s-cluster"] = true
-		case "system-container", "vm", "node", "storage", "agent", "pbs":
+		case "system-container", "vm", "node", "storage", "agent", "pbs", "pmg":
 			typeSet[trimmed] = true
 		default:
 			// Unknown/legacy values are preserved to fail closed in matching.
@@ -1181,6 +1181,15 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		if pbsMatches {
 			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
 			includeResourceID(pbs.ID)
+		}
+	}
+	for _, pmg := range snap.PMGInstances {
+		if !matchesType("pmg") {
+			continue
+		}
+		if matchesID(pmg.ID, pmg.Name, pmg.Host) {
+			filtered.PMGInstances = append(filtered.PMGInstances, pmg)
+			includeResourceID(pmg.ID)
 		}
 	}
 	for _, h := range snap.Hosts {
