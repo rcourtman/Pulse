@@ -20,6 +20,7 @@ type mockReadState struct {
 	vms         []*ur.VMView
 	containers  []*ur.ContainerView
 	hosts       []*ur.HostView
+	storage     []*ur.StoragePoolView
 	k8sClusters []*ur.K8sClusterView
 }
 
@@ -31,7 +32,7 @@ func (m *mockReadState) DockerHosts() []*ur.DockerHostView { return nil }
 func (m *mockReadState) DockerContainers() []*ur.DockerContainerView {
 	return nil
 }
-func (m *mockReadState) StoragePools() []*ur.StoragePoolView     { return nil }
+func (m *mockReadState) StoragePools() []*ur.StoragePoolView     { return m.storage }
 func (m *mockReadState) PBSInstances() []*ur.PBSInstanceView     { return nil }
 func (m *mockReadState) PMGInstances() []*ur.PMGInstanceView     { return nil }
 func (m *mockReadState) K8sClusters() []*ur.K8sClusterView       { return m.k8sClusters }

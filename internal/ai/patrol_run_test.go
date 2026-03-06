@@ -1383,6 +1383,74 @@ func TestGetCurrentMetricValue_Storage(t *testing.T) {
 	}
 }
 
+func TestGetCurrentMetricValue_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "n1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName: "node-1",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 42},
+			Memory: &unifiedresources.MetricValue{Percent: 33},
+		},
+	})
+	state.readState = &mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}}
+
+	val := ps.getCurrentMetricValueState(AlertInfo{ResourceID: "n1", ResourceType: "node", Type: "cpu"}, state)
+	if val != 42.0 {
+		t.Fatalf("expected readState-backed CPU 42.0, got %f", val)
+	}
+
+	val = ps.getCurrentMetricValueState(AlertInfo{ResourceID: "n1", ResourceType: "node", Type: "memory"}, state)
+	if val != 33.0 {
+		t.Fatalf("expected readState-backed memory 33.0, got %f", val)
+	}
+}
+
+func TestIsResourceOnline_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID:     "h1",
+		Name:   "host-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Agent: &unifiedresources.AgentData{
+			Hostname: "host-1",
+		},
+	})
+	state.readState = &mockReadState{hosts: []*unifiedresources.HostView{&hostView}}
+
+	if !ps.isResourceOnlineState(AlertInfo{ResourceID: "h1", ResourceType: "agent", Type: "offline"}, state) {
+		t.Fatal("expected host to be online via readState")
+	}
+}
+
+func TestGetResourceCurrentState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	storageView := unifiedresources.NewStoragePoolView(&unifiedresources.Resource{
+		ID:     "s1",
+		Name:   "local",
+		Type:   unifiedresources.ResourceTypeStorage,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 72.5},
+		},
+	})
+	state.readState = &mockReadState{storage: []*unifiedresources.StoragePoolView{&storageView}}
+
+	desc := ps.getResourceCurrentStateState(AlertInfo{ResourceID: "s1", ResourceType: "storage"}, state)
+	if !strings.Contains(desc, "Storage 'local': 72.5% used") {
+		t.Fatalf("expected readState-backed storage description, got %q", desc)
+	}
+}
+
 // --- shouldResolveAlert (heuristic-only, no AI) ---
 
 func TestShouldResolveAlert_StorageUsageDropped(t *testing.T) {
