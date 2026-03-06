@@ -1,5 +1,6 @@
 import { Accessor, Component, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { controlClass, formField, formHelpText, labelClass } from '@/components/shared/Form';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
@@ -31,7 +32,12 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
   return (
     <>
       <Show when={props.showExportDialog()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <Dialog
+          isOpen={true}
+          onClose={props.closeExportDialog}
+          panelClass="max-w-md"
+          ariaLabel="Export configuration"
+        >
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="Export configuration" size="md" class="mb-4" />
 
@@ -165,11 +171,16 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </div>
             </div>
           </Card>
-        </div>
+        </Dialog>
       </Show>
 
       <Show when={props.showApiTokenModal()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <Dialog
+          isOpen={true}
+          onClose={props.closeApiTokenModal}
+          panelClass="max-w-md"
+          ariaLabel="API token required"
+        >
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="API token required" size="md" class="mb-4" />
 
@@ -218,11 +229,16 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </button>
             </div>
           </Card>
-        </div>
+        </Dialog>
       </Show>
 
       <Show when={props.showImportDialog()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <Dialog
+          isOpen={true}
+          onClose={props.closeImportDialog}
+          panelClass="max-w-md"
+          ariaLabel="Import configuration"
+        >
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="Import configuration" size="md" class="mb-4" />
 
@@ -280,7 +296,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
               </div>
             </div>
           </Card>
-        </div>
+        </Dialog>
       </Show>
     </>
   );

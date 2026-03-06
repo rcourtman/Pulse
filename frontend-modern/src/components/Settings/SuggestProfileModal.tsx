@@ -14,6 +14,7 @@ import {
   type ConfigKeyDefinition,
   type ConfigValidationResult,
 } from '@/api/agentProfiles';
+import { Dialog } from '@/components/shared/Dialog';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
@@ -253,8 +254,13 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
   };
 
   return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+    <Dialog
+      isOpen={true}
+      onClose={props.onClose}
+      panelClass="max-w-2xl"
+      ariaLabel="Profile ideas"
+    >
+      <div class="w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div class="flex items-center gap-3">
@@ -646,7 +652,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
           </Show>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 };
 

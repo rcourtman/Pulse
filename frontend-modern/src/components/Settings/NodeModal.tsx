@@ -1,5 +1,4 @@
 import { Component, Show, For, createSignal, createEffect, createMemo } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -18,6 +17,7 @@ import {
 } from '@/components/shared/Form';
 import { logger } from '@/utils/logger';
 import { TogglePrimitive } from '@/components/shared/Toggle';
+import { Dialog } from '@/components/shared/Dialog';
 import { licenseStatus, startProTrial } from '@/stores/license';
 
 interface NodeModalProps {
@@ -477,15 +477,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   };
 
   return (
-    <Portal>
-      <Show when={props.isOpen}>
-        <div class="fixed inset-0 z-50 overflow-y-auto">
-          <div class="flex min-h-screen items-center justify-center p-4">
-            {/* Backdrop */}
-            <div class="fixed inset-0 bg-black transition-opacity" onClick={props.onClose} />
-
-            {/* Modal */}
-            <div class="relative w-full max-w-2xl bg-surface rounded-md shadow-sm">
+    <Dialog
+      isOpen={props.isOpen}
+      onClose={props.onClose}
+      panelClass="max-w-2xl"
+      ariaLabel={`${isEditingExistingNode() ? 'Edit' : 'Add'} ${nodeProductName()} node`}
+    >
+      <div class="relative w-full">
               <form onSubmit={handleSubmit}>
                 {/* Header */}
                 <div class="flex items-center justify-between p-4 border-b border-border">
@@ -2502,10 +2500,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   </div>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      </Show>
-    </Portal>
+      </div>
+    </Dialog>
   );
 };

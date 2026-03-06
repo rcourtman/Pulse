@@ -1,7 +1,7 @@
-import { Component, createSignal, Show } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { Component, Show, createSignal } from 'solid-js';
 import { apiFetch } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
+import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
@@ -98,13 +98,14 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
   };
 
   return (
-    <Show when={props.isOpen}>
-      <Portal>
-        <div
-          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
-          style="z-index: 9999"
-        >
-          <div class="bg-surface rounded-md shadow-sm max-w-md w-full">
+    <Dialog
+      isOpen={props.isOpen}
+      onClose={handleClose}
+      panelClass="max-w-md"
+      closeOnBackdrop={!loading()}
+      ariaLabel="Change password"
+    >
+      <div class="w-full">
             <div class="flex items-center justify-between p-6 border-b border-border">
               <SectionHeader title="Change password" size="lg" class="flex-1" />
               <button
@@ -196,9 +197,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      </Portal>
-    </Show>
+      </div>
+    </Dialog>
   );
 };

@@ -1,6 +1,7 @@
 import { Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import type { Component } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import { copyToClipboard } from '@/utils/clipboard';
 import { showError, showSuccess } from '@/utils/toast';
 import { useTokenRevealState, dismissTokenReveal } from '@/stores/tokenReveal';
@@ -70,9 +71,13 @@ export const TokenRevealDialog: Component = () => {
                 : null;
 
         return (
-          <div class="fixed inset-0 z-[60] flex items-center justify-center px-4 py-6">
-            <div class="absolute inset-0 bg-base" role="presentation" onClick={handleDismiss} />
-            <div class="relative z-[61] w-full max-w-xl">
+          <Dialog
+            isOpen={true}
+            onClose={handleDismiss}
+            panelClass="max-w-xl"
+            ariaLabel="API token ready"
+          >
+            <div class="w-full">
               <Card padding="lg" class="shadow-sm relative">
                 <button
                   type="button"
@@ -148,7 +153,7 @@ export const TokenRevealDialog: Component = () => {
                 </div>
               </Card>
             </div>
-          </div>
+          </Dialog>
         );
       }}
     </Show>

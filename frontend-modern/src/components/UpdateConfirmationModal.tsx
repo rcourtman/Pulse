@@ -1,5 +1,6 @@
 import { createEffect, createSignal, Show, For } from 'solid-js';
 import type { UpdatePlan } from '@/api/updates';
+import { Dialog } from '@/components/shared/Dialog';
 
 interface UpdateConfirmationModalProps {
   isOpen: boolean;
@@ -16,6 +17,11 @@ interface UpdateConfirmationModalProps {
 
 export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
   const [acknowledged, setAcknowledged] = createSignal(false);
+  const handleClose = () => {
+    if (!props.isApplying) {
+      props.onClose();
+    }
+  };
 
   createEffect(() => {
     if (!props.isOpen) {
@@ -30,17 +36,23 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
   };
 
   return (
-    <Show when={props.isOpen}>
-      <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
-        <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <Dialog
+      isOpen={props.isOpen}
+      onClose={handleClose}
+      panelClass="max-w-2xl"
+      closeOnBackdrop={!props.isApplying}
+      ariaLabel="Confirm update"
+    >
+      <div class="w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center justify-between">
               <h2 class="text-xl font-semibold text-base-content">Confirm Update</h2>
               <button
-                onClick={props.onClose}
+                onClick={handleClose}
                 class=" hover:text-base-content"
                 disabled={props.isApplying}
+                type="button"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -245,9 +257,10 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
           {/* Footer */}
           <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">
             <button
-              onClick={props.onClose}
+              onClick={handleClose}
               disabled={props.isApplying}
               class="px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
             >
               Cancel
             </button>
@@ -255,6 +268,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
               onClick={handleConfirm}
               disabled={!acknowledged() || props.isApplying}
               class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              type="button"
             >
               <Show when={props.isApplying}>
                 <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -276,8 +290,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
               <span>{props.isApplying ? 'Starting...' : 'Start Update'}</span>
             </button>
           </div>
-        </div>
       </div>
-    </Show>
+    </Dialog>
   );
 }

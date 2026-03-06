@@ -1,5 +1,6 @@
 import { createSignal, Show, onCleanup, createEffect } from 'solid-js';
 import { UpdatesAPI, type UpdateStatus } from '@/api/updates';
+import { Dialog } from '@/components/shared/Dialog';
 import { apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
@@ -371,16 +372,27 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     return currentStatus.message || 'Updating...';
   };
 
+  const handleClose = () => {
+    if (isComplete()) {
+      props.onClose();
+    }
+  };
+
   return (
-    <Show when={props.isOpen}>
-      <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
-        <div class="bg-surface rounded-md shadow-sm max-w-2xl w-full">
+    <Dialog
+      isOpen={props.isOpen}
+      onClose={handleClose}
+      panelClass="max-w-2xl"
+      closeOnBackdrop={isComplete()}
+      ariaLabel="Updating Pulse"
+    >
+      <div class="w-full">
           {/* Header */}
           <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center justify-between">
               <h2 class="text-xl font-semibold text-base-content">Updating Pulse</h2>
               <Show when={isComplete()}>
-                <button onClick={props.onClose} class=" hover:text-base-content">
+                <button onClick={handleClose} class=" hover:text-base-content" type="button">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
@@ -469,6 +481,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                         <button
                           onClick={() => window.location.reload()}
                           class="mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                          type="button"
                         >
                           Reload Now
                         </button>
@@ -509,6 +522,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                 <button
                   onClick={props.onViewHistory}
                   class="px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors"
+                  type="button"
                 >
                   View History
                 </button>
@@ -517,20 +531,21 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                 <button
                   onClick={() => window.location.reload()}
                   class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                  type="button"
                 >
                   Retry
                 </button>
               </Show>
               <button
-                onClick={props.onClose}
+                onClick={handleClose}
                 class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                type="button"
               >
                 Close
               </button>
             </div>
           </Show>
-        </div>
       </div>
-    </Show>
+    </Dialog>
   );
 }
