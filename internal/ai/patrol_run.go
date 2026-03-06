@@ -1631,129 +1631,220 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.State
 	return p.getCurrentMetricValueState(alert, p.patrolRuntimeStateForSnapshot(snap))
 }
 
-func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolRuntimeState) float64 {
+type patrolAlertResourceState struct {
+	resourceType string
+	name         string
+	status       string
+	cpu          float64
+	memory       float64
+	disk         float64
+	found        bool
+}
+
+func patrolAlertNameMatches(alert AlertInfo, ids ...string) bool {
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		if id == alert.ResourceID || id == alert.ResourceName {
+			return true
+		}
+	}
+	return false
+}
+
+func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) patrolAlertResourceState {
 	if rs := snap.readState; rs != nil {
 		switch alert.ResourceType {
+		case "storage":
+			for _, storage := range rs.StoragePools() {
+				if patrolAlertNameMatches(alert, storage.ID(), storage.Name()) {
+					return patrolAlertResourceState{
+						resourceType: "storage",
+						name:         storage.Name(),
+						status:       string(storage.Status()),
+						disk:         storage.DiskPercent(),
+						found:        true,
+					}
+				}
+			}
 		case "node":
 			for _, node := range rs.Nodes() {
-				if node.ID() == alert.ResourceID || node.Name() == alert.ResourceName {
-					if alert.Type == "cpu" {
-						return node.CPUPercent()
-					} else if alert.Type == "memory" {
-						return node.MemoryPercent()
+				if patrolAlertNameMatches(alert, node.ID(), node.Name()) {
+					return patrolAlertResourceState{
+						resourceType: "node",
+						name:         node.Name(),
+						status:       string(node.Status()),
+						cpu:          node.CPUPercent(),
+						memory:       node.MemoryPercent(),
+						found:        true,
 					}
 				}
 			}
 		case "agent":
 			for _, host := range rs.Hosts() {
-				if host.ID() == alert.ResourceID || host.Name() == alert.ResourceName || host.Hostname() == alert.ResourceName {
-					if alert.Type == "cpu" {
-						return host.CPUPercent()
-					} else if alert.Type == "memory" {
-						return host.MemoryPercent()
+				if patrolAlertNameMatches(alert, host.ID(), host.Name(), host.Hostname()) {
+					name := host.Hostname()
+					if name == "" {
+						name = host.Name()
+					}
+					return patrolAlertResourceState{
+						resourceType: "agent",
+						name:         name,
+						status:       string(host.Status()),
+						cpu:          host.CPUPercent(),
+						memory:       host.MemoryPercent(),
+						found:        true,
 					}
 				}
 			}
 		case "vm":
 			for _, vm := range rs.VMs() {
-				if vm.ID() == alert.ResourceID || vm.Name() == alert.ResourceName {
-					if alert.Type == "cpu" {
-						return vm.CPUPercent()
-					} else if alert.Type == "memory" {
-						return vm.MemoryPercent()
+				if patrolAlertNameMatches(alert, vm.ID(), vm.Name()) {
+					return patrolAlertResourceState{
+						resourceType: "vm",
+						name:         vm.Name(),
+						status:       string(vm.Status()),
+						cpu:          vm.CPUPercent(),
+						memory:       vm.MemoryPercent(),
+						found:        true,
 					}
 				}
 			}
 		case "system-container":
 			for _, ct := range rs.Containers() {
-				if ct.ID() == alert.ResourceID || ct.Name() == alert.ResourceName {
-					if alert.Type == "cpu" {
-						return ct.CPUPercent()
-					} else if alert.Type == "memory" {
-						return ct.MemoryPercent()
+				if patrolAlertNameMatches(alert, ct.ID(), ct.Name()) {
+					return patrolAlertResourceState{
+						resourceType: "system-container",
+						name:         ct.Name(),
+						status:       string(ct.Status()),
+						cpu:          ct.CPUPercent(),
+						memory:       ct.MemoryPercent(),
+						found:        true,
 					}
 				}
 			}
 		case "app-container":
 			for _, container := range rs.DockerContainers() {
-				if container.ID() == alert.ResourceID || container.Name() == alert.ResourceName {
-					if alert.Type == "cpu" {
-						return container.CPUPercent()
-					} else if alert.Type == "memory" {
-						return container.MemoryPercent()
+				if patrolAlertNameMatches(alert, container.ID(), container.Name()) {
+					return patrolAlertResourceState{
+						resourceType: "app-container",
+						name:         container.Name(),
+						status:       container.ContainerState(),
+						cpu:          container.CPUPercent(),
+						memory:       container.MemoryPercent(),
+						found:        true,
 					}
-				}
-			}
-		case "storage":
-			for _, storage := range rs.StoragePools() {
-				if storage.ID() == alert.ResourceID || storage.Name() == alert.ResourceName {
-					return storage.DiskPercent()
 				}
 			}
 		}
 	}
 
 	switch alert.ResourceType {
+	case "storage":
+		for _, storage := range snap.Storage {
+			if patrolAlertNameMatches(alert, storage.ID, storage.Name) {
+				return patrolAlertResourceState{
+					resourceType: "storage",
+					name:         storage.Name,
+					status:       storage.Status,
+					disk:         storage.Usage,
+					found:        true,
+				}
+			}
+		}
 	case "node":
 		for _, node := range snap.Nodes {
-			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
-				if alert.Type == "cpu" {
-					return node.CPU * 100
-				} else if alert.Type == "memory" {
-					return node.Memory.Usage
+			if patrolAlertNameMatches(alert, node.ID, node.Name) {
+				return patrolAlertResourceState{
+					resourceType: "node",
+					name:         node.Name,
+					status:       node.Status,
+					cpu:          node.CPU * 100,
+					memory:       node.Memory.Usage,
+					found:        true,
 				}
 			}
 		}
 	case "agent":
 		for _, host := range snap.Hosts {
-			if host.ID == alert.ResourceID || host.DisplayName == alert.ResourceName || host.Hostname == alert.ResourceName {
-				if alert.Type == "cpu" {
-					return host.CPUUsage
-				} else if alert.Type == "memory" {
-					return host.Memory.Usage
+			if patrolAlertNameMatches(alert, host.ID, host.DisplayName, host.Hostname) {
+				name := host.DisplayName
+				if name == "" {
+					name = host.Hostname
+				}
+				return patrolAlertResourceState{
+					resourceType: "agent",
+					name:         name,
+					status:       host.Status,
+					cpu:          host.CPUUsage,
+					memory:       host.Memory.Usage,
+					found:        true,
 				}
 			}
 		}
 	case "vm":
 		for _, vm := range snap.VMs {
-			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
-				if alert.Type == "cpu" {
-					return vm.CPU * 100
-				} else if alert.Type == "memory" {
-					return vm.Memory.Usage
+			if patrolAlertNameMatches(alert, vm.ID, vm.Name) {
+				return patrolAlertResourceState{
+					resourceType: "vm",
+					name:         vm.Name,
+					status:       vm.Status,
+					cpu:          vm.CPU * 100,
+					memory:       vm.Memory.Usage,
+					found:        true,
 				}
 			}
 		}
 	case "system-container":
 		for _, ct := range snap.Containers {
-			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
-				if alert.Type == "cpu" {
-					return ct.CPU * 100
-				} else if alert.Type == "memory" {
-					return ct.Memory.Usage
+			if patrolAlertNameMatches(alert, ct.ID, ct.Name) {
+				return patrolAlertResourceState{
+					resourceType: "system-container",
+					name:         ct.Name,
+					status:       ct.Status,
+					cpu:          ct.CPU * 100,
+					memory:       ct.Memory.Usage,
+					found:        true,
 				}
 			}
 		}
 	case "app-container":
 		for _, host := range snap.DockerHosts {
 			for _, container := range host.Containers {
-				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
-					if alert.Type == "cpu" {
-						return container.CPUPercent
-					} else if alert.Type == "memory" {
-						return container.MemoryPercent
+				if patrolAlertNameMatches(alert, container.ID, container.Name) {
+					return patrolAlertResourceState{
+						resourceType: "app-container",
+						name:         container.Name,
+						status:       container.State,
+						cpu:          container.CPUPercent,
+						memory:       container.MemoryPercent,
+						found:        true,
 					}
 				}
 			}
 		}
-	case "storage":
-		for _, storage := range snap.Storage {
-			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
-				return storage.Usage
-			}
+	}
+
+	return patrolAlertResourceState{}
+}
+
+func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolRuntimeState) float64 {
+	resource := lookupPatrolAlertResourceState(alert, snap)
+	if !resource.found {
+		return -1
+	}
+	switch alert.Type {
+	case "cpu":
+		return resource.cpu
+	case "memory":
+		return resource.memory
+	default:
+		if resource.resourceType == "storage" {
+			return resource.disk
 		}
 	}
-	return -1 // Not found
+	return -1
 }
 
 // isResourceOnline checks if a resource that triggered an offline alert is now online
@@ -1762,76 +1853,18 @@ func (p *PatrolService) isResourceOnline(alert AlertInfo, snap models.StateSnaps
 }
 
 func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntimeState) bool {
-	if rs := snap.readState; rs != nil {
-		switch alert.ResourceType {
-		case "node":
-			for _, node := range rs.Nodes() {
-				if (node.ID() == alert.ResourceID || node.Name() == alert.ResourceName) && node.Status() == unifiedresources.StatusOnline {
-					return true
-				}
-			}
-		case "agent":
-			for _, host := range rs.Hosts() {
-				if (host.ID() == alert.ResourceID || host.Name() == alert.ResourceName || host.Hostname() == alert.ResourceName) && host.Status() == unifiedresources.StatusOnline {
-					return true
-				}
-			}
-		case "vm":
-			for _, vm := range rs.VMs() {
-				if (vm.ID() == alert.ResourceID || vm.Name() == alert.ResourceName) && vm.Status() == unifiedresources.StatusOnline {
-					return true
-				}
-			}
-		case "system-container":
-			for _, ct := range rs.Containers() {
-				if (ct.ID() == alert.ResourceID || ct.Name() == alert.ResourceName) && ct.Status() == unifiedresources.StatusOnline {
-					return true
-				}
-			}
-		case "app-container":
-			for _, container := range rs.DockerContainers() {
-				if (container.ID() == alert.ResourceID || container.Name() == alert.ResourceName) && container.Status() == unifiedresources.StatusOnline {
-					return true
-				}
-			}
-		}
+	resource := lookupPatrolAlertResourceState(alert, snap)
+	if !resource.found {
+		return false
 	}
-
-	switch alert.ResourceType {
-	case "node":
-		for _, node := range snap.Nodes {
-			if (node.ID == alert.ResourceID || node.Name == alert.ResourceName) && node.Status == "online" {
-				return true
-			}
-		}
-	case "agent":
-		for _, host := range snap.Hosts {
-			if (host.ID == alert.ResourceID || host.DisplayName == alert.ResourceName || host.Hostname == alert.ResourceName) && host.Status == "online" {
-				return true
-			}
-		}
-	case "vm":
-		for _, vm := range snap.VMs {
-			if (vm.ID == alert.ResourceID || vm.Name == alert.ResourceName) && vm.Status == "running" {
-				return true
-			}
-		}
-	case "system-container":
-		for _, ct := range snap.Containers {
-			if (ct.ID == alert.ResourceID || ct.Name == alert.ResourceName) && ct.Status == "running" {
-				return true
-			}
-		}
-	case "app-container":
-		for _, host := range snap.DockerHosts {
-			for _, container := range host.Containers {
-				if (container.ID == alert.ResourceID || container.Name == alert.ResourceName) && container.State == "running" {
-					return true
-				}
-			}
-		}
+	switch resource.resourceType {
+	case "node", "agent":
+		return resource.status == "online"
+	case "vm", "system-container", "app-container":
+		return resource.status == "running" || resource.status == string(unifiedresources.StatusOnline)
+	default:
+		return false
 	}
-	return false
 }
 
 // askAIAboutAlert uses the AI to determine if an alert should be resolved
@@ -1888,116 +1921,43 @@ func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.Sta
 }
 
 func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patrolRuntimeState) string {
-	if rs := snap.readState; rs != nil {
+	resource := lookupPatrolAlertResourceState(alert, snap)
+	if !resource.found {
 		switch alert.ResourceType {
 		case "storage":
-			for _, storage := range rs.StoragePools() {
-				if storage.ID() == alert.ResourceID || storage.Name() == alert.ResourceName {
-					return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", storage.Name(), storage.DiskPercent(), storage.Status())
-				}
-			}
 			return "Storage not found in current state (may have been removed)"
 		case "node":
-			for _, node := range rs.Nodes() {
-				if node.ID() == alert.ResourceID || node.Name() == alert.ResourceName {
-					return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-						node.Name(), node.CPUPercent(), node.MemoryPercent(), node.Status())
-				}
-			}
 			return "Node not found in current state"
 		case "agent":
-			for _, host := range rs.Hosts() {
-				hostName := host.Hostname()
-				if hostName == "" {
-					hostName = host.Name()
-				}
-				if host.ID() == alert.ResourceID || hostName == alert.ResourceName || host.Hostname() == alert.ResourceName {
-					return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-						hostName, host.CPUPercent(), host.MemoryPercent(), host.Status())
-				}
-			}
 			return "Agent host not found in current state"
 		case "vm":
-			for _, vm := range rs.VMs() {
-				if vm.ID() == alert.ResourceID || vm.Name() == alert.ResourceName {
-					return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-						vm.Name(), vm.CPUPercent(), vm.MemoryPercent(), vm.Status())
-				}
-			}
 			return "VM not found in current state"
 		case "system-container":
-			for _, ct := range rs.Containers() {
-				if ct.ID() == alert.ResourceID || ct.Name() == alert.ResourceName {
-					return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-						ct.Name(), ct.CPUPercent(), ct.MemoryPercent(), ct.Status())
-				}
-			}
 			return "Container not found in current state"
 		case "app-container":
-			for _, container := range rs.DockerContainers() {
-				if container.ID() == alert.ResourceID || container.Name() == alert.ResourceName {
-					return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
-						container.Name(), container.CPUPercent(), container.MemoryPercent(), container.Status())
-				}
-			}
 			return "Docker container not found in current state"
+		default:
+			return "Resource state unknown"
 		}
 	}
-
-	switch alert.ResourceType {
+	switch resource.resourceType {
 	case "storage":
-		for _, storage := range snap.Storage {
-			if storage.ID == alert.ResourceID || storage.Name == alert.ResourceName {
-				return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", storage.Name, storage.Usage, storage.Status)
-			}
-		}
-		return "Storage not found in current state (may have been removed)"
+		return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", resource.name, resource.disk, resource.status)
 	case "node":
-		for _, node := range snap.Nodes {
-			if node.ID == alert.ResourceID || node.Name == alert.ResourceName {
-				return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-					node.Name, node.CPU, node.Memory.Usage, node.Status)
-			}
-		}
-		return "Node not found in current state"
+		return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+			resource.name, resource.cpu, resource.memory, resource.status)
 	case "agent":
-		for _, host := range snap.Hosts {
-			hostName := host.DisplayName
-			if hostName == "" {
-				hostName = host.Hostname
-			}
-			if host.ID == alert.ResourceID || hostName == alert.ResourceName || host.Hostname == alert.ResourceName {
-				return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-					hostName, host.CPUUsage, host.Memory.Usage, host.Status)
-			}
-		}
-		return "Agent host not found in current state"
+		return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+			resource.name, resource.cpu, resource.memory, resource.status)
 	case "vm":
-		for _, vm := range snap.VMs {
-			if vm.ID == alert.ResourceID || vm.Name == alert.ResourceName {
-				return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-					vm.Name, vm.CPU, vm.Memory.Usage, vm.Status)
-			}
-		}
-		return "VM not found in current state"
+		return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+			resource.name, resource.cpu, resource.memory, resource.status)
 	case "system-container":
-		for _, ct := range snap.Containers {
-			if ct.ID == alert.ResourceID || ct.Name == alert.ResourceName {
-				return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-					ct.Name, ct.CPU, ct.Memory.Usage, ct.Status)
-			}
-		}
-		return "Container not found in current state"
+		return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+			resource.name, resource.cpu, resource.memory, resource.status)
 	case "app-container":
-		for _, host := range snap.DockerHosts {
-			for _, container := range host.Containers {
-				if container.ID == alert.ResourceID || container.Name == alert.ResourceName {
-					return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
-						container.Name, container.CPUPercent, container.MemoryPercent, container.State)
-				}
-			}
-		}
-		return "Docker container not found in current state"
+		return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
+			resource.name, resource.cpu, resource.memory, resource.status)
 	default:
 		return "Resource state unknown"
 	}

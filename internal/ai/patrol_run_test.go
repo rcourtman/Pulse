@@ -1451,6 +1451,39 @@ func TestGetResourceCurrentState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T
 	}
 }
 
+func TestAlertResolutionHelpers_UseReadStateForAppContainer(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	parentID := "docker-1"
+	containerView := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "dc-1",
+		Name:     "web",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOnline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "running",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 12.3},
+			Memory: &unifiedresources.MetricValue{Percent: 45.6},
+		},
+	})
+	state.readState = &mockReadState{dockerCtrs: []*unifiedresources.DockerContainerView{&containerView}}
+
+	alert := AlertInfo{ResourceID: "dc-1", ResourceName: "web", ResourceType: "app-container", Type: "cpu"}
+	if got := ps.getCurrentMetricValueState(alert, state); got != 12.3 {
+		t.Fatalf("expected readState-backed docker CPU 12.3, got %f", got)
+	}
+	if !ps.isResourceOnlineState(AlertInfo{ResourceID: "dc-1", ResourceName: "web", ResourceType: "app-container"}, state) {
+		t.Fatal("expected docker container to be online via readState")
+	}
+	desc := ps.getResourceCurrentStateState(AlertInfo{ResourceID: "dc-1", ResourceName: "web", ResourceType: "app-container"}, state)
+	if !strings.Contains(desc, "Docker container 'web': CPU 12.3%, Memory 45.6%, State: running") {
+		t.Fatalf("expected readState-backed docker container description, got %q", desc)
+	}
+}
+
 // --- shouldResolveAlert (heuristic-only, no AI) ---
 
 func TestShouldResolveAlert_StorageUsageDropped(t *testing.T) {
