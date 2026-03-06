@@ -1411,16 +1411,24 @@ func (p *PatrolService) buildScopedSet(scope *PatrolScope) map[string]bool {
 		return nil
 	}
 
+	return p.buildScopedSetWithCorrelations(scope.ResourceIDs)
+}
+
+func (p *PatrolService) buildScopedSetWithCorrelations(resourceIDs []string) map[string]bool {
+	if len(resourceIDs) == 0 {
+		return nil
+	}
+
 	p.mu.RLock()
 	corrDet := p.correlationDetector
 	p.mu.RUnlock()
 
 	scopedSet := make(map[string]bool)
-	for _, id := range scope.ResourceIDs {
+	for _, id := range resourceIDs {
 		scopedSet[id] = true
 	}
 	if corrDet != nil {
-		for _, id := range scope.ResourceIDs {
+		for _, id := range resourceIDs {
 			for _, c := range corrDet.GetCorrelationsForResource(id) {
 				scopedSet[c.SourceID] = true
 				scopedSet[c.TargetID] = true
@@ -1448,11 +1456,7 @@ func (p *PatrolService) buildScopedSetForRuntime(scope *PatrolScope, snap patrol
 	if len(resourceIDs) == 0 {
 		return nil
 	}
-	scopedSet := make(map[string]bool, len(resourceIDs))
-	for _, id := range resourceIDs {
-		scopedSet[id] = true
-	}
-	return scopedSet
+	return p.buildScopedSetWithCorrelations(resourceIDs)
 }
 
 // seedPreviousRun returns the previous patrol run summary section.
