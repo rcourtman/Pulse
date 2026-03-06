@@ -38,15 +38,17 @@ type TriageResult struct {
 
 // TriageSummary provides top-level infrastructure counts.
 type TriageSummary struct {
-	TotalNodes    int
-	TotalGuests   int
-	RunningGuests int
-	StoppedGuests int
-	TotalStorage  int
-	TotalDocker   int
-	TotalPBS      int
-	TotalPMG      int
-	FlaggedCount  int
+	TotalNodes         int
+	TotalGuests        int
+	RunningGuests      int
+	StoppedGuests      int
+	TotalStoragePools  int
+	TotalPhysicalDisks int
+	TotalStorage       int
+	TotalDocker        int
+	TotalPBS           int
+	TotalPMG           int
+	FlaggedCount       int
 }
 
 // RunDeterministicTriage runs deterministic checks and returns triage output for seed/context use.
@@ -802,11 +804,13 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	scanned := triage.Summary.TotalNodes + triage.Summary.TotalGuests + triage.Summary.TotalStorage +
 		triage.Summary.TotalDocker + triage.Summary.TotalPBS + triage.Summary.TotalPMG
 	sb.WriteString(fmt.Sprintf(
-		"Scanned %d resources: %d nodes, %d guests, %d storage, %d docker hosts, %d PBS, %d PMG.\n\n",
+		"Scanned %d resources: %d nodes, %d guests, %d storage resources (%d pools, %d physical disks), %d docker hosts, %d PBS, %d PMG.\n\n",
 		scanned,
 		triage.Summary.TotalNodes,
 		triage.Summary.TotalGuests,
 		triage.Summary.TotalStorage,
+		triage.Summary.TotalStoragePools,
+		triage.Summary.TotalPhysicalDisks,
 		triage.Summary.TotalDocker,
 		triage.Summary.TotalPBS,
 		triage.Summary.TotalPMG,
@@ -872,7 +876,10 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	sb.WriteString(fmt.Sprintf("## Healthy Resources (%d)\n", totalHealthy))
 	sb.WriteString(fmt.Sprintf("Nodes: %d healthy\n", healthyNodes))
 	sb.WriteString(fmt.Sprintf("Guests: %d running, %d stopped\n", triage.Summary.RunningGuests, triage.Summary.StoppedGuests))
-	sb.WriteString(fmt.Sprintf("Storage: %d resources monitored\n", healthyStorage))
+	sb.WriteString(fmt.Sprintf("Storage: %d resources monitored (%d pools, %d physical disks)\n",
+		healthyStorage,
+		triage.Summary.TotalStoragePools,
+		triage.Summary.TotalPhysicalDisks))
 	sb.WriteString(fmt.Sprintf("Docker: %d hosts\n", healthyDocker))
 	sb.WriteString(fmt.Sprintf("PBS: %d instances\n", healthyPBS))
 	sb.WriteString(fmt.Sprintf("PMG: %d instances\n", healthyPMG))
@@ -886,19 +893,20 @@ func triageBuildSummary(snap models.StateSnapshot, flaggedIDs map[string]bool) T
 
 func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool) TriageSummary {
 	if rs := snap.readState; rs != nil {
-		totalStorage := len(rs.StoragePools())
+		totalStoragePools := len(rs.StoragePools())
+		totalPhysicalDisks := len(snap.PhysicalDisks)
 		if snap.unifiedResourceProvider != nil {
-			totalStorage += len(snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
-		} else {
-			totalStorage += len(snap.PhysicalDisks)
+			totalPhysicalDisks = len(snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
 		}
 		summary := TriageSummary{
-			TotalNodes:   len(rs.Nodes()),
-			TotalStorage: totalStorage,
-			TotalDocker:  len(rs.DockerHosts()),
-			TotalPBS:     len(rs.PBSInstances()),
-			TotalPMG:     len(rs.PMGInstances()),
-			FlaggedCount: len(flaggedIDs),
+			TotalNodes:         len(rs.Nodes()),
+			TotalStoragePools:  totalStoragePools,
+			TotalPhysicalDisks: totalPhysicalDisks,
+			TotalStorage:       totalStoragePools + totalPhysicalDisks,
+			TotalDocker:        len(rs.DockerHosts()),
+			TotalPBS:           len(rs.PBSInstances()),
+			TotalPMG:           len(rs.PMGInstances()),
+			FlaggedCount:       len(flaggedIDs),
 		}
 
 		for _, vm := range rs.VMs() {
@@ -931,12 +939,14 @@ func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool
 	}
 
 	summary := TriageSummary{
-		TotalNodes:   len(snap.Nodes),
-		TotalStorage: len(snap.Storage) + len(snap.PhysicalDisks),
-		TotalDocker:  len(snap.DockerHosts),
-		TotalPBS:     len(snap.PBSInstances),
-		TotalPMG:     len(snap.PMGInstances),
-		FlaggedCount: len(flaggedIDs),
+		TotalNodes:         len(snap.Nodes),
+		TotalStoragePools:  len(snap.Storage),
+		TotalPhysicalDisks: len(snap.PhysicalDisks),
+		TotalStorage:       len(snap.Storage) + len(snap.PhysicalDisks),
+		TotalDocker:        len(snap.DockerHosts),
+		TotalPBS:           len(snap.PBSInstances),
+		TotalPMG:           len(snap.PMGInstances),
+		FlaggedCount:       len(flaggedIDs),
 	}
 
 	for _, vm := range snap.VMs {

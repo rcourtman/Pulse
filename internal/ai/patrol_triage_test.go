@@ -605,15 +605,17 @@ func TestFormatTriageBriefing(t *testing.T) {
 			},
 		},
 		Summary: TriageSummary{
-			TotalNodes:    1,
-			TotalGuests:   2,
-			RunningGuests: 2,
-			StoppedGuests: 0,
-			TotalStorage:  1,
-			TotalDocker:   1,
-			TotalPBS:      1,
-			TotalPMG:      0,
-			FlaggedCount:  1,
+			TotalNodes:         1,
+			TotalGuests:        2,
+			RunningGuests:      2,
+			StoppedGuests:      0,
+			TotalStoragePools:  1,
+			TotalPhysicalDisks: 0,
+			TotalStorage:       1,
+			TotalDocker:        1,
+			TotalPBS:           1,
+			TotalPMG:           0,
+			FlaggedCount:       1,
 		},
 		FlaggedIDs: map[string]bool{"qemu/100": true},
 	}
@@ -631,7 +633,10 @@ func TestFormatTriageBriefing(t *testing.T) {
 	if !strings.Contains(out, "## Healthy Resources") {
 		t.Fatalf("expected healthy summary section, got:\n%s", out)
 	}
-	if !strings.Contains(out, "Storage: 1 resources monitored") {
+	if !strings.Contains(out, "Scanned 6 resources: 1 nodes, 2 guests, 1 storage resources (1 pools, 0 physical disks), 1 docker hosts, 1 PBS, 0 PMG.") {
+		t.Fatalf("expected explicit storage breakdown in scanned summary, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Storage: 1 resources monitored (1 pools, 0 physical disks)") {
 		t.Fatalf("expected storage resources wording in output, got:\n%s", out)
 	}
 }
@@ -763,7 +768,7 @@ func TestTriageBuildSummaryState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T
 	}
 
 	summary := triageBuildSummaryState(state, map[string]bool{"qemu/100": true})
-	if summary.TotalNodes != 1 || summary.TotalStorage != 2 || summary.TotalDocker != 1 || summary.TotalPBS != 1 || summary.TotalPMG != 1 {
+	if summary.TotalNodes != 1 || summary.TotalStoragePools != 1 || summary.TotalPhysicalDisks != 1 || summary.TotalStorage != 2 || summary.TotalDocker != 1 || summary.TotalPBS != 1 || summary.TotalPMG != 1 {
 		t.Fatalf("unexpected non-guest summary counts from readState: %#v", summary)
 	}
 	if summary.TotalGuests != 3 || summary.RunningGuests != 2 || summary.StoppedGuests != 1 {
