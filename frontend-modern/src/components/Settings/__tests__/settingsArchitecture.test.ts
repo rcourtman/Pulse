@@ -14,18 +14,13 @@ const extractedModules = [
 ] as const;
 
 const requiredImportSources = [
-  './settingsTypes',
   './settingsTabs',
   './settingsHeaderMeta',
   './settingsFeatureGates',
   './useSettingsNavigation',
-  './useSystemSettingsState',
-  './useInfrastructureSettingsState',
-  './useBackupTransferFlow',
-  './settingsPanelRegistry',
 ] as const;
 
-describe.skip('Settings architecture guardrails', () => {
+describe('Settings architecture guardrails', () => {
   it('keeps extracted settings modules present on disk', () => {
     const settingsModuleFiles = import.meta.glob('../*.ts');
 
@@ -48,6 +43,13 @@ describe.skip('Settings architecture guardrails', () => {
     }
   });
 
+  it('keeps panel registry extracted until dispatch is migrated', async () => {
+    const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
+
+    expect(registrySource).toContain('createSettingsPanelRegistry');
+    expect(registrySource).toContain("'security-webhooks'");
+  });
+
   it('does not re-inline extracted tab and header metadata definitions', () => {
     expect(settingsSource).not.toMatch(/\b(?:const|let|var)\s+baseTabGroups\s*=/);
     expect(settingsSource).not.toMatch(/\b(?:const|let|var)\s+SETTINGS_HEADER_META\s*=/);
@@ -64,13 +66,8 @@ describe.skip('Settings architecture guardrails', () => {
     expect(settingsLineCount).toBeLessThanOrEqual(maxSettingsLines);
   });
 
-  it('uses lazy() imports for panel components in settingsPanelRegistry', () => {
-    const registrySource = import.meta.glob('../settingsPanelRegistry.ts', {
-      query: '?raw',
-      eager: true,
-      import: 'default',
-    });
-    const source = Object.values(registrySource)[0] as string;
+  it('uses lazy() imports for panel components in settingsPanelRegistry', async () => {
+    const source = (await import('../settingsPanelRegistry.ts?raw')).default;
 
     expect(source).toContain('lazy(');
 
