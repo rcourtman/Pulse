@@ -2214,131 +2214,44 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 }
 
 func patrolPrecomputeNodeSources(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPrecomputeNodeSource {
-	rs := snap.readState
-	if rs != nil {
-		rows := make([]patrolPrecomputeNodeSource, 0, len(rs.Nodes()))
-		for _, nv := range rs.Nodes() {
-			if !seedIsInScope(scopedSet, nv.ID()) {
-				continue
-			}
-			rows = append(rows, patrolPrecomputeNodeSource{
-				id:          nv.ID(),
-				name:        nv.Name(),
-				cpuFraction: nv.CPUPercent() / 100,
-				memPercent:  nv.MemoryPercent(),
-			})
-		}
-		return rows
-	}
-
-	rows := make([]patrolPrecomputeNodeSource, 0, len(snap.Nodes))
-	for _, n := range snap.Nodes {
-		if !seedIsInScope(scopedSet, n.ID) {
-			continue
-		}
+	nodeRows := patrolNodeInventoryRows(snap, scopedSet)
+	rows := make([]patrolPrecomputeNodeSource, 0, len(nodeRows))
+	for _, n := range nodeRows {
 		rows = append(rows, patrolPrecomputeNodeSource{
-			id:          n.ID,
-			name:        n.Name,
-			cpuFraction: n.CPU,
-			memPercent:  n.Memory.Usage,
+			id:          n.id,
+			name:        n.name,
+			cpuFraction: n.cpu / 100,
+			memPercent:  n.mem,
 		})
 	}
 	return rows
 }
 
 func patrolPrecomputeGuestSources(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPrecomputeGuestSource {
-	rs := snap.readState
-	if rs != nil {
-		rows := make([]patrolPrecomputeGuestSource, 0, len(rs.VMs())+len(rs.Containers()))
-		for _, vmv := range rs.VMs() {
-			if !seedIsInScope(scopedSet, vmv.ID()) {
-				continue
-			}
-			rows = append(rows, patrolPrecomputeGuestSource{
-				id:          vmv.ID(),
-				name:        vmv.Name(),
-				template:    vmv.Template(),
-				status:      string(vmv.Status()),
-				cpuFraction: vmv.CPUPercent() / 100,
-				memPercent:  vmv.MemoryPercent(),
-				diskPercent: vmv.DiskPercent(),
-			})
-		}
-		for _, ctv := range rs.Containers() {
-			if !seedIsInScope(scopedSet, ctv.ID()) {
-				continue
-			}
-			rows = append(rows, patrolPrecomputeGuestSource{
-				id:          ctv.ID(),
-				name:        ctv.Name(),
-				template:    ctv.Template(),
-				status:      string(ctv.Status()),
-				cpuFraction: ctv.CPUPercent() / 100,
-				memPercent:  ctv.MemoryPercent(),
-				diskPercent: ctv.DiskPercent(),
-			})
-		}
-		return rows
-	}
-
-	rows := make([]patrolPrecomputeGuestSource, 0, len(snap.VMs)+len(snap.Containers))
-	for _, vm := range snap.VMs {
-		if !seedIsInScope(scopedSet, vm.ID) {
-			continue
-		}
+	guestRows := patrolGuestInventoryRows(snap, scopedSet, nil)
+	rows := make([]patrolPrecomputeGuestSource, 0, len(guestRows))
+	for _, guest := range guestRows {
 		rows = append(rows, patrolPrecomputeGuestSource{
-			id:          vm.ID,
-			name:        vm.Name,
-			template:    vm.Template,
-			status:      vm.Status,
-			cpuFraction: vm.CPU,
-			memPercent:  vm.Memory.Usage,
-			diskPercent: vm.Disk.Usage,
-		})
-	}
-	for _, ct := range snap.Containers {
-		if !seedIsInScope(scopedSet, ct.ID) {
-			continue
-		}
-		rows = append(rows, patrolPrecomputeGuestSource{
-			id:          ct.ID,
-			name:        ct.Name,
-			template:    ct.Template,
-			status:      ct.Status,
-			cpuFraction: ct.CPU,
-			memPercent:  ct.Memory.Usage,
-			diskPercent: ct.Disk.Usage,
+			id:          guest.id,
+			name:        guest.name,
+			template:    false,
+			status:      guest.status,
+			cpuFraction: guest.cpu / 100,
+			memPercent:  guest.mem,
+			diskPercent: guest.disk,
 		})
 	}
 	return rows
 }
 
 func patrolPrecomputeStorageSources(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPrecomputeStorageSource {
-	rs := snap.readState
-	if rs != nil {
-		rows := make([]patrolPrecomputeStorageSource, 0, len(rs.StoragePools()))
-		for _, spv := range rs.StoragePools() {
-			if !seedIsInScope(scopedSet, spv.ID()) {
-				continue
-			}
-			rows = append(rows, patrolPrecomputeStorageSource{
-				id:           spv.ID(),
-				name:         spv.Name(),
-				usagePercent: spv.DiskPercent(),
-			})
-		}
-		return rows
-	}
-
-	rows := make([]patrolPrecomputeStorageSource, 0, len(snap.Storage))
-	for _, s := range snap.Storage {
-		if !seedIsInScope(scopedSet, s.ID) {
-			continue
-		}
+	storageRows := patrolStoragePoolRows(snap, scopedSet)
+	rows := make([]patrolPrecomputeStorageSource, 0, len(storageRows))
+	for _, s := range storageRows {
 		rows = append(rows, patrolPrecomputeStorageSource{
-			id:           s.ID,
-			name:         s.Name,
-			usagePercent: s.Usage,
+			id:           s.id,
+			name:         s.name,
+			usagePercent: s.usage,
 		})
 	}
 	return rows
