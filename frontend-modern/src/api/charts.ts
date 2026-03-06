@@ -129,7 +129,6 @@ export interface WorkloadsSummaryChartsResponse {
 // Persistent metrics history types (SQLite-backed, longer retention)
 export type HistoryTimeRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d';
 type MetricsHistoryAPIResourceType =
-  | 'node'
   | 'vm'
   | 'system-container'
   | 'oci-container'
@@ -141,7 +140,7 @@ type MetricsHistoryAPIResourceType =
   | 'disk';
 
 export type ResourceType =
-  | 'node'
+  | 'agent'
   | 'vm'
   | 'system-container'
   | 'oci-container'
@@ -162,7 +161,9 @@ export interface MetricsHistoryParams {
   maxPoints?: number; // Optional cap on returned points (backend may downsample)
 }
 
-export function toMetricsHistoryAPIResourceType(resourceType: ResourceType): MetricsHistoryAPIResourceType {
+export function toMetricsHistoryAPIResourceType(
+  resourceType: ResourceType,
+): MetricsHistoryAPIResourceType {
   switch (resourceType) {
     case 'k8s-cluster':
     case 'k8s-node':

@@ -64,7 +64,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
   const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
   const { byType, resources: allResources } = useResources();
-  const isCluster = createMemo(() => byType('node').length > 1);
+  const isCluster = createMemo(() => byType('agent').length > 1);
 
   // @ mention autocomplete state
   const [mentionActive, setMentionActive] = createSignal(false);
@@ -430,14 +430,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return Number.isFinite(parsed) ? parsed : 0;
     };
 
-    const nodes = byType('node');
+    const nodes = byType('agent');
     const vms = byType('vm');
     const containers = [...byType('system-container'), ...byType('oci-container')];
     const dockerHosts = byType('docker-host');
     const dockerContainers = byType('app-container');
     const agentResources = allResources().filter(
       (resource) =>
-        (resource.type === 'node' ||
+        (resource.type === 'agent' ||
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&
@@ -523,7 +523,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       mentionCandidates.push({
         id: `node:${node.platformId || ''}:${node.name}`,
         name: node.name,
-        type: 'node',
+        type: 'agent',
         status: node.status,
       });
     }

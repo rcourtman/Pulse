@@ -41,7 +41,7 @@ vi.mock('@/components/shared/DensityMap', () => ({
 
 const makeHost = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'node-1',
-  type: 'node',
+  type: 'agent',
   name: 'node-1',
   displayName: 'node-1',
   platformId: 'node-1',
@@ -450,7 +450,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const agentOnlyHost: Resource = {
       id: 'unified-host-1',
-      type: 'node',
+      type: 'agent',
       name: 'unraid-node',
       displayName: 'unraid-node',
       platformId: 'unraid-node',
@@ -512,7 +512,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const agentOnlyHost: Resource = {
       id: 'unified-host-2',
-      type: 'node',
+      type: 'agent',
       name: 'agent-host-two',
       displayName: 'agent-host-two',
       platformId: 'agent-host-two',
@@ -588,7 +588,7 @@ describe('InfrastructureSummary range behavior', () => {
     mockHostAgentResources = [
       {
         id: 'hash-host-resource-id',
-        type: 'node',
+        type: 'agent',
         name: 'agent-host-3-name',
         displayName: 'Agent Host 3',
         platformId: 'agent-host-3-platform',
@@ -612,7 +612,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     const proxmoxNodeHost: Resource = {
       id: 'node-1',
-      type: 'node',
+      type: 'agent',
       name: 'node-1',
       displayName: 'node-1',
       platformId: 'node-1',

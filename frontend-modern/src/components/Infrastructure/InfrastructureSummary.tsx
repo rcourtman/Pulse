@@ -148,7 +148,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   const agentResources = createMemo(() =>
     resources().filter(
       (resource) =>
-        (resource.type === 'node' ||
+        (resource.type === 'agent' ||
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&

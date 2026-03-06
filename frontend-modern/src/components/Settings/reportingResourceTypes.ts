@@ -2,7 +2,6 @@ import type { ResourceType } from '@/types/resource';
 
 export type ReportingResourceType =
   | 'agent'
-  | 'node'
   | 'docker-host'
   | 'vm'
   | 'system-container'

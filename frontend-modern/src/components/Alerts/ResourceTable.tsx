@@ -397,7 +397,7 @@ export function ResourceTable(props: ResourceTableProps) {
   };
 
   const renderGroupHeader = (groupKey: string, meta?: GroupHeaderMeta) => {
-    if (!meta || meta.type !== 'node') {
+    if (!meta || meta.type !== 'agent') {
       return <span class="text-xs font-medium text-muted">{groupKey}</span>;
     }
 
@@ -787,7 +787,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         <Show
                           when={
                             resource.hasOverride ||
-                            (resource.type === 'node' && resource.disableConnectivity)
+                            (resource.type === 'agent' && resource.disableConnectivity)
                           }
                         >
                           <button
@@ -1367,7 +1367,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 <TableCell class="p-1 px-2">
                                   <div class="flex items-center gap-2 min-w-0">
                                     <Show
-                                      when={resource.type === 'node'}
+                                      when={resource.type === 'agent'}
                                       fallback={
                                         <span
                                           class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
@@ -1386,7 +1386,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                             <span
                                               class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                             >
-                                              {resource.type === 'node'
+                                              {resource.type === 'agent'
                                                 ? resource.name
                                                 : resource.displayName || resource.name}
                                             </span>
@@ -1405,7 +1405,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                               }`}
                                               title={`Open ${resource.displayName || resource.name} web interface`}
                                             >
-                                              {resource.type === 'node'
+                                              {resource.type === 'agent'
                                                 ? resource.name
                                                 : resource.displayName || resource.name}
                                             </a>
@@ -1792,7 +1792,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <Show
                                         when={
                                           resource.hasOverride ||
-                                          ((resource.type === 'node' ||
+                                          ((resource.type === 'agent' ||
                                             resource.type === 'dockerHost') &&
                                             resource.disableConnectivity)
                                         }
@@ -1926,7 +1926,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             </TableCell>
                             <TableCell class="p-1 px-2">
                               <Show
-                                when={resource.type === 'node'}
+                                when={resource.type === 'agent'}
                                 fallback={
                                   <div class="flex items-center gap-2 min-w-0">
                                     <span
@@ -1954,7 +1954,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <span
                                         class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                       >
-                                        {resource.type === 'node'
+                                        {resource.type === 'agent'
                                           ? resource.name
                                           : resource.displayName || resource.name}
                                       </span>
@@ -1973,7 +1973,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         }`}
                                         title={`Open ${resource.displayName || resource.name} web interface`}
                                       >
-                                        {resource.type === 'node'
+                                        {resource.type === 'agent'
                                           ? resource.name
                                           : resource.displayName || resource.name}
                                       </a>
@@ -2000,7 +2000,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 // Check if this metric applies to this resource type
                                 const showMetric = () => {
                                   if (
-                                    resource.type === 'node' &&
+                                    resource.type === 'agent' &&
                                     ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(
                                       metric,
                                     )
@@ -2231,7 +2231,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <Show
                                         when={
                                           resource.hasOverride ||
-                                          (resource.type === 'node' && resource.disableConnectivity)
+                                          (resource.type === 'agent' && resource.disableConnectivity)
                                         }
                                       >
                                         <button

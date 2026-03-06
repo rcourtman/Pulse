@@ -225,8 +225,8 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
       return 'Container';
     case 'app-container':
       return 'Container';
-    case 'node':
-      return 'Node';
+    case 'agent':
+      return 'Agent';
     case 'docker-host':
       return 'Container Runtime';
     case 'storage':

@@ -5,7 +5,6 @@ export type CanonicalFrontendResourceType =
   | 'app-container'
   | 'oci-container'
   | 'pod'
-  | 'node'
   | 'storage'
   | 'disk'
   | 'docker-host'
@@ -53,7 +52,9 @@ export const canonicalizeFrontendResourceType = (
     case 'app-container':
     case 'oci-container':
     case 'pod':
+      return normalized;
     case 'node':
+      return 'agent';
     case 'storage':
     case 'disk':
     case 'docker-host':

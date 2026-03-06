@@ -121,7 +121,7 @@ beforeEach(() => {
   mockResources = [
     makeResource({ id: 'vm-200', name: 'Zulu VM', displayName: 'Zulu VM' }),
     makeResource({ id: 'vm-100', name: 'Alpha VM', displayName: '' }),
-    makeResource({ id: 'host-1', type: 'node', name: '', displayName: '' }),
+    makeResource({ id: 'host-1', type: 'agent', name: '', displayName: '' }),
     makeResource({ id: '', type: 'vm', name: 'Hidden', displayName: 'Hidden' }),
   ];
 
@@ -178,7 +178,12 @@ describe('OrganizationSharingPanel', () => {
     const quickPick = screen.getByLabelText('Quick Pick Resource') as HTMLSelectElement;
     const labels = Array.from(quickPick.options).map((option) => option.textContent?.trim());
 
-    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'host-1 (node)', 'Zulu VM (vm)']);
+    expect(labels).toEqual([
+      'Select resource',
+      'Alpha VM (vm)',
+      'host-1 (agent)',
+      'Zulu VM (vm)',
+    ]);
     expect(labels).not.toContain('Hidden (vm)');
   });
 

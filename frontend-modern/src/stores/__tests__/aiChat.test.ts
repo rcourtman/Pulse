@@ -51,11 +51,11 @@ describe('aiChatStore', () => {
 
   it('removes context items and keeps legacy context consistent', () => {
     aiChatStore.addContextItem('vm', 'vm-101', 'vm-101', { name: 'vm-101' });
-    aiChatStore.addContextItem('node', 'node-1', 'node-1', { name: 'node-1' });
+    aiChatStore.addContextItem('agent', 'agent-1', 'agent-1', { name: 'agent-1' });
     expect(aiChatStore.contextItems).toHaveLength(2);
-    expect(aiChatStore.context.targetId).toBe('node-1');
+    expect(aiChatStore.context.targetId).toBe('agent-1');
 
-    aiChatStore.removeContextItem('node-1');
+    aiChatStore.removeContextItem('agent-1');
     expect(aiChatStore.contextItems).toHaveLength(1);
     expect(aiChatStore.context.targetId).toBe('vm-101');
 
@@ -71,11 +71,11 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.targetId).toBe('vm-101');
 
     // openForTarget should replace, not add to existing context
-    aiChatStore.openForTarget('node', 'node-1', { name: 'delly' });
+    aiChatStore.openForTarget('agent', 'agent-1', { name: 'delly' });
     expect(aiChatStore.isOpen).toBe(true);
     expect(aiChatStore.contextItems).toHaveLength(1);
     expect(aiChatStore.contextItems[0].name).toBe('delly');
-    expect(aiChatStore.context.targetId).toBe('node-1');
+    expect(aiChatStore.context.targetId).toBe('agent-1');
   });
 
   it('opens with a pre-filled prompt', () => {

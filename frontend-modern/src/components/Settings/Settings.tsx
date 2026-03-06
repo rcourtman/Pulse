@@ -212,7 +212,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const pmgNodes = createMemo(() => nodes().filter((n) => n.type === 'pmg'));
   const unifiedNodeSnapshots = createMemo(() =>
     (state.resources || [])
-      .filter((resource) => resource.type === 'node')
+      .filter((resource) => resource.type === 'agent')
       .map(nodeFromResource)
       .filter((node): node is NonNullable<typeof node> => Boolean(node)),
   );
@@ -2341,7 +2341,7 @@ const Settings: Component<SettingsProps> = (props) => {
                           <Show when={pveNodes().length > 0}>
                             <PveNodesTable
                               nodes={pveNodes()}
-                              stateNodes={(state.resources ?? []).filter((r) => r.type === 'node')}
+                              stateNodes={(state.resources ?? []).filter((r) => r.type === 'agent')}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {

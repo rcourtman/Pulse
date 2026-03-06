@@ -165,7 +165,7 @@ const buildTemperature = (
 };
 
 export const nodeFromResource = (resource: Resource): Node | null => {
-  if (resource.type !== 'node') return null;
+  if (resource.type !== 'agent') return null;
   const platform = resourcePlatformData(resource);
   const proxmox =
     asRecord(platform?.proxmox) ||

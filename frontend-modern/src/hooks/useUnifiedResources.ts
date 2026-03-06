@@ -394,9 +394,8 @@ const resolveType = (value?: string): ResourceType => {
   const normalized = (value || '').toLowerCase();
   switch (normalized) {
     case 'agent':
-      return 'node';
     case 'node':
-      return 'node';
+      return 'agent';
     case 'docker-host':
       return 'docker-host';
     case 'k8s-cluster':
@@ -442,7 +441,7 @@ const resolveType = (value?: string): ResourceType => {
     case 'physical-disk':
       return 'physical_disk';
     default:
-      return 'node';
+      return 'agent';
   }
 };
 

@@ -114,8 +114,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   type TableItem = Node | PBSInstance;
 
   const isPVE = (item: TableItem): item is Node => {
-    // Check for pveVersion OR if type is specifically 'node' (from API)
-    return (item as Node).pveVersion !== undefined || (item as any).type === 'node';
+    // Check for pveVersion or the unified agent resource type returned by v6 APIs.
+    return (item as Node).pveVersion !== undefined || (item as any).type === 'agent';
   };
 
   type CountSortKey = 'vmCount' | 'containerCount' | 'storageCount' | 'diskCount' | 'backupCount';

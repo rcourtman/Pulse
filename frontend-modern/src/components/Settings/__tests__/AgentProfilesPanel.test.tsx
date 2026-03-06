@@ -61,7 +61,7 @@ vi.mock('@/utils/upgradeMetrics', () => ({
 
 const makeAgentResource = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'hash-agent-resource-id',
-  type: 'node',
+  type: 'agent',
   name: 'agent-one',
   displayName: 'Agent One',
   platformId: 'agent-one',
@@ -76,7 +76,7 @@ const makeAgentResource = (overrides: Partial<Resource> = {}): Resource => ({
 
 const makeNodeResource = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'node-resource-id',
-  type: 'node',
+  type: 'agent',
   name: 'pve-node-1',
   displayName: 'PVE Node One',
   platformId: 'pve-node-1',

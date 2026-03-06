@@ -32,7 +32,7 @@ const typeFilterLabels: Record<TypeFilter, string> = {
 };
 
 const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
-  'node',
+  'agent',
   'docker-host',
   'k8s-cluster',
   'k8s-node',
@@ -50,7 +50,7 @@ const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
 ]);
 
 const INFRASTRUCTURE_TYPES = new Set<ResourceType>([
-  'node',
+  'agent',
   'docker-host',
   'k8s-cluster',
   'k8s-node',
@@ -107,9 +107,9 @@ function getStatusColor(status: string): string {
 
 function getTypeBadge(type: ResourceType): { label: string; classes: string } {
   switch (type) {
-    case 'node':
+    case 'agent':
     case 'k8s-node':
-      return { label: 'Node', classes: 'bg-blue-500 text-blue-300' };
+      return { label: 'Agent', classes: 'bg-blue-500 text-blue-300' };
     case 'docker-host':
       return { label: 'Agent', classes: 'bg-slate-500 text-slate-300' };
     case 'k8s-cluster':
@@ -175,7 +175,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
     // Sort by domain first, then by type, then alphabetical.
     result.sort((a, b) => {
       const typeOrder: Record<string, number> = {
-        node: 0,
+        agent: 0,
         'docker-host': 1,
         k8s: 2,
         pbs: 3,

@@ -11,7 +11,7 @@ import {
 const makeResource = (overrides: Partial<Resource> = {}): Resource =>
   ({
     id: 'resource-1',
-    type: 'node',
+    type: 'agent',
     name: 'resource-1',
     displayName: 'resource-1',
     platformId: 'resource-1',

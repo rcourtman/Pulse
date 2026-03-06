@@ -21,7 +21,7 @@ import type { Resource } from '@/types/resource';
 function makePveNode(id: string, agentId?: string): Resource {
   return {
     id,
-    type: 'node',
+    type: 'agent',
     name: id,
     displayName: id,
     platformId: 'pve1',

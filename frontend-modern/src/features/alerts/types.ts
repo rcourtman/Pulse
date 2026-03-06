@@ -106,7 +106,6 @@ export interface DestinationsRef {
 // Override interface for both guests and nodes
 export type OverrideType =
   | 'guest'
-  | 'node'
   | 'agent'
   | 'agentDisk'
   | 'storage'

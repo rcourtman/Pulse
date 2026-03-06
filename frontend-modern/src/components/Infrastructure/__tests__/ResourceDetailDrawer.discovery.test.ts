@@ -6,7 +6,7 @@ import { buildWorkloadsHref } from '@/components/Infrastructure/workloadsLink';
 
 const baseResource = (): Resource => ({
   id: 'host-abcd',
-  type: 'node',
+  type: 'agent',
   name: 'pve1',
   displayName: 'pve1',
   platformId: 'pve1',
@@ -285,7 +285,7 @@ describe('buildWorkloadsHref', () => {
   it('builds workloads route with host hint for proxmox node resources', () => {
     const resource: Resource = {
       ...baseResource(),
-      type: 'node',
+      type: 'agent',
       platformData: {
         sources: ['proxmox'],
         proxmox: { nodeName: 'pve1' },

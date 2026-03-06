@@ -1,10 +1,15 @@
 import type { Resource, ResourceType } from '@/types/resource';
 import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
-const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>(['node', 'pbs', 'pmg', 'truenas']);
+const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>([
+  'agent',
+  'pbs',
+  'pmg',
+  'truenas',
+]);
 const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([
   'docker-host',
-  'node',
+  'agent',
   'pbs',
   'pmg',
   'truenas',

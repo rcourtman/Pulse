@@ -16,7 +16,7 @@ const EMPTY_STATUS_COUNTS: Record<string, number> = {
 function createResource(overrides: Partial<Resource> = {}): Resource {
   return {
     id: 'resource-1',
-    type: 'node',
+    type: 'agent',
     name: 'resource-1',
     displayName: 'Resource 1',
     platformId: 'platform-1',
@@ -81,7 +81,7 @@ describe('computeDashboardOverview', () => {
     const resources: Resource[] = [
       createResource({
         id: 'infra-1',
-        type: 'node',
+        type: 'agent',
         displayName: 'Host 1',
         status: 'online',
         cpu: { current: 10 },
@@ -89,7 +89,7 @@ describe('computeDashboardOverview', () => {
       }),
       createResource({
         id: 'infra-2',
-        type: 'node',
+        type: 'agent',
         displayName: 'Node 2',
         status: 'online',
         cpu: { current: 90 },
@@ -133,7 +133,7 @@ describe('computeDashboardOverview', () => {
 
     expect(overview.infrastructure.total).toBe(6);
     expect(overview.infrastructure.byType).toEqual({
-      node: 2,
+      agent: 2,
       'k8s-node': 1,
       'docker-host': 1,
       truenas: 1,
@@ -166,8 +166,8 @@ describe('computeDashboardOverview', () => {
   it('handles workloads-only resources and computes running/stopped counts', () => {
     const resources: Resource[] = [
       createResource({ id: 'wl-1', type: 'vm', status: 'running' }),
-      createResource({ id: 'wl-2', type: 'container', status: 'online' }),
-      createResource({ id: 'wl-3', type: 'docker-container', status: 'stopped' }),
+      createResource({ id: 'wl-2', type: 'system-container', status: 'online' }),
+      createResource({ id: 'wl-3', type: 'app-container', status: 'stopped' }),
       createResource({ id: 'wl-4', type: 'pod', status: 'offline' }),
     ];
 
@@ -178,8 +178,8 @@ describe('computeDashboardOverview', () => {
     expect(overview.workloads.stopped).toBe(2);
     expect(overview.workloads.byType).toEqual({
       vm: 1,
-      container: 1,
-      'docker-container': 1,
+      'system-container': 1,
+      'app-container': 1,
       pod: 1,
     });
     expect(overview.infrastructure.total).toBe(0);
@@ -190,7 +190,7 @@ describe('computeDashboardOverview', () => {
     const resources: Resource[] = [
       createResource({
         id: 'infra-a',
-        type: 'node',
+        type: 'agent',
         status: 'online',
         cpu: { current: 25 },
         memory: { current: 55 },

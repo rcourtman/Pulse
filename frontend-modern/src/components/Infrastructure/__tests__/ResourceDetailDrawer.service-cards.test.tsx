@@ -24,7 +24,7 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
 
 const baseResource = (overrides: Partial<Resource>): Resource => ({
   id: 'resource-1',
-  type: 'node',
+  type: 'agent',
   name: 'host-1',
   displayName: 'host-1',
   platformId: 'host-1',

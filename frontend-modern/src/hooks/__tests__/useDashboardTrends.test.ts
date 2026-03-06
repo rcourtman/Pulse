@@ -50,12 +50,11 @@ describe('computeTrendDelta', () => {
 
 describe('mapUnifiedTypeToHistoryType', () => {
   it('maps all supported unified types', () => {
-    expect(mapUnifiedTypeToHistoryType('node')).toBe('node');
     expect(mapUnifiedTypeToHistoryType('agent')).toBe('agent');
     expect(mapUnifiedTypeToHistoryType('docker-host')).toBe('docker-host');
     expect(mapUnifiedTypeToHistoryType('k8s-node')).toBe('k8s-node');
     expect(mapUnifiedTypeToHistoryType('k8s-cluster')).toBe('k8s-cluster');
-    expect(mapUnifiedTypeToHistoryType('truenas')).toBe('node');
+    expect(mapUnifiedTypeToHistoryType('truenas')).toBe('agent');
     expect(mapUnifiedTypeToHistoryType('vm')).toBe('vm');
     expect(mapUnifiedTypeToHistoryType('system-container')).toBe('system-container');
     expect(mapUnifiedTypeToHistoryType('oci-container')).toBe('oci-container');

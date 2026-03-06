@@ -103,7 +103,7 @@ describe('websocket store unified resource contract', () => {
         type: 'initialState',
         data: {
           resources: [
-            { id: 'node-1', type: 'node', name: 'pve1', status: 'online' },
+            { id: 'node-1', type: 'agent', name: 'pve1', status: 'online' },
             { id: 'vm-101', type: 'vm', name: 'web-server', status: 'running' },
           ],
           lastUpdate: '2026-02-09T00:00:00Z',
@@ -127,7 +127,7 @@ describe('websocket store unified resource contract', () => {
       emitMessage({
         type: 'initialState',
         data: {
-          resources: [{ id: 'node-1', type: 'node', name: 'pve1', status: 'online' }],
+          resources: [{ id: 'node-1', type: 'agent', name: 'pve1', status: 'online' }],
           nodes: [{ id: 'node-1', name: 'pve1' }],
           lastUpdate: '2026-02-09T00:00:00Z',
           activeAlerts: [],
@@ -150,7 +150,7 @@ describe('websocket store unified resource contract', () => {
       emitMessage({
         type: 'initialState',
         data: {
-          resources: [{ id: 'node-1', type: 'node', name: 'pve1', status: 'online' }],
+          resources: [{ id: 'node-1', type: 'agent', name: 'pve1', status: 'online' }],
           lastUpdate: '2026-02-09T00:00:00Z',
           activeAlerts: [],
           recentlyResolved: [],
@@ -161,7 +161,7 @@ describe('websocket store unified resource contract', () => {
         type: 'rawData',
         data: {
           resources: [
-            { id: 'node-1', type: 'node', name: 'pve1', status: 'online' },
+            { id: 'node-1', type: 'agent', name: 'pve1', status: 'online' },
             { id: 'vm-101', type: 'vm', name: 'web-server', status: 'running' },
           ],
           lastUpdate: '2026-02-09T00:01:00Z',

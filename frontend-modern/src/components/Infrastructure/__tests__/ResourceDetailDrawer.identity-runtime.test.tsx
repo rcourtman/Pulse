@@ -35,7 +35,7 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 
 const baseResource = (overrides: Partial<Resource>): Resource => ({
   id: 'resource-1',
-  type: 'node',
+  type: 'agent',
   name: 'host-1',
   displayName: 'host-1',
   platformId: 'host-1',
@@ -133,7 +133,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
   it('renders aliases inline when few exist and collapses when many exist', () => {
     const inlineResource = baseResource({
-      type: 'node',
+      type: 'agent',
       platformData: {
         sources: ['agent'],
         agent: {
@@ -155,7 +155,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(inlineRender.getAllByText('inline-host.local').length).toBeGreaterThan(0);
 
     const overflowResource = baseResource({
-      type: 'node',
+      type: 'agent',
       platformData: {
         sources: ['agent', 'proxmox'],
         agent: {

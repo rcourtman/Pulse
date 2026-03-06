@@ -6,7 +6,7 @@ import type { Resource } from '@/types/resource';
 const createNodeResource = (platformData: Record<string, unknown>): Resource =>
   ({
     id: 'node-1',
-    type: 'node',
+    type: 'agent',
     name: 'pve-node-1',
     displayName: 'PVE Node 1',
     platformId: 'pve-node-1',

@@ -7,7 +7,7 @@ import type { Resource } from '@/types/resource';
 function makeResource(overrides: Partial<Resource> = {}): Resource {
   return {
     id: 'test-1',
-    type: 'node',
+    type: 'agent',
     name: 'test-node',
     displayName: 'Test Node',
     platformId: 'pve-1',

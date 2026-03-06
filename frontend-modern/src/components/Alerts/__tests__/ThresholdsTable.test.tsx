@@ -354,7 +354,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     setPathname('/alerts/thresholds/agents');
     const host = {
       id: 'resource:host:abc123',
-      type: 'node',
+      type: 'agent',
       name: 'host-v6',
       displayName: 'Host V6',
       platformId: 'host-platform-1',

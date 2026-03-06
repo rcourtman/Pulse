@@ -341,7 +341,7 @@ describe('useUnifiedResources', () => {
     const resources = result!.resources();
     expect(resources).toHaveLength(1);
     expect(resources[0].id).toBe('node-1');
-    expect(resources[0].type).toBe('node');
+    expect(resources[0].type).toBe('agent');
 
     dispose();
   });

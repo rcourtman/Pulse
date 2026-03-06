@@ -101,7 +101,7 @@ const Storage: Component = () => {
 
   const kioskMode = useKioskMode();
 
-  const nodes = createMemo(() => byType('node'));
+  const nodes = createMemo(() => byType('agent'));
   const physicalDisks = createMemo(() => byType('physical_disk'));
   const cephResources = createMemo(() => byType('ceph'));
   const storageRecoveryResources = useStorageRecoveryResources();

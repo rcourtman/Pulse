@@ -272,13 +272,13 @@ describe('InvestigateAlertButton', () => {
   // Target type inference
   // ---------------------------------------------------------------------------
   describe('target type inference', () => {
-    it('uses "node" when alert type starts with "node_"', async () => {
+    it('uses "agent" when alert type starts with "node_"', async () => {
       const alert = makeAlert({ type: 'node_cpu' });
       render(() => <InvestigateAlertButton alert={alert} />);
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('node');
+      expect(context.targetType).toBe('agent');
     });
 
     it('uses "app-container" when alert type starts with "docker_"', async () => {
@@ -374,7 +374,7 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(screen.getByRole('button'));
 
       const [, context] = openWithPromptMock.mock.calls[0] as [string, Record<string, unknown>];
-      expect(context.targetType).toBe('node');
+      expect(context.targetType).toBe('agent');
     });
   });
 

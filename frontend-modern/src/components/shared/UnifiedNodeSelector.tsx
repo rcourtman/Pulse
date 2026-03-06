@@ -109,7 +109,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   const agentsForNodeSummary = createMemo<Agent[]>(() => {
     const agentFacetResources = resources().filter(
       (resource) =>
-        (resource.type === 'node' ||
+        (resource.type === 'agent' ||
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&
@@ -204,7 +204,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
 
   const unifiedNodes = createMemo<Node[]>(() =>
     resources()
-      .filter((resource) => resource.type === 'node')
+      .filter((resource) => resource.type === 'agent')
       .map(nodeFromResource)
       .filter((node): node is Node => Boolean(node)),
   );

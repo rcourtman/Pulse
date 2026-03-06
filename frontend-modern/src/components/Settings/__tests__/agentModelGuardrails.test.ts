@@ -54,7 +54,7 @@ describe('agent model guardrails', () => {
       "const dockerRuntimeResources = createMemo(() => byType('docker-host'))",
     );
     expect(apiTokenManagerSource).toContain('const hasAgentScopeResource = (resource: Resource)');
-    expect(apiTokenManagerSource).toContain("resource.type === 'node'");
+    expect(apiTokenManagerSource).toContain("resource.type === 'agent'");
     expect(apiTokenManagerSource).toContain("resource.type === 'pbs'");
     expect(apiTokenManagerSource).toContain("resource.type === 'pmg'");
     expect(apiTokenManagerSource).toContain("resource.type === 'truenas'");
@@ -120,7 +120,7 @@ describe('agent model guardrails', () => {
 
   it('keeps setup and node summary fallbacks aware of v6 agent facets', () => {
     expect(completeStepSource).toContain('const hasAgentFacet = (resource: Resource)');
-    expect(completeStepSource).toContain("resource.type === 'node'");
+    expect(completeStepSource).toContain("resource.type === 'agent'");
     expect(completeStepSource).toContain('command -v sudo');
     expect(completeStepSource).toContain('const agentFacetResources = resources.filter(');
     expect(completeStepSource).not.toContain('state.nodes || []');
@@ -286,11 +286,11 @@ describe('agent model guardrails', () => {
     expect(aiSettingsSource).not.toContain('settings_ai_autonomous_mode');
   });
 
-  it('keeps unified resource typing normalized to node (no legacy host type)', () => {
+  it('keeps unified resource typing normalized to agent (no legacy host type)', () => {
     expect(resourceTypesSource).not.toContain("| 'host' // Standalone host (via agent)");
     expect(unifiedResourcesHookSource).not.toContain("case 'host':");
     expect(unifiedResourcesHookSource).toContain("case 'agent':");
-    expect(unifiedResourcesHookSource).toContain("return 'node';");
+    expect(unifiedResourcesHookSource).toContain("return 'agent';");
     expect(unifiedResourcesHookSource).not.toContain("return 'host';");
   });
 

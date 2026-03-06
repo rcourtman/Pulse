@@ -72,7 +72,7 @@ vi.mock('@/api/agentProfiles', () => ({
 // and byType('k8s-cluster') for kubernetes clusters.
 const toAgentResource = (h: any) => ({
   id: h.id,
-  type: 'node' as const,
+  type: 'agent' as const,
   platformType: 'agent' as const,
   sourceType: 'agent' as const,
   name: h.hostname || h.id,

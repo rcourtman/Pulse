@@ -629,7 +629,7 @@ describe('ResourceTable', () => {
         },
         groupHeaderMeta: {
           pve1: {
-            type: 'node',
+            type: 'agent',
             displayName: 'PVE Node 1',
             clusterName: 'production',
           },
@@ -649,7 +649,7 @@ describe('ResourceTable', () => {
         },
         groupHeaderMeta: {
           pve1: {
-            type: 'node',
+            type: 'agent',
             displayName: 'PVE Node 1',
             host: 'https://pve1.example.com:8006',
           },
@@ -859,7 +859,7 @@ describe('ResourceTable', () => {
           makeResource({
             id: 'node-1',
             name: 'Node 1',
-            type: 'node',
+            type: 'agent',
             thresholds: { cpu: 80 },
           }),
         ],
@@ -912,7 +912,7 @@ describe('ResourceTable', () => {
           makeResource({
             id: 'node-1',
             name: 'pve-node-1',
-            type: 'node',
+            type: 'agent',
             host: 'https://192.168.0.10:8006',
           }),
         ],
@@ -930,7 +930,7 @@ describe('ResourceTable', () => {
           makeResource({
             id: 'node-1',
             name: 'pve-node-1',
-            type: 'node',
+            type: 'agent',
             clusterName: 'home-lab',
           }),
         ],
@@ -946,7 +946,7 @@ describe('ResourceTable', () => {
           makeResource({
             id: 'node-1',
             name: 'pve-node-1',
-            type: 'node',
+            type: 'agent',
           }),
         ],
         columns: ['CPU %'],

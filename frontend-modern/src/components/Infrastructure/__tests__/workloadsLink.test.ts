@@ -4,7 +4,7 @@ import { buildWorkloadsHref } from '@/components/Infrastructure/workloadsLink';
 
 const makeResource = (overrides: Partial<Resource>): Resource => ({
   id: 'test-1',
-  type: 'node',
+  type: 'agent',
   name: 'test-resource',
   displayName: 'Test Resource',
   platformId: 'plat-1',
@@ -232,7 +232,7 @@ describe('buildWorkloadsHref', () => {
   describe('node resources', () => {
     it('resolves Proxmox node using proxmox.nodeName', () => {
       const resource = makeResource({
-        type: 'node',
+        type: 'agent',
         platformData: { proxmox: { nodeName: 'pve-node-3' } },
       });
       expect(buildWorkloadsHref(resource)).toBe('/workloads?agent=pve-node-3');
@@ -240,7 +240,7 @@ describe('buildWorkloadsHref', () => {
 
     it('falls back through the expected chain for node resources', () => {
       const resource = makeResource({
-        type: 'node',
+        type: 'agent',
         name: 'node-name',
         displayName: '',
         platformId: '',
@@ -286,7 +286,7 @@ describe('buildWorkloadsHref', () => {
   describe('edge cases', () => {
     it('handles missing platformData gracefully', () => {
       const resource = makeResource({
-        type: 'node',
+        type: 'agent',
         platformData: undefined,
         platformId: '',
         name: '',

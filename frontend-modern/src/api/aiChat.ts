@@ -13,7 +13,7 @@ export interface ChatSession {
   message_count: number;
 }
 
-export type ChatMentionType = 'vm' | 'system-container' | 'app-container' | 'node' | 'agent';
+export type ChatMentionType = 'vm' | 'system-container' | 'app-container' | 'agent';
 
 export interface ChatMention {
   id: string;

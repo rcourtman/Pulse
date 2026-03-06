@@ -63,7 +63,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
       return 'app-container';
     }
     if (normalized.startsWith('node:')) {
-      return 'node';
+      return 'agent';
     }
     if (normalized.startsWith('storage:')) {
       return 'storage';
@@ -115,7 +115,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const resolveTargetTypeForAlert = (): string => {
     const baseType = resolveTargetType();
     if (props.alert.type.startsWith('node_')) {
-      return 'node';
+      return 'agent';
     }
     if (props.alert.type.startsWith('docker_')) {
       return 'app-container';

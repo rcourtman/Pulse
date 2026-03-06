@@ -42,7 +42,7 @@ export const AgentProfilesPanel: Component = () => {
   const { resources } = useResources();
   const resourcePriority = (resource: Resource): number => {
     switch (resource.type) {
-      case 'node':
+      case 'agent':
         return 0;
       case 'pbs':
         return 1;

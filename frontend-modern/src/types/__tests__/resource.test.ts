@@ -32,7 +32,7 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 
 describe('Resource Type Guards', () => {
   describe('isInfrastructure', () => {
-    const infrastructureTypes: ResourceType[] = ['node', 'docker-host', 'k8s-node', 'truenas'];
+    const infrastructureTypes: ResourceType[] = ['agent', 'docker-host', 'k8s-node', 'truenas'];
     const nonInfrastructureTypes: ResourceType[] = [
       'vm',
       'system-container',
@@ -61,7 +61,7 @@ describe('Resource Type Guards', () => {
       'pod',
       'jail',
     ];
-    const nonWorkloadTypes: ResourceType[] = ['node', 'docker-host', 'storage', 'pbs'];
+    const nonWorkloadTypes: ResourceType[] = ['agent', 'docker-host', 'storage', 'pbs'];
 
     it.each(workloadTypes)('returns true for %s', (type) => {
       const resource = createResource({ type });
@@ -76,7 +76,7 @@ describe('Resource Type Guards', () => {
 
   describe('isStorage', () => {
     const storageTypes: ResourceType[] = ['storage', 'datastore', 'pool', 'dataset'];
-    const nonStorageTypes: ResourceType[] = ['vm', 'node', 'system-container', 'docker-host'];
+    const nonStorageTypes: ResourceType[] = ['vm', 'agent', 'system-container', 'docker-host'];
 
     it.each(storageTypes)('returns true for %s', (type) => {
       const resource = createResource({ type });
@@ -181,7 +181,7 @@ describe('Resource Helper Functions', () => {
 describe('Resource Interface', () => {
   it('allows all valid resource types', () => {
     const types: ResourceType[] = [
-      'node',
+      'agent',
       'docker-host',
       'k8s-cluster',
       'k8s-node',

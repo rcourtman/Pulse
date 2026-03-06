@@ -25,7 +25,7 @@ const defaultResources: MentionResource[] = [
     status: 'running',
     node: 'pve2',
   }),
-  makeResource({ id: 'node-1', name: 'pve1', type: 'node', status: 'running' }),
+  makeResource({ id: 'node-1', name: 'pve1', type: 'agent', status: 'running' }),
   makeResource({
     id: 'docker-1',
     name: 'nginx-proxy',

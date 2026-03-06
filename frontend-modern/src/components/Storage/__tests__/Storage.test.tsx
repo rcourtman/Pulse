@@ -48,7 +48,7 @@ let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'act
 let nodeResources: Resource[] = [
   {
     id: 'node-1',
-    type: 'node',
+    type: 'agent',
     name: 'pve1',
     displayName: 'pve1',
     platformId: 'cluster-main',
@@ -61,7 +61,7 @@ let nodeResources: Resource[] = [
   },
   {
     id: 'node-2',
-    type: 'node',
+    type: 'agent',
     name: 'pve2',
     displayName: 'pve2',
     platformId: 'cluster-main',
@@ -226,7 +226,7 @@ describe('Storage', () => {
     nodeResources = [
       {
         id: 'node-1',
-        type: 'node',
+        type: 'agent',
         name: 'pve1',
         displayName: 'pve1',
         platformId: 'cluster-main',
@@ -239,7 +239,7 @@ describe('Storage', () => {
       },
       {
         id: 'node-2',
-        type: 'node',
+        type: 'agent',
         name: 'pve2',
         displayName: 'pve2',
         platformId: 'cluster-main',

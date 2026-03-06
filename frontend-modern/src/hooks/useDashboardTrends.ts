@@ -107,7 +107,7 @@ function dedupeValues(values: string[]): string[] {
 function asHistoryResourceType(type: string): HistoryResourceType | null {
   const normalizedType = type.trim().toLowerCase();
   const historyTypes: HistoryResourceType[] = [
-    'node',
+    'agent',
     'vm',
     'system-container',
     'oci-container',
@@ -237,8 +237,6 @@ export function computeTrendDelta(points: TrendPoint[]): number | null {
 
 export function mapUnifiedTypeToHistoryType(type: string): string | null {
   switch (type) {
-    case 'node':
-      return 'node';
     case 'agent':
       return 'agent';
     case 'docker-host':
@@ -248,7 +246,7 @@ export function mapUnifiedTypeToHistoryType(type: string): string | null {
     case 'k8s-cluster':
       return 'k8s-cluster';
     case 'truenas':
-      return 'node';
+      return 'agent';
     case 'vm':
       return 'vm';
     case 'system-container':

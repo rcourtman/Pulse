@@ -290,7 +290,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     resource.identity?.hostname || resource.displayName || resource.name || resource.id;
 
   switch (resource.type) {
-    case 'node':
+    case 'agent':
     case 'docker-host':
     case 'pbs':
     case 'pmg':

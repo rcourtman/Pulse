@@ -572,7 +572,7 @@ export const UnifiedAgents: Component = () => {
     const caps: AgentCapability[] = [];
     if (r.agent) caps.push('agent');
     if (hasDockerSource(r)) caps.push('docker');
-    if (r.type === 'node' || r.type === 'pbs' || r.type === 'pmg' || r.proxmox)
+    if (r.type === 'agent' || r.type === 'pbs' || r.type === 'pmg' || r.proxmox)
       caps.push('proxmox');
     return caps;
   };
@@ -580,7 +580,7 @@ export const UnifiedAgents: Component = () => {
   /**
    * All resources managed by an agent.
    * In v6, the backend already merges resources by identity — a PVE node with a
-   * linked agent is a single resource of type "node" with agent + proxmox data.
+   * linked agent is a single resource of type "agent" with agent + proxmox data.
    * No frontend merge logic or type-flapping prevention needed.
    *
    * Includes docker-host resources that may lack the `agent` facet when the

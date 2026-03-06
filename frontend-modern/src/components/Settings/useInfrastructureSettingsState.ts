@@ -129,7 +129,7 @@ export function useInfrastructureSettingsState({
 
   const orgNodeUsage = createMemo(
     () =>
-      byType('node').length +
+      byType('agent').length +
       byType('docker-host').length +
       byType('k8s-cluster').length +
       byType('pbs').length +
@@ -172,7 +172,7 @@ export function useInfrastructureSettingsState({
     try {
       clearLoadNodesRetry();
       const nodesList = await NodesAPI.getNodes();
-      const nodeResources = byType('node');
+      const nodeResources = byType('agent');
       const nodesWithStatus = nodesList.map((node) => {
         const stateNode = matchStateNode(node, nodeResources);
 
@@ -907,7 +907,7 @@ export function useInfrastructureSettingsState({
 
   createEffect(
     on(
-      () => byType('node'),
+      () => byType('agent'),
       (nodeResources) => {
         const currentNodes = nodes();
         if (nodeResources && nodeResources.length > 0 && currentNodes.length > 0) {

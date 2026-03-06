@@ -47,7 +47,6 @@ const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [
 
 const CANONICAL_RESOURCE_TYPES = [
   'agent',
-  'node',
   'docker-host',
   'k8s-cluster',
   'k8s-node',

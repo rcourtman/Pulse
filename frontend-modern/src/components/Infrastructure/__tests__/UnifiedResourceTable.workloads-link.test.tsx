@@ -20,7 +20,7 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
 
 const baseResource = (overrides: Partial<Resource>): Resource => ({
   id: 'resource-1',
-  type: 'node',
+  type: 'agent',
   name: 'pve1',
   displayName: 'pve1',
   platformId: 'pve1',
@@ -38,7 +38,7 @@ describe('UnifiedResourceTable workloads links', () => {
     const resources: Resource[] = [
       baseResource({
         id: 'node-1',
-        type: 'node',
+        type: 'agent',
         platformData: {
           sources: ['proxmox'],
           proxmox: { nodeName: 'pve1' },

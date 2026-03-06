@@ -72,7 +72,7 @@ const resolveHostHint = (resource: Resource): string | undefined => {
       resource.id,
     ]);
   }
-  if (resource.type === 'node') {
+  if (resource.type === 'agent') {
     return firstNonEmpty([
       platformData?.proxmox?.nodeName,
       platformData?.agent?.hostname,
@@ -97,7 +97,7 @@ export const buildWorkloadsHref = (resource: Resource): string | null => {
     return buildWorkloadsPath({ type: 'app-container', agent });
   }
 
-  if (resource.type === 'node') {
+  if (resource.type === 'agent') {
     const agent = resolveHostHint(resource);
     return buildWorkloadsPath({ agent });
   }

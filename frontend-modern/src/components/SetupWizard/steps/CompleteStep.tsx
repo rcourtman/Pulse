@@ -117,10 +117,10 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
           },
         });
         const resources = state.resources || [];
-        const nodeResources = resources.filter((resource) => resource.type === 'node');
+        const nodeResources = resources.filter((resource) => resource.type === 'agent');
         const agentFacetResources = resources.filter(
           (resource) =>
-            (resource.type === 'node' ||
+            (resource.type === 'agent' ||
               resource.type === 'pbs' ||
               resource.type === 'pmg' ||
               resource.type === 'truenas') &&

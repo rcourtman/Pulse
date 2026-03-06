@@ -32,7 +32,7 @@ describe('useResources - Resource Filtering Logic', () => {
       createMockResource({ id: '1', type: 'vm' }),
       createMockResource({ id: '2', type: 'vm' }),
       createMockResource({ id: '3', type: 'container' }),
-      createMockResource({ id: '4', type: 'node' }),
+      createMockResource({ id: '4', type: 'agent' }),
       createMockResource({ id: '5', type: 'docker-container' }),
     ];
 
@@ -68,7 +68,7 @@ describe('useResources - Resource Filtering Logic', () => {
 
   describe('children filtering', () => {
     const resources: Resource[] = [
-      createMockResource({ id: 'node-1', type: 'node' }),
+      createMockResource({ id: 'node-1', type: 'agent' }),
       createMockResource({ id: 'vm-1', type: 'vm', parentId: 'node-1' }),
       createMockResource({ id: 'vm-2', type: 'vm', parentId: 'node-1' }),
       createMockResource({ id: 'vm-3', type: 'vm', parentId: 'node-2' }),

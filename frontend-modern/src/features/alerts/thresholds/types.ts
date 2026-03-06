@@ -9,7 +9,6 @@ import type { Resource } from '@/types/resource';
 
 export type OverrideType =
   | 'guest'
-  | 'node'
   | 'agent'
   | 'agentDisk'
   | 'storage'

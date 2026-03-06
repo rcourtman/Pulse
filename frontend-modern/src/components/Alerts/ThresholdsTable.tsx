@@ -371,7 +371,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
 
     const headerMeta: GroupHeaderMeta = {
-      type: 'node',
+      type: 'agent',
       displayName: friendlyName,
       rawName: originalDisplayName,
       host,
@@ -448,8 +448,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         displayName: sanitizedName,
         rawName: originalDisplayName,
         host: normalizedHost,
-        type: 'node' as const,
-        resourceType: 'Node',
+        type: 'agent' as const,
+        resourceType: 'Agent',
         status: node.status,
         uptime: node.uptime,
         cpu: (node.cpu?.current ?? 0) / 100,
@@ -2263,7 +2263,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     );
     if (
       !resource ||
-      (resource.type !== 'node' &&
+      (resource.type !== 'agent' &&
         resource.type !== 'pbs' &&
         resource.type !== 'guest' &&
         resource.type !== 'agent' &&

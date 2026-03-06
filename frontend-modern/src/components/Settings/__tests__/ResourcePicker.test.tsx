@@ -67,7 +67,7 @@ describe('ResourcePicker', () => {
     mockResources = [
       makeResource({
         id: 'node-1',
-        type: 'node',
+        type: 'agent',
         name: 'Node One',
         displayName: 'Node One',
         status: 'online',
@@ -87,7 +87,7 @@ describe('ResourcePicker', () => {
     mockResources = [
       makeResource({
         id: 'node-1',
-        type: 'node',
+        type: 'agent',
         name: 'Node One',
         displayName: 'Node One',
         status: 'online',
@@ -142,7 +142,7 @@ describe('ResourcePicker', () => {
       }),
       makeResource({
         id: 'host-dev-55',
-        type: 'node',
+        type: 'agent',
         name: 'Edge Host',
         displayName: 'Edge Host',
         status: 'online',
@@ -288,7 +288,7 @@ describe('ResourcePicker', () => {
     mockResources = [
       makeResource({
         id: 'node-1',
-        type: 'node',
+        type: 'agent',
         name: 'Node One',
         displayName: 'Node One',
         status: 'online',

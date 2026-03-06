@@ -402,7 +402,7 @@ export function Alerts() {
   const agentResources = createMemo(() =>
     allResources().filter(
       (resource) =>
-        (resource.type === 'node' ||
+        (resource.type === 'agent' ||
           resource.type === 'pbs' ||
           resource.type === 'pmg' ||
           resource.type === 'truenas') &&
@@ -433,8 +433,8 @@ export function Alerts() {
     }
 
     const rawConfig = rawOverridesConfig();
-    if (Object.keys(rawConfig).length > 0 && byType('node').length > 0) {
-      const nodeResources = byType('node');
+    if (Object.keys(rawConfig).length > 0 && byType('agent').length > 0) {
+      const nodeResources = byType('agent');
       const vmResources = byType('vm');
       const containerResources = [...byType('system-container'), ...byType('oci-container')];
       const storageResources = allResources().filter(
@@ -636,8 +636,8 @@ export function Alerts() {
             overridesList.push({
               id: key,
               name: node.name,
-              type: 'node',
-              resourceType: 'Node',
+              type: 'agent',
+              resourceType: 'Agent',
               disableConnectivity: thresholds.disableConnectivity || false,
               thresholds: extractTriggerValues(thresholds),
             });
@@ -1929,7 +1929,7 @@ export function Alerts() {
                   allGuests={allGuests}
                   pbsInstances={pbsInstances()}
                   pmgInstances={pmgInstances()}
-                  nodes={byType('node')}
+                  nodes={byType('agent')}
                   agents={agentResources()}
                   storage={allResources().filter(
                     (r) => r.type === 'storage' || r.type === 'datastore',

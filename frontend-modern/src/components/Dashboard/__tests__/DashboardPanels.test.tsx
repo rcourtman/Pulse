@@ -6,7 +6,7 @@ import { computeDashboardOverview } from '@/hooks/useDashboardOverview';
 function createResource(overrides: Partial<Resource> = {}): Resource {
   return {
     id: 'resource-1',
-    type: 'node',
+    type: 'agent',
     name: 'resource-1',
     displayName: 'Resource 1',
     platformId: 'platform-1',
@@ -23,7 +23,7 @@ describe('Dashboard panels data contract', () => {
     const resources: Resource[] = [
       createResource({
         id: 'infra-1',
-        type: 'node',
+        type: 'agent',
         name: 'host-alpha',
         displayName: 'Host Alpha',
         status: 'online',
@@ -31,7 +31,7 @@ describe('Dashboard panels data contract', () => {
       }),
       createResource({
         id: 'infra-2',
-        type: 'node',
+        type: 'agent',
         name: 'node-beta',
         displayName: 'Node Beta',
         status: 'offline',
@@ -76,12 +76,12 @@ describe('Dashboard panels data contract', () => {
       }),
       createResource({
         id: 'work-2',
-        type: 'container',
+        type: 'system-container',
         status: 'online',
       }),
       createResource({
         id: 'work-3',
-        type: 'docker-container',
+        type: 'app-container',
         status: 'stopped',
       }),
       createResource({
@@ -113,8 +113,8 @@ describe('Dashboard panels data contract', () => {
     expect(overview.workloads.stopped).toBe(2);
     expect(overview.workloads.byType).toEqual({
       vm: 1,
-      container: 1,
-      'docker-container': 1,
+      'system-container': 1,
+      'app-container': 1,
       pod: 1,
     });
   });
@@ -147,7 +147,7 @@ describe('Dashboard panels data contract', () => {
       }),
       createResource({
         id: 'infra-1',
-        type: 'node',
+        type: 'agent',
         status: 'online',
         disk: { current: 99, total: 1000, used: 990 },
       }),

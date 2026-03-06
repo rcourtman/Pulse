@@ -56,7 +56,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const hasAgentScopeResource = (resource: Resource): boolean => {
     if (resource.type === 'docker-host') return false;
     return (
-      resource.type === 'node' ||
+      resource.type === 'agent' ||
       resource.type === 'pbs' ||
       resource.type === 'pmg' ||
       resource.type === 'truenas' ||
