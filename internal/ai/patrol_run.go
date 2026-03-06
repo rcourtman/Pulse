@@ -1977,8 +1977,6 @@ type patrolAlertResourceState struct {
 	found        bool
 }
 
-type patrolAlertResourceVisitor func(patrolAlertResourceState) bool
-
 func patrolAlertNameMatches(alert AlertInfo, ids ...string) bool {
 	for _, id := range ids {
 		if strings.TrimSpace(id) == "" {
@@ -2006,19 +2004,29 @@ func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) pa
 			return resource
 		}
 	}
-	if resource, ok := lookupPatrolAlertResourceStateFromReadState(alert, snap); ok {
-		return resource
-	}
-	if resource, ok := lookupPatrolAlertResourceStateFromSnapshot(alert, snap); ok {
-		return resource
+	switch alert.ResourceType {
+	case "storage":
+		if resource, ok := patrolLookupStorageAlertResourceState(alert, snap); ok {
+			return resource
+		}
+	case "node":
+		if resource, ok := patrolLookupNodeAlertResourceState(alert, snap); ok {
+			return resource
+		}
+	case "vm":
+		if resource, ok := patrolLookupGuestAlertResourceState(alert, snap, "VM", "vm"); ok {
+			return resource
+		}
+	case "system-container":
+		if resource, ok := patrolLookupGuestAlertResourceState(alert, snap, "Container", "system-container"); ok {
+			return resource
+		}
+	case "agent":
+		if resource, ok := patrolLookupAgentAlertResourceState(alert, snap); ok {
+			return resource
+		}
 	}
 	return patrolAlertResourceState{}
-}
-
-func lookupPatrolAlertResourceStateFromReadState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
-	return patrolLookupAlertResourceStateWithVisitor(func(visit patrolAlertResourceVisitor) bool {
-		return patrolVisitAlertResourceStateFromReadState(alert, snap, visit)
-	})
 }
 
 func patrolLookupAppContainerAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
@@ -2038,172 +2046,94 @@ func patrolLookupAppContainerAlertResourceState(alert AlertInfo, snap patrolRunt
 	return patrolAlertResourceState{}, false
 }
 
-func lookupPatrolAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
-	return patrolLookupAlertResourceStateWithVisitor(func(visit patrolAlertResourceVisitor) bool {
-		return patrolVisitAlertResourceStateFromSnapshot(alert, snap, visit)
-	})
-}
-
-func patrolLookupAlertResourceStateWithVisitor(walk func(patrolAlertResourceVisitor) bool) (patrolAlertResourceState, bool) {
-	var result patrolAlertResourceState
-	found := false
-	walk(func(state patrolAlertResourceState) bool {
-		result = state
-		found = true
-		return false
-	})
-	return result, found
-}
-
-func patrolVisitAlertResourceStateFromReadState(alert AlertInfo, snap patrolRuntimeState, visit patrolAlertResourceVisitor) bool {
-	if snap.readState == nil {
-		return false
+func patrolLookupStorageAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+	for _, storage := range patrolStoragePoolRows(snap, nil) {
+		if !patrolAlertNameMatches(alert, storage.id, storage.name) {
+			continue
+		}
+		return patrolAlertResourceState{
+			resourceType: "storage",
+			name:         storage.name,
+			status:       storage.status,
+			disk:         storage.usage,
+			found:        true,
+		}, true
 	}
-	switch alert.ResourceType {
-	case "storage":
-		for _, storage := range snap.readState.StoragePools() {
-			if patrolAlertNameMatches(alert, storage.ID(), storage.Name()) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "storage",
-					name:         storage.Name(),
-					status:       string(storage.Status()),
-					disk:         storage.DiskPercent(),
-					found:        true,
-				})
-			}
+	return patrolAlertResourceState{}, false
+}
+
+func patrolLookupNodeAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+	for _, node := range patrolNodeInventoryRows(snap, nil) {
+		if !patrolAlertNameMatches(alert, node.id, node.name) {
+			continue
 		}
-	case "node":
-		for _, node := range snap.readState.Nodes() {
-			if patrolAlertNameMatches(alert, node.ID(), node.Name()) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "node",
-					name:         node.Name(),
-					status:       string(node.Status()),
-					cpu:          node.CPUPercent(),
-					memory:       node.MemoryPercent(),
-					found:        true,
-				})
-			}
+		return patrolAlertResourceState{
+			resourceType: "node",
+			name:         node.name,
+			status:       node.status,
+			cpu:          node.cpu,
+			memory:       node.mem,
+			found:        true,
+		}, true
+	}
+	return patrolAlertResourceState{}, false
+}
+
+func patrolLookupGuestAlertResourceState(alert AlertInfo, snap patrolRuntimeState, guestType, resourceType string) (patrolAlertResourceState, bool) {
+	for _, guest := range patrolGuestInventoryRows(snap, nil, nil) {
+		if guest.gType != guestType || !patrolAlertNameMatches(alert, guest.id, guest.name) {
+			continue
 		}
-	case "agent":
+		return patrolAlertResourceState{
+			resourceType: resourceType,
+			name:         guest.name,
+			status:       guest.status,
+			cpu:          guest.cpu,
+			memory:       guest.mem,
+			found:        true,
+		}, true
+	}
+	return patrolAlertResourceState{}, false
+}
+
+func patrolLookupAgentAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+	if snap.readState != nil {
 		for _, host := range snap.readState.Hosts() {
-			if patrolAlertNameMatches(alert, host.ID(), host.Name(), host.Hostname()) {
-				name := host.Hostname()
-				if name == "" {
-					name = host.Name()
-				}
-				return !visit(patrolAlertResourceState{
-					resourceType: "agent",
-					name:         name,
-					status:       string(host.Status()),
-					cpu:          host.CPUPercent(),
-					memory:       host.MemoryPercent(),
-					found:        true,
-				})
+			if !patrolAlertNameMatches(alert, host.ID(), host.Name(), host.Hostname()) {
+				continue
 			}
-		}
-	case "vm":
-		for _, vm := range snap.readState.VMs() {
-			if patrolAlertNameMatches(alert, vm.ID(), vm.Name()) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "vm",
-					name:         vm.Name(),
-					status:       string(vm.Status()),
-					cpu:          vm.CPUPercent(),
-					memory:       vm.MemoryPercent(),
-					found:        true,
-				})
+			name := host.Hostname()
+			if name == "" {
+				name = host.Name()
 			}
-		}
-	case "system-container":
-		for _, ct := range snap.readState.Containers() {
-			if patrolAlertNameMatches(alert, ct.ID(), ct.Name()) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "system-container",
-					name:         ct.Name(),
-					status:       string(ct.Status()),
-					cpu:          ct.CPUPercent(),
-					memory:       ct.MemoryPercent(),
-					found:        true,
-				})
-			}
+			return patrolAlertResourceState{
+				resourceType: "agent",
+				name:         name,
+				status:       string(host.Status()),
+				cpu:          host.CPUPercent(),
+				memory:       host.MemoryPercent(),
+				found:        true,
+			}, true
 		}
 	}
-	return false
-}
-
-func patrolVisitAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRuntimeState, visit patrolAlertResourceVisitor) bool {
-	switch alert.ResourceType {
-	case "storage":
-		for _, storage := range snap.Storage {
-			if patrolAlertNameMatches(alert, storage.ID, storage.Name) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "storage",
-					name:         storage.Name,
-					status:       storage.Status,
-					disk:         storage.Usage,
-					found:        true,
-				})
-			}
+	for _, host := range snap.Hosts {
+		if !patrolAlertNameMatches(alert, host.ID, host.DisplayName, host.Hostname) {
+			continue
 		}
-	case "node":
-		for _, node := range snap.Nodes {
-			if patrolAlertNameMatches(alert, node.ID, node.Name) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "node",
-					name:         node.Name,
-					status:       node.Status,
-					cpu:          node.CPU * 100,
-					memory:       node.Memory.Usage,
-					found:        true,
-				})
-			}
+		name := host.DisplayName
+		if name == "" {
+			name = host.Hostname
 		}
-	case "agent":
-		for _, host := range snap.Hosts {
-			if patrolAlertNameMatches(alert, host.ID, host.DisplayName, host.Hostname) {
-				name := host.DisplayName
-				if name == "" {
-					name = host.Hostname
-				}
-				return !visit(patrolAlertResourceState{
-					resourceType: "agent",
-					name:         name,
-					status:       host.Status,
-					cpu:          host.CPUUsage,
-					memory:       host.Memory.Usage,
-					found:        true,
-				})
-			}
-		}
-	case "vm":
-		for _, vm := range snap.VMs {
-			if patrolAlertNameMatches(alert, vm.ID, vm.Name) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "vm",
-					name:         vm.Name,
-					status:       vm.Status,
-					cpu:          vm.CPU * 100,
-					memory:       vm.Memory.Usage,
-					found:        true,
-				})
-			}
-		}
-	case "system-container":
-		for _, ct := range snap.Containers {
-			if patrolAlertNameMatches(alert, ct.ID, ct.Name) {
-				return !visit(patrolAlertResourceState{
-					resourceType: "system-container",
-					name:         ct.Name,
-					status:       ct.Status,
-					cpu:          ct.CPU * 100,
-					memory:       ct.Memory.Usage,
-					found:        true,
-				})
-			}
-		}
+		return patrolAlertResourceState{
+			resourceType: "agent",
+			name:         name,
+			status:       host.Status,
+			cpu:          host.CPUUsage,
+			memory:       host.Memory.Usage,
+			found:        true,
+		}, true
 	}
-	return false
+	return patrolAlertResourceState{}, false
 }
 
 func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolRuntimeState) float64 {
