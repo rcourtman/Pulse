@@ -511,6 +511,60 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 	}
 }
 
+func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 55},
+			Memory: &unifiedresources.MetricValue{Percent: 65},
+			Disk:   &unifiedresources.MetricValue{Percent: 40},
+		},
+	})
+	vmView := unifiedresources.NewVMView(&unifiedresources.Resource{
+		ID:     "qemu/101",
+		Name:   "vm-1",
+		Type:   unifiedresources.ResourceTypeVM,
+		Status: "running",
+		Proxmox: &unifiedresources.ProxmoxData{
+			SourceID:   "qemu/101",
+			VMID:       101,
+			NodeName:   "node-1",
+			LastBackup: now.Add(-2 * time.Hour),
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 10},
+			Memory: &unifiedresources.MetricValue{Percent: 30},
+			Disk:   &unifiedresources.MetricValue{Percent: 20},
+		},
+	})
+	runtimeState.readState = &mockReadState{
+		nodes: []*unifiedresources.NodeView{&nodeView},
+		vms:   []*unifiedresources.VMView{&vmView},
+	}
+
+	ps.SetReadState(nil)
+
+	out := ps.seedResourceInventoryState(runtimeState, nil, cfg, now, false, nil)
+	for _, part := range []string{
+		"# Node Metrics",
+		"| node-1 | online | 55% | 65% | 40%",
+		"# Guest Metrics",
+		"| vm-1 | VM | node-1 | - | 10% | 30% | 20% | running | - | 2h ago |",
+	} {
+		if !strings.Contains(out, part) {
+			t.Fatalf("expected runtime-state-backed output to contain %q, got: %s", part, out)
+		}
+	}
+}
+
 func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	cfg := DefaultPatrolConfig()

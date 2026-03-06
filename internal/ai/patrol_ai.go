@@ -1764,59 +1764,154 @@ func (p *PatrolService) seedResourceInventory(snap models.StateSnapshot, scopedS
 	return p.seedResourceInventoryState(p.patrolRuntimeStateForSnapshot(snap), scopedSet, cfg, now, isQuiet, guestIntel)
 }
 
+type patrolNodeInventoryRow struct {
+	id, name, status string
+	cpu, mem, disk   float64
+	load             []float64
+	uptimeSeconds    int64
+	pendingUpdates   int
+}
+
+type patrolGuestInventoryRow struct {
+	name, gType, node, status string
+	cpu, mem, disk            float64
+	lastBackup                time.Time
+	service                   string
+	reachable                 string
+}
+
+func patrolNodeInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolNodeInventoryRow {
+	rs := snap.readState
+	if rs != nil {
+		scopedNodes := make([]patrolNodeInventoryRow, 0, len(rs.Nodes()))
+		for _, nv := range rs.Nodes() {
+			if !seedIsInScope(scopedSet, nv.ID()) {
+				continue
+			}
+			scopedNodes = append(scopedNodes, patrolNodeInventoryRow{
+				id:             nv.ID(),
+				name:           nv.Name(),
+				status:         string(nv.Status()),
+				cpu:            nv.CPUPercent(),
+				mem:            nv.MemoryPercent(),
+				disk:           nv.DiskPercent(),
+				load:           nv.LoadAverage(),
+				uptimeSeconds:  nv.Uptime(),
+				pendingUpdates: nv.PendingUpdates(),
+			})
+		}
+		return scopedNodes
+	}
+
+	scopedNodes := make([]patrolNodeInventoryRow, 0, len(snap.Nodes))
+	for _, n := range snap.Nodes {
+		if !seedIsInScope(scopedSet, n.ID) {
+			continue
+		}
+		scopedNodes = append(scopedNodes, patrolNodeInventoryRow{
+			id:             n.ID,
+			name:           n.Name,
+			status:         n.Status,
+			cpu:            n.CPU * 100,
+			mem:            n.Memory.Usage,
+			disk:           n.Disk.Usage,
+			load:           n.LoadAverage,
+			uptimeSeconds:  n.Uptime,
+			pendingUpdates: n.PendingUpdates,
+		})
+	}
+	return scopedNodes
+}
+
+func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool, guestIntel map[string]*GuestIntelligence) []patrolGuestInventoryRow {
+	rs := snap.readState
+	if rs != nil {
+		guests := make([]patrolGuestInventoryRow, 0, len(rs.VMs())+len(rs.Containers()))
+		for _, vmv := range rs.VMs() {
+			if vmv.Template() || !seedIsInScope(scopedSet, vmv.ID()) {
+				continue
+			}
+			gi := guestIntel[vmv.ID()]
+			guests = append(guests, patrolGuestInventoryRow{
+				name:       vmv.Name(),
+				gType:      "VM",
+				node:       vmv.Node(),
+				status:     string(vmv.Status()),
+				cpu:        vmv.CPUPercent(),
+				mem:        vmv.MemoryPercent(),
+				disk:       vmv.DiskPercent(),
+				lastBackup: vmv.LastBackup(),
+				service:    formatService(gi),
+				reachable:  formatReachable(reachableFromIntel(gi)),
+			})
+		}
+		for _, ctv := range rs.Containers() {
+			if ctv.Template() || !seedIsInScope(scopedSet, ctv.ID()) {
+				continue
+			}
+			gi := guestIntel[ctv.ID()]
+			guests = append(guests, patrolGuestInventoryRow{
+				name:       ctv.Name(),
+				gType:      "Container",
+				node:       ctv.Node(),
+				status:     string(ctv.Status()),
+				cpu:        ctv.CPUPercent(),
+				mem:        ctv.MemoryPercent(),
+				disk:       ctv.DiskPercent(),
+				lastBackup: ctv.LastBackup(),
+				service:    formatService(gi),
+				reachable:  formatReachable(reachableFromIntel(gi)),
+			})
+		}
+		return guests
+	}
+
+	guests := make([]patrolGuestInventoryRow, 0, len(snap.VMs)+len(snap.Containers))
+	for _, vm := range snap.VMs {
+		if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
+			continue
+		}
+		gi := guestIntel[vm.ID]
+		guests = append(guests, patrolGuestInventoryRow{
+			name:       vm.Name,
+			gType:      "VM",
+			node:       vm.Node,
+			status:     vm.Status,
+			cpu:        vm.CPU * 100,
+			mem:        vm.Memory.Usage,
+			disk:       vm.Disk.Usage,
+			lastBackup: vm.LastBackup,
+			service:    formatService(gi),
+			reachable:  formatReachable(reachableFromIntel(gi)),
+		})
+	}
+	for _, ct := range snap.Containers {
+		if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
+			continue
+		}
+		gi := guestIntel[ct.ID]
+		guests = append(guests, patrolGuestInventoryRow{
+			name:       ct.Name,
+			gType:      "Container",
+			node:       ct.Node,
+			status:     ct.Status,
+			cpu:        ct.CPU * 100,
+			mem:        ct.Memory.Usage,
+			disk:       ct.Disk.Usage,
+			lastBackup: ct.LastBackup,
+			service:    formatService(gi),
+			reachable:  formatReachable(reachableFromIntel(gi)),
+		})
+	}
+	return guests
+}
+
 func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
 	var sb strings.Builder
 
 	// --- Node Metrics ---
 	if cfg.AnalyzeNodes {
-		type nodeRow struct {
-			id, name, status string
-			cpu, mem, disk   float64
-			load             []float64
-			uptimeSeconds    int64
-			pendingUpdates   int
-		}
-
-		rs := snap.readState
-
-		var scopedNodes []nodeRow
-		if rs != nil {
-			for _, nv := range rs.Nodes() {
-				if seedIsInScope(scopedSet, nv.ID()) {
-					scopedNodes = append(scopedNodes, nodeRow{
-						id:            nv.ID(),
-						name:          nv.Name(),
-						status:        string(nv.Status()),
-						cpu:           nv.CPUPercent(),
-						mem:           nv.MemoryPercent(),
-						disk:          nv.DiskPercent(),
-						load:          nv.LoadAverage(),
-						uptimeSeconds: nv.Uptime(),
-						pendingUpdates: func() int {
-							return nv.PendingUpdates()
-						}(),
-					})
-				}
-			}
-		} else {
-			for _, n := range snap.Nodes {
-				if seedIsInScope(scopedSet, n.ID) {
-					scopedNodes = append(scopedNodes, nodeRow{
-						id:            n.ID,
-						name:          n.Name,
-						status:        n.Status,
-						cpu:           n.CPU * 100,
-						mem:           n.Memory.Usage,
-						disk:          n.Disk.Usage,
-						load:          n.LoadAverage,
-						uptimeSeconds: n.Uptime,
-						pendingUpdates: func() int {
-							return n.PendingUpdates
-						}(),
-					})
-				}
-			}
-		}
+		scopedNodes := patrolNodeInventoryRows(snap, scopedSet)
 
 		if len(scopedNodes) > 0 {
 			if isQuiet && scopedSet == nil {
@@ -1869,73 +1964,10 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 	}
 
 	// --- Guest Metrics (VMs + Containers in one table) ---
-	type guestRow struct {
-		name, gType, node, status string
-		cpu, mem, disk            float64
-		lastBackup                time.Time
-		service                   string // from discovery, e.g. "PostgreSQL 15" or "-"
-		reachable                 string // "yes", "NO", or "-"
-	}
-	var guests []guestRow
+	var guests []patrolGuestInventoryRow
 
 	if cfg.AnalyzeGuests {
-		rs := snap.readState
-
-		if rs != nil {
-			for _, vmv := range rs.VMs() {
-				if vmv.Template() || !seedIsInScope(scopedSet, vmv.ID()) {
-					continue
-				}
-				gi := guestIntel[vmv.ID()]
-				guests = append(guests, guestRow{
-					name: vmv.Name(), gType: "VM", node: vmv.Node(), status: string(vmv.Status()),
-					cpu: vmv.CPUPercent(), mem: vmv.MemoryPercent(), disk: vmv.DiskPercent(),
-					lastBackup: vmv.LastBackup(),
-					service:    formatService(gi),
-					reachable:  formatReachable(reachableFromIntel(gi)),
-				})
-			}
-			for _, ctv := range rs.Containers() {
-				if ctv.Template() || !seedIsInScope(scopedSet, ctv.ID()) {
-					continue
-				}
-				gi := guestIntel[ctv.ID()]
-				guests = append(guests, guestRow{
-					name: ctv.Name(), gType: "Container", node: ctv.Node(), status: string(ctv.Status()),
-					cpu: ctv.CPUPercent(), mem: ctv.MemoryPercent(), disk: ctv.DiskPercent(),
-					lastBackup: ctv.LastBackup(),
-					service:    formatService(gi),
-					reachable:  formatReachable(reachableFromIntel(gi)),
-				})
-			}
-		} else {
-			for _, vm := range snap.VMs {
-				if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
-					continue
-				}
-				gi := guestIntel[vm.ID]
-				guests = append(guests, guestRow{
-					name: vm.Name, gType: "VM", node: vm.Node, status: vm.Status,
-					cpu: vm.CPU * 100, mem: vm.Memory.Usage, disk: vm.Disk.Usage,
-					lastBackup: vm.LastBackup,
-					service:    formatService(gi),
-					reachable:  formatReachable(reachableFromIntel(gi)),
-				})
-			}
-			for _, ct := range snap.Containers {
-				if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
-					continue
-				}
-				gi := guestIntel[ct.ID]
-				guests = append(guests, guestRow{
-					name: ct.Name, gType: "Container", node: ct.Node, status: ct.Status,
-					cpu: ct.CPU * 100, mem: ct.Memory.Usage, disk: ct.Disk.Usage,
-					lastBackup: ct.LastBackup,
-					service:    formatService(gi),
-					reachable:  formatReachable(reachableFromIntel(gi)),
-				})
-			}
-		}
+		guests = patrolGuestInventoryRows(snap, scopedSet, guestIntel)
 	}
 
 	if len(guests) > 0 {
@@ -2294,35 +2326,16 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 
 	// --- Nodes ---
 	if cfg.AnalyzeNodes {
-		rs := snap.readState
-
-		nodes := make([]compactResource, 0, len(snap.Nodes))
-		if rs != nil {
-			for _, nv := range rs.Nodes() {
-				if !seedIsInScope(scopedSet, nv.ID()) {
-					continue
-				}
-				nodes = append(nodes, compactResource{
-					name:   nv.Name(),
-					status: string(nv.Status()),
-					cpu:    nv.CPUPercent(),
-					mem:    nv.MemoryPercent(),
-					disk:   nv.DiskPercent(),
-				})
-			}
-		} else {
-			for _, n := range snap.Nodes {
-				if !seedIsInScope(scopedSet, n.ID) {
-					continue
-				}
-				nodes = append(nodes, compactResource{
-					name:   n.Name,
-					status: n.Status,
-					cpu:    n.CPU * 100,
-					mem:    n.Memory.Usage,
-					disk:   n.Disk.Usage,
-				})
-			}
+		nodeRows := patrolNodeInventoryRows(snap, scopedSet)
+		nodes := make([]compactResource, 0, len(nodeRows))
+		for _, n := range nodeRows {
+			nodes = append(nodes, compactResource{
+				name:   n.name,
+				status: n.status,
+				cpu:    n.cpu,
+				mem:    n.mem,
+				disk:   n.disk,
+			})
 		}
 
 		if len(nodes) > 0 {
@@ -2362,59 +2375,16 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 
 	// --- Guests ---
 	if cfg.AnalyzeGuests {
-		rs := snap.readState
-
-		guests := []compactResource{}
-		if rs != nil {
-			for _, vmv := range rs.VMs() {
-				if vmv.Template() || !seedIsInScope(scopedSet, vmv.ID()) {
-					continue
-				}
-				guests = append(guests, compactResource{
-					name:   vmv.Name(),
-					status: string(vmv.Status()),
-					cpu:    vmv.CPUPercent(),
-					mem:    vmv.MemoryPercent(),
-					disk:   vmv.DiskPercent(),
-				})
-			}
-			for _, ctv := range rs.Containers() {
-				if ctv.Template() || !seedIsInScope(scopedSet, ctv.ID()) {
-					continue
-				}
-				guests = append(guests, compactResource{
-					name:   ctv.Name(),
-					status: string(ctv.Status()),
-					cpu:    ctv.CPUPercent(),
-					mem:    ctv.MemoryPercent(),
-					disk:   ctv.DiskPercent(),
-				})
-			}
-		} else {
-			for _, vm := range snap.VMs {
-				if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
-					continue
-				}
-				guests = append(guests, compactResource{
-					name:   vm.Name,
-					status: vm.Status,
-					cpu:    vm.CPU * 100,
-					mem:    vm.Memory.Usage,
-					disk:   vm.Disk.Usage,
-				})
-			}
-			for _, ct := range snap.Containers {
-				if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
-					continue
-				}
-				guests = append(guests, compactResource{
-					name:   ct.Name,
-					status: ct.Status,
-					cpu:    ct.CPU * 100,
-					mem:    ct.Memory.Usage,
-					disk:   ct.Disk.Usage,
-				})
-			}
+		guestRows := patrolGuestInventoryRows(snap, scopedSet, guestIntel)
+		guests := make([]compactResource, 0, len(guestRows))
+		for _, g := range guestRows {
+			guests = append(guests, compactResource{
+				name:   g.name,
+				status: g.status,
+				cpu:    g.cpu,
+				mem:    g.mem,
+				disk:   g.disk,
+			})
 		}
 
 		if len(guests) > 0 {
