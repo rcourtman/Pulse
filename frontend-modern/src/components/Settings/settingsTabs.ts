@@ -207,6 +207,7 @@ export interface SettingsNavVisibilityContext {
   licenseLoaded: () => boolean;
   hostedModeEnabled?: boolean;
   settingsCapabilities?: Partial<SecurityStatusSettingsCapabilities> | null;
+  settingsCapabilitiesResolved?: boolean;
 }
 
 const navItemsByTab = new Map<SettingsTab, SettingsNavItem>(
@@ -240,7 +241,11 @@ export function shouldHideSettingsNavItem(
     return true;
   }
 
-  if (item.requiredCapability && context.settingsCapabilities?.[item.requiredCapability] !== true) {
+  if (
+    item.requiredCapability &&
+    context.settingsCapabilitiesResolved &&
+    context.settingsCapabilities?.[item.requiredCapability] !== true
+  ) {
     return true;
   }
 

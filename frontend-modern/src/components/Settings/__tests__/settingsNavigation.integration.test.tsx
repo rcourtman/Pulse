@@ -89,6 +89,7 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures([]),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
         settingsCapabilities: { apiAccessRead: false },
       }),
     ).toBe(true);
@@ -98,9 +99,32 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures(['rbac']),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
         settingsCapabilities: { roles: false },
       }),
     ).toBe(true);
+  });
+
+  it('keeps capability-gated tabs visible while capability state is unresolved', () => {
+    expect(
+      shouldHideSettingsNavItem('api', {
+        hasFeature: hasFeatures([]),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+        settingsCapabilitiesResolved: false,
+        settingsCapabilities: null,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldHideSettingsNavItem('security-auth', {
+        hasFeature: hasFeatures([]),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+        settingsCapabilitiesResolved: false,
+        settingsCapabilities: null,
+      }),
+    ).toBe(false);
   });
 
   it('shows restricted tabs when the backend grants the required capability', () => {
@@ -109,6 +133,7 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures(['audit_logging']),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
         settingsCapabilities: { auditLog: true },
       }),
     ).toBe(false);
@@ -118,6 +143,7 @@ describe('settingsNavigation integration scaffold', () => {
         hasFeature: hasFeatures(['relay']),
         licenseLoaded: () => true,
         hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
         settingsCapabilities: { relayRead: true, relayWrite: false },
       }),
     ).toBe(false);

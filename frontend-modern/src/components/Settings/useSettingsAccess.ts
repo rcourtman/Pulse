@@ -25,6 +25,7 @@ export function useSettingsAccess({
   const visibleTabGroups = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
     const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
+    const settingsCapabilitiesResolved = securityStatus() !== null;
 
     return baseTabGroups
       .map((group) => ({
@@ -36,6 +37,7 @@ export function useSettingsAccess({
               licenseLoaded,
               hostedModeEnabled,
               settingsCapabilities,
+              settingsCapabilitiesResolved,
             }),
         ),
       }))
