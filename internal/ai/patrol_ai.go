@@ -1196,7 +1196,7 @@ func (p *PatrolService) buildTriageSeedContextState(
 		{priority: 0, name: "triage_briefing", content: FormatTriageBriefing(triage)},
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, flaggedSet, cfg, now)},
-		{priority: 0, name: "scope", content: buildScopeSection(scope)},
+		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(flaggedSet))},
 
 		// P1 — flagged resource details only.
 		{
@@ -1230,12 +1230,13 @@ func (p *PatrolService) buildSeedContextState(snap patrolRuntimeState, scope *Pa
 	scopedSet := p.buildScopedSetForRuntime(scope, snap)
 	intel := p.seedPrecomputeIntelligenceState(snap, scopedSet, now)
 	findingsCtx, seededFindingIDs := p.seedFindingsAndContextState(scope, snap)
+	effectiveScopeIDs := sortedScopedIDs(scopedSet)
 
 	sections := []seedSection{
 		// P0 — always include.
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, scopedSet, cfg, now)},
-		{priority: 0, name: "scope", content: buildScopeSection(scope)},
+		{priority: 0, name: "scope", content: buildScopeSection(scope, effectiveScopeIDs)},
 
 		// P1 — always include (typically compact).
 		{priority: 1, name: "previous_run", content: p.seedPreviousRun(now)},
@@ -1367,7 +1368,7 @@ func (p *PatrolService) assembleSeedWithinBudget(sections []seedSection, budgetT
 	return sb.String()
 }
 
-func buildScopeSection(scope *PatrolScope) string {
+func buildScopeSection(scope *PatrolScope, effectiveScopeIDs []string) string {
 	if scope == nil {
 		return ""
 	}
@@ -1386,6 +1387,12 @@ func buildScopeSection(scope *PatrolScope) string {
 	if len(scope.ResourceTypes) > 0 {
 		sb.WriteString(fmt.Sprintf("Resource types: %s\n", strings.Join(scope.ResourceTypes, ", ")))
 	}
+	if len(effectiveScopeIDs) > 0 {
+		sb.WriteString(fmt.Sprintf("Effective scope: %d %s (%s)\n",
+			len(effectiveScopeIDs),
+			seedCountLabel(len(effectiveScopeIDs), "resource", "resources"),
+			seedTruncateOutlierList(effectiveScopeIDs, 8)))
+	}
 	if scope.AlertID != "" {
 		sb.WriteString(fmt.Sprintf("Alert ID: %s\n", scope.AlertID))
 	}
@@ -1402,6 +1409,21 @@ func buildScopeSection(scope *PatrolScope) string {
 	sb.WriteString("\n")
 
 	return sb.String()
+}
+
+func sortedScopedIDs(scopedSet map[string]bool) []string {
+	if len(scopedSet) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(scopedSet))
+	for id := range scopedSet {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // buildScopedSet constructs the set of resource IDs in scope from explicit scope IDs,

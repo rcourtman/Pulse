@@ -63,6 +63,9 @@ func TestPatrolService_buildSeedContext_ScopeSection(t *testing.T) {
 	if !strings.Contains(seed, "Resource types: node") {
 		t.Fatalf("expected resource types in scope section, got:\n%s", seed)
 	}
+	if !strings.Contains(seed, "Effective scope: 1 resource (node-1)") {
+		t.Fatalf("expected effective scope in scope section, got:\n%s", seed)
+	}
 	if !strings.Contains(seed, "Alert ID: alert-123") {
 		t.Fatalf("expected alert ID in scope section, got:\n%s", seed)
 	}
@@ -71,5 +74,25 @@ func TestPatrolService_buildSeedContext_ScopeSection(t *testing.T) {
 	}
 	if !strings.Contains(seed, "Depth: quick") {
 		t.Fatalf("expected depth in scope section, got:\n%s", seed)
+	}
+}
+
+func TestPatrolService_buildSeedContext_TypeScopedEffectiveScopeSection(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	scope := &PatrolScope{
+		ResourceTypes: []string{"node"},
+		Depth:         PatrolDepthQuick,
+	}
+
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-1", Name: "node-1", Status: "online"},
+			{ID: "node-2", Name: "node-2", Status: "online"},
+		},
+	}
+
+	seed, _ := ps.buildSeedContext(state, scope, nil)
+	if !strings.Contains(seed, "Effective scope: 2 resources (node-1, node-2)") {
+		t.Fatalf("expected type-scoped effective scope section, got:\n%s", seed)
 	}
 }
