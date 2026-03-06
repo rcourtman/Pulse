@@ -1,8 +1,5 @@
 import { Component, createEffect, createMemo, createSignal, Match, Switch } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import Server from 'lucide-solid/icons/server';
-import Boxes from 'lucide-solid/icons/boxes';
-import Waypoints from 'lucide-solid/icons/waypoints';
 import { Card } from '@/components/shared/Card';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ProxmoxSettingsPanel, type ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
@@ -67,72 +64,60 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
 
   return (
     <div class="space-y-6">
-      <Card padding="lg" class="rounded-xl border border-border shadow-sm">
-        <div class="space-y-5">
-          <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-            <div class="space-y-2">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-                Infrastructure
-              </p>
-              <h2 class="text-[1.75rem] font-semibold leading-tight text-base-content">
-                Add and manage infrastructure
-              </h2>
-              <p class="max-w-3xl text-sm leading-6 text-muted">
-                Start with the unified agent. Use direct Proxmox connections only when the agent
-                cannot run on the target host.
-              </p>
-            </div>
+      <div class="space-y-4">
+        <div class="space-y-2">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
+            Infrastructure
+          </p>
+          <h2 class="text-[1.75rem] font-semibold leading-tight text-base-content">
+            Add and manage infrastructure
+          </h2>
+          <p class="max-w-3xl text-sm leading-6 text-muted">
+            Start with the unified agent. Use direct Proxmox connections only when the agent
+            cannot run on the target host.
+          </p>
+        </div>
 
-            <div class="inline-flex w-full flex-col gap-2 rounded-xl border border-border bg-surface-alt p-2 xl:w-auto xl:min-w-[520px] xl:flex-row">
-              <button
-                type="button"
-                onClick={() => openView('install')}
-                class={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeView() === 'install'
-                    ? 'bg-surface text-base-content shadow-sm'
-                    : 'text-muted hover:bg-surface hover:text-base-content'
-                }`}
-              >
-                <Server class="h-4 w-4" />
-                Install on a host
-              </button>
-              <button
-                type="button"
-                onClick={() => openView('direct')}
-                class={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeView() === 'direct'
-                    ? 'bg-surface text-base-content shadow-sm'
-                    : 'text-muted hover:bg-surface hover:text-base-content'
-                }`}
-              >
-                <Waypoints class="h-4 w-4" />
-                Direct Proxmox
-              </button>
-              <button
-                type="button"
-                onClick={() => openView('inventory')}
-                class={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeView() === 'inventory'
-                    ? 'bg-surface text-base-content shadow-sm'
-                    : 'text-muted hover:bg-surface hover:text-base-content'
-                }`}
-              >
-                <Boxes class="h-4 w-4" />
-                Connected
-              </button>
-            </div>
-          </div>
-
-          <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
-            <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div class="text-sm font-medium text-base-content">
-                Current view: {activeViewMeta().label}
-              </div>
-              <div class="text-sm text-muted">{activeViewMeta().description}</div>
-            </div>
+        <div class="border-b border-border">
+          <div class="flex flex-wrap items-center gap-6">
+            <button
+              type="button"
+              onClick={() => openView('install')}
+              class={`inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
+                activeView() === 'install'
+                  ? 'border-blue-600 text-base-content'
+                  : 'border-transparent text-muted hover:text-base-content'
+              }`}
+            >
+              Install on a host
+            </button>
+            <button
+              type="button"
+              onClick={() => openView('direct')}
+              class={`inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
+                activeView() === 'direct'
+                  ? 'border-blue-600 text-base-content'
+                  : 'border-transparent text-muted hover:text-base-content'
+              }`}
+            >
+              Direct Proxmox
+            </button>
+            <button
+              type="button"
+              onClick={() => openView('inventory')}
+              class={`inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
+                activeView() === 'inventory'
+                  ? 'border-blue-600 text-base-content'
+                  : 'border-transparent text-muted hover:text-base-content'
+              }`}
+            >
+              Connected infrastructure
+            </button>
           </div>
         </div>
-      </Card>
+
+        <div class="text-sm text-muted">{activeViewMeta().description}</div>
+      </div>
 
       <Switch>
         <Match when={activeView() === 'install'}>
