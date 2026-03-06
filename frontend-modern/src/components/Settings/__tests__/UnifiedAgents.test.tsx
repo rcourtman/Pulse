@@ -538,7 +538,7 @@ describe('UnifiedAgents managed agents table', () => {
     setupComponent();
 
     await waitFor(() => {
-      expect(screen.getByText('No agents installed yet.')).toBeInTheDocument();
+      expect(screen.getByText('No active infrastructure connected yet.')).toBeInTheDocument();
     });
   });
 
@@ -559,7 +559,7 @@ describe('UnifiedAgents managed agents table', () => {
     expect(details.getByText('Outdated')).toBeInTheDocument();
   });
 
-  it('filters removed agents with the status filter', async () => {
+  it('separates active and monitoring-stopped items into dedicated sections', async () => {
     const host = createAgent({ displayName: 'Active Host' });
     const removedHost = createRemovedDockerHost();
     setupComponent([host], [], [], [removedHost]);
@@ -568,14 +568,15 @@ describe('UnifiedAgents managed agents table', () => {
       expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
     });
 
+    expect(screen.getAllByText('Active infrastructure').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Monitoring stopped').length).toBeGreaterThan(0);
     expect(screen.getByText('Active Host')).toBeInTheDocument();
     expect(screen.getByText('old-docker.local')).toBeInTheDocument();
-
-    const statusSelect = screen.getByLabelText('Status');
-    fireEvent.change(statusSelect, { target: { value: 'removed' } });
-
-    expect(screen.queryByText('Active Host')).not.toBeInTheDocument();
-    expect(screen.getByText('old-docker.local')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Pulse is currently ignoring reports from these items\. Allow reconnect when you want them to appear as active again\./i,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('prefers removed docker entries over matching active runtime rows', async () => {

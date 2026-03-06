@@ -374,7 +374,6 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
   const [pendingScopeUpdates, setPendingScopeUpdates] = createSignal<Record<string, boolean>>({});
   const [expandedRowKey, setExpandedRowKey] = createSignal<string | null>(null);
   const [filterCapability, setFilterCapability] = createSignal<'all' | AgentCapability>('all');
-  const [filterStatus, setFilterStatus] = createSignal<'all' | UnifiedAgentStatus>('all');
   const [filterScope, setFilterScope] = createSignal<'all' | Exclude<ScopeCategory, 'na'>>('all');
   const [filterSearch, setFilterSearch] = createSignal('');
 
@@ -991,40 +990,52 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     return rows;
   });
 
-  const filteredRows = createMemo(() => {
+  const matchesInventoryFilters = (row: UnifiedAgentRow) => {
     const query = filterSearch().trim().toLowerCase();
-    return unifiedRows().filter((row) => {
-      if (
-        filterCapability() !== 'all' &&
-        !row.capabilities.includes(filterCapability() as AgentCapability)
-      ) {
-        return false;
-      }
-      if (filterStatus() !== 'all' && row.status !== filterStatus()) {
-        return false;
-      }
-      if (filterScope() !== 'all' && row.scope.category !== filterScope()) {
-        return false;
-      }
-      if (query && !row.searchText.includes(query)) {
-        return false;
-      }
-      return true;
-    });
-  });
+    if (
+      filterCapability() !== 'all' &&
+      !row.capabilities.includes(filterCapability() as AgentCapability)
+    ) {
+      return false;
+    }
+    if (filterScope() !== 'all' && row.scope.category !== filterScope()) {
+      return false;
+    }
+    if (query && !row.searchText.includes(query)) {
+      return false;
+    }
+    return true;
+  };
+
+  const activeRows = createMemo(() => unifiedRows().filter((row) => row.status === 'active'));
+  const monitoringStoppedRows = createMemo(() =>
+    unifiedRows().filter((row) => row.status === 'removed'),
+  );
+
+  const filteredActiveRows = createMemo(() => activeRows().filter(matchesInventoryFilters));
+  const filteredMonitoringStoppedRows = createMemo(() =>
+    monitoringStoppedRows().filter(matchesInventoryFilters),
+  );
 
   const hasFilters = createMemo(() => {
     return (
       filterCapability() !== 'all' ||
-      filterStatus() !== 'all' ||
       filterScope() !== 'all' ||
       filterSearch().trim().length > 0
     );
   });
 
+  const visibleRowCount = createMemo(
+    () => filteredActiveRows().length + filteredMonitoringStoppedRows().length,
+  );
+
+  const hasMonitoringStoppedRows = createMemo(() => monitoringStoppedRows().length > 0);
+  const showMonitoringStoppedSection = createMemo(() => {
+    return hasMonitoringStoppedRows() || hasFilters();
+  });
+
   const resetFilters = () => {
     setFilterCapability('all');
-    setFilterStatus('all');
     setFilterScope('all');
     setFilterSearch('');
   };
@@ -1840,6 +1851,37 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
           </div>
         </Show>
 
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="rounded-md border border-border bg-surface-alt px-4 py-3">
+            <div class="text-xs font-medium uppercase tracking-wide text-muted">
+              Active infrastructure
+            </div>
+            <div class="mt-1 text-2xl font-semibold text-base-content">
+              {filteredActiveRows().length}
+            </div>
+            <div class="mt-1 text-xs text-muted">
+              Systems currently reporting to Pulse.
+            </div>
+          </div>
+          <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/40">
+            <div class="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              Monitoring stopped
+            </div>
+            <div class="mt-1 text-2xl font-semibold text-amber-900 dark:text-amber-100">
+              {filteredMonitoringStoppedRows().length}
+            </div>
+            <div class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              Pulse is ignoring reports from these items until reconnect is allowed.
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-sm text-muted">
+          Stopping monitoring in Pulse does not uninstall software on the remote system. Use the
+          uninstall commands above or remove the service on the host itself if you want it gone
+          completely.
+        </div>
+
         <div class="flex flex-wrap items-end gap-3">
           <div class="space-y-1">
             <label for="agent-filter-capability" class="text-xs font-medium text-muted">
@@ -1858,23 +1900,6 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
               <option value="docker">Docker</option>
               <option value="kubernetes">Kubernetes</option>
               <option value="proxmox">Proxmox</option>
-            </select>
-          </div>
-          <div class="space-y-1">
-            <label for="agent-filter-status" class="text-xs font-medium text-muted">
-              Status
-            </label>
-            <select
-              id="agent-filter-status"
-              value={filterStatus()}
-              onChange={(event) =>
-                setFilterStatus(event.currentTarget.value as 'all' | UnifiedAgentStatus)
-              }
-              class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="removed">Monitoring stopped</option>
             </select>
           </div>
           <div class="space-y-1">
@@ -1919,16 +1944,31 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
         </div>
 
         <div class="text-xs text-muted">
-          Showing {filteredRows().length} of {unifiedRows().length} records.
+          Showing {visibleRowCount()} of {unifiedRows().length} records.
         </div>
 
-        <PulseDataGrid
-          data={filteredRows()}
-          emptyState={
-            hasFilters() ? 'No agents match the current filters.' : 'No agents installed yet.'
-          }
-          desktopMinWidth="960px"
-          columns={[
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-semibold text-base-content">Active infrastructure</h3>
+              <p class="text-xs text-muted">
+                Systems currently reporting to Pulse and available for management actions.
+              </p>
+            </div>
+            <span class="rounded-full bg-surface-alt px-2.5 py-1 text-xs font-medium text-muted">
+              {filteredActiveRows().length}
+            </span>
+          </div>
+
+          <PulseDataGrid
+            data={filteredActiveRows()}
+            emptyState={
+              hasFilters()
+                ? 'No active infrastructure matches the current filters.'
+                : 'No active infrastructure connected yet.'
+            }
+            desktopMinWidth="960px"
+            columns={[
             {
               key: 'name',
               label: 'Name',
@@ -2284,11 +2324,11 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                 );
               },
             },
-          ]}
-          keyExtractor={(row) => row.rowKey}
-          onRowClick={(row) => toggleAgentDetails(row.rowKey)}
-          isRowExpanded={(row) => expandedRowKey() === row.rowKey}
-          expandedRender={(row: UnifiedAgentRow) => {
+            ]}
+            keyExtractor={(row) => row.rowKey}
+            onRowClick={(row) => toggleAgentDetails(row.rowKey)}
+            isRowExpanded={(row) => expandedRowKey() === row.rowKey}
+            expandedRender={(row: UnifiedAgentRow) => {
             const isKubernetes = () =>
               row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
             const resolvedAgentId = row.agentId || '';
@@ -2490,6 +2530,120 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
             );
           }}
         />
+
+          <Show when={showMonitoringStoppedSection()}>
+            <div class="space-y-3 pt-2">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-sm font-semibold text-base-content">Monitoring stopped</h3>
+                  <p class="text-xs text-muted">
+                    Pulse is currently ignoring reports from these items. Allow reconnect when you
+                    want them to appear as active again.
+                  </p>
+                </div>
+                <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                  {filteredMonitoringStoppedRows().length}
+                </span>
+              </div>
+
+              <PulseDataGrid
+                data={filteredMonitoringStoppedRows()}
+                emptyState={
+                  hasFilters()
+                    ? 'No monitoring-stopped items match the current filters.'
+                    : 'No infrastructure currently has monitoring stopped.'
+                }
+                desktopMinWidth="760px"
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Name',
+                    render: (row: UnifiedAgentRow) => (
+                      <div class="min-w-0 text-left">
+                        <div class="truncate text-sm font-medium text-base-content">{row.name}</div>
+                        <Show
+                          when={
+                            row.displayName && row.hostname && row.displayName !== row.hostname
+                          }
+                        >
+                          <div class="truncate text-xs text-muted">{row.hostname}</div>
+                        </Show>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'capabilities',
+                    label: 'Capabilities',
+                    render: (row: UnifiedAgentRow) => (
+                      <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <For each={row.capabilities}>
+                          {(cap) => (
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                              {cap === 'agent'
+                                ? 'Agent'
+                                : cap === 'docker'
+                                  ? 'Docker'
+                                  : cap === 'kubernetes'
+                                    ? 'Kubernetes'
+                                    : 'Proxmox'}
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'stoppedAt',
+                    label: 'Stopped In Pulse',
+                    render: (row: UnifiedAgentRow) => (
+                      <span class="text-xs text-muted">
+                        {row.removedAt
+                          ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
+                          : 'Unknown'}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    align: 'right',
+                    render: (row: UnifiedAgentRow) => (
+                      <Show
+                        when={row.capabilities.includes('docker')}
+                        fallback={
+                          <button
+                            onClick={() =>
+                              handleAllowKubernetesReconnect(
+                                row.kubernetesActionId || row.id,
+                                row.name,
+                              )
+                            }
+                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                          >
+                            {ALLOW_RECONNECT_LABEL}
+                          </button>
+                        }
+                      >
+                        <button
+                          onClick={() =>
+                            handleAllowReconnect(
+                              row.dockerActionId || row.id,
+                              row.displayName || row.hostname || row.name,
+                            )
+                          }
+                          class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                        >
+                          {ALLOW_RECONNECT_LABEL}
+                        </button>
+                      </Show>
+                    ),
+                  },
+                ]}
+                keyExtractor={(row) => row.rowKey}
+	              />
+	            </div>
+	          </Show>
+        </div>
         </SettingsPanel>
       </Show>
     </div>
