@@ -130,6 +130,31 @@ func TestStripeWebhook_SignatureVerification(t *testing.T) {
 	})
 
 	t.Run("valid signature accepted", func(t *testing.T) {
+		createTestOrg(t, persistence, "org_signature", "user@example.com")
+
+		event := map[string]any{
+			"id":   "evt_signature_valid",
+			"type": "checkout.session.completed",
+			"data": map[string]any{
+				"object": map[string]any{
+					"id":             "cs_signature_valid",
+					"mode":           "subscription",
+					"customer":       "cus_signature_valid",
+					"customer_email": "user@example.com",
+					"subscription":   "sub_signature_valid",
+					"metadata": map[string]any{
+						"org_id":       "org_signature",
+						"org_name":     "Acme",
+						"plan_version": "cloud-v1",
+					},
+				},
+			},
+		}
+		payload, err := json.Marshal(event)
+		if err != nil {
+			t.Fatalf("marshal valid event: %v", err)
+		}
+
 		req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
 		req.Host = "app.example.test"
 		signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
@@ -244,6 +269,162 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 
 	if emailer.Count() != 1 {
 		t.Fatalf("magic link send count=%d, want %d (idempotency)", emailer.Count(), 1)
+	}
+}
+
+func TestStripeWebhook_CheckoutCompleted_MissingOrgLinkageFailsClosed(t *testing.T) {
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_missing_org")
+
+	tmp := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(tmp)
+	rbacProvider := NewTenantRBACProvider(tmp)
+	billingStore := config.NewFileBillingStore(tmp)
+
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, nil, nil, true, tmp)
+
+	event := map[string]any{
+		"id":   "evt_checkout_missing_org",
+		"type": "checkout.session.completed",
+		"data": map[string]any{
+			"object": map[string]any{
+				"id":             "cs_missing_org",
+				"mode":           "subscription",
+				"customer":       "cus_missing_org",
+				"customer_email": "owner@example.com",
+				"subscription":   "sub_missing_org",
+				"metadata": map[string]any{
+					"org_name":     "Missing Linkage Org",
+					"plan_version": "cloud-v1",
+				},
+			},
+		},
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+		Payload:   payload,
+		Secret:    "whsec_test_missing_org",
+		Timestamp: time.Now(),
+		Scheme:    "v1",
+	})
+
+	post := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
+		req.Header.Set("Stripe-Signature", signed.Header)
+		rr := httptest.NewRecorder()
+		h.HandleStripeWebhook(rr, req)
+		return rr
+	}
+
+	first := post()
+	if first.Code != http.StatusInternalServerError {
+		t.Fatalf("first status=%d, want %d: %s", first.Code, http.StatusInternalServerError, first.Body.String())
+	}
+
+	second := post()
+	if second.Code != http.StatusInternalServerError {
+		t.Fatalf("second status=%d, want %d: %s", second.Code, http.StatusInternalServerError, second.Body.String())
+	}
+
+	orgID, ok, err := h.index.LookupOrgID("cus_missing_org")
+	if err != nil {
+		t.Fatalf("LookupOrgID: %v", err)
+	}
+	if ok || orgID != "" {
+		t.Fatalf("unexpected customer index mapping org=%q ok=%v", orgID, ok)
+	}
+}
+
+func TestStripeWebhook_CheckoutCompleted_RetriesUntilLinkedOrgExists(t *testing.T) {
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_retry_org")
+
+	tmp := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(tmp)
+	rbacProvider := NewTenantRBACProvider(tmp)
+	billingStore := config.NewFileBillingStore(tmp)
+
+	emailer := &captureEmailer{}
+	magicLinks := NewMagicLinkServiceWithKey([]byte("01234567890123456789012345678901"), nil, emailer, nil)
+	t.Cleanup(magicLinks.Stop)
+
+	publicURL := func(_ *http.Request) string { return "https://pulse.example.test" }
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, publicURL, true, tmp)
+
+	event := map[string]any{
+		"id":   "evt_checkout_retry_org",
+		"type": "checkout.session.completed",
+		"data": map[string]any{
+			"object": map[string]any{
+				"id":             "cs_retry_org",
+				"mode":           "subscription",
+				"customer":       "cus_retry_org",
+				"customer_email": "owner@example.com",
+				"subscription":   "sub_retry_org",
+				"metadata": map[string]any{
+					"org_id":       "org_retry_org",
+					"org_name":     "Retry Org",
+					"plan_version": "cloud-v1",
+				},
+			},
+		},
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+		Payload:   payload,
+		Secret:    "whsec_test_retry_org",
+		Timestamp: time.Now(),
+		Scheme:    "v1",
+	})
+
+	post := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
+		req.Header.Set("Stripe-Signature", signed.Header)
+		rr := httptest.NewRecorder()
+		h.HandleStripeWebhook(rr, req)
+		return rr
+	}
+
+	first := post()
+	if first.Code != http.StatusInternalServerError {
+		t.Fatalf("first status=%d, want %d: %s", first.Code, http.StatusInternalServerError, first.Body.String())
+	}
+
+	createTestOrg(t, persistence, "org_retry_org", "owner@example.com")
+
+	second := post()
+	if second.Code != http.StatusOK {
+		t.Fatalf("second status=%d, want %d: %s", second.Code, http.StatusOK, second.Body.String())
+	}
+
+	state, err := billingStore.GetBillingState("org_retry_org")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if state == nil {
+		t.Fatalf("expected billing state")
+	}
+	if state.SubscriptionState != entitlements.SubStateActive {
+		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateActive)
+	}
+	if state.StripeCustomerID != "cus_retry_org" {
+		t.Fatalf("stripe_customer_id=%q, want %q", state.StripeCustomerID, "cus_retry_org")
+	}
+
+	mappedOrgID, ok, err := h.index.LookupOrgID("cus_retry_org")
+	if err != nil {
+		t.Fatalf("LookupOrgID: %v", err)
+	}
+	if !ok || mappedOrgID != "org_retry_org" {
+		t.Fatalf("index mapping mismatch: org=%q ok=%v, want org=%q ok=true", mappedOrgID, ok, "org_retry_org")
+	}
+
+	if emailer.Count() != 1 {
+		t.Fatalf("magic link send count=%d, want %d", emailer.Count(), 1)
 	}
 }
 

@@ -292,34 +292,31 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 	}
 	orgID = strings.TrimSpace(orgID)
 	if orgID == "" {
-		log.Warn().
-			Str("session_id", strings.TrimSpace(session.ID)).
-			Str("customer_id", strings.TrimSpace(session.Customer)).
-			Str("subscription_id", strings.TrimSpace(session.Subscription)).
-			Msg("Stripe checkout.session.completed: missing org linkage (refusing to provision)")
-		return nil
+		return fmt.Errorf(
+			"checkout session %q missing org linkage for customer %q",
+			strings.TrimSpace(session.ID),
+			strings.TrimSpace(session.Customer),
+		)
 	}
 	if !isValidOrganizationID(orgID) {
-		log.Warn().
-			Str("session_id", strings.TrimSpace(session.ID)).
-			Str("customer_id", strings.TrimSpace(session.Customer)).
-			Str("org_id", orgID).
-			Str("resolved_by", orgResolvedBy).
-			Msg("Stripe checkout.session.completed: invalid org id linkage (refusing to provision)")
-		return nil
+		return fmt.Errorf(
+			"checkout session %q resolved invalid org %q via %s",
+			strings.TrimSpace(session.ID),
+			orgID,
+			orgResolvedBy,
+		)
 	}
 
 	// SECURITY: only provision into an org that already exists. Do not create tenants from webhook payloads.
 	org, err := h.persistence.LoadOrganizationStrict(orgID)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			log.Warn().
-				Str("session_id", strings.TrimSpace(session.ID)).
-				Str("customer_id", strings.TrimSpace(session.Customer)).
-				Str("org_id", orgID).
-				Str("resolved_by", orgResolvedBy).
-				Msg("Stripe checkout.session.completed: org not found for linkage (refusing to provision)")
-			return nil
+			return fmt.Errorf(
+				"checkout session %q linked to missing org %q via %s",
+				strings.TrimSpace(session.ID),
+				orgID,
+				orgResolvedBy,
+			)
 		}
 		return fmt.Errorf("load org: %w", err)
 	}
