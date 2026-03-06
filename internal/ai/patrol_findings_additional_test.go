@@ -432,6 +432,67 @@ func TestVerifyGuestReachabilityState_UsesReadStateWhenLegacySlicesEmpty(t *test
 	}
 }
 
+func TestIsActionable_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.thresholds = PatrolThresholds{NodeCPUWatch: 40}
+
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 60},
+		},
+	})
+	state.readState = &mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}}
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+
+	finding := &Finding{
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "node-1",
+		ResourceType: "node",
+		Title:        "High CPU usage",
+	}
+
+	if !adapter.isActionable(finding) {
+		t.Fatal("expected finding to remain actionable via readState metrics")
+	}
+}
+
+func TestIsActionable_ReadStateRejectsMissingResource(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 80},
+		},
+	})
+	state.readState = &mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}}
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+
+	finding := &Finding{
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "missing-node",
+		ResourceType: "node",
+		Title:        "High CPU usage",
+	}
+
+	if adapter.isActionable(finding) {
+		t.Fatal("expected missing resource to be rejected when readState inventory is available")
+	}
+}
+
 func TestIsBaselineAnomaly_NoStore(t *testing.T) {
 	// No baseline store → always returns false (safe fallback)
 	ps := NewPatrolService(nil, nil)

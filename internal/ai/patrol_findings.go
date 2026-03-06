@@ -843,34 +843,7 @@ func (a *patrolFindingCreatorAdapter) isBaselineAnomaly(resourceID, metric strin
 // Uses user-configured thresholds from PatrolThresholds and baseline anomaly detection
 // as a second-chance check for findings below the threshold but statistically anomalous.
 func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
-	// Build resource metrics lookup from current state
-	resourceMetrics := make(map[string]map[string]float64)
-	for _, n := range a.snap.Nodes {
-		m := map[string]float64{"cpu": n.CPU * 100}
-		if n.Memory.Total > 0 {
-			m["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
-		}
-		resourceMetrics[n.ID] = m
-		resourceMetrics[n.Name] = m
-	}
-	for _, vm := range a.snap.VMs {
-		m := map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
-		resourceMetrics[vm.ID] = m
-		resourceMetrics[vm.Name] = m
-	}
-	for _, ct := range a.snap.Containers {
-		m := map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
-		resourceMetrics[ct.ID] = m
-		resourceMetrics[ct.Name] = m
-	}
-	for _, s := range a.snap.Storage {
-		m := map[string]float64{}
-		if s.Total > 0 {
-			m["usage"] = float64(s.Used) / float64(s.Total) * 100
-		}
-		resourceMetrics[s.ID] = m
-		resourceMetrics[s.Name] = m
-	}
+	resourceMetrics, hasInventory := a.actionabilityResourceMetrics()
 
 	// Reject findings for resources that no longer exist in the current infrastructure.
 	// Only enforce when we have state data (avoid rejecting during empty/error states).
@@ -878,8 +851,7 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 	if !hasMetrics {
 		metrics, hasMetrics = resourceMetrics[f.ResourceName]
 	}
-	snapHasResources := len(a.snap.Nodes) > 0 || len(a.snap.VMs) > 0 || len(a.snap.Containers) > 0 || len(a.snap.Storage) > 0
-	if !hasMetrics && snapHasResources {
+	if !hasMetrics && hasInventory {
 		// Resource not found — it may have been deleted. Reject the finding.
 		return false
 	}
@@ -936,6 +908,80 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 	}
 
 	return true
+}
+
+func (a *patrolFindingCreatorAdapter) actionabilityResourceMetrics() (map[string]map[string]float64, bool) {
+	resourceMetrics := make(map[string]map[string]float64)
+	hasInventory := false
+	if rs := a.snap.readState; rs != nil {
+		for _, n := range rs.Nodes() {
+			hasInventory = true
+			m := map[string]float64{"cpu": n.CPUPercent()}
+			if mem := n.MemoryPercent(); mem > 0 {
+				m["memory"] = mem
+			}
+			resourceMetrics[n.ID()] = m
+			resourceMetrics[n.Name()] = m
+		}
+		for _, vm := range rs.VMs() {
+			hasInventory = true
+			m := map[string]float64{"cpu": vm.CPUPercent(), "memory": vm.MemoryPercent(), "disk": vm.DiskPercent()}
+			resourceMetrics[vm.ID()] = m
+			resourceMetrics[vm.Name()] = m
+			resourceMetrics[fmt.Sprintf("%d", vm.VMID())] = m
+		}
+		for _, ct := range rs.Containers() {
+			hasInventory = true
+			m := map[string]float64{"cpu": ct.CPUPercent(), "memory": ct.MemoryPercent(), "disk": ct.DiskPercent()}
+			resourceMetrics[ct.ID()] = m
+			resourceMetrics[ct.Name()] = m
+			resourceMetrics[fmt.Sprintf("%d", ct.VMID())] = m
+		}
+		for _, s := range rs.StoragePools() {
+			hasInventory = true
+			m := map[string]float64{"usage": s.DiskPercent()}
+			resourceMetrics[s.ID()] = m
+			resourceMetrics[s.Name()] = m
+		}
+		if hasInventory {
+			return resourceMetrics, true
+		}
+	}
+
+	for _, n := range a.snap.Nodes {
+		hasInventory = true
+		m := map[string]float64{"cpu": n.CPU * 100}
+		if n.Memory.Total > 0 {
+			m["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
+		}
+		resourceMetrics[n.ID] = m
+		resourceMetrics[n.Name] = m
+	}
+	for _, vm := range a.snap.VMs {
+		hasInventory = true
+		m := map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
+		resourceMetrics[vm.ID] = m
+		resourceMetrics[vm.Name] = m
+		resourceMetrics[fmt.Sprintf("%d", vm.VMID)] = m
+	}
+	for _, ct := range a.snap.Containers {
+		hasInventory = true
+		m := map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
+		resourceMetrics[ct.ID] = m
+		resourceMetrics[ct.Name] = m
+		resourceMetrics[fmt.Sprintf("%d", ct.VMID)] = m
+	}
+	for _, s := range a.snap.Storage {
+		hasInventory = true
+		m := map[string]float64{}
+		if s.Total > 0 {
+			m["usage"] = float64(s.Used) / float64(s.Total) * 100
+		}
+		resourceMetrics[s.ID] = m
+		resourceMetrics[s.Name] = m
+	}
+
+	return resourceMetrics, hasInventory
 }
 
 func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) error {
