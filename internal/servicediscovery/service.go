@@ -1713,7 +1713,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		// Add note to reasoning when we couldn't run commands
 		metadataNote := "[Note: Discovery was limited to metadata-only analysis because command execution was unavailable. "
 		if strings.Contains(scanError.Error(), "no connected agent") {
-			metadataNote += "To enable full discovery with command execution, ensure the host agent has 'Pulse Commands' enabled in Settings → Unified Agents.]"
+			metadataNote += "To enable full discovery with command execution, ensure the host agent has 'Pulse Commands' enabled in Settings → Infrastructure.]"
 		} else {
 			metadataNote += "Error: " + scanError.Error() + "]"
 		}

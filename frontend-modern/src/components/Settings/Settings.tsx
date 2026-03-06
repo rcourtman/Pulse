@@ -36,6 +36,12 @@ import { AgentLedgerPanel } from './AgentLedgerPanel';
 import { SecurityAuthPanel } from './SecurityAuthPanel';
 import { APIAccessPanel } from './APIAccessPanel';
 import { SecurityOverviewPanel } from './SecurityOverviewPanel';
+import { RelaySettingsPanel } from './RelaySettingsPanel';
+import OrganizationOverviewPanel from './OrganizationOverviewPanel';
+import OrganizationAccessPanel from './OrganizationAccessPanel';
+import OrganizationSharingPanel from './OrganizationSharingPanel';
+import OrganizationBillingPanel from './OrganizationBillingPanel';
+import BillingAdminPanel from './BillingAdminPanel';
 import AuditLogPanel from './AuditLogPanel';
 import { AuditWebhookPanel } from './AuditWebhookPanel';
 import RolesPanel from './RolesPanel';
@@ -75,6 +81,9 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Terminal from 'lucide-solid/icons/terminal';
 import Container from 'lucide-solid/icons/container';
 import Search from 'lucide-solid/icons/search';
+import Building2 from 'lucide-solid/icons/building-2';
+import Share2 from 'lucide-solid/icons/share-2';
+import CreditCard from 'lucide-solid/icons/credit-card';
 import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
@@ -84,7 +93,7 @@ import { useSettingsNavigation } from './useSettingsNavigation';
 import type { SettingsTab } from './settingsRouting';
 
 import { updateStore } from '@/stores/updates';
-import { isPro, loadLicenseStatus } from '@/stores/license';
+import { getLimit, isPro, loadLicenseStatus } from '@/stores/license';
 import {
   nodeFromResource,
   pbsInstanceFromResource,
@@ -219,6 +228,8 @@ const Settings: Component<SettingsProps> = (props) => {
       .map(pmgInstanceFromResource)
       .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
   );
+  const organizationAgentUsage = createMemo(() => getLimit('max_agents')?.current ?? 0);
+  const organizationGuestUsage = createMemo(() => getLimit('max_guests')?.current ?? 0);
 
   // System settings
   const [pvePollingInterval, setPVEPollingInterval] = createSignal<number>(PVE_POLLING_MIN_SECONDS);
@@ -558,6 +569,42 @@ const Settings: Component<SettingsProps> = (props) => {
       ],
     },
     {
+      id: 'organization',
+      label: 'Organization',
+      items: [
+        {
+          id: 'organization-overview',
+          label: 'Overview',
+          icon: Building2,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'organization-access',
+          label: 'Access',
+          icon: Users,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'organization-sharing',
+          label: 'Sharing',
+          icon: Share2,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'organization-billing',
+          label: 'Billing',
+          icon: CreditCard,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'organization-billing-admin',
+          label: 'Billing Admin',
+          icon: CreditCard,
+          iconProps: { strokeWidth: 2 },
+        },
+      ],
+    },
+    {
       id: 'operations',
       label: 'Operations',
       items: [{ id: 'api', label: 'API Tokens', icon: BadgeCheck }],
@@ -594,6 +641,12 @@ const Settings: Component<SettingsProps> = (props) => {
           id: 'system-ai',
           label: 'AI',
           icon: Sparkles,
+          iconProps: { strokeWidth: 2 },
+        },
+        {
+          id: 'system-relay',
+          label: 'Remote Access',
+          icon: Globe,
           iconProps: { strokeWidth: 2 },
         },
         {
@@ -3259,12 +3312,45 @@ const Settings: Component<SettingsProps> = (props) => {
                 </div>
               </Show>
 
+              {/* Relay Settings Tab */}
+              <Show when={activeTab() === 'system-relay'}>
+                <RelaySettingsPanel />
+              </Show>
+
               {/* Pulse Pro License Tab */}
               <Show when={activeTab() === 'system-pro'}>
                 <div class="space-y-6">
                   <ProLicensePanel />
                   <AgentLedgerPanel />
                 </div>
+              </Show>
+
+              {/* Organization Overview Tab */}
+              <Show when={activeTab() === 'organization-overview'}>
+                <OrganizationOverviewPanel />
+              </Show>
+
+              {/* Organization Access Tab */}
+              <Show when={activeTab() === 'organization-access'}>
+                <OrganizationAccessPanel />
+              </Show>
+
+              {/* Organization Sharing Tab */}
+              <Show when={activeTab() === 'organization-sharing'}>
+                <OrganizationSharingPanel />
+              </Show>
+
+              {/* Organization Billing Tab */}
+              <Show when={activeTab() === 'organization-billing'}>
+                <OrganizationBillingPanel
+                  nodeUsage={organizationAgentUsage()}
+                  guestUsage={organizationGuestUsage()}
+                />
+              </Show>
+
+              {/* Billing Admin Tab */}
+              <Show when={activeTab() === 'organization-billing-admin'}>
+                <BillingAdminPanel />
               </Show>
 
               {/* API Access */}
