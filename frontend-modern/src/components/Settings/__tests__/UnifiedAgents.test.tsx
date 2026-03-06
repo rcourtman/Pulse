@@ -572,9 +572,15 @@ describe('UnifiedAgents managed agents table', () => {
     expect(screen.getAllByText('Monitoring stopped').length).toBeGreaterThan(0);
     expect(screen.getByText('Active Host')).toBeInTheDocument();
     expect(screen.getByText('old-docker.local')).toBeInTheDocument();
+    expect(screen.getByText('Docker runtime')).toBeInTheDocument();
     expect(
       screen.getByText(
         /Pulse is currently ignoring reports from these items\. Allow reconnect when you want them to appear as active again\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /The software on the remote system may still be running until you remove it there\./i,
       ),
     ).toBeInTheDocument();
   });

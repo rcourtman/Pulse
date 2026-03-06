@@ -100,6 +100,43 @@ const getInventorySubjectLabel = (name?: string, fallback?: string) => name || f
 const MONITORING_STOPPED_STATUS_LABEL = 'Monitoring stopped';
 const ALLOW_RECONNECT_LABEL = 'Allow reconnect';
 
+const getCapabilityLabel = (cap: AgentCapability) => {
+  switch (cap) {
+    case 'agent':
+      return 'Agent';
+    case 'docker':
+      return 'Docker';
+    case 'kubernetes':
+      return 'Kubernetes';
+    case 'proxmox':
+      return 'Proxmox';
+  }
+};
+
+const getCapabilityBadgeClass = (cap: AgentCapability) => {
+  switch (cap) {
+    case 'proxmox':
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
+    case 'kubernetes':
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
+    default:
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+  }
+};
+
+const getRemovedItemLabel = (row: UnifiedAgentRow) => {
+  if (row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent')) {
+    return 'Kubernetes cluster';
+  }
+  if (row.capabilities.includes('docker')) {
+    return 'Docker runtime';
+  }
+  if (row.capabilities.includes('proxmox')) {
+    return 'Proxmox node';
+  }
+  return 'Host agent';
+};
+
 const INSTALL_PROFILE_OPTIONS: {
   value: InstallProfile;
   label: string;
@@ -1851,35 +1888,16 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
           </div>
         </Show>
 
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div class="rounded-md border border-border bg-surface-alt px-4 py-3">
-            <div class="text-xs font-medium uppercase tracking-wide text-muted">
-              Active infrastructure
-            </div>
-            <div class="mt-1 text-2xl font-semibold text-base-content">
-              {filteredActiveRows().length}
-            </div>
-            <div class="mt-1 text-xs text-muted">
-              Systems currently reporting to Pulse.
-            </div>
-          </div>
-          <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/40">
-            <div class="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Monitoring stopped
-            </div>
-            <div class="mt-1 text-2xl font-semibold text-amber-900 dark:text-amber-100">
-              {filteredMonitoringStoppedRows().length}
-            </div>
-            <div class="mt-1 text-xs text-amber-700 dark:text-amber-300">
-              Pulse is ignoring reports from these items until reconnect is allowed.
-            </div>
-          </div>
-        </div>
-
-        <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-sm text-muted">
-          Stopping monitoring in Pulse does not uninstall software on the remote system. Use the
-          uninstall commands above or remove the service on the host itself if you want it gone
-          completely.
+        <div class="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface-alt px-4 py-3 text-sm">
+          <span class="inline-flex items-center rounded-full bg-surface px-3 py-1 text-xs font-medium text-base-content">
+            {filteredActiveRows().length} active
+          </span>
+          <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+            {filteredMonitoringStoppedRows().length} monitoring stopped
+          </span>
+          <span class="text-muted">
+            Stopping monitoring in Pulse does not uninstall software on the remote system.
+          </span>
         </div>
 
         <div class="flex flex-wrap items-end gap-3">
@@ -2015,43 +2033,19 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
             {
               key: 'capabilities',
               label: 'Capabilities',
-              render: (row: UnifiedAgentRow) => {
-                const capBadgeClass = (cap: AgentCapability) => {
-                  switch (cap) {
-                    case 'proxmox':
-                      return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-                    case 'kubernetes':
-                      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
-                    default:
-                      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-                  }
-                };
-                const capLabel = (cap: AgentCapability) => {
-                  switch (cap) {
-                    case 'agent':
-                      return 'Agent';
-                    case 'docker':
-                      return 'Docker';
-                    case 'kubernetes':
-                      return 'Kubernetes';
-                    case 'proxmox':
-                      return 'Proxmox';
-                  }
-                };
-                return (
-                  <div class="flex flex-wrap items-center gap-2 text-xs">
-                    <For each={row.capabilities}>
-                      {(cap) => (
-                        <span
-                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${capBadgeClass(cap)}`}
-                        >
-                          {capLabel(cap)}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                );
-              },
+              render: (row: UnifiedAgentRow) => (
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                  <For each={row.capabilities}>
+                    {(cap) => (
+                      <span
+                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
+                      >
+                        {getCapabilityLabel(cap)}
+                      </span>
+                    )}
+                  </For>
+                </div>
+              ),
             },
             {
               key: 'status',
@@ -2336,29 +2330,6 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
               resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
             const agentName = row.displayName || row.hostname || row.name;
 
-            const capBadgeClass = (cap: AgentCapability) => {
-              switch (cap) {
-                case 'proxmox':
-                  return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-                case 'kubernetes':
-                  return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
-                default:
-                  return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-              }
-            };
-            const capLabel = (cap: AgentCapability) => {
-              switch (cap) {
-                case 'agent':
-                  return 'Agent';
-                case 'docker':
-                  return 'Docker';
-                case 'kubernetes':
-                  return 'Kubernetes';
-                case 'proxmox':
-                  return 'Proxmox';
-              }
-            };
-
             return (
               <div id={`agent-details-${row.rowKey}`} class="px-4 py-4 text-sm text-muted">
                 <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -2367,9 +2338,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                       <For each={row.capabilities}>
                         {(cap) => (
                           <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${capBadgeClass(cap)}`}
+                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
                           >
-                            {capLabel(cap)}
+                            {getCapabilityLabel(cap)}
                           </span>
                         )}
                       </For>
@@ -2546,103 +2517,93 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                 </span>
               </div>
 
-              <PulseDataGrid
-                data={filteredMonitoringStoppedRows()}
-                emptyState={
-                  hasFilters()
-                    ? 'No monitoring-stopped items match the current filters.'
-                    : 'No infrastructure currently has monitoring stopped.'
+              <Show
+                when={filteredMonitoringStoppedRows().length > 0}
+                fallback={
+                  <div class="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted">
+                    {hasFilters()
+                      ? 'No monitoring-stopped items match the current filters.'
+                      : 'No infrastructure currently has monitoring stopped.'}
+                  </div>
                 }
-                desktopMinWidth="760px"
-                columns={[
-                  {
-                    key: 'name',
-                    label: 'Name',
-                    render: (row: UnifiedAgentRow) => (
-                      <div class="min-w-0 text-left">
-                        <div class="truncate text-sm font-medium text-base-content">{row.name}</div>
-                        <Show
-                          when={
-                            row.displayName && row.hostname && row.displayName !== row.hostname
-                          }
-                        >
-                          <div class="truncate text-xs text-muted">{row.hostname}</div>
-                        </Show>
+              >
+                <div class="space-y-3">
+                  <For each={filteredMonitoringStoppedRows()}>
+                    {(row) => (
+                      <div class="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-4 dark:border-amber-800 dark:bg-amber-950/30">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div class="min-w-0 space-y-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <h4 class="text-sm font-semibold text-base-content">{row.name}</h4>
+                              <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                                {getRemovedItemLabel(row)}
+                              </span>
+                              <For each={row.capabilities}>
+                                {(cap) => (
+                                  <span
+                                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
+                                  >
+                                    {getCapabilityLabel(cap)}
+                                  </span>
+                                )}
+                              </For>
+                            </div>
+
+                            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                              <Show
+                                when={
+                                  row.displayName &&
+                                  row.hostname &&
+                                  row.displayName !== row.hostname
+                                }
+                              >
+                                <span>Hostname: {row.hostname}</span>
+                              </Show>
+                              <span>
+                                Stopped in Pulse{' '}
+                                {row.removedAt
+                                  ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
+                                  : 'at an unknown time'}
+                              </span>
+                            </div>
+
+                            <p class="max-w-3xl text-sm text-muted">
+                              Pulse is ignoring new reports from this {getRemovedItemLabel(row).toLowerCase()}.
+                              The software on the remote system may still be running until you
+                              remove it there.
+                            </p>
+                          </div>
+
+                          <div class="flex min-w-[210px] flex-col items-start gap-2 lg:items-end">
+                            <button
+                              onClick={() =>
+                                row.capabilities.includes('docker')
+                                  ? handleAllowReconnect(
+                                      row.dockerActionId || row.id,
+                                      row.displayName || row.hostname || row.name,
+                                    )
+                                  : handleAllowKubernetesReconnect(
+                                      row.kubernetesActionId || row.id,
+                                      row.name,
+                                    )
+                              }
+                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-border hover:bg-blue-50 hover:text-blue-900 dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-700 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                            >
+                              {ALLOW_RECONNECT_LABEL}
+                            </button>
+                            <p class="text-xs text-muted lg:text-right">
+                              Use this when you want the same {getRemovedItemLabel(row).toLowerCase()} to
+                              appear as active again.
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    ),
-                  },
-                  {
-                    key: 'capabilities',
-                    label: 'Capabilities',
-                    render: (row: UnifiedAgentRow) => (
-                      <div class="flex flex-wrap items-center gap-2 text-xs">
-                        <For each={row.capabilities}>
-                          {(cap) => (
-                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                              {cap === 'agent'
-                                ? 'Agent'
-                                : cap === 'docker'
-                                  ? 'Docker'
-                                  : cap === 'kubernetes'
-                                    ? 'Kubernetes'
-                                    : 'Proxmox'}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'stoppedAt',
-                    label: 'Stopped In Pulse',
-                    render: (row: UnifiedAgentRow) => (
-                      <span class="text-xs text-muted">
-                        {row.removedAt
-                          ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
-                          : 'Unknown'}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: 'actions',
-                    label: 'Actions',
-                    align: 'right',
-                    render: (row: UnifiedAgentRow) => (
-                      <Show
-                        when={row.capabilities.includes('docker')}
-                        fallback={
-                          <button
-                            onClick={() =>
-                              handleAllowKubernetesReconnect(
-                                row.kubernetesActionId || row.id,
-                                row.name,
-                              )
-                            }
-                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
-                          >
-                            {ALLOW_RECONNECT_LABEL}
-                          </button>
-                        }
-                      >
-                        <button
-                          onClick={() =>
-                            handleAllowReconnect(
-                              row.dockerActionId || row.id,
-                              row.displayName || row.hostname || row.name,
-                            )
-                          }
-                          class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
-                        >
-                          {ALLOW_RECONNECT_LABEL}
-                        </button>
-                      </Show>
-                    ),
-                  },
-                ]}
-                keyExtractor={(row) => row.rowKey}
-	              />
-	            </div>
-	          </Show>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+          </Show>
         </div>
         </SettingsPanel>
       </Show>
