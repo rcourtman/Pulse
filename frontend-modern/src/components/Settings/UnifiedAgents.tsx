@@ -1062,10 +1062,6 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     );
   });
 
-  const visibleRowCount = createMemo(
-    () => filteredActiveRows().length + filteredMonitoringStoppedRows().length,
-  );
-
   const hasMonitoringStoppedRows = createMemo(() => monitoringStoppedRows().length > 0);
   const showMonitoringStoppedSection = createMemo(() => {
     return hasMonitoringStoppedRows() || hasFilters();
@@ -1958,29 +1954,23 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
           </button>
         </div>
 
-        <div class="text-xs text-muted">
-          Showing {visibleRowCount()} of {unifiedRows().length} records.
+        <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+          <span>
+            Showing {filteredActiveRows().length} of {activeRows().length} active records.
+          </span>
+          <Show when={filteredMonitoringStoppedRows().length > 0}>
+            <span>{filteredMonitoringStoppedRows().length} item(s) are in the recovery queue.</span>
+          </Show>
         </div>
 
-        <div class="space-y-3">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h3 class="text-sm font-semibold text-base-content">Active infrastructure</h3>
-              <p class="text-xs text-muted">
-                Systems currently reporting to Pulse and available for management actions.
-              </p>
-            </div>
-            <span class="rounded-full bg-surface-alt px-2.5 py-1 text-xs font-medium text-muted">
-              {filteredActiveRows().length}
-            </span>
-          </div>
+        <div>
 
           <PulseDataGrid
             data={filteredActiveRows()}
             emptyState={
               hasFilters()
-                ? 'No active infrastructure matches the current filters.'
-                : 'No active infrastructure connected yet.'
+                ? 'No connected infrastructure matches the current filters.'
+                : 'No infrastructure connected yet.'
             }
             desktopMinWidth="960px"
             columns={[

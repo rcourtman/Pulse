@@ -538,7 +538,7 @@ describe('UnifiedAgents managed agents table', () => {
     setupComponent();
 
     await waitFor(() => {
-      expect(screen.getByText('No active infrastructure connected yet.')).toBeInTheDocument();
+      expect(screen.getByText('No infrastructure connected yet.')).toBeInTheDocument();
     });
   });
 
@@ -568,11 +568,12 @@ describe('UnifiedAgents managed agents table', () => {
       expect(screen.getByText('Connected infrastructure')).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText('Active infrastructure').length).toBeGreaterThan(0);
+    expect(screen.getByText('Showing 1 of 1 active records.')).toBeInTheDocument();
     expect(screen.getByText('Recovery queue')).toBeInTheDocument();
     expect(screen.getByText('Active Host')).toBeInTheDocument();
     expect(screen.getByText('old-docker.local')).toBeInTheDocument();
     expect(screen.getByText('Docker runtime')).toBeInTheDocument();
+    expect(screen.getByText('1 item(s) are in the recovery queue.')).toBeInTheDocument();
     expect(
       screen.getByText(
         /Infrastructure with monitoring stopped stays out of active inventory until reconnect is allowed\./i,
@@ -605,7 +606,8 @@ describe('UnifiedAgents managed agents table', () => {
     expect(screen.getByText('Recovery queue')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Allow reconnect/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Stop monitoring' })).not.toBeInTheDocument();
-    expect(screen.getByText('Showing 1 of 1 records.')).toBeInTheDocument();
+    expect(screen.getByText('Showing 0 of 0 active records.')).toBeInTheDocument();
+    expect(screen.getByText('1 item(s) are in the recovery queue.')).toBeInTheDocument();
   });
 
   it('shows Kubernetes clusters in the unified table', async () => {
