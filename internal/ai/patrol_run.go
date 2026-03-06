@@ -1017,26 +1017,35 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		readState:               snap.readState,
 		unifiedResourceProvider: snap.unifiedResourceProvider,
 		LastUpdate:              snap.LastUpdate,
-		ConnectionHealth:        snap.ConnectionHealth,
 		Stats:                   snap.Stats,
-		ActiveAlerts:            snap.ActiveAlerts,
-		RecentlyResolved:        snap.RecentlyResolved,
+	}
+	includedResourceIDs := make(map[string]bool)
+	includeResourceID := func(ids ...string) {
+		for _, id := range ids {
+			if strings.TrimSpace(id) == "" {
+				continue
+			}
+			includedResourceIDs[id] = true
+		}
 	}
 
 	// Filter each resource type
 	for _, n := range snap.Nodes {
 		if matchesType("node") && matchesID(n.ID, n.Name) {
 			filtered.Nodes = append(filtered.Nodes, n)
+			includeResourceID(n.ID)
 		}
 	}
 	for _, vm := range snap.VMs {
 		if matchesType("vm") && matchesID(vm.ID, vm.Name) {
 			filtered.VMs = append(filtered.VMs, vm)
+			includeResourceID(vm.ID)
 		}
 	}
 	for _, c := range snap.Containers {
 		if matchesType("system-container") && matchesID(c.ID, c.Name) {
 			filtered.Containers = append(filtered.Containers, c)
+			includeResourceID(c.ID)
 		}
 	}
 	for _, d := range snap.DockerHosts {
@@ -1055,6 +1064,14 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		hostMatches := matchesID(d.ID, hostName, d.Hostname, d.DisplayName, d.CustomDisplayName)
 		if !hasIDs {
 			filtered.DockerHosts = append(filtered.DockerHosts, d)
+			if typeSet["docker-host"] || !hasTypes {
+				includeResourceID(d.ID)
+			}
+			if typeSet["app-container"] || !hasTypes {
+				for _, c := range d.Containers {
+					includeResourceID(c.ID)
+				}
+			}
 			continue
 		}
 
@@ -1067,17 +1084,29 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 
 		if hostMatches {
 			filtered.DockerHosts = append(filtered.DockerHosts, d)
+			if typeSet["docker-host"] || !hasTypes {
+				includeResourceID(d.ID)
+			}
+			if typeSet["app-container"] || !hasTypes {
+				for _, c := range d.Containers {
+					includeResourceID(c.ID)
+				}
+			}
 			continue
 		}
 		if len(matchedContainers) > 0 {
 			hostCopy := d
 			hostCopy.Containers = matchedContainers
 			filtered.DockerHosts = append(filtered.DockerHosts, hostCopy)
+			for _, c := range matchedContainers {
+				includeResourceID(c.ID)
+			}
 		}
 	}
 	for _, s := range snap.Storage {
 		if matchesType("storage") && matchesID(s.ID, s.Name) {
 			filtered.Storage = append(filtered.Storage, s)
+			includeResourceID(s.ID)
 		}
 	}
 	for _, pbs := range snap.PBSInstances {
@@ -1120,11 +1149,13 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		}
 		if pbsMatches {
 			filtered.PBSInstances = append(filtered.PBSInstances, pbs)
+			includeResourceID(pbs.ID)
 		}
 	}
 	for _, h := range snap.Hosts {
 		if matchesType("agent") && matchesID(h.ID, h.DisplayName, h.Hostname) {
 			filtered.Hosts = append(filtered.Hosts, h)
+			includeResourceID(h.ID)
 		}
 	}
 	for _, k := range snap.KubernetesClusters {
@@ -1137,6 +1168,32 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		}
 		if matchesType("k8s-cluster") && matchesID(k.ID, clusterName) {
 			filtered.KubernetesClusters = append(filtered.KubernetesClusters, k)
+			includeResourceID(k.ID)
+		}
+	}
+
+	if len(snap.ActiveAlerts) > 0 {
+		filtered.ActiveAlerts = make([]models.Alert, 0, len(snap.ActiveAlerts))
+		for _, alert := range snap.ActiveAlerts {
+			if includedResourceIDs[alert.ResourceID] {
+				filtered.ActiveAlerts = append(filtered.ActiveAlerts, alert)
+			}
+		}
+	}
+	if len(snap.RecentlyResolved) > 0 {
+		filtered.RecentlyResolved = make([]models.ResolvedAlert, 0, len(snap.RecentlyResolved))
+		for _, resolved := range snap.RecentlyResolved {
+			if includedResourceIDs[resolved.ResourceID] {
+				filtered.RecentlyResolved = append(filtered.RecentlyResolved, resolved)
+			}
+		}
+	}
+	if len(snap.ConnectionHealth) > 0 {
+		filtered.ConnectionHealth = make(map[string]bool, len(snap.ConnectionHealth))
+		for resourceID, healthy := range snap.ConnectionHealth {
+			if includedResourceIDs[resourceID] {
+				filtered.ConnectionHealth[resourceID] = healthy
+			}
 		}
 	}
 

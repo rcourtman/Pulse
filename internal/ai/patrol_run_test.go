@@ -375,13 +375,25 @@ func TestFilterStateByScope_Kubernetes(t *testing.T) {
 	}
 }
 
-func TestFilterStateByScope_PreservesMetadata(t *testing.T) {
+func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	now := time.Now()
 	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-1", Name: "node-1"},
+		},
 		LastUpdate: now,
 		ConnectionHealth: map[string]bool{
 			"node-1": true,
+			"node-2": false,
+		},
+		ActiveAlerts: []models.Alert{
+			{ID: "a1", ResourceID: "node-1", Message: "scoped"},
+			{ID: "a2", ResourceID: "node-2", Message: "global"},
+		},
+		RecentlyResolved: []models.ResolvedAlert{
+			{Alert: models.Alert{ID: "r1", ResourceID: "node-1", Message: "resolved scoped"}},
+			{Alert: models.Alert{ID: "r2", ResourceID: "node-2", Message: "resolved global"}},
 		},
 	}
 	scope := PatrolScope{ResourceTypes: []string{"node"}}
@@ -392,7 +404,16 @@ func TestFilterStateByScope_PreservesMetadata(t *testing.T) {
 		t.Error("expected LastUpdate to be preserved")
 	}
 	if len(filtered.ConnectionHealth) != 1 {
-		t.Error("expected ConnectionHealth to be preserved")
+		t.Fatalf("expected only scoped ConnectionHealth entries, got %d", len(filtered.ConnectionHealth))
+	}
+	if !filtered.ConnectionHealth["node-1"] {
+		t.Fatal("expected node-1 connection health to be preserved")
+	}
+	if len(filtered.ActiveAlerts) != 1 || filtered.ActiveAlerts[0].ResourceID != "node-1" {
+		t.Fatalf("expected only scoped active alerts, got %+v", filtered.ActiveAlerts)
+	}
+	if len(filtered.RecentlyResolved) != 1 || filtered.RecentlyResolved[0].ResourceID != "node-1" {
+		t.Fatalf("expected only scoped resolved alerts, got %+v", filtered.RecentlyResolved)
 	}
 }
 
