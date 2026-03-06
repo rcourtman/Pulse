@@ -1,6 +1,8 @@
 package cloudcp
 
 import (
+	"context"
+	"crypto/ed25519"
 	"html/template"
 	"net/http"
 	"net/mail"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
+	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -19,7 +22,10 @@ import (
 const (
 	trialSignupDefaultOrgID            = "default"
 	trialSignupTrialDays               = 14
+	trialSignupVerificationTTL         = 20 * time.Minute
 	stripeCheckoutSessionIDPlaceholder = "{CHECKOUT_SESSION_ID}"
+	trialSignupVerificationIssuer      = "pulse-pro-trial-email-verify"
+	trialSignupVerificationAudience    = "pulse-pro-trial-checkout"
 )
 
 var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Parse(`<!DOCTYPE html>
@@ -29,60 +35,214 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Start Pulse Pro Trial</title>
   <style nonce="{{.Nonce}}">
-    :root { color-scheme: light; }
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(140deg, #f7fafc, #edf2f7); color: #1a202c; }
-    .wrap { max-width: 720px; margin: 36px auto; padding: 0 16px; }
-    .card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 8px 30px rgba(15,23,42,.08); padding: 24px; }
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    p { margin: 0 0 16px; line-height: 1.5; color: #334155; }
-    .meta { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 14px; color: #475569; }
+    :root {
+      color-scheme: light;
+      --bg-top: #f7f3ea;
+      --bg-bottom: #e9efe8;
+      --card: #fffdf8;
+      --line: #d8dccf;
+      --text: #14261f;
+      --muted: #4d5f57;
+      --accent: #0f766e;
+      --accent-deep: #115e59;
+      --soft-accent: #def7ec;
+      --error-bg: #fef2f2;
+      --error-line: #fecaca;
+      --error-text: #991b1b;
+      --note-bg: #eefbf4;
+      --note-line: #bfe8ce;
+      --note-text: #166534;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(15,118,110,.10), transparent 34%),
+        linear-gradient(155deg, var(--bg-top), var(--bg-bottom));
+      color: var(--text);
+    }
+    .wrap { max-width: 840px; margin: 40px auto; padding: 0 18px; }
+    .card {
+      background: var(--card);
+      border-radius: 18px;
+      border: 1px solid rgba(20,38,31,.10);
+      box-shadow: 0 18px 60px rgba(20,38,31,.10);
+      overflow: hidden;
+    }
+    .hero {
+      padding: 28px 28px 18px;
+      background:
+        linear-gradient(130deg, rgba(15,118,110,.10), rgba(15,118,110,0)),
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.75));
+      border-bottom: 1px solid rgba(20,38,31,.08);
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(15,118,110,.10);
+      color: var(--accent-deep);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .hero h1 { margin: 0 0 10px; font-size: 34px; line-height: 1.05; }
+    .hero p { margin: 0; max-width: 620px; font-size: 16px; line-height: 1.6; color: var(--muted); }
+    .content { display: grid; gap: 0; }
+    @media (min-width: 760px) { .content { grid-template-columns: 1.2fr .8fr; } }
+    .form-col { padding: 24px 28px 28px; }
+    .aside {
+      padding: 24px 28px 28px;
+      background: rgba(20,38,31,.03);
+      border-top: 1px solid rgba(20,38,31,.08);
+    }
+    @media (min-width: 760px) { .aside { border-top: 0; border-left: 1px solid rgba(20,38,31,.08); } }
+    h2 { margin: 0 0 10px; font-size: 20px; }
+    p { margin: 0 0 16px; line-height: 1.6; color: var(--muted); }
+    .meta {
+      background: rgba(255,255,255,.75);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .meta strong, .summary strong { display: block; margin-bottom: 3px; color: var(--text); font-size: 12px; letter-spacing: .03em; text-transform: uppercase; }
+    .summary {
+      background: rgba(255,255,255,.78);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 16px 0;
+    }
+    .summary + .summary { margin-top: 12px; }
     label { display: block; margin: 12px 0 6px; font-size: 14px; font-weight: 600; color: #0f172a; }
-    input { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+    input {
+      width: 100%;
+      border: 1px solid #c8d2ca;
+      border-radius: 10px;
+      padding: 11px 13px;
+      font-size: 15px;
+      background: #fff;
+      color: var(--text);
+    }
     .row { display: grid; gap: 12px; grid-template-columns: 1fr; }
     @media (min-width: 680px) { .row { grid-template-columns: 1fr 1fr; } }
-    .error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
-    .note { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
-    .cta { margin-top: 16px; border: 0; border-radius: 10px; background: #0f766e; color: #fff; font-size: 16px; font-weight: 600; padding: 12px 16px; width: 100%; cursor: pointer; }
-    .cta:hover { background: #0d6b63; }
+    .error, .note {
+      border-radius: 10px;
+      padding: 11px 13px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .error { background: var(--error-bg); color: var(--error-text); border: 1px solid var(--error-line); }
+    .note { background: var(--note-bg); color: var(--note-text); border: 1px solid var(--note-line); }
+    .cta {
+      margin-top: 18px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 13px 18px;
+      width: 100%;
+      cursor: pointer;
+    }
+    .cta:hover { background: var(--accent-deep); }
     .fine { font-size: 12px; color: #64748b; margin-top: 12px; }
+    .steps { margin: 0; padding-left: 18px; color: var(--muted); }
+    .steps li { margin-bottom: 10px; line-height: 1.5; }
+    .mini { font-size: 13px; color: #5f7168; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Start Your 14-Day Pulse Pro Trial</h1>
-      <p>Complete registration to start your free 14-day trial. No credit card required.</p>
-
-      {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
-      {{if .Cancelled}}<div class="note">Checkout was cancelled. You can retry at any time.</div>{{end}}
-
-      <div class="meta">
-        <div><strong>Organization:</strong> {{.OrgID}}</div>
-        <div><strong>Activation Return URL:</strong> {{.ReturnURL}}</div>
+      <div class="hero">
+        <div class="eyebrow">Pulse Pro Trial</div>
+        <h1>Start a 14-day Pro trial for {{.ReturnTarget}}</h1>
+        <p>Use your work email to confirm ownership, then continue to secure setup. When registration completes, Pulse returns you to this instance automatically.</p>
       </div>
+      <div class="content">
+        <div class="form-col">
+          {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
+          {{if .Cancelled}}<div class="note">Secure setup was cancelled. You can continue again below.</div>{{end}}
+          {{if .VerificationSent}}<div class="note">Check {{.Email}} for a verification link. It expires in 20 minutes.</div>{{end}}
 
-      <form method="POST" action="/api/trial-signup/checkout">
-        <input type="hidden" name="org_id" value="{{.OrgID}}">
-        <input type="hidden" name="return_url" value="{{.ReturnURL}}">
+          {{if .Verified}}
+          <h2>Email verified</h2>
+          <p>Your work email has been confirmed. Continue to secure setup to register the Pro trial for this Pulse instance.</p>
 
-        <div class="row">
-          <div>
-            <label for="name">Full Name</label>
-            <input id="name" name="name" type="text" value="{{.Name}}" autocomplete="name" required>
+          <div class="summary">
+            <strong>Work email</strong>
+            <div>{{.Email}}</div>
           </div>
-          <div>
-            <label for="email">Work Email</label>
-            <input id="email" name="email" type="email" value="{{.Email}}" autocomplete="email" required>
+          <div class="summary">
+            <strong>Name</strong>
+            <div>{{.Name}}</div>
           </div>
+          {{if .Company}}<div class="summary">
+            <strong>Company</strong>
+            <div>{{.Company}}</div>
+          </div>{{end}}
+
+          <form method="POST" action="/api/trial-signup/checkout">
+            <input type="hidden" name="verified_token" value="{{.VerifiedToken}}">
+            <button class="cta" type="submit">Continue To Secure Setup</button>
+          </form>
+          <p class="fine">No credit card is required to start the trial.</p>
+          {{else}}
+          <h2>Verify your work email</h2>
+          <p>I’ll send a one-time verification link before trial setup continues.</p>
+
+          <form method="POST" action="/api/trial-signup/request-verification">
+            <input type="hidden" name="org_id" value="{{.OrgID}}">
+            <input type="hidden" name="return_url" value="{{.ReturnURL}}">
+
+            <div class="row">
+              <div>
+                <label for="name">Full Name</label>
+                <input id="name" name="name" type="text" value="{{.Name}}" autocomplete="name" required>
+              </div>
+              <div>
+                <label for="email">Work Email</label>
+                <input id="email" name="email" type="email" value="{{.Email}}" autocomplete="email" required>
+              </div>
+            </div>
+
+            <label for="company">Company</label>
+            <input id="company" name="company" type="text" value="{{.Company}}" autocomplete="organization">
+
+            <button class="cta" type="submit">Email Me a Verification Link</button>
+          </form>
+          <p class="fine">I only use this email to verify the trial request and attach the resulting entitlement.</p>
+          {{end}}
         </div>
 
-        <label for="company">Company</label>
-        <input id="company" name="company" type="text" value="{{.Company}}" autocomplete="organization">
-
-        <button class="cta" type="submit">Continue To Secure Checkout</button>
-      </form>
-
-      <p class="fine">By continuing, you agree to the Pulse terms and billing policy.</p>
+        <div class="aside">
+          <div class="meta">
+            <strong>Pulse instance</strong>
+            <div>{{.ReturnTarget}}</div>
+          </div>
+          <div class="meta">
+            <strong>Workspace</strong>
+            <div>{{.OrgID}}</div>
+          </div>
+          <p class="mini">After trial setup completes, Pulse sends you straight back to the instance that started this flow.</p>
+          <ol class="steps">
+            <li>Confirm the request from your work inbox.</li>
+            <li>Complete secure setup for the 14-day Pro trial.</li>
+            <li>Return to Pulse with a signed activation token.</li>
+          </ol>
+        </div>
+      </div>
     </div>
   </div>
 </body>
@@ -91,25 +251,40 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
 
 type TrialSignupHandlers struct {
 	cfg                   *CPConfig
+	emailSender           cpemail.Sender
 	createCheckoutSession func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 	getCheckoutSession    func(id string, params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 	now                   func() time.Time
 }
 
 type trialSignupPageData struct {
-	OrgID        string
-	ReturnURL    string
-	Name         string
-	Email        string
-	Company      string
-	ErrorMessage string
-	Cancelled    bool
-	Nonce        string
+	OrgID            string
+	ReturnURL        string
+	ReturnTarget     string
+	Name             string
+	Email            string
+	Company          string
+	ErrorMessage     string
+	Cancelled        bool
+	VerificationSent bool
+	Verified         bool
+	VerifiedToken    string
+	Nonce            string
 }
 
-func NewTrialSignupHandlers(cfg *CPConfig) *TrialSignupHandlers {
+type trialSignupVerificationClaims struct {
+	OrgID     string `json:"org_id"`
+	ReturnURL string `json:"return_url"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Company   string `json:"company,omitempty"`
+	jwt.RegisteredClaims
+}
+
+func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender) *TrialSignupHandlers {
 	return &TrialSignupHandlers{
 		cfg:                   cfg,
+		emailSender:           emailSender,
 		createCheckoutSession: stripesession.New,
 		getCheckoutSession:    stripesession.Get,
 		now:                   func() time.Time { return time.Now().UTC() },
@@ -123,17 +298,128 @@ func (h *TrialSignupHandlers) HandleStartProTrial(w http.ResponseWriter, r *http
 		return
 	}
 	data := trialSignupPageData{
-		OrgID:     normalizeTrialOrgID(r.URL.Query().Get("org_id")),
-		ReturnURL: strings.TrimSpace(r.URL.Query().Get("return_url")),
-		Email:     strings.TrimSpace(r.URL.Query().Get("email")),
-		Name:      strings.TrimSpace(r.URL.Query().Get("name")),
-		Company:   strings.TrimSpace(r.URL.Query().Get("company")),
-		Cancelled: strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
+		OrgID:        normalizeTrialOrgID(r.URL.Query().Get("org_id")),
+		ReturnURL:    strings.TrimSpace(r.URL.Query().Get("return_url")),
+		Name:         strings.TrimSpace(r.URL.Query().Get("name")),
+		Email:        strings.TrimSpace(r.URL.Query().Get("email")),
+		Company:      strings.TrimSpace(r.URL.Query().Get("company")),
+		Cancelled:    strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
+		ReturnTarget: summarizeTrialReturnTarget(r.URL.Query().Get("return_url")),
 	}
 	if data.ReturnURL == "" {
 		data.ErrorMessage = "Missing return_url. Please restart from Pulse Settings > Pro License."
 	}
 	h.renderTrialSignupPage(w, r, http.StatusOK, data)
+}
+
+// HandleRequestVerification emails a short-lived verification link before checkout.
+func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form body", http.StatusBadRequest)
+		return
+	}
+
+	data := trialSignupPageData{
+		OrgID:        normalizeTrialOrgID(r.FormValue("org_id")),
+		ReturnURL:    strings.TrimSpace(r.FormValue("return_url")),
+		Name:         strings.TrimSpace(r.FormValue("name")),
+		Email:        strings.TrimSpace(r.FormValue("email")),
+		Company:      strings.TrimSpace(r.FormValue("company")),
+		ReturnTarget: summarizeTrialReturnTarget(r.FormValue("return_url")),
+	}
+	if !isValidTrialReturnURL(data.ReturnURL) {
+		data.ErrorMessage = "A valid Pulse return URL is required. Please restart from Pulse Settings > Pro License."
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+		return
+	}
+	if strings.TrimSpace(data.Name) == "" {
+		data.ErrorMessage = "Your name is required."
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+		return
+	}
+	if !isValidTrialEmail(data.Email) {
+		data.ErrorMessage = "A valid work email address is required."
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+		return
+	}
+	if h.emailSender == nil || h.cfg == nil || strings.TrimSpace(h.cfg.EmailFrom) == "" {
+		data.ErrorMessage = "Email verification is not configured yet. Please contact support."
+		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
+		return
+	}
+
+	privateKey, err := h.trialActivationPrivateKey()
+	if err != nil {
+		log.Error().Err(err).Msg("trial signup verification key unavailable")
+		data.ErrorMessage = "Trial verification is unavailable right now. Please try again shortly."
+		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
+		return
+	}
+
+	token, err := h.signTrialSignupVerificationToken(privateKey, trialSignupVerificationClaims{
+		OrgID:     data.OrgID,
+		ReturnURL: data.ReturnURL,
+		Name:      data.Name,
+		Email:     data.Email,
+		Company:   data.Company,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(h.now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(h.now().UTC().Add(trialSignupVerificationTTL)),
+			Subject:   data.Email,
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Str("email", data.Email).Msg("trial signup verification token signing failed")
+		data.ErrorMessage = "Unable to create the verification link. Please try again."
+		h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
+		return
+	}
+
+	verifyURL := buildTrialSignupVerifyURL(h.cfg.BaseURL, token, false)
+	if err := h.sendTrialVerificationEmail(data.Email, verifyURL); err != nil {
+		log.Error().Err(err).Str("email", data.Email).Msg("trial signup verification email send failed")
+		data.ErrorMessage = "Unable to send the verification email. Please try again."
+		h.renderTrialSignupPage(w, r, http.StatusBadGateway, data)
+		return
+	}
+
+	data.VerificationSent = true
+	h.renderTrialSignupPage(w, r, http.StatusOK, data)
+}
+
+// HandleVerifyEmail validates the verification token and shows the final checkout step.
+func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	claims, err := h.verifyTrialSignupVerificationToken(token)
+	if err != nil {
+		log.Warn().Err(err).Msg("trial signup verification token invalid")
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
+			ErrorMessage: "That verification link is invalid or expired. Request a fresh email from Pulse and try again.",
+			ReturnTarget: "your Pulse instance",
+		})
+		return
+	}
+
+	h.renderTrialSignupPage(w, r, http.StatusOK, trialSignupPageData{
+		OrgID:         claims.OrgID,
+		ReturnURL:     claims.ReturnURL,
+		ReturnTarget:  summarizeTrialReturnTarget(claims.ReturnURL),
+		Name:          claims.Name,
+		Email:         claims.Email,
+		Company:       claims.Company,
+		Cancelled:     strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
+		Verified:      true,
+		VerifiedToken: token,
+	})
 }
 
 // HandleCheckout creates a Stripe Checkout Session for trial signup.
@@ -147,21 +433,30 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	verifiedToken := strings.TrimSpace(r.FormValue("verified_token"))
+	claims, err := h.verifyTrialSignupVerificationToken(verifiedToken)
+	if err != nil {
+		log.Warn().Err(err).Msg("trial signup checkout requested without valid verified token")
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
+			ErrorMessage: "Please verify your work email before continuing to secure setup.",
+			ReturnTarget: "your Pulse instance",
+		})
+		return
+	}
+
 	data := trialSignupPageData{
-		OrgID:     normalizeTrialOrgID(r.FormValue("org_id")),
-		ReturnURL: strings.TrimSpace(r.FormValue("return_url")),
-		Name:      strings.TrimSpace(r.FormValue("name")),
-		Email:     strings.TrimSpace(r.FormValue("email")),
-		Company:   strings.TrimSpace(r.FormValue("company")),
+		OrgID:         claims.OrgID,
+		ReturnURL:     claims.ReturnURL,
+		ReturnTarget:  summarizeTrialReturnTarget(claims.ReturnURL),
+		Name:          claims.Name,
+		Email:         claims.Email,
+		Company:       claims.Company,
+		Verified:      true,
+		VerifiedToken: verifiedToken,
 	}
 
 	if !isValidTrialReturnURL(data.ReturnURL) {
-		data.ErrorMessage = "A valid return URL is required. Please restart from Pulse Settings > Pro License."
-		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
-		return
-	}
-	if !isValidTrialEmail(data.Email) {
-		data.ErrorMessage = "A valid email address is required."
+		data.ErrorMessage = "A valid Pulse return URL is required. Please restart from Pulse Settings > Pro License."
 		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
 		return
 	}
@@ -173,14 +468,7 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
 	successURL := buildTrialSignupSuccessURL(h.cfg.BaseURL)
-	cancelURL := buildCPURL(h.cfg.BaseURL, "/start-pro-trial", url.Values{
-		"cancelled":  {"1"},
-		"org_id":     {data.OrgID},
-		"return_url": {data.ReturnURL},
-		"name":       {data.Name},
-		"email":      {data.Email},
-		"company":    {data.Company},
-	})
+	cancelURL := buildTrialSignupVerifyURL(h.cfg.BaseURL, verifiedToken, true)
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:                    stripe.String(string(stripe.CheckoutSessionModeSubscription)),
@@ -203,11 +491,13 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 			},
 		},
 		Metadata: map[string]string{
-			"org_id":     data.OrgID,
-			"return_url": data.ReturnURL,
-			"name":       data.Name,
-			"email":      data.Email,
-			"company":    data.Company,
+			"org_id":         data.OrgID,
+			"return_url":     data.ReturnURL,
+			"name":           data.Name,
+			"email":          data.Email,
+			"company":        data.Company,
+			"signup_source":  "pulse_pro_trial",
+			"email_verified": "true",
 		},
 	}
 
@@ -320,6 +610,107 @@ func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *ht
 	}
 }
 
+func (h *TrialSignupHandlers) trialActivationPrivateKey() (ed25519.PrivateKey, error) {
+	if h == nil || h.cfg == nil {
+		return nil, pkglicensing.ErrTrialActivationPrivateKeyMissing
+	}
+	return pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialActivationPrivateKey))
+}
+
+func (h *TrialSignupHandlers) signTrialSignupVerificationToken(privateKey ed25519.PrivateKey, claims trialSignupVerificationClaims) (string, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return "", pkglicensing.ErrTrialActivationPrivateKeyInvalid
+	}
+	claims.OrgID = normalizeTrialOrgID(claims.OrgID)
+	claims.ReturnURL = strings.TrimSpace(claims.ReturnURL)
+	claims.Name = strings.TrimSpace(claims.Name)
+	claims.Email = strings.TrimSpace(claims.Email)
+	claims.Company = strings.TrimSpace(claims.Company)
+	if !isValidTrialReturnURL(claims.ReturnURL) {
+		return "", url.InvalidHostError("invalid return_url")
+	}
+	if claims.Name == "" {
+		return "", jwt.ErrTokenMalformed
+	}
+	if !isValidTrialEmail(claims.Email) {
+		return "", jwt.ErrTokenMalformed
+	}
+	if claims.IssuedAt == nil {
+		now := h.now().UTC()
+		claims.IssuedAt = jwt.NewNumericDate(now)
+		claims.ExpiresAt = jwt.NewNumericDate(now.Add(trialSignupVerificationTTL))
+	}
+	if claims.ExpiresAt == nil {
+		claims.ExpiresAt = jwt.NewNumericDate(h.now().UTC().Add(trialSignupVerificationTTL))
+	}
+	if strings.TrimSpace(claims.Issuer) == "" {
+		claims.Issuer = trialSignupVerificationIssuer
+	}
+	if len(claims.Audience) == 0 {
+		claims.Audience = jwt.ClaimStrings{trialSignupVerificationAudience}
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	return token.SignedString(privateKey)
+}
+
+func (h *TrialSignupHandlers) verifyTrialSignupVerificationToken(token string) (*trialSignupVerificationClaims, error) {
+	privateKey, err := h.trialActivationPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok || len(publicKey) != ed25519.PublicKeySize {
+		return nil, pkglicensing.ErrTrialActivationPublicKeyInvalid
+	}
+
+	claims := &trialSignupVerificationClaims{}
+	parsed, err := jwt.ParseWithClaims(
+		strings.TrimSpace(token),
+		claims,
+		func(t *jwt.Token) (any, error) {
+			if t.Method.Alg() != jwt.SigningMethodEdDSA.Alg() {
+				return nil, jwt.ErrTokenSignatureInvalid
+			}
+			return publicKey, nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
+		jwt.WithIssuer(trialSignupVerificationIssuer),
+		jwt.WithAudience(trialSignupVerificationAudience),
+		jwt.WithTimeFunc(func() time.Time { return h.now().UTC() }),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !parsed.Valid {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+	claims.OrgID = normalizeTrialOrgID(claims.OrgID)
+	claims.ReturnURL = strings.TrimSpace(claims.ReturnURL)
+	claims.Name = strings.TrimSpace(claims.Name)
+	claims.Email = strings.TrimSpace(claims.Email)
+	claims.Company = strings.TrimSpace(claims.Company)
+	if !isValidTrialReturnURL(claims.ReturnURL) || claims.Name == "" || !isValidTrialEmail(claims.Email) {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+	return claims, nil
+}
+
+func (h *TrialSignupHandlers) sendTrialVerificationEmail(email, verifyURL string) error {
+	htmlBody, textBody, err := cpemail.RenderTrialVerificationEmail(cpemail.TrialVerificationData{
+		VerifyURL: verifyURL,
+	})
+	if err != nil {
+		return err
+	}
+	return h.emailSender.Send(context.Background(), cpemail.Message{
+		From:    strings.TrimSpace(h.cfg.EmailFrom),
+		To:      email,
+		Subject: "Verify your Pulse Pro trial request",
+		HTML:    htmlBody,
+		Text:    textBody,
+	})
+}
+
 func isValidTrialEmail(email string) bool {
 	email = strings.TrimSpace(email)
 	if email == "" {
@@ -385,6 +776,28 @@ func buildTrialSignupSuccessURL(baseURL string) string {
 		stripeCheckoutSessionIDPlaceholder,
 	)
 	return parsed.String()
+}
+
+func buildTrialSignupVerifyURL(baseURL, token string, cancelled bool) string {
+	query := url.Values{}
+	if strings.TrimSpace(token) != "" {
+		query.Set("token", strings.TrimSpace(token))
+	}
+	if cancelled {
+		query.Set("cancelled", "1")
+	}
+	return buildCPURL(baseURL, "/trial-signup/verify", query)
+}
+
+func summarizeTrialReturnTarget(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed == nil {
+		return "your Pulse instance"
+	}
+	if host := strings.TrimSpace(parsed.Host); host != "" {
+		return host
+	}
+	return "your Pulse instance"
 }
 
 func appendQueryParams(base string, params map[string]string) (string, error) {

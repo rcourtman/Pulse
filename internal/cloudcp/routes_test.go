@@ -112,8 +112,22 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 	if pageRec.Code != http.StatusOK {
 		t.Fatalf("GET /start-pro-trial status=%d, want %d", pageRec.Code, http.StatusOK)
 	}
-	if !strings.Contains(pageRec.Body.String(), "Start Your 14-Day Pulse Pro Trial") {
+	if !strings.Contains(pageRec.Body.String(), "Verify your work email") {
 		t.Fatalf("expected trial signup page body")
+	}
+
+	verifyReq := httptest.NewRequest(http.MethodGet, "/trial-signup/verify", nil)
+	verifyRec := httptest.NewRecorder()
+	mux.ServeHTTP(verifyRec, verifyReq)
+	if verifyRec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /trial-signup/verify status=%d, want %d", verifyRec.Code, http.StatusBadRequest)
+	}
+
+	requestVerificationReq := httptest.NewRequest(http.MethodGet, "/api/trial-signup/request-verification", nil)
+	requestVerificationRec := httptest.NewRecorder()
+	mux.ServeHTTP(requestVerificationRec, requestVerificationReq)
+	if requestVerificationRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /api/trial-signup/request-verification status=%d, want %d", requestVerificationRec.Code, http.StatusMethodNotAllowed)
 	}
 
 	checkoutReq := httptest.NewRequest(http.MethodGet, "/api/trial-signup/checkout", nil)
