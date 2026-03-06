@@ -26,6 +26,7 @@ import {
   getActionableAgentIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
   API_SCOPE_LABELS,
@@ -138,8 +139,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
       const runtimeId = dockerActionIdForResource(resource);
-      const label =
-        resource.displayName?.trim() || resource.identity?.hostname || resource.name || resource.id;
+      const label = getPreferredResourceDisplayName(resource);
       const previous = usage.get(tokenId);
       if (previous) {
         if (previous.runtimes.some((runtime) => runtime.id === runtimeId)) continue;
@@ -163,8 +163,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       const tokenId = tokenIdForResource(resource);
       if (!tokenId) continue;
       const agentId = agentActionIdForResource(resource);
-      const label =
-        resource.displayName?.trim() || resource.identity?.hostname || resource.name || resource.id;
+      const label = getPreferredResourceDisplayName(resource);
       const previous = usage.get(tokenId);
       if (previous) {
         if (previous.agents.some((agent) => agent.id === agentId)) continue;
