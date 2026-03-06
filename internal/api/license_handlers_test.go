@@ -226,6 +226,51 @@ func TestHandleLicenseStatus_WithActiveLicense(t *testing.T) {
 	}
 }
 
+func TestHandleLicenseStatus_ExpiredBillingBackedTrialFallsBackToFreeDisplay(t *testing.T) {
+	handler := createTestHandler(t)
+
+	now := time.Now()
+	startedAt := now.Add(-15 * 24 * time.Hour).Unix()
+	endedAt := now.Add(-2 * time.Hour).Unix()
+	store := config.NewFileBillingStore(handler.mtPersistence.BaseDataDir())
+	if err := store.SaveBillingState("default", &pkglicensing.BillingState{
+		Capabilities:      append([]string(nil), license.TierFeatures[license.TierPro]...),
+		Limits:            map[string]int64{"max_agents": 15},
+		MetersEnabled:     []string{"agents"},
+		PlanVersion:       "trial",
+		SubscriptionState: entitlements.SubStateTrial,
+		TrialStartedAt:    &startedAt,
+		TrialEndsAt:       &endedAt,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleLicenseStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp license.LicenseStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Valid {
+		t.Fatalf("expected Valid=false for expired billing-backed trial")
+	}
+	if resp.Tier != license.TierFree {
+		t.Fatalf("expected tier %q, got %q", license.TierFree, resp.Tier)
+	}
+	if resp.MaxAgents != license.TierAgentLimits[license.TierFree] {
+		t.Fatalf("expected max_agents %d, got %d", license.TierAgentLimits[license.TierFree], resp.MaxAgents)
+	}
+	if resp.MaxGuests != 0 {
+		t.Fatalf("expected max_guests 0, got %d", resp.MaxGuests)
+	}
+}
+
 // ========================================
 // HandleActivateLicense tests
 // ========================================

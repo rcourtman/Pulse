@@ -593,11 +593,11 @@ func (s *Service) Status() *LicenseStatus {
 	if s.license == nil {
 		// Hosted path: evaluator drives status when no JWT is present.
 		if s.evaluator != nil {
-			status.Tier = TierPro // hosted billing-backed tenants are effectively "pro" for display
 			status.PlanVersion = s.evaluator.PlanVersion()
 			subState := s.evaluator.SubscriptionState()
 			switch subState {
 			case SubStateActive, SubStateTrial, SubStateGrace:
+				status.Tier = TierPro // hosted billing-backed tenants are effectively "pro" while entitled
 				status.Valid = true
 				if subState == SubStateGrace {
 					status.InGracePeriod = true
@@ -618,9 +618,14 @@ func (s *Service) Status() *LicenseStatus {
 					status.MaxGuests = safeIntFromInt64(maxGuests)
 				}
 			default:
+				status.Tier = TierFree
 				status.Valid = false
 				// Keep effective capabilities free-tier only when subscription is not entitled.
 				status.Features = append([]string(nil), TierFeatures[TierFree]...)
+				if defaultAgents := TierAgentLimits[TierFree]; defaultAgents > 0 {
+					status.MaxAgents = defaultAgents
+				}
+				status.MaxGuests = 0
 			}
 		} else {
 			// No license, no evaluator — apply free tier agent limit default.
