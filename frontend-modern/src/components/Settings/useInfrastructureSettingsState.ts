@@ -870,7 +870,7 @@ export function useInfrastructureSettingsState({
         clearInterval(discoveryInterval);
         discoveryInterval = undefined;
       }
-      if (currentTab() === 'proxmox') {
+      if (currentTab() === 'agents') {
         discoveryInterval = setInterval(() => {
           void loadDiscoveredNodes();
         }, 30000);

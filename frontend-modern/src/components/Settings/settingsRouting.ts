@@ -87,7 +87,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
 
   if (canonicalPath === '/settings') return 'agents';
   if (canonicalPath.includes(PROXMOX_PREFIX) || canonicalPath.includes(LEGACY_PROXMOX_API_PREFIX))
-    return 'proxmox';
+    return 'agents';
 
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';
   if (canonicalPath.includes('/settings/system-network')) return 'system-network';

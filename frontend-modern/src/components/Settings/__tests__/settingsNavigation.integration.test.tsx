@@ -4,7 +4,6 @@ import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 import { getSettingsTabSaveBehavior, shouldHideSettingsNavItem } from '../settingsTabs';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure/proxmox',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
@@ -233,7 +232,7 @@ describe('settingsNavigation integration scaffold', () => {
   it('panel registry covers all dispatchable tabs', async () => {
     const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
     const allTabs = Object.keys(canonicalTabPaths) as SettingsTab[];
-    const dispatchableTabs = allTabs.filter((tab) => tab !== 'proxmox');
+    const dispatchableTabs = allTabs;
     for (const tab of dispatchableTabs) {
       const isCovered = registrySource.includes(`'${tab}'`) || registrySource.includes(`${tab}:`);
       expect(isCovered, `panel registry should cover tab '${tab}'`).toBe(true);

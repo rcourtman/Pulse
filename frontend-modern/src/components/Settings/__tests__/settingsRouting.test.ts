@@ -11,7 +11,6 @@ import {
 import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure/proxmox',
   agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
@@ -150,5 +149,11 @@ describe('settingsRouting', () => {
     for (const [path, expectedAgent] of agentCases) {
       expect(deriveAgentFromPath(path)).toBe(expectedAgent);
     }
+  });
+
+  it('treats proxmox deep links as infrastructure aliases', () => {
+    expect(deriveTabFromPath('/settings/infrastructure/proxmox')).toBe('agents');
+    expect(deriveTabFromPath('/settings/infrastructure/proxmox/pve')).toBe('agents');
+    expect(deriveTabFromPath('/settings/infrastructure/api/pve')).toBe('agents');
   });
 });

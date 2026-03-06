@@ -13,7 +13,6 @@ import Clock from 'lucide-solid/icons/clock';
 import Sparkles from 'lucide-solid/icons/sparkles';
 
 import Globe from 'lucide-solid/icons/globe';
-import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
@@ -30,8 +29,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
     id: 'infrastructure',
     label: 'Infrastructure',
     items: [
-      { id: 'agents', label: 'Unified Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
-      { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
+      { id: 'agents', label: 'Infrastructure', icon: Bot, iconProps: { strokeWidth: 2 } },
     ],
   },
   {

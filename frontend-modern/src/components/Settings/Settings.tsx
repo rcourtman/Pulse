@@ -372,11 +372,7 @@ const Settings: Component<SettingsProps> = (props) => {
   });
   const activeSettingsPanelEntry = createMemo(() => {
     const currentTab = activeTab();
-    if (currentTab === 'proxmox') {
-      return null;
-    }
-
-      return settingsPanelRegistry()[currentTab];
+    return settingsPanelRegistry()[currentTab];
   });
 
   onMount(() => {
@@ -404,57 +400,7 @@ const Settings: Component<SettingsProps> = (props) => {
         setActiveTab={setActiveTab}
         isPro={isPro}
       >
-        <Show when={activeTab() === 'proxmox'}>
-          <ProxmoxSettingsPanel
-            selectedAgent={selectedAgent}
-            onSelectAgent={handleSelectAgent}
-            initialLoadComplete={initialLoadComplete}
-            discoveryEnabled={discoveryEnabled}
-            discoveryMode={discoveryMode}
-            discoveryScanStatus={discoveryScanStatus}
-            discoveredNodes={discoveredNodes}
-            savingDiscoverySettings={savingDiscoverySettings}
-            envOverrides={envOverrides}
-            agentStateResources={() =>
-              (state.resources ?? []).filter((resource) => resource.type === 'agent')
-            }
-            pbsInstances={pbsInstancesFromResources}
-            pmgInstances={pmgInstancesFromResources}
-            pveNodes={pveNodes}
-            pbsNodes={pbsNodes}
-            pmgNodes={pmgNodes}
-            temperatureMonitoringEnabled={temperatureMonitoringEnabled}
-            triggerDiscoveryScan={triggerDiscoveryScan}
-            loadDiscoveredNodes={loadDiscoveredNodes}
-            handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
-            testNodeConnection={testNodeConnection}
-            requestDeleteNode={requestDeleteNode}
-            refreshClusterNodes={refreshClusterNodes}
-            setShowNodeModal={setShowNodeModal}
-            editingNode={editingNode}
-            setEditingNode={setEditingNode}
-            setCurrentNodeType={setCurrentNodeType}
-            modalResetKey={modalResetKey}
-            setModalResetKey={setModalResetKey}
-            isNodeModalVisible={isNodeModalVisible}
-            securityStatus={securityStatus}
-            resolveTemperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled}
-            temperatureMonitoringLocked={temperatureMonitoringLocked}
-            savingTemperatureSetting={savingTemperatureSetting}
-            handleTemperatureMonitoringChange={handleTemperatureMonitoringChange}
-            handleNodeTemperatureMonitoringChange={handleNodeTemperatureMonitoringChange}
-            saveNode={saveNode}
-            showDeleteNodeModal={showDeleteNodeModal}
-            cancelDeleteNode={cancelDeleteNode}
-            deleteNode={deleteNode}
-            deleteNodeLoading={deleteNodeLoading}
-            nodePendingDeleteLabel={nodePendingDeleteLabel}
-            nodePendingDeleteHost={nodePendingDeleteHost}
-            nodePendingDeleteType={nodePendingDeleteType}
-            nodePendingDeleteTypeLabel={nodePendingDeleteTypeLabel}
-          />
-        </Show>
-        <Show when={activeTab() !== 'proxmox' && activeSettingsPanelEntry()}>
+        <Show when={activeSettingsPanelEntry()}>
           {(entry) => (
             <Suspense
               fallback={
@@ -463,7 +409,59 @@ const Settings: Component<SettingsProps> = (props) => {
                 </div>
               }
             >
-              <Dynamic component={entry().component} {...(entry().getProps?.() ?? {})} />
+              <div class="space-y-8">
+                <Dynamic component={entry().component} {...(entry().getProps?.() ?? {})} />
+                <Show when={activeTab() === 'agents'}>
+                  <ProxmoxSettingsPanel
+                    selectedAgent={selectedAgent}
+                    onSelectAgent={handleSelectAgent}
+                    initialLoadComplete={initialLoadComplete}
+                    discoveryEnabled={discoveryEnabled}
+                    discoveryMode={discoveryMode}
+                    discoveryScanStatus={discoveryScanStatus}
+                    discoveredNodes={discoveredNodes}
+                    savingDiscoverySettings={savingDiscoverySettings}
+                    envOverrides={envOverrides}
+                    agentStateResources={() =>
+                      (state.resources ?? []).filter((resource) => resource.type === 'agent')
+                    }
+                    pbsInstances={pbsInstancesFromResources}
+                    pmgInstances={pmgInstancesFromResources}
+                    pveNodes={pveNodes}
+                    pbsNodes={pbsNodes}
+                    pmgNodes={pmgNodes}
+                    temperatureMonitoringEnabled={temperatureMonitoringEnabled}
+                    triggerDiscoveryScan={triggerDiscoveryScan}
+                    loadDiscoveredNodes={loadDiscoveredNodes}
+                    handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
+                    testNodeConnection={testNodeConnection}
+                    requestDeleteNode={requestDeleteNode}
+                    refreshClusterNodes={refreshClusterNodes}
+                    setShowNodeModal={setShowNodeModal}
+                    editingNode={editingNode}
+                    setEditingNode={setEditingNode}
+                    setCurrentNodeType={setCurrentNodeType}
+                    modalResetKey={modalResetKey}
+                    setModalResetKey={setModalResetKey}
+                    isNodeModalVisible={isNodeModalVisible}
+                    securityStatus={securityStatus}
+                    resolveTemperatureMonitoringEnabled={resolveTemperatureMonitoringEnabled}
+                    temperatureMonitoringLocked={temperatureMonitoringLocked}
+                    savingTemperatureSetting={savingTemperatureSetting}
+                    handleTemperatureMonitoringChange={handleTemperatureMonitoringChange}
+                    handleNodeTemperatureMonitoringChange={handleNodeTemperatureMonitoringChange}
+                    saveNode={saveNode}
+                    showDeleteNodeModal={showDeleteNodeModal}
+                    cancelDeleteNode={cancelDeleteNode}
+                    deleteNode={deleteNode}
+                    deleteNodeLoading={deleteNodeLoading}
+                    nodePendingDeleteLabel={nodePendingDeleteLabel}
+                    nodePendingDeleteHost={nodePendingDeleteHost}
+                    nodePendingDeleteType={nodePendingDeleteType}
+                    nodePendingDeleteTypeLabel={nodePendingDeleteTypeLabel}
+                  />
+                </Show>
+              </div>
             </Suspense>
           )}
         </Show>
