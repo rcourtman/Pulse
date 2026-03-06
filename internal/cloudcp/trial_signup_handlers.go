@@ -346,15 +346,15 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		return
 	}
 	if h.verificationStore != nil {
-		alreadyUsed, err := h.verificationStore.HasIssuedTrialForEmail(data.Email)
+		conflict, err := h.verificationStore.FindIssuedTrialConflict(data.Email, data.Company)
 		if err != nil {
 			log.Error().Err(err).Str("email", data.Email).Msg("trial signup issuance lookup failed")
 			data.ErrorMessage = "Unable to validate trial eligibility right now. Please try again."
 			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
 			return
 		}
-		if alreadyUsed {
-			data.ErrorMessage = "This work email has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
+		if conflict != nil {
+			data.ErrorMessage = "This organization has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
 			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
 			return
 		}
@@ -632,6 +632,8 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		switch {
 		case errors.Is(err, ErrTrialSignupEmailAlreadyUsed):
 			http.Error(w, "trial already used for this email", http.StatusConflict)
+		case errors.Is(err, ErrTrialSignupOrganizationUsed):
+			http.Error(w, "trial already used for this organization", http.StatusConflict)
 		case errors.Is(err, ErrTrialSignupRecordNotFound), errors.Is(err, ErrTrialSignupVerificationInvalid):
 			http.Error(w, "invalid trial request", http.StatusBadRequest)
 		default:

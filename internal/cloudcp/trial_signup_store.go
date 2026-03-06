@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,7 @@ var (
 	ErrTrialSignupVerificationUsed    = errors.New("trial signup verification token already used")
 	ErrTrialSignupRecordNotFound      = errors.New("trial signup record not found")
 	ErrTrialSignupEmailAlreadyUsed    = errors.New("trial signup email already used")
+	ErrTrialSignupOrganizationUsed    = errors.New("trial signup organization already used")
 )
 
 const (
@@ -32,6 +34,36 @@ const (
 	trialSignupStorePrivateDirPerm  = 0o700
 	trialSignupTokenPrefix          = "tsv1_"
 )
+
+var (
+	trialSignupCompanyNoiseTokens = map[string]struct{}{
+		"and": {}, "co": {}, "company": {}, "corp": {}, "corporation": {}, "gmbh": {}, "group": {},
+		"holding": {}, "holdings": {}, "inc": {}, "incorporated": {}, "limited": {}, "llc": {},
+		"llp": {}, "ltd": {}, "plc": {}, "pte": {}, "pty": {}, "sa": {}, "sas": {}, "sarl": {},
+	}
+	trialSignupPublicEmailDomains = map[string]struct{}{
+		"aol.com": {}, "fastmail.com": {}, "gmail.com": {}, "gmx.com": {}, "googlemail.com": {},
+		"hey.com": {}, "hotmail.com": {}, "icloud.com": {}, "live.com": {}, "mac.com": {},
+		"mail.com": {}, "me.com": {}, "msn.com": {}, "outlook.com": {}, "pm.me": {},
+		"proton.me": {}, "protonmail.com": {}, "rocketmail.com": {}, "yahoo.com": {},
+		"ymail.com": {}, "zoho.com": {},
+	}
+	trialSignupNonAlnumPattern = regexp.MustCompile(`[^a-z0-9]+`)
+)
+
+type trialSignupIssuanceConflictKind string
+
+const (
+	trialSignupConflictNone          trialSignupIssuanceConflictKind = ""
+	trialSignupConflictEmail         trialSignupIssuanceConflictKind = "email"
+	trialSignupConflictDomain        trialSignupIssuanceConflictKind = "domain"
+	trialSignupConflictPublicCompany trialSignupIssuanceConflictKind = "public_company"
+)
+
+type TrialSignupIssuanceConflict struct {
+	RequestID string
+	Kind      trialSignupIssuanceConflictKind
+}
 
 type TrialSignupRecord struct {
 	ID                    string
@@ -121,12 +153,37 @@ func (s *TrialSignupStore) initSchema() error {
 	CREATE TABLE IF NOT EXISTS trial_signup_issuances (
 		email TEXT PRIMARY KEY,
 		request_id TEXT NOT NULL UNIQUE,
+		email_domain TEXT NOT NULL DEFAULT '',
+		company_key TEXT NOT NULL DEFAULT '',
 		issued_at INTEGER NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_trial_signup_issuances_request_id ON trial_signup_issuances(request_id);
+	CREATE INDEX IF NOT EXISTS idx_trial_signup_issuances_domain ON trial_signup_issuances(email_domain);
+	CREATE INDEX IF NOT EXISTS idx_trial_signup_issuances_company_key ON trial_signup_issuances(company_key);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("init trial signup schema: %w", err)
+	}
+	hasDomain, err := s.tableHasColumn("trial_signup_issuances", "email_domain")
+	if err != nil {
+		return fmt.Errorf("check trial_signup_issuances schema for email_domain: %w", err)
+	}
+	if !hasDomain {
+		if _, err := s.db.Exec(`ALTER TABLE trial_signup_issuances ADD COLUMN email_domain TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrate trial_signup_issuances: add email_domain: %w", err)
+		}
+	}
+	hasCompanyKey, err := s.tableHasColumn("trial_signup_issuances", "company_key")
+	if err != nil {
+		return fmt.Errorf("check trial_signup_issuances schema for company_key: %w", err)
+	}
+	if !hasCompanyKey {
+		if _, err := s.db.Exec(`ALTER TABLE trial_signup_issuances ADD COLUMN company_key TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrate trial_signup_issuances: add company_key: %w", err)
+		}
+	}
+	if err := s.backfillTrialSignupIssuanceIdentities(); err != nil {
+		return fmt.Errorf("backfill trial signup issuance identities: %w", err)
 	}
 	return nil
 }
@@ -383,6 +440,26 @@ func (s *TrialSignupStore) HasIssuedTrialForEmail(email string) (bool, error) {
 	return false, fmt.Errorf("lookup trial signup issuance: %w", err)
 }
 
+func (s *TrialSignupStore) FindIssuedTrialConflict(email, company string) (*TrialSignupIssuanceConflict, error) {
+	if s == nil {
+		return nil, fmt.Errorf("trial signup store not configured")
+	}
+	email = normalizeTrialSignupEmail(email)
+	if email == "" {
+		return nil, nil
+	}
+
+	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("trial signup store not configured")
+	}
+	defer s.mu.Unlock()
+
+	return findTrialSignupIssuanceConflict(db, email, company, "")
+}
+
 func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {
 	if s == nil {
 		return fmt.Errorf("trial signup store not configured")
@@ -431,12 +508,30 @@ func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {
 	if email == "" {
 		return ErrTrialSignupVerificationInvalid
 	}
+	conflict, err := findTrialSignupIssuanceConflict(tx, email, rec.Company, rec.ID)
+	if err != nil {
+		return fmt.Errorf("find trial issuance conflict: %w", err)
+	}
+	if conflict != nil {
+		switch conflict.Kind {
+		case trialSignupConflictEmail:
+			return ErrTrialSignupEmailAlreadyUsed
+		case trialSignupConflictDomain, trialSignupConflictPublicCompany:
+			return ErrTrialSignupOrganizationUsed
+		default:
+			return ErrTrialSignupOrganizationUsed
+		}
+	}
+	emailDomain := normalizeTrialSignupEmailDomain(email)
+	companyKey := normalizeTrialSignupCompany(rec.Company)
 
 	res, err := tx.Exec(
-		`INSERT OR IGNORE INTO trial_signup_issuances (email, request_id, issued_at)
-		 VALUES (?, ?, ?)`,
+		`INSERT OR IGNORE INTO trial_signup_issuances (email, request_id, email_domain, company_key, issued_at)
+		 VALUES (?, ?, ?, ?, ?)`,
 		email,
 		rec.ID,
+		emailDomain,
+		companyKey,
 		now.Unix(),
 	)
 	if err != nil {
@@ -447,18 +542,17 @@ func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {
 		return fmt.Errorf("get trial issuance rows affected: %w", err)
 	}
 	if affected == 0 {
-		var existingRequestID string
-		err = tx.QueryRow(
-			`SELECT request_id
-			 FROM trial_signup_issuances
-			 WHERE email = ?`,
-			email,
-		).Scan(&existingRequestID)
-		if err != nil {
-			return fmt.Errorf("lookup existing trial issuance: %w", err)
+		conflict, conflictErr := findTrialSignupIssuanceConflict(tx, email, rec.Company, rec.ID)
+		if conflictErr != nil {
+			return fmt.Errorf("lookup existing trial issuance: %w", conflictErr)
 		}
-		if strings.TrimSpace(existingRequestID) != rec.ID {
-			return ErrTrialSignupEmailAlreadyUsed
+		if conflict != nil {
+			switch conflict.Kind {
+			case trialSignupConflictEmail:
+				return ErrTrialSignupEmailAlreadyUsed
+			default:
+				return ErrTrialSignupOrganizationUsed
+			}
 		}
 	}
 
@@ -568,4 +662,197 @@ func randomHex(n int) (string, error) {
 
 func normalizeTrialSignupEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func normalizeTrialSignupEmailDomain(email string) string {
+	email = normalizeTrialSignupEmail(email)
+	at := strings.LastIndex(email, "@")
+	if at == -1 || at == len(email)-1 {
+		return ""
+	}
+	return strings.TrimSpace(email[at+1:])
+}
+
+func normalizeTrialSignupCompany(company string) string {
+	raw := strings.ToLower(strings.TrimSpace(company))
+	if raw == "" {
+		return ""
+	}
+	raw = strings.ReplaceAll(raw, "&", " and ")
+	raw = trialSignupNonAlnumPattern.ReplaceAllString(raw, " ")
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return ""
+	}
+	normalized := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if _, noise := trialSignupCompanyNoiseTokens[field]; noise {
+			continue
+		}
+		normalized = append(normalized, field)
+	}
+	if len(normalized) == 0 {
+		return ""
+	}
+	return strings.Join(normalized, " ")
+}
+
+func isPublicTrialSignupEmailDomain(domain string) bool {
+	_, ok := trialSignupPublicEmailDomains[strings.ToLower(strings.TrimSpace(domain))]
+	return ok
+}
+
+func findTrialSignupIssuanceConflict(
+	queryable interface {
+		QueryRow(query string, args ...any) *sql.Row
+	},
+	email, company, excludeRequestID string,
+) (*TrialSignupIssuanceConflict, error) {
+	email = normalizeTrialSignupEmail(email)
+	if email == "" {
+		return nil, nil
+	}
+	excludeRequestID = strings.TrimSpace(excludeRequestID)
+
+	requestID, err := queryIssuanceConflictRequestID(queryable,
+		`SELECT request_id FROM trial_signup_issuances
+		 WHERE email = ? AND (? = '' OR request_id <> ?)
+		 LIMIT 1`,
+		email, excludeRequestID, excludeRequestID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if requestID != "" {
+		return &TrialSignupIssuanceConflict{RequestID: requestID, Kind: trialSignupConflictEmail}, nil
+	}
+
+	domain := normalizeTrialSignupEmailDomain(email)
+	if domain != "" && !isPublicTrialSignupEmailDomain(domain) {
+		requestID, err = queryIssuanceConflictRequestID(queryable,
+			`SELECT request_id FROM trial_signup_issuances
+			 WHERE email_domain = ? AND (? = '' OR request_id <> ?)
+			 LIMIT 1`,
+			domain, excludeRequestID, excludeRequestID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if requestID != "" {
+			return &TrialSignupIssuanceConflict{RequestID: requestID, Kind: trialSignupConflictDomain}, nil
+		}
+		return nil, nil
+	}
+
+	companyKey := normalizeTrialSignupCompany(company)
+	if companyKey == "" {
+		return nil, nil
+	}
+	requestID, err = queryIssuanceConflictRequestID(queryable,
+		`SELECT request_id FROM trial_signup_issuances
+		 WHERE company_key = ? AND company_key <> '' AND (? = '' OR request_id <> ?)
+		 LIMIT 1`,
+		companyKey, excludeRequestID, excludeRequestID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if requestID != "" {
+		return &TrialSignupIssuanceConflict{RequestID: requestID, Kind: trialSignupConflictPublicCompany}, nil
+	}
+	return nil, nil
+}
+
+func queryIssuanceConflictRequestID(
+	queryable interface {
+		QueryRow(query string, args ...any) *sql.Row
+	},
+	query string,
+	args ...any,
+) (string, error) {
+	var requestID string
+	err := queryable.QueryRow(query, args...).Scan(&requestID)
+	if err == nil {
+		return strings.TrimSpace(requestID), nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return "", err
+}
+
+func (s *TrialSignupStore) tableHasColumn(tableName, columnName string) (bool, error) {
+	rows, err := s.db.Query(`PRAGMA table_info(` + tableName + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, typeName string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &typeName, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(columnName)) {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
+func (s *TrialSignupStore) backfillTrialSignupIssuanceIdentities() error {
+	rows, err := s.db.Query(`
+		SELECT i.request_id, i.email, i.email_domain, i.company_key, COALESCE(r.company, '')
+		FROM trial_signup_issuances i
+		LEFT JOIN trial_signup_requests r ON r.request_id = i.request_id
+		WHERE i.email_domain = '' OR i.company_key = ''
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type rowData struct {
+		requestID   string
+		email       string
+		emailDomain string
+		companyKey  string
+		company     string
+	}
+	var updates []rowData
+	for rows.Next() {
+		var row rowData
+		if err := rows.Scan(&row.requestID, &row.email, &row.emailDomain, &row.companyKey, &row.company); err != nil {
+			return err
+		}
+		updates = append(updates, row)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, row := range updates {
+		emailDomain := row.emailDomain
+		if strings.TrimSpace(emailDomain) == "" {
+			emailDomain = normalizeTrialSignupEmailDomain(row.email)
+		}
+		companyKey := row.companyKey
+		if strings.TrimSpace(companyKey) == "" {
+			companyKey = normalizeTrialSignupCompany(row.company)
+		}
+		if _, err := s.db.Exec(
+			`UPDATE trial_signup_issuances
+			 SET email_domain = ?, company_key = ?
+			 WHERE request_id = ?`,
+			emailDomain,
+			companyKey,
+			row.requestID,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
