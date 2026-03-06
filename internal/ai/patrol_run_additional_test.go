@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,23 +15,25 @@ import (
 type mockPatrolProvider struct {
 	response string
 	err      error
+	lastReq  providers.ChatRequest
 }
 
-func (m mockPatrolProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+func (m *mockPatrolProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+	m.lastReq = req
 	if m.err != nil {
 		return nil, m.err
 	}
 	return &providers.ChatResponse{Content: m.response}, nil
 }
 
-func (m mockPatrolProvider) ChatStream(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+func (m *mockPatrolProvider) ChatStream(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 	return nil
 }
 
-func (m mockPatrolProvider) SupportsThinking(model string) bool       { return false }
-func (m mockPatrolProvider) TestConnection(ctx context.Context) error { return nil }
-func (m mockPatrolProvider) Name() string                             { return "mock" }
-func (m mockPatrolProvider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
+func (m *mockPatrolProvider) SupportsThinking(model string) bool       { return false }
+func (m *mockPatrolProvider) TestConnection(ctx context.Context) error { return nil }
+func (m *mockPatrolProvider) Name() string                             { return "mock" }
+func (m *mockPatrolProvider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
 	return nil, nil
 }
 
@@ -42,8 +45,9 @@ func (m mockPatrolStateProvider) ReadSnapshot() models.StateSnapshot { return m.
 
 func TestPatrolService_AskAIAboutAlert(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
+	provider := &mockPatrolProvider{response: "RESOLVE: looks good"}
 	aiSvc := &Service{
-		provider: mockPatrolProvider{response: "RESOLVE: looks good"},
+		provider: provider,
 		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
 	}
 
@@ -65,6 +69,39 @@ func TestPatrolService_AskAIAboutAlert(t *testing.T) {
 	}
 	if reason == "" {
 		t.Fatalf("expected resolution reason")
+	}
+	if !strings.Contains(provider.lastReq.Messages[1].Content, "Resource: node1 (node)") {
+		t.Fatalf("expected prompt to include canonical node resource type, got %q", provider.lastReq.Messages[1].Content)
+	}
+}
+
+func TestPatrolService_AskAIAboutAlert_NormalizesUsageType(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	provider := &mockPatrolProvider{response: "KEEP: still high"}
+	aiSvc := &Service{
+		provider: provider,
+		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
+	}
+
+	alert := AlertInfo{
+		ID:           "a-usage",
+		Type:         "usage",
+		ResourceName: "local",
+		ResourceType: "usage",
+		ResourceID:   "storage-1",
+		Message:      "high usage",
+		Value:        92,
+		Threshold:    90,
+		Duration:     "20m",
+	}
+	state := models.StateSnapshot{Storage: []models.Storage{{ID: "storage-1", Name: "local", Usage: 91, Status: "active"}}}
+
+	resolved, _ := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc)
+	if resolved {
+		t.Fatalf("expected alert to stay unresolved")
+	}
+	if !strings.Contains(provider.lastReq.Messages[1].Content, "Resource: local (storage)") {
+		t.Fatalf("expected prompt to normalize usage alerts to storage, got %q", provider.lastReq.Messages[1].Content)
 	}
 }
 

@@ -2242,6 +2242,7 @@ func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntim
 
 // askAIAboutAlert uses the AI to determine if an alert should be resolved
 func (p *PatrolService) askAIAboutAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
+	alertType := patrolAlertLookupType(alert)
 	// Build a focused prompt for the AI
 	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
 
@@ -2261,7 +2262,7 @@ Should this alert be RESOLVED because the underlying issue is fixed?
 Respond with ONLY one of:
 - RESOLVE: <brief reason>
 - KEEP: <brief reason>`,
-		alert.ID, alert.Type, alert.ResourceName, alert.ResourceType,
+		alert.ID, alert.Type, alert.ResourceName, alertType,
 		alert.Message, alert.Value, alert.Threshold, alert.Duration,
 		p.getResourceCurrentStateState(alert, snap))
 
