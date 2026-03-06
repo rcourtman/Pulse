@@ -13,18 +13,22 @@ type InfrastructureWorkspaceView = 'install' | 'direct' | 'inventory';
 const VIEW_META: Record<
   InfrastructureWorkspaceView,
   {
+    label: string;
     description: string;
   }
 > = {
   install: {
+    label: 'Install on a host',
     description:
       'Use one installer for hosts, Docker, Kubernetes, and agent-managed Proxmox. This is the normal onboarding path.',
   },
   direct: {
+    label: 'Direct Proxmox',
     description:
       'Use direct PVE, PBS, or PMG connections only when the unified agent cannot run on the target host.',
   },
   inventory: {
+    label: 'Inventory',
     description:
       'Review existing agents, direct Proxmox links, Docker runtime policy, and agent profiles.',
   },
@@ -64,26 +68,26 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
   return (
     <div class="space-y-6">
       <Card padding="lg" class="rounded-xl border border-border shadow-sm">
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
-              Infrastructure
-            </p>
-            <h2 class="text-[1.75rem] font-semibold leading-tight text-base-content">
-              Add and manage infrastructure
-            </h2>
-            <p class="max-w-3xl text-sm leading-6 text-muted">
-              Start with the unified agent. Use direct Proxmox connections only when the agent
-              cannot run on the target host.
-            </p>
-          </div>
+        <div class="space-y-5">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
+                Infrastructure
+              </p>
+              <h2 class="text-[1.75rem] font-semibold leading-tight text-base-content">
+                Add and manage infrastructure
+              </h2>
+              <p class="max-w-3xl text-sm leading-6 text-muted">
+                Start with the unified agent. Use direct Proxmox connections only when the agent
+                cannot run on the target host.
+              </p>
+            </div>
 
-          <div class="space-y-3">
-            <div class="inline-flex w-full flex-col gap-2 rounded-xl border border-border bg-surface-alt p-2 lg:w-auto lg:flex-row">
+            <div class="inline-flex w-full flex-col gap-2 rounded-xl border border-border bg-surface-alt p-2 xl:w-auto xl:min-w-[520px] xl:flex-row">
               <button
                 type="button"
                 onClick={() => openView('install')}
-                class={`inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                class={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeView() === 'install'
                     ? 'bg-surface text-base-content shadow-sm'
                     : 'text-muted hover:bg-surface hover:text-base-content'
@@ -95,7 +99,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
               <button
                 type="button"
                 onClick={() => openView('direct')}
-                class={`inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                class={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeView() === 'direct'
                     ? 'bg-surface text-base-content shadow-sm'
                     : 'text-muted hover:bg-surface hover:text-base-content'
@@ -107,7 +111,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
               <button
                 type="button"
                 onClick={() => openView('inventory')}
-                class={`inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                class={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeView() === 'inventory'
                     ? 'bg-surface text-base-content shadow-sm'
                     : 'text-muted hover:bg-surface hover:text-base-content'
@@ -117,9 +121,14 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
                 Inventory
               </button>
             </div>
+          </div>
 
-            <div class="text-sm text-muted">
-              {activeViewMeta().description}
+          <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
+            <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div class="text-sm font-medium text-base-content">
+                Current view: {activeViewMeta().label}
+              </div>
+              <div class="text-sm text-muted">{activeViewMeta().description}</div>
             </div>
           </div>
         </div>
@@ -136,13 +145,6 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
 
         <Match when={activeView() === 'inventory'}>
           <div class="space-y-6">
-            <Card padding="lg" class="rounded-xl border border-border shadow-sm">
-              <div class="flex items-center gap-2 text-base font-semibold text-base-content">
-                <Boxes class="h-4 w-4" />
-                Existing infrastructure
-              </div>
-            </Card>
-
             <div class="space-y-6">
               <UnifiedAgents embedded showInstaller={false} />
 
