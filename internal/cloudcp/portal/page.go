@@ -90,6 +90,19 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
     .add-workspace-form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     .add-workspace-form input { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; }
     .add-workspace-form .form-actions { display: flex; gap: 8px; }
+    .team-section { margin-top: 12px; display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .team-section.visible { display: block; }
+    .team-section h3 { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+    .team-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .team-table th { text-align: left; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+    .team-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .team-table select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 13px; background: #fff; }
+    .team-table .btn-remove { background: none; border: none; color: #dc2626; cursor: pointer; font-size: 13px; padding: 4px 8px; }
+    .team-table .btn-remove:hover { text-decoration: underline; }
+    .team-invite { margin-top: 12px; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .team-invite label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
+    .team-invite input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 200px; }
+    .team-invite select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 14px; background: #fff; }
     .empty-state { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b; }
     .empty-state p { margin: 0; font-size: 15px; }
     .spinner { display: none; width: 18px; height: 18px; border: 2px solid #93c5fd; border-top-color: #1d4ed8; border-radius: 50%; animation: spin 0.6s linear infinite; }
@@ -174,7 +187,22 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
       {{if $account.HasBilling}}
       <button class="btn-secondary" onclick="openBilling('{{$account.ID}}')">Manage billing</button>
       {{end}}
-      {{/* Team management page is not yet available */}}
+      <button class="btn-secondary" id="team-btn-{{$account.ID}}" onclick="toggleTeam('{{$account.ID}}','{{$account.Role}}')">Manage team</button>
+    </div>
+
+    <div class="team-section" id="team-section-{{$account.ID}}" data-actor-role="{{$account.Role}}">
+      <h3>Team members</h3>
+      <table class="team-table">
+        <thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>
+        <tbody id="team-list-{{$account.ID}}">
+          <tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading…</td></tr>
+        </tbody>
+      </table>
+      <div class="team-invite">
+        <div><label for="invite-email-{{$account.ID}}">Email</label><input type="email" id="invite-email-{{$account.ID}}" placeholder="user@example.com" autocomplete="off"></div>
+        <div><label for="invite-role-{{$account.ID}}">Role</label><select id="invite-role-{{$account.ID}}"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>
+        <button class="btn-primary" style="padding:8px 14px;font-size:13px" onclick="inviteMember('{{$account.ID}}')">Invite</button>
+      </div>
     </div>
 
     {{if eq $account.Kind "msp"}}
@@ -285,6 +313,137 @@ async function openBilling(accountID) {
     } else {
       showToast('Failed to open billing portal.', true);
     }
+  } catch(e) {
+    showToast('Network error.', true);
+  }
+}
+
+function toggleTeam(accountID) {
+  var section = document.getElementById('team-section-' + accountID);
+  var visible = section.classList.contains('visible');
+  section.classList.toggle('visible', !visible);
+  if (!visible) loadTeam(accountID);
+}
+
+function setTbodyMessage(tbody, msg, isError) {
+  tbody.textContent = '';
+  var tr = document.createElement('tr');
+  var td = document.createElement('td');
+  td.setAttribute('colspan', '3');
+  td.style.cssText = 'text-align:center;padding:16px;color:' + (isError ? '#991b1b' : '#94a3b8');
+  td.textContent = msg;
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+async function loadTeam(accountID) {
+  var tbody = document.getElementById('team-list-' + accountID);
+  var section = document.getElementById('team-section-' + accountID);
+  var actorRole = section.getAttribute('data-actor-role') || '';
+  var isOwner = actorRole === 'owner';
+  setTbodyMessage(tbody, 'Loading\u2026', false);
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members');
+    if (!r.ok) { setTbodyMessage(tbody, 'Failed to load team.', true); return; }
+    var members = await r.json();
+    if (!members || members.length === 0) {
+      setTbodyMessage(tbody, 'No team members.', false);
+      return;
+    }
+    var allRoles = ['owner','admin','tech','read_only'];
+    var nonOwnerRoles = ['admin','tech','read_only'];
+    tbody.textContent = '';
+    for (var i = 0; i < members.length; i++) {
+      (function(m) {
+        var tr = document.createElement('tr');
+        var tdEmail = document.createElement('td');
+        tdEmail.textContent = m.email;
+        tr.appendChild(tdEmail);
+        var tdRole = document.createElement('td');
+        if (m.role === 'owner' && !isOwner) {
+          tdRole.textContent = 'owner';
+        } else {
+          var sel = document.createElement('select');
+          var roles = isOwner ? allRoles : nonOwnerRoles;
+          for (var j = 0; j < roles.length; j++) {
+            var opt = document.createElement('option');
+            opt.value = roles[j];
+            opt.textContent = roles[j].replace('_', ' ');
+            if (m.role === roles[j]) opt.selected = true;
+            sel.appendChild(opt);
+          }
+          sel.addEventListener('change', function() { changeRole(accountID, m.user_id, this.value); });
+          tdRole.appendChild(sel);
+        }
+        tr.appendChild(tdRole);
+        var tdAction = document.createElement('td');
+        if (!(m.role === 'owner' && !isOwner)) {
+          var btn = document.createElement('button');
+          btn.className = 'btn-remove';
+          btn.textContent = 'Remove';
+          btn.addEventListener('click', function() { removeMember(accountID, m.user_id, m.email); });
+          tdAction.appendChild(btn);
+        }
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
+      })(members[i]);
+    }
+  } catch(e) {
+    setTbodyMessage(tbody, 'Network error.', true);
+  }
+}
+
+async function inviteMember(accountID) {
+  var emailEl = document.getElementById('invite-email-' + accountID);
+  var roleEl = document.getElementById('invite-role-' + accountID);
+  var email = emailEl.value.trim();
+  if (!email) { emailEl.focus(); return; }
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, role: roleEl.value })
+    });
+    if (r.status === 409) { showToast('Member already exists.', true); return; }
+    if (!r.ok) {
+      var err = await r.text();
+      showToast(err || 'Failed to invite member.', true);
+      return;
+    }
+    emailEl.value = '';
+    showToast('Member invited!');
+    loadTeam(accountID);
+  } catch(e) {
+    showToast('Network error.', true);
+  }
+}
+
+async function changeRole(accountID, userID, newRole) {
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole })
+    });
+    if (r.status === 409) { showToast('Cannot demote last owner.', true); loadTeam(accountID); return; }
+    if (!r.ok) { showToast('Failed to update role.', true); loadTeam(accountID); return; }
+    showToast('Role updated.');
+  } catch(e) {
+    showToast('Network error.', true);
+    loadTeam(accountID);
+  }
+}
+
+async function removeMember(accountID, userID, email) {
+  if (!confirm('Remove ' + email + ' from this account?')) return;
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+      method: 'DELETE'
+    });
+    if (r.status === 409) { showToast('Cannot remove last owner.', true); return; }
+    if (!r.ok) { showToast('Failed to remove member.', true); return; }
+    showToast('Member removed.');
+    loadTeam(accountID);
   } catch(e) {
     showToast('Network error.', true);
   }

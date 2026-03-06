@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -579,6 +580,120 @@ func TestBillingPortalRedirect_EmptyURL(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusBadGateway, rec.Body.String())
+	}
+}
+
+// --- Portal page template rendering tests ---
+
+func TestPortalPageTemplate_TeamManagementRendered(t *testing.T) {
+	// Verify that accounts with CanManage=true render team management UI markup.
+	data := portalPageData{
+		Nonce: "test-nonce",
+		Email: "admin@example.com",
+		Accounts: []portalPageAccount{
+			{
+				ID:         "a_managed",
+				Kind:       "cloud",
+				KindLabel:  "Cloud",
+				Name:       "My Cloud Account",
+				Role:       "owner",
+				CanManage:  true,
+				HasBilling: false,
+				Workspaces: nil,
+			},
+		},
+	}
+
+	var buf strings.Builder
+	if err := portalPageTmpl.Execute(&buf, data); err != nil {
+		t.Fatalf("template execute: %v", err)
+	}
+	html := buf.String()
+
+	// Account-specific markup (only rendered when CanManage=true).
+	mustContain := []string{
+		`id="team-btn-a_managed"`,     // team button with account ID
+		`id="team-section-a_managed"`, // team section div
+		`data-actor-role="owner"`,     // actor role data attribute
+		"Team members",                // section heading
+		`id="team-list-a_managed"`,    // member list tbody
+		`id="invite-email-a_managed"`, // invite email input
+		`id="invite-role-a_managed"`,  // invite role select
+		`toggleTeam('a_managed'`,      // button onclick references account ID
+		`inviteMember('a_managed'`,
+	}
+	for _, needle := range mustContain {
+		if !strings.Contains(html, needle) {
+			t.Errorf("expected %q in rendered HTML", needle)
+		}
+	}
+}
+
+func TestPortalPageTemplate_TeamManagementHiddenForNonManagers(t *testing.T) {
+	// Accounts with CanManage=false should NOT render team management markup.
+	data := portalPageData{
+		Nonce: "test-nonce",
+		Email: "viewer@example.com",
+		Accounts: []portalPageAccount{
+			{
+				ID:         "a_readonly",
+				Kind:       "cloud",
+				KindLabel:  "Cloud",
+				Name:       "Readonly Account",
+				Role:       "read_only",
+				CanManage:  false,
+				HasBilling: false,
+				Workspaces: nil,
+			},
+		},
+	}
+
+	var buf strings.Builder
+	if err := portalPageTmpl.Execute(&buf, data); err != nil {
+		t.Fatalf("template execute: %v", err)
+	}
+	html := buf.String()
+
+	// Account-specific team markup must NOT appear.
+	mustNotContain := []string{
+		`id="team-btn-a_readonly"`,
+		`id="team-section-a_readonly"`,
+		`id="invite-email-a_readonly"`,
+		"Team members",
+	}
+	for _, needle := range mustNotContain {
+		if strings.Contains(html, needle) {
+			t.Errorf("%q should NOT appear for non-manager accounts", needle)
+		}
+	}
+}
+
+func TestPortalPageTemplate_ActorRolePassedToSection(t *testing.T) {
+	// Verify the actor role is passed as a data attribute for JS permission checks.
+	for _, role := range []string{"owner", "admin"} {
+		t.Run(role, func(t *testing.T) {
+			data := portalPageData{
+				Nonce: "n",
+				Email: "test@example.com",
+				Accounts: []portalPageAccount{
+					{
+						ID:        "a_test",
+						Kind:      "cloud",
+						KindLabel: "Cloud",
+						Name:      "Test",
+						Role:      role,
+						CanManage: true,
+					},
+				},
+			}
+			var buf strings.Builder
+			if err := portalPageTmpl.Execute(&buf, data); err != nil {
+				t.Fatalf("template execute: %v", err)
+			}
+			if !strings.Contains(buf.String(), `data-actor-role="`+role+`"`) {
+				t.Errorf("expected data-actor-role=%q in rendered HTML", role)
+			}
+		})
 	}
 }
 
