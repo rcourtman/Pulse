@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -97,6 +99,14 @@ func TestPulseToolExecutor_ListTools(t *testing.T) {
 	stateTools := execWithState.ListTools()
 	// With state provider, pulse_query should be available
 	assert.True(t, containsTool(stateTools, "pulse_query"))
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "pve1", Status: "online"}},
+	})
+	execWithUnifiedReadState := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
+	unifiedTools := execWithUnifiedReadState.ListTools()
+	assert.True(t, containsTool(unifiedTools, "pulse_query"))
 }
 
 func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
@@ -115,6 +125,29 @@ func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
 	assert.True(t, execWithProviders.isToolAvailable("pulse_metrics"))
 	// And pulse_query should be available with state provider
 	assert.True(t, execWithProviders.isToolAvailable("pulse_query"))
+}
+
+func TestPulseToolExecutor_GetReadStatePrefersUnifiedResourceProvider(t *testing.T) {
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-unified", Name: "vm-unified", Status: "running", Node: "pve1", Instance: "cluster-a"}},
+	})
+
+	stateProvider := &mockStateProvider{}
+	stateProvider.On("ReadSnapshot").Return(models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-snapshot", Name: "vm-snapshot", Status: "running", Node: "pve2", Instance: "cluster-b"}},
+	})
+
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider:           stateProvider,
+		UnifiedResourceProvider: adapter,
+	})
+
+	readState := exec.getReadState()
+	require.NotNil(t, readState)
+	require.Len(t, readState.VMs(), 1)
+	assert.Equal(t, "vm-unified", readState.VMs()[0].Name())
+	stateProvider.AssertNotCalled(t, "ReadSnapshot")
 }
 
 func TestToolRegistry_ListTools(t *testing.T) {

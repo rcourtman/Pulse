@@ -544,6 +544,9 @@ func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
 	if e.readState != nil {
 		return e.readState
 	}
+	if readState, ok := e.unifiedResourceProvider.(unifiedresources.ReadState); ok && readState != nil {
+		return readState
+	}
 	if e.stateProvider == nil {
 		return nil
 	}
@@ -556,7 +559,11 @@ func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
 }
 
 func (e *PulseToolExecutor) hasReadState() bool {
-	return e.readState != nil || e.stateProvider != nil
+	if e.readState != nil || e.stateProvider != nil {
+		return true
+	}
+	readState, ok := e.unifiedResourceProvider.(unifiedresources.ReadState)
+	return ok && readState != nil
 }
 
 // SetContext sets the current execution context
