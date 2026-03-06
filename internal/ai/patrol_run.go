@@ -1131,6 +1131,20 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 	return models.DockerHost{}, nil, false
 }
 
+func collectPatrolScopedDockerHosts(hosts []models.DockerHost, matcher patrolScopeMatcher) ([]models.DockerHost, []string) {
+	filtered := make([]models.DockerHost, 0, len(hosts))
+	ids := make([]string, 0, len(hosts))
+	for _, host := range hosts {
+		scopedHost, includeIDs, ok := scopePatrolDockerHost(host, matcher)
+		if !ok {
+			continue
+		}
+		filtered = append(filtered, scopedHost)
+		ids = append(ids, includeIDs...)
+	}
+	return filtered, ids
+}
+
 func scopePatrolPBSInstance(pbs models.PBSInstance, matcher patrolScopeMatcher) bool {
 	if !matcher.matchesType("pbs") {
 		return false
@@ -1448,13 +1462,9 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		filterState.includeGuestVMID(vmid)
 	}
 
-	for _, d := range snap.DockerHosts {
-		scopedHost, includeIDs, ok := scopePatrolDockerHost(d, matcher)
-		if ok {
-			filterState.filtered.DockerHosts = append(filterState.filtered.DockerHosts, scopedHost)
-			filterState.includeResourceID(includeIDs...)
-		}
-	}
+	filteredDockerHosts, dockerIDs := collectPatrolScopedDockerHosts(snap.DockerHosts, matcher)
+	filterState.filtered.DockerHosts = filteredDockerHosts
+	filterState.includeResourceID(dockerIDs...)
 
 	filteredStorage, storageIDs := collectPatrolScopedStorage(snap.Storage, matcher)
 	filterState.filtered.Storage = filteredStorage
