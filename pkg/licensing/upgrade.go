@@ -9,7 +9,7 @@ import (
 const DefaultUpgradeURL = "https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade"
 
 // DefaultProTrialSignupURL is the hosted signup/checkout entrypoint for Pulse Pro trials.
-const DefaultProTrialSignupURL = "https://pulserelay.pro/start-pro-trial?utm_source=pulse&utm_medium=app&utm_campaign=trial_signup"
+const DefaultProTrialSignupURL = "https://cloud.pulserelay.pro/start-pro-trial?utm_source=pulse&utm_medium=app&utm_campaign=trial_signup"
 
 // ProTrialSignupURLEnvVar overrides the hosted signup URL for Pulse Pro trials.
 const ProTrialSignupURLEnvVar = "PULSE_PRO_TRIAL_SIGNUP_URL"
