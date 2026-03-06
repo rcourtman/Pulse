@@ -1,4 +1,4 @@
-import { Component, createEffect, createMemo, createSignal, Match, Switch } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal, Match, Switch } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import Server from 'lucide-solid/icons/server';
 import Boxes from 'lucide-solid/icons/boxes';
@@ -9,7 +9,7 @@ import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import { ProxmoxSettingsPanel, type ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
 import { UnifiedAgents } from './UnifiedAgents';
 
-type InfrastructureWorkspaceView = 'install' | 'direct' | 'inventory';
+type InfrastructureWorkspaceView = 'install' | 'direct';
 
 const VIEW_META: Record<
   InfrastructureWorkspaceView,
@@ -24,10 +24,6 @@ const VIEW_META: Record<
   direct: {
     description:
       'Use direct PVE, PBS, or PMG connections only when the unified agent cannot run on the target host.',
-  },
-  inventory: {
-    description:
-      'Audit agent coverage, direct Proxmox links, Docker runtime policy, and supporting infrastructure controls from one place.',
   },
 };
 
@@ -47,6 +43,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
   const [activeView, setActiveView] = createSignal<InfrastructureWorkspaceView>(
     inferViewFromPath(location.pathname),
   );
+  const [showInventory, setShowInventory] = createSignal(false);
 
   createEffect(() => {
     if (location.pathname.startsWith('/settings/infrastructure/proxmox')) {
@@ -110,18 +107,6 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
                 <Waypoints class="h-4 w-4" />
                 Direct Proxmox
               </button>
-              <button
-                type="button"
-                onClick={() => openView('inventory')}
-                class={`inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeView() === 'inventory'
-                    ? 'bg-surface text-base-content shadow-sm'
-                    : 'text-muted hover:bg-surface hover:text-base-content'
-                }`}
-              >
-                <Boxes class="h-4 w-4" />
-                Inventory
-              </button>
             </div>
 
             <div class="text-sm text-muted">
@@ -139,67 +124,90 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
         <Match when={activeView() === 'direct'}>
           <ProxmoxSettingsPanel {...props} embedded />
         </Match>
-
-        <Match when={activeView() === 'inventory'}>
-          <div class="space-y-6">
-            <UnifiedAgents embedded showInstaller={false} />
-
-            <div class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <Card padding="lg" class="rounded-xl border border-border shadow-sm">
-                <div class="space-y-4">
-                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h3 class="text-base font-semibold text-base-content">
-                        Direct Proxmox connections
-                      </h3>
-                      <p class="text-sm text-muted">
-                        Review fallback direct coverage separately from agent-managed hosts.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => openView('direct')}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-                    >
-                      Manage direct connections
-                    </button>
-                  </div>
-
-                  <div class="grid gap-3 sm:grid-cols-3">
-                    <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
-                      <div class="text-sm font-medium text-base-content">PVE</div>
-                      <div class="mt-1 text-xl font-semibold text-base-content">
-                        {props.pveNodes().length}
-                      </div>
-                    </div>
-                    <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
-                      <div class="text-sm font-medium text-base-content">PBS</div>
-                      <div class="mt-1 text-xl font-semibold text-base-content">
-                        {props.pbsNodes().length}
-                      </div>
-                    </div>
-                    <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
-                      <div class="text-sm font-medium text-base-content">PMG</div>
-                      <div class="mt-1 text-xl font-semibold text-base-content">
-                        {props.pmgNodes().length}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              <DockerRuntimeSettingsCard
-                disableDockerUpdateActions={props.disableDockerUpdateActions}
-                disableDockerUpdateActionsLocked={props.disableDockerUpdateActionsLocked}
-                savingDockerUpdateActions={props.savingDockerUpdateActions}
-                handleDisableDockerUpdateActionsChange={props.handleDisableDockerUpdateActionsChange}
-              />
-            </div>
-
-            <AgentProfilesPanel />
-          </div>
-        </Match>
       </Switch>
+
+      <Card padding="lg" class="rounded-xl border border-border shadow-sm">
+        <div class="space-y-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 text-base font-semibold text-base-content">
+                <Boxes class="h-4 w-4" />
+                Connected infrastructure
+              </div>
+              <p class="text-sm text-muted">
+                View installed agents, direct Proxmox links, Docker policy, and agent profiles.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowInventory((current) => !current)}
+              class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+            >
+              {showInventory() ? 'Hide details' : 'Show details'}
+            </button>
+          </div>
+
+          <Show when={showInventory()}>
+            <div class="space-y-6 border-t border-border pt-4">
+              <UnifiedAgents embedded showInstaller={false} />
+
+              <div class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                <Card padding="lg" class="rounded-xl border border-border shadow-sm">
+                  <div class="space-y-4">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 class="text-base font-semibold text-base-content">
+                          Direct Proxmox connections
+                        </h3>
+                        <p class="text-sm text-muted">
+                          Review fallback direct coverage separately from agent-managed hosts.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openView('direct')}
+                        class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                      >
+                        Manage direct connections
+                      </button>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-3">
+                      <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
+                        <div class="text-sm font-medium text-base-content">PVE</div>
+                        <div class="mt-1 text-xl font-semibold text-base-content">
+                          {props.pveNodes().length}
+                        </div>
+                      </div>
+                      <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
+                        <div class="text-sm font-medium text-base-content">PBS</div>
+                        <div class="mt-1 text-xl font-semibold text-base-content">
+                          {props.pbsNodes().length}
+                        </div>
+                      </div>
+                      <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
+                        <div class="text-sm font-medium text-base-content">PMG</div>
+                        <div class="mt-1 text-xl font-semibold text-base-content">
+                          {props.pmgNodes().length}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <DockerRuntimeSettingsCard
+                  disableDockerUpdateActions={props.disableDockerUpdateActions}
+                  disableDockerUpdateActionsLocked={props.disableDockerUpdateActionsLocked}
+                  savingDockerUpdateActions={props.savingDockerUpdateActions}
+                  handleDisableDockerUpdateActionsChange={props.handleDisableDockerUpdateActionsChange}
+                />
+              </div>
+
+              <AgentProfilesPanel />
+            </div>
+          </Show>
+        </div>
+      </Card>
     </div>
   );
 };
