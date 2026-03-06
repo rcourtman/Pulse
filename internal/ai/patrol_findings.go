@@ -1656,29 +1656,12 @@ type patrolGuestRuntimeDetailsVisitor func(identifiers []string, details patrolG
 type patrolMetricVisitor func(identifiers []string, metrics map[string]float64) bool
 
 func patrolActionabilityResourceMetrics(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
-	if metrics, ok := patrolActionabilityMetricsFromReadState(snap); ok {
-		return patrolAugmentActionabilityMetricsWithPhysicalDisks(metrics, snap), true
-	}
-	metrics, ok := patrolActionabilityMetricsFromSnapshot(snap)
-	return patrolAugmentActionabilityMetricsWithPhysicalDisks(metrics, snap), ok
-}
-
-func patrolActionabilityMetricsFromReadState(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
 	resourceMetrics := make(map[string]map[string]float64)
-	hasInventory := patrolVisitMetricsFromReadState(snap, func(identifiers []string, metrics map[string]float64) bool {
+	hasInventory := patrolVisitMetrics(snap, func(identifiers []string, metrics map[string]float64) bool {
 		patrolRegisterResourceMetrics(resourceMetrics, metrics, identifiers...)
 		return true
 	})
-	return resourceMetrics, hasInventory
-}
-
-func patrolActionabilityMetricsFromSnapshot(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
-	resourceMetrics := make(map[string]map[string]float64)
-	hasInventory := patrolVisitMetricsFromSnapshot(snap, func(identifiers []string, metrics map[string]float64) bool {
-		patrolRegisterResourceMetrics(resourceMetrics, metrics, identifiers...)
-		return true
-	})
-	return resourceMetrics, hasInventory
+	return patrolAugmentActionabilityMetricsWithPhysicalDisks(resourceMetrics, snap), hasInventory
 }
 
 func patrolAugmentActionabilityMetricsWithPhysicalDisks(dest map[string]map[string]float64, snap patrolRuntimeState) map[string]map[string]float64 {
@@ -1701,53 +1684,35 @@ func patrolAugmentActionabilityMetricsWithPhysicalDisks(dest map[string]map[stri
 }
 
 func patrolLookupGuestRuntimeDetails(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
-	if details, ok := patrolLookupGuestRuntimeDetailsFromReadState(snap, guestID); ok {
-		return details, true
-	}
-	return patrolLookupGuestRuntimeDetailsFromSnapshot(snap, guestID)
-}
-
-func patrolLookupGuestRuntimeDetailsFromReadState(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
 	return patrolLookupGuestRuntimeDetailsWithVisitor(guestID, func(visit patrolGuestRuntimeDetailsVisitor) bool {
-		return patrolVisitGuestRuntimeDetailsFromReadState(snap, visit)
-	})
-}
-
-func patrolLookupGuestRuntimeDetailsFromSnapshot(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
-	return patrolLookupGuestRuntimeDetailsWithVisitor(guestID, func(visit patrolGuestRuntimeDetailsVisitor) bool {
-		return patrolVisitGuestRuntimeDetailsFromSnapshot(snap, visit)
+		return patrolVisitGuestRuntimeDetails(snap, visit)
 	})
 }
 
 func patrolLookupResourceMetrics(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	if metrics, ok := patrolLookupResourceMetricsFromReadState(snap, resourceID); ok {
-		return metrics, true
-	}
-	return patrolLookupResourceMetricsFromSnapshot(snap, resourceID)
+	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+		return patrolVisitMetrics(snap, visit)
+	})
 }
 
 func patrolLookupResourceMetricsForType(snap patrolRuntimeState, resourceID, resourceType string) (map[string]float64, bool) {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
 	case "node", "agent":
-		if metrics, ok := patrolLookupNodeMetricsFromReadState(snap, resourceID); ok {
-			return metrics, true
-		}
-		return patrolLookupNodeMetricsFromSnapshot(snap, resourceID)
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitNodeMetrics(snap, visit)
+		})
 	case "vm":
-		if metrics, ok := patrolLookupVMMetricsFromReadState(snap, resourceID); ok {
-			return metrics, true
-		}
-		return patrolLookupVMMetricsFromSnapshot(snap, resourceID)
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitGuestMetrics(snap, "VM", visit)
+		})
 	case "container", "system-container":
-		if metrics, ok := patrolLookupContainerMetricsFromReadState(snap, resourceID); ok {
-			return metrics, true
-		}
-		return patrolLookupContainerMetricsFromSnapshot(snap, resourceID)
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitGuestMetrics(snap, "Container", visit)
+		})
 	case "storage":
-		if metrics, ok := patrolLookupStorageMetricsFromReadState(snap, resourceID); ok {
-			return metrics, true
-		}
-		return patrolLookupStorageMetricsFromSnapshot(snap, resourceID)
+		return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
+			return patrolVisitStorageMetrics(snap, visit)
+		})
 	case "physical_disk":
 		if metrics, ok := patrolLookupPhysicalDiskMetricsState(snap, resourceID); ok {
 			return metrics, true
@@ -1756,66 +1721,6 @@ func patrolLookupResourceMetricsForType(snap patrolRuntimeState, resourceID, res
 	default:
 		return patrolLookupResourceMetrics(snap, resourceID)
 	}
-}
-
-func patrolLookupResourceMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitMetricsFromReadState(snap, visit)
-	})
-}
-
-func patrolLookupResourceMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitMetricsFromSnapshot(snap, visit)
-	})
-}
-
-func patrolLookupNodeMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitNodeMetricsFromReadState(snap, visit)
-	})
-}
-
-func patrolLookupNodeMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitNodeMetricsFromSnapshot(snap, visit)
-	})
-}
-
-func patrolLookupVMMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitVMMetricsFromReadState(snap, visit)
-	})
-}
-
-func patrolLookupVMMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitVMMetricsFromSnapshot(snap, visit)
-	})
-}
-
-func patrolLookupContainerMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitContainerMetricsFromReadState(snap, visit)
-	})
-}
-
-func patrolLookupContainerMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitContainerMetricsFromSnapshot(snap, visit)
-	})
-}
-
-func patrolLookupStorageMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitStorageMetricsFromReadState(snap, visit)
-	})
-}
-
-func patrolLookupStorageMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
-	return patrolLookupMetricsWithVisitor(resourceID, func(visit patrolMetricVisitor) bool {
-		return patrolVisitStorageMetricsFromSnapshot(snap, visit)
-	})
 }
 
 func patrolLookupPhysicalDiskMetricsState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
@@ -1890,38 +1795,49 @@ func patrolLookupGuestRuntimeDetailsWithVisitor(guestID string, walk func(patrol
 	return result, found
 }
 
-func patrolVisitGuestRuntimeDetailsFromReadState(snap patrolRuntimeState, visit patrolGuestRuntimeDetailsVisitor) bool {
-	if snap.readState == nil {
-		return false
-	}
-	hasInventory := false
-	for _, vm := range snap.readState.VMs() {
-		hasInventory = true
-		if !visit([]string{vm.ID(), vm.Name(), fmt.Sprintf("%d", vm.VMID())}, patrolGuestRuntimeDetails{
-			lastBackup: vm.LastBackup(),
-			node:       vm.Node(),
-			ip:         patrolFirstIP(vm.IPAddresses()),
+func patrolVisitGuestRuntimeDetails(snap patrolRuntimeState, visit patrolGuestRuntimeDetailsVisitor) bool {
+	rows := patrolGuestInventoryRows(snap, nil, nil)
+	for _, guest := range rows {
+		if !visit([]string{guest.id, guest.name}, patrolGuestRuntimeDetails{
+			lastBackup: guest.lastBackup,
+			node:       guest.node,
 		}) {
 			return true
 		}
 	}
-	for _, ct := range snap.readState.Containers() {
-		hasInventory = true
-		if !visit([]string{ct.ID(), ct.Name(), fmt.Sprintf("%d", ct.VMID())}, patrolGuestRuntimeDetails{
-			lastBackup: ct.LastBackup(),
-			node:       ct.Node(),
-			ip:         patrolFirstIP(ct.IPAddresses()),
-		}) {
-			return true
-		}
-	}
-	return hasInventory
-}
 
-func patrolVisitGuestRuntimeDetailsFromSnapshot(snap patrolRuntimeState, visit patrolGuestRuntimeDetailsVisitor) bool {
-	hasInventory := false
+	if snap.readState != nil {
+		for _, vm := range snap.readState.VMs() {
+			if vm.Template() {
+				continue
+			}
+			if !visit([]string{vm.ID(), vm.Name(), fmt.Sprintf("%d", vm.VMID())}, patrolGuestRuntimeDetails{
+				lastBackup: vm.LastBackup(),
+				node:       vm.Node(),
+				ip:         patrolFirstIP(vm.IPAddresses()),
+			}) {
+				return true
+			}
+		}
+		for _, ct := range snap.readState.Containers() {
+			if ct.Template() {
+				continue
+			}
+			if !visit([]string{ct.ID(), ct.Name(), fmt.Sprintf("%d", ct.VMID())}, patrolGuestRuntimeDetails{
+				lastBackup: ct.LastBackup(),
+				node:       ct.Node(),
+				ip:         patrolFirstIP(ct.IPAddresses()),
+			}) {
+				return true
+			}
+		}
+		return len(rows) > 0 || len(snap.readState.VMs()) > 0 || len(snap.readState.Containers()) > 0
+	}
+
 	for _, vm := range snap.VMs {
-		hasInventory = true
+		if vm.Template {
+			continue
+		}
 		if !visit([]string{vm.ID, vm.Name, fmt.Sprintf("%d", vm.VMID)}, patrolGuestRuntimeDetails{
 			lastBackup: vm.LastBackup,
 			node:       vm.Node,
@@ -1931,7 +1847,9 @@ func patrolVisitGuestRuntimeDetailsFromSnapshot(snap patrolRuntimeState, visit p
 		}
 	}
 	for _, ct := range snap.Containers {
-		hasInventory = true
+		if ct.Template {
+			continue
+		}
 		if !visit([]string{ct.ID, ct.Name, fmt.Sprintf("%d", ct.VMID)}, patrolGuestRuntimeDetails{
 			lastBackup: ct.LastBackup,
 			node:       ct.Node,
@@ -1940,7 +1858,7 @@ func patrolVisitGuestRuntimeDetailsFromSnapshot(snap patrolRuntimeState, visit p
 			return true
 		}
 	}
-	return hasInventory
+	return len(rows) > 0 || len(snap.VMs) > 0 || len(snap.Containers) > 0
 }
 
 func patrolLookupMetricsWithVisitor(resourceID string, walk func(patrolMetricVisitor) bool) (map[string]float64, bool) {
@@ -1960,13 +1878,15 @@ func patrolLookupMetricsWithVisitor(resourceID string, walk func(patrolMetricVis
 	return result, found
 }
 
-func patrolVisitMetricsFromReadState(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
+func patrolVisitMetrics(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
 	hasInventory := false
 	for _, walk := range []func(patrolRuntimeState, patrolMetricVisitor) bool{
-		patrolVisitNodeMetricsFromReadState,
-		patrolVisitVMMetricsFromReadState,
-		patrolVisitContainerMetricsFromReadState,
-		patrolVisitStorageMetricsFromReadState,
+		patrolVisitNodeMetrics,
+		func(s patrolRuntimeState, v patrolMetricVisitor) bool { return patrolVisitGuestMetrics(s, "VM", v) },
+		func(s patrolRuntimeState, v patrolMetricVisitor) bool {
+			return patrolVisitGuestMetrics(s, "Container", v)
+		},
+		patrolVisitStorageMetrics,
 	} {
 		if walk(snap, visit) {
 			hasInventory = true
@@ -1975,147 +1895,47 @@ func patrolVisitMetricsFromReadState(snap patrolRuntimeState, visit patrolMetric
 	return hasInventory
 }
 
-func patrolVisitMetricsFromSnapshot(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	hasInventory := false
-	for _, walk := range []func(patrolRuntimeState, patrolMetricVisitor) bool{
-		patrolVisitNodeMetricsFromSnapshot,
-		patrolVisitVMMetricsFromSnapshot,
-		patrolVisitContainerMetricsFromSnapshot,
-		patrolVisitStorageMetricsFromSnapshot,
-	} {
-		if walk(snap, visit) {
-			hasInventory = true
+func patrolVisitNodeMetrics(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
+	rows := patrolNodeInventoryRows(snap, nil)
+	for _, node := range rows {
+		metrics := map[string]float64{"cpu": node.cpu}
+		if node.mem > 0 {
+			metrics["memory"] = node.mem
 		}
-	}
-	return hasInventory
-}
-
-func patrolVisitNodeMetricsFromReadState(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	if snap.readState == nil {
-		return false
-	}
-	hasInventory := false
-	for _, n := range snap.readState.Nodes() {
-		hasInventory = true
-		metrics := map[string]float64{"cpu": n.CPUPercent()}
-		if mem := n.MemoryPercent(); mem > 0 {
-			metrics["memory"] = mem
-		}
-		if !visit([]string{n.ID(), n.Name()}, metrics) {
+		if !visit([]string{node.id, node.name}, metrics) {
 			return true
 		}
 	}
-	return hasInventory
+	return len(rows) > 0
 }
 
-func patrolVisitNodeMetricsFromSnapshot(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	hasInventory := false
-	for _, n := range snap.Nodes {
-		hasInventory = true
-		metrics := map[string]float64{"cpu": n.CPU * 100}
-		if n.Memory.Total > 0 {
-			metrics["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
+func patrolVisitGuestMetrics(snap patrolRuntimeState, guestType string, visit patrolMetricVisitor) bool {
+	rows := patrolGuestInventoryRows(snap, nil, nil)
+	count := 0
+	for _, guest := range rows {
+		if guest.gType != guestType {
+			continue
 		}
-		if !visit([]string{n.ID, n.Name}, metrics) {
-			return true
-		}
-	}
-	return hasInventory
-}
-
-func patrolVisitVMMetricsFromReadState(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	if snap.readState == nil {
-		return false
-	}
-	hasInventory := false
-	for _, vm := range snap.readState.VMs() {
-		hasInventory = true
-		if !visit([]string{vm.ID(), vm.Name(), fmt.Sprintf("%d", vm.VMID())}, map[string]float64{
-			"cpu":    vm.CPUPercent(),
-			"memory": vm.MemoryPercent(),
-			"disk":   vm.DiskPercent(),
+		count++
+		if !visit([]string{guest.id, guest.name}, map[string]float64{
+			"cpu":    guest.cpu,
+			"memory": guest.mem,
+			"disk":   guest.disk,
 		}) {
 			return true
 		}
 	}
-	return hasInventory
+	return count > 0
 }
 
-func patrolVisitVMMetricsFromSnapshot(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	hasInventory := false
-	for _, vm := range snap.VMs {
-		hasInventory = true
-		if !visit([]string{vm.ID, vm.Name, fmt.Sprintf("%d", vm.VMID)}, map[string]float64{
-			"cpu":    vm.CPU * 100,
-			"memory": vm.Memory.Usage,
-			"disk":   vm.Disk.Usage,
-		}) {
+func patrolVisitStorageMetrics(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
+	rows := patrolStoragePoolRows(snap, nil)
+	for _, storage := range rows {
+		if !visit([]string{storage.id, storage.name}, map[string]float64{"usage": storage.usage}) {
 			return true
 		}
 	}
-	return hasInventory
-}
-
-func patrolVisitContainerMetricsFromReadState(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	if snap.readState == nil {
-		return false
-	}
-	hasInventory := false
-	for _, ct := range snap.readState.Containers() {
-		hasInventory = true
-		if !visit([]string{ct.ID(), ct.Name(), fmt.Sprintf("%d", ct.VMID())}, map[string]float64{
-			"cpu":    ct.CPUPercent(),
-			"memory": ct.MemoryPercent(),
-			"disk":   ct.DiskPercent(),
-		}) {
-			return true
-		}
-	}
-	return hasInventory
-}
-
-func patrolVisitContainerMetricsFromSnapshot(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	hasInventory := false
-	for _, ct := range snap.Containers {
-		hasInventory = true
-		if !visit([]string{ct.ID, ct.Name, fmt.Sprintf("%d", ct.VMID)}, map[string]float64{
-			"cpu":    ct.CPU * 100,
-			"memory": ct.Memory.Usage,
-			"disk":   ct.Disk.Usage,
-		}) {
-			return true
-		}
-	}
-	return hasInventory
-}
-
-func patrolVisitStorageMetricsFromReadState(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	if snap.readState == nil {
-		return false
-	}
-	hasInventory := false
-	for _, s := range snap.readState.StoragePools() {
-		hasInventory = true
-		if !visit([]string{s.ID(), s.Name()}, map[string]float64{"usage": s.DiskPercent()}) {
-			return true
-		}
-	}
-	return hasInventory
-}
-
-func patrolVisitStorageMetricsFromSnapshot(snap patrolRuntimeState, visit patrolMetricVisitor) bool {
-	hasInventory := false
-	for _, s := range snap.Storage {
-		hasInventory = true
-		metrics := map[string]float64{}
-		if s.Total > 0 {
-			metrics["usage"] = float64(s.Used) / float64(s.Total) * 100
-		}
-		if !visit([]string{s.ID, s.Name}, metrics) {
-			return true
-		}
-	}
-	return hasInventory
+	return len(rows) > 0
 }
 
 func patrolRegisterResourceMetrics(dest map[string]map[string]float64, metrics map[string]float64, identifiers ...string) {
