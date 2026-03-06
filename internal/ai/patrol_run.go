@@ -1203,6 +1203,127 @@ func scopePatrolKubernetesCluster(k models.KubernetesCluster, matcher patrolScop
 	return matcher.matchesType("k8s-cluster") && matcher.matchesID(k.ID, patrolKubernetesScopeName(k))
 }
 
+func collectPatrolScopedNodes(nodes []models.Node, matcher patrolScopeMatcher) ([]models.Node, []string) {
+	filtered := make([]models.Node, 0, len(nodes))
+	ids := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		if !scopePatrolNode(n, matcher) {
+			continue
+		}
+		filtered = append(filtered, n)
+		ids = append(ids, n.ID)
+	}
+	return filtered, ids
+}
+
+func collectPatrolScopedVMs(vms []models.VM, matcher patrolScopeMatcher) ([]models.VM, []string, []int) {
+	filtered := make([]models.VM, 0, len(vms))
+	ids := make([]string, 0, len(vms))
+	vmids := make([]int, 0, len(vms))
+	for _, vm := range vms {
+		if !scopePatrolVM(vm, matcher) {
+			continue
+		}
+		filtered = append(filtered, vm)
+		ids = append(ids, vm.ID)
+		vmids = append(vmids, vm.VMID)
+	}
+	return filtered, ids, vmids
+}
+
+func collectPatrolScopedContainers(containers []models.Container, matcher patrolScopeMatcher) ([]models.Container, []string, []int) {
+	filtered := make([]models.Container, 0, len(containers))
+	ids := make([]string, 0, len(containers))
+	vmids := make([]int, 0, len(containers))
+	for _, ct := range containers {
+		if !scopePatrolContainer(ct, matcher) {
+			continue
+		}
+		filtered = append(filtered, ct)
+		ids = append(ids, ct.ID)
+		vmids = append(vmids, ct.VMID)
+	}
+	return filtered, ids, vmids
+}
+
+func collectPatrolScopedStorage(storage []models.Storage, matcher patrolScopeMatcher) ([]models.Storage, []string) {
+	filtered := make([]models.Storage, 0, len(storage))
+	ids := make([]string, 0, len(storage))
+	for _, s := range storage {
+		if !scopePatrolStorage(s, matcher) {
+			continue
+		}
+		filtered = append(filtered, s)
+		ids = append(ids, s.ID)
+	}
+	return filtered, ids
+}
+
+func collectPatrolScopedPhysicalDisks(disks []models.PhysicalDisk, matcher patrolScopeMatcher) ([]models.PhysicalDisk, []string) {
+	filtered := make([]models.PhysicalDisk, 0, len(disks))
+	ids := make([]string, 0, len(disks)*2)
+	for _, disk := range disks {
+		if !scopePatrolPhysicalDisk(disk, matcher) {
+			continue
+		}
+		filtered = append(filtered, disk)
+		ids = append(ids, disk.ID, disk.DevPath)
+	}
+	return filtered, ids
+}
+
+func collectPatrolScopedPBSInstances(instances []models.PBSInstance, matcher patrolScopeMatcher) ([]models.PBSInstance, []string) {
+	filtered := make([]models.PBSInstance, 0, len(instances))
+	ids := make([]string, 0, len(instances))
+	for _, pbs := range instances {
+		if !scopePatrolPBSInstance(pbs, matcher) {
+			continue
+		}
+		filtered = append(filtered, pbs)
+		ids = append(ids, pbs.ID)
+	}
+	return filtered, ids
+}
+
+func collectPatrolScopedPMGInstances(instances []models.PMGInstance, matcher patrolScopeMatcher) ([]models.PMGInstance, []string) {
+	filtered := make([]models.PMGInstance, 0, len(instances))
+	ids := make([]string, 0, len(instances))
+	for _, pmg := range instances {
+		if !scopePatrolPMGInstance(pmg, matcher) {
+			continue
+		}
+		filtered = append(filtered, pmg)
+		ids = append(ids, pmg.ID)
+	}
+	return filtered, ids
+}
+
+func collectPatrolScopedHosts(hosts []models.Host, matcher patrolScopeMatcher) ([]models.Host, []string) {
+	filtered := make([]models.Host, 0, len(hosts))
+	ids := make([]string, 0, len(hosts))
+	for _, h := range hosts {
+		if !scopePatrolHost(h, matcher) {
+			continue
+		}
+		filtered = append(filtered, h)
+		ids = append(ids, h.ID)
+	}
+	return filtered, ids
+}
+
+func collectPatrolScopedKubernetesClusters(clusters []models.KubernetesCluster, matcher patrolScopeMatcher) ([]models.KubernetesCluster, []string) {
+	filtered := make([]models.KubernetesCluster, 0, len(clusters))
+	ids := make([]string, 0, len(clusters))
+	for _, k := range clusters {
+		if !scopePatrolKubernetesCluster(k, matcher) {
+			continue
+		}
+		filtered = append(filtered, k)
+		ids = append(ids, k.ID)
+	}
+	return filtered, ids
+}
+
 func patrolKubernetesScopeName(k models.KubernetesCluster) string {
 	clusterName := k.CustomDisplayName
 	if clusterName == "" {
@@ -1274,27 +1395,24 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 	matcher := newPatrolScopeMatcher(scope)
 	filterState := newPatrolScopedFilterState(snap)
 
-	// Filter each resource type
-	for _, n := range snap.Nodes {
-		if scopePatrolNode(n, matcher) {
-			filterState.filtered.Nodes = append(filterState.filtered.Nodes, n)
-			filterState.includeResourceID(n.ID)
-		}
+	filteredNodes, nodeIDs := collectPatrolScopedNodes(snap.Nodes, matcher)
+	filterState.filtered.Nodes = filteredNodes
+	filterState.includeResourceID(nodeIDs...)
+
+	filteredVMs, vmIDs, guestVMIDs := collectPatrolScopedVMs(snap.VMs, matcher)
+	filterState.filtered.VMs = filteredVMs
+	filterState.includeResourceID(vmIDs...)
+	for _, vmid := range guestVMIDs {
+		filterState.includeGuestVMID(vmid)
 	}
-	for _, vm := range snap.VMs {
-		if scopePatrolVM(vm, matcher) {
-			filterState.filtered.VMs = append(filterState.filtered.VMs, vm)
-			filterState.includeResourceID(vm.ID)
-			filterState.includeGuestVMID(vm.VMID)
-		}
+
+	filteredContainers, containerIDs, containerVMIDs := collectPatrolScopedContainers(snap.Containers, matcher)
+	filterState.filtered.Containers = filteredContainers
+	filterState.includeResourceID(containerIDs...)
+	for _, vmid := range containerVMIDs {
+		filterState.includeGuestVMID(vmid)
 	}
-	for _, c := range snap.Containers {
-		if scopePatrolContainer(c, matcher) {
-			filterState.filtered.Containers = append(filterState.filtered.Containers, c)
-			filterState.includeResourceID(c.ID)
-			filterState.includeGuestVMID(c.VMID)
-		}
-	}
+
 	for _, d := range snap.DockerHosts {
 		scopedHost, includeIDs, ok := scopePatrolDockerHost(d, matcher)
 		if ok {
@@ -1302,41 +1420,35 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 			filterState.includeResourceID(includeIDs...)
 		}
 	}
-	for _, s := range snap.Storage {
-		if scopePatrolStorage(s, matcher) {
-			filterState.filtered.Storage = append(filterState.filtered.Storage, s)
-			filterState.includeResourceID(s.ID)
-		}
+
+	filterState.filtered.Storage, _ = collectPatrolScopedStorage(snap.Storage, matcher)
+	for _, storage := range filterState.filtered.Storage {
+		filterState.includeResourceID(storage.ID)
 	}
-	for _, disk := range snap.PhysicalDisks {
-		if scopePatrolPhysicalDisk(disk, matcher) {
-			filterState.filtered.PhysicalDisks = append(filterState.filtered.PhysicalDisks, disk)
-			filterState.includeResourceID(disk.ID, disk.DevPath)
-		}
+
+	filterState.filtered.PhysicalDisks, _ = collectPatrolScopedPhysicalDisks(snap.PhysicalDisks, matcher)
+	for _, disk := range filterState.filtered.PhysicalDisks {
+		filterState.includeResourceID(disk.ID, disk.DevPath)
 	}
-	for _, pbs := range snap.PBSInstances {
-		if scopePatrolPBSInstance(pbs, matcher) {
-			filterState.filtered.PBSInstances = append(filterState.filtered.PBSInstances, pbs)
-			filterState.includeResourceID(pbs.ID)
-		}
+
+	filterState.filtered.PBSInstances, _ = collectPatrolScopedPBSInstances(snap.PBSInstances, matcher)
+	for _, pbs := range filterState.filtered.PBSInstances {
+		filterState.includeResourceID(pbs.ID)
 	}
-	for _, pmg := range snap.PMGInstances {
-		if scopePatrolPMGInstance(pmg, matcher) {
-			filterState.filtered.PMGInstances = append(filterState.filtered.PMGInstances, pmg)
-			filterState.includeResourceID(pmg.ID)
-		}
+
+	filterState.filtered.PMGInstances, _ = collectPatrolScopedPMGInstances(snap.PMGInstances, matcher)
+	for _, pmg := range filterState.filtered.PMGInstances {
+		filterState.includeResourceID(pmg.ID)
 	}
-	for _, h := range snap.Hosts {
-		if scopePatrolHost(h, matcher) {
-			filterState.filtered.Hosts = append(filterState.filtered.Hosts, h)
-			filterState.includeResourceID(h.ID)
-		}
+
+	filterState.filtered.Hosts, _ = collectPatrolScopedHosts(snap.Hosts, matcher)
+	for _, h := range filterState.filtered.Hosts {
+		filterState.includeResourceID(h.ID)
 	}
-	for _, k := range snap.KubernetesClusters {
-		if scopePatrolKubernetesCluster(k, matcher) {
-			filterState.filtered.KubernetesClusters = append(filterState.filtered.KubernetesClusters, k)
-			filterState.includeResourceID(k.ID)
-		}
+
+	filterState.filtered.KubernetesClusters, _ = collectPatrolScopedKubernetesClusters(snap.KubernetesClusters, matcher)
+	for _, k := range filterState.filtered.KubernetesClusters {
+		filterState.includeResourceID(k.ID)
 	}
 
 	copyScopedPatrolMetadata(&filterState.filtered, snap, filterState.includedResourceIDs, filterState.includedGuestVMIDs)
