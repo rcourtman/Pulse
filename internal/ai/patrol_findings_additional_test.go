@@ -788,3 +788,56 @@ func TestPatrolFindingCreatorAdapter_GetActiveFindings_UsesScopedRuntimeState(t 
 		t.Fatalf("expected in-scope finding %s, got %+v", inScope.ID, active)
 	}
 }
+
+func TestPatrolFindingCreatorAdapter_ResolveFinding_RejectsOutOfScopeFinding(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	inScope := &Finding{
+		ID:           "scope-in",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-1",
+		ResourceName: "web",
+		ResourceType: "app-container",
+		Title:        "Scoped app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	outOfScope := &Finding{
+		ID:           "scope-out",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-2",
+		ResourceName: "db",
+		ResourceType: "app-container",
+		Title:        "Global app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(inScope)
+	ps.findings.Add(outOfScope)
+
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID: "docker-host-1",
+				Containers: []models.DockerContainer{
+					{ID: "app-1", Name: "web"},
+				},
+			},
+		},
+	})
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	if err := adapter.ResolveFinding(outOfScope.ID, "resolved in test"); err == nil {
+		t.Fatal("expected out-of-scope resolve to fail")
+	}
+	stored := ps.findings.Get(outOfScope.ID)
+	if stored == nil || stored.ResolvedAt != nil {
+		t.Fatalf("expected out-of-scope finding to remain unresolved, got %+v", stored)
+	}
+	if err := adapter.ResolveFinding(inScope.ID, "resolved in test"); err != nil {
+		t.Fatalf("expected in-scope resolve to succeed, got %v", err)
+	}
+}

@@ -985,6 +985,17 @@ func (a *patrolFindingCreatorAdapter) actionabilityResourceMetrics() (map[string
 }
 
 func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) error {
+	scopedResources := patrolRuntimeKnownResources(a.snap)
+	if len(scopedResources) > 0 {
+		finding := a.patrol.findings.Get(findingID)
+		if finding == nil {
+			return fmt.Errorf("finding %s not found or already resolved", findingID)
+		}
+		if !scopedResources[finding.ResourceID] && !scopedResources[finding.ResourceName] {
+			return fmt.Errorf("finding %s is outside the current patrol scope", findingID)
+		}
+	}
+
 	resolved := a.patrol.findings.Resolve(findingID, true)
 	if !resolved {
 		return fmt.Errorf("finding %s not found or already resolved", findingID)
