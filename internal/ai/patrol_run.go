@@ -1456,35 +1456,29 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		}
 	}
 
-	filterState.filtered.Storage, _ = collectPatrolScopedStorage(snap.Storage, matcher)
-	for _, storage := range filterState.filtered.Storage {
-		filterState.includeResourceID(storage.ID)
-	}
+	filteredStorage, storageIDs := collectPatrolScopedStorage(snap.Storage, matcher)
+	filterState.filtered.Storage = filteredStorage
+	filterState.includeResourceID(storageIDs...)
 
-	filterState.filtered.PhysicalDisks, _ = collectPatrolScopedPhysicalDisks(snap.PhysicalDisks, matcher)
-	for _, disk := range filterState.filtered.PhysicalDisks {
-		filterState.includeResourceID(disk.ID, disk.DevPath)
-	}
+	filteredDisks, diskIDs := collectPatrolScopedPhysicalDisks(snap.PhysicalDisks, matcher)
+	filterState.filtered.PhysicalDisks = filteredDisks
+	filterState.includeResourceID(diskIDs...)
 
-	filterState.filtered.PBSInstances, _ = collectPatrolScopedPBSInstances(snap.PBSInstances, matcher)
-	for _, pbs := range filterState.filtered.PBSInstances {
-		filterState.includeResourceID(pbs.ID)
-	}
+	filteredPBS, pbsIDs := collectPatrolScopedPBSInstances(snap.PBSInstances, matcher)
+	filterState.filtered.PBSInstances = filteredPBS
+	filterState.includeResourceID(pbsIDs...)
 
-	filterState.filtered.PMGInstances, _ = collectPatrolScopedPMGInstances(snap.PMGInstances, matcher)
-	for _, pmg := range filterState.filtered.PMGInstances {
-		filterState.includeResourceID(pmg.ID)
-	}
+	filteredPMG, pmgIDs := collectPatrolScopedPMGInstances(snap.PMGInstances, matcher)
+	filterState.filtered.PMGInstances = filteredPMG
+	filterState.includeResourceID(pmgIDs...)
 
-	filterState.filtered.Hosts, _ = collectPatrolScopedHosts(snap.Hosts, matcher)
-	for _, h := range filterState.filtered.Hosts {
-		filterState.includeResourceID(h.ID)
-	}
+	filteredHosts, hostIDs := collectPatrolScopedHosts(snap.Hosts, matcher)
+	filterState.filtered.Hosts = filteredHosts
+	filterState.includeResourceID(hostIDs...)
 
-	filterState.filtered.KubernetesClusters, _ = collectPatrolScopedKubernetesClusters(snap.KubernetesClusters, matcher)
-	for _, k := range filterState.filtered.KubernetesClusters {
-		filterState.includeResourceID(k.ID)
-	}
+	filteredK8sClusters, k8sClusterIDs := collectPatrolScopedKubernetesClusters(snap.KubernetesClusters, matcher)
+	filterState.filtered.KubernetesClusters = filteredK8sClusters
+	filterState.includeResourceID(k8sClusterIDs...)
 
 	copyScopedPatrolMetadata(&filterState.filtered, snap, filterState.includedResourceIDs, filterState.includedGuestVMIDs)
 
