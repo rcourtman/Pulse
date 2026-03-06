@@ -73,7 +73,6 @@ Required values:
 - `CP_PULSE_IMAGE` (digest-pinned tenant image ref)
 - `CP_TRIAL_SIGNUP_PRICE_ID` (Stripe recurring price ID used for hosted trial checkout; use current v6 monthly in production)
 - `CP_TRIAL_ACTIVATION_PRIVATE_KEY` (base64 Ed25519 private key for final `/auth/trial-activate` token signing)
-- `CP_TRIAL_CHECKOUT_PRIVATE_KEY` (base64 Ed25519 private key for verified pre-checkout state signing; must be distinct from activation key)
 - `CP_ALLOW_DOCKERLESS_PROVISIONING=false`
 - `CP_REQUIRE_EMAIL_PROVIDER=true`
 - `RESEND_API_KEY` (required in production)
@@ -83,8 +82,8 @@ Required values:
 
 Trial-signup keying note:
 
-- `CP_TRIAL_ACTIVATION_PRIVATE_KEY` and `CP_TRIAL_CHECKOUT_PRIVATE_KEY` must both be present when hosted trial checkout is enabled.
-- Do not reuse the same key for both purposes in production. Checkout verification state and final activation tokens are separate trust boundaries.
+- `CP_TRIAL_ACTIVATION_PRIVATE_KEY` must be present when hosted trial checkout is enabled.
+- Verified pre-checkout state is stored server-side in the control-plane SQLite store; there is no separate checkout-signing key.
 
 Stripe key mode must match environment:
 
@@ -174,7 +173,6 @@ chmod 600 .env
 - `STRIPE_WEBHOOK_SECRET=whsec_...` (from Stripe test-mode webhook endpoint)
 - `CP_TRIAL_SIGNUP_PRICE_ID=price_...` (test-mode recurring price)
 - `CP_TRIAL_ACTIVATION_PRIVATE_KEY=<base64 Ed25519 private key>`
-- `CP_TRIAL_CHECKOUT_PRIVATE_KEY=<base64 Ed25519 private key>`
 
 If your operator machine has local staging Stripe secret files, you can populate `.env` safely:
 

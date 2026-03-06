@@ -276,3 +276,51 @@ func TestTrialSignupStoreStoreOrRotateActivationToken(t *testing.T) {
 		t.Fatalf("storedToken=%q, want rotated token %q", storedToken, "token-three")
 	}
 }
+
+func TestTrialSignupStoreIssueCheckoutTokenAndLookup(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		Name:                  "Owner",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             now,
+		VerificationExpiresAt: now.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, now)
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+
+	checkoutToken, err := store.IssueCheckoutToken(record.ID, now, trialSignupVerificationTTL)
+	if err != nil {
+		t.Fatalf("IssueCheckoutToken: %v", err)
+	}
+	if checkoutToken == "" {
+		t.Fatal("expected checkout token")
+	}
+
+	loaded, err := store.GetRecordByCheckoutToken(checkoutToken, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("GetRecordByCheckoutToken: %v", err)
+	}
+	if loaded.ID != record.ID {
+		t.Fatalf("loaded.ID=%q, want %q", loaded.ID, record.ID)
+	}
+	if loaded.CheckoutTokenHash == "" {
+		t.Fatal("expected checkout token hash to be stored")
+	}
+	if loaded.CheckoutTokenExpiresAt.IsZero() {
+		t.Fatal("expected checkout token expiry to be stored")
+	}
+}

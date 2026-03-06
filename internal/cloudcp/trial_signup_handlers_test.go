@@ -938,10 +938,6 @@ func newTrialSignupTestHandler(t *testing.T) (*TrialSignupHandlers, *TrialSignup
 	if err != nil {
 		t.Fatalf("GenerateKey activation: %v", err)
 	}
-	_, checkoutPriv, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatalf("GenerateKey checkout: %v", err)
-	}
 	store, err := NewTrialSignupStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewTrialSignupStore: %v", err)
@@ -952,7 +948,6 @@ func newTrialSignupTestHandler(t *testing.T) (*TrialSignupHandlers, *TrialSignup
 	h := NewTrialSignupHandlers(&CPConfig{
 		BaseURL:                   "https://cloud.example.com",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(activationPriv),
-		TrialCheckoutPrivateKey:   base64.StdEncoding.EncodeToString(checkoutPriv),
 		EmailFrom:                 "noreply@pulserelay.pro",
 	}, sender, store)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
@@ -1003,11 +998,11 @@ func verifyTrialRequest(t *testing.T, h *TrialSignupHandlers, rawToken string) s
 
 func parseVerifiedTokenRequestID(t *testing.T, h *TrialSignupHandlers, verifiedToken string) string {
 	t.Helper()
-	claims, err := h.verifyTrialSignupCheckoutToken(verifiedToken)
+	record, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
 	if err != nil {
-		t.Fatalf("verifyTrialSignupCheckoutToken: %v", err)
+		t.Fatalf("lookupVerifiedTrialSignupRecord: %v", err)
 	}
-	return claims.RequestID
+	return record.ID
 }
 
 func extractQueryValueFromTextURL(t *testing.T, text, key string) string {

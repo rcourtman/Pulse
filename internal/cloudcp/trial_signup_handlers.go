@@ -2,7 +2,6 @@ package cloudcp
 
 import (
 	"context"
-	"crypto/ed25519"
 	"errors"
 	"html/template"
 	"net/http"
@@ -26,8 +25,6 @@ const (
 	trialSignupVerificationTTL         = 20 * time.Minute
 	trialSignupActivationTokenTTL      = 10 * time.Minute
 	stripeCheckoutSessionIDPlaceholder = "{CHECKOUT_SESSION_ID}"
-	trialSignupCheckoutIssuer          = "pulse-pro-trial-checkout"
-	trialSignupCheckoutAudience        = "pulse-pro-trial-checkout"
 )
 
 var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Parse(`<!DOCTYPE html>
@@ -275,11 +272,6 @@ type trialSignupPageData struct {
 	Nonce            string
 }
 
-type trialSignupCheckoutClaims struct {
-	RequestID string `json:"request_id"`
-	jwt.RegisteredClaims
-}
-
 func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender, verificationStore *TrialSignupStore) *TrialSignupHandlers {
 	return &TrialSignupHandlers{
 		cfg:                   cfg,
@@ -428,25 +420,9 @@ func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.R
 			})
 			return
 		}
-		checkoutPrivateKey, err := h.trialCheckoutPrivateKey()
+		verifiedToken, err := h.verificationStore.IssueCheckoutToken(record.ID, h.now().UTC(), trialSignupVerificationTTL)
 		if err != nil {
-			log.Error().Err(err).Msg("trial checkout private key unavailable")
-			h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, trialSignupPageData{
-				ErrorMessage: "Trial checkout is unavailable right now. Please try again shortly.",
-				ReturnTarget: summarizeTrialReturnTarget(record.ReturnURL),
-			})
-			return
-		}
-		verifiedToken, err := h.signTrialSignupCheckoutToken(checkoutPrivateKey, trialSignupCheckoutClaims{
-			RequestID: record.ID,
-			RegisteredClaims: jwt.RegisteredClaims{
-				IssuedAt:  jwt.NewNumericDate(h.now().UTC()),
-				ExpiresAt: jwt.NewNumericDate(h.now().UTC().Add(trialSignupVerificationTTL)),
-				Subject:   record.ID,
-			},
-		})
-		if err != nil {
-			log.Error().Err(err).Str("request_id", record.ID).Msg("trial checkout token signing failed")
+			log.Error().Err(err).Str("request_id", record.ID).Msg("trial checkout token issuance failed")
 			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, trialSignupPageData{
 				ErrorMessage: "Unable to continue to trial checkout. Please try again.",
 				ReturnTarget: summarizeTrialReturnTarget(record.ReturnURL),
@@ -764,92 +740,11 @@ func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *ht
 	}
 }
 
-func (h *TrialSignupHandlers) trialActivationPrivateKey() (ed25519.PrivateKey, error) {
-	if h == nil || h.cfg == nil {
-		return nil, pkglicensing.ErrTrialActivationPrivateKeyMissing
-	}
-	return pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialActivationPrivateKey))
-}
-
-func (h *TrialSignupHandlers) trialCheckoutPrivateKey() (ed25519.PrivateKey, error) {
-	if h == nil || h.cfg == nil {
-		return nil, pkglicensing.ErrTrialActivationPrivateKeyMissing
-	}
-	return pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialCheckoutPrivateKey))
-}
-
-func (h *TrialSignupHandlers) signTrialSignupCheckoutToken(privateKey ed25519.PrivateKey, claims trialSignupCheckoutClaims) (string, error) {
-	if len(privateKey) != ed25519.PrivateKeySize {
-		return "", pkglicensing.ErrTrialActivationPrivateKeyInvalid
-	}
-	claims.RequestID = strings.TrimSpace(claims.RequestID)
-	if claims.RequestID == "" {
-		return "", jwt.ErrTokenMalformed
-	}
-	if claims.IssuedAt == nil {
-		now := h.now().UTC()
-		claims.IssuedAt = jwt.NewNumericDate(now)
-	}
-	if claims.ExpiresAt == nil {
-		claims.ExpiresAt = jwt.NewNumericDate(h.now().UTC().Add(trialSignupVerificationTTL))
-	}
-	if strings.TrimSpace(claims.Issuer) == "" {
-		claims.Issuer = trialSignupCheckoutIssuer
-	}
-	if len(claims.Audience) == 0 {
-		claims.Audience = jwt.ClaimStrings{trialSignupCheckoutAudience}
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
-	return token.SignedString(privateKey)
-}
-
-func (h *TrialSignupHandlers) verifyTrialSignupCheckoutToken(token string) (*trialSignupCheckoutClaims, error) {
-	privateKey, err := h.trialCheckoutPrivateKey()
-	if err != nil {
-		return nil, err
-	}
-	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
-	if !ok || len(publicKey) != ed25519.PublicKeySize {
-		return nil, pkglicensing.ErrTrialActivationPublicKeyInvalid
-	}
-
-	claims := &trialSignupCheckoutClaims{}
-	parsed, err := jwt.ParseWithClaims(
-		strings.TrimSpace(token),
-		claims,
-		func(t *jwt.Token) (any, error) {
-			if t.Method.Alg() != jwt.SigningMethodEdDSA.Alg() {
-				return nil, jwt.ErrTokenSignatureInvalid
-			}
-			return publicKey, nil
-		},
-		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
-		jwt.WithIssuer(trialSignupCheckoutIssuer),
-		jwt.WithAudience(trialSignupCheckoutAudience),
-		jwt.WithTimeFunc(func() time.Time { return h.now().UTC() }),
-	)
-	if err != nil {
-		return nil, err
-	}
-	if !parsed.Valid {
-		return nil, jwt.ErrTokenInvalidClaims
-	}
-	claims.RequestID = strings.TrimSpace(claims.RequestID)
-	if claims.RequestID == "" {
-		return nil, jwt.ErrTokenInvalidClaims
-	}
-	return claims, nil
-}
-
 func (h *TrialSignupHandlers) lookupVerifiedTrialSignupRecord(verifiedToken string) (*TrialSignupRecord, error) {
-	claims, err := h.verifyTrialSignupCheckoutToken(verifiedToken)
-	if err != nil {
-		return nil, err
-	}
 	if h.verificationStore == nil {
 		return nil, ErrTrialSignupRecordNotFound
 	}
-	record, err := h.verificationStore.GetRecord(claims.RequestID)
+	record, err := h.verificationStore.GetRecordByCheckoutToken(verifiedToken, h.now().UTC())
 	if err != nil {
 		return nil, err
 	}
