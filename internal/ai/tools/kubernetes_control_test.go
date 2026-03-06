@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -117,6 +118,27 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 		agentID, _, err := exec.findAgentForKubernetesCluster("My Cluster")
 		assert.NoError(t, err)
 		assert.Equal(t, "agent-1", agentID)
+	})
+
+	t.Run("FoundWithUnifiedReadStateOnly", func(t *testing.T) {
+		snapshot := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", CustomDisplayName: "My Cluster", AgentID: "agent-1", Server: "https://k8s.example", Context: "prod"},
+			},
+		}
+		adapter := unifiedresources.NewMonitorAdapter(nil)
+		adapter.PopulateFromSnapshot(snapshot)
+
+		exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: adapter})
+		agentID, cluster, err := exec.findAgentForKubernetesCluster("My Cluster")
+		assert.NoError(t, err)
+		assert.Equal(t, "agent-1", agentID)
+		require.NotNil(t, cluster)
+		assert.NotEmpty(t, cluster.ID)
+		assert.Equal(t, "cluster-1", cluster.Name)
+		assert.Equal(t, "My Cluster", cluster.DisplayName)
+		assert.Equal(t, "https://k8s.example", cluster.Server)
+		assert.Equal(t, "prod", cluster.Context)
 	})
 }
 

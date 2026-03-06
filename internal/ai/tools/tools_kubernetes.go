@@ -421,34 +421,28 @@ func (e *PulseToolExecutor) findAgentForKubernetesCluster(clusterArg string) (st
 				return "", nil, fmt.Errorf("cluster '%s' has no agent configured - kubectl commands cannot be executed", clusterArg)
 			}
 
-			// Try to return the real models.KubernetesCluster when available (richer display name fields).
-			if e.stateProvider != nil {
-				// No fast check because we dropped dependency on StateProvider.
-				// For the minimal cluster struct fallback:
-				return agentID, &models.KubernetesCluster{
-					ID:          c.ClusterID(),
-					AgentID:     agentID,
-					Name:        c.SourceName(),
-					DisplayName: c.ClusterName(),
-					Server:      c.Server(),
-					Context:     c.Context(),
-					Version:     c.Version(),
-					Status:      string(c.Status()),
-				}, nil
-			}
-
-			// Fallback: synthesize a minimal cluster struct for approval labels.
 			display := c.ClusterName()
 			if display == "" {
 				display = c.Name()
 			}
 			if display == "" {
+				display = c.SourceName()
+			}
+			if display == "" {
 				display = c.ID()
 			}
+			name := c.SourceName()
+			if name == "" {
+				name = c.Name()
+			}
+			clusterID := c.ClusterID()
+			if clusterID == "" {
+				clusterID = c.ID()
+			}
 			return agentID, &models.KubernetesCluster{
-				ID:          c.ID(),
+				ID:          clusterID,
 				AgentID:     agentID,
-				Name:        c.ClusterName(),
+				Name:        name,
 				DisplayName: display,
 				Server:      c.Server(),
 				Context:     c.Context(),
