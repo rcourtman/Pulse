@@ -256,7 +256,7 @@ func TestPatrolService_filterStateByScope_DockerContainer(t *testing.T) {
 		ResourceTypes: []string{"app-container"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.DockerHosts) != 1 {
 		t.Fatalf("expected 1 docker host, got %d", len(filtered.DockerHosts))
@@ -281,7 +281,7 @@ func TestPatrolService_filterStateByScope_KubernetesClusterType(t *testing.T) {
 		ResourceTypes: []string{"k8s-cluster"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.KubernetesClusters) != 1 {
 		t.Fatalf("expected 1 kubernetes cluster, got %d", len(filtered.KubernetesClusters))
@@ -309,7 +309,7 @@ func TestPatrolService_filterStateByScope_PBSDatastoreIDWithCanonicalPBSType(t *
 		ResourceTypes: []string{"pbs"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.PBSInstances) != 1 {
 		t.Fatalf("expected 1 PBS instance, got %d", len(filtered.PBSInstances))

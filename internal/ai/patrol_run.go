@@ -1238,13 +1238,6 @@ func copyScopedPatrolMetadata(dst *patrolRuntimeState, snap patrolRuntimeState, 
 	}
 }
 
-// filterStateByScope filters a StateSnapshot to only include resources matching the scope.
-func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
-	filtered := p.filterStateByScopeState(p.patrolRuntimeStateForSnapshot(snap), scope).snapshot()
-	filtered.LastUpdate = snap.LastUpdate
-	return filtered
-}
-
 func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
 	matcher := newPatrolScopeMatcher(scope)
 	filterState := newPatrolScopedFilterState(snap)

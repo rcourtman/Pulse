@@ -21,7 +21,7 @@ func TestFilterStateByScope_NoScope(t *testing.T) {
 	}
 	scope := PatrolScope{} // no resource IDs or types
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.Nodes) != 1 {
 		t.Errorf("expected 1 node with no scope filter, got %d", len(filtered.Nodes))
@@ -44,7 +44,7 @@ func TestFilterStateByScope_ByResourceID(t *testing.T) {
 		ResourceTypes: []string{"node"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.Nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(filtered.Nodes))
@@ -67,7 +67,7 @@ func TestFilterStateByScope_ByResourceName(t *testing.T) {
 		ResourceTypes: []string{"node"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.Nodes) != 1 {
 		t.Fatalf("expected 1 node matched by name, got %d", len(filtered.Nodes))
@@ -87,7 +87,7 @@ func TestFilterStateByScope_ByType_VM(t *testing.T) {
 		ResourceTypes: []string{"vm"},
 	}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
 	if len(filtered.Nodes) != 0 {
 		t.Errorf("expected 0 nodes when scoped to VM type, got %d", len(filtered.Nodes))
@@ -122,84 +122,84 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 
 	// Legacy alias should not match canonical VM resources.
 	scope := PatrolScope{ResourceTypes: []string{"qemu"}}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.VMs) != 0 {
 		t.Errorf("expected legacy 'qemu' alias to be rejected, got %d VMs", len(filtered.VMs))
 	}
 
 	// Legacy alias should not match canonical system-container resources.
 	scope = PatrolScope{ResourceTypes: []string{"container"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Containers) != 0 {
 		t.Errorf("expected legacy 'container' alias to be rejected, got %d containers", len(filtered.Containers))
 	}
 
 	// Removed host alias should not match canonical agent resources.
 	scope = PatrolScope{ResourceTypes: []string{"host"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Hosts) != 0 {
 		t.Errorf("expected legacy 'host' alias to be rejected, got %d hosts", len(filtered.Hosts))
 	}
 
 	// Canonical v6 type should match containers.
 	scope = PatrolScope{ResourceTypes: []string{"system-container"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Containers) != 1 {
 		t.Errorf("expected 'system-container' to match LXC containers, got %d", len(filtered.Containers))
 	}
 
 	// Underscore alias should be rejected; hyphenated canonical type is required.
 	scope = PatrolScope{ResourceTypes: []string{"system_container"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Containers) != 0 {
 		t.Errorf("expected legacy 'system_container' alias to be rejected, got %d containers", len(filtered.Containers))
 	}
 
 	// Additional removed aliases should also be rejected.
 	scope = PatrolScope{ResourceTypes: []string{"docker_container"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.DockerHosts) != 0 {
 		t.Errorf("expected legacy 'docker_container' alias to be rejected, got %d docker hosts", len(filtered.DockerHosts))
 	}
 
 	scope = PatrolScope{ResourceTypes: []string{"kubernetes_cluster"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.KubernetesClusters) != 0 {
 		t.Errorf("expected legacy 'kubernetes_cluster' alias to be rejected, got %d kubernetes clusters", len(filtered.KubernetesClusters))
 	}
 
 	scope = PatrolScope{ResourceTypes: []string{"docker"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.DockerHosts) != 0 {
 		t.Errorf("expected non-canonical 'docker' alias to be rejected, got %d docker hosts", len(filtered.DockerHosts))
 	}
 
 	scope = PatrolScope{ResourceTypes: []string{"kubernetes"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.KubernetesClusters) != 0 {
 		t.Errorf("expected non-canonical 'kubernetes' alias to be rejected, got %d kubernetes clusters", len(filtered.KubernetesClusters))
 	}
 
 	scope = PatrolScope{ResourceTypes: []string{"pbs_datastore"}, ResourceIDs: []string{"pbs1:ds1"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.PBSInstances) != 0 {
 		t.Errorf("expected non-canonical 'pbs_datastore' alias to be rejected, got %d pbs instances", len(filtered.PBSInstances))
 	}
 
 	scope = PatrolScope{ResourceTypes: []string{"agent_raid"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Hosts) != 0 {
 		t.Errorf("expected non-canonical 'agent_raid' alias to be rejected, got %d hosts", len(filtered.Hosts))
 	}
 
 	scope = PatrolScope{ResourceTypes: []string{"pmg"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.PMGInstances) != 1 {
 		t.Errorf("expected canonical 'pmg' to match PMG instances, got %d", len(filtered.PMGInstances))
 	}
 
 	scope = PatrolScope{ResourceTypes: []string{"physical_disk"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.PhysicalDisks) != 1 {
 		t.Errorf("expected canonical 'physical_disk' to match physical disks, got %d", len(filtered.PhysicalDisks))
 	}
@@ -221,14 +221,14 @@ func TestFilterStateByScope_AppContainerAlias(t *testing.T) {
 
 	// Canonical semantic name should match Docker resources.
 	scope := PatrolScope{ResourceTypes: []string{"app-container"}}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.DockerHosts) != 1 {
 		t.Errorf("expected 'app-container' to match Docker hosts, got %d", len(filtered.DockerHosts))
 	}
 
 	// Underscore alias should be rejected.
 	scope = PatrolScope{ResourceTypes: []string{"app_container"}}
-	filtered = ps.filterStateByScope(state, scope)
+	filtered = ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.DockerHosts) != 0 {
 		t.Errorf("expected legacy 'app_container' alias to be rejected, got %d docker hosts", len(filtered.DockerHosts))
 	}
@@ -254,7 +254,7 @@ func TestFilterStateByScope_DockerHost(t *testing.T) {
 		ResourceIDs:   []string{"dh1"},
 		ResourceTypes: []string{"docker-host"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.DockerHosts) != 1 {
 		t.Fatalf("expected 1 docker host, got %d", len(filtered.DockerHosts))
 	}
@@ -284,7 +284,7 @@ func TestFilterStateByScope_DockerContainerOnly(t *testing.T) {
 		ResourceIDs:   []string{"c1"},
 		ResourceTypes: []string{"app-container"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.DockerHosts) != 1 {
 		t.Fatalf("expected 1 docker host, got %d", len(filtered.DockerHosts))
 	}
@@ -309,7 +309,7 @@ func TestFilterStateByScope_Storage(t *testing.T) {
 		ResourceIDs:   []string{"s1"},
 		ResourceTypes: []string{"storage"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Storage) != 1 {
 		t.Fatalf("expected 1 storage, got %d", len(filtered.Storage))
 	}
@@ -331,7 +331,7 @@ func TestFilterStateByScope_Hosts(t *testing.T) {
 		ResourceIDs:   []string{"h1"},
 		ResourceTypes: []string{"agent"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Hosts) != 1 {
 		t.Fatalf("expected 1 host, got %d", len(filtered.Hosts))
 	}
@@ -362,7 +362,7 @@ func TestFilterStateByScope_PBS(t *testing.T) {
 		ResourceIDs:   []string{"pbs1"},
 		ResourceTypes: []string{"pbs"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.PBSInstances) != 1 {
 		t.Fatalf("expected 1 PBS instance, got %d", len(filtered.PBSInstances))
 	}
@@ -384,7 +384,7 @@ func TestFilterStateByScope_Kubernetes(t *testing.T) {
 		ResourceIDs:   []string{"k1"},
 		ResourceTypes: []string{"k8s-cluster"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.KubernetesClusters) != 1 {
 		t.Fatalf("expected 1 k8s cluster, got %d", len(filtered.KubernetesClusters))
 	}
@@ -437,11 +437,8 @@ func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 	}
 	scope := PatrolScope{ResourceTypes: []string{"node", "vm"}}
 
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 
-	if filtered.LastUpdate != now {
-		t.Error("expected LastUpdate to be preserved")
-	}
 	if len(filtered.ConnectionHealth) != 1 {
 		t.Fatalf("expected only scoped ConnectionHealth entries, got %d", len(filtered.ConnectionHealth))
 	}
@@ -726,7 +723,7 @@ func TestFilterStateByScope_WhitespaceInIDs(t *testing.T) {
 		ResourceIDs:   []string{"  n1  "},
 		ResourceTypes: []string{"node"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Nodes) != 1 {
 		t.Errorf("expected whitespace-trimmed ID to match, got %d nodes", len(filtered.Nodes))
 	}
@@ -742,7 +739,7 @@ func TestFilterStateByScope_EmptyIDsIgnored(t *testing.T) {
 		ResourceIDs:   []string{"", "  ", "n1"},
 		ResourceTypes: []string{"node"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Nodes) != 1 {
 		t.Errorf("expected empty IDs to be ignored, got %d nodes", len(filtered.Nodes))
 	}
@@ -757,7 +754,7 @@ func TestFilterStateByScope_CaseInsensitiveTypes(t *testing.T) {
 	scope := PatrolScope{
 		ResourceTypes: []string{"NODE"},
 	}
-	filtered := ps.filterStateByScope(state, scope)
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), scope)
 	if len(filtered.Nodes) != 1 {
 		t.Errorf("expected case-insensitive type matching, got %d nodes", len(filtered.Nodes))
 	}

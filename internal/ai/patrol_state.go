@@ -83,26 +83,6 @@ func newPatrolRuntimeStateWithProviders(
 	}
 }
 
-func (s patrolRuntimeState) snapshot() models.StateSnapshot {
-	return models.StateSnapshot{
-		Nodes:              s.Nodes,
-		VMs:                s.VMs,
-		Containers:         s.Containers,
-		PhysicalDisks:      s.PhysicalDisks,
-		DockerHosts:        s.DockerHosts,
-		KubernetesClusters: s.KubernetesClusters,
-		Hosts:              s.Hosts,
-		Storage:            s.Storage,
-		PBSInstances:       s.PBSInstances,
-		PMGInstances:       s.PMGInstances,
-		PBSBackups:         s.PBSBackups,
-		PVEBackups:         s.PVEBackups,
-		ConnectionHealth:   s.ConnectionHealth,
-		ActiveAlerts:       s.ActiveAlerts,
-		RecentlyResolved:   s.RecentlyResolved,
-	}
-}
-
 func (s patrolRuntimeState) resourceSnapshot() models.StateSnapshot {
 	return models.StateSnapshot{
 		Nodes:              s.Nodes,
