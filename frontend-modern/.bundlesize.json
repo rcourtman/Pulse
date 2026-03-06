@@ -1,73 +1,73 @@
 {
   "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
   "version": 1,
-  "generated": "2026-03-02",
+  "generated": "2026-03-06",
   "defaultThresholdPercent": 15,
   "chunks": {
     "settings-admin": {
-      "baselineGzip": 92582
+      "baselineGzip": 92387
     },
     "Alerts": {
-      "baselineGzip": 73539
+      "baselineGzip": 73984
     },
     "ai-ui": {
-      "baselineGzip": 64189
-    },
-    "settings-heavy": {
-      "baselineGzip": 53886
+      "baselineGzip": 63973
     },
     "Dashboard": {
-      "baselineGzip": 51512
+      "baselineGzip": 51325
+    },
+    "settings-heavy": {
+      "baselineGzip": 50337
     },
     "Infrastructure": {
-      "baselineGzip": 41568
+      "baselineGzip": 41478
     },
     "settings-shell": {
-      "baselineGzip": 28192
+      "baselineGzip": 30123
     },
     "Storage": {
-      "baselineGzip": 27477
+      "baselineGzip": 27371
     },
     "vendor-ai": {
       "baselineGzip": 20729
     },
     "settings-auth": {
-      "baselineGzip": 20630
+      "baselineGzip": 20575
     },
     "ScrollToTopButton": {
-      "baselineGzip": 19829
+      "baselineGzip": 19452
     },
     "RecoveryRoute": {
-      "baselineGzip": 18281
+      "baselineGzip": 17726
     },
     "vendor-solid": {
       "baselineGzip": 17262
     },
     "index": {
-      "baselineGzip": 13923
+      "baselineGzip": 13862
     },
     "AIIntelligence": {
-      "baselineGzip": 10271
-    },
-    "settings-core": {
-      "baselineGzip": 10203
+      "baselineGzip": 10269
     },
     "vendor-icons": {
       "baselineGzip": 8457
     },
+    "settings-core": {
+      "baselineGzip": 7641
+    },
     "Ceph": {
-      "baselineGzip": 7210
+      "baselineGzip": 7207
     },
     "InteractiveSparkline": {
-      "baselineGzip": 6765
+      "baselineGzip": 6766
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 616545
+      "baselineGzip": 608957
     },
     "css": {
-      "baselineGzip": 21929
+      "baselineGzip": 21936
     }
   }
 }
