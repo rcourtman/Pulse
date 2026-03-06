@@ -11,16 +11,16 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
   <div class="rounded-xl border border-border bg-surface p-5 shadow-sm">
     <div class="space-y-4">
       <div class="space-y-1">
-        <h3 class="text-base font-semibold text-base-content">Docker Runtime Controls</h3>
+        <h3 class="text-base font-semibold text-base-content">Container Updates</h3>
         <p class="text-sm text-muted">
-          Manage Docker-wide behavior for this Pulse instance.
+          Control how container update actions appear across Pulse.
         </p>
       </div>
 
       <div class="flex items-start justify-between gap-4 rounded-md border border-border bg-surface-hover p-4">
         <div class="flex-1 space-y-1">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-base-content">Hide Docker Update Buttons</span>
+            <span class="text-sm font-medium text-base-content">Hide update buttons</span>
             <Show when={props.disableDockerUpdateActionsLocked()}>
               <span
                 class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
@@ -44,9 +44,8 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
             </Show>
           </div>
           <p class="text-xs text-muted">
-            When enabled, the "Update" button on Docker containers will be hidden across all
-            views. Update detection still runs, so Pulse can continue showing which containers have
-            updates available.
+            When enabled, container "Update" actions are hidden across Pulse. Update detection
+            still runs, so available updates remain visible.
           </p>
           <p class="text-xs text-muted mt-1">
             Can also be set via environment variable:{' '}

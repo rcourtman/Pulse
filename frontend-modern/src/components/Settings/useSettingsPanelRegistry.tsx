@@ -155,6 +155,10 @@ export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams)
           telemetryEnabledLocked={params.telemetryEnabledLocked}
           savingTelemetry={params.savingTelemetry}
           handleTelemetryEnabledChange={params.handleTelemetryEnabledChange}
+          disableDockerUpdateActions={params.disableDockerUpdateActions}
+          disableDockerUpdateActionsLocked={params.disableDockerUpdateActionsLocked}
+          savingDockerUpdateActions={params.savingDockerUpdateActions}
+          handleDisableDockerUpdateActionsChange={params.handleDisableDockerUpdateActionsChange}
         />
       </Show>
     </>

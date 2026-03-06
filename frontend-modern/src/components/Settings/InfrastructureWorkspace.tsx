@@ -5,7 +5,6 @@ import Boxes from 'lucide-solid/icons/boxes';
 import Waypoints from 'lucide-solid/icons/waypoints';
 import { Card } from '@/components/shared/Card';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import { ProxmoxSettingsPanel, type ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
 import { UnifiedAgents } from './UnifiedAgents';
 
@@ -34,12 +33,7 @@ const VIEW_META: Record<
 const inferViewFromPath = (pathname: string): InfrastructureWorkspaceView =>
   pathname.startsWith('/settings/infrastructure/proxmox') ? 'direct' : 'install';
 
-export interface InfrastructureWorkspaceProps extends ProxmoxSettingsPanelProps {
-  disableDockerUpdateActions: () => boolean;
-  disableDockerUpdateActionsLocked: () => boolean;
-  savingDockerUpdateActions: () => boolean;
-  handleDisableDockerUpdateActionsChange: (disabled: boolean) => Promise<void>;
-}
+export type InfrastructureWorkspaceProps = ProxmoxSettingsPanelProps;
 
 export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
@@ -195,13 +189,6 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
                     </div>
                   </div>
                 </Card>
-
-                <DockerRuntimeSettingsCard
-                  disableDockerUpdateActions={props.disableDockerUpdateActions}
-                  disableDockerUpdateActionsLocked={props.disableDockerUpdateActionsLocked}
-                  savingDockerUpdateActions={props.savingDockerUpdateActions}
-                  handleDisableDockerUpdateActionsChange={props.handleDisableDockerUpdateActionsChange}
-                />
               </div>
 
               <AgentProfilesPanel />

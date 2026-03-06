@@ -1,6 +1,7 @@
 import { Component, Show, For, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
+import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import Activity from 'lucide-solid/icons/activity';
 import Sun from 'lucide-solid/icons/sun';
@@ -43,6 +44,11 @@ interface GeneralSettingsPanelProps {
   telemetryEnabledLocked: () => boolean;
   savingTelemetry: Accessor<boolean>;
   handleTelemetryEnabledChange: (enabled: boolean) => Promise<void>;
+
+  disableDockerUpdateActions: Accessor<boolean>;
+  disableDockerUpdateActionsLocked: () => boolean;
+  savingDockerUpdateActions: Accessor<boolean>;
+  handleDisableDockerUpdateActionsChange: (disabled: boolean) => Promise<void>;
 }
 
 export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props) => {
@@ -256,6 +262,13 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
       </SettingsPanel>
+
+      <DockerRuntimeSettingsCard
+        disableDockerUpdateActions={props.disableDockerUpdateActions}
+        disableDockerUpdateActionsLocked={props.disableDockerUpdateActionsLocked}
+        savingDockerUpdateActions={props.savingDockerUpdateActions}
+        handleDisableDockerUpdateActionsChange={props.handleDisableDockerUpdateActionsChange}
+      />
 
       {/* Monitoring Cadence Card */}
       <SettingsPanel
