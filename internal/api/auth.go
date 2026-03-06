@@ -889,6 +889,13 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 		if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 			if ValidateSession(cookie.Value) {
 				if username := GetSessionUsername(cookie.Value); username != "" {
+					// Trigger token refresh if access token is near expiry
+					session := GetSessionStore().GetSession(cookie.Value)
+					if session != nil && session.OIDCRefreshToken != "" {
+						if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
+							go refreshOIDCSessionTokens(cfg, cookie.Value, session)
+						}
+					}
 					return attachUserContext(r, username)
 				}
 			}

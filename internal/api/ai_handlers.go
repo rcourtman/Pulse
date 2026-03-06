@@ -160,6 +160,9 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	}
 
 	// Create new service for this tenant
+	if h.mtPersistence == nil {
+		return h.ensureLegacyAIService()
+	}
 	persistence, err := h.mtPersistence.GetPersistence(orgID)
 	if err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to get persistence for AI service")
