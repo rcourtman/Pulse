@@ -1693,6 +1693,9 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		data = decrypted
 	}
 
+	var legacyRaw map[string]json.RawMessage
+	_ = json.Unmarshal(data, &legacyRaw)
+
 	// Start with defaults so new fields get proper values
 	settings := NewDefaultAIConfig()
 	if err := json.Unmarshal(data, settings); err != nil {
@@ -1710,6 +1713,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		}
 	}
 
+	migratedLegacyFields := applyLegacyAIConfigFields(settings, legacyRaw)
 	migratedControlLevel := false
 	if settings.ControlLevel == "suggest" {
 		settings.ControlLevel = ControlLevelControlled
@@ -1718,16 +1722,110 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 
 	c.mu.RUnlock()
 
-	if migratedControlLevel {
+	if migratedLegacyFields || migratedControlLevel {
 		if err := c.SaveAIConfig(*settings); err != nil {
-			log.Warn().Err(err).Msg("Failed to save migrated AI control level")
+			log.Warn().Err(err).Msg("Failed to save migrated AI configuration")
 		} else {
-			log.Info().Str("control_level", settings.ControlLevel).Msg("Migrated AI control level")
+			log.Info().
+				Str("control_level", settings.ControlLevel).
+				Bool("legacy_fields_migrated", migratedLegacyFields).
+				Msg("Migrated AI configuration")
 		}
 	}
 
 	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Bool("patrol_enabled", settings.PatrolEnabled).Bool("alert_triggered_analysis", settings.AlertTriggeredAnalysis).Msg("AI configuration loaded")
 	return settings, nil
+}
+
+func applyLegacyAIConfigFields(settings *AIConfig, raw map[string]json.RawMessage) bool {
+	if settings == nil || len(raw) == 0 {
+		return false
+	}
+
+	legacyProvider := decodeOptionalJSONString(raw["provider"])
+	legacyAPIKey := decodeOptionalJSONString(raw["api_key"])
+	legacyBaseURL := decodeOptionalJSONString(raw["base_url"])
+	legacyAutonomousMode, hasLegacyAutonomous := decodeOptionalJSONBool(raw["autonomous_mode"])
+
+	migrated := false
+
+	if settings.Model == "" && legacyProvider != "" {
+		if defaultModel := DefaultModelForProvider(legacyProvider); defaultModel != "" {
+			settings.Model = defaultModel
+			migrated = true
+		}
+	}
+
+	if legacyAPIKey != "" {
+		switch {
+		case settings.AnthropicAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderAnthropic):
+			settings.AnthropicAPIKey = legacyAPIKey
+			migrated = true
+		case settings.OpenAIAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOpenAI):
+			settings.OpenAIAPIKey = legacyAPIKey
+			migrated = true
+		case settings.OpenRouterAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOpenRouter):
+			settings.OpenRouterAPIKey = legacyAPIKey
+			migrated = true
+		case settings.DeepSeekAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderDeepSeek):
+			settings.DeepSeekAPIKey = legacyAPIKey
+			migrated = true
+		case settings.GeminiAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderGemini):
+			settings.GeminiAPIKey = legacyAPIKey
+			migrated = true
+		}
+	}
+
+	if legacyBaseURL != "" {
+		switch {
+		case settings.OpenAIBaseURL == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOpenAI):
+			settings.OpenAIBaseURL = legacyBaseURL
+			migrated = true
+		case settings.OllamaBaseURL == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderOllama):
+			settings.OllamaBaseURL = legacyBaseURL
+			migrated = true
+		}
+	}
+
+	if hasLegacyAutonomous && legacyAutonomousMode && settings.ControlLevel == "" {
+		settings.ControlLevel = ControlLevelAutonomous
+		migrated = true
+	}
+
+	return migrated
+}
+
+func shouldUseLegacyProviderCredential(settings *AIConfig, legacyProvider, targetProvider string) bool {
+	if settings == nil {
+		return false
+	}
+	if strings.TrimSpace(legacyProvider) != "" {
+		return strings.EqualFold(strings.TrimSpace(legacyProvider), targetProvider)
+	}
+	modelProvider, _ := ParseModelString(settings.Model)
+	return modelProvider == targetProvider
+}
+
+func decodeOptionalJSONString(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func decodeOptionalJSONBool(raw json.RawMessage) (bool, bool) {
+	if len(raw) == 0 {
+		return false, false
+	}
+	var value bool
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return false, false
+	}
+	return value, true
 }
 
 // AIFindingsData represents persisted AI findings with metadata

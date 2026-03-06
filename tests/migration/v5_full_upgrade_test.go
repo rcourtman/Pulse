@@ -1,10 +1,12 @@
 // Package migration contains integration tests verifying v5→v6 migration safety.
 // This file implements the full upgrade scenario test required for L11 score 8:
 // v5 fixture with realistic data → v6 binary startup → API health check →
-// verify all resources accessible via API → verify no data loss.
+// verify all resources accessible via API → verify license state preserved →
+// verify no data loss.
 package migration
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -24,6 +26,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	internalws "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -223,7 +226,8 @@ func newMigrationTestServer(t *testing.T, dataDir string) *httptest.Server {
 
 // TestV5FullUpgradeScenario is the comprehensive L11 score 8 test.
 // It builds a realistic v5 data directory, starts a full v6 API server against it,
-// and verifies that all data is accessible via the API with no loss.
+// and verifies that all data is accessible via the API, preserves migrated
+// license state, and incurs no data loss.
 func TestV5FullUpgradeScenario(t *testing.T) {
 	dataDir := buildRealisticV5DataDir(t)
 	srv := newMigrationTestServer(t, dataDir)
@@ -259,7 +263,7 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 		assert.NotEmpty(t, version)
 	})
 
-	// --- 3. State: v6 mock mode provides resources ---
+	// --- 3. State: v6 mock mode responds with the canonical unified state shape ---
 	t.Run("StateEndpoint", func(t *testing.T) {
 		res, err := http.Get(srv.URL + "/api/state")
 		require.NoError(t, err)
@@ -272,10 +276,13 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 		var state map[string]interface{}
 		require.NoError(t, json.Unmarshal(body, &state))
 
-		// State should have a nodes array (mock mode generates nodes)
-		nodes, ok := state["nodes"].([]interface{})
-		require.True(t, ok, "state must contain nodes array")
-		assert.Greater(t, len(nodes), 0, "mock mode should provide nodes")
+		// v6 contract: legacy per-type arrays are intentionally stripped from
+		// /api/state in favor of the unified state frontend payload.
+		for _, key := range []string{"nodes", "vms", "containers", "dockerHosts", "hosts", "storage"} {
+			if _, ok := state[key]; ok {
+				t.Fatalf("expected %q to be omitted from /api/state payload", key)
+			}
+		}
 
 		// lastUpdate should be present (non-zero)
 		lastUpdate, ok := state["lastUpdate"].(float64)
@@ -317,13 +324,12 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.True(t, aiCfg.Enabled)
-		assert.Equal(t, "anthropic", aiCfg.Provider)
-		assert.Equal(t, "sk-ant-v5-test-key-placeholder", aiCfg.APIKey)
 		assert.Equal(t, "anthropic:claude-3-5-sonnet-20241022", aiCfg.Model)
+		assert.Equal(t, "sk-ant-v5-test-key-placeholder", aiCfg.AnthropicAPIKey)
 		assert.True(t, aiCfg.PatrolEnabled)
 		assert.True(t, aiCfg.PatrolAnalyzeNodes)
 		assert.True(t, aiCfg.PatrolAnalyzeGuests)
-		assert.False(t, aiCfg.AutonomousMode)
+		assert.Equal(t, config.ControlLevelReadOnly, aiCfg.GetControlLevel())
 		assert.Equal(t, "3-node Proxmox cluster running production workloads", aiCfg.CustomContext)
 	})
 
@@ -426,6 +432,115 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 		assert.Equal(t, http.StatusOK, res.StatusCode,
 			"server must start and report healthy without license.enc")
 	})
+
+	t.Run("PersistedV5LicenseAutoExchanges", func(t *testing.T) {
+		t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+		legacyLicense, err := pkglicensing.GenerateLicenseForTesting(
+			"legacy-lifetime@example.com",
+			pkglicensing.TierLifetime,
+			365*24*time.Hour,
+		)
+		require.NoError(t, err)
+
+		persistence, err := pkglicensing.NewPersistence(dataDir)
+		require.NoError(t, err)
+		require.NoError(t, persistence.Save(legacyLicense))
+
+		grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+			LicenseID: "lic_v5_migrated",
+			Tier:      string(pkglicensing.TierLifetime),
+			PlanKey:   "v5_lifetime_grandfathered",
+			State:     "active",
+			Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
+			MaxAgents: pkglicensing.TierAgentLimits[pkglicensing.TierLifetime],
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+			Email:     "legacy-lifetime@example.com",
+		})
+		require.NoError(t, err)
+		pkglicensing.SetPublicKey(grantPublicKey)
+		t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+		exchangeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "/v1/licenses/exchange", r.URL.Path)
+
+			var req pkglicensing.ExchangeLegacyLicenseRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			assert.Equal(t, legacyLicense, req.LegacyLicenseKey)
+
+			w.WriteHeader(http.StatusCreated)
+			require.NoError(t, json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+				License: pkglicensing.ActivateResponseLicense{
+					LicenseID: "lic_v5_migrated",
+					State:     "active",
+					Tier:      string(pkglicensing.TierLifetime),
+					Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
+					MaxAgents: pkglicensing.TierAgentLimits[pkglicensing.TierLifetime],
+				},
+				Installation: pkglicensing.ActivateResponseInstallation{
+					InstallationID:    "inst_v5_migrated",
+					InstallationToken: "pit_live_v5_migrated",
+					Status:            "active",
+				},
+				Grant: pkglicensing.GrantEnvelope{
+					JWT:       grantJWT,
+					JTI:       "grant_v5_migrated",
+					ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+			}))
+		}))
+		defer exchangeServer.Close()
+		t.Setenv("PULSE_LICENSE_SERVER_URL", exchangeServer.URL)
+
+		mtp := config.NewMultiTenantPersistence(dataDir)
+		handlers := api.NewLicenseHandlers(mtp, false)
+		ctx := context.WithValue(context.Background(), api.OrgIDContextKey, "default")
+
+		svc := handlers.Service(ctx)
+		require.NotNil(t, svc)
+		require.True(t, svc.IsActivated(), "persisted v5 license must auto-exchange on v6 startup")
+
+		current := svc.Current()
+		require.NotNil(t, current)
+		assert.Equal(t, "lic_v5_migrated", current.Claims.LicenseID)
+		assert.Equal(t, pkglicensing.TierLifetime, current.Claims.Tier)
+		assert.Equal(t, "v5_lifetime_grandfathered", current.Claims.PlanVersion)
+
+		activationState, err := persistence.LoadActivationState()
+		require.NoError(t, err)
+		require.NotNil(t, activationState, "activation state must be persisted after exchange")
+		assert.Equal(t, "lic_v5_migrated", activationState.LicenseID)
+
+		legacyLeft, err := persistence.Load()
+		if err == nil {
+			assert.Empty(t, legacyLeft, "legacy v5 license persistence must be removed after exchange")
+		}
+
+		statusReq := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
+		statusRec := httptest.NewRecorder()
+		handlers.HandleLicenseStatus(statusRec, statusReq)
+		require.Equal(t, http.StatusOK, statusRec.Code)
+
+		var status pkglicensing.LicenseStatus
+		require.NoError(t, json.Unmarshal(statusRec.Body.Bytes(), &status))
+		assert.True(t, status.Valid)
+		assert.True(t, status.IsLifetime)
+		assert.Equal(t, "v5_lifetime_grandfathered", status.PlanVersion)
+
+		entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+		entRec := httptest.NewRecorder()
+		handlers.HandleEntitlements(entRec, entReq)
+		require.Equal(t, http.StatusOK, entRec.Code)
+
+		var entitlements api.EntitlementPayload
+		require.NoError(t, json.Unmarshal(entRec.Body.Bytes(), &entitlements))
+		assert.Equal(t, "v5_lifetime_grandfathered", entitlements.PlanVersion)
+		assert.True(t, entitlements.IsLifetime)
+		assert.Equal(t, "active", entitlements.SubscriptionState)
+
+		handlers.StopAllBackgroundLoops()
+	})
 }
 
 // TestV5DowngradeSafety verifies what happens when a v5-compatible config
@@ -502,9 +617,8 @@ func TestV5DowngradeSafety(t *testing.T) {
 
 		// Original v5 fields must survive the v6 re-encryption
 		assert.True(t, aiCfg2.Enabled)
-		assert.Equal(t, "anthropic", aiCfg2.Provider)
-		assert.Equal(t, "sk-ant-v5-test-key-placeholder", aiCfg2.APIKey)
 		assert.Equal(t, "anthropic:claude-3-5-sonnet-20241022", aiCfg2.Model)
+		assert.Equal(t, "sk-ant-v5-test-key-placeholder", aiCfg2.AnthropicAPIKey)
 		assert.True(t, aiCfg2.PatrolEnabled)
 
 		// v6-added field must also be present (proves the save roundtripped)

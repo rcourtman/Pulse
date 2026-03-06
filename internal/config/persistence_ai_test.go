@@ -141,6 +141,49 @@ func TestPersistence_AIConfig_MigratesSuggestControlLevel(t *testing.T) {
 	assert.Equal(t, ControlLevelControlled, saved.ControlLevel)
 }
 
+func TestPersistence_AIConfig_MigratesLegacyProviderAndAPIKey(t *testing.T) {
+	tempDir := t.TempDir()
+	p := NewConfigPersistence(tempDir)
+
+	legacy := map[string]interface{}{
+		"enabled":              true,
+		"provider":             "anthropic",
+		"api_key":              "sk-ant-legacy",
+		"model":                "anthropic:claude-3-5-sonnet-20241022",
+		"autonomous_mode":      true,
+		"custom_context":       "legacy config",
+		"patrol_enabled":       true,
+		"patrol_analyze_nodes": true,
+	}
+
+	data, err := json.Marshal(legacy)
+	require.NoError(t, err)
+	if p.crypto != nil {
+		data, err = p.crypto.Encrypt(data)
+		require.NoError(t, err)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai.enc"), data, 0o600))
+
+	loaded, err := p.LoadAIConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "anthropic:claude-3-5-sonnet-20241022", loaded.Model)
+	assert.Equal(t, "sk-ant-legacy", loaded.AnthropicAPIKey)
+	assert.Equal(t, ControlLevelAutonomous, loaded.ControlLevel)
+	assert.Equal(t, "legacy config", loaded.CustomContext)
+
+	savedRaw, err := os.ReadFile(filepath.Join(tempDir, "ai.enc"))
+	require.NoError(t, err)
+	if p.crypto != nil {
+		savedRaw, err = p.crypto.Decrypt(savedRaw)
+		require.NoError(t, err)
+	}
+
+	var saved AIConfig
+	require.NoError(t, json.Unmarshal(savedRaw, &saved))
+	assert.Equal(t, "sk-ant-legacy", saved.AnthropicAPIKey)
+	assert.Equal(t, ControlLevelAutonomous, saved.ControlLevel)
+}
+
 func TestPersistence_PatrolRunHistory(t *testing.T) {
 	tempDir := t.TempDir()
 	p := NewConfigPersistence(tempDir)

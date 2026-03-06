@@ -187,9 +187,8 @@ func TestV5DataDir_V6ConfigPersistenceLoadsAll(t *testing.T) {
 	require.NoError(t, err, "LoadAIConfig must succeed against v5 data")
 	require.NotNil(t, aiCfg)
 	assert.True(t, aiCfg.Enabled)
-	assert.Equal(t, "anthropic", aiCfg.Provider)
-	assert.Equal(t, "sk-ant-v5-test-key-placeholder", aiCfg.APIKey)
 	assert.Equal(t, "anthropic:claude-3-5-sonnet-20241022", aiCfg.Model)
+	assert.Equal(t, "sk-ant-v5-test-key-placeholder", aiCfg.AnthropicAPIKey)
 	assert.True(t, aiCfg.PatrolEnabled)
 	assert.True(t, aiCfg.PatrolAnalyzeNodes)
 
