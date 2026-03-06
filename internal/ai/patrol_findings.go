@@ -1545,6 +1545,22 @@ func verifyBackupFreshState(snap patrolRuntimeState, guestID string) (bool, erro
 
 	now := time.Now()
 	var last time.Time
+	if rs := snap.readState; rs != nil {
+		for _, vm := range rs.VMs() {
+			if fmt.Sprintf("%d", vm.VMID()) == vmID || vm.ID() == vmID || vm.Name() == vmID {
+				last = vm.LastBackup()
+				break
+			}
+		}
+		if last.IsZero() {
+			for _, ct := range rs.Containers() {
+				if fmt.Sprintf("%d", ct.VMID()) == vmID || ct.ID() == vmID || ct.Name() == vmID {
+					last = ct.LastBackup()
+					break
+				}
+			}
+		}
+	}
 	for _, vm := range snap.VMs {
 		if fmt.Sprintf("%d", vm.VMID) == vmID || vm.ID == vmID || vm.Name == vmID {
 			last = vm.LastBackup
@@ -1582,6 +1598,54 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 
 	// Use a small margin to avoid flapping around exact thresholds.
 	const margin = 0.95
+
+	if rs := snap.readState; rs != nil {
+		for _, n := range rs.Nodes() {
+			if n.ID() != rid && n.Name() != rid {
+				continue
+			}
+			switch key {
+			case "cpu-high":
+				return n.CPUPercent() < thresholds.NodeCPUWarning*margin, nil
+			case "memory-high":
+				return n.MemoryPercent() < thresholds.NodeMemWarning*margin, nil
+			}
+		}
+		for _, vm := range rs.VMs() {
+			if vm.ID() != rid && vm.Name() != rid && fmt.Sprintf("%d", vm.VMID()) != rid {
+				continue
+			}
+			switch key {
+			case "cpu-high":
+				return vm.CPUPercent() < thresholds.NodeCPUWarning*margin, nil
+			case "memory-high":
+				return vm.MemoryPercent() < thresholds.GuestMemWarning*margin, nil
+			case "disk-high":
+				return vm.DiskPercent() < thresholds.GuestDiskWarn*margin, nil
+			}
+		}
+		for _, ct := range rs.Containers() {
+			if ct.ID() != rid && ct.Name() != rid && fmt.Sprintf("%d", ct.VMID()) != rid {
+				continue
+			}
+			switch key {
+			case "cpu-high":
+				return ct.CPUPercent() < thresholds.NodeCPUWarning*margin, nil
+			case "memory-high":
+				return ct.MemoryPercent() < thresholds.GuestMemWarning*margin, nil
+			case "disk-high":
+				return ct.DiskPercent() < thresholds.GuestDiskWarn*margin, nil
+			}
+		}
+		for _, s := range rs.StoragePools() {
+			if s.ID() != rid && s.Name() != rid {
+				continue
+			}
+			if key == "disk-high" {
+				return s.DiskPercent() < thresholds.StorageWarning*margin, nil
+			}
+		}
+	}
 
 	// Nodes
 	for _, n := range snap.Nodes {
@@ -1658,6 +1722,28 @@ func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap p
 
 	var node string
 	var ip string
+	if rs := snap.readState; rs != nil {
+		for _, vm := range rs.VMs() {
+			if vm.ID() == vmID || vm.Name() == vmID || fmt.Sprintf("%d", vm.VMID()) == vmID {
+				node = vm.Node()
+				if ips := vm.IPAddresses(); len(ips) > 0 {
+					ip = ips[0]
+				}
+				break
+			}
+		}
+		if node == "" {
+			for _, ct := range rs.Containers() {
+				if ct.ID() == vmID || ct.Name() == vmID || fmt.Sprintf("%d", ct.VMID()) == vmID {
+					node = ct.Node()
+					if ips := ct.IPAddresses(); len(ips) > 0 {
+						ip = ips[0]
+					}
+					break
+				}
+			}
+		}
+	}
 	for _, vm := range snap.VMs {
 		if vm.ID == vmID || vm.Name == vmID || fmt.Sprintf("%d", vm.VMID) == vmID {
 			node = vm.Node

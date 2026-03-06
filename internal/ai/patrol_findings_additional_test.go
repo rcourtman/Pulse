@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type patrolTestStateProvider struct {
@@ -348,6 +349,86 @@ func TestIsActionable_NodeMemoryUsesNodeThreshold(t *testing.T) {
 	// 78% < GuestMemWatch (80%) → should be rejected
 	if vmAdapter.isActionable(vmFinding) {
 		t.Fatal("VM at 78% memory should be rejected with GuestMemWatch=80")
+	}
+}
+
+func TestVerifyBackupFreshState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	now := time.Now()
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	vmResource := &unifiedresources.Resource{
+		ID:     "reg-qemu/101",
+		Name:   "vm-1",
+		Type:   unifiedresources.ResourceTypeVM,
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			SourceID:   "qemu/101",
+			VMID:       101,
+			NodeName:   "pve1",
+			LastBackup: now.Add(-24 * time.Hour),
+		},
+	}
+	vm := unifiedresources.NewVMView(vmResource)
+	vmView := &vm
+	state.readState = &mockReadState{vms: []*unifiedresources.VMView{vmView}}
+
+	ok, err := verifyBackupFreshState(state, "101")
+	if err != nil {
+		t.Fatalf("expected readState-backed backup verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected recent backup to verify via readState")
+	}
+}
+
+func TestVerifyMetricRecoveredState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "n1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName: "node-1",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 40},
+		},
+	})
+	state.readState = &mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}}
+
+	ok, err := verifyMetricRecoveredState(state, PatrolThresholds{NodeCPUWarning: 90}, "cpu-high", "n1", "node")
+	if err != nil {
+		t.Fatalf("expected readState-backed metric verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected CPU metric to verify as recovered via readState")
+	}
+}
+
+func TestVerifyGuestReachabilityState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.SetGuestProber(&mockGuestProber{
+		agents: map[string]string{"pve1": "agent-1"},
+		results: map[string]map[string]PingResult{
+			"agent-1": {
+				"10.0.0.1": {Reachable: true},
+			},
+		},
+	})
+
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	state.readState = &mockReadState{
+		vms: []*unifiedresources.VMView{
+			newTestVMView("qemu/100", "vm-1", 100, "pve1", "", unifiedresources.StatusOnline, false, []string{"10.0.0.1"}),
+		},
+	}
+
+	ok, err := ps.verifyGuestReachabilityState(context.Background(), state, "100")
+	if err != nil {
+		t.Fatalf("expected readState-backed reachability verification to succeed, got %v", err)
+	}
+	if !ok {
+		t.Fatal("expected guest to verify as reachable via readState")
 	}
 }
 
