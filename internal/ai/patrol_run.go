@@ -1171,6 +1171,38 @@ func scopePatrolPBSInstance(pbs models.PBSInstance, matcher patrolScopeMatcher) 
 	return pbsMatches
 }
 
+func scopePatrolNode(n models.Node, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("node") && matcher.matchesID(n.ID, n.Name)
+}
+
+func scopePatrolVM(vm models.VM, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("vm") && matcher.matchesID(vm.ID, vm.Name)
+}
+
+func scopePatrolContainer(ct models.Container, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("system-container") && matcher.matchesID(ct.ID, ct.Name)
+}
+
+func scopePatrolStorage(storage models.Storage, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("storage") && matcher.matchesID(storage.ID, storage.Name)
+}
+
+func scopePatrolPhysicalDisk(disk models.PhysicalDisk, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("physical_disk") && matcher.matchesID(disk.ID, disk.DevPath, disk.Model)
+}
+
+func scopePatrolPMGInstance(pmg models.PMGInstance, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("pmg") && matcher.matchesID(pmg.ID, pmg.Name, pmg.Host)
+}
+
+func scopePatrolHost(h models.Host, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("agent") && matcher.matchesID(h.ID, h.DisplayName, h.Hostname)
+}
+
+func scopePatrolKubernetesCluster(k models.KubernetesCluster, matcher patrolScopeMatcher) bool {
+	return matcher.matchesType("k8s-cluster") && matcher.matchesID(k.ID, patrolKubernetesScopeName(k))
+}
+
 func patrolKubernetesScopeName(k models.KubernetesCluster) string {
 	clusterName := k.CustomDisplayName
 	if clusterName == "" {
@@ -1244,20 +1276,20 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 
 	// Filter each resource type
 	for _, n := range snap.Nodes {
-		if matcher.matchesType("node") && matcher.matchesID(n.ID, n.Name) {
+		if scopePatrolNode(n, matcher) {
 			filterState.filtered.Nodes = append(filterState.filtered.Nodes, n)
 			filterState.includeResourceID(n.ID)
 		}
 	}
 	for _, vm := range snap.VMs {
-		if matcher.matchesType("vm") && matcher.matchesID(vm.ID, vm.Name) {
+		if scopePatrolVM(vm, matcher) {
 			filterState.filtered.VMs = append(filterState.filtered.VMs, vm)
 			filterState.includeResourceID(vm.ID)
 			filterState.includeGuestVMID(vm.VMID)
 		}
 	}
 	for _, c := range snap.Containers {
-		if matcher.matchesType("system-container") && matcher.matchesID(c.ID, c.Name) {
+		if scopePatrolContainer(c, matcher) {
 			filterState.filtered.Containers = append(filterState.filtered.Containers, c)
 			filterState.includeResourceID(c.ID)
 			filterState.includeGuestVMID(c.VMID)
@@ -1271,13 +1303,13 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		}
 	}
 	for _, s := range snap.Storage {
-		if matcher.matchesType("storage") && matcher.matchesID(s.ID, s.Name) {
+		if scopePatrolStorage(s, matcher) {
 			filterState.filtered.Storage = append(filterState.filtered.Storage, s)
 			filterState.includeResourceID(s.ID)
 		}
 	}
 	for _, disk := range snap.PhysicalDisks {
-		if matcher.matchesType("physical_disk") && matcher.matchesID(disk.ID, disk.DevPath, disk.Model) {
+		if scopePatrolPhysicalDisk(disk, matcher) {
 			filterState.filtered.PhysicalDisks = append(filterState.filtered.PhysicalDisks, disk)
 			filterState.includeResourceID(disk.ID, disk.DevPath)
 		}
@@ -1289,19 +1321,19 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		}
 	}
 	for _, pmg := range snap.PMGInstances {
-		if matcher.matchesType("pmg") && matcher.matchesID(pmg.ID, pmg.Name, pmg.Host) {
+		if scopePatrolPMGInstance(pmg, matcher) {
 			filterState.filtered.PMGInstances = append(filterState.filtered.PMGInstances, pmg)
 			filterState.includeResourceID(pmg.ID)
 		}
 	}
 	for _, h := range snap.Hosts {
-		if matcher.matchesType("agent") && matcher.matchesID(h.ID, h.DisplayName, h.Hostname) {
+		if scopePatrolHost(h, matcher) {
 			filterState.filtered.Hosts = append(filterState.filtered.Hosts, h)
 			filterState.includeResourceID(h.ID)
 		}
 	}
 	for _, k := range snap.KubernetesClusters {
-		if matcher.matchesType("k8s-cluster") && matcher.matchesID(k.ID, patrolKubernetesScopeName(k)) {
+		if scopePatrolKubernetesCluster(k, matcher) {
 			filterState.filtered.KubernetesClusters = append(filterState.filtered.KubernetesClusters, k)
 			filterState.includeResourceID(k.ID)
 		}
