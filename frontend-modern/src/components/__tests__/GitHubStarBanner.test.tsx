@@ -236,6 +236,26 @@ describe('GitHubStarBanner', () => {
     expect(localStorage.getItem(DISMISSED_KEY)).not.toBe('true');
   });
 
+  it('uses the shared dialog close path to snooze on Escape', async () => {
+    vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
+    localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
+    setResourceCount(3);
+
+    await renderBanner();
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(localStorage.getItem(SNOOZED_KEY)).toBe('2026-03-12');
+    expect(localStorage.getItem(DISMISSED_KEY)).not.toBe('true');
+  });
+
   /* ---------- Edge cases ---------- */
 
   it('renders on the exact snooze expiry date (snooze date == today)', async () => {

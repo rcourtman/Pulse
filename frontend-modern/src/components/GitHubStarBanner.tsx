@@ -1,9 +1,10 @@
-import { createSignal, createEffect, Show } from 'solid-js';
+import { createSignal, createEffect } from 'solid-js';
 import {
   createLocalStorageBooleanSignal,
   createLocalStorageStringSignal,
   STORAGE_KEYS,
 } from '@/utils/localStorage';
+import { Dialog } from '@/components/shared/Dialog';
 import { useResources } from '@/hooks/useResources';
 import GithubIcon from 'lucide-solid/icons/github';
 import StarIcon from 'lucide-solid/icons/star';
@@ -98,9 +99,13 @@ export function GitHubStarBanner() {
   };
 
   return (
-    <Show when={showModal()}>
-      <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
-        <div class="bg-surface rounded-md shadow-sm max-w-md w-full overflow-hidden">
+    <Dialog
+      isOpen={showModal()}
+      onClose={handleMaybeLater}
+      panelClass="max-w-md"
+      ariaLabelledBy="github-star-title"
+    >
+      <div class="w-full overflow-hidden">
           {/* Header with close button */}
           <div class="flex justify-end p-3 pb-0">
             <button
@@ -108,6 +113,7 @@ export function GitHubStarBanner() {
               class="p-1.5 hover:bg-surface-hover rounded-md text-slate-400 hover:text-muted transition-colors"
               title="Don't show again"
               aria-label="Close and don't show again"
+              type="button"
             >
               <XIcon class="w-5 h-5" />
             </button>
@@ -128,7 +134,9 @@ export function GitHubStarBanner() {
             </div>
 
             {/* Text */}
-            <h2 class="text-xl font-semibold text-base-content mb-2">Enjoying Pulse?</h2>
+            <h2 id="github-star-title" class="text-xl font-semibold text-base-content mb-2">
+              Enjoying Pulse?
+            </h2>
             <p class="text-muted mb-6 leading-relaxed">
               Pulse is built and maintained by an independent developer. If it's been useful for
               monitoring your infrastructure, a GitHub star helps more than you'd think.
@@ -139,6 +147,7 @@ export function GitHubStarBanner() {
               <button
                 onClick={handleStarClick}
                 class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                type="button"
               >
                 <StarIcon class="w-4 h-4" />
                 Star on GitHub
@@ -146,13 +155,13 @@ export function GitHubStarBanner() {
               <button
                 onClick={handleMaybeLater}
                 class="w-full px-4 py-2 text-sm text-muted hover:text-base-content transition-colors"
+                type="button"
               >
                 Maybe later
               </button>
             </div>
           </div>
-        </div>
       </div>
-    </Show>
+    </Dialog>
   );
 }

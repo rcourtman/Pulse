@@ -1,5 +1,6 @@
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { Dialog } from '@/components/shared/Dialog';
 import ServerIcon from 'lucide-solid/icons/server';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
@@ -15,29 +16,30 @@ export function WhatsNewModal() {
     STORAGE_KEYS.WHATS_NEW_NAV_V2_SHOWN,
     false,
   );
-  const [isOpen, setIsOpen] = createSignal(false);
   const [dontShowAgain, setDontShowAgain] = createSignal(true);
+  const [dismissedForSession, setDismissedForSession] = createSignal(false);
 
-  createEffect(() => {
-    if (!hasSeen()) {
-      setIsOpen(true);
-    }
-  });
+  const isOpen = () => !hasSeen() && !dismissedForSession();
 
   const handleClose = () => {
-    if (dontShowAgain() || hasSeen()) {
+    if (dontShowAgain()) {
       setHasSeen(true);
+      return;
     }
-    setIsOpen(false);
+    setDismissedForSession(true);
   };
 
   return (
-    <Show when={isOpen()}>
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
-        <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-md bg-surface shadow-sm">
+    <Dialog
+      isOpen={isOpen()}
+      onClose={handleClose}
+      panelClass="max-w-2xl"
+      ariaLabelledBy="whats-new-title"
+    >
+      <div class="flex max-h-[90vh] flex-col overflow-hidden">
           <div class="flex-shrink-0 flex items-start justify-between border-b border-border px-6 py-4">
             <div>
-              <h2 class="text-xl sm:text-2xl font-semibold text-base-content">
+              <h2 id="whats-new-title" class="text-xl sm:text-2xl font-semibold text-base-content">
                 Welcome to the New Navigation!
               </h2>
               <p class="mt-1 text-sm text-muted">
@@ -48,6 +50,7 @@ export function WhatsNewModal() {
               onClick={handleClose}
               class="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-surface-hover hover:text-muted"
               aria-label="Close"
+              type="button"
             >
               <XIcon class="h-5 w-5" />
             </button>
@@ -158,13 +161,13 @@ export function WhatsNewModal() {
             <button
               onClick={handleClose}
               class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+              type="button"
             >
               Let&#39;s go
             </button>
           </div>
-        </div>
       </div>
-    </Show>
+    </Dialog>
   );
 }
 
