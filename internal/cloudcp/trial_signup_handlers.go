@@ -508,6 +508,21 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 	}
 
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
+	if existingSessionID := strings.TrimSpace(record.CheckoutSessionID); existingSessionID != "" {
+		existingSession, err := h.getCheckoutSession(existingSessionID, nil)
+		if err == nil && existingSession != nil {
+			switch existingSession.Status {
+			case stripe.CheckoutSessionStatusComplete:
+				http.Redirect(w, r, buildTrialSignupSuccessURLWithSession(h.cfg.BaseURL, existingSessionID), http.StatusSeeOther)
+				return
+			case stripe.CheckoutSessionStatusOpen:
+				if existingURL := strings.TrimSpace(existingSession.URL); existingURL != "" {
+					http.Redirect(w, r, existingURL, http.StatusSeeOther)
+					return
+				}
+			}
+		}
+	}
 	successURL := buildTrialSignupSuccessURL(h.cfg.BaseURL)
 	cancelURL := buildTrialSignupVerifiedURL(h.cfg.BaseURL, verifiedToken, true)
 
@@ -553,7 +568,7 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		h.renderTrialSignupPage(w, r, http.StatusBadGateway, data)
 		return
 	}
-	if err := h.verificationStore.MarkCheckoutStarted(record.ID, h.now().UTC()); err != nil {
+	if err := h.verificationStore.MarkCheckoutStarted(record.ID, session.ID, h.now().UTC()); err != nil {
 		log.Warn().Err(err).Str("request_id", record.ID).Msg("trial signup checkout start could not be recorded")
 	}
 
@@ -626,6 +641,41 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	}
 	if h.verificationStore == nil {
 		http.Error(w, "trial signup store not configured", http.StatusServiceUnavailable)
+		return
+	}
+	record, err := h.verificationStore.GetRecord(requestID)
+	if err != nil {
+		http.Error(w, "invalid trial request", http.StatusBadRequest)
+		return
+	}
+	if record.VerifiedAt.IsZero() {
+		http.Error(w, "invalid trial request", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(record.OrgID) != orgID {
+		http.Error(w, "trial request org mismatch", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(record.ReturnURL) != returnURL {
+		http.Error(w, "trial request return url mismatch", http.StatusBadRequest)
+		return
+	}
+	if verifiedEmail := normalizeTrialSignupEmail(record.Email); verifiedEmail == "" || normalizeTrialSignupEmail(email) != verifiedEmail {
+		http.Error(w, "trial request email mismatch", http.StatusBadRequest)
+		return
+	}
+	if existingSessionID := strings.TrimSpace(record.CheckoutSessionID); existingSessionID != "" && existingSessionID != sessionID {
+		http.Error(w, "trial request checkout session mismatch", http.StatusBadRequest)
+		return
+	}
+	if err := h.verificationStore.MarkCheckoutCompleted(requestID, sessionID, now); err != nil {
+		switch {
+		case errors.Is(err, ErrTrialSignupRecordNotFound):
+			http.Error(w, "invalid trial request", http.StatusBadRequest)
+		default:
+			log.Error().Err(err).Str("request_id", requestID).Str("session_id", sessionID).Msg("failed to record checkout completion")
+			http.Error(w, "failed to record checkout completion", http.StatusInternalServerError)
+		}
 		return
 	}
 	if err := h.verificationStore.MarkTrialIssued(requestID, now); err != nil {
@@ -853,6 +903,18 @@ func buildTrialSignupSuccessURL(baseURL string) string {
 		url.QueryEscape(stripeCheckoutSessionIDPlaceholder),
 		stripeCheckoutSessionIDPlaceholder,
 	)
+	return parsed.String()
+}
+
+func buildTrialSignupSuccessURLWithSession(baseURL, sessionID string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed == nil {
+		return "/trial-signup/complete?session_id=" + url.QueryEscape(strings.TrimSpace(sessionID))
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/trial-signup/complete"
+	parsed.RawQuery = url.Values{
+		"session_id": {strings.TrimSpace(sessionID)},
+	}.Encode()
 	return parsed.String()
 }
 

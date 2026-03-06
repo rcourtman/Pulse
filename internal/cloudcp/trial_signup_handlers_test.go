@@ -221,7 +221,7 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 		}
 		capturedSuccessURL = strings.TrimSpace(stripe.StringValue(params.SuccessURL))
 		capturedCancelURL = strings.TrimSpace(stripe.StringValue(params.CancelURL))
-		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
+		return &stripe.CheckoutSession{ID: "cs_test_new", URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
 	}
 
 	rawToken := requestTrialVerification(t, h, sender)
@@ -254,6 +254,55 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 	}
 	if record.CheckoutStartedAt.IsZero() {
 		t.Fatalf("expected checkout_started_at to be recorded")
+	}
+	if record.CheckoutSessionID != "cs_test_new" {
+		t.Fatalf("checkout_session_id=%q, want %q", record.CheckoutSessionID, "cs_test_new")
+	}
+}
+
+func TestTrialSignupHandleCheckoutReusesExistingOpenSession(t *testing.T) {
+	h, store, sender := newTrialSignupTestHandler(t)
+	h.cfg.StripeAPIKey = "sk_test_123"
+	h.cfg.TrialSignupPriceID = "price_test_123"
+
+	rawToken := requestTrialVerification(t, h, sender)
+	verifiedToken := verifyTrialRequest(t, h, rawToken)
+	recordID := parseVerifiedTokenRequestID(t, h, verifiedToken)
+	if err := store.MarkCheckoutStarted(recordID, "cs_existing_open", h.now().UTC()); err != nil {
+		t.Fatalf("MarkCheckoutStarted: %v", err)
+	}
+
+	createCalls := 0
+	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		createCalls++
+		return &stripe.CheckoutSession{ID: "cs_should_not_exist", URL: "https://checkout.stripe.com/c/pay/cs_should_not_exist"}, nil
+	}
+	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		if id != "cs_existing_open" {
+			t.Fatalf("getCheckoutSession id=%q, want %q", id, "cs_existing_open")
+		}
+		return &stripe.CheckoutSession{
+			ID:     id,
+			Status: stripe.CheckoutSessionStatusOpen,
+			URL:    "https://checkout.stripe.com/c/pay/cs_existing_open",
+		}, nil
+	}
+
+	form := url.Values{"verified_token": {verifiedToken}}
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleCheckout(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusSeeOther, rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); loc != "https://checkout.stripe.com/c/pay/cs_existing_open" {
+		t.Fatalf("location=%q, want existing checkout URL", loc)
+	}
+	if createCalls != 0 {
+		t.Fatalf("createCheckoutSession calls=%d, want 0", createCalls)
 	}
 }
 
@@ -328,6 +377,16 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	}
 	if claims.OrgID != "default" {
 		t.Fatalf("claims.OrgID=%q, want %q", claims.OrgID, "default")
+	}
+	updatedRecord, err := store.GetRecord(record.ID)
+	if err != nil {
+		t.Fatalf("GetRecord(updated): %v", err)
+	}
+	if updatedRecord.CheckoutSessionID != "cs_test_123" {
+		t.Fatalf("checkout_session_id=%q, want %q", updatedRecord.CheckoutSessionID, "cs_test_123")
+	}
+	if updatedRecord.CheckoutCompletedAt.IsZero() {
+		t.Fatalf("expected checkout_completed_at to be recorded")
 	}
 }
 
@@ -434,6 +493,42 @@ func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *
 	}
 	if !strings.Contains(rec.Body.String(), "trial already used for this organization") {
 		t.Fatalf("expected organization duplicate issuance error, got %q", rec.Body.String())
+	}
+}
+
+func TestTrialSignupHandleCompleteRejectsCheckoutSessionMismatch(t *testing.T) {
+	h, store, sender := newTrialSignupTestHandler(t)
+	h.cfg.StripeAPIKey = "sk_test_123"
+
+	rawToken := requestTrialVerification(t, h, sender)
+	verifiedToken := verifyTrialRequest(t, h, rawToken)
+	requestID := parseVerifiedTokenRequestID(t, h, verifiedToken)
+	if err := store.MarkCheckoutStarted(requestID, "cs_bound_original", h.now().UTC()); err != nil {
+		t.Fatalf("MarkCheckoutStarted: %v", err)
+	}
+
+	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		return &stripe.CheckoutSession{
+			ID:            id,
+			Status:        stripe.CheckoutSessionStatusComplete,
+			CustomerEmail: "owner@example.com",
+			Metadata: map[string]string{
+				"org_id":           "default",
+				"return_url":       "https://pulse.example.com/auth/trial-activate",
+				"trial_request_id": requestID,
+			},
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_other_session", nil)
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupComplete(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "checkout session mismatch") {
+		t.Fatalf("expected checkout session mismatch, got %q", rec.Body.String())
 	}
 }
 
