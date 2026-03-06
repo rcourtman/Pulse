@@ -513,9 +513,8 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 		assert.Equal(t, "lic_v5_migrated", activationState.LicenseID)
 
 		legacyLeft, err := persistence.Load()
-		if err == nil {
-			assert.Empty(t, legacyLeft, "legacy v5 license persistence must be removed after exchange")
-		}
+		require.NoError(t, err)
+		assert.Equal(t, legacyLicense, legacyLeft, "legacy v5 license persistence must remain available for downgrade")
 
 		statusReq := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
 		statusRec := httptest.NewRecorder()

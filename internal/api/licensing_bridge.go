@@ -65,6 +65,7 @@ const (
 	subscriptionStateActiveValue   = pkglicensing.SubStateActive
 	subscriptionStateGraceValue    = pkglicensing.SubStateGrace
 	subscriptionStateCanceledValue = pkglicensing.SubStateCanceled
+	activationKeyPrefixValue       = pkglicensing.ActivationKeyPrefix
 
 	// Conversion event type constants for backend-emitted events.
 	conversionEventTrialStarted            = pkglicensing.EventTrialStarted

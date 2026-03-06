@@ -253,14 +253,11 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 				if feedToken := revocationFeedToken(); feedToken != "" {
 					service.StartRevocationPoll(context.Background(), feedToken)
 				}
-				if err := persistence.Delete(); err != nil {
-					log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to delete migrated legacy license persistence")
-				}
 				if current := service.Current(); current != nil {
 					log.Info().
 						Str("org_id", orgID).
 						Str("license_id", current.Claims.LicenseID).
-						Msg("Auto-exchanged persisted legacy license")
+						Msg("Auto-exchanged persisted legacy license while preserving downgrade fallback")
 				}
 			}
 		}
@@ -725,9 +722,14 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		if feedToken := revocationFeedToken(); feedToken != "" {
 			service.StartRevocationPoll(context.Background(), feedToken)
 		}
-		// Remove stale legacy JWT persistence to prevent fallback to old license on restart.
+		// Preserve migrated v5 keys for downgrade/recovery, but remove stale
+		// legacy persistence after a native v6 activation-key activation.
 		if persistence != nil {
-			_ = persistence.Delete()
+			if strings.HasPrefix(strings.TrimSpace(req.LicenseKey), activationKeyPrefixValue) {
+				_ = persistence.Delete()
+			} else if err := persistence.Save(req.LicenseKey); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist migrated legacy license for downgrade fallback")
+			}
 		}
 		log.Info().
 			Str("tier", string(lic.Claims.Tier)).

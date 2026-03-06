@@ -363,6 +363,104 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 	if svc := handler.Service(context.Background()); svc == nil || !svc.IsActivated() {
 		t.Fatalf("expected service activation state after exchange")
 	}
+	cp, err := handler.mtPersistence.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("get default persistence: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new license persistence: %v", err)
+	}
+	legacyLeft, err := persistence.Load()
+	if err != nil {
+		t.Fatalf("load preserved legacy key: %v", err)
+	}
+	if legacyLeft != licenseKey {
+		t.Fatalf("expected legacy key to be preserved for downgrade, got %q", legacyLeft)
+	}
+}
+
+func TestHandleActivateLicense_ActivationKeyClearsStaleLegacyPersistence(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID: "lic_v6_native",
+		Tier:      "pro",
+		State:     "active",
+		Features:  []string{"relay"},
+		MaxAgents: 10,
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "native-v6@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	license.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { license.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/activate" {
+			t.Fatalf("path = %q, want /v1/activate", r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"license": map[string]any{
+				"license_id": "lic_v6_native",
+				"state":      "active",
+				"tier":       "pro",
+				"features":   []string{"relay"},
+				"max_agents": 10,
+			},
+			"installation": map[string]any{
+				"installation_id":    "inst_v6_native",
+				"installation_token": "pit_live_native",
+				"status":             "active",
+			},
+			"grant": map[string]any{
+				"jwt":        grantJWT,
+				"jti":        "grant_v6_native",
+				"expires_at": time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	handler := createTestHandler(t)
+	_ = handler.Service(context.Background())
+	cp, err := handler.mtPersistence.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("get default persistence: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new license persistence: %v", err)
+	}
+
+	legacyKey, err := license.GenerateLicenseForTesting("legacy-stale@example.com", license.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("generate stale legacy license: %v", err)
+	}
+	if err := persistence.Save(legacyKey); err != nil {
+		t.Fatalf("save stale legacy license: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{"license_key": "ppk_live_native_activation"})
+	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleActivateLicense(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if legacyLeft, err := persistence.Load(); err != nil {
+		t.Fatalf("load legacy persistence after native activation: %v", err)
+	} else if legacyLeft != "" {
+		t.Fatalf("expected native v6 activation to clear stale legacy persistence, got %q", legacyLeft)
+	}
 }
 
 func TestHandleActivateLicense_InvalidBody(t *testing.T) {

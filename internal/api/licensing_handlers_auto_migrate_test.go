@@ -108,8 +108,10 @@ func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 	if current := svc.Current(); current == nil || current.Claims.LicenseID != "lic_migrated" {
 		t.Fatalf("expected migrated license to be active, got %#v", current)
 	}
-	if legacyLeft, err := persistence.Load(); err == nil && legacyLeft != "" {
-		t.Fatalf("expected migrated legacy JWT persistence to be removed, got %q", legacyLeft)
+	if legacyLeft, err := persistence.Load(); err != nil {
+		t.Fatalf("load preserved legacy JWT: %v", err)
+	} else if legacyLeft != legacyJWT {
+		t.Fatalf("expected migrated legacy JWT persistence to be preserved for downgrade, got %q", legacyLeft)
 	}
 	if activationState, err := persistence.LoadActivationState(); err != nil {
 		t.Fatalf("load activation state: %v", err)
