@@ -63,6 +63,7 @@ const (
 	maxAgentsLicenseGateKey        = pkglicensing.MaxAgentsLicenseGateKey
 	maxUsersLicenseGateKey         = pkglicensing.MaxUsersLicenseGateKey
 	subscriptionStateActiveValue   = pkglicensing.SubStateActive
+	subscriptionStateExpiredValue  = pkglicensing.SubStateExpired
 	subscriptionStateGraceValue    = pkglicensing.SubStateGrace
 	subscriptionStateCanceledValue = pkglicensing.SubStateCanceled
 	activationKeyPrefixValue       = pkglicensing.ActivationKeyPrefix

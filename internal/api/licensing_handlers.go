@@ -798,6 +798,11 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 
 	service.Clear()
 
+	orgID := GetOrgID(r.Context())
+	if orgID == "" {
+		orgID = "default"
+	}
+
 	// Clear from persistence (both legacy JWT and activation state).
 	if persistence != nil {
 		if err := persistence.Delete(); err != nil {
@@ -805,6 +810,29 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 		}
 		if err := persistence.ClearActivationState(); err != nil {
 			log.Warn().Err(err).Msg("Failed to delete persisted activation state")
+		}
+	}
+
+	// Clear any locally cached billing-backed entitlement grant as well.
+	// Preserve trial_started_at and free-tier bookkeeping so the effective trial
+	// ends immediately but trial reuse remains blocked.
+	if h != nil && h.mtPersistence != nil {
+		billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+		existing, err := billingStore.GetBillingState(orgID)
+		if err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load billing state while clearing license")
+		} else if existing != nil {
+			existing.Capabilities = []string{}
+			existing.Limits = map[string]int64{}
+			existing.MetersEnabled = []string{}
+			existing.PlanVersion = string(subscriptionStateExpiredValue)
+			existing.SubscriptionState = subscriptionStateExpiredValue
+			existing.TrialEndsAt = nil
+			existing.TrialExtendedAt = nil
+
+			if err := billingStore.SaveBillingState(orgID, existing); err != nil {
+				log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to clear billing-backed entitlement state")
+			}
 		}
 	}
 

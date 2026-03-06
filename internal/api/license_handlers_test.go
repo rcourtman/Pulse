@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -744,6 +745,75 @@ func TestHandleClearLicense_WithActiveLicense(t *testing.T) {
 	}
 	if success, ok := resp["success"].(bool); !ok || !success {
 		t.Fatalf("expected success=true")
+	}
+}
+
+func TestHandleClearLicense_ClearsActiveTrialButPreservesTrialUsedMarker(t *testing.T) {
+	handler := createTestHandler(t)
+
+	now := time.Now()
+	startedAt := now.Add(-2 * time.Hour).Unix()
+	endsAt := now.Add(12 * time.Hour).Unix()
+	store := config.NewFileBillingStore(handler.mtPersistence.BaseDataDir())
+	if err := store.SaveBillingState("default", &pkglicensing.BillingState{
+		Capabilities:      append([]string(nil), license.TierFeatures[license.TierPro]...),
+		Limits:            map[string]int64{"max_agents": 15},
+		MetersEnabled:     []string{"agents"},
+		PlanVersion:       "trial",
+		SubscriptionState: entitlements.SubStateTrial,
+		TrialStartedAt:    &startedAt,
+		TrialEndsAt:       &endsAt,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/license/clear", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleClearLicense(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	cleared, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if cleared == nil {
+		t.Fatal("expected billing state to remain so trial reuse stays blocked")
+	}
+	if cleared.SubscriptionState != pkglicensing.SubStateExpired {
+		t.Fatalf("subscription_state=%q, want %q", cleared.SubscriptionState, pkglicensing.SubStateExpired)
+	}
+	if cleared.TrialStartedAt == nil || *cleared.TrialStartedAt != startedAt {
+		t.Fatalf("trial_started_at=%v, want %d", cleared.TrialStartedAt, startedAt)
+	}
+	if cleared.TrialEndsAt != nil {
+		t.Fatalf("trial_ends_at=%v, want nil", cleared.TrialEndsAt)
+	}
+	if len(cleared.Capabilities) != 0 {
+		t.Fatalf("capabilities=%v, want empty", cleared.Capabilities)
+	}
+
+	entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil)
+	entRec := httptest.NewRecorder()
+	handler.HandleEntitlements(entRec, entReq)
+	if entRec.Code != http.StatusOK {
+		t.Fatalf("entitlements status=%d, want %d: %s", entRec.Code, http.StatusOK, entRec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(entRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode entitlements payload: %v", err)
+	}
+	if payload.SubscriptionState != string(license.SubStateExpired) {
+		t.Fatalf("payload.subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateExpired)
+	}
+	if payload.TrialEligible {
+		t.Fatalf("payload.trial_eligible=%v, want false", payload.TrialEligible)
+	}
+	if payload.TrialEligibilityReason != "already_used" {
+		t.Fatalf("payload.trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "already_used")
 	}
 }
 
