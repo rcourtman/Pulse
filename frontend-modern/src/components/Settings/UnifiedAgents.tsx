@@ -1826,13 +1826,22 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       </Show>
 
       <Show when={showInventory()}>
+        <div class="space-y-6">
+        <div class="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface-alt px-4 py-3 text-sm">
+          <span class="inline-flex items-center rounded-full bg-surface px-3 py-1 text-xs font-medium text-base-content">
+            {filteredActiveRows().length} active
+          </span>
+          <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+            {filteredMonitoringStoppedRows().length} monitoring stopped
+          </span>
+          <span class="text-muted">
+            Stopping monitoring in Pulse does not uninstall software on the remote system.
+          </span>
+        </div>
+
         <SettingsPanel
           title="Connected infrastructure"
-          description={
-            props.embedded
-              ? 'Review active infrastructure and recover items with monitoring stopped, including Docker and Kubernetes coverage.'
-              : 'Review active infrastructure and recover items with monitoring stopped.'
-          }
+          description="Review infrastructure currently reporting to Pulse, including Docker and Kubernetes coverage."
           icon={<Users class="w-5 h-5" strokeWidth={2} />}
           bodyClass="space-y-4"
         >
@@ -1887,18 +1896,6 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
             </div>
           </div>
         </Show>
-
-        <div class="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface-alt px-4 py-3 text-sm">
-          <span class="inline-flex items-center rounded-full bg-surface px-3 py-1 text-xs font-medium text-base-content">
-            {filteredActiveRows().length} active
-          </span>
-          <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-            {filteredMonitoringStoppedRows().length} monitoring stopped
-          </span>
-          <span class="text-muted">
-            Stopping monitoring in Pulse does not uninstall software on the remote system.
-          </span>
-        </div>
 
         <div class="flex flex-wrap items-end gap-3">
           <div class="space-y-1">
@@ -2501,101 +2498,94 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
             );
           }}
         />
+        </div>
+        </SettingsPanel>
 
-          <Show when={showMonitoringStoppedSection()}>
-            <div class="space-y-3 pt-2">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="text-sm font-semibold text-base-content">Recovery queue</h3>
-                  <p class="text-xs text-muted">
-                    Infrastructure with monitoring stopped stays out of active inventory until
-                    reconnect is allowed.
-                  </p>
+        <Show when={showMonitoringStoppedSection()}>
+          <SettingsPanel
+            title="Recovery queue"
+            description="Infrastructure with monitoring stopped stays out of active inventory until reconnect is allowed."
+            icon={<Users class="w-5 h-5" strokeWidth={2} />}
+            bodyClass="space-y-4"
+          >
+            <Show
+              when={filteredMonitoringStoppedRows().length > 0}
+              fallback={
+                <div class="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted">
+                  {hasFilters()
+                    ? 'No monitoring-stopped items match the current filters.'
+                    : 'No infrastructure currently has monitoring stopped.'}
                 </div>
-                <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                  {filteredMonitoringStoppedRows().length}
-                </span>
-              </div>
-
-              <Show
-                when={filteredMonitoringStoppedRows().length > 0}
-                fallback={
-                  <div class="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted">
-                    {hasFilters()
-                      ? 'No monitoring-stopped items match the current filters.'
-                      : 'No infrastructure currently has monitoring stopped.'}
-                  </div>
-                }
-              >
-                <div class="rounded-lg border border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30">
-                  <div class="border-b border-amber-200 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:text-amber-100">
-                    Pulse is intentionally ignoring reports from these items. This does not
-                    uninstall software on the remote system.
-                  </div>
-                  <div class="divide-y divide-amber-200/80 dark:divide-amber-800/80">
-                    <For each={filteredMonitoringStoppedRows()}>
-                      {(row) => (
-                        <div class="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-                          <div class="min-w-0 space-y-1">
-                            <div class="flex flex-wrap items-center gap-2">
-                              <h4 class="truncate text-sm font-semibold text-base-content">
-                                {row.name}
-                              </h4>
-                              <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
-                                {getRemovedItemLabel(row)}
-                              </span>
-                            </div>
-                            <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                              <span>{row.capabilities.map(getCapabilityLabel).join(', ')}</span>
-                              <Show
-                                when={
-                                  row.displayName &&
-                                  row.hostname &&
-                                  row.displayName !== row.hostname
-                                }
-                              >
-                                <span>Hostname: {row.hostname}</span>
-                              </Show>
-                              <span>
-                                Stopped{' '}
-                                {row.removedAt
-                                  ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
-                                  : 'at an unknown time'}
-                              </span>
-                            </div>
+              }
+            >
+              <div class="rounded-lg border border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30">
+                <div class="border-b border-amber-200 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:text-amber-100">
+                  Pulse is intentionally ignoring reports from these items. This does not
+                  uninstall software on the remote system.
+                </div>
+                <div class="divide-y divide-amber-200/80 dark:divide-amber-800/80">
+                  <For each={filteredMonitoringStoppedRows()}>
+                    {(row) => (
+                      <div class="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0 space-y-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h4 class="truncate text-sm font-semibold text-base-content">
+                              {row.name}
+                            </h4>
+                            <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                              {getRemovedItemLabel(row)}
+                            </span>
                           </div>
-
-                          <div class="flex items-center gap-3 lg:flex-shrink-0">
-                            <button
-                              onClick={() =>
-                                row.capabilities.includes('docker')
-                                  ? handleAllowReconnect(
-                                      row.dockerActionId || row.id,
-                                      row.displayName || row.hostname || row.name,
-                                    )
-                                  : handleAllowKubernetesReconnect(
-                                      row.kubernetesActionId || row.id,
-                                      row.name,
-                                    )
+                          <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                            <span>{row.capabilities.map(getCapabilityLabel).join(', ')}</span>
+                            <Show
+                              when={
+                                row.displayName &&
+                                row.hostname &&
+                                row.displayName !== row.hostname
                               }
-                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-border hover:bg-blue-50 hover:text-blue-900 dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-700 dark:hover:bg-blue-900 dark:hover:text-blue-300"
                             >
-                              {ALLOW_RECONNECT_LABEL}
-                            </button>
-                            <span class="text-xs text-muted">
-                              Ready to return to active monitoring
+                              <span>Hostname: {row.hostname}</span>
+                            </Show>
+                            <span>
+                              Stopped{' '}
+                              {row.removedAt
+                                ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
+                                : 'at an unknown time'}
                             </span>
                           </div>
                         </div>
-                      )}
-                    </For>
-                  </div>
+
+                        <div class="flex items-center gap-3 lg:flex-shrink-0">
+                          <button
+                            onClick={() =>
+                              row.capabilities.includes('docker')
+                                ? handleAllowReconnect(
+                                    row.dockerActionId || row.id,
+                                    row.displayName || row.hostname || row.name,
+                                  )
+                                : handleAllowKubernetesReconnect(
+                                    row.kubernetesActionId || row.id,
+                                    row.name,
+                                  )
+                            }
+                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-border hover:bg-blue-50 hover:text-blue-900 dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-700 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                          >
+                            {ALLOW_RECONNECT_LABEL}
+                          </button>
+                          <span class="text-xs text-muted">
+                            Ready to return to active monitoring
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </For>
                 </div>
-              </Show>
-            </div>
-          </Show>
+              </div>
+            </Show>
+          </SettingsPanel>
+        </Show>
         </div>
-        </SettingsPanel>
       </Show>
     </div>
   );
