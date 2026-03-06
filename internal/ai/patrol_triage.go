@@ -67,7 +67,7 @@ func (p *PatrolService) runDeterministicTriageState(
 ) *TriageResult {
 	_ = ctx
 
-	scopedSet := p.buildScopedSet(scope)
+	scopedSet := p.buildScopedSetForRuntime(scope, snap)
 	intel := p.seedPrecomputeIntelligenceState(snap, scopedSet, time.Now())
 
 	thresholds := p.GetThresholds()

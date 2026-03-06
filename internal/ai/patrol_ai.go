@@ -1227,7 +1227,7 @@ func (p *PatrolService) buildSeedContextState(snap patrolRuntimeState, scope *Pa
 	p.mu.RUnlock()
 
 	now := time.Now()
-	scopedSet := p.buildScopedSet(scope)
+	scopedSet := p.buildScopedSetForRuntime(scope, snap)
 	intel := p.seedPrecomputeIntelligenceState(snap, scopedSet, now)
 	findingsCtx, seededFindingIDs := p.seedFindingsAndContextState(scope, snap)
 
@@ -1404,7 +1404,8 @@ func buildScopeSection(scope *PatrolScope) string {
 	return sb.String()
 }
 
-// buildScopedSet constructs the set of resource IDs in scope, expanding with correlated resources.
+// buildScopedSet constructs the set of resource IDs in scope from explicit scope IDs,
+// expanding with correlated resources. It is preserved for direct ID-scoped callers/tests.
 func (p *PatrolService) buildScopedSet(scope *PatrolScope) map[string]bool {
 	if scope == nil || len(scope.ResourceIDs) == 0 {
 		return nil
@@ -1425,6 +1426,31 @@ func (p *PatrolService) buildScopedSet(scope *PatrolScope) map[string]bool {
 				scopedSet[c.TargetID] = true
 			}
 		}
+	}
+	return scopedSet
+}
+
+// buildScopedSetForRuntime constructs the effective scope set for a patrol runtime state.
+// For explicit resource-ID scopes, it preserves correlation expansion semantics.
+// For non-empty type-only scopes, it derives the scope from the already-filtered runtime state.
+func (p *PatrolService) buildScopedSetForRuntime(scope *PatrolScope, snap patrolRuntimeState) map[string]bool {
+	if scope == nil {
+		return nil
+	}
+	if len(scope.ResourceIDs) > 0 {
+		return p.buildScopedSet(scope)
+	}
+	if len(scope.ResourceTypes) == 0 && scope.AlertID == "" && scope.FindingID == "" && strings.TrimSpace(scope.Context) == "" {
+		return nil
+	}
+
+	resourceIDs := patrolRuntimeResourceIDs(snap)
+	if len(resourceIDs) == 0 {
+		return nil
+	}
+	scopedSet := make(map[string]bool, len(resourceIDs))
+	for _, id := range resourceIDs {
+		scopedSet[id] = true
 	}
 	return scopedSet
 }

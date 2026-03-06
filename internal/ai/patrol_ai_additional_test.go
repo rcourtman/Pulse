@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestSeedFormattingHelpers(t *testing.T) {
@@ -107,6 +109,67 @@ func TestPatrolService_BuildScopedSet_WithCorrelation(t *testing.T) {
 	}
 	if !scopedSet["vm:node1:101"] || !scopedSet["vm:node1:102"] {
 		t.Fatalf("expected correlated resources to be included, got: %+v", scopedSet)
+	}
+}
+
+func TestPatrolService_BuildScopedSetForRuntime_TypeOnlyScope(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	node := ur.NewNodeView(&ur.Resource{ID: "node-1", Name: "node-1", Type: ur.ResourceTypeAgent})
+
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "node-1"}},
+	})
+	runtimeState.readState = &mockReadState{
+		nodes: []*ur.NodeView{&node},
+	}
+
+	scopedSet := ps.buildScopedSetForRuntime(&PatrolScope{ResourceTypes: []string{"node"}}, runtimeState)
+	if scopedSet == nil {
+		t.Fatal("expected non-nil scoped set for type-only runtime scope")
+	}
+	if !scopedSet["node-1"] {
+		t.Fatalf("expected runtime scoped set to include filtered node, got %+v", scopedSet)
+	}
+	if len(scopedSet) != 1 {
+		t.Fatalf("expected runtime scoped set to contain only filtered resources, got %+v", scopedSet)
+	}
+}
+
+func TestBuildSeedContextState_TypeOnlyScopeUsesRuntimeScopedSet(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	changeDetector := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 10})
+	changeDetector.DetectChanges([]ResourceSnapshot{{
+		ID:           "qemu/101",
+		Name:         "vm-1",
+		Type:         "vm",
+		Status:       "running",
+		SnapshotTime: time.Now().Add(-2 * time.Hour),
+	}})
+	changeDetector.DetectChanges([]ResourceSnapshot{{
+		ID:           "qemu/101",
+		Name:         "vm-1",
+		Type:         "vm",
+		Status:       "stopped",
+		SnapshotTime: time.Now().Add(-time.Hour),
+	}})
+	ps.SetChangeDetector(changeDetector)
+
+	node := ur.NewNodeView(&ur.Resource{ID: "node-1", Name: "node-1", Type: ur.ResourceTypeAgent})
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "node-1"}},
+	})
+	runtimeState.readState = &mockReadState{
+		nodes: []*ur.NodeView{&node},
+	}
+
+	output, _ := ps.buildSeedContextState(runtimeState, &PatrolScope{ResourceTypes: []string{"node"}}, nil)
+	if strings.Contains(output, "# Recent Infrastructure Changes") {
+		t.Fatalf("expected type-only scoped patrol to omit out-of-scope recent changes, got: %s", output)
+	}
+	if strings.Contains(output, "vm-1") {
+		t.Fatalf("expected type-only scoped patrol to omit unrelated VM change context, got: %s", output)
 	}
 }
 
