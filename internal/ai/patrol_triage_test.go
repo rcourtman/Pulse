@@ -429,6 +429,9 @@ func TestTriageResourceTypeRejectsLegacyKnownTypeAliases(t *testing.T) {
 	if got := triageResourceType("docker", "qemu/100"); got != "vm" {
 		t.Fatalf("expected canonical vm type from resource ID when docker alias is provided, got %q", got)
 	}
+	if got := triageResourceType("physical-disk", "disk-1"); got != "physical_disk" {
+		t.Fatalf("expected physical-disk alias to normalize to canonical physical_disk, got %q", got)
+	}
 }
 
 func TestTriageResourceTypeCanonicalResourceIDs(t *testing.T) {
@@ -625,6 +628,9 @@ func TestFormatTriageBriefing(t *testing.T) {
 	if !strings.Contains(out, "## Healthy Resources") {
 		t.Fatalf("expected healthy summary section, got:\n%s", out)
 	}
+	if !strings.Contains(out, "Storage: 1 resources monitored") {
+		t.Fatalf("expected storage resources wording in output, got:\n%s", out)
+	}
 }
 
 func TestTriageBuildSummaryState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
@@ -732,10 +738,29 @@ func TestTriageBuildSummaryState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T
 				}(),
 			},
 		},
+		unifiedResourceProvider: &mockUnifiedResourceProvider{
+			getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+				if t != unifiedresources.ResourceTypePhysicalDisk {
+					return nil
+				}
+				return []unifiedresources.Resource{
+					{
+						ID:   "disk-1",
+						Name: "sda",
+						Type: unifiedresources.ResourceTypePhysicalDisk,
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath: "/dev/sda",
+							Model:   "sda",
+							Health:  "PASSED",
+						},
+					},
+				}
+			},
+		},
 	}
 
 	summary := triageBuildSummaryState(state, map[string]bool{"qemu/100": true})
-	if summary.TotalNodes != 1 || summary.TotalStorage != 1 || summary.TotalDocker != 1 || summary.TotalPBS != 1 || summary.TotalPMG != 1 {
+	if summary.TotalNodes != 1 || summary.TotalStorage != 2 || summary.TotalDocker != 1 || summary.TotalPBS != 1 || summary.TotalPMG != 1 {
 		t.Fatalf("unexpected non-guest summary counts from readState: %#v", summary)
 	}
 	if summary.TotalGuests != 3 || summary.RunningGuests != 2 || summary.StoppedGuests != 1 {

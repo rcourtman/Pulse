@@ -850,7 +850,7 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	if healthyNodes < 0 {
 		healthyNodes = 0
 	}
-	healthyStorage := triage.Summary.TotalStorage - triageUniqueFlaggedByType(triage.Flags, "storage")
+	healthyStorage := triage.Summary.TotalStorage - triageUniqueFlaggedByTypes(triage.Flags, "storage", "physical_disk")
 	if healthyStorage < 0 {
 		healthyStorage = 0
 	}
@@ -872,7 +872,7 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	sb.WriteString(fmt.Sprintf("## Healthy Resources (%d)\n", totalHealthy))
 	sb.WriteString(fmt.Sprintf("Nodes: %d healthy\n", healthyNodes))
 	sb.WriteString(fmt.Sprintf("Guests: %d running, %d stopped\n", triage.Summary.RunningGuests, triage.Summary.StoppedGuests))
-	sb.WriteString(fmt.Sprintf("Storage: %d pools monitored\n", healthyStorage))
+	sb.WriteString(fmt.Sprintf("Storage: %d resources monitored\n", healthyStorage))
 	sb.WriteString(fmt.Sprintf("Docker: %d hosts\n", healthyDocker))
 	sb.WriteString(fmt.Sprintf("PBS: %d instances\n", healthyPBS))
 	sb.WriteString(fmt.Sprintf("PMG: %d instances\n", healthyPMG))
@@ -886,9 +886,15 @@ func triageBuildSummary(snap models.StateSnapshot, flaggedIDs map[string]bool) T
 
 func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool) TriageSummary {
 	if rs := snap.readState; rs != nil {
+		totalStorage := len(rs.StoragePools())
+		if snap.unifiedResourceProvider != nil {
+			totalStorage += len(snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
+		} else {
+			totalStorage += len(snap.PhysicalDisks)
+		}
 		summary := TriageSummary{
 			TotalNodes:   len(rs.Nodes()),
-			TotalStorage: len(rs.StoragePools()),
+			TotalStorage: totalStorage,
 			TotalDocker:  len(rs.DockerHosts()),
 			TotalPBS:     len(rs.PBSInstances()),
 			TotalPMG:     len(rs.PMGInstances()),
@@ -926,7 +932,7 @@ func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool
 
 	summary := TriageSummary{
 		TotalNodes:   len(snap.Nodes),
-		TotalStorage: len(snap.Storage),
+		TotalStorage: len(snap.Storage) + len(snap.PhysicalDisks),
 		TotalDocker:  len(snap.DockerHosts),
 		TotalPBS:     len(snap.PBSInstances),
 		TotalPMG:     len(snap.PMGInstances),
@@ -1130,9 +1136,12 @@ func triageGuestResourceType(knownType, resourceID string) string {
 }
 
 func triageCanonicalResourceType(resourceType string) string {
-	switch strings.ToLower(strings.TrimSpace(resourceType)) {
-	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent":
-		return strings.ToLower(strings.TrimSpace(resourceType))
+	switch normalized := strings.ToLower(strings.TrimSpace(resourceType)); normalized {
+	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent", "physical_disk", "physical-disk":
+		if normalized == "physical-disk" {
+			return "physical_disk"
+		}
+		return normalized
 	default:
 		return ""
 	}
