@@ -20,7 +20,10 @@ type mockReadState struct {
 	vms         []*ur.VMView
 	containers  []*ur.ContainerView
 	hosts       []*ur.HostView
+	dockerHosts []*ur.DockerHostView
 	storage     []*ur.StoragePoolView
+	pbs         []*ur.PBSInstanceView
+	pmg         []*ur.PMGInstanceView
 	k8sClusters []*ur.K8sClusterView
 }
 
@@ -28,13 +31,13 @@ func (m *mockReadState) Nodes() []*ur.NodeView             { return m.nodes }
 func (m *mockReadState) VMs() []*ur.VMView                 { return m.vms }
 func (m *mockReadState) Containers() []*ur.ContainerView   { return m.containers }
 func (m *mockReadState) Hosts() []*ur.HostView             { return m.hosts }
-func (m *mockReadState) DockerHosts() []*ur.DockerHostView { return nil }
+func (m *mockReadState) DockerHosts() []*ur.DockerHostView { return m.dockerHosts }
 func (m *mockReadState) DockerContainers() []*ur.DockerContainerView {
 	return nil
 }
 func (m *mockReadState) StoragePools() []*ur.StoragePoolView     { return m.storage }
-func (m *mockReadState) PBSInstances() []*ur.PBSInstanceView     { return nil }
-func (m *mockReadState) PMGInstances() []*ur.PMGInstanceView     { return nil }
+func (m *mockReadState) PBSInstances() []*ur.PBSInstanceView     { return m.pbs }
+func (m *mockReadState) PMGInstances() []*ur.PMGInstanceView     { return m.pmg }
 func (m *mockReadState) K8sClusters() []*ur.K8sClusterView       { return m.k8sClusters }
 func (m *mockReadState) K8sNodes() []*ur.K8sNodeView             { return nil }
 func (m *mockReadState) Pods() []*ur.PodView                     { return nil }

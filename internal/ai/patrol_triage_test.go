@@ -597,6 +597,125 @@ func TestFormatTriageBriefing(t *testing.T) {
 	}
 }
 
+func TestTriageBuildSummaryState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
+	state := patrolRuntimeState{
+		readState: &mockReadState{
+			nodes: []*unifiedresources.NodeView{
+				func() *unifiedresources.NodeView {
+					node := unifiedresources.NewNodeView(&unifiedresources.Resource{
+						ID:     "node/pve1",
+						Name:   "pve1",
+						Type:   unifiedresources.ResourceTypeAgent,
+						Status: unifiedresources.StatusOnline,
+					})
+					return &node
+				}(),
+			},
+			vms: []*unifiedresources.VMView{
+				func() *unifiedresources.VMView {
+					vm := unifiedresources.NewVMView(&unifiedresources.Resource{
+						ID:     "qemu/100",
+						Name:   "vm-run",
+						Type:   unifiedresources.ResourceTypeVM,
+						Status: "running",
+						Proxmox: &unifiedresources.ProxmoxData{
+							SourceID: "qemu/100",
+							VMID:     100,
+							NodeName: "pve1",
+						},
+					})
+					return &vm
+				}(),
+				func() *unifiedresources.VMView {
+					vm := unifiedresources.NewVMView(&unifiedresources.Resource{
+						ID:     "qemu/101",
+						Name:   "vm-stop",
+						Type:   unifiedresources.ResourceTypeVM,
+						Status: "stopped",
+						Proxmox: &unifiedresources.ProxmoxData{
+							SourceID: "qemu/101",
+							VMID:     101,
+							NodeName: "pve1",
+						},
+					})
+					return &vm
+				}(),
+			},
+			containers: []*unifiedresources.ContainerView{
+				func() *unifiedresources.ContainerView {
+					ct := unifiedresources.NewContainerView(&unifiedresources.Resource{
+						ID:     "lxc/200",
+						Name:   "ct-run",
+						Type:   unifiedresources.ResourceTypeSystemContainer,
+						Status: "running",
+						Proxmox: &unifiedresources.ProxmoxData{
+							SourceID: "lxc/200",
+							VMID:     200,
+							NodeName: "pve1",
+						},
+					})
+					return &ct
+				}(),
+			},
+			storage: []*unifiedresources.StoragePoolView{
+				func() *unifiedresources.StoragePoolView {
+					storage := unifiedresources.NewStoragePoolView(&unifiedresources.Resource{
+						ID:     "storage/local",
+						Name:   "local",
+						Type:   unifiedresources.ResourceTypeStorage,
+						Status: unifiedresources.StatusOnline,
+					})
+					return &storage
+				}(),
+			},
+			dockerHosts: []*unifiedresources.DockerHostView{
+				func() *unifiedresources.DockerHostView {
+					host := unifiedresources.NewDockerHostView(&unifiedresources.Resource{
+						ID:     "docker-host-1",
+						Name:   "docker-a",
+						Type:   unifiedresources.ResourceTypeAppContainer,
+						Status: unifiedresources.StatusOnline,
+					})
+					return &host
+				}(),
+			},
+			pbs: []*unifiedresources.PBSInstanceView{
+				func() *unifiedresources.PBSInstanceView {
+					pbs := unifiedresources.NewPBSInstanceView(&unifiedresources.Resource{
+						ID:     "pbs-1",
+						Name:   "pbs-a",
+						Type:   unifiedresources.ResourceTypePBS,
+						Status: unifiedresources.StatusOnline,
+					})
+					return &pbs
+				}(),
+			},
+			pmg: []*unifiedresources.PMGInstanceView{
+				func() *unifiedresources.PMGInstanceView {
+					pmg := unifiedresources.NewPMGInstanceView(&unifiedresources.Resource{
+						ID:     "pmg-1",
+						Name:   "pmg-a",
+						Type:   unifiedresources.ResourceTypePMG,
+						Status: unifiedresources.StatusOnline,
+					})
+					return &pmg
+				}(),
+			},
+		},
+	}
+
+	summary := triageBuildSummaryState(state, map[string]bool{"qemu/100": true})
+	if summary.TotalNodes != 1 || summary.TotalStorage != 1 || summary.TotalDocker != 1 || summary.TotalPBS != 1 || summary.TotalPMG != 1 {
+		t.Fatalf("unexpected non-guest summary counts from readState: %#v", summary)
+	}
+	if summary.TotalGuests != 3 || summary.RunningGuests != 2 || summary.StoppedGuests != 1 {
+		t.Fatalf("unexpected guest summary counts from readState: %#v", summary)
+	}
+	if summary.FlaggedCount != 1 {
+		t.Fatalf("expected flagged count to be preserved, got %#v", summary)
+	}
+}
+
 func triageFindFlag(flags []TriageFlag, predicate func(TriageFlag) bool) *TriageFlag {
 	for _, flag := range flags {
 		if predicate(flag) {

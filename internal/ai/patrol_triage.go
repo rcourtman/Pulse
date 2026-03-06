@@ -854,6 +854,45 @@ func triageBuildSummary(snap models.StateSnapshot, flaggedIDs map[string]bool) T
 }
 
 func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool) TriageSummary {
+	if rs := snap.readState; rs != nil {
+		summary := TriageSummary{
+			TotalNodes:   len(rs.Nodes()),
+			TotalStorage: len(rs.StoragePools()),
+			TotalDocker:  len(rs.DockerHosts()),
+			TotalPBS:     len(rs.PBSInstances()),
+			TotalPMG:     len(rs.PMGInstances()),
+			FlaggedCount: len(flaggedIDs),
+		}
+
+		for _, vm := range rs.VMs() {
+			if vm.Template() {
+				continue
+			}
+			summary.TotalGuests++
+			if strings.EqualFold(string(vm.Status()), "running") {
+				summary.RunningGuests++
+			} else {
+				summary.StoppedGuests++
+			}
+		}
+
+		for _, ct := range rs.Containers() {
+			if ct.Template() {
+				continue
+			}
+			summary.TotalGuests++
+			if strings.EqualFold(string(ct.Status()), "running") {
+				summary.RunningGuests++
+			} else {
+				summary.StoppedGuests++
+			}
+		}
+
+		if summary.TotalNodes > 0 || summary.TotalGuests > 0 || summary.TotalStorage > 0 || summary.TotalDocker > 0 || summary.TotalPBS > 0 || summary.TotalPMG > 0 {
+			return summary
+		}
+	}
+
 	summary := TriageSummary{
 		TotalNodes:   len(snap.Nodes),
 		TotalStorage: len(snap.Storage),
