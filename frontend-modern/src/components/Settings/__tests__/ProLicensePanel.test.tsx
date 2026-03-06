@@ -12,11 +12,11 @@ const activateLicenseMock = vi.fn();
 const clearLicenseMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
-const trackUpgradeMetricEventMock = vi.fn();
 
 vi.mock('@/stores/license', () => ({
   getUpgradeActionUrlOrFallback: () => '/pricing',
   isMultiTenantEnabled: () => true,
+  licenseLoadError: () => false,
   licenseStatus: () => mockEntitlements,
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
@@ -36,10 +36,6 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
-vi.mock('@/utils/upgradeMetrics', () => ({
-  trackUpgradeMetricEvent: (...args: unknown[]) => trackUpgradeMetricEventMock(...args),
-}));
-
 describe('ProLicensePanel', () => {
   beforeEach(() => {
     mockEntitlements = {
@@ -57,8 +53,6 @@ describe('ProLicensePanel', () => {
     clearLicenseMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
-    trackUpgradeMetricEventMock.mockReset();
-
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
@@ -188,10 +182,19 @@ describe('ProLicensePanel', () => {
     await waitFor(() => {
       expect(startProTrialMock).toHaveBeenCalledTimes(1);
     });
-    expect(trackUpgradeMetricEventMock).toHaveBeenCalledWith({
-      type: 'trial_started',
-      surface: 'license_panel',
-    });
     expect(notificationSuccessMock).toHaveBeenCalledWith('Pro trial started');
+  });
+
+  it('shows migration guidance when the pasted key looks like a legacy v5 license', async () => {
+    render(() => <ProLicensePanel />);
+
+    fireEvent.input(screen.getByLabelText(/license \/ activation key/i), {
+      target: { value: 'header.payload.signature' },
+    });
+
+    expect(screen.getByText('Legacy v5 license detected')).toBeInTheDocument();
+    expect(
+      screen.getByText(/retrieve your migrated activation key from your Pulse account/i),
+    ).toBeInTheDocument();
   });
 });

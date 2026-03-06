@@ -317,6 +317,9 @@ func TestHandleActivateLicense_RejectsLegacyJWTInStrictV6(t *testing.T) {
 	if !strings.Contains(resp.Message, "activation key") {
 		t.Fatalf("expected activation-key guidance in error message, got %q", resp.Message)
 	}
+	if !strings.Contains(strings.ToLower(resp.Message), "v5") {
+		t.Fatalf("expected v5 migration guidance in error message, got %q", resp.Message)
+	}
 }
 
 func TestHandleActivateLicense_InvalidBody(t *testing.T) {
@@ -463,6 +466,9 @@ func TestUserFriendlyActivationError_NoGoErrorChainSyntax(t *testing.T) {
 			check: func(t *testing.T, msg string) {
 				if strings.Contains(msg, "JWT") {
 					t.Errorf("message leaks JWT terminology: %q", msg)
+				}
+				if !strings.Contains(strings.ToLower(msg), "v5") {
+					t.Errorf("message should mention v5 migration: %q", msg)
 				}
 				if !strings.Contains(msg, "activation key") {
 					t.Errorf("message should mention activation key: %q", msg)

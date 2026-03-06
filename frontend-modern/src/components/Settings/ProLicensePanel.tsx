@@ -205,6 +205,16 @@ export const ProLicensePanel: Component = () => {
     return 'Unknown';
   });
 
+  const looksLikeLegacyLicenseKey = createMemo(() => {
+    const trimmed = licenseKey().trim();
+    if (!trimmed || trimmed.startsWith('ppk_live_')) {
+      return false;
+    }
+
+    const segments = trimmed.split('.');
+    return segments.length === 3 && segments.every((segment) => segment.length > 0);
+  });
+
   const maxLimit = (key: string) => {
     const limit = entitlements()?.limits?.find((entry) => entry.key === key)?.limit;
     return typeof limit === 'number' && limit > 0 ? limit : 'Unlimited';
@@ -289,8 +299,9 @@ export const ProLicensePanel: Component = () => {
             onInput={(event) => setLicenseKey(event.currentTarget.value)}
           />
           <p class={formHelpText}>
-            Paste a license key or activation key. Activation keys are validated with the Pulse
-            license server. By activating a license, you agree to the{' '}
+            Paste a Pulse v6 activation key. Legacy Pulse v5 license keys are not accepted
+            directly in v6. If you purchased Pro or Lifetime on v5, first retrieve your migrated
+            activation key from your Pulse account. By activating a license, you agree to the{' '}
             <a
               href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md"
               target="_blank"
@@ -301,6 +312,16 @@ export const ProLicensePanel: Component = () => {
             </a>
             .
           </p>
+          <Show when={looksLikeLegacyLicenseKey()}>
+            <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
+              <p class="font-medium">Legacy v5 license detected</p>
+              <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Pulse v6 uses activation keys. If you bought Pro or Lifetime on v5, retrieve the
+                migrated activation key from your Pulse account. If none is shown there, contact
+                support before activating.
+              </p>
+            </div>
+          </Show>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button
