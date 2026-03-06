@@ -198,35 +198,55 @@ func TestSeedResourceInventorySummary(t *testing.T) {
 	totalOne := int64(1000)
 	usedTwo := int64(870)
 	totalTwo := int64(1000)
+	diskSize := int64(2 * 1024 * 1024 * 1024 * 1024)
 	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
 		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
-			if t != unifiedresources.ResourceTypeStorage {
-				return nil
+			if t == unifiedresources.ResourceTypeStorage {
+				return []unifiedresources.Resource{
+					{
+						ID:     "store-1",
+						Name:   "local-lvm",
+						Status: unifiedresources.StatusOnline,
+						Storage: &unifiedresources.StorageMeta{
+							Type: "lvm",
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							Disk: &unifiedresources.MetricValue{Used: &usedOne, Total: &totalOne},
+						},
+					},
+					{
+						ID:     "store-2",
+						Name:   "ceph-pool",
+						Status: unifiedresources.StatusOnline,
+						Storage: &unifiedresources.StorageMeta{
+							Type: "ceph",
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							Disk: &unifiedresources.MetricValue{Used: &usedTwo, Total: &totalTwo},
+						},
+					},
+				}
 			}
-			return []unifiedresources.Resource{
-				{
-					ID:     "store-1",
-					Name:   "local-lvm",
-					Status: unifiedresources.StatusOnline,
-					Storage: &unifiedresources.StorageMeta{
-						Type: "lvm",
+			if t == unifiedresources.ResourceTypePhysicalDisk {
+				return []unifiedresources.Resource{
+					{
+						ID:         "disk-1",
+						Name:       "nvme-disk",
+						Type:       unifiedresources.ResourceTypePhysicalDisk,
+						Status:     unifiedresources.StatusOnline,
+						ParentName: "node-1",
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:   "/dev/nvme0n1",
+							Model:     "Samsung PM9A3",
+							DiskType:  "nvme",
+							SizeBytes: diskSize,
+							Health:    "PASSED",
+							Wearout:   92,
+						},
 					},
-					Metrics: &unifiedresources.ResourceMetrics{
-						Disk: &unifiedresources.MetricValue{Used: &usedOne, Total: &totalOne},
-					},
-				},
-				{
-					ID:     "store-2",
-					Name:   "ceph-pool",
-					Status: unifiedresources.StatusOnline,
-					Storage: &unifiedresources.StorageMeta{
-						Type: "ceph",
-					},
-					Metrics: &unifiedresources.ResourceMetrics{
-						Disk: &unifiedresources.MetricValue{Used: &usedTwo, Total: &totalTwo},
-					},
-				},
+				}
 			}
+			return nil
 		},
 	})
 
@@ -240,6 +260,7 @@ func TestSeedResourceInventorySummary(t *testing.T) {
 		"lxc/200":  true,
 		"store-1":  true,
 		"store-2":  true,
+		"disk-1":   true,
 	}
 
 	out := ps.seedResourceInventorySummary(state, scopedSet, cfg, time.Now(), nil)
@@ -251,7 +272,7 @@ func TestSeedResourceInventorySummary(t *testing.T) {
 		"Guests: 4 (running: 3, stopped: 1)",
 		"webserver-01 (CPU 89%)",
 		"db-primary (Mem 94%)",
-		"Storage: 2 pools (active: 2)",
+		"Storage: 3 resources (2 pools, 1 disk; active: 2, online: 1)",
 		"local-lvm (91%)",
 		"ceph-pool (87%)",
 	} {

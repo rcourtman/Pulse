@@ -1679,6 +1679,23 @@ type patrolDockerHostRow struct {
 	unhealthyContainers []string
 }
 
+type patrolStoragePoolRow struct {
+	id, name, stype, node, status string
+	used, total                   int64
+	hasBytes                      bool
+	usage                         float64
+	zfsRead, zfsWrite, zfsCksum   int64
+	hasZFSErrors                  bool
+}
+
+type patrolPhysicalDiskRow struct {
+	id, name, node, diskType string
+	sizeBytes                int64
+	devPath, model           string
+	health, status           string
+	wearout, temperature     int
+}
+
 type patrolPrecomputeNodeSource struct {
 	id, name    string
 	cpuFraction float64
@@ -1941,6 +1958,197 @@ func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []
 			}
 		}
 		rows = append(rows, row)
+	}
+	return rows
+}
+
+func patrolStoragePoolRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolStoragePoolRow {
+	urp := snap.unifiedResourceProvider
+	if urp != nil {
+		storageResources := urp.GetByType(unifiedresources.ResourceTypeStorage)
+		rows := make([]patrolStoragePoolRow, 0, len(storageResources))
+		for _, r := range storageResources {
+			if !seedIsInScope(scopedSet, r.ID) || r.Storage == nil {
+				continue
+			}
+
+			name := strings.TrimSpace(r.Name)
+			if name == "" {
+				name = strings.TrimSpace(r.ID)
+			}
+			stype := strings.TrimSpace(r.Storage.Type)
+			if stype == "" {
+				stype = "-"
+			}
+
+			node := ""
+			if r.Proxmox != nil {
+				node = strings.TrimSpace(r.Proxmox.NodeName)
+			}
+			if node == "" && r.Storage.Shared {
+				node = "shared"
+			}
+
+			used, total := int64(0), int64(0)
+			hasBytes := false
+			usage := 0.0
+			if r.Metrics != nil && r.Metrics.Disk != nil {
+				if r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil {
+					used, total = *r.Metrics.Disk.Used, *r.Metrics.Disk.Total
+					hasBytes = true
+				}
+				if r.Metrics.Disk.Percent > 0 {
+					usage = r.Metrics.Disk.Percent
+				} else if hasBytes && total > 0 {
+					usage = (float64(used) / float64(total)) * 100
+				}
+			}
+
+			status := "active"
+			switch r.Status {
+			case unifiedresources.StatusOffline:
+				status = "inactive"
+			case unifiedresources.StatusUnknown:
+				status = "unknown"
+			case unifiedresources.StatusWarning:
+				status = "warning"
+			}
+			if r.Storage.IsZFS && strings.TrimSpace(r.Storage.ZFSPoolState) != "" {
+				status = strings.TrimSpace(r.Storage.ZFSPoolState)
+			}
+
+			zfsRead := r.Storage.ZFSReadErrors
+			zfsWrite := r.Storage.ZFSWriteErrors
+			zfsCksum := r.Storage.ZFSChecksumErrors
+			hasZFSErrors := r.Storage.IsZFS && (zfsRead > 0 || zfsWrite > 0 || zfsCksum > 0)
+
+			rows = append(rows, patrolStoragePoolRow{
+				id:           r.ID,
+				name:         name,
+				stype:        stype,
+				node:         node,
+				status:       status,
+				used:         used,
+				total:        total,
+				hasBytes:     hasBytes,
+				usage:        usage,
+				zfsRead:      zfsRead,
+				zfsWrite:     zfsWrite,
+				zfsCksum:     zfsCksum,
+				hasZFSErrors: hasZFSErrors,
+			})
+		}
+		return rows
+	}
+
+	rows := make([]patrolStoragePoolRow, 0, len(snap.Storage))
+	for _, s := range snap.Storage {
+		if !seedIsInScope(scopedSet, s.ID) {
+			continue
+		}
+		name := strings.TrimSpace(s.Name)
+		if name == "" {
+			name = strings.TrimSpace(s.ID)
+		}
+		node := strings.TrimSpace(s.Node)
+		if node == "" && s.Shared {
+			node = "shared"
+		}
+		stype := strings.TrimSpace(s.Type)
+		if stype == "" {
+			stype = "-"
+		}
+		rows = append(rows, patrolStoragePoolRow{
+			id:       s.ID,
+			name:     name,
+			stype:    stype,
+			node:     node,
+			status:   strings.TrimSpace(s.Status),
+			used:     s.Used,
+			total:    s.Total,
+			hasBytes: s.Total > 0,
+			usage:    s.Usage,
+		})
+	}
+	return rows
+}
+
+func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPhysicalDiskRow {
+	urp := snap.unifiedResourceProvider
+	if urp != nil {
+		diskResources := urp.GetByType(unifiedresources.ResourceTypePhysicalDisk)
+		rows := make([]patrolPhysicalDiskRow, 0, len(diskResources))
+		for _, r := range diskResources {
+			if !seedIsInScope(scopedSet, r.ID) || r.PhysicalDisk == nil {
+				continue
+			}
+
+			name := strings.TrimSpace(r.Name)
+			if name == "" {
+				name = strings.TrimSpace(r.ID)
+			}
+			status := strings.TrimSpace(string(r.Status))
+			if status == "" {
+				status = "unknown"
+			}
+			health := strings.TrimSpace(r.PhysicalDisk.Health)
+			if health == "" {
+				health = "UNKNOWN"
+			}
+
+			rows = append(rows, patrolPhysicalDiskRow{
+				id:          r.ID,
+				name:        name,
+				node:        strings.TrimSpace(r.ParentName),
+				diskType:    strings.TrimSpace(r.PhysicalDisk.DiskType),
+				sizeBytes:   r.PhysicalDisk.SizeBytes,
+				devPath:     strings.TrimSpace(r.PhysicalDisk.DevPath),
+				model:       strings.TrimSpace(r.PhysicalDisk.Model),
+				health:      health,
+				status:      status,
+				wearout:     r.PhysicalDisk.Wearout,
+				temperature: r.PhysicalDisk.Temperature,
+			})
+		}
+		return rows
+	}
+
+	rows := make([]patrolPhysicalDiskRow, 0, len(snap.PhysicalDisks))
+	for _, d := range snap.PhysicalDisks {
+		if !seedIsInScope(scopedSet, d.ID) {
+			continue
+		}
+		name := strings.TrimSpace(d.Model)
+		if name == "" {
+			name = strings.TrimSpace(d.DevPath)
+		}
+		status := strings.ToLower(strings.TrimSpace(d.Health))
+		switch status {
+		case "passed", "ok":
+			status = "online"
+		case "failed":
+			status = "inactive"
+		case "":
+			status = "unknown"
+		}
+		health := strings.TrimSpace(d.Health)
+		if health == "" {
+			health = "UNKNOWN"
+		}
+
+		rows = append(rows, patrolPhysicalDiskRow{
+			id:          d.ID,
+			name:        name,
+			node:        strings.TrimSpace(d.Node),
+			diskType:    strings.TrimSpace(d.Type),
+			sizeBytes:   d.Size,
+			devPath:     strings.TrimSpace(d.DevPath),
+			model:       strings.TrimSpace(d.Model),
+			health:      health,
+			status:      status,
+			wearout:     d.Wearout,
+			temperature: d.Temperature,
+		})
 	}
 	return rows
 }
@@ -2228,132 +2436,118 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 
 	// --- Storage Pools ---
 	if cfg.AnalyzeStorage {
-		urp := snap.unifiedResourceProvider
-		if urp != nil {
-			storageResources := urp.GetByType(unifiedresources.ResourceTypeStorage)
-			if len(storageResources) > 0 {
-				type seedStorageRow struct {
-					id, name, stype, node, status string
-					used, total                   int64
-					hasBytes                      bool
-					usage                         float64
-					zfsRead, zfsWrite, zfsCksum   int64
-					hasZFSErrors                  bool
+		poolRows := patrolStoragePoolRows(snap, scopedSet)
+		diskRows := patrolPhysicalDiskRows(snap, scopedSet)
+
+		if len(poolRows) > 0 {
+			sort.Slice(poolRows, func(i, j int) bool { return poolRows[i].name < poolRows[j].name })
+		}
+		if len(diskRows) > 0 {
+			sort.Slice(diskRows, func(i, j int) bool {
+				if diskRows[i].node != diskRows[j].node {
+					return diskRows[i].node < diskRows[j].node
 				}
-
-				rows := make([]seedStorageRow, 0, len(storageResources))
-				for _, r := range storageResources {
-					if scopedSet != nil && !seedIsInScope(scopedSet, r.ID) {
-						continue
-					}
-					if r.Storage == nil {
-						continue
-					}
-
-					name := strings.TrimSpace(r.Name)
-					if name == "" {
-						name = strings.TrimSpace(r.ID)
-					}
-					stype := strings.TrimSpace(r.Storage.Type)
-					if stype == "" {
-						stype = "-"
-					}
-
-					node := ""
-					if r.Proxmox != nil {
-						node = strings.TrimSpace(r.Proxmox.NodeName)
-					}
-					if node == "" && r.Storage.Shared {
-						node = "shared"
-					}
-
-					used, total := int64(0), int64(0)
-					hasBytes := false
-					usage := 0.0
-					if r.Metrics != nil && r.Metrics.Disk != nil {
-						if r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil {
-							used, total = *r.Metrics.Disk.Used, *r.Metrics.Disk.Total
-							hasBytes = true
-						}
-						if r.Metrics.Disk.Percent > 0 {
-							usage = r.Metrics.Disk.Percent
-						} else if hasBytes && total > 0 {
-							usage = (float64(used) / float64(total)) * 100
-						}
-					}
-
-					status := "active"
-					switch r.Status {
-					case unifiedresources.StatusOffline:
-						status = "inactive"
-					case unifiedresources.StatusUnknown:
-						status = "unknown"
-					}
-					if r.Storage.IsZFS && strings.TrimSpace(r.Storage.ZFSPoolState) != "" {
-						status = strings.TrimSpace(r.Storage.ZFSPoolState)
-					}
-
-					zfsRead := r.Storage.ZFSReadErrors
-					zfsWrite := r.Storage.ZFSWriteErrors
-					zfsCksum := r.Storage.ZFSChecksumErrors
-					hasZFSErrors := r.Storage.IsZFS && (zfsRead > 0 || zfsWrite > 0 || zfsCksum > 0)
-
-					rows = append(rows, seedStorageRow{
-						id:           r.ID,
-						name:         name,
-						stype:        stype,
-						node:         node,
-						status:       status,
-						used:         used,
-						total:        total,
-						hasBytes:     hasBytes,
-						usage:        usage,
-						zfsRead:      zfsRead,
-						zfsWrite:     zfsWrite,
-						zfsCksum:     zfsCksum,
-						hasZFSErrors: hasZFSErrors,
-					})
+				if diskRows[i].devPath != diskRows[j].devPath {
+					return diskRows[i].devPath < diskRows[j].devPath
 				}
+				return diskRows[i].name < diskRows[j].name
+			})
+		}
 
-				if len(rows) > 0 {
-					sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
-					if isQuiet && scopedSet == nil {
-						minUsage, maxUsage := 100.0, 0.0
-						for _, row := range rows {
-							if row.usage < minUsage {
-								minUsage = row.usage
-							}
-							if row.usage > maxUsage {
-								maxUsage = row.usage
-							}
+		if len(poolRows) > 0 || len(diskRows) > 0 {
+			if isQuiet && scopedSet == nil {
+				parts := make([]string, 0, 2)
+				if len(poolRows) > 0 {
+					minUsage, maxUsage := 100.0, 0.0
+					for _, row := range poolRows {
+						if row.usage < minUsage {
+							minUsage = row.usage
 						}
-						sb.WriteString(fmt.Sprintf("# Storage: %d pools, all within normal range (%.0f-%.0f%% used).\n\n",
-							len(rows), minUsage, maxUsage))
-					} else {
-						sb.WriteString("# Storage\n")
-						sb.WriteString("| Pool | Type | Node | Usage | Used | Total | Status |\n")
-						sb.WriteString("|------|------|------|-------|------|-------|--------|\n")
-						for _, row := range rows {
-							usedStr, totalStr := "—", "—"
-							if row.hasBytes {
-								usedStr, totalStr = seedFormatBytes(row.used), seedFormatBytes(row.total)
-							}
-							node := row.node
-							if node == "" {
-								node = "—"
-							}
-							sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %s | %s |\n",
-								row.name, row.stype, node, row.usage, usedStr, totalStr, row.status))
+						if row.usage > maxUsage {
+							maxUsage = row.usage
 						}
-						for _, row := range rows {
-							if row.hasZFSErrors {
-								sb.WriteString(fmt.Sprintf("- %s ZFS errors: read=%d write=%d checksum=%d\n",
-									row.name, row.zfsRead, row.zfsWrite, row.zfsCksum))
-							}
+					}
+					parts = append(parts, fmt.Sprintf("%d %s (%.0f-%.0f%% used)", len(poolRows), seedCountLabel(len(poolRows), "pool", "pools"), minUsage, maxUsage))
+				}
+				if len(diskRows) > 0 {
+					diskIssues := 0
+					for _, row := range diskRows {
+						if !strings.EqualFold(row.health, "PASSED") || row.status != "online" {
+							diskIssues++
 						}
+					}
+					diskSummary := fmt.Sprintf("%d %s healthy", len(diskRows), seedCountLabel(len(diskRows), "disk", "disks"))
+					if diskIssues > 0 {
+						diskSummary = fmt.Sprintf("%d %s, %d with issues", len(diskRows), seedCountLabel(len(diskRows), "disk", "disks"), diskIssues)
+					}
+					parts = append(parts, diskSummary)
+				}
+				sb.WriteString(fmt.Sprintf("# Storage: %s.\n\n", strings.Join(parts, "; ")))
+			} else {
+				sb.WriteString("# Storage\n")
+				if len(poolRows) > 0 {
+					sb.WriteString("## Pools\n")
+					sb.WriteString("| Pool | Type | Node | Usage | Used | Total | Status |\n")
+					sb.WriteString("|------|------|------|-------|------|-------|--------|\n")
+					for _, row := range poolRows {
+						usedStr, totalStr := "—", "—"
+						if row.hasBytes {
+							usedStr, totalStr = seedFormatBytes(row.used), seedFormatBytes(row.total)
+						}
+						node := row.node
+						if node == "" {
+							node = "—"
+						}
+						sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %s | %s |\n",
+							row.name, row.stype, node, row.usage, usedStr, totalStr, row.status))
+					}
+					for _, row := range poolRows {
+						if row.hasZFSErrors {
+							sb.WriteString(fmt.Sprintf("- %s ZFS errors: read=%d write=%d checksum=%d\n",
+								row.name, row.zfsRead, row.zfsWrite, row.zfsCksum))
+						}
+					}
+				}
+				if len(diskRows) > 0 {
+					if len(poolRows) > 0 {
 						sb.WriteString("\n")
 					}
+					sb.WriteString("## Physical Disks\n")
+					sb.WriteString("| Disk | Node | Type | Size | Health | Wear | Temp | Status |\n")
+					sb.WriteString("|------|------|------|------|--------|------|------|--------|\n")
+					for _, row := range diskRows {
+						diskName := row.devPath
+						if diskName == "" {
+							diskName = row.name
+						}
+						if row.model != "" {
+							diskName = fmt.Sprintf("%s (%s)", diskName, row.model)
+						}
+						node := row.node
+						if node == "" {
+							node = "—"
+						}
+						diskType := row.diskType
+						if diskType == "" {
+							diskType = "—"
+						}
+						size := "—"
+						if row.sizeBytes > 0 {
+							size = seedFormatBytes(row.sizeBytes)
+						}
+						wear := "—"
+						if row.wearout >= 0 {
+							wear = fmt.Sprintf("%d%%", row.wearout)
+						}
+						temp := "—"
+						if row.temperature > 0 {
+							temp = fmt.Sprintf("%dC", row.temperature)
+						}
+						sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s |\n",
+							diskName, node, diskType, size, row.health, wear, temp, row.status))
+					}
 				}
+				sb.WriteString("\n\n")
 			}
 		}
 	}
@@ -2517,72 +2711,42 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 
 	// --- Storage ---
 	if cfg.AnalyzeStorage {
-		type storageRow struct {
-			name, status string
-			usage        float64
-		}
+		poolRows := patrolStoragePoolRows(snap, scopedSet)
+		diskRows := patrolPhysicalDiskRows(snap, scopedSet)
 
-		urp := snap.unifiedResourceProvider
-
-		rows := []storageRow{}
-		if urp != nil {
-			for _, r := range urp.GetByType(unifiedresources.ResourceTypeStorage) {
-				if scopedSet != nil && !seedIsInScope(scopedSet, r.ID) {
-					continue
-				}
-				if r.Storage == nil {
-					continue
-				}
-
-				name := strings.TrimSpace(r.Name)
-				if name == "" {
-					name = strings.TrimSpace(r.ID)
-				}
-				status := "active"
-				switch r.Status {
-				case unifiedresources.StatusOffline:
-					status = "inactive"
-				case unifiedresources.StatusUnknown:
-					status = "unknown"
-				}
-				if r.Storage.IsZFS && strings.TrimSpace(r.Storage.ZFSPoolState) != "" {
-					status = strings.TrimSpace(r.Storage.ZFSPoolState)
-				}
-
-				usage := 0.0
-				if r.Metrics != nil && r.Metrics.Disk != nil {
-					if r.Metrics.Disk.Percent > 0 {
-						usage = r.Metrics.Disk.Percent
-					} else if r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil && *r.Metrics.Disk.Total > 0 {
-						usage = (float64(*r.Metrics.Disk.Used) / float64(*r.Metrics.Disk.Total)) * 100
-					}
-				}
-
-				rows = append(rows, storageRow{name: name, status: status, usage: usage})
-			}
-		} else {
-			for _, s := range snap.Storage {
-				if !seedIsInScope(scopedSet, s.ID) {
-					continue
-				}
-				rows = append(rows, storageRow{name: s.Name, status: s.Status, usage: s.Usage})
-			}
-		}
-
-		if len(rows) > 0 {
+		if len(poolRows) > 0 || len(diskRows) > 0 {
 			statusCounts := map[string]int{}
-			outliers := []string{}
-			for _, row := range rows {
-				statusCounts[row.status]++
+			usageOutliers := []string{}
+			for _, row := range poolRows {
+				statusCounts[strings.ToLower(strings.TrimSpace(row.status))]++
 				if row.usage > 80 {
-					outliers = append(outliers, fmt.Sprintf("%s (%.0f%%)", row.name, row.usage))
+					usageOutliers = append(usageOutliers, fmt.Sprintf("%s (%.0f%%)", row.name, row.usage))
+				}
+			}
+			diskIssues := []string{}
+			for _, row := range diskRows {
+				statusCounts[strings.ToLower(strings.TrimSpace(row.status))]++
+				if !strings.EqualFold(row.health, "PASSED") || row.status != "online" {
+					name := row.devPath
+					if name == "" {
+						name = row.name
+					}
+					diskIssues = append(diskIssues, fmt.Sprintf("%s (%s)", name, row.health))
 				}
 			}
 
-			line := fmt.Sprintf("Storage: %d pools (%s)",
-				len(rows), seedFormatStatusBreakdown(statusCounts, []string{"active", "online", "inactive", "unknown"}))
-			if len(outliers) > 0 {
-				line += fmt.Sprintf(". High usage: %s", seedTruncateOutlierList(outliers, 5))
+			line := fmt.Sprintf("Storage: %d resources (%d %s, %d %s; %s)",
+				len(poolRows)+len(diskRows),
+				len(poolRows),
+				seedCountLabel(len(poolRows), "pool", "pools"),
+				len(diskRows),
+				seedCountLabel(len(diskRows), "disk", "disks"),
+				seedFormatStatusBreakdown(statusCounts, []string{"active", "online", "warning", "degraded", "inactive", "unknown"}))
+			if len(usageOutliers) > 0 {
+				line += fmt.Sprintf(". High usage: %s", seedTruncateOutlierList(usageOutliers, 5))
+			}
+			if len(diskIssues) > 0 {
+				line += fmt.Sprintf(". Disk issues: %s", seedTruncateOutlierList(diskIssues, 5))
 			}
 			lines = append(lines, line)
 		}
@@ -3249,6 +3413,13 @@ func seedCephBytes(r unifiedresources.Resource) (usedBytes, totalBytes int64) {
 		}
 	}
 	return
+}
+
+func seedCountLabel(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
 }
 
 func seedFormatBytes(b int64) string {

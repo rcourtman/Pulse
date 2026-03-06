@@ -440,6 +440,7 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 	totalBytes := int64(1000 * 1024 * 1024)
 	storeUsedBytes := int64(700 * 1024 * 1024)
 	storeTotalBytes := int64(1000 * 1024 * 1024)
+	diskSizeBytes := int64(2 * 1024 * 1024 * 1024 * 1024)
 	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
 		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
 			if t == unifiedresources.ResourceTypeStorage {
@@ -464,6 +465,26 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 								Total:   &storeTotalBytes,
 								Percent: 70.0,
 							},
+						},
+					},
+				}
+			}
+			if t == unifiedresources.ResourceTypePhysicalDisk {
+				return []unifiedresources.Resource{
+					{
+						ID:         "disk-1",
+						Name:       "disk-1",
+						Type:       unifiedresources.ResourceTypePhysicalDisk,
+						Status:     unifiedresources.StatusOffline,
+						ParentName: "node-1",
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:     "/dev/nvme0n1",
+							Model:       "Samsung PM9A3",
+							DiskType:    "nvme",
+							SizeBytes:   diskSizeBytes,
+							Health:      "FAILED",
+							Wearout:     12,
+							Temperature: 58,
 						},
 					},
 				}
@@ -500,6 +521,9 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 		"# Docker",
 		"health=unhealthy",
 		"# Storage",
+		"## Pools",
+		"## Physical Disks",
+		"/dev/nvme0n1 (Samsung PM9A3)",
 		"ZFS errors",
 		"# Ceph",
 		"Message: OSD down",
