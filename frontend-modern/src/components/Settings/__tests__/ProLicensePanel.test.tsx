@@ -124,6 +124,62 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
   });
 
+  it('renders all capability strings as human-readable labels (no raw snake_case)', async () => {
+    mockEntitlements = {
+      capabilities: [
+        'ai_patrol',
+        'sso',
+        'update_alerts',
+        'rbac',
+        'advanced_sso',
+        'audit_logging',
+        'advanced_reporting',
+        'agent_profiles',
+        'relay',
+        'mobile_app',
+        'push_notifications',
+        'long_term_metrics',
+        'ai_alerts',
+        'ai_autofix',
+        'kubernetes_ai',
+        'multi_user',
+        'white_label',
+        'multi_tenant',
+        'unlimited',
+      ],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'enterprise',
+    };
+
+    render(() => <ProLicensePanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Basic SSO (OIDC)')).toBeInTheDocument();
+    });
+
+    // Verify every capability renders with its expected label
+    expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Alert Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
+    expect(screen.getByText('Kubernetes Insights')).toBeInTheDocument();
+    expect(screen.getByText('Update Alerts')).toBeInTheDocument();
+    expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
+    expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
+    expect(screen.getByText('Audit Logging')).toBeInTheDocument();
+    expect(screen.getByText('PDF/CSV Reporting')).toBeInTheDocument();
+    expect(screen.getByText('Centralized Agent Profiles')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
+    expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
+    expect(screen.getByText('Push Notifications')).toBeInTheDocument();
+    expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
+    expect(screen.getByText('Multi-User Mode')).toBeInTheDocument();
+    expect(screen.getByText('White-Label Branding')).toBeInTheDocument();
+    expect(screen.getByText('Multi-Tenant Mode')).toBeInTheDocument();
+    expect(screen.getByText('Unlimited Instances')).toBeInTheDocument();
+  });
+
   it('starts trial and records conversion metric when user clicks start', async () => {
     render(() => <ProLicensePanel />);
 
