@@ -28,6 +28,13 @@ type APINormalizedIdentityResource = {
   };
 };
 
+type NamedEntity = {
+  id: string;
+  displayName?: string;
+  hostname?: string;
+  name?: string;
+};
+
 const asTrimmedString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -176,6 +183,12 @@ export const getPreferredConfiguredNodeLabel = (
   asTrimmedString(node.name) ||
   asTrimmedString(node.host) ||
   node.id;
+
+export const getPreferredNamedEntityLabel = (entity: NamedEntity): string =>
+  asTrimmedString(entity.displayName) ||
+  asTrimmedString(entity.hostname) ||
+  asTrimmedString(entity.name) ||
+  entity.id;
 
 export const getPreferredNormalizedPlatformId = (
   resource: APINormalizedIdentityResource,

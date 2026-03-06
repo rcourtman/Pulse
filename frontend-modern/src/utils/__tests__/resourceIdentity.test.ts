@@ -5,6 +5,7 @@ import {
   getAgentLikeIdentityAliases,
   getAgentLikeMetadataIds,
   getPreferredConfiguredNodeLabel,
+  getPreferredNamedEntityLabel,
   getPreferredNormalizedPlatformId,
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
@@ -234,6 +235,23 @@ describe('resourceIdentity', () => {
         host: 'pbs.local',
       } as never),
     ).toBe('pbs.local');
+  });
+
+  it('resolves named entity labels across runtime and cluster-like shapes', () => {
+    expect(
+      getPreferredNamedEntityLabel({
+        id: 'runtime-1',
+        displayName: '',
+        hostname: 'tower.local',
+      }),
+    ).toBe('tower.local');
+
+    expect(
+      getPreferredNamedEntityLabel({
+        id: 'cluster-1',
+        name: 'cluster-a',
+      }),
+    ).toBe('cluster-a');
   });
 
   it('resolves normalized platform ids with source-aware precedence', () => {

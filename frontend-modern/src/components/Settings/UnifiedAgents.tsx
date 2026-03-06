@@ -31,6 +31,11 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import {
+  getPreferredNamedEntityLabel,
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
+import {
   trackAgentInstallCommandCopied,
   trackAgentInstallProfileSelected,
   trackAgentInstallTokenGenerated,
@@ -689,7 +694,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     return resources()
       .filter((r) => r.agent != null || r.type === 'docker-host')
       .sort((a, b) =>
-        (a.identity?.hostname || a.name || '').localeCompare(b.identity?.hostname || b.name || ''),
+        (getPreferredResourceHostname(a) || '').localeCompare(getPreferredResourceHostname(b) || ''),
       );
   });
 
@@ -870,8 +875,16 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     });
 
     return Array.from(map.values()).sort((a, b) =>
-      (a.displayName || a.name || a.actionClusterId).localeCompare(
-        b.displayName || b.name || b.actionClusterId,
+      getPreferredNamedEntityLabel({
+        id: a.actionClusterId,
+        displayName: a.displayName,
+        name: a.name,
+      }).localeCompare(
+        getPreferredNamedEntityLabel({
+          id: b.actionClusterId,
+          displayName: b.displayName,
+          name: b.name,
+        }),
       ),
     );
   });
@@ -887,7 +900,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       const linkedNodeId = getLinkedNodeId(r);
       if (!linkedNodeId) return [];
 
-      const hostname = r.identity?.hostname || r.name || 'Unknown';
+      const hostname = getPreferredResourceHostname(r) || 'Unknown';
       const version = getAgentVersion(r);
       return [
         {
@@ -911,7 +924,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
 
     // Build rows directly from v6 unified resources that have agents
     agentResources().forEach((r) => {
-      const hostname = r.identity?.hostname || r.name || 'Unknown';
+      const hostname = getPreferredResourceHostname(r) || 'Unknown';
       const agentId = getAgentId(r);
       const resolvedAgentId = agentId || getAgentActionId(r);
       const scopeInfo = getScopeInfo(resolvedAgentId);
@@ -920,7 +933,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       if (dockerActionId && removedDockerHostIds().has(dockerActionId)) {
         return;
       }
-      const name = r.displayName || hostname;
+      const name = getPreferredResourceDisplayName(r);
       const searchText = [name, hostname, r.id, resolvedAgentId, agentActionId, dockerActionId]
         .filter(Boolean)
         .join(' ')
@@ -986,7 +999,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     });
 
     removedDockerHosts().forEach((runtime) => {
-      const name = runtime.displayName || runtime.hostname || runtime.id;
+      const name = getPreferredNamedEntityLabel(runtime);
       rows.push({
         rowKey: `removed-docker-${runtime.id}`,
         id: runtime.id,
@@ -1003,7 +1016,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     });
 
     removedKubernetesClusters().forEach((cluster) => {
-      const name = cluster.displayName || cluster.name || cluster.id;
+      const name = getPreferredNamedEntityLabel(cluster);
       rows.push({
         rowKey: `removed-k8s-${cluster.id}`,
         id: cluster.id,
