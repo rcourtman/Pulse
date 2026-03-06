@@ -48,7 +48,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 					"resource_type": {
 						Type:        "string",
 						Description: "Canonical v6 resource type",
-						Enum:        []string{"node", "vm", "system-container", "app-container", "storage", "agent", "k8s-cluster", "pbs"},
+						Enum:        []string{"node", "vm", "system-container", "app-container", "storage", "physical_disk", "agent", "k8s-cluster", "pbs"},
 					},
 					"title": {
 						Type:        "string",
@@ -183,12 +183,13 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 		"system-container": true,
 		"app-container":    true,
 		"storage":          true,
+		"physical_disk":    true,
 		"agent":            true,
 		"k8s-cluster":      true,
 		"pbs":              true,
 	}
 	if !validResourceTypes[resourceType] {
-		return NewErrorResult(fmt.Errorf("unsupported resource_type %q: use node, vm, system-container, app-container, storage, agent, k8s-cluster, or pbs", resourceType)), nil
+		return NewErrorResult(fmt.Errorf("unsupported resource_type %q: use node, vm, system-container, app-container, storage, physical_disk, agent, k8s-cluster, or pbs", resourceType)), nil
 	}
 
 	// Validate enums

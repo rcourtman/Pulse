@@ -308,3 +308,18 @@ func patrolRuntimeSortedResourceIDs(s patrolRuntimeState) []string {
 	sort.Strings(ids)
 	return ids
 }
+
+func patrolRuntimeStorageResourceCount(s patrolRuntimeState) int {
+	count := 0
+	if rs := s.readState; rs != nil {
+		count += len(rs.StoragePools())
+	} else {
+		count += len(s.Storage)
+	}
+	if s.unifiedResourceProvider != nil {
+		count += len(s.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
+	} else {
+		count += len(s.PhysicalDisks)
+	}
+	return count
+}

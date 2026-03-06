@@ -307,12 +307,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runStats.dockerChecked = len(rs.DockerHosts())
 	}
 	if cfg.AnalyzeStorage && rs != nil {
-		runStats.storageChecked = len(rs.StoragePools())
-		if state.unifiedResourceProvider != nil {
-			runStats.storageChecked += len(state.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
-		} else {
-			runStats.storageChecked += len(state.PhysicalDisks)
-		}
+		runStats.storageChecked = patrolRuntimeStorageResourceCount(state)
 	}
 	if cfg.AnalyzePBS && rs != nil {
 		runStats.pbsChecked = len(rs.PBSInstances())
@@ -726,7 +721,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		resourceCount += len(filteredState.DockerHosts)
 	}
 	if cfg.AnalyzeStorage {
-		resourceCount += len(filteredState.Storage) + len(filteredState.PhysicalDisks)
+		resourceCount += patrolRuntimeStorageResourceCount(filteredState)
 	}
 	if cfg.AnalyzePBS {
 		resourceCount += len(filteredState.PBSInstances)
@@ -770,7 +765,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		runStats.dockerChecked = len(filteredState.DockerHosts)
 	}
 	if cfg.AnalyzeStorage {
-		runStats.storageChecked = len(filteredState.Storage) + len(filteredState.PhysicalDisks)
+		runStats.storageChecked = patrolRuntimeStorageResourceCount(filteredState)
 	}
 	if cfg.AnalyzePBS {
 		runStats.pbsChecked = len(filteredState.PBSInstances)

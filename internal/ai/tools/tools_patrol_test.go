@@ -145,6 +145,29 @@ func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 	assert.Equal(t, "CPU at 92% over 15 minutes", input.Evidence)
 }
 
+func TestHandlePatrolReportFinding_AcceptsPhysicalDiskResourceType(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
+	exec := newPatrolTestExecutor(creator)
+
+	args := validReportArgs()
+	args["resource_id"] = "disk-1"
+	args["resource_name"] = "/dev/sda"
+	args["resource_type"] = "physical_disk"
+	args["title"] = "Disk health warning"
+	args["description"] = "Disk health reported FAILED"
+
+	result, err := handlePatrolReportFinding(context.Background(), exec, args)
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	text := extractText(result)
+	require.NoError(t, json.Unmarshal([]byte(text), &parsed))
+
+	assert.Equal(t, true, parsed["ok"])
+	require.Len(t, creator.createCalls, 1)
+	assert.Equal(t, "physical_disk", creator.createCalls[0].ResourceType)
+}
+
 func TestHandlePatrolReportFinding_MissingRequiredFields(t *testing.T) {
 	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)

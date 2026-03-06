@@ -675,6 +675,8 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_patrol_test.go"),
 			requiredSnippets: []string{
 				`TestHandlePatrolReportFinding_RejectsLegacyResourceTypeAliases`,
+				`TestHandlePatrolReportFinding_AcceptsPhysicalDiskResourceType`,
+				`"resource_type"] = "physical_disk"`,
 				`[]string{"host", "container", "docker"`,
 			},
 		},
