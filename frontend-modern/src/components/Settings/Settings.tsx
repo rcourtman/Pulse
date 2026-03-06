@@ -32,7 +32,6 @@ import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTab
 import { SettingsSectionNav } from './SettingsSectionNav';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
-import { UpdatesAPI } from '@/api/updates';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -46,7 +45,6 @@ import Loader from 'lucide-solid/icons/loader';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
 import Search from 'lucide-solid/icons/search';
 import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
-import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
@@ -58,11 +56,11 @@ import {
   shouldHideSettingsNavItem,
 } from './settingsTabs';
 import { useBackupTransferFlow } from './useBackupTransferFlow';
+import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
 import { tabFeatureRequirements } from './settingsFeatureGates';
 
-import { updateStore } from '@/stores/updates';
 import {
   getLimit,
   hasFeature,
@@ -105,27 +103,6 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
-const BACKUP_INTERVAL_OPTIONS = [
-  { label: 'Default (~90 seconds)', value: 0 },
-  { label: '15 minutes', value: 15 * 60 },
-  { label: '30 minutes', value: 30 * 60 },
-  { label: '1 hour', value: 60 * 60 },
-  { label: '6 hours', value: 6 * 60 * 60 },
-  { label: '12 hours', value: 12 * 60 * 60 },
-  { label: '24 hours', value: 24 * 60 * 60 },
-];
-
-const PVE_POLLING_MIN_SECONDS = 10;
-const PVE_POLLING_MAX_SECONDS = 3600;
-const PVE_POLLING_PRESETS = [
-  { label: '10 seconds (default)', value: 10 },
-  { label: '15 seconds', value: 15 },
-  { label: '30 seconds', value: 30 },
-  { label: '60 seconds', value: 60 },
-  { label: '2 minutes', value: 120 },
-  { label: '5 minutes', value: 300 },
-];
-
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
   hasPassword?: boolean;
@@ -154,7 +131,6 @@ const Settings: Component<SettingsProps> = (props) => {
       description: 'Manage Pulse configuration.',
     };
 
-  const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   // Sidebar always starts expanded for discoverability (issue #764)
   // Users can collapse during session but it resets on page reload
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
@@ -208,13 +184,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const organizationAgentUsage = createMemo(() => getLimit('max_agents')?.current ?? 0);
   const organizationGuestUsage = createMemo(() => getLimit('max_guests')?.current ?? 0);
 
-  // System settings
-  const [pvePollingInterval, setPVEPollingInterval] = createSignal<number>(PVE_POLLING_MIN_SECONDS);
-  const [pvePollingSelection, setPVEPollingSelection] = createSignal<number | 'custom'>(
-    PVE_POLLING_MIN_SECONDS,
-  );
-  const [pvePollingCustomSeconds, setPVEPollingCustomSeconds] = createSignal(30);
-  const [allowedOrigins, setAllowedOrigins] = createSignal('');
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal(false);
   const [discoverySubnet, setDiscoverySubnet] = createSignal('auto');
   const [discoveryMode, setDiscoveryMode] = createSignal<'auto' | 'custom'>('auto');
@@ -222,44 +191,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const [lastCustomSubnet, setLastCustomSubnet] = createSignal('');
   const [discoverySubnetError, setDiscoverySubnetError] = createSignal<string | undefined>();
   const [savingDiscoverySettings, setSavingDiscoverySettings] = createSignal(false);
-  const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
-  const [temperatureMonitoringEnabled, setTemperatureMonitoringEnabled] = createSignal(true);
-  const [savingTemperatureSetting, setSavingTemperatureSetting] = createSignal(false);
-  const [hideLocalLogin, setHideLocalLogin] = createSignal(false);
-  const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
-
-  // Docker update actions control (server-wide setting to hide update buttons)
-  const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
-  const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
-
-  // Miscellaneous System settings
-  const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
-  const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
-  const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
-  const [savingTelemetry, setSavingTelemetry] = createSignal(false);
-
-  const temperatureMonitoringLocked = () =>
-    Boolean(
-      envOverrides().temperatureMonitoringEnabled ||
-      envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
-    );
-  const hideLocalLoginLocked = () =>
-    Boolean(envOverrides().hideLocalLogin || envOverrides()['PULSE_AUTH_HIDE_LOCAL_LOGIN']);
-  const disableDockerUpdateActionsLocked = () =>
-    Boolean(
-      envOverrides().disableDockerUpdateActions ||
-      envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS'],
-    );
-  const disableLocalUpgradeMetricsLocked = () =>
-    Boolean(
-      envOverrides().disableLocalUpgradeMetrics ||
-      envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS'],
-    );
-  const telemetryEnabledLocked = () =>
-    Boolean(envOverrides().telemetryEnabled || envOverrides()['PULSE_TELEMETRY']);
-
-  const pvePollingEnvLocked = () =>
-    Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
   let discoverySubnetInputRef: HTMLInputElement | undefined;
 
   const parseSubnetList = (value: string) => {
@@ -446,63 +377,6 @@ const Settings: Component<SettingsProps> = (props) => {
   };
   // Connection timeout removed - backend-only setting
 
-  // Iframe embedding settings
-  const [allowEmbedding, setAllowEmbedding] = createSignal(false);
-  const [allowedEmbedOrigins, setAllowedEmbedOrigins] = createSignal('');
-
-  // Webhook security settings
-  const [webhookAllowedPrivateCIDRs, setWebhookAllowedPrivateCIDRs] = createSignal('');
-
-  // Public URL for notifications
-  const [publicURL, setPublicURL] = createSignal('');
-
-  // Update settings
-  const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
-  const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
-  const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
-  const [updateChannel, setUpdateChannel] = createSignal<'stable' | 'rc'>('stable');
-  const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
-  const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
-  const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
-  // Update installation state
-  const [updatePlan, setUpdatePlan] = createSignal<import('@/api/updates').UpdatePlan | null>(null);
-  const [isInstallingUpdate, setIsInstallingUpdate] = createSignal(false);
-  const [showUpdateConfirmation, setShowUpdateConfirmation] = createSignal(false);
-  const [backupPollingEnabled, setBackupPollingEnabled] = createSignal(true);
-  const [backupPollingInterval, setBackupPollingInterval] = createSignal(0);
-  const [backupPollingCustomMinutes, setBackupPollingCustomMinutes] = createSignal(60);
-  const [backupPollingUseCustom, setBackupPollingUseCustom] = createSignal(false);
-  const backupPollingEnvLocked = () =>
-    Boolean(envOverrides()['ENABLE_BACKUP_POLLING'] || envOverrides()['BACKUP_POLLING_INTERVAL']);
-  const backupIntervalSelectValue = () => {
-    if (backupPollingUseCustom()) {
-      return 'custom';
-    }
-    const seconds = backupPollingInterval();
-    return BACKUP_INTERVAL_OPTIONS.some((option) => option.value === seconds)
-      ? String(seconds)
-      : 'custom';
-  };
-  const backupIntervalSummary = () => {
-    if (!backupPollingEnabled()) {
-      return 'Backup polling is disabled.';
-    }
-    const seconds = backupPollingInterval();
-    if (seconds <= 0) {
-      return 'Pulse checks backups and snapshots at the default cadence (~every 90 seconds).';
-    }
-    if (seconds % 86400 === 0) {
-      const days = seconds / 86400;
-      return `Pulse checks backups every ${days === 1 ? 'day' : `${days} days`}.`;
-    }
-    if (seconds % 3600 === 0) {
-      const hours = seconds / 3600;
-      return `Pulse checks backups every ${hours === 1 ? 'hour' : `${hours} hours`}.`;
-    }
-    const minutes = Math.max(1, Math.round(seconds / 60));
-    return `Pulse checks backups every ${minutes === 1 ? 'minute' : `${minutes} minutes`}.`;
-  };
-
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
   const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
@@ -533,6 +407,86 @@ const Settings: Component<SettingsProps> = (props) => {
     closeApiTokenModal,
     handleApiTokenAuthenticate,
   } = useBackupTransferFlow({ securityStatus });
+  const {
+    hasUnsavedChanges,
+    setHasUnsavedChanges,
+    pvePollingInterval,
+    setPVEPollingInterval,
+    pvePollingSelection,
+    setPVEPollingSelection,
+    pvePollingCustomSeconds,
+    setPVEPollingCustomSeconds,
+    pvePollingEnvLocked,
+    allowedOrigins,
+    setAllowedOrigins,
+    allowEmbedding,
+    setAllowEmbedding,
+    allowedEmbedOrigins,
+    setAllowedEmbedOrigins,
+    webhookAllowedPrivateCIDRs,
+    setWebhookAllowedPrivateCIDRs,
+    publicURL,
+    setPublicURL,
+    envOverrides,
+    temperatureMonitoringEnabled,
+    setTemperatureMonitoringEnabled,
+    temperatureMonitoringLocked,
+    savingTemperatureSetting,
+    setSavingTemperatureSetting,
+    handleTemperatureMonitoringChange,
+    hideLocalLogin,
+    hideLocalLoginLocked,
+    savingHideLocalLogin,
+    handleHideLocalLoginChange,
+    disableDockerUpdateActions,
+    disableDockerUpdateActionsLocked,
+    savingDockerUpdateActions,
+    handleDisableDockerUpdateActionsChange,
+    disableLocalUpgradeMetrics,
+    disableLocalUpgradeMetricsLocked,
+    savingUpgradeMetrics,
+    handleDisableLocalUpgradeMetricsChange,
+    telemetryEnabled,
+    telemetryEnabledLocked,
+    savingTelemetry,
+    handleTelemetryEnabledChange,
+    versionInfo,
+    updateInfo,
+    checkingForUpdates,
+    updateChannel,
+    setUpdateChannel,
+    autoUpdateEnabled,
+    setAutoUpdateEnabled,
+    autoUpdateCheckInterval,
+    setAutoUpdateCheckInterval,
+    autoUpdateTime,
+    setAutoUpdateTime,
+    updatePlan,
+    isInstallingUpdate,
+    showUpdateConfirmation,
+    setShowUpdateConfirmation,
+    backupPollingEnabled,
+    setBackupPollingEnabled,
+    backupPollingInterval,
+    setBackupPollingInterval,
+    backupPollingCustomMinutes,
+    setBackupPollingCustomMinutes,
+    backupPollingUseCustom,
+    setBackupPollingUseCustom,
+    backupPollingEnvLocked,
+    backupIntervalSelectValue,
+    backupIntervalSummary,
+    initializeSystemSettingsState,
+    saveSettings,
+    checkForUpdates,
+    handleInstallUpdate,
+    handleConfirmUpdate,
+  } = useSystemSettingsState({
+    activeTab,
+    loadSecurityStatus,
+    setDiscoveryEnabled,
+    applySavedDiscoverySubnet,
+  });
 
   const visibleTabGroups = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
@@ -945,7 +899,7 @@ const Settings: Component<SettingsProps> = (props) => {
   };
 
   // Function to load discovered nodes
-  const loadSecurityStatus = async () => {
+  async function loadSecurityStatus() {
     setSecurityStatusLoading(true);
     try {
       const { apiFetch } = await import('@/utils/apiClient');
@@ -962,7 +916,7 @@ const Settings: Component<SettingsProps> = (props) => {
     } finally {
       setSecurityStatusLoading(false);
     }
-  };
+  }
 
   const updateDiscoveredNodesFromServers = (
     servers: RawDiscoveredServer[] | undefined | null,
@@ -1543,116 +1497,7 @@ const Settings: Component<SettingsProps> = (props) => {
       // Load discovered nodes
       await loadDiscoveredNodes();
 
-      // Load system settings
-      try {
-        const systemSettings = await SettingsAPI.getSystemSettings();
-        const rawPVESecs =
-          typeof systemSettings.pvePollingInterval === 'number'
-            ? Math.round(systemSettings.pvePollingInterval)
-            : PVE_POLLING_MIN_SECONDS;
-        const clampedPVESecs = Math.min(
-          PVE_POLLING_MAX_SECONDS,
-          Math.max(PVE_POLLING_MIN_SECONDS, rawPVESecs),
-        );
-        setPVEPollingInterval(clampedPVESecs);
-        const presetMatch = PVE_POLLING_PRESETS.find((opt) => opt.value === clampedPVESecs);
-        if (presetMatch) {
-          setPVEPollingSelection(presetMatch.value);
-        } else {
-          setPVEPollingSelection('custom');
-          setPVEPollingCustomSeconds(clampedPVESecs);
-        }
-        setAllowedOrigins(systemSettings.allowedOrigins ?? '');
-        // Connection timeout is backend-only
-        // Load discovery settings (default to false when unset)
-        setDiscoveryEnabled(systemSettings.discoveryEnabled ?? false);
-        applySavedDiscoverySubnet(systemSettings.discoverySubnet);
-        // Load embedding settings
-        setAllowEmbedding(systemSettings.allowEmbedding ?? false);
-        setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
-        // Load webhook security settings
-        setWebhookAllowedPrivateCIDRs(systemSettings.webhookAllowedPrivateCIDRs || '');
-        // Load public URL for notifications
-        setPublicURL(systemSettings.publicURL || '');
-        setTemperatureMonitoringEnabled(
-          typeof systemSettings.temperatureMonitoringEnabled === 'boolean'
-            ? systemSettings.temperatureMonitoringEnabled
-            : true,
-        );
-        // Load hideLocalLogin setting
-        setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
-
-        // Load Docker update actions setting
-        setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
-
-        setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
-        setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
-
-        // Backup polling controls
-        if (typeof systemSettings.backupPollingEnabled === 'boolean') {
-          setBackupPollingEnabled(systemSettings.backupPollingEnabled);
-        } else {
-          setBackupPollingEnabled(true);
-        }
-        const intervalSeconds =
-          typeof systemSettings.backupPollingInterval === 'number'
-            ? Math.max(0, Math.floor(systemSettings.backupPollingInterval))
-            : 0;
-        setBackupPollingInterval(intervalSeconds);
-        if (intervalSeconds > 0) {
-          setBackupPollingCustomMinutes(Math.max(1, Math.round(intervalSeconds / 60)));
-        }
-        // Determine if the loaded interval is a custom value
-        const isPresetInterval = BACKUP_INTERVAL_OPTIONS.some(
-          (opt) => opt.value === intervalSeconds,
-        );
-        setBackupPollingUseCustom(!isPresetInterval && intervalSeconds > 0);
-        // Load auto-update settings
-        setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
-        setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
-        setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
-        if (systemSettings.updateChannel) {
-          setUpdateChannel(systemSettings.updateChannel as 'stable' | 'rc');
-        }
-        // Track environment variable overrides
-        if (systemSettings.envOverrides) {
-          setEnvOverrides(systemSettings.envOverrides);
-        }
-      } catch (error) {
-        logger.error('Failed to load settings', error);
-      }
-
-      // Load version information
-      try {
-        const version = await UpdatesAPI.getVersion();
-        setVersionInfo(version);
-        // Also set it in the store so it's available globally
-        await updateStore.checkForUpdates(); // This will load version info too
-
-        // Fetch update info and plan from store
-        const storeInfo = updateStore.updateInfo();
-        if (storeInfo) {
-          setUpdateInfo(storeInfo);
-          // Fetch update plan if update is available
-          if (storeInfo.available && storeInfo.latestVersion) {
-            try {
-              const plan = await UpdatesAPI.getUpdatePlan(storeInfo.latestVersion);
-              setUpdatePlan(plan);
-            } catch (planError) {
-              logger.warn('Failed to fetch update plan on load', planError);
-            }
-          }
-        }
-
-        // Only use version.channel as fallback if user hasn't configured a preference
-        // The user's saved updateChannel preference should take priority
-        // Check the signal value since systemSettings is scoped to the previous try block
-        if (version.channel && !updateChannel()) {
-          setUpdateChannel(version.channel as 'stable' | 'rc');
-        }
-      } catch (error) {
-        logger.error('Failed to load version', error);
-      }
+      await initializeSystemSettingsState();
     } catch (error) {
       logger.error('Failed to load configuration', error);
     } finally {
@@ -1697,42 +1542,6 @@ const Settings: Component<SettingsProps> = (props) => {
       },
     ),
   );
-
-  const saveSettings = async () => {
-    try {
-      if (activeTabSaveBehavior() === 'system') {
-        // Save system settings using typed API
-        await SettingsAPI.updateSystemSettings({
-          pvePollingInterval: pvePollingInterval(),
-          allowedOrigins: allowedOrigins(),
-          // Connection timeout is backend-only
-          // Discovery settings are saved immediately on toggle
-          updateChannel: updateChannel(),
-          autoUpdateEnabled: autoUpdateEnabled(),
-          autoUpdateCheckInterval: autoUpdateCheckInterval(),
-          autoUpdateTime: autoUpdateTime(),
-          backupPollingEnabled: backupPollingEnabled(),
-          backupPollingInterval: backupPollingInterval(),
-          allowEmbedding: allowEmbedding(),
-          allowedEmbedOrigins: allowedEmbedOrigins(),
-          webhookAllowedPrivateCIDRs: webhookAllowedPrivateCIDRs(),
-          publicURL: publicURL(),
-        });
-      }
-
-      notificationStore.success(
-        'Settings saved successfully. Service restart may be required for port changes.',
-      );
-      setHasUnsavedChanges(false);
-
-      // Reload the page after a short delay to ensure the new settings are applied
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
-    } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to save settings');
-    }
-  };
 
   const nodePendingDeleteLabel = () => {
     const node = nodePendingDelete();
@@ -1835,65 +1644,6 @@ const Settings: Component<SettingsProps> = (props) => {
       notificationStore.error(
         error instanceof Error ? error.message : 'Failed to refresh cluster membership',
       );
-    }
-  };
-
-  const checkForUpdates = async () => {
-    setCheckingForUpdates(true);
-    try {
-      // Force check with current channel selection
-      await updateStore.checkForUpdates(true);
-      const info = updateStore.updateInfo();
-      setUpdateInfo(info);
-
-      // Fetch update plan if update is available
-      if (info?.available && info.latestVersion) {
-        try {
-          const plan = await UpdatesAPI.getUpdatePlan(info.latestVersion);
-          setUpdatePlan(plan);
-        } catch (planError) {
-          logger.warn('Failed to fetch update plan', planError);
-          setUpdatePlan(null);
-        }
-      } else {
-        setUpdatePlan(null);
-      }
-
-      // If update was dismissed, clear it so user can see it again
-      if (info?.available && updateStore.isDismissed()) {
-        updateStore.clearDismissed();
-      }
-
-      if (!info?.available) {
-        notificationStore.success('You are running the latest version');
-      }
-    } catch (error) {
-      notificationStore.error('Failed to check for updates');
-      logger.error('Update check error', error);
-    } finally {
-      setCheckingForUpdates(false);
-    }
-  };
-
-  // Handle install update from settings panel
-  const handleInstallUpdate = () => {
-    setShowUpdateConfirmation(true);
-  };
-
-  const handleConfirmUpdate = async () => {
-    const info = updateInfo();
-    if (!info?.downloadUrl) return;
-
-    setIsInstallingUpdate(true);
-    try {
-      await UpdatesAPI.applyUpdate(info.downloadUrl);
-      // Close confirmation - GlobalUpdateProgressWatcher will auto-open the progress modal
-      setShowUpdateConfirmation(false);
-    } catch (error) {
-      logger.error('Failed to start update', error);
-      notificationStore.error('Failed to start update. Please try again.');
-    } finally {
-      setIsInstallingUpdate(false);
     }
   };
 

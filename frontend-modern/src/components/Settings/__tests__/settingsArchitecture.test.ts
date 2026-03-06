@@ -19,6 +19,7 @@ const requiredImportSources = [
   './settingsFeatureGates',
   './settingsPanelRegistry',
   './useBackupTransferFlow',
+  './useSystemSettingsState',
   './useSettingsNavigation',
 ] as const;
 

@@ -1,16 +1,16 @@
-import { Accessor, Setter, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Accessor, Setter, createSignal } from 'solid-js';
 import { SettingsAPI } from '@/api/settings';
 import { UpdatesAPI } from '@/api/updates';
 import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { apiFetch } from '@/utils/apiClient';
 import { updateStore } from '@/stores/updates';
 import {
   updateDisableLocalUpgradeMetricsSetting,
   updateDockerUpdateActionsSetting,
   updateReduceProUpsellNoiseSetting,
 } from '@/stores/systemSettings';
+import { getSettingsTabSaveBehavior } from './settingsTabs';
 import type { SettingsTab } from './settingsTypes';
 
 const BACKUP_INTERVAL_OPTIONS = [
@@ -34,126 +34,8 @@ const PVE_POLLING_PRESETS = [
   { label: '5 minutes', value: 300 },
 ];
 
-interface DiagnosticsNode {
-  id: string;
-  name: string;
-  host: string;
-  type: string;
-  authMethod: string;
-  connected: boolean;
-  error?: string;
-  details?: Record<string, unknown>;
-  lastPoll?: string;
-  clusterInfo?: Record<string, unknown>;
-}
-
-interface DiagnosticsPBS {
-  id: string;
-  name: string;
-  host: string;
-  connected: boolean;
-  error?: string;
-  details?: Record<string, unknown>;
-}
-
-interface SystemDiagnostic {
-  os: string;
-  arch: string;
-  goVersion: string;
-  numCPU: number;
-  numGoroutine: number;
-  memoryMB: number;
-}
-
-interface APITokenSummary {
-  id: string;
-  name: string;
-  hint?: string;
-  createdAt?: string;
-  lastUsedAt?: string;
-  source?: string;
-}
-
-interface APITokenUsage {
-  tokenId: string;
-  agentCount: number;
-  agents?: string[];
-}
-
-interface APITokenDiagnostic {
-  enabled: boolean;
-  tokenCount: number;
-  recommendTokenSetup: boolean;
-  unusedTokenCount?: number;
-  notes?: string[];
-  tokens?: APITokenSummary[];
-  usage?: APITokenUsage[];
-}
-
-interface DockerAgentAttention {
-  agentId: string;
-  name: string;
-  status: string;
-  agentVersion?: string;
-  tokenHint?: string;
-  lastSeen?: string;
-  issues: string[];
-}
-
-interface DockerAgentDiagnostic {
-  agentsTotal: number;
-  agentsOnline: number;
-  agentsReportingVersion: number;
-  agentsWithTokenBinding: number;
-  agentsWithoutTokenBinding: number;
-  agentsWithoutVersion?: number;
-  agentsOutdatedVersion?: number;
-  agentsWithStaleCommand?: number;
-  agentsPendingUninstall?: number;
-  agentsNeedingAttention: number;
-  recommendedAgentVersion?: string;
-  attention?: DockerAgentAttention[];
-  notes?: string[];
-}
-
-interface DiscoveryDiagnostic {
-  enabled: boolean;
-  configuredSubnet?: string;
-  activeSubnet?: string;
-  environmentOverride?: string;
-  subnetAllowlist?: string[];
-  subnetBlocklist?: string[];
-  scanning?: boolean;
-  scanInterval?: string;
-  lastScanStartedAt?: string;
-  lastResultTimestamp?: string;
-  lastResultServers?: number;
-  lastResultErrors?: number;
-}
-
-interface AlertsDiagnostic {
-  missingCooldown: boolean;
-  missingGroupingWindow: boolean;
-  notes?: string[];
-}
-
-interface DiagnosticsData {
-  version: string;
-  runtime: string;
-  uptime: number;
-  nodes: DiagnosticsNode[];
-  pbs: DiagnosticsPBS[];
-  system: SystemDiagnostic;
-  apiTokens?: APITokenDiagnostic | null;
-  dockerAgents?: DockerAgentDiagnostic | null;
-  alerts?: AlertsDiagnostic | null;
-  discovery?: DiscoveryDiagnostic | null;
-  errors: string[];
-}
-
 interface UseSystemSettingsStateParams {
   activeTab: Accessor<SettingsTab>;
-  currentTab: Accessor<SettingsTab>;
   loadSecurityStatus: () => Promise<void>;
   setDiscoveryEnabled: Setter<boolean>;
   applySavedDiscoverySubnet: (subnet?: string | null) => void;
@@ -161,7 +43,6 @@ interface UseSystemSettingsStateParams {
 
 export function useSystemSettingsState({
   activeTab,
-  currentTab,
   loadSecurityStatus,
   setDiscoveryEnabled,
   applySavedDiscoverySubnet,
@@ -188,6 +69,8 @@ export function useSystemSettingsState({
   const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
   const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
   const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
+  const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
+  const [savingTelemetry, setSavingTelemetry] = createSignal(false);
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
   const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
@@ -202,8 +85,6 @@ export function useSystemSettingsState({
   const [backupPollingInterval, setBackupPollingInterval] = createSignal(0);
   const [backupPollingCustomMinutes, setBackupPollingCustomMinutes] = createSignal(60);
   const [backupPollingUseCustom, setBackupPollingUseCustom] = createSignal(false);
-  const [_diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
-  const [_runningDiagnostics, setRunningDiagnostics] = createSignal(false);
 
   const temperatureMonitoringLocked = () =>
     Boolean(
@@ -222,6 +103,8 @@ export function useSystemSettingsState({
       envOverrides().disableLocalUpgradeMetrics ||
       envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS'],
     );
+  const telemetryEnabledLocked = () =>
+    Boolean(envOverrides().telemetryEnabled || envOverrides()['PULSE_TELEMETRY']);
   const pvePollingEnvLocked = () =>
     Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
   const backupPollingEnvLocked = () =>
@@ -258,39 +141,6 @@ export function useSystemSettingsState({
     const minutes = Math.max(1, Math.round(seconds / 60));
     return `Pulse checks backups every ${minutes === 1 ? 'minute' : `${minutes} minutes`}.`;
   };
-
-  const runDiagnostics = async () => {
-    setRunningDiagnostics(true);
-    try {
-      const response = await apiFetch('/api/diagnostics');
-      const diag = await response.json();
-      setDiagnosticsData(diag);
-    } catch (err) {
-      logger.error('Failed to fetch diagnostics', err);
-      notificationStore.error('Failed to run diagnostics');
-    } finally {
-      setRunningDiagnostics(false);
-    }
-  };
-
-  createEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    if (currentTab() !== 'proxmox') {
-      return;
-    }
-
-    void runDiagnostics();
-    const intervalId = window.setInterval(() => {
-      void runDiagnostics();
-    }, 60000);
-
-    onCleanup(() => {
-      window.clearInterval(intervalId);
-    });
-  });
 
   const initializeSystemSettingsState = async () => {
     try {
@@ -329,6 +179,7 @@ export function useSystemSettingsState({
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
       setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
       setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
+      setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
 
       if (typeof systemSettings.backupPollingEnabled === 'boolean') {
         setBackupPollingEnabled(systemSettings.backupPollingEnabled);
@@ -390,12 +241,7 @@ export function useSystemSettingsState({
 
   const saveSettings = async () => {
     try {
-      if (
-        activeTab() === 'system-general' ||
-        activeTab() === 'system-network' ||
-        activeTab() === 'system-updates' ||
-        activeTab() === 'system-recovery'
-      ) {
+      if (getSettingsTabSaveBehavior(activeTab()) === 'system') {
         await SettingsAPI.updateSystemSettings({
           pvePollingInterval: pvePollingInterval(),
           allowedOrigins: allowedOrigins(),
@@ -533,6 +379,32 @@ export function useSystemSettingsState({
     }
   };
 
+  const handleTelemetryEnabledChange = async (enabled: boolean): Promise<void> => {
+    if (telemetryEnabledLocked() || savingTelemetry()) {
+      return;
+    }
+
+    const previous = telemetryEnabled();
+    setTelemetryEnabled(enabled);
+    setSavingTelemetry(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ telemetryEnabled: enabled });
+      notificationStore.success(
+        enabled ? 'Anonymous telemetry enabled' : 'Anonymous telemetry disabled',
+        3000,
+      );
+    } catch (error) {
+      logger.error('Failed to update telemetry setting', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to update telemetry setting',
+      );
+      setTelemetryEnabled(previous);
+    } finally {
+      setSavingTelemetry(false);
+    }
+  };
+
   const handleTemperatureMonitoringChange = async (enabled: boolean): Promise<void> => {
     if (temperatureMonitoringLocked() || savingTemperatureSetting()) {
       return;
@@ -658,6 +530,10 @@ export function useSystemSettingsState({
     disableLocalUpgradeMetricsLocked,
     savingUpgradeMetrics,
     handleDisableLocalUpgradeMetricsChange,
+    telemetryEnabled,
+    telemetryEnabledLocked,
+    savingTelemetry,
+    handleTelemetryEnabledChange,
     versionInfo,
     updateInfo,
     checkingForUpdates,
@@ -684,8 +560,6 @@ export function useSystemSettingsState({
     backupPollingEnvLocked,
     backupIntervalSelectValue,
     backupIntervalSummary,
-    _diagnosticsData,
-    _runningDiagnostics,
     initializeSystemSettingsState,
     saveSettings,
     checkForUpdates,
