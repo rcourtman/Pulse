@@ -1677,6 +1677,11 @@ type patrolDockerHostRow struct {
 	unhealthyContainers []string
 }
 
+type patrolAppContainerRow struct {
+	id, name, status string
+	cpu, memory      float64
+}
+
 type patrolStoragePoolRow struct {
 	id, name, stype, node, status string
 	used, total                   int64
@@ -1973,6 +1978,47 @@ func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []
 			}
 		}
 		rows = append(rows, row)
+	}
+	return rows
+}
+
+func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolAppContainerRow {
+	rs := snap.readState
+	if rs != nil {
+		rows := make([]patrolAppContainerRow, 0, len(rs.DockerContainers()))
+		for _, cv := range rs.DockerContainers() {
+			if !seedIsInScope(scopedSet, cv.ID()) {
+				continue
+			}
+			rows = append(rows, patrolAppContainerRow{
+				id:     cv.ID(),
+				name:   cv.Name(),
+				status: strings.TrimSpace(cv.ContainerState()),
+				cpu:    cv.CPUPercent(),
+				memory: cv.MemoryPercent(),
+			})
+		}
+		return rows
+	}
+
+	count := 0
+	for _, host := range snap.DockerHosts {
+		count += len(host.Containers)
+	}
+	rows := make([]patrolAppContainerRow, 0, count)
+	for _, host := range snap.DockerHosts {
+		for _, container := range host.Containers {
+			if !seedIsInScope(scopedSet, container.ID) {
+				continue
+			}
+			rows = append(rows, patrolAppContainerRow{
+				id:     container.ID,
+				name:   container.Name,
+				status: container.State,
+				cpu:    container.CPUPercent,
+				memory: container.MemoryPercent,
+			})
+		}
 	}
 	return rows
 }

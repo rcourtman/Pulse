@@ -1813,6 +1813,11 @@ func patrolAlertNameMatches(alert AlertInfo, ids ...string) bool {
 }
 
 func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) patrolAlertResourceState {
+	if strings.TrimSpace(alert.ResourceType) == "app-container" {
+		if resource, ok := patrolLookupAppContainerAlertResourceState(alert, snap); ok {
+			return resource
+		}
+	}
 	if resource, ok := lookupPatrolAlertResourceStateFromReadState(alert, snap); ok {
 		return resource
 	}
@@ -1826,6 +1831,23 @@ func lookupPatrolAlertResourceStateFromReadState(alert AlertInfo, snap patrolRun
 	return patrolLookupAlertResourceStateWithVisitor(func(visit patrolAlertResourceVisitor) bool {
 		return patrolVisitAlertResourceStateFromReadState(alert, snap, visit)
 	})
+}
+
+func patrolLookupAppContainerAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+	for _, container := range patrolAppContainerRows(snap, nil) {
+		if !patrolAlertNameMatches(alert, container.id, container.name) {
+			continue
+		}
+		return patrolAlertResourceState{
+			resourceType: "app-container",
+			name:         container.name,
+			status:       container.status,
+			cpu:          container.cpu,
+			memory:       container.memory,
+			found:        true,
+		}, true
+	}
+	return patrolAlertResourceState{}, false
 }
 
 func lookupPatrolAlertResourceStateFromSnapshot(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
