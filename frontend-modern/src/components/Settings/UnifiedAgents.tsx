@@ -1827,11 +1827,11 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
 
       <Show when={showInventory()}>
         <SettingsPanel
-          title={props.embedded ? 'Connected infrastructure' : 'Agent Inventory'}
+          title="Connected infrastructure"
           description={
             props.embedded
-              ? 'Review active infrastructure and items with monitoring stopped, including Docker and Kubernetes coverage.'
-              : 'Review active agents and clusters with monitoring stopped.'
+              ? 'Review active infrastructure and recover items with monitoring stopped, including Docker and Kubernetes coverage.'
+              : 'Review active infrastructure and recover items with monitoring stopped.'
           }
           icon={<Users class="w-5 h-5" strokeWidth={2} />}
           bodyClass="space-y-4"

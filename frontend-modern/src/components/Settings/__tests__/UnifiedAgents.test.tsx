@@ -497,7 +497,7 @@ describe('UnifiedAgents managed agents table', () => {
     setupComponent([host]);
 
     await waitFor(() => {
-      expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
+      expect(screen.getByText('Connected infrastructure')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Test Server')).toBeInTheDocument();
@@ -520,7 +520,7 @@ describe('UnifiedAgents managed agents table', () => {
     setupComponent([], [dockerHost]);
 
     await waitFor(() => {
-      expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
+      expect(screen.getByText('Connected infrastructure')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Docker Server')).toBeInTheDocument();
@@ -565,7 +565,7 @@ describe('UnifiedAgents managed agents table', () => {
     setupComponent([host], [], [], [removedHost]);
 
     await waitFor(() => {
-      expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
+      expect(screen.getByText('Connected infrastructure')).toBeInTheDocument();
     });
 
     expect(screen.getAllByText('Active infrastructure').length).toBeGreaterThan(0);
@@ -599,7 +599,7 @@ describe('UnifiedAgents managed agents table', () => {
     setupComponent([], [dockerHost], [], [removedHost]);
 
     await waitFor(() => {
-      expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
+      expect(screen.getByText('Connected infrastructure')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Recovery queue')).toBeInTheDocument();
@@ -613,7 +613,7 @@ describe('UnifiedAgents managed agents table', () => {
     setupComponent([], [], [cluster]);
 
     await waitFor(() => {
-      expect(screen.getByText('Agent Inventory')).toBeInTheDocument();
+      expect(screen.getByText('Connected infrastructure')).toBeInTheDocument();
     });
 
     expect(screen.getByText('K8s Alpha')).toBeInTheDocument();
