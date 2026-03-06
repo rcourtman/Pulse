@@ -105,6 +105,14 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
     }
   };
 
+  const isInteractiveTarget = (target: EventTarget | null) =>
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        'button, a, input, select, textarea, summary, [role="button"], [data-row-action]',
+      ),
+    );
+
   return (
     <div class={`overflow-hidden rounded-md border border-border bg-surface ${local.class || ''}`}>
       <div
@@ -154,7 +162,12 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                                         : 'hover:bg-surface-hover'
                                                     }
                                                 `}
-                        onClick={() => local.onRowClick?.(row)}
+                        onClick={(event) => {
+                          if (isInteractiveTarget(event.target)) {
+                            return;
+                          }
+                          local.onRowClick?.(row);
+                        }}
                       >
                         <For each={local.columns}>
                           {(col) => (
