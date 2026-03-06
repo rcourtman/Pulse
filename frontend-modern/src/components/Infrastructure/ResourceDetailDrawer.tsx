@@ -317,8 +317,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     const proxmox = data?.proxmox;
     const agent = data?.agent;
     const raw = [
+      props.resource.metricsTarget?.resourceId,
       props.resource.discoveryTarget?.agentId,
       props.resource.discoveryTarget?.resourceId,
+      dockerHostData()?.hostSourceId,
       proxmox?.nodeName,
       agent?.agentId,
       agent?.hostname,
@@ -360,6 +362,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       rows.push({
         label: 'Discovery',
         value: `${props.resource.discoveryTarget.resourceType}:${props.resource.discoveryTarget.resourceId}`,
+      });
+    }
+    if (props.resource.metricsTarget?.resourceType && props.resource.metricsTarget.resourceId) {
+      rows.push({
+        label: 'Metrics Target',
+        value: `${props.resource.metricsTarget.resourceType}:${props.resource.metricsTarget.resourceId}`,
       });
     }
     return rows;

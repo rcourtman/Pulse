@@ -131,6 +131,39 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(sparseRender.getByText('No enriched identity metadata yet.')).toBeInTheDocument();
   });
 
+  it('shows canonical metrics target identity for docker-backed host resources', () => {
+    const resource = baseResource({
+      id: 'hash-docker-resource',
+      type: 'docker-host',
+      name: 'Tower',
+      displayName: 'Tower',
+      platformId: 'tower',
+      platformType: 'docker',
+      sourceType: 'agent',
+      identity: {
+        hostname: 'tower.local',
+      },
+      metricsTarget: {
+        resourceType: 'docker-host',
+        resourceId: 'docker-host-1',
+      },
+      platformData: {
+        sources: ['docker', 'agent'],
+        docker: {
+          hostSourceId: 'docker-host-1',
+          hostname: 'tower.local',
+        },
+      },
+    });
+
+    const { getByText, getAllByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByText('Metrics Target')).toBeInTheDocument();
+    expect(getByText('docker-host:docker-host-1')).toBeInTheDocument();
+    expect(getByText('Aliases')).toBeInTheDocument();
+    expect(getAllByText('docker-host-1').length).toBeGreaterThan(0);
+  });
+
   it('renders aliases inline when few exist and collapses when many exist', () => {
     const inlineResource = baseResource({
       type: 'agent',
