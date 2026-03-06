@@ -563,7 +563,7 @@ func TestSeedResourceInventory_WithIntelligence(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), false, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, intel)
 
 	// Check table headers
 	if !strings.Contains(out, "| Service |") {
@@ -610,7 +610,7 @@ func TestSeedResourceInventory_NilIntelligence(t *testing.T) {
 	}
 
 	// nil intel should produce "-" for both columns
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), false, nil)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, nil)
 	if !strings.Contains(out, "| - |") {
 		t.Errorf("expected '-' for unknown service/reachability, got:\n%s", out)
 	}
@@ -634,7 +634,7 @@ func TestSeedResourceInventory_QuietMode_AllReachable(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), true, intel)
 	if !strings.Contains(out, "All reachable.") {
 		t.Errorf("expected 'All reachable.' in quiet summary, got:\n%s", out)
 	}
@@ -659,7 +659,7 @@ func TestSeedResourceInventory_QuietMode_Unreachable(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), true, intel)
 	if !strings.Contains(out, "1 UNREACHABLE: vm-bad") {
 		t.Errorf("expected unreachable guest name in quiet summary, got:\n%s", out)
 	}
@@ -676,7 +676,7 @@ func TestSeedResourceInventory_QuietMode_NoReachabilityData(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), true, nil)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), true, nil)
 	if strings.Contains(out, "reachable") {
 		t.Errorf("should not mention reachability when no data available, got:\n%s", out)
 	}
@@ -701,7 +701,7 @@ func TestSeedResourceInventory_HealthIssuesFallbackType(t *testing.T) {
 		},
 	}
 
-	out := ps.seedResourceInventory(state, nil, cfg, time.Now(), false, intel)
+	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, intel)
 	// When no discovery, should use "VM" not "-" in health issues
 	if !strings.Contains(out, "unknown-vm (VM on pve1): Running but UNREACHABLE") {
 		t.Errorf("expected VM type fallback in health issue, got:\n%s", out)

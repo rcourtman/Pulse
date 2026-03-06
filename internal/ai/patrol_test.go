@@ -9,6 +9,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+func patrolRuntimeStateForTest(ps *PatrolService, snap models.StateSnapshot) patrolRuntimeState {
+	if ps == nil {
+		return newPatrolRuntimeState(snap)
+	}
+	return ps.patrolRuntimeStateForSnapshot(snap)
+}
+
 func TestPatrolConfig_GetInterval(t *testing.T) {
 	tests := []struct {
 		name     string

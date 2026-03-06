@@ -263,7 +263,7 @@ func TestSeedResourceInventorySummary(t *testing.T) {
 		"disk-1":   true,
 	}
 
-	out := ps.seedResourceInventorySummary(state, scopedSet, cfg, time.Now(), nil)
+	out := ps.seedResourceInventorySummaryState(patrolRuntimeStateForTest(ps, state), scopedSet, cfg, time.Now(), nil)
 
 	for _, expected := range []string{
 		"# Infrastructure Summary (condensed)",

@@ -5,10 +5,10 @@
 //	Scheduled/Event Trigger
 //	        │
 //	        ▼
-//	buildSeedContext()  ── infrastructure snapshot
+//	buildSeedContextState()  ── patrol runtime state
 //	        │
 //	        ▼
-//	runAIAnalysis()     ── agentic LLM loop with tools
+//	runAIAnalysisState() ── agentic LLM loop with tools
 //	        │
 //	        ▼
 //	recordFinding()     ── dedup, threshold validation

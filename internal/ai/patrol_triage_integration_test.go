@@ -22,7 +22,7 @@ func TestRunAIAnalysis_TriageQuietSkipsLLM(t *testing.T) {
 		t.Fatalf("expected quiet triage state, got IsQuiet=%v", triage.IsQuiet)
 	}
 
-	res, err := ps.runAIAnalysis(context.Background(), state, nil)
+	res, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, state), nil)
 	if err != nil {
 		t.Fatalf("runAIAnalysis() unexpected error for quiet triage: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestBuildTriageSeedContext_SmallOutput(t *testing.T) {
 	triage := triageIntegrationResult(state, flaggedIDs)
 
 	triageSeed, _ := ps.buildTriageSeedContext(triage, state, nil, nil)
-	fullSeed, _ := ps.buildSeedContext(state, nil, nil)
+	fullSeed, _ := ps.buildSeedContextState(patrolRuntimeStateForTest(ps, state), nil, nil)
 
 	if len(fullSeed) == 0 {
 		t.Fatal("expected non-empty full seed context")

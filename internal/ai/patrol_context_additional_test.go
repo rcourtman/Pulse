@@ -26,7 +26,7 @@ func TestPatrolService_buildSeedContext_QuietSummary(t *testing.T) {
 		},
 	}
 
-	seed, _ := ps.buildSeedContext(state, nil, nil)
+	seed, _ := ps.buildSeedContextState(patrolRuntimeStateForTest(ps, state), nil, nil)
 	if !strings.Contains(seed, "# Node Metrics") {
 		t.Fatalf("expected detailed node metrics section, got:\n%s", seed)
 	}
@@ -47,7 +47,7 @@ func TestPatrolService_buildSeedContext_ScopeSection(t *testing.T) {
 		Depth:         PatrolDepthQuick,
 	}
 
-	seed, _ := ps.buildSeedContext(models.StateSnapshot{}, scope, nil)
+	seed, _ := ps.buildSeedContextState(patrolRuntimeStateForTest(ps, models.StateSnapshot{}), scope, nil)
 	if !strings.Contains(seed, "# Patrol Scope") {
 		t.Fatalf("expected patrol scope section, got:\n%s", seed)
 	}
@@ -91,7 +91,7 @@ func TestPatrolService_buildSeedContext_TypeScopedEffectiveScopeSection(t *testi
 		},
 	}
 
-	seed, _ := ps.buildSeedContext(state, scope, nil)
+	seed, _ := ps.buildSeedContextState(patrolRuntimeStateForTest(ps, state), scope, nil)
 	if !strings.Contains(seed, "Effective scope: 2 resources (node-1, node-2)") {
 		t.Fatalf("expected type-scoped effective scope section, got:\n%s", seed)
 	}

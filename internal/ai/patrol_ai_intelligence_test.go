@@ -161,7 +161,7 @@ func TestSeedPrecomputeIntelligence_PopulatesSignals(t *testing.T) {
 	}
 
 	scoped := map[string]bool{"node-1": true, "vm-1": true, "ct-1": true, "storage-1": true}
-	intel := ps.seedPrecomputeIntelligence(state, scoped, now)
+	intel := ps.seedPrecomputeIntelligenceState(patrolRuntimeStateForTest(ps, state), scoped, now)
 
 	if !intel.hasBaselineStore {
 		t.Fatalf("expected baseline store flag to be true")
@@ -228,7 +228,7 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 		PBSBackups: []models.PBSBackup{{VMID: "102", BackupTime: now.Add(-72 * time.Hour)}},
 	}
 
-	output := ps.seedBackupAnalysis(state, now)
+	output := ps.seedBackupAnalysisState(patrolRuntimeStateForTest(ps, state), nil, now)
 	if output == "" {
 		t.Fatalf("expected backup analysis output")
 	}
@@ -467,7 +467,7 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	ps.readState = &mockReadState{nodes: []*ur.NodeView{&nodeView}}
 
 	state := models.StateSnapshot{Nodes: []models.Node{{ID: "node-1", Name: "node-1"}}}
-	output, seeded := ps.seedFindingsAndContext(&PatrolScope{ResourceIDs: []string{"node-1"}}, state)
+	output, seeded := ps.seedFindingsAndContextState(&PatrolScope{ResourceIDs: []string{"node-1"}}, patrolRuntimeStateForTest(ps, state))
 
 	if resolvedID != missing.ID {
 		t.Fatalf("expected unified resolver to be called for missing finding")
