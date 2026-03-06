@@ -1139,7 +1139,7 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		}
 	}
 
-	return filtered
+	return filtered.withDerivedProviders()
 }
 
 // GetStatus returns the current patrol status

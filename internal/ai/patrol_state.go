@@ -86,6 +86,14 @@ func (s patrolRuntimeState) snapshot() models.StateSnapshot {
 	}
 }
 
+func (s patrolRuntimeState) withDerivedProviders() patrolRuntimeState {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(s.snapshot())
+	s.readState = registry
+	s.unifiedResourceProvider = unifiedresources.NewUnifiedAIAdapter(registry)
+	return s
+}
+
 func (p *PatrolService) currentPatrolRuntimeState() patrolRuntimeState {
 	if p == nil {
 		return patrolRuntimeState{}

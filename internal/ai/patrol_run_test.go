@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // --- filterStateByScope tests ---
@@ -392,6 +393,49 @@ func TestFilterStateByScope_PreservesMetadata(t *testing.T) {
 	}
 	if len(filtered.ConnectionHealth) != 1 {
 		t.Error("expected ConnectionHealth to be preserved")
+	}
+}
+
+func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	state := patrolRuntimeState{
+		Nodes: []models.Node{
+			{ID: "n1", Name: "node-1"},
+			{ID: "n2", Name: "node-2"},
+		},
+		VMs: []models.VM{
+			{ID: "vm1", Name: "vm-1"},
+			{ID: "vm2", Name: "vm-2"},
+		},
+		Storage: []models.Storage{
+			{ID: "s1", Name: "local", Usage: 42},
+			{ID: "s2", Name: "backup", Usage: 10},
+		},
+	}
+
+	filtered := ps.filterStateByScopeState(state, PatrolScope{
+		ResourceIDs:   []string{"n1", "s1"},
+		ResourceTypes: []string{"node", "storage"},
+	})
+
+	if filtered.readState == nil {
+		t.Fatal("expected scoped readState to be rebuilt")
+	}
+	if filtered.unifiedResourceProvider == nil {
+		t.Fatal("expected scoped unified resource provider to be rebuilt")
+	}
+	if got := len(filtered.readState.Nodes()); got != 1 {
+		t.Fatalf("expected 1 scoped node in readState, got %d", got)
+	}
+	if got := len(filtered.readState.VMs()); got != 0 {
+		t.Fatalf("expected 0 scoped VMs in readState, got %d", got)
+	}
+	if got := len(filtered.readState.StoragePools()); got != 1 {
+		t.Fatalf("expected 1 scoped storage pool in readState, got %d", got)
+	}
+	if got := len(filtered.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeStorage)); got != 1 {
+		t.Fatalf("expected 1 scoped storage resource in provider, got %d", got)
 	}
 }
 
