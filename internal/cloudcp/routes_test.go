@@ -150,6 +150,51 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 	}
 }
 
+func TestRegisterRoutes_TrialSignupVerificationRateLimit(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	trialStore, err := NewTrialSignupStore(dir)
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { trialStore.Close() })
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:             dir,
+			AdminKey:            "test-admin-key",
+			BaseURL:             "https://cloud.example.com",
+			StripeWebhookSecret: "whsec_test",
+		},
+		Registry:         reg,
+		TrialSignupStore: trialStore,
+		Version:          "test",
+	})
+
+	for i := 0; i < 6; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/trial-signup/request-verification", nil)
+		req.RemoteAddr = "198.51.100.25:7777"
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("attempt %d status=%d, want %d", i+1, rec.Code, http.StatusMethodNotAllowed)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/trial-signup/request-verification", nil)
+	req.RemoteAddr = "198.51.100.25:7777"
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("rate-limited status=%d, want %d body=%q", rec.Code, http.StatusTooManyRequests, rec.Body.String())
+	}
+}
+
 func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 	dir := t.TempDir()
 	reg, err := registry.NewTenantRegistry(dir)

@@ -37,7 +37,11 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	adminLimiter := NewCPRateLimiter(deps.Config.AdminRateLimitPerMinute, time.Minute)
 	accountAPILimiter := NewCPRateLimiter(deps.Config.AccountAPIRateLimitPerMinute, time.Minute)
 	portalAPILimiter := NewCPRateLimiter(deps.Config.PortalAPIRateLimitPerMinute, time.Minute)
-	trialSignupLimiter := NewCPRateLimiter(30, time.Minute)
+	trialSignupPageLimiter := NewCPRateLimiter(30, time.Minute)
+	trialSignupVerificationLimiter := NewCPRateLimiter(6, time.Hour)
+	trialSignupVerifyLimiter := NewCPRateLimiter(30, time.Minute)
+	trialSignupCheckoutLimiter := NewCPRateLimiter(12, time.Hour)
+	trialSignupCompleteLimiter := NewCPRateLimiter(30, time.Minute)
 	publicSignupLimiter := NewCPRateLimiter(30, time.Minute)
 	publicMagicLinkLimiter := NewCPRateLimiter(20, time.Minute)
 
@@ -94,11 +98,11 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
 	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore)
-	mux.Handle("/start-pro-trial", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
-	mux.Handle("/api/trial-signup/request-verification", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
-	mux.Handle("/trial-signup/verify", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
-	mux.Handle("/api/trial-signup/checkout", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
-	mux.Handle("/trial-signup/complete", trialSignupLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
+	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
+	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
+	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
+	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
+	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
 
 	// Pulse Cloud self-serve signup: public page + API checkout + magic-link request.
 	publicCloudSignupHandlers := NewPublicCloudSignupHandlers(deps.Config, deps.Registry, deps.MagicLinks, deps.EmailSender)
