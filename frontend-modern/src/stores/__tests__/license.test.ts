@@ -18,6 +18,7 @@ import {
   maxHistoryDays,
   entitlements,
   licenseLoaded,
+  licenseLoadError,
 } from '@/stores/license';
 
 vi.mock('@/api/license');
@@ -96,6 +97,25 @@ describe('license store', () => {
       },
       has_migration_gap: false,
     });
+  });
+
+  it('sets loadError on API failure', async () => {
+    vi.mocked(LicenseAPI.getEntitlements).mockRejectedValue(new Error('Network timeout'));
+
+    await loadLicenseStatus(true);
+
+    expect(licenseLoadError()).toBeInstanceOf(Error);
+    expect(licenseLoadError()?.message).toBe('Network timeout');
+  });
+
+  it('clears loadError on successful load after failure', async () => {
+    vi.mocked(LicenseAPI.getEntitlements).mockRejectedValue(new Error('Network timeout'));
+    await loadLicenseStatus(true);
+    expect(licenseLoadError()).toBeInstanceOf(Error);
+
+    vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockProEntitlements);
+    await loadLicenseStatus(true);
+    expect(licenseLoadError()).toBeNull();
   });
 
   it('startProTrial throws error if trial start fails', async () => {

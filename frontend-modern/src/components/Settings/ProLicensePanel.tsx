@@ -5,6 +5,7 @@ import { notificationStore } from '@/stores/notifications';
 import {
   getUpgradeActionUrlOrFallback,
   isMultiTenantEnabled,
+  licenseLoadError,
   licenseStatus,
   loadLicenseStatus,
   startProTrial,
@@ -88,15 +89,8 @@ export const ProLicensePanel: Component = () => {
 
   const loadPanelData = async () => {
     setLoading(true);
-    try {
-      await loadLicenseStatus(true);
-    } catch (err) {
-      notificationStore.error(
-        err instanceof Error ? err.message : 'Failed to load license details',
-      );
-    } finally {
-      setLoading(false);
-    }
+    await loadLicenseStatus(true);
+    setLoading(false);
   };
 
   onMount(() => {
@@ -325,7 +319,7 @@ export const ProLicensePanel: Component = () => {
           </button>
         </div>
 
-        <Show when={showTrialStart()}>
+        <Show when={showTrialStart() && !licenseLoadError()}>
           <div class="rounded-md border border-border bg-surface-alt p-3">
             <p class="text-sm font-medium text-base-content">Try Pro for free</p>
             <p class="text-xs text-muted mt-1">Start a 14-day Pro trial for this organization.</p>
@@ -346,7 +340,7 @@ export const ProLicensePanel: Component = () => {
         description="Review your active tier, expiry, and available features."
         icon={<BadgeCheck class="w-5 h-5" />}
       >
-        <Show when={trialEnded()}>
+        <Show when={trialEnded() && !licenseLoadError()}>
           <div class="mb-4 rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 p-3 text-sm text-red-900 dark:text-red-100">
             <p class="font-medium">Your Pro trial has ended</p>
             <p class="text-xs text-red-800 dark:text-red-200 mt-1">Upgrade to keep Pro features.</p>
@@ -360,6 +354,24 @@ export const ProLicensePanel: Component = () => {
             </a>
           </div>
         </Show>
+        <Show when={licenseLoadError()}>
+          <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
+            <p class="font-medium">Could not load license status</p>
+            <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+              The license server could not be reached. Some features may be temporarily restricted.
+            </p>
+            <button
+              type="button"
+              class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-800 transition-colors disabled:opacity-60"
+              disabled={loading()}
+              onClick={loadPanelData}
+            >
+              <RefreshCw class={`w-3 h-3 ${loading() ? 'animate-spin' : ''}`} />
+              Retry
+            </button>
+          </div>
+        </Show>
+        <Show when={!licenseLoadError()}>
         <Show when={!loading()} fallback={<p class="text-sm ">Loading license status...</p>}>
           <div class="flex flex-wrap items-center gap-2">
             <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
@@ -438,6 +450,7 @@ export const ProLicensePanel: Component = () => {
               </a>
             </div>
           </Show>
+        </Show>
         </Show>
       </SettingsPanel>
     </div>

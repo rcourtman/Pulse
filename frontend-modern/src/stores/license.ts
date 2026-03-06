@@ -11,6 +11,7 @@ import { logger } from '@/utils/logger';
 const [entitlements, setEntitlements] = createSignal<LicenseEntitlements | null>(null);
 const [loading, setLoading] = createSignal(false);
 const [loaded, setLoaded] = createSignal(false);
+const [loadError, setLoadError] = createSignal<Error | null>(null);
 
 type TrialStartErrorPayload = {
   error?: string;
@@ -34,6 +35,7 @@ export async function loadLicenseStatus(force = false): Promise<void> {
   try {
     const next = await LicenseAPI.getEntitlements();
     setEntitlements(next);
+    setLoadError(null);
     setLoaded(true);
     logger.debug('[licenseStore] Entitlements loaded', {
       tier: next.tier,
@@ -41,6 +43,7 @@ export async function loadLicenseStatus(force = false): Promise<void> {
     });
   } catch (err) {
     logger.error('[licenseStore] Failed to load entitlements', err);
+    setLoadError(err instanceof Error ? err : new Error(String(err)));
     // Best-effort fallback to avoid breaking the UI.
     setEntitlements({
       capabilities: ['update_alerts', 'sso', 'ai_patrol'],
@@ -209,6 +212,7 @@ export function isRangeLocked(range: string): boolean {
 eventBus.on('org_switched', () => {
   setEntitlements(null);
   setLoaded(false);
+  setLoadError(null);
   void loadLicenseStatus(true);
 });
 
@@ -220,4 +224,5 @@ export {
   entitlements as licenseStatus,
   loading as licenseLoading,
   loaded as licenseLoaded,
+  loadError as licenseLoadError,
 };
