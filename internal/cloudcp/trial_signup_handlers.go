@@ -3,6 +3,7 @@ package cloudcp
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/mail"
@@ -344,6 +345,20 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
 		return
 	}
+	if h.verificationStore != nil {
+		alreadyUsed, err := h.verificationStore.HasIssuedTrialForEmail(data.Email)
+		if err != nil {
+			log.Error().Err(err).Str("email", data.Email).Msg("trial signup issuance lookup failed")
+			data.ErrorMessage = "Unable to validate trial eligibility right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
+			return
+		}
+		if alreadyUsed {
+			data.ErrorMessage = "This work email has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
+			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
+			return
+		}
+	}
 	if h.emailSender == nil || h.cfg == nil || strings.TrimSpace(h.cfg.EmailFrom) == "" || h.verificationStore == nil {
 		data.ErrorMessage = "Email verification is not configured yet. Please contact support."
 		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
@@ -604,6 +619,27 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	}
 
 	now := h.now().UTC()
+	requestID := strings.TrimSpace(session.Metadata["trial_request_id"])
+	if requestID == "" {
+		http.Error(w, "missing trial request id", http.StatusBadRequest)
+		return
+	}
+	if h.verificationStore == nil {
+		http.Error(w, "trial signup store not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.verificationStore.MarkTrialIssued(requestID, now); err != nil {
+		switch {
+		case errors.Is(err, ErrTrialSignupEmailAlreadyUsed):
+			http.Error(w, "trial already used for this email", http.StatusConflict)
+		case errors.Is(err, ErrTrialSignupRecordNotFound), errors.Is(err, ErrTrialSignupVerificationInvalid):
+			http.Error(w, "invalid trial request", http.StatusBadRequest)
+		default:
+			log.Error().Err(err).Str("request_id", requestID).Msg("failed to record trial issuance")
+			http.Error(w, "failed to record trial issuance", http.StatusInternalServerError)
+		}
+		return
+	}
 	token, err := pkglicensing.SignTrialActivationToken(privateKey, pkglicensing.TrialActivationClaims{
 		OrgID:        orgID,
 		Email:        email,

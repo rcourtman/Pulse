@@ -65,6 +65,36 @@ func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
 	}
 }
 
+func TestTrialSignupHandleRequestVerificationRejectsEmailThatAlreadyUsedTrial(t *testing.T) {
+	h, store, sender := newTrialSignupTestHandler(t)
+	rawToken := requestTrialVerification(t, h, sender)
+	verifiedToken := verifyTrialRequest(t, h, rawToken)
+	recordID := parseVerifiedTokenRequestID(t, h, verifiedToken)
+	if err := store.MarkTrialIssued(recordID, h.now().UTC()); err != nil {
+		t.Fatalf("MarkTrialIssued: %v", err)
+	}
+
+	form := url.Values{
+		"org_id":     {"default"},
+		"return_url": {"https://pulse.example.com/auth/trial-activate"},
+		"name":       {"Test User"},
+		"email":      {"owner@example.com"},
+		"company":    {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleRequestVerification(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "already used a Pulse Pro trial") {
+		t.Fatalf("expected duplicate trial message, got %q", rec.Body.String())
+	}
+}
+
 func TestTrialSignupHandleVerifyEmailConsumesSingleUseToken(t *testing.T) {
 	h, _, sender := newTrialSignupTestHandler(t)
 	rawToken := requestTrialVerification(t, h, sender)
@@ -189,10 +219,33 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		Name:                  "Test User",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             time.Unix(1710000000, 0).UTC(),
+		VerificationExpiresAt: time.Unix(1710000000, 0).UTC().Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, time.Unix(1710000000, 0).UTC())
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, nil)
+	}, nil, store)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
@@ -200,8 +253,9 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 			Status:        stripe.CheckoutSessionStatusComplete,
 			CustomerEmail: "owner@example.com",
 			Metadata: map[string]string{
-				"org_id":     "default",
-				"return_url": "https://pulse.example.com/auth/trial-activate",
+				"org_id":           "default",
+				"return_url":       "https://pulse.example.com/auth/trial-activate",
+				"trial_request_id": record.ID,
 			},
 		}, nil
 	}
@@ -230,6 +284,46 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	}
 	if claims.OrgID != "default" {
 		t.Fatalf("claims.OrgID=%q, want %q", claims.OrgID, "default")
+	}
+}
+
+func TestTrialSignupHandleCompleteRejectsDuplicateIssuedEmail(t *testing.T) {
+	h, store, sender := newTrialSignupTestHandler(t)
+	h.cfg.StripeAPIKey = "sk_test_123"
+
+	firstRawToken := requestTrialVerification(t, h, sender)
+	firstVerifiedToken := verifyTrialRequest(t, h, firstRawToken)
+	firstRequestID := parseVerifiedTokenRequestID(t, h, firstVerifiedToken)
+
+	secondRawToken := requestTrialVerification(t, h, sender)
+	secondVerifiedToken := verifyTrialRequest(t, h, secondRawToken)
+	secondRequestID := parseVerifiedTokenRequestID(t, h, secondVerifiedToken)
+	if err := store.MarkTrialIssued(firstRequestID, h.now().UTC()); err != nil {
+		t.Fatalf("MarkTrialIssued(first): %v", err)
+	}
+
+	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		return &stripe.CheckoutSession{
+			ID:            id,
+			Status:        stripe.CheckoutSessionStatusComplete,
+			CustomerEmail: "owner@example.com",
+			Metadata: map[string]string{
+				"org_id":           "default",
+				"return_url":       "https://pulse.example.com/auth/trial-activate",
+				"trial_request_id": secondRequestID,
+			},
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_dupe", nil)
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupComplete(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "trial already used for this email") {
+		t.Fatalf("expected duplicate issuance error, got %q", rec.Body.String())
 	}
 }
 

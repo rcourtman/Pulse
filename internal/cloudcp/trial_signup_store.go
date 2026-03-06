@@ -24,6 +24,7 @@ var (
 	ErrTrialSignupVerificationExpired = errors.New("trial signup verification token is expired")
 	ErrTrialSignupVerificationUsed    = errors.New("trial signup verification token already used")
 	ErrTrialSignupRecordNotFound      = errors.New("trial signup record not found")
+	ErrTrialSignupEmailAlreadyUsed    = errors.New("trial signup email already used")
 )
 
 const (
@@ -117,6 +118,12 @@ func (s *TrialSignupStore) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_trial_signup_email ON trial_signup_requests(email);
 	CREATE INDEX IF NOT EXISTS idx_trial_signup_verify_expiry ON trial_signup_requests(verification_expires_at);
 	CREATE INDEX IF NOT EXISTS idx_trial_signup_verified_at ON trial_signup_requests(verified_at);
+	CREATE TABLE IF NOT EXISTS trial_signup_issuances (
+		email TEXT PRIMARY KEY,
+		request_id TEXT NOT NULL UNIQUE,
+		issued_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_trial_signup_issuances_request_id ON trial_signup_issuances(request_id);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("init trial signup schema: %w", err)
@@ -164,6 +171,10 @@ func (s *TrialSignupStore) CreateVerification(rec *TrialSignupRecord) (string, e
 	if expiresAt.IsZero() {
 		return "", fmt.Errorf("verification expiry is required")
 	}
+	email := normalizeTrialSignupEmail(rec.Email)
+	if email == "" {
+		return "", fmt.Errorf("email is required")
+	}
 
 	s.mu.Lock()
 	db := s.db
@@ -183,7 +194,7 @@ func (s *TrialSignupStore) CreateVerification(rec *TrialSignupRecord) (string, e
 		rec.OrgID,
 		rec.ReturnURL,
 		rec.Name,
-		strings.ToLower(strings.TrimSpace(rec.Email)),
+		email,
 		rec.Company,
 		expiresAt.Unix(),
 		now.Unix(),
@@ -194,7 +205,7 @@ func (s *TrialSignupStore) CreateVerification(rec *TrialSignupRecord) (string, e
 	rec.ID = requestID
 	rec.CreatedAt = now
 	rec.VerificationExpiresAt = expiresAt
-	rec.Email = strings.ToLower(strings.TrimSpace(rec.Email))
+	rec.Email = email
 	return rawToken, nil
 }
 
@@ -339,6 +350,124 @@ func (s *TrialSignupStore) MarkCheckoutStarted(id string, now time.Time) error {
 	return nil
 }
 
+func (s *TrialSignupStore) HasIssuedTrialForEmail(email string) (bool, error) {
+	if s == nil {
+		return false, fmt.Errorf("trial signup store not configured")
+	}
+	email = normalizeTrialSignupEmail(email)
+	if email == "" {
+		return false, nil
+	}
+
+	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return false, fmt.Errorf("trial signup store not configured")
+	}
+	defer s.mu.Unlock()
+
+	var issuedAt int64
+	err := db.QueryRow(
+		`SELECT issued_at
+		 FROM trial_signup_issuances
+		 WHERE email = ?`,
+		email,
+	).Scan(&issuedAt)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return false, fmt.Errorf("lookup trial signup issuance: %w", err)
+}
+
+func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {
+	if s == nil {
+		return fmt.Errorf("trial signup store not configured")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrTrialSignupRecordNotFound
+	}
+	now = now.UTC()
+
+	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return fmt.Errorf("trial signup store not configured")
+	}
+	defer s.mu.Unlock()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin trial issuance tx: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			log.Warn().Err(rollbackErr).Msg("Failed to rollback trial issuance transaction")
+		}
+	}()
+
+	rec, err := loadTrialSignupRecord(tx.QueryRow(
+		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at
+		 FROM trial_signup_requests
+		 WHERE request_id = ?`,
+		id,
+	))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrTrialSignupRecordNotFound
+		}
+		return fmt.Errorf("load trial signup request for issuance: %w", err)
+	}
+	if rec.VerifiedAt.IsZero() {
+		return ErrTrialSignupVerificationInvalid
+	}
+
+	email := normalizeTrialSignupEmail(rec.Email)
+	if email == "" {
+		return ErrTrialSignupVerificationInvalid
+	}
+
+	res, err := tx.Exec(
+		`INSERT OR IGNORE INTO trial_signup_issuances (email, request_id, issued_at)
+		 VALUES (?, ?, ?)`,
+		email,
+		rec.ID,
+		now.Unix(),
+	)
+	if err != nil {
+		return fmt.Errorf("insert trial issuance: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get trial issuance rows affected: %w", err)
+	}
+	if affected == 0 {
+		var existingRequestID string
+		err = tx.QueryRow(
+			`SELECT request_id
+			 FROM trial_signup_issuances
+			 WHERE email = ?`,
+			email,
+		).Scan(&existingRequestID)
+		if err != nil {
+			return fmt.Errorf("lookup existing trial issuance: %w", err)
+		}
+		if strings.TrimSpace(existingRequestID) != rec.ID {
+			return ErrTrialSignupEmailAlreadyUsed
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit trial issuance tx: %w", err)
+	}
+	return nil
+}
+
 func (s *TrialSignupStore) DeleteExpired(now time.Time) error {
 	if s == nil {
 		return nil
@@ -435,4 +564,8 @@ func randomHex(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+func normalizeTrialSignupEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }

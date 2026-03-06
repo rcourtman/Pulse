@@ -44,6 +44,7 @@ export const getExplicitAgentIdFromResource = (resource: Resource): string | und
     asTrimmedString(resource.agent?.agentId) ||
     asTrimmedString(platformAgent?.agentId) ||
     asTrimmedString(platformData?.agentId) ||
+    asTrimmedString(platformData?.linkedAgentId) ||
     asTrimmedString(resource.kubernetes?.agentId) ||
     asTrimmedString(kubernetes?.agentId)
   );

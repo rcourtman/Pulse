@@ -12,7 +12,7 @@ import {
   readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
 import {
-  getExplicitAgentIdFromResource,
+  getActionableAgentIdFromResource,
   getMetricsChartKeyCandidatesFromResource,
   getPlatformAgentRecord,
   getPlatformDataRecord,
@@ -352,9 +352,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     if (map.size === 0) return undefined;
 
     const directAgentCandidates: string[] = [];
-    const explicitAgentId = getExplicitAgentIdFromResource(resource);
-    if (explicitAgentId) {
-      directAgentCandidates.push(explicitAgentId);
+    const actionableAgentId = getActionableAgentIdFromResource(resource);
+    if (actionableAgentId) {
+      directAgentCandidates.push(actionableAgentId);
     }
     if (resource.platformType === 'agent') {
       const discoveryResourceId = asTrimmedString(resource.discoveryTarget?.resourceId);

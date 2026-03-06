@@ -53,6 +53,16 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('agent-k8s');
+
+    expect(
+      getExplicitAgentIdFromResource(
+        makeResource({
+          platformData: {
+            linkedAgentId: 'agent-linked',
+          },
+        }),
+      ),
+    ).toBe('agent-linked');
   });
 
   it('falls back to discovery coordinates for actionable agent ids', () => {
@@ -119,6 +129,20 @@ describe('agentResources', () => {
         }),
       ),
     ).toEqual(['docker-host-1', 'agent-host-1', 'hash-resource', 'tower']);
+
+    expect(
+      getMetricsChartKeyCandidatesFromResource(
+        makeResource({
+          id: 'hash-resource-2',
+          type: 'agent',
+          name: 'pve1',
+          platformId: 'pve1',
+          platformData: {
+            linkedAgentId: 'agent-linked',
+          },
+        }),
+      ),
+    ).toEqual(['agent-linked', 'hash-resource-2', 'pve1']);
   });
 
   it('detects agent facets without relying on node-only typing', () => {

@@ -726,4 +726,77 @@ describe('InfrastructureSummary range behavior', () => {
       expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
     });
   });
+
+  it('uses linkedAgentId for direct agent chart fallback when no agent resource is loaded', async () => {
+    mockGetCharts.mockReset();
+    const now = Date.now();
+    mockHostAgentResources = [];
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {
+        'node-1': {
+          cpu: [
+            { timestamp: now - 60_000, value: 20 },
+            { timestamp: now, value: 25 },
+          ],
+          memory: [
+            { timestamp: now - 60_000, value: 40 },
+            { timestamp: now, value: 45 },
+          ],
+          disk: [
+            { timestamp: now - 60_000, value: 35 },
+            { timestamp: now, value: 40 },
+          ],
+          netin: [],
+          netout: [],
+        },
+      },
+      dockerHostData: {},
+      agentData: {
+        'agent-host-4': {
+          cpu: [],
+          memory: [],
+          disk: [],
+          netin: [
+            { timestamp: now - 60_000, value: 1024 },
+            { timestamp: now, value: 2048 },
+          ],
+          netout: [
+            { timestamp: now - 60_000, value: 512 },
+            { timestamp: now, value: 1536 },
+          ],
+        },
+      },
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    const proxmoxNodeHost: Resource = {
+      id: 'node-1',
+      type: 'agent',
+      name: 'node-1',
+      displayName: 'node-1',
+      platformId: 'node-1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: now,
+      platformData: {
+        linkedAgentId: 'agent-host-4',
+      },
+    };
+
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="density-map"]')).toBeTruthy();
+    });
+  });
 });
