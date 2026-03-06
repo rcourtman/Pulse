@@ -3053,12 +3053,11 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	sb.WriteString(fmt.Sprintf("- Storage warning: %.0f%%, critical: %.0f%%\n", thresholds.StorageWarning, thresholds.StorageCritical))
 	sb.WriteString("Note: The real-time alerting system monitors these thresholds continuously. Do NOT report findings for threshold breaches — focus on trends, capacity planning, and issues alerts cannot detect.\n\n")
 
-	scopedResources := patrolKnownResources(snap.readState)
+	scopedResources := patrolRuntimeKnownResources(snap)
 	stateHasScopedResources := len(scopedResources) > 0
 	globalResources := scopedResources
-	if current := p.currentPatrolRuntimeState(); current.readState != nil {
-		globalResources = patrolKnownResources(current.readState)
-	}
+	current := p.currentPatrolRuntimeState()
+	globalResources = patrolRuntimeKnownResources(current)
 	stateHasGlobalResources := len(globalResources) > 0
 
 	// --- Active Findings to Re-check ---
@@ -3119,7 +3118,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	p.mu.RUnlock()
 	if knowledgeStore != nil {
 		var knowledgeContext string
-		scopedKnowledgeIDs := patrolScopedKnowledgeResourceIDs(snap.readState)
+		scopedKnowledgeIDs := patrolRuntimeResourceIDs(snap)
 		if len(scopedKnowledgeIDs) == 0 && scope != nil {
 			scopedKnowledgeIDs = append(scopedKnowledgeIDs, scope.ResourceIDs...)
 		}
@@ -3136,96 +3135,6 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	}
 
 	return sb.String(), seededFindingIDs
-}
-
-func patrolKnownResources(rs unifiedresources.ReadState) map[string]bool {
-	knownResources := make(map[string]bool)
-	if rs == nil {
-		return knownResources
-	}
-	for _, n := range rs.Nodes() {
-		knownResources[n.ID()] = true
-		knownResources[n.Name()] = true
-	}
-	for _, vm := range rs.VMs() {
-		knownResources[vm.ID()] = true
-		knownResources[vm.Name()] = true
-	}
-	for _, ct := range rs.Containers() {
-		knownResources[ct.ID()] = true
-		knownResources[ct.Name()] = true
-	}
-	for _, s := range rs.StoragePools() {
-		knownResources[s.ID()] = true
-		knownResources[s.Name()] = true
-	}
-	for _, dh := range rs.DockerHosts() {
-		knownResources[dh.ID()] = true
-		knownResources[dh.Name()] = true
-		if hn := strings.TrimSpace(dh.Hostname()); hn != "" {
-			knownResources[hn] = true
-		}
-	}
-	for _, h := range rs.Hosts() {
-		knownResources[h.ID()] = true
-		knownResources[h.Name()] = true
-		if hn := strings.TrimSpace(h.Hostname()); hn != "" {
-			knownResources[hn] = true
-		}
-	}
-	for _, pbs := range rs.PBSInstances() {
-		knownResources[pbs.ID()] = true
-		knownResources[pbs.Name()] = true
-	}
-	for _, pmg := range rs.PMGInstances() {
-		knownResources[pmg.ID()] = true
-		knownResources[pmg.Name()] = true
-	}
-	for _, k := range rs.K8sClusters() {
-		knownResources[k.ID()] = true
-		knownResources[k.Name()] = true
-	}
-	return knownResources
-}
-
-func patrolScopedKnowledgeResourceIDs(rs unifiedresources.ReadState) []string {
-	if rs == nil {
-		return nil
-	}
-	ids := make([]string, 0)
-	add := func(id string) {
-		if strings.TrimSpace(id) != "" {
-			ids = append(ids, id)
-		}
-	}
-	for _, n := range rs.Nodes() {
-		add(n.ID())
-	}
-	for _, vm := range rs.VMs() {
-		add(vm.ID())
-	}
-	for _, ct := range rs.Containers() {
-		add(ct.ID())
-	}
-	for _, s := range rs.StoragePools() {
-		add(s.ID())
-	}
-	for _, dh := range rs.DockerHosts() {
-		add(dh.ID())
-	}
-	for _, h := range rs.Hosts() {
-		add(h.ID())
-	}
-	for _, pbs := range rs.PBSInstances() {
-		add(pbs.ID())
-	}
-	for _, pmg := range rs.PMGInstances() {
-		add(pmg.ID())
-	}
-	for _, k := range rs.K8sClusters() {
-		add(k.ID())
-	}
-	return ids
 }
 
 func seedOutlierLabel(name string, cpu, mem, disk float64) (string, bool) {

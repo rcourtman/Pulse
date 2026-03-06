@@ -1027,9 +1027,13 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 	}
 
 	active := a.patrol.findings.GetActive(minSev)
+	scopedResources := patrolRuntimeKnownResources(a.snap)
 	var result []tools.PatrolFindingInfo
 	for _, f := range active {
 		if resourceID != "" && f.ResourceID != resourceID && f.ResourceName != resourceID {
+			continue
+		}
+		if len(scopedResources) > 0 && !scopedResources[f.ResourceID] && !scopedResources[f.ResourceName] {
 			continue
 		}
 		result = append(result, tools.PatrolFindingInfo{

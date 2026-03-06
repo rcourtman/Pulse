@@ -738,3 +738,53 @@ func TestPatrolFindingCreatorAdapter_ResolveFindingAndChecks(t *testing.T) {
 		t.Fatal("expected HasCheckedFindings to be true after GetActiveFindings")
 	}
 }
+
+func TestPatrolFindingCreatorAdapter_GetActiveFindings_UsesScopedRuntimeState(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	inScope := &Finding{
+		ID:           "scope-in",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-1",
+		ResourceName: "web",
+		ResourceType: "app-container",
+		Title:        "Scoped app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	outOfScope := &Finding{
+		ID:           "scope-out",
+		Key:          "cpu-high",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "app-2",
+		ResourceName: "db",
+		ResourceType: "app-container",
+		Title:        "Global app finding",
+		DetectedAt:   time.Now().Add(-time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(inScope)
+	ps.findings.Add(outOfScope)
+
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID: "docker-host-1",
+				Containers: []models.DockerContainer{
+					{ID: "app-1", Name: "web"},
+				},
+			},
+		},
+	})
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	active := adapter.GetActiveFindings("", "warning")
+	if len(active) != 1 {
+		t.Fatalf("expected 1 scoped active finding, got %+v", active)
+	}
+	if active[0].ID != inScope.ID {
+		t.Fatalf("expected in-scope finding %s, got %+v", inScope.ID, active)
+	}
+}
