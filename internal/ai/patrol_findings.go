@@ -911,77 +911,7 @@ func (a *patrolFindingCreatorAdapter) isActionable(f *Finding) bool {
 }
 
 func (a *patrolFindingCreatorAdapter) actionabilityResourceMetrics() (map[string]map[string]float64, bool) {
-	resourceMetrics := make(map[string]map[string]float64)
-	hasInventory := false
-	if rs := a.snap.readState; rs != nil {
-		for _, n := range rs.Nodes() {
-			hasInventory = true
-			m := map[string]float64{"cpu": n.CPUPercent()}
-			if mem := n.MemoryPercent(); mem > 0 {
-				m["memory"] = mem
-			}
-			resourceMetrics[n.ID()] = m
-			resourceMetrics[n.Name()] = m
-		}
-		for _, vm := range rs.VMs() {
-			hasInventory = true
-			m := map[string]float64{"cpu": vm.CPUPercent(), "memory": vm.MemoryPercent(), "disk": vm.DiskPercent()}
-			resourceMetrics[vm.ID()] = m
-			resourceMetrics[vm.Name()] = m
-			resourceMetrics[fmt.Sprintf("%d", vm.VMID())] = m
-		}
-		for _, ct := range rs.Containers() {
-			hasInventory = true
-			m := map[string]float64{"cpu": ct.CPUPercent(), "memory": ct.MemoryPercent(), "disk": ct.DiskPercent()}
-			resourceMetrics[ct.ID()] = m
-			resourceMetrics[ct.Name()] = m
-			resourceMetrics[fmt.Sprintf("%d", ct.VMID())] = m
-		}
-		for _, s := range rs.StoragePools() {
-			hasInventory = true
-			m := map[string]float64{"usage": s.DiskPercent()}
-			resourceMetrics[s.ID()] = m
-			resourceMetrics[s.Name()] = m
-		}
-		if hasInventory {
-			return resourceMetrics, true
-		}
-	}
-
-	for _, n := range a.snap.Nodes {
-		hasInventory = true
-		m := map[string]float64{"cpu": n.CPU * 100}
-		if n.Memory.Total > 0 {
-			m["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
-		}
-		resourceMetrics[n.ID] = m
-		resourceMetrics[n.Name] = m
-	}
-	for _, vm := range a.snap.VMs {
-		hasInventory = true
-		m := map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
-		resourceMetrics[vm.ID] = m
-		resourceMetrics[vm.Name] = m
-		resourceMetrics[fmt.Sprintf("%d", vm.VMID)] = m
-	}
-	for _, ct := range a.snap.Containers {
-		hasInventory = true
-		m := map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
-		resourceMetrics[ct.ID] = m
-		resourceMetrics[ct.Name] = m
-		resourceMetrics[fmt.Sprintf("%d", ct.VMID)] = m
-	}
-	for _, s := range a.snap.Storage {
-		hasInventory = true
-		m := map[string]float64{}
-		if s.Total > 0 {
-			m["usage"] = float64(s.Used) / float64(s.Total) * 100
-		}
-		resourceMetrics[s.ID] = m
-		resourceMetrics[s.Name] = m
-	}
-
-	return resourceMetrics, hasInventory
+	return patrolActionabilityResourceMetrics(a.snap)
 }
 
 func (a *patrolFindingCreatorAdapter) ResolveFinding(findingID, reason string) error {
@@ -1605,43 +1535,13 @@ func verifyBackupFreshState(snap patrolRuntimeState, guestID string) (bool, erro
 	}
 
 	now := time.Now()
-	var last time.Time
-	if rs := snap.readState; rs != nil {
-		for _, vm := range rs.VMs() {
-			if fmt.Sprintf("%d", vm.VMID()) == vmID || vm.ID() == vmID || vm.Name() == vmID {
-				last = vm.LastBackup()
-				break
-			}
-		}
-		if last.IsZero() {
-			for _, ct := range rs.Containers() {
-				if fmt.Sprintf("%d", ct.VMID()) == vmID || ct.ID() == vmID || ct.Name() == vmID {
-					last = ct.LastBackup()
-					break
-				}
-			}
-		}
-	}
-	for _, vm := range snap.VMs {
-		if fmt.Sprintf("%d", vm.VMID) == vmID || vm.ID == vmID || vm.Name == vmID {
-			last = vm.LastBackup
-			break
-		}
-	}
-	if last.IsZero() {
-		for _, ct := range snap.Containers {
-			if fmt.Sprintf("%d", ct.VMID) == vmID || ct.ID == vmID || ct.Name == vmID {
-				last = ct.LastBackup
-				break
-			}
-		}
-	}
-	if last.IsZero() {
+	details, ok := patrolLookupGuestRuntimeDetails(snap, vmID)
+	if !ok || details.lastBackup.IsZero() {
 		// If the guest cannot be found, verification can't be concluded deterministically.
 		return false, fmt.Errorf("%w: guest not found for backup verification (%s)", aicontracts.ErrVerificationUnknown, vmID)
 	}
 
-	if now.Sub(last) <= 48*time.Hour {
+	if now.Sub(details.lastBackup) <= 48*time.Hour {
 		return true, nil
 	}
 	return false, nil
@@ -1659,104 +1559,32 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 
 	// Use a small margin to avoid flapping around exact thresholds.
 	const margin = 0.95
-
-	if rs := snap.readState; rs != nil {
-		for _, n := range rs.Nodes() {
-			if n.ID() != rid && n.Name() != rid {
-				continue
-			}
-			switch key {
-			case "cpu-high":
-				return n.CPUPercent() < thresholds.NodeCPUWarning*margin, nil
-			case "memory-high":
-				return n.MemoryPercent() < thresholds.NodeMemWarning*margin, nil
-			}
-		}
-		for _, vm := range rs.VMs() {
-			if vm.ID() != rid && vm.Name() != rid && fmt.Sprintf("%d", vm.VMID()) != rid {
-				continue
-			}
-			switch key {
-			case "cpu-high":
-				return vm.CPUPercent() < thresholds.NodeCPUWarning*margin, nil
-			case "memory-high":
-				return vm.MemoryPercent() < thresholds.GuestMemWarning*margin, nil
-			case "disk-high":
-				return vm.DiskPercent() < thresholds.GuestDiskWarn*margin, nil
-			}
-		}
-		for _, ct := range rs.Containers() {
-			if ct.ID() != rid && ct.Name() != rid && fmt.Sprintf("%d", ct.VMID()) != rid {
-				continue
-			}
-			switch key {
-			case "cpu-high":
-				return ct.CPUPercent() < thresholds.NodeCPUWarning*margin, nil
-			case "memory-high":
-				return ct.MemoryPercent() < thresholds.GuestMemWarning*margin, nil
-			case "disk-high":
-				return ct.DiskPercent() < thresholds.GuestDiskWarn*margin, nil
-			}
-		}
-		for _, s := range rs.StoragePools() {
-			if s.ID() != rid && s.Name() != rid {
-				continue
-			}
-			if key == "disk-high" {
-				return s.DiskPercent() < thresholds.StorageWarning*margin, nil
-			}
-		}
-	}
-
-	// Nodes
-	for _, n := range snap.Nodes {
-		if n.ID != rid && n.Name != rid {
-			continue
-		}
+	metrics, ok := patrolLookupResourceMetrics(snap, rid)
+	if ok {
 		switch key {
 		case "cpu-high":
-			return (n.CPU * 100) < thresholds.NodeCPUWarning*margin, nil
+			if value, exists := metrics["cpu"]; exists {
+				return value < thresholds.NodeCPUWarning*margin, nil
+			}
 		case "memory-high":
-			return n.Memory.Usage < thresholds.NodeMemWarning*margin, nil
-		}
-	}
-
-	// Guests
-	for _, vm := range snap.VMs {
-		if vm.ID != rid && vm.Name != rid && fmt.Sprintf("%d", vm.VMID) != rid {
-			continue
-		}
-		switch key {
-		case "cpu-high":
-			return (vm.CPU * 100) < thresholds.NodeCPUWarning*margin, nil
-		case "memory-high":
-			return vm.Memory.Usage < thresholds.GuestMemWarning*margin, nil
+			value, exists := metrics["memory"]
+			if !exists {
+				break
+			}
+			if resourceType == "node" {
+				return value < thresholds.NodeMemWarning*margin, nil
+			}
+			return value < thresholds.GuestMemWarning*margin, nil
 		case "disk-high":
-			return vm.Disk.Usage < thresholds.GuestDiskWarn*margin, nil
-		}
-	}
-	for _, ct := range snap.Containers {
-		if ct.ID != rid && ct.Name != rid && fmt.Sprintf("%d", ct.VMID) != rid {
-			continue
-		}
-		switch key {
-		case "cpu-high":
-			return (ct.CPU * 100) < thresholds.NodeCPUWarning*margin, nil
-		case "memory-high":
-			return ct.Memory.Usage < thresholds.GuestMemWarning*margin, nil
-		case "disk-high":
-			return ct.Disk.Usage < thresholds.GuestDiskWarn*margin, nil
-		}
-	}
-
-	// Storage pools
-	for _, s := range snap.Storage {
-		if s.ID != rid && s.Name != rid {
-			continue
-		}
-		switch key {
-		case "disk-high":
-			return s.Usage < thresholds.StorageWarning*margin, nil
+			if resourceType == "storage" {
+				if value, exists := metrics["usage"]; exists {
+					return value < thresholds.StorageWarning*margin, nil
+				}
+				break
+			}
+			if value, exists := metrics["disk"]; exists {
+				return value < thresholds.GuestDiskWarn*margin, nil
+			}
 		}
 	}
 
@@ -1781,68 +1609,243 @@ func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap p
 		return false, fmt.Errorf("%w: missing guest id", aicontracts.ErrVerificationUnknown)
 	}
 
-	var node string
-	var ip string
-	if rs := snap.readState; rs != nil {
-		for _, vm := range rs.VMs() {
-			if vm.ID() == vmID || vm.Name() == vmID || fmt.Sprintf("%d", vm.VMID()) == vmID {
-				node = vm.Node()
-				if ips := vm.IPAddresses(); len(ips) > 0 {
-					ip = ips[0]
-				}
-				break
-			}
-		}
-		if node == "" {
-			for _, ct := range rs.Containers() {
-				if ct.ID() == vmID || ct.Name() == vmID || fmt.Sprintf("%d", ct.VMID()) == vmID {
-					node = ct.Node()
-					if ips := ct.IPAddresses(); len(ips) > 0 {
-						ip = ips[0]
-					}
-					break
-				}
-			}
-		}
-	}
-	for _, vm := range snap.VMs {
-		if vm.ID == vmID || vm.Name == vmID || fmt.Sprintf("%d", vm.VMID) == vmID {
-			node = vm.Node
-			if len(vm.IPAddresses) > 0 {
-				ip = vm.IPAddresses[0]
-			}
-			break
-		}
-	}
-	if node == "" {
-		for _, ct := range snap.Containers {
-			if ct.ID == vmID || ct.Name == vmID || fmt.Sprintf("%d", ct.VMID) == vmID {
-				node = ct.Node
-				if len(ct.IPAddresses) > 0 {
-					ip = ct.IPAddresses[0]
-				}
-				break
-			}
-		}
-	}
-	if node == "" || ip == "" {
+	details, ok := patrolLookupGuestRuntimeDetails(snap, vmID)
+	if !ok || details.node == "" || details.ip == "" {
 		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", aicontracts.ErrVerificationUnknown, vmID)
 	}
 
-	agentID, ok := prober.GetAgentForHost(node)
+	agentID, ok := prober.GetAgentForHost(details.node)
 	if !ok || strings.TrimSpace(agentID) == "" {
-		return false, fmt.Errorf("%w: no agent available for host %s", aicontracts.ErrVerificationUnknown, node)
+		return false, fmt.Errorf("%w: no agent available for host %s", aicontracts.ErrVerificationUnknown, details.node)
 	}
 
-	results, err := prober.PingGuests(ctx, agentID, []string{ip})
+	results, err := prober.PingGuests(ctx, agentID, []string{details.ip})
 	if err != nil {
 		return false, fmt.Errorf("%w: reachability probe failed: %v", aicontracts.ErrVerificationUnknown, err)
 	}
-	if res, ok := results[ip]; ok {
+	if res, ok := results[details.ip]; ok {
 		if res.Reachable {
 			return true, nil
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("%w: missing ping result for %s", aicontracts.ErrVerificationUnknown, ip)
+	return false, fmt.Errorf("%w: missing ping result for %s", aicontracts.ErrVerificationUnknown, details.ip)
+}
+
+type patrolGuestRuntimeDetails struct {
+	lastBackup time.Time
+	node       string
+	ip         string
+}
+
+func patrolActionabilityResourceMetrics(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
+	if metrics, ok := patrolActionabilityMetricsFromReadState(snap); ok {
+		return metrics, true
+	}
+	return patrolActionabilityMetricsFromSnapshot(snap)
+}
+
+func patrolActionabilityMetricsFromReadState(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
+	if snap.readState == nil {
+		return nil, false
+	}
+	resourceMetrics := make(map[string]map[string]float64)
+	hasInventory := false
+	for _, n := range snap.readState.Nodes() {
+		hasInventory = true
+		m := map[string]float64{"cpu": n.CPUPercent()}
+		if mem := n.MemoryPercent(); mem > 0 {
+			m["memory"] = mem
+		}
+		patrolRegisterResourceMetrics(resourceMetrics, m, n.ID(), n.Name())
+	}
+	for _, vm := range snap.readState.VMs() {
+		hasInventory = true
+		m := map[string]float64{"cpu": vm.CPUPercent(), "memory": vm.MemoryPercent(), "disk": vm.DiskPercent()}
+		patrolRegisterResourceMetrics(resourceMetrics, m, vm.ID(), vm.Name(), fmt.Sprintf("%d", vm.VMID()))
+	}
+	for _, ct := range snap.readState.Containers() {
+		hasInventory = true
+		m := map[string]float64{"cpu": ct.CPUPercent(), "memory": ct.MemoryPercent(), "disk": ct.DiskPercent()}
+		patrolRegisterResourceMetrics(resourceMetrics, m, ct.ID(), ct.Name(), fmt.Sprintf("%d", ct.VMID()))
+	}
+	for _, s := range snap.readState.StoragePools() {
+		hasInventory = true
+		m := map[string]float64{"usage": s.DiskPercent()}
+		patrolRegisterResourceMetrics(resourceMetrics, m, s.ID(), s.Name())
+	}
+	return resourceMetrics, hasInventory
+}
+
+func patrolActionabilityMetricsFromSnapshot(snap patrolRuntimeState) (map[string]map[string]float64, bool) {
+	resourceMetrics := make(map[string]map[string]float64)
+	hasInventory := false
+	for _, n := range snap.Nodes {
+		hasInventory = true
+		m := map[string]float64{"cpu": n.CPU * 100}
+		if n.Memory.Total > 0 {
+			m["memory"] = float64(n.Memory.Used) / float64(n.Memory.Total) * 100
+		}
+		patrolRegisterResourceMetrics(resourceMetrics, m, n.ID, n.Name)
+	}
+	for _, vm := range snap.VMs {
+		hasInventory = true
+		m := map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
+		patrolRegisterResourceMetrics(resourceMetrics, m, vm.ID, vm.Name, fmt.Sprintf("%d", vm.VMID))
+	}
+	for _, ct := range snap.Containers {
+		hasInventory = true
+		m := map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
+		patrolRegisterResourceMetrics(resourceMetrics, m, ct.ID, ct.Name, fmt.Sprintf("%d", ct.VMID))
+	}
+	for _, s := range snap.Storage {
+		hasInventory = true
+		m := map[string]float64{}
+		if s.Total > 0 {
+			m["usage"] = float64(s.Used) / float64(s.Total) * 100
+		}
+		patrolRegisterResourceMetrics(resourceMetrics, m, s.ID, s.Name)
+	}
+	return resourceMetrics, hasInventory
+}
+
+func patrolLookupGuestRuntimeDetails(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
+	if details, ok := patrolLookupGuestRuntimeDetailsFromReadState(snap, guestID); ok {
+		return details, true
+	}
+	return patrolLookupGuestRuntimeDetailsFromSnapshot(snap, guestID)
+}
+
+func patrolLookupGuestRuntimeDetailsFromReadState(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
+	if snap.readState == nil {
+		return patrolGuestRuntimeDetails{}, false
+	}
+	for _, vm := range snap.readState.VMs() {
+		if !patrolGuestMatches(guestID, vm.ID(), vm.Name(), vm.VMID()) {
+			continue
+		}
+		return patrolGuestRuntimeDetails{
+			lastBackup: vm.LastBackup(),
+			node:       vm.Node(),
+			ip:         patrolFirstIP(vm.IPAddresses()),
+		}, true
+	}
+	for _, ct := range snap.readState.Containers() {
+		if !patrolGuestMatches(guestID, ct.ID(), ct.Name(), ct.VMID()) {
+			continue
+		}
+		return patrolGuestRuntimeDetails{
+			lastBackup: ct.LastBackup(),
+			node:       ct.Node(),
+			ip:         patrolFirstIP(ct.IPAddresses()),
+		}, true
+	}
+	return patrolGuestRuntimeDetails{}, false
+}
+
+func patrolLookupGuestRuntimeDetailsFromSnapshot(snap patrolRuntimeState, guestID string) (patrolGuestRuntimeDetails, bool) {
+	for _, vm := range snap.VMs {
+		if !patrolGuestMatches(guestID, vm.ID, vm.Name, vm.VMID) {
+			continue
+		}
+		return patrolGuestRuntimeDetails{
+			lastBackup: vm.LastBackup,
+			node:       vm.Node,
+			ip:         patrolFirstIP(vm.IPAddresses),
+		}, true
+	}
+	for _, ct := range snap.Containers {
+		if !patrolGuestMatches(guestID, ct.ID, ct.Name, ct.VMID) {
+			continue
+		}
+		return patrolGuestRuntimeDetails{
+			lastBackup: ct.LastBackup,
+			node:       ct.Node,
+			ip:         patrolFirstIP(ct.IPAddresses),
+		}, true
+	}
+	return patrolGuestRuntimeDetails{}, false
+}
+
+func patrolLookupResourceMetrics(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if metrics, ok := patrolLookupResourceMetricsFromReadState(snap, resourceID); ok {
+		return metrics, true
+	}
+	return patrolLookupResourceMetricsFromSnapshot(snap, resourceID)
+}
+
+func patrolLookupResourceMetricsFromReadState(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	if snap.readState == nil {
+		return nil, false
+	}
+	for _, n := range snap.readState.Nodes() {
+		if n.ID() == resourceID || n.Name() == resourceID {
+			metrics := map[string]float64{"cpu": n.CPUPercent(), "memory": n.MemoryPercent()}
+			return metrics, true
+		}
+	}
+	for _, vm := range snap.readState.VMs() {
+		if patrolGuestMatches(resourceID, vm.ID(), vm.Name(), vm.VMID()) {
+			metrics := map[string]float64{"cpu": vm.CPUPercent(), "memory": vm.MemoryPercent(), "disk": vm.DiskPercent()}
+			return metrics, true
+		}
+	}
+	for _, ct := range snap.readState.Containers() {
+		if patrolGuestMatches(resourceID, ct.ID(), ct.Name(), ct.VMID()) {
+			metrics := map[string]float64{"cpu": ct.CPUPercent(), "memory": ct.MemoryPercent(), "disk": ct.DiskPercent()}
+			return metrics, true
+		}
+	}
+	for _, s := range snap.readState.StoragePools() {
+		if s.ID() == resourceID || s.Name() == resourceID {
+			metrics := map[string]float64{"usage": s.DiskPercent()}
+			return metrics, true
+		}
+	}
+	return nil, false
+}
+
+func patrolLookupResourceMetricsFromSnapshot(snap patrolRuntimeState, resourceID string) (map[string]float64, bool) {
+	for _, n := range snap.Nodes {
+		if n.ID == resourceID || n.Name == resourceID {
+			return map[string]float64{"cpu": n.CPU * 100, "memory": n.Memory.Usage}, true
+		}
+	}
+	for _, vm := range snap.VMs {
+		if patrolGuestMatches(resourceID, vm.ID, vm.Name, vm.VMID) {
+			return map[string]float64{"cpu": vm.CPU * 100, "memory": vm.Memory.Usage, "disk": vm.Disk.Usage}, true
+		}
+	}
+	for _, ct := range snap.Containers {
+		if patrolGuestMatches(resourceID, ct.ID, ct.Name, ct.VMID) {
+			return map[string]float64{"cpu": ct.CPU * 100, "memory": ct.Memory.Usage, "disk": ct.Disk.Usage}, true
+		}
+	}
+	for _, s := range snap.Storage {
+		if s.ID == resourceID || s.Name == resourceID {
+			return map[string]float64{"usage": s.Usage}, true
+		}
+	}
+	return nil, false
+}
+
+func patrolRegisterResourceMetrics(dest map[string]map[string]float64, metrics map[string]float64, identifiers ...string) {
+	for _, identifier := range identifiers {
+		identifier = strings.TrimSpace(identifier)
+		if identifier == "" {
+			continue
+		}
+		dest[identifier] = metrics
+	}
+}
+
+func patrolGuestMatches(guestID, id, name string, vmid int) bool {
+	return id == guestID || name == guestID || fmt.Sprintf("%d", vmid) == guestID
+}
+
+func patrolFirstIP(ips []string) string {
+	if len(ips) == 0 {
+		return ""
+	}
+	return ips[0]
 }
