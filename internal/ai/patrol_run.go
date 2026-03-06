@@ -1335,60 +1335,95 @@ func patrolKubernetesScopeName(k models.KubernetesCluster) string {
 	return clusterName
 }
 
+func collectPatrolScopedActiveAlerts(alerts []models.Alert, includedResourceIDs map[string]bool) []models.Alert {
+	filtered := make([]models.Alert, 0, len(alerts))
+	for _, alert := range alerts {
+		if includedResourceIDs[alert.ResourceID] {
+			filtered = append(filtered, alert)
+		}
+	}
+	return filtered
+}
+
+func collectPatrolScopedResolvedAlerts(alerts []models.ResolvedAlert, includedResourceIDs map[string]bool) []models.ResolvedAlert {
+	filtered := make([]models.ResolvedAlert, 0, len(alerts))
+	for _, resolved := range alerts {
+		if includedResourceIDs[resolved.ResourceID] {
+			filtered = append(filtered, resolved)
+		}
+	}
+	return filtered
+}
+
+func collectPatrolScopedConnectionHealth(connectionHealth map[string]bool, includedResourceIDs map[string]bool) map[string]bool {
+	filtered := make(map[string]bool, len(connectionHealth))
+	for resourceID, healthy := range connectionHealth {
+		if includedResourceIDs[resourceID] {
+			filtered[resourceID] = healthy
+		}
+	}
+	return filtered
+}
+
+func collectPatrolScopedBackupTasks(tasks []models.BackupTask, includedGuestVMIDs map[int]bool) []models.BackupTask {
+	filtered := make([]models.BackupTask, 0, len(tasks))
+	for _, backupTask := range tasks {
+		if includedGuestVMIDs[backupTask.VMID] {
+			filtered = append(filtered, backupTask)
+		}
+	}
+	return filtered
+}
+
+func collectPatrolScopedStorageBackups(backups []models.StorageBackup, includedGuestVMIDs map[int]bool) []models.StorageBackup {
+	filtered := make([]models.StorageBackup, 0, len(backups))
+	for _, storageBackup := range backups {
+		if includedGuestVMIDs[storageBackup.VMID] {
+			filtered = append(filtered, storageBackup)
+		}
+	}
+	return filtered
+}
+
+func collectPatrolScopedGuestSnapshots(snapshots []models.GuestSnapshot, includedGuestVMIDs map[int]bool) []models.GuestSnapshot {
+	filtered := make([]models.GuestSnapshot, 0, len(snapshots))
+	for _, guestSnapshot := range snapshots {
+		if includedGuestVMIDs[guestSnapshot.VMID] {
+			filtered = append(filtered, guestSnapshot)
+		}
+	}
+	return filtered
+}
+
+func collectPatrolScopedPBSBackups(backups []models.PBSBackup, includedGuestVMIDs map[int]bool) []models.PBSBackup {
+	filtered := make([]models.PBSBackup, 0, len(backups))
+	for _, backup := range backups {
+		vmid, err := strconv.Atoi(backup.VMID)
+		if err == nil && includedGuestVMIDs[vmid] {
+			filtered = append(filtered, backup)
+		}
+	}
+	return filtered
+}
+
 func copyScopedPatrolMetadata(dst *patrolRuntimeState, snap patrolRuntimeState, includedResourceIDs map[string]bool, includedGuestVMIDs map[int]bool) {
 	if len(snap.ActiveAlerts) > 0 {
-		dst.ActiveAlerts = make([]models.Alert, 0, len(snap.ActiveAlerts))
-		for _, alert := range snap.ActiveAlerts {
-			if includedResourceIDs[alert.ResourceID] {
-				dst.ActiveAlerts = append(dst.ActiveAlerts, alert)
-			}
-		}
+		dst.ActiveAlerts = collectPatrolScopedActiveAlerts(snap.ActiveAlerts, includedResourceIDs)
 	}
 	if len(snap.RecentlyResolved) > 0 {
-		dst.RecentlyResolved = make([]models.ResolvedAlert, 0, len(snap.RecentlyResolved))
-		for _, resolved := range snap.RecentlyResolved {
-			if includedResourceIDs[resolved.ResourceID] {
-				dst.RecentlyResolved = append(dst.RecentlyResolved, resolved)
-			}
-		}
+		dst.RecentlyResolved = collectPatrolScopedResolvedAlerts(snap.RecentlyResolved, includedResourceIDs)
 	}
 	if len(snap.ConnectionHealth) > 0 {
-		dst.ConnectionHealth = make(map[string]bool, len(snap.ConnectionHealth))
-		for resourceID, healthy := range snap.ConnectionHealth {
-			if includedResourceIDs[resourceID] {
-				dst.ConnectionHealth[resourceID] = healthy
-			}
-		}
+		dst.ConnectionHealth = collectPatrolScopedConnectionHealth(snap.ConnectionHealth, includedResourceIDs)
 	}
 	if len(includedGuestVMIDs) == 0 {
 		return
 	}
 
-	dst.PVEBackups.BackupTasks = make([]models.BackupTask, 0, len(snap.PVEBackups.BackupTasks))
-	for _, backupTask := range snap.PVEBackups.BackupTasks {
-		if includedGuestVMIDs[backupTask.VMID] {
-			dst.PVEBackups.BackupTasks = append(dst.PVEBackups.BackupTasks, backupTask)
-		}
-	}
-	dst.PVEBackups.StorageBackups = make([]models.StorageBackup, 0, len(snap.PVEBackups.StorageBackups))
-	for _, storageBackup := range snap.PVEBackups.StorageBackups {
-		if includedGuestVMIDs[storageBackup.VMID] {
-			dst.PVEBackups.StorageBackups = append(dst.PVEBackups.StorageBackups, storageBackup)
-		}
-	}
-	dst.PVEBackups.GuestSnapshots = make([]models.GuestSnapshot, 0, len(snap.PVEBackups.GuestSnapshots))
-	for _, guestSnapshot := range snap.PVEBackups.GuestSnapshots {
-		if includedGuestVMIDs[guestSnapshot.VMID] {
-			dst.PVEBackups.GuestSnapshots = append(dst.PVEBackups.GuestSnapshots, guestSnapshot)
-		}
-	}
-	dst.PBSBackups = make([]models.PBSBackup, 0, len(snap.PBSBackups))
-	for _, backup := range snap.PBSBackups {
-		vmid, err := strconv.Atoi(backup.VMID)
-		if err == nil && includedGuestVMIDs[vmid] {
-			dst.PBSBackups = append(dst.PBSBackups, backup)
-		}
-	}
+	dst.PVEBackups.BackupTasks = collectPatrolScopedBackupTasks(snap.PVEBackups.BackupTasks, includedGuestVMIDs)
+	dst.PVEBackups.StorageBackups = collectPatrolScopedStorageBackups(snap.PVEBackups.StorageBackups, includedGuestVMIDs)
+	dst.PVEBackups.GuestSnapshots = collectPatrolScopedGuestSnapshots(snap.PVEBackups.GuestSnapshots, includedGuestVMIDs)
+	dst.PBSBackups = collectPatrolScopedPBSBackups(snap.PBSBackups, includedGuestVMIDs)
 }
 
 func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
