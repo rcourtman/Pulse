@@ -21,10 +21,11 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
+import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
-  getAgentDiscoveryResourceId,
-  isAppContainerDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
+  getActionableAgentIdFromResource,
+  hasAgentFacet as resourceHasAgentFacet,
+} from '@/utils/agentResources';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
   API_SCOPE_LABELS,
@@ -59,7 +60,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       resource.type === 'pbs' ||
       resource.type === 'pmg' ||
       resource.type === 'truenas' ||
-      resource.agent != null
+      resource.agent != null ||
+      resourceHasAgentFacet(resource)
     );
   };
   const agentCapableResources = createMemo(() =>
@@ -103,12 +105,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const agentActionIdForResource = (resource: Resource): string => {
-    const platformData = readPlatformData(resource);
     return (
-      readPlatformString(resource.agent?.agentId) ||
-      readPlatformString(readNestedPlatformField(platformData, 'agentId')) ||
-      getAgentDiscoveryResourceId(resource.discoveryTarget) ||
-      resource.discoveryTarget?.agentId ||
+      getActionableAgentIdFromResource(resource) ||
       resource.id
     );
   };

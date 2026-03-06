@@ -17,10 +17,12 @@ import { logger } from '@/utils/logger';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
 import {
-  getAgentDiscoveryResourceId,
-  isAgentDiscoveryResourceType,
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
+import {
+  getActionableAgentIdFromResource,
+  hasAgentFacet as resourceHasAgentFacet,
+} from '@/utils/agentResources';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
@@ -395,28 +397,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
       value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
     const asString = (value: unknown): string | undefined =>
       typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-    const hasAgentFacet = (resource: Resource): boolean => {
-      if (resource.agent) return true;
-      const platformData = readPlatformData(resource);
-      const platformAgent = asRecord(platformData?.agent);
-      return Boolean(
-        platformAgent ||
-        asString(platformData?.agentId) ||
-        (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-          resource.discoveryTarget.agentId),
-      );
-    };
+    const hasAgentFacet = (resource: Resource): boolean => resourceHasAgentFacet(resource);
     const getAgentActionId = (resource: Resource): string => {
-      const platformData = readPlatformData(resource);
-      const platformAgent = asRecord(platformData?.agent);
-      return (
-        getAgentDiscoveryResourceId(resource.discoveryTarget) ||
-        resource.discoveryTarget?.agentId ||
-        asString(resource.agent?.agentId) ||
-        asString(platformAgent?.agentId) ||
-        asString(platformData?.agentId) ||
-        resource.id
-      );
+      return getActionableAgentIdFromResource(resource) || resource.id;
     };
     const getDockerActionId = (resource: Resource): string => {
       const platformData = readPlatformData(resource);

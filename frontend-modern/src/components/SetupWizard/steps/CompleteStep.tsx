@@ -11,7 +11,10 @@ import type { Resource } from '@/types/resource';
 import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { showSuccess, showError } from '@/utils/toast';
-import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
+import {
+  getActionableAgentIdFromResource,
+  hasAgentFacet as resourceHasAgentFacet,
+} from '@/utils/agentResources';
 import {
   trackAgentFirstConnected,
   trackAgentInstallCommandCopied,
@@ -50,18 +53,7 @@ const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 const pd = (resource: Resource) =>
   resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
-const hasAgentFacet = (resource: Resource): boolean => {
-  if (resource.agent) return true;
-  const platformData = pd(resource);
-  if (!platformData) return false;
-  const platformAgent = asRecord(platformData.agent);
-  return Boolean(
-    platformAgent ||
-    asString(platformData.agentId) ||
-    (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-      resource.discoveryTarget.agentId),
-  );
-};
+const hasAgentFacet = (resource: Resource): boolean => resourceHasAgentFacet(resource);
 
 const toNodeSummaryShape = (resource: Resource) => {
   const platformData = pd(resource);
@@ -84,10 +76,7 @@ const toAgentSummaryShape = (resource: Resource) => {
   const hostname =
     resource.identity?.hostname || asString(agent.hostname) || resource.name || resource.id;
   const id =
-    asString(agent.agentId) ||
-    resource.discoveryTarget?.agentId ||
-    getAgentDiscoveryResourceId(resource.discoveryTarget) ||
-    resource.id;
+    getActionableAgentIdFromResource(resource) || resource.id;
   return {
     id,
     hostname,
@@ -140,66 +129,77 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
 
         const nodes = nodeResources.map(toNodeSummaryShape);
         const agents = agentFacetResources.map(toAgentSummaryShape);
+        const agentMap = new Map<string, ConnectedAgent>();
 
-        // Check if we have new connections
-        const totalAgents = nodes.length + agents.length;
+        for (const node of nodes) {
+          const name = node.name || node.displayName || 'Unknown';
+          const existing = agentMap.get(name);
+          if (existing) {
+            if (!existing.type.includes('Proxmox')) {
+              existing.type = `${existing.type} + Proxmox VE`;
+            }
+            if (node.host && !existing.host) {
+              existing.host = node.host;
+            }
+          } else {
+            agentMap.set(name, {
+              id: node.id || `node-${name}`,
+              name,
+              type: 'Proxmox VE',
+              host: node.host || '',
+              addedAt: new Date(),
+            });
+          }
+        }
+
+        for (const agent of agents) {
+          const name = agent.displayName || agent.hostname || 'Unknown';
+          const existing = agentMap.get(name);
+          if (existing) {
+            if (!existing.type.includes('Agent')) {
+              existing.type = `${existing.type} + Agent`;
+            }
+          } else {
+            agentMap.set(name, {
+              id: agent.id || `agent-${name}`,
+              name,
+              type: 'Agent',
+              host: '',
+              addedAt: new Date(),
+            });
+          }
+        }
+
+        const nextConnectedAgents = Array.from(agentMap.values());
+        const totalAgents = nextConnectedAgents.length;
+        const previousAgents = connectedAgents();
+        const hasConnectionChanges =
+          totalAgents !== previousAgents.length ||
+          nextConnectedAgents.some((agent, index) => {
+            const previousAgent = previousAgents[index];
+            return (
+              !previousAgent ||
+              previousAgent.id !== agent.id ||
+              previousAgent.name !== agent.name ||
+              previousAgent.type !== agent.type ||
+              previousAgent.host !== agent.host
+            );
+          });
+
         if (!firstConnectionTracked && totalAgents > 0) {
           trackAgentFirstConnected(SETUP_WIZARD_TELEMETRY_SURFACE, 'first_agent');
           firstConnectionTracked = true;
         }
 
-        if (totalAgents > previousCount || totalAgents !== connectedAgents().length) {
-          // Group agents by hostname to avoid duplicates
-          const agentMap = new Map<string, ConnectedAgent>();
+        if (hasConnectionChanges) {
+          setConnectedAgents(nextConnectedAgents);
+        }
 
-          for (const node of nodes) {
-            const name = node.name || node.displayName || 'Unknown';
-            const existing = agentMap.get(name);
-            if (existing) {
-              // Add PVE to existing agent's types
-              if (!existing.type.includes('Proxmox')) {
-                existing.type = `${existing.type} + Proxmox VE`;
-              }
-              if (node.host && !existing.host) {
-                existing.host = node.host;
-              }
-            } else {
-              agentMap.set(name, {
-                id: node.id || `node-${name}`,
-                name,
-                type: 'Proxmox VE',
-                host: node.host || '',
-                addedAt: new Date(),
-              });
-            }
-          }
+        if (previousCount > 0 && totalAgents > previousCount) {
+          void generateNewToken('agent_added');
+        }
 
-          for (const agent of agents) {
-            const name = agent.displayName || agent.hostname || 'Unknown';
-            const existing = agentMap.get(name);
-            if (existing) {
-              // Add Agent to existing PVE node
-              if (!existing.type.includes('Agent')) {
-                existing.type = `${existing.type} + Agent`;
-              }
-            } else {
-              agentMap.set(name, {
-                id: agent.id || `agent-${name}`,
-                name,
-                type: 'Agent',
-                host: '',
-                addedAt: new Date(),
-              });
-            }
-          }
-
-          setConnectedAgents(Array.from(agentMap.values()));
-
-          // Generate new token if agents increased
-          if (previousCount > 0 && totalAgents > previousCount) {
-            void generateNewToken('agent_added');
-          }
-
+        if (hasConnectionChanges || totalAgents !== previousCount) {
           previousCount = totalAgents;
         }
       } catch (error) {

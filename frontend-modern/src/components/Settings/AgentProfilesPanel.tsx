@@ -1,5 +1,4 @@
 import { Component, createSignal, createMemo, createEffect, onMount, Show, For } from 'solid-js';
-import { unwrap } from 'solid-js/store';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -26,7 +25,10 @@ import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics'
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import type { Resource } from '@/types/resource';
-import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
+import {
+  getActionableAgentIdFromResource,
+  isAgentProfileAssignableResource,
+} from '@/utils/agentResources';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -38,43 +40,6 @@ import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 export const AgentProfilesPanel: Component = () => {
   const { resources } = useResources();
-  const pd = (r: Resource) =>
-    r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
-  const asRecord = (value: unknown): Record<string, unknown> | undefined =>
-    value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-  const asString = (value: unknown): string | undefined =>
-    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-  const getActionableAgentId = (resource: Resource): string | undefined => {
-    const discoveryType = resource.discoveryTarget?.resourceType;
-    const discoveryTargetAgentId =
-      getAgentDiscoveryResourceId(resource.discoveryTarget) || resource.discoveryTarget?.agentId;
-    const discoveryResourceId =
-      discoveryType === 'docker' || discoveryType === 'k8s'
-        ? resource.discoveryTarget?.resourceId
-        : undefined;
-    return (
-      asString(resource.agent?.agentId) ||
-      asString(asRecord(pd(resource)?.agent)?.agentId) ||
-      asString(pd(resource)?.agentId) ||
-      asString(resource.kubernetes?.agentId) ||
-      asString(asRecord(pd(resource)?.kubernetes)?.agentId) ||
-      discoveryTargetAgentId ||
-      discoveryResourceId
-    );
-  };
-  const isAssignableAgentResource = (resource: Resource): boolean => {
-    switch (resource.type) {
-      case 'docker-host':
-      case 'node':
-      case 'pbs':
-      case 'pmg':
-      case 'truenas':
-      case 'k8s-cluster':
-        return true;
-      default:
-        return false;
-    }
-  };
   const resourcePriority = (resource: Resource): number => {
     switch (resource.type) {
       case 'node':
@@ -151,8 +116,8 @@ export const AgentProfilesPanel: Component = () => {
   // Connected agents from WebSocket state
   const connectedAgents = createMemo(() => {
     const sorted = resources()
-      .filter(isAssignableAgentResource)
-      .map((resource) => ({ resource, assignmentId: getActionableAgentId(resource) }))
+      .filter(isAgentProfileAssignableResource)
+      .map((resource) => ({ resource, assignmentId: getActionableAgentIdFromResource(resource) }))
       .filter((entry): entry is { resource: Resource; assignmentId: string } =>
         Boolean(entry.assignmentId),
       )

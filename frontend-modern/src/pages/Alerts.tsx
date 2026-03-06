@@ -58,11 +58,11 @@ import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import type { Incident, PBSInstance, PMGInstance } from '@/types/api';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
+import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
-  getAgentDiscoveryResourceId,
-  isAgentDiscoveryResourceType,
-  isAppContainerDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
+  getActionableAgentIdFromResource,
+  hasAgentFacet,
+} from '@/utils/agentResources';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { filterIncidentEvents } from '@/features/alerts/types';
@@ -374,7 +374,7 @@ export function Alerts() {
     const data = pd(resource);
     const agent = asRecord(data?.agent);
     return uniqueIds(
-      getAgentDiscoveryResourceId(resource.discoveryTarget),
+      getActionableAgentIdFromResource(resource),
       resource.discoveryTarget?.agentId,
       resource.agent?.agentId,
       agent?.agentId,
@@ -399,17 +399,6 @@ export function Alerts() {
     uniqueIds(
       ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
     );
-  const hasAgentFacet = (resource: Resource): boolean => {
-    if (resource.agent) return true;
-    const data = pd(resource);
-    const agent = asRecord(data?.agent);
-    return Boolean(
-      agent ||
-      asString(data?.agentId) ||
-      (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-        resource.discoveryTarget.agentId),
-    );
-  };
   const agentResources = createMemo(() =>
     allResources().filter(
       (resource) =>

@@ -1,5 +1,4 @@
 import { Component, For, Show, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
-import { unwrap } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
@@ -13,13 +12,19 @@ import {
   readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
 import {
+  getActionableAgentIdFromResource,
+  getExplicitAgentIdFromResource,
+  getPlatformAgentRecord,
+  getPlatformDataRecord,
+  hasAgentFacet,
+} from '@/utils/agentResources';
+import {
   SUMMARY_TIME_RANGES,
   SUMMARY_TIME_RANGE_LABEL,
 } from '@/components/shared/summaryTimeRange';
 import { RESOURCE_COLORS } from '@/pages/DashboardPanels/resourceColors';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
-import { isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 const normalizeResourceIdentifier = (value?: string | null): string[] => {
   if (!value) return [];
@@ -33,32 +38,15 @@ const normalizeResourceIdentifier = (value?: string | null): string[] => {
   return Array.from(variants);
 };
 
-const asRecord = (value: unknown): Record<string, unknown> | undefined =>
-  value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-
 const asTrimmedString = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const getPlatformDataRecord = (resource: Resource): Record<string, unknown> | undefined =>
-  resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
-
-const getPlatformAgentRecord = (resource: Resource): Record<string, unknown> | undefined =>
-  asRecord(getPlatformDataRecord(resource)?.agent);
-
-const getExplicitAgentIdFromResource = (resource: Resource): string | null => {
-  return (
-    asTrimmedString(resource.agent?.agentId) ||
-    asTrimmedString(getPlatformAgentRecord(resource)?.agentId) ||
-    asTrimmedString(getPlatformDataRecord(resource)?.agentId)
-  );
-};
-
 const getAgentIdFromResource = (resource: Resource): string | null => {
   return (
-    getExplicitAgentIdFromResource(resource) ||
+    getActionableAgentIdFromResource(resource) ||
     asTrimmedString(resource.discoveryTarget?.resourceId) ||
     asTrimmedString(resource.discoveryTarget?.agentId)
   );
@@ -67,15 +55,6 @@ const getAgentIdFromResource = (resource: Resource): string | null => {
 const getLinkedNodeIdFromResource = (resource: Resource): string | null =>
   asTrimmedString(getPlatformDataRecord(resource)?.linkedNodeId) ||
   asTrimmedString(getPlatformAgentRecord(resource)?.linkedNodeId);
-
-const hasAgentFacet = (resource: Resource): boolean =>
-  Boolean(
-    resource.agent ||
-    getPlatformAgentRecord(resource) ||
-    getExplicitAgentIdFromResource(resource) ||
-    (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-      resource.discoveryTarget.agentId),
-  );
 
 const getChartKeyCandidates = (resource: Resource): string[] => {
   const candidates = [

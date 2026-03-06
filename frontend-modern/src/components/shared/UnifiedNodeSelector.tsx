@@ -14,7 +14,10 @@ import type { Agent, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import { nodeFromResource, pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
-import { getAgentDiscoveryResourceId, isAgentDiscoveryResourceType } from '@/utils/discoveryTarget';
+import {
+  getActionableAgentIdFromResource,
+  hasAgentFacet as resourceHasAgentFacet,
+} from '@/utils/agentResources';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'recovery';
@@ -40,18 +43,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   const asBoolean = (value: unknown): boolean | undefined =>
     typeof value === 'boolean' ? value : undefined;
-  const hasAgentFacet = (resource: Resource): boolean => {
-    if (resource.agent) return true;
-    const platformData = pd(resource);
-    if (!platformData) return false;
-    const platformAgent = asRecord(platformData.agent);
-    return Boolean(
-      platformAgent ||
-      asString(platformData.agentId) ||
-      (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-        resource.discoveryTarget.agentId),
-    );
-  };
+  const hasAgentFacet = (resource: Resource): boolean => resourceHasAgentFacet(resource);
 
   // Handle ESC key to deselect node
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -163,10 +155,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         .filter((disk): disk is NonNullable<typeof disk> => Boolean(disk));
 
       const hostId =
-        asString(agent.agentId) ||
-        resource.discoveryTarget?.agentId ||
-        getAgentDiscoveryResourceId(resource.discoveryTarget) ||
-        resource.id;
+        getActionableAgentIdFromResource(resource) || resource.id;
       const hostname =
         resource.identity?.hostname || asString(agent.hostname) || resource.name || hostId;
 
