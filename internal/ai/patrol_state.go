@@ -160,6 +160,14 @@ func patrolRuntimeKnownResources(s patrolRuntimeState) map[string]bool {
 			add(k.ID(), k.Name())
 		}
 	}
+	if s.unifiedResourceProvider != nil {
+		for _, disk := range s.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			add(disk.ID, disk.Name)
+			if disk.PhysicalDisk != nil {
+				add(disk.PhysicalDisk.DevPath, disk.PhysicalDisk.Model)
+			}
+		}
+	}
 
 	for _, n := range s.Nodes {
 		add(n.ID, n.Name)
@@ -190,6 +198,9 @@ func patrolRuntimeKnownResources(s patrolRuntimeState) map[string]bool {
 	}
 	for _, k := range s.KubernetesClusters {
 		add(k.ID, k.Name, k.DisplayName, k.CustomDisplayName)
+	}
+	for _, disk := range s.PhysicalDisks {
+		add(disk.ID, disk.DevPath, disk.Model)
 	}
 
 	return known
@@ -242,6 +253,14 @@ func patrolRuntimeResourceIDs(s patrolRuntimeState) []string {
 			add(k.ID())
 		}
 	}
+	if s.unifiedResourceProvider != nil {
+		for _, disk := range s.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			add(disk.ID)
+			if disk.PhysicalDisk != nil {
+				add(disk.PhysicalDisk.DevPath)
+			}
+		}
+	}
 
 	for _, n := range s.Nodes {
 		add(n.ID)
@@ -272,6 +291,10 @@ func patrolRuntimeResourceIDs(s patrolRuntimeState) []string {
 	}
 	for _, k := range s.KubernetesClusters {
 		add(k.ID)
+	}
+	for _, disk := range s.PhysicalDisks {
+		add(disk.ID)
+		add(disk.DevPath)
 	}
 
 	return ids

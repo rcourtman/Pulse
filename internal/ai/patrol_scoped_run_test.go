@@ -109,6 +109,56 @@ func TestRunScopedPatrol_StoresEffectiveScopeResourceIDs(t *testing.T) {
 	}
 }
 
+func TestRunScopedPatrol_PhysicalDiskScopeRuns(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+	svc.provider = &mockProvider{}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	svc.SetChatService(&mockChatService{
+		executor: executor,
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			return &PatrolStreamResponse{Content: "disk scope ok"}, nil
+		},
+	})
+
+	stateProvider := &mockStateProvider{
+		state: models.StateSnapshot{
+			PhysicalDisks: []models.PhysicalDisk{
+				{ID: "disk-1", DevPath: "/dev/sda", Model: "sda", Health: "PASSED"},
+			},
+		},
+	}
+
+	ps := NewPatrolService(svc, stateProvider)
+	ps.SetConfig(PatrolConfig{
+		Enabled:        true,
+		Interval:       10 * time.Minute,
+		AnalyzeStorage: true,
+	})
+
+	ps.runScopedPatrol(context.Background(), PatrolScope{
+		ResourceIDs:   []string{"/dev/sda"},
+		ResourceTypes: []string{"physical_disk"},
+		Reason:        TriggerReasonManual,
+		NoStream:      true,
+	})
+
+	runs := ps.runHistoryStore.GetRecent(1)
+	if len(runs) != 1 {
+		t.Fatalf("expected 1 scoped patrol run, got %d", len(runs))
+	}
+
+	run := runs[0]
+	if run.StorageChecked != 1 {
+		t.Fatalf("expected scoped physical disk patrol to count 1 storage resource, got %d", run.StorageChecked)
+	}
+	if !containsScopeID(run.EffectiveScopeResourceIDs, "disk-1") {
+		t.Fatalf("expected effective scope IDs to include disk-1, got %v", run.EffectiveScopeResourceIDs)
+	}
+}
+
 func containsScopeID(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

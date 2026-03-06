@@ -103,6 +103,9 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 		VMs:        []models.VM{{ID: "vm1", Name: "vm-1"}},
 		Containers: []models.Container{{ID: "ct1", Name: "ct-1"}},
 		Hosts:      []models.Host{{ID: "h1", Hostname: "host-1"}},
+		PhysicalDisks: []models.PhysicalDisk{
+			{ID: "disk-1", DevPath: "/dev/sda", Model: "sda"},
+		},
 		PBSInstances: []models.PBSInstance{
 			{ID: "pbs1", Name: "pbs-main", Datastores: []models.PBSDatastore{{Name: "ds1"}}},
 		},
@@ -193,6 +196,12 @@ func TestFilterStateByScope_TypeAliasesRejected(t *testing.T) {
 	filtered = ps.filterStateByScope(state, scope)
 	if len(filtered.PMGInstances) != 1 {
 		t.Errorf("expected canonical 'pmg' to match PMG instances, got %d", len(filtered.PMGInstances))
+	}
+
+	scope = PatrolScope{ResourceTypes: []string{"physical_disk"}}
+	filtered = ps.filterStateByScope(state, scope)
+	if len(filtered.PhysicalDisks) != 1 {
+		t.Errorf("expected canonical 'physical_disk' to match physical disks, got %d", len(filtered.PhysicalDisks))
 	}
 }
 
@@ -475,6 +484,10 @@ func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
 			{ID: "s1", Name: "local", Usage: 42},
 			{ID: "s2", Name: "backup", Usage: 10},
 		},
+		PhysicalDisks: []models.PhysicalDisk{
+			{ID: "disk-1", DevPath: "/dev/sda", Model: "sda"},
+			{ID: "disk-2", DevPath: "/dev/sdb", Model: "sdb"},
+		},
 		PMGInstances: []models.PMGInstance{
 			{ID: "pmg1", Name: "pmg-main", Host: "pmg.local"},
 			{ID: "pmg2", Name: "pmg-edge", Host: "pmg2.local"},
@@ -504,6 +517,9 @@ func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
 	if got := len(filtered.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeStorage)); got != 1 {
 		t.Fatalf("expected 1 scoped storage resource in provider, got %d", got)
 	}
+	if got := len(filtered.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk)); got != 0 {
+		t.Fatalf("expected no scoped physical disk resources in provider, got %d", got)
+	}
 
 	filteredPMG := ps.filterStateByScopeState(state, PatrolScope{
 		ResourceIDs:   []string{"pmg.local"},
@@ -523,6 +539,20 @@ func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
 	}
 	if got := len(filteredPMG.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePMG)); got != 1 {
 		t.Fatalf("expected 1 scoped PMG resource in provider, got %d", got)
+	}
+
+	filteredDisks := ps.filterStateByScopeState(state, PatrolScope{
+		ResourceIDs:   []string{"/dev/sda"},
+		ResourceTypes: []string{"physical_disk"},
+	})
+	if got := len(filteredDisks.PhysicalDisks); got != 1 {
+		t.Fatalf("expected 1 scoped physical disk, got %d", got)
+	}
+	if filteredDisks.PhysicalDisks[0].ID != "disk-1" {
+		t.Fatalf("expected scoped physical disk disk-1, got %s", filteredDisks.PhysicalDisks[0].ID)
+	}
+	if got := len(filteredDisks.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk)); got != 1 {
+		t.Fatalf("expected 1 scoped physical disk resource in provider, got %d", got)
 	}
 }
 

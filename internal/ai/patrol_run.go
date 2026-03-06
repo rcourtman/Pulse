@@ -308,6 +308,11 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	}
 	if cfg.AnalyzeStorage && rs != nil {
 		runStats.storageChecked = len(rs.StoragePools())
+		if state.unifiedResourceProvider != nil {
+			runStats.storageChecked += len(state.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
+		} else {
+			runStats.storageChecked += len(state.PhysicalDisks)
+		}
 	}
 	if cfg.AnalyzePBS && rs != nil {
 		runStats.pbsChecked = len(rs.PBSInstances())
@@ -721,7 +726,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		resourceCount += len(filteredState.DockerHosts)
 	}
 	if cfg.AnalyzeStorage {
-		resourceCount += len(filteredState.Storage)
+		resourceCount += len(filteredState.Storage) + len(filteredState.PhysicalDisks)
 	}
 	if cfg.AnalyzePBS {
 		resourceCount += len(filteredState.PBSInstances)
@@ -765,7 +770,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		runStats.dockerChecked = len(filteredState.DockerHosts)
 	}
 	if cfg.AnalyzeStorage {
-		runStats.storageChecked = len(filteredState.Storage)
+		runStats.storageChecked = len(filteredState.Storage) + len(filteredState.PhysicalDisks)
 	}
 	if cfg.AnalyzePBS {
 		runStats.pbsChecked = len(filteredState.PBSInstances)
@@ -993,7 +998,7 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 			typeSet["app-container"] = true
 		case "k8s-cluster":
 			typeSet["k8s-cluster"] = true
-		case "system-container", "vm", "node", "storage", "agent", "pbs", "pmg":
+		case "system-container", "vm", "node", "storage", "agent", "pbs", "pmg", "physical_disk":
 			typeSet[trimmed] = true
 		default:
 			// Unknown/legacy values are preserved to fail closed in matching.
@@ -1138,6 +1143,12 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		if matchesType("storage") && matchesID(s.ID, s.Name) {
 			filtered.Storage = append(filtered.Storage, s)
 			includeResourceID(s.ID)
+		}
+	}
+	for _, disk := range snap.PhysicalDisks {
+		if matchesType("physical_disk") && matchesID(disk.ID, disk.DevPath, disk.Model) {
+			filtered.PhysicalDisks = append(filtered.PhysicalDisks, disk)
+			includeResourceID(disk.ID, disk.DevPath)
 		}
 	}
 	for _, pbs := range snap.PBSInstances {
