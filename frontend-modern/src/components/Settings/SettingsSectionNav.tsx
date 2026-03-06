@@ -36,34 +36,34 @@ const allSections: Array<{
 
 export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) => {
   return (
-    <div
-      class={`flex p-1 space-x-1 bg-surface-alt rounded-md overflow-x-auto scrollbar-hide ${props.class ?? ''}`}
-      style="-webkit-overflow-scrolling: touch;"
-      aria-label="Settings sections"
-    >
-      <For each={allSections}>
-        {(section) => {
-          const isActive = () => section.id === props.current;
-          const Icon = section.icon;
+    <div class={`border-b border-border ${props.class ?? ''}`} aria-label="Settings sections">
+      <div
+        class="flex flex-wrap items-center gap-6 overflow-x-auto scrollbar-hide"
+        style="-webkit-overflow-scrolling: touch;"
+      >
+        <For each={allSections}>
+          {(section) => {
+            const isActive = () => section.id === props.current;
+            const Icon = section.icon;
 
-          return (
-            <button
-              type="button"
-              onClick={() => props.onSelect(section.id)}
-              class={`flex flex-1 justify-center sm:flex-none sm:justify-start items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
-                isActive()
-                  ? 'bg-surface border border-border text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-muted border border-transparent hover:text-base-content hover:bg-surface-hover'
-              }`}
-              aria-pressed={isActive()}
-            >
-              <Icon size={18} stroke-width={2} class="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
-              <span class="hidden sm:inline">{section.label}</span>
-              <span class="sm:hidden">{section.label.split(' ').pop()}</span>
-            </button>
-          );
-        }}
-      </For>
+            return (
+              <button
+                type="button"
+                onClick={() => props.onSelect(section.id)}
+                class={`inline-flex min-h-10 items-center gap-2 border-b-2 px-1 py-2 text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                  isActive()
+                    ? 'border-blue-600 text-base-content'
+                    : 'border-transparent text-muted hover:text-base-content'
+                }`}
+                aria-pressed={isActive()}
+              >
+                <Icon size={18} stroke-width={2} class="h-4 w-4" />
+                <span>{section.label}</span>
+              </button>
+            );
+          }}
+        </For>
+      </div>
     </div>
   );
 };

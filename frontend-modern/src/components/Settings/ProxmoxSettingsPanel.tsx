@@ -310,31 +310,31 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
     <>
       <SettingsSectionNav current={props.selectedAgent()} onSelect={props.onSelectAgent} class="mb-6" />
 
-      <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900">
-        <div class="flex items-start gap-3">
-          <svg
-            class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <div class="flex-1">
-            <p class="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Recommended:</strong> use the unified agent for Proxmox hosts. It
-              auto-creates the API token, links the host, and unlocks temperature monitoring plus
-              Pulse Patrol automation.
-            </p>
-            <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
-              Use this fallback path only when you cannot install the unified agent on the host.
-            </p>
-            <Show when={!props.embedded}>
+      <Show when={!props.embedded}>
+        <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900">
+          <div class="flex items-start gap-3">
+            <svg
+              class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div class="flex-1">
+              <p class="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Recommended:</strong> use the unified agent for Proxmox hosts. It
+                auto-creates the API token, links the host, and unlocks temperature monitoring plus
+                Pulse Patrol automation.
+              </p>
+              <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                Use this fallback path only when you cannot install the unified agent on the host.
+              </p>
               <button
                 type="button"
                 onClick={() => navigate('/settings')}
@@ -342,10 +342,10 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
               >
                 Open infrastructure setup →
               </button>
-            </Show>
+            </div>
           </div>
         </div>
-      </div>
+      </Show>
 
       <div class="space-y-6 mt-6">
         <div class="space-y-4">
@@ -356,7 +356,7 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
           </Show>
 
           <Show when={props.initialLoadComplete()}>
-            <Card padding="none" tone="glass">
+            <Card padding="none" class="rounded-xl border border-border shadow-sm">
               <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div class="space-y-2">
