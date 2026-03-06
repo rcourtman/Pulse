@@ -11,6 +11,7 @@ const extractedModules = [
   '../SettingsDialogs.tsx',
   '../SettingsPageShell.tsx',
   '../useDiscoverySettingsState.ts',
+  '../useSettingsAccess.ts',
   '../useSettingsNavigation.ts',
   '../useSettingsPanelRegistry.tsx',
   '../useSystemSettingsState.ts',
@@ -22,13 +23,13 @@ const extractedModules = [
 const requiredImportSources = [
   './settingsTabs',
   './settingsHeaderMeta',
-  './settingsFeatureGates',
   './ProxmoxSettingsPanel',
   './SettingsDialogs',
   './SettingsPageShell',
   './useBackupTransferFlow',
   './useDiscoverySettingsState',
   './useInfrastructureSettingsState',
+  './useSettingsAccess',
   './useSettingsPanelRegistry',
   './useSystemSettingsState',
   './useSettingsNavigation',
@@ -62,12 +63,16 @@ describe('Settings architecture guardrails', () => {
 
   it('routes dispatchable settings tabs through the extracted panel registry', async () => {
     const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
+    const accessHookSource = (await import('../useSettingsAccess.ts?raw')).default;
     const panelRegistryHookSource = (await import('../useSettingsPanelRegistry.tsx?raw')).default;
 
     expect(registrySource).toContain('createSettingsPanelRegistry');
     expect(registrySource).toContain("'security-webhooks'");
+    expect(accessHookSource).toContain('shouldHideSettingsNavItem');
+    expect(accessHookSource).toContain('tabFeatureRequirements');
     expect(panelRegistryHookSource).toContain('createSettingsPanelRegistry');
     expect(settingsSource).toContain('useSettingsPanelRegistry');
+    expect(settingsSource).toContain('useSettingsAccess');
     expect(settingsSource).toContain('activeSettingsPanelEntry');
     expect(settingsSource).toContain('<Dynamic component={entry().component}');
     expect(settingsSource).not.toContain("<Show when={activeTab() === 'system-general'}>");

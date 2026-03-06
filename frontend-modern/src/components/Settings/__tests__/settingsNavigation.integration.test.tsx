@@ -200,8 +200,7 @@ describe('settingsNavigation integration scaffold', () => {
     const onMountBody = onMountMatch![1];
     expect(onMountBody).toContain('loadLicenseStatus');
     expect(onMountBody).not.toContain('runDiagnostics');
-    expect(settingsSource).toContain('baseTabGroups');
-    expect(settingsSource).toContain('shouldHideSettingsNavItem');
+    expect(settingsSource).toContain('useSettingsAccess');
     expect(settingsSource).toContain('useSettingsPanelRegistry');
     expect(settingsSource).not.toContain('const tabGroups');
   });

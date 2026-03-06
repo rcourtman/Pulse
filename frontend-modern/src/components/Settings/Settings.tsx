@@ -11,36 +11,21 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
-import { logger } from '@/utils/logger';
 import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
 import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
-import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
-import {
-  baseTabGroups,
-  getSettingsNavItem,
-  getSettingsTabSaveBehavior,
-  shouldHideSettingsNavItem,
-} from './settingsTabs';
+import { getSettingsTabSaveBehavior } from './settingsTabs';
 import { useBackupTransferFlow } from './useBackupTransferFlow';
 import { useDiscoverySettingsState } from './useDiscoverySettingsState';
 import { useInfrastructureSettingsState } from './useInfrastructureSettingsState';
+import { useSettingsAccess } from './useSettingsAccess';
 import { useSettingsPanelRegistry } from './useSettingsPanelRegistry';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
-import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
-import { tabFeatureRequirements } from './settingsFeatureGates';
 
-import {
-  getLimit,
-  hasFeature,
-  isHostedModeEnabled,
-  isPro,
-  licenseLoaded,
-  loadLicenseStatus,
-} from '@/stores/license';
+import { getLimit, isPro, loadLicenseStatus } from '@/stores/license';
 import {
   pbsInstanceFromResource,
   pmgInstanceFromResource,
@@ -113,12 +98,21 @@ const Settings: Component<SettingsProps> = (props) => {
   } = useDiscoverySettingsState();
 
   // Security
-  const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
-  const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
   let searchInputRef: HTMLInputElement | undefined;
+  const {
+    securityStatus,
+    securityStatusLoading,
+    flatTabs,
+    filteredTabGroups,
+    loadSecurityStatus,
+  } = useSettingsAccess({
+    activeTab,
+    setActiveTab,
+    searchQuery,
+  });
   const {
     exportPassphrase,
     setExportPassphrase,
@@ -281,26 +275,6 @@ const Settings: Component<SettingsProps> = (props) => {
     initializeSystemSettingsState,
   });
 
-  const visibleTabGroups = createMemo(() => {
-    const hostedModeEnabled = isHostedModeEnabled();
-    const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
-
-    return baseTabGroups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter(
-          (item) =>
-            !shouldHideSettingsNavItem(item.id, {
-              hasFeature,
-              licenseLoaded,
-              hostedModeEnabled,
-              settingsCapabilities,
-            }),
-        ),
-      }))
-      .filter((group) => group.items.length > 0);
-  });
-
   const activeTabSaveBehavior = createMemo(() => getSettingsTabSaveBehavior(activeTab()));
   const settingsPanelRegistry = useSettingsPanelRegistry({
     darkMode: props.darkMode,
@@ -408,45 +382,7 @@ const Settings: Component<SettingsProps> = (props) => {
       return null;
     }
 
-    return settingsPanelRegistry()[currentTab];
-  });
-
-  const flatTabs = createMemo(() => visibleTabGroups().flatMap((group) => group.items));
-
-  const filteredTabGroups = createMemo(() => {
-    const q = searchQuery().trim().toLowerCase();
-    const groups = visibleTabGroups();
-    if (!q) return groups;
-
-    return groups
-      .map((group) => {
-        const filteredItems = group.items.filter((item) => {
-          const matchLabel = item.label.toLowerCase().includes(q);
-          const description = SETTINGS_HEADER_META[item.id]?.description?.toLowerCase() || '';
-          const matchDesc = description.includes(q);
-          return matchLabel || matchDesc;
-        });
-        return { ...group, items: filteredItems };
-      })
-      .filter((group) => group.items.length > 0);
-  });
-
-  createEffect(() => {
-    const currentTab = activeTab();
-    const requiresFeatureResolution = Boolean(tabFeatureRequirements[currentTab]?.length);
-    const requiresCapabilityResolution = Boolean(
-      getSettingsNavItem(currentTab)?.requiredCapability,
-    );
-    if (
-      (requiresFeatureResolution && !licenseLoaded()) ||
-      (requiresCapabilityResolution && securityStatusLoading())
-    ) {
-      return;
-    }
-
-    if (!flatTabs().some((tab) => tab.id === currentTab)) {
-      setActiveTab(DEFAULT_SETTINGS_TAB);
-    }
+      return settingsPanelRegistry()[currentTab];
   });
 
   createEffect(() => {
@@ -484,25 +420,6 @@ const Settings: Component<SettingsProps> = (props) => {
   onMount(() => {
     loadLicenseStatus();
   });
-
-  async function loadSecurityStatus() {
-    setSecurityStatusLoading(true);
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch('/api/security/status');
-      if (response.ok) {
-        const status = await response.json();
-        logger.debug('Security status loaded', status);
-        setSecurityStatus(status);
-      } else {
-        logger.error('Failed to fetch security status', { status: response.status });
-      }
-    } catch (err) {
-      logger.error('Failed to fetch security status', err);
-    } finally {
-      setSecurityStatusLoading(false);
-    }
-  }
 
   return (
     <>
