@@ -31,6 +31,7 @@ func TestGetResourceCurrentState(t *testing.T) {
 		assert string
 	}{
 		{alert: AlertInfo{ResourceType: "storage", ResourceID: "storage-1", ResourceName: "local"}, assert: "Storage 'local'"},
+		{alert: AlertInfo{ResourceType: "usage", Type: "usage", ResourceID: "storage-1", ResourceName: "local"}, assert: "Storage 'local'"},
 		{alert: AlertInfo{ResourceType: "node", ResourceID: "node-1", ResourceName: "node-1"}, assert: "Node 'node-1'"},
 		{alert: AlertInfo{ResourceType: "agent", ResourceID: "host-1", ResourceName: "host-1"}, assert: "Agent host 'host-1'"},
 		{alert: AlertInfo{ResourceType: "vm", ResourceID: "vm-1", ResourceName: "vm-1"}, assert: "VM 'vm-1'"},

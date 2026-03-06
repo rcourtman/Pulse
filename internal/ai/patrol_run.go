@@ -1929,11 +1929,7 @@ func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert Alert
 	// First, try smart heuristic checks based on alert type
 	switch alert.Type {
 	case "usage": // Storage usage alert
-		storageAlert := alert
-		if strings.TrimSpace(storageAlert.ResourceType) == "" || strings.EqualFold(strings.TrimSpace(storageAlert.ResourceType), "usage") {
-			storageAlert.ResourceType = "storage"
-		}
-		resource := lookupPatrolAlertResourceState(storageAlert, snap)
+		resource := lookupPatrolAlertResourceState(alert, snap)
 		if resource.found {
 			if resource.disk < alert.Threshold*0.95 { // 5% margin below threshold
 				return true, fmt.Sprintf("storage usage dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
@@ -1995,8 +1991,17 @@ func patrolAlertNameMatches(alert AlertInfo, ids ...string) bool {
 	return false
 }
 
+func patrolAlertLookupType(alert AlertInfo) string {
+	resourceType := strings.TrimSpace(alert.ResourceType)
+	if alert.Type == "usage" && (resourceType == "" || strings.EqualFold(resourceType, "usage")) {
+		return "storage"
+	}
+	return resourceType
+}
+
 func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) patrolAlertResourceState {
-	if strings.TrimSpace(alert.ResourceType) == "app-container" {
+	alert.ResourceType = patrolAlertLookupType(alert)
+	if alert.ResourceType == "app-container" {
 		if resource, ok := patrolLookupAppContainerAlertResourceState(alert, snap); ok {
 			return resource
 		}
@@ -2283,7 +2288,7 @@ Respond with ONLY one of:
 func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patrolRuntimeState) string {
 	resource := lookupPatrolAlertResourceState(alert, snap)
 	if !resource.found {
-		switch alert.ResourceType {
+		switch patrolAlertLookupType(alert) {
 		case "storage":
 			return "Storage not found in current state (may have been removed)"
 		case "node":
