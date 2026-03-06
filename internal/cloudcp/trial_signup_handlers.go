@@ -616,6 +616,18 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		http.Error(w, "checkout session not complete", http.StatusBadRequest)
 		return
 	}
+	if session.Mode != stripe.CheckoutSessionModeSubscription {
+		http.Error(w, "invalid checkout session mode", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(session.Metadata["signup_source"]) != "pulse_pro_trial" {
+		http.Error(w, "invalid trial signup source", http.StatusBadRequest)
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(session.Metadata["email_verified"]), "true") {
+		http.Error(w, "trial email not verified", http.StatusBadRequest)
+		return
+	}
 
 	returnURL := strings.TrimSpace(session.Metadata["return_url"])
 	if !isValidTrialReturnURL(returnURL) {

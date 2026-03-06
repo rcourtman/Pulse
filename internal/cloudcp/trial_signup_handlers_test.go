@@ -370,11 +370,14 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 		return &stripe.CheckoutSession{
 			ID:            id,
 			Status:        stripe.CheckoutSessionStatusComplete,
+			Mode:          stripe.CheckoutSessionModeSubscription,
 			CustomerEmail: "owner@example.com",
 			Metadata: map[string]string{
 				"org_id":           "default",
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": record.ID,
+				"signup_source":    "pulse_pro_trial",
+				"email_verified":   "true",
 			},
 		}, nil
 	}
@@ -435,11 +438,14 @@ func TestTrialSignupHandleCompleteRejectsDuplicateIssuedEmail(t *testing.T) {
 		return &stripe.CheckoutSession{
 			ID:            id,
 			Status:        stripe.CheckoutSessionStatusComplete,
+			Mode:          stripe.CheckoutSessionModeSubscription,
 			CustomerEmail: "owner@example.com",
 			Metadata: map[string]string{
 				"org_id":           "default",
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": secondRequestID,
+				"signup_source":    "pulse_pro_trial",
+				"email_verified":   "true",
 			},
 		}, nil
 	}
@@ -501,11 +507,14 @@ func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *
 		return &stripe.CheckoutSession{
 			ID:            id,
 			Status:        stripe.CheckoutSessionStatusComplete,
+			Mode:          stripe.CheckoutSessionModeSubscription,
 			CustomerEmail: "bob@acme.com",
 			Metadata: map[string]string{
 				"org_id":           "default",
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": secondRecord.ID,
+				"signup_source":    "pulse_pro_trial",
+				"email_verified":   "true",
 			},
 		}, nil
 	}
@@ -537,11 +546,14 @@ func TestTrialSignupHandleCompleteRejectsCheckoutSessionMismatch(t *testing.T) {
 		return &stripe.CheckoutSession{
 			ID:            id,
 			Status:        stripe.CheckoutSessionStatusComplete,
+			Mode:          stripe.CheckoutSessionModeSubscription,
 			CustomerEmail: "owner@example.com",
 			Metadata: map[string]string{
 				"org_id":           "default",
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": requestID,
+				"signup_source":    "pulse_pro_trial",
+				"email_verified":   "true",
 			},
 		}, nil
 	}
@@ -555,6 +567,132 @@ func TestTrialSignupHandleCompleteRejectsCheckoutSessionMismatch(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "checkout session mismatch") {
 		t.Fatalf("expected checkout session mismatch, got %q", rec.Body.String())
+	}
+}
+
+func TestTrialSignupHandleCompleteRejectsNonTrialCheckoutSession(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		Name:                  "Test User",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             time.Unix(1710000000, 0).UTC(),
+		VerificationExpiresAt: time.Unix(1710000000, 0).UTC().Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, time.Unix(1710000000, 0).UTC())
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+
+	h := NewTrialSignupHandlers(&CPConfig{
+		StripeAPIKey:              "sk_test_123",
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+	}, nil, store)
+	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
+	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		return &stripe.CheckoutSession{
+			ID:            id,
+			Status:        stripe.CheckoutSessionStatusComplete,
+			Mode:          stripe.CheckoutSessionModePayment,
+			CustomerEmail: "owner@example.com",
+			Metadata: map[string]string{
+				"org_id":           "default",
+				"return_url":       "https://pulse.example.com/auth/trial-activate",
+				"trial_request_id": record.ID,
+				"signup_source":    "pulse_pro_trial",
+				"email_verified":   "true",
+			},
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_non_trial", nil)
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupComplete(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "invalid checkout session mode") {
+		t.Fatalf("expected invalid mode error, got %q", rec.Body.String())
+	}
+
+	_ = pub
+}
+
+func TestTrialSignupHandleCompleteRejectsMissingVerifiedTrialMetadata(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		Name:                  "Test User",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             time.Unix(1710000000, 0).UTC(),
+		VerificationExpiresAt: time.Unix(1710000000, 0).UTC().Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, time.Unix(1710000000, 0).UTC())
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+
+	h := NewTrialSignupHandlers(&CPConfig{
+		StripeAPIKey:              "sk_test_123",
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+	}, nil, store)
+	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
+	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		return &stripe.CheckoutSession{
+			ID:            id,
+			Status:        stripe.CheckoutSessionStatusComplete,
+			Mode:          stripe.CheckoutSessionModeSubscription,
+			CustomerEmail: "owner@example.com",
+			Metadata: map[string]string{
+				"org_id":           "default",
+				"return_url":       "https://pulse.example.com/auth/trial-activate",
+				"trial_request_id": record.ID,
+				"signup_source":    "something_else",
+				"email_verified":   "false",
+			},
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_bad_metadata", nil)
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupComplete(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "invalid trial signup source") {
+		t.Fatalf("expected invalid signup source error, got %q", rec.Body.String())
 	}
 }
 
