@@ -18,7 +18,7 @@ import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
-import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
+import { InfrastructureSelector } from '@/components/shared/InfrastructureSelector';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
@@ -1369,8 +1369,8 @@ export function Dashboard(props: DashboardProps) {
         </div>
       </Show>
 
-      {/* Unified Node Selector - infrastructure summary (hidden on workloads) */}
-      <UnifiedNodeSelector
+      {/* Infrastructure selector - infrastructure summary (hidden on workloads) */}
+      <InfrastructureSelector
         currentTab="dashboard"
         globalTemperatureMonitoringEnabled={ws.state.temperatureMonitoringEnabled}
         onNodeSelect={handleNodeSelect}
@@ -1414,7 +1414,7 @@ export function Dashboard(props: DashboardProps) {
         </Card>
       </Show>
 
-      {/* Empty State - No PVE Nodes Configured */}
+      {/* Empty State - No infrastructure hosts connected */}
       <Show
         when={
           connected() &&
@@ -1441,8 +1441,8 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="No Proxmox VE nodes configured"
-            description="Install the Pulse agent for extra capabilities (temperature monitoring and Pulse Patrol automation), or add a node via API token in Settings → Infrastructure or API Connections."
+            title="No infrastructure hosts connected"
+            description="Install the Pulse agent to connect a host and unlock v6 infrastructure data, or add a Proxmox API connection in Settings → Infrastructure or API Connections."
             actions={
               !kioskMode() ? (
                 <button

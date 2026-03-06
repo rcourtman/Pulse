@@ -8,7 +8,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import { NodeSummaryTable } from './NodeSummaryTable';
+import { InfrastructureSummaryTable } from './InfrastructureSummaryTable';
 import { useResources } from '@/hooks/useResources';
 import type { Agent, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -19,7 +19,7 @@ import {
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
 
-interface UnifiedNodeSelectorProps {
+interface InfrastructureSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'recovery';
   globalTemperatureMonitoringEnabled?: boolean;
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
@@ -29,7 +29,7 @@ interface UnifiedNodeSelectorProps {
   showNodeSummary?: boolean;
 }
 
-export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) => {
+export const InfrastructureSelector: Component<InfrastructureSelectorProps> = (props) => {
   const { byType, resources } = useResources();
   const recovery = useRecoveryRollups();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
@@ -259,7 +259,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   return (
     <Show when={showNodeSummary()}>
       <div class="space-y-2 mb-4">
-        <NodeSummaryTable
+        <InfrastructureSummaryTable
           nodes={nodes()}
           pbsInstances={props.currentTab === 'recovery' ? pbsInstances() : undefined}
           vmCounts={vmCounts()}

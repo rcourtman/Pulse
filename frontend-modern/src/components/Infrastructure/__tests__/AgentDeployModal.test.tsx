@@ -150,7 +150,7 @@ describe('AgentDeployModal', () => {
       render(() => <AgentDeployModal {...defaultProps()} />);
 
       const indicator = screen.getByTestId('step-indicator');
-      expect(indicator).toHaveTextContent('Select Nodes | Preflight | Confirm | Deploy | Results');
+      expect(indicator).toHaveTextContent('Select Hosts | Preflight | Confirm | Deploy | Results');
     });
 
     it('has a close X button with aria-label', () => {
@@ -372,7 +372,7 @@ describe('AgentDeployModal', () => {
       );
       render(() => <AgentDeployModal {...defaultProps()} />);
 
-      expect(screen.getByText('Deploy 3 Nodes')).toBeInTheDocument();
+      expect(screen.getByText('Deploy 3 Hosts')).toBeInTheDocument();
     });
 
     it('uses singular "Node" when exactly 1 confirmed node', () => {
@@ -384,7 +384,7 @@ describe('AgentDeployModal', () => {
       );
       render(() => <AgentDeployModal {...defaultProps()} />);
 
-      expect(screen.getByText('Deploy 1 Node')).toBeInTheDocument();
+      expect(screen.getByText('Deploy 1 Host')).toBeInTheDocument();
     });
 
     it('disables Deploy button when no confirmed nodes', () => {
@@ -396,7 +396,7 @@ describe('AgentDeployModal', () => {
       );
       render(() => <AgentDeployModal {...defaultProps()} />);
 
-      expect(screen.getByText('Deploy 0 Nodes')).toBeDisabled();
+      expect(screen.getByText('Deploy 0 Hosts')).toBeDisabled();
     });
 
     it('disables and shows Starting... when startingDeploy is true', () => {
@@ -425,7 +425,7 @@ describe('AgentDeployModal', () => {
       );
       render(() => <AgentDeployModal {...defaultProps()} />);
 
-      fireEvent.click(screen.getByText('Deploy 1 Node'));
+      fireEvent.click(screen.getByText('Deploy 1 Host'));
       expect(startDeployMock).toHaveBeenCalledTimes(1);
     });
   });

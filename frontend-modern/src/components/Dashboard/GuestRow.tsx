@@ -1506,7 +1506,7 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-        {/* Link Column - at the end like NodeSummaryTable */}
+        {/* Link Column - at the end like InfrastructureSummaryTable */}
         <Show when={isColVisible('link')}>
           <td class="px-0 py-0.5 align-middle text-center">
             <Show

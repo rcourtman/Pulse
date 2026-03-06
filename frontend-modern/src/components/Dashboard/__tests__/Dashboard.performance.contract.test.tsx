@@ -88,8 +88,10 @@ vi.mock('@/components/Workloads/WorkloadsSummary', () => ({
   WorkloadsSummary: () => <div data-testid="workloads-summary">summary</div>,
 }));
 
-vi.mock('@/components/shared/UnifiedNodeSelector', () => ({
-  UnifiedNodeSelector: () => <div data-testid="node-selector">node-selector</div>,
+vi.mock('@/components/shared/InfrastructureSelector', () => ({
+  InfrastructureSelector: () => (
+    <div data-testid="infrastructure-selector">infrastructure-selector</div>
+  ),
 }));
 
 vi.mock('../DashboardFilter', () => ({
@@ -396,7 +398,7 @@ describe('Dashboard performance contract', () => {
       const guests = makeGuests(PROFILES.S);
       const stats = computeWorkloadStats(guests as any);
       expect(stats.total).toBe(PROFILES.S);
-      expect(stats.vms + stats.containers + stats.docker + stats.k8s).toBe(PROFILES.S);
+      expect(stats.vms + stats.containers + stats.appContainers + stats.pods).toBe(PROFILES.S);
       expect(stats.running + stats.degraded + stats.stopped).toBe(PROFILES.S);
     });
   });

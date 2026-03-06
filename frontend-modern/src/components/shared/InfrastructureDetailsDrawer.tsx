@@ -8,14 +8,14 @@ import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfac
 import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 
-interface NodeDrawerProps {
+interface InfrastructureDetailsDrawerProps {
   node: Node;
   agent?: Agent;
-  customUrl?: string; // Nodes don't typically have custom URL in current architecture but we can keep it
+  customUrl?: string; // Proxmox hosts do not typically override this URL, but the field still supports it.
   onCustomUrlChange?: (agentId: string, url: string) => void;
 }
 
-export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
+export const InfrastructureDetailsDrawer: Component<InfrastructureDetailsDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
   const metadataId = () => props.agent?.id || props.node.id || props.node.name;
   const discoveryHostname = () => props.agent?.hostname || props.node.name;

@@ -25,8 +25,10 @@ import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 
-// Lazy load NodeDrawer to avoid circular dependencies and reduce bundle size
-const NodeDrawer = lazy(() => import('./NodeDrawer').then((m) => ({ default: m.NodeDrawer })));
+// Lazy load InfrastructureDetailsDrawer to avoid circular dependencies and reduce bundle size
+const InfrastructureDetailsDrawer = lazy(() =>
+  import('./InfrastructureDetailsDrawer').then((m) => ({ default: m.InfrastructureDetailsDrawer })),
+);
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
@@ -76,7 +78,7 @@ const getAgentNameCandidates = (agent: Agent): string[] => {
   return Array.from(new Set(names));
 };
 
-interface NodeSummaryTableProps {
+interface InfrastructureSummaryTableProps {
   nodes: Node[];
   pbsInstances?: PBSInstance[];
   vmCounts?: Record<string, number>;
@@ -91,7 +93,7 @@ interface NodeSummaryTableProps {
   onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void;
 }
 
-export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
+export const InfrastructureSummaryTable: Component<InfrastructureSummaryTableProps> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
@@ -992,7 +994,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         <Suspense
                           fallback={<div class="flex justify-center p-4">Loading stats...</div>}
                         >
-                          <NodeDrawer node={node!} agent={linkedAgentForDrawer()} />
+                          <InfrastructureDetailsDrawer
+                            node={node!}
+                            agent={linkedAgentForDrawer()}
+                          />
                         </Suspense>
                       </TableCell>
                     </TableRow>

@@ -16,7 +16,7 @@ interface AgentDeployModalProps {
   onClose: () => void;
 }
 
-const STEP_LABELS = ['Select Nodes', 'Preflight', 'Confirm', 'Deploy', 'Results'];
+const STEP_LABELS = ['Select Hosts', 'Preflight', 'Confirm', 'Deploy', 'Results'];
 
 const stepToIndex: Record<WizardStep, number> = {
   candidates: 0,
@@ -155,7 +155,7 @@ export const AgentDeployModal: Component<AgentDeployModalProps> = (props) => {
               >
                 <Show
                   when={wizard.startingDeploy()}
-                  fallback={`Deploy ${wizard.confirmSelectedNodeIds().size} Node${wizard.confirmSelectedNodeIds().size !== 1 ? 's' : ''}`}
+                  fallback={`Deploy ${wizard.confirmSelectedNodeIds().size} Host${wizard.confirmSelectedNodeIds().size !== 1 ? 's' : ''}`}
                 >
                   <span class="flex items-center gap-1.5">
                     <span class="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />

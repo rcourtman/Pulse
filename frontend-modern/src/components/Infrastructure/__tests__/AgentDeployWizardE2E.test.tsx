@@ -338,8 +338,8 @@ describe('Agent Deploy Wizard E2E', () => {
     ];
     agentDeployAPIMock.getJob.mockResolvedValue(makeJob({ id: 'j1', targets: deployTargets }));
 
-    // Click "Deploy 2 Nodes"
-    const deployBtn = screen.getByText('Deploy 2 Nodes');
+    // Click "Deploy 2 Hosts"
+    const deployBtn = screen.getByText('Deploy 2 Hosts');
     await fireEvent.click(deployBtn);
     await vi.advanceTimersByTimeAsync(0);
 
@@ -491,7 +491,7 @@ describe('Agent Deploy Wizard E2E', () => {
       }),
     );
 
-    await fireEvent.click(screen.getByText('Deploy 2 Nodes'));
+    await fireEvent.click(screen.getByText('Deploy 2 Hosts'));
     await vi.advanceTimersByTimeAsync(0);
 
     const deployES = latestES();
@@ -696,7 +696,7 @@ describe('Agent Deploy Wizard E2E', () => {
       }),
     );
 
-    await fireEvent.click(screen.getByText('Deploy 1 Node'));
+    await fireEvent.click(screen.getByText('Deploy 1 Host'));
     await vi.advanceTimersByTimeAsync(0);
 
     const deployES = latestES();
@@ -823,7 +823,7 @@ describe('Agent Deploy Wizard E2E', () => {
       }),
     );
 
-    await fireEvent.click(screen.getByText('Deploy 1 Node'));
+    await fireEvent.click(screen.getByText('Deploy 1 Host'));
     await vi.advanceTimersByTimeAsync(0);
 
     const deployES = latestES();
@@ -999,7 +999,7 @@ describe('Agent Deploy Wizard E2E', () => {
       }),
     );
 
-    await fireEvent.click(screen.getByText('Deploy 1 Node'));
+    await fireEvent.click(screen.getByText('Deploy 1 Host'));
     await vi.advanceTimersByTimeAsync(0);
 
     const deployES = latestES();

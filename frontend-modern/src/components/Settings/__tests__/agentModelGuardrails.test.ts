@@ -4,13 +4,13 @@ import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import unifiedAgentsSource from '../UnifiedAgents.tsx?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import completeStepSource from '@/components/SetupWizard/steps/CompleteStep.tsx?raw';
-import unifiedNodeSelectorSource from '@/components/shared/UnifiedNodeSelector.tsx?raw';
+import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
 import systemSettingsStateSource from '../useSystemSettingsState.ts?raw';
 import infrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
-import unifiedNodeSelectorComponentSource from '@/components/shared/UnifiedNodeSelector.tsx?raw';
+import infrastructureSelectorComponentSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import workloadsLinkSource from '@/components/Infrastructure/workloadsLink.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
@@ -128,11 +128,11 @@ describe('agent model guardrails', () => {
     expect(completeStepSource).not.toContain(
       '(state.hosts || []).length > 0\n            ? state.hosts\n            : resources',
     );
-    expect(unifiedNodeSelectorSource).toContain(
+    expect(infrastructureSelectorSource).toContain(
       'const hasAgentFacet = (resource: Resource): boolean =>',
     );
-    expect(unifiedNodeSelectorSource).toContain("resource.type === 'truenas'");
-    expect(unifiedNodeSelectorSource).not.toContain('if (hostLikeResources.length === 0');
+    expect(infrastructureSelectorSource).toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorSource).not.toContain('if (hostLikeResources.length === 0');
   });
 
   it('keeps discovery mapping on canonical agentId only', () => {
@@ -159,9 +159,9 @@ describe('agent model guardrails', () => {
     expect(mentionAutocompleteSource).not.toContain("| 'host'");
   });
 
-  it('keeps infrastructure agent selectors on v6 node-family resources', () => {
+  it('keeps infrastructure selectors on v6 agent-family resources', () => {
     expect(infrastructureSummarySource).not.toContain("resource.type === 'host'");
-    expect(unifiedNodeSelectorComponentSource).not.toContain("resource.type === 'host'");
+    expect(infrastructureSelectorComponentSource).not.toContain("resource.type === 'host'");
     expect(workloadsLinkSource).not.toContain("resource.type === 'host'");
     expect(unifiedResourceTableSource).toContain("buildMetricKey('agent', resource.id)");
     expect(unifiedResourceTableSource).not.toContain("buildMetricKey('host', resource.id)");

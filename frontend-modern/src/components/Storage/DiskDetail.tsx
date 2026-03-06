@@ -423,7 +423,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   );
 };
 
-/** Small attribute summary card matching the NodeDrawer card pattern. */
+/** Small attribute summary card matching the infrastructure details drawer card pattern. */
 const AttrCard: Component<{ label: string; value: string; ok: boolean }> = (props) => {
   return (
     <div class="rounded border border-border bg-surface p-3 shadow-sm">

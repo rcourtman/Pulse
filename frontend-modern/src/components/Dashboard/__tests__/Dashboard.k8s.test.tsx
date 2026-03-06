@@ -98,8 +98,10 @@ vi.mock('@/components/Workloads/WorkloadsSummary', () => ({
   WorkloadsSummary: () => <div data-testid="workloads-summary">summary</div>,
 }));
 
-vi.mock('@/components/shared/UnifiedNodeSelector', () => ({
-  UnifiedNodeSelector: () => <div data-testid="node-selector">node-selector</div>,
+vi.mock('@/components/shared/InfrastructureSelector', () => ({
+  InfrastructureSelector: () => (
+    <div data-testid="infrastructure-selector">infrastructure-selector</div>
+  ),
 }));
 
 vi.mock('../DashboardFilter', () => ({
