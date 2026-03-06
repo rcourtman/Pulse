@@ -101,6 +101,13 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 		return monitor, nil
 	}
 
+	if mtm.persistence == nil {
+		return nil, fmt.Errorf("tenant persistence is not configured")
+	}
+	if orgID != "default" && !mtm.persistence.OrgExists(orgID) {
+		return nil, fmt.Errorf("organization %q is not provisioned", orgID)
+	}
+
 	// Initialize new monitor for this tenant
 	log.Info().Str("org_id", orgID).Msg("initializing tenant monitor")
 

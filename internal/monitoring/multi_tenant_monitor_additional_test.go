@@ -1,11 +1,14 @@
 package monitoring
 
 import (
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestMultiTenantMonitorRemoveTenant(t *testing.T) {
@@ -82,6 +85,23 @@ func TestMultiTenantMonitorGetMonitorRejectsEmptyOrgID(t *testing.T) {
 	}
 }
 
+func TestMultiTenantMonitorGetMonitorRejectsUnknownTenant(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	baseCfg := &config.Config{DataPath: baseDir}
+	mtm := NewMultiTenantMonitor(baseCfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	if _, err := mtm.GetMonitor("org-missing"); err == nil {
+		t.Fatal("expected error for unknown org")
+	}
+
+	orgDir := filepath.Join(baseDir, "orgs", "org-missing")
+	if _, err := os.Stat(orgDir); !os.IsNotExist(err) {
+		t.Fatalf("expected unknown org monitor lookup to avoid creating %s, stat err = %v", orgDir, err)
+	}
+}
+
 func TestMultiTenantMonitorPeekMonitorTrimsOrgID(t *testing.T) {
 	expected := &Monitor{}
 	mtm := &MultiTenantMonitor{
@@ -133,6 +153,13 @@ func TestMultiTenantMonitorSetMonitorInitializerAppliesToNewMonitor(t *testing.T
 			called.Add(1)
 		}
 	})
+
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          "org-init",
+		DisplayName: "Org Init",
+	}); err != nil {
+		t.Fatalf("SaveOrganization(org-init) error = %v", err)
+	}
 
 	if _, err := mtm.GetMonitor("org-init"); err != nil {
 		t.Fatalf("GetMonitor(org-init) error = %v", err)
