@@ -8,19 +8,24 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - If the mobile app is part of the release, run the mobile checks from `/Volumes/Development/pulse/repos/pulse-mobile`.
 - Record pass/fail notes inline in this file or in the release ticket as each section is completed.
 
+## Current Status
+- Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
+- Manual scenarios and staging-like end-to-end flows are still the main remaining release gate.
+- Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
+
 ## Scope
-- [ ] Confirm whether there is a separate mobile app codebase.
-- [ ] If yes, do not call the whole product pre-release ready until that app is audited.
+- [x] Confirm whether there is a separate mobile app codebase.
+- [x] If yes, do not call the whole product pre-release ready until that app is audited.
 - [ ] If no, treat this checklist as the full product gate.
 
 ## Worktree
-- [ ] Run `git status --porcelain`.
-- [ ] Confirm there are no tracked modified or staged files.
-- [ ] Ignore only the known local untracked artifacts if they are expected:
-  - [ ] `.gocache/`
-  - [ ] `.gotmp/`
-  - [ ] `pulse-host-agent`
-  - [ ] `unused_param_test.o`
+- [x] Run `git status --porcelain`.
+- [x] Confirm there are no tracked modified or staged files.
+- [x] Ignore only the known local untracked artifacts if they are expected:
+  - [x] `.gocache/`
+  - [x] `.gotmp/`
+  - [x] `pulse-host-agent`
+  - [x] `unused_param_test.o`
 
 Run:
 
@@ -31,13 +36,13 @@ git status --porcelain
 
 ## Canonical v6 Contract
 - [ ] Verify the key canonical v6 hardening commits are present in the release target:
-  - [ ] `26a88bf66512ec5cafaf6e597a5ba736d5ff279b` `internal/api/resources`
-  - [ ] `c5eb7057a0b2a7e8dfbcd44470185a72d083feff` `internal/ai/tools`
-  - [ ] `3ab9d6c13` `internal/servicediscovery`
-  - [ ] `f89e4a56bcad9901edd6afc3212172845605d6e7` `internal/api/state_provider` / `router_helpers`
-  - [ ] `7115143825647f5bfade7469fe20a324d3a76dbe` `internal/monitoring/monitor.go`
+  - [x] `26a88bf66512ec5cafaf6e597a5ba736d5ff279b` `internal/api/resources`
+  - [x] `c5eb7057a0b2a7e8dfbcd44470185a72d083feff` `internal/ai/tools`
+  - [x] `3ab9d6c13` `internal/servicediscovery`
+  - [x] `f89e4a56bcad9901edd6afc3212172845605d6e7` `internal/api/state_provider` / `router_helpers`
+  - [x] `7115143825647f5bfade7469fe20a324d3a76dbe` `internal/monitoring/monitor.go`
 - [ ] Verify the Patrol and frontend canonicalization commits required for the release target are included.
-- [ ] Run the key backend/API/AI/frontend test slices that protect canonical v6 behavior.
+- [x] Run the key backend/API/AI/frontend test slices that protect canonical v6 behavior.
 
 Run:
 
@@ -57,11 +62,11 @@ npx vitest run src/utils/__tests__/frontendResourceTypeBoundaries.test.ts
 ```
 
 ## Hosted / Cloud
-- [ ] Run hosted signup and billing lifecycle tests.
-- [ ] Verify hosted paid checkout fails closed when org linkage is missing.
-- [ ] Verify replay succeeds once the linked org exists.
+- [x] Run hosted signup and billing lifecycle tests.
+- [x] Verify hosted paid checkout fails closed when org linkage is missing.
+- [x] Verify replay succeeds once the linked org exists.
 - [ ] Verify the normal hosted provisioning path still succeeds.
-- [ ] Confirm commit `8b3a5d30246a86005d363b405126b0e9bfdda8d3` is present.
+- [x] Confirm commit `8b3a5d30246a86005d363b405126b0e9bfdda8d3` is present.
 
 Run:
 
@@ -79,12 +84,12 @@ Manual scenario:
 - Verify a replay succeeds once the org exists.
 
 ## Relay
-- [ ] Run Relay tests end to end.
+- [x] Run Relay tests end to end.
 - [ ] Verify fresh register works.
 - [ ] Verify reconnect works.
-- [ ] Verify stale cached session resume recovers by fresh registration.
+- [x] Verify stale cached session resume recovers by fresh registration.
 - [ ] Verify abrupt disconnect and inflight drain behavior still work.
-- [ ] Confirm commit `ee78cb33dd35b891d84e61bfce2098b4548bbb56` is present.
+- [x] Confirm commit `ee78cb33dd35b891d84e61bfce2098b4548bbb56` is present.
 
 Run:
 
@@ -100,11 +105,11 @@ Manual scenario:
 - Verify the client retries with fresh registration instead of hanging in resume/backoff loops.
 
 ## Multi-Tenant / MSP
-- [ ] Run multi-tenant tests.
-- [ ] Verify unknown non-default orgs fail closed.
-- [ ] Verify explicitly provisioned orgs initialize correctly.
-- [ ] Verify there is no default-org fallback for non-default tenant requests.
-- [ ] Confirm commit `f090a77ae` is present.
+- [x] Run multi-tenant tests.
+- [x] Verify unknown non-default orgs fail closed.
+- [x] Verify explicitly provisioned orgs initialize correctly.
+- [x] Verify there is no default-org fallback for non-default tenant requests.
+- [x] Confirm commit `f090a77ae` is present.
 
 Run:
 
@@ -126,7 +131,7 @@ Manual scenario:
 - [ ] Verify alerts/investigate.
 - [ ] Verify reporting/settings.
 - [ ] Verify metrics history / charts.
-- [ ] Confirm canonical routes and page state still behave correctly.
+- [x] Confirm canonical routes and page state still behave correctly.
 
 Run:
 
@@ -141,10 +146,10 @@ Manual scenario:
 - Verify Kubernetes/pod pages and investigation paths still behave correctly.
 
 ## AI / Tools Smoke
-- [ ] Verify `pulse_query` works.
-- [ ] Verify Kubernetes tools work through unified read-state.
-- [ ] Verify PMG tools still work.
-- [ ] Verify Patrol scoped runs still behave correctly.
+- [x] Verify `pulse_query` works.
+- [x] Verify Kubernetes tools work through unified read-state.
+- [x] Verify PMG tools still work.
+- [x] Verify Patrol scoped runs still behave correctly.
 
 Run:
 
@@ -207,9 +212,14 @@ npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__test
 npm test -- --runTestsByPath src/stores/__tests__/approvalStore.test.ts
 ```
 
+Mobile automated checks completed:
+- [x] Secure storage / auth / instance persistence
+- [x] Relay reconnect and hardening tests
+- [x] Approval store state consistency
+
 ## Release Decision
 Mark Pulse v6 pre-release ready only if all of the following are true:
 - [ ] The smoke checks above pass.
-- [ ] There is no separate unaudited mobile app.
+- [x] There is no separate unaudited mobile app.
 - [ ] There is no tracked dirty state.
 - [ ] No new high-severity regressions appear.
