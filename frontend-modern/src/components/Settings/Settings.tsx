@@ -79,6 +79,9 @@ import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
+import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
+import { useSettingsNavigation } from './useSettingsNavigation';
+import type { SettingsTab } from './settingsRouting';
 
 import { updateStore } from '@/stores/updates';
 import { isPro, loadLicenseStatus } from '@/stores/license';
@@ -115,103 +118,6 @@ interface DiscoveryScanStatus {
   lastResultAt?: number;
   errors?: string[];
 }
-
-type SettingsTab =
-  | 'proxmox'
-  | 'docker'
-  | 'agents'
-  | 'system-general'
-  | 'system-network'
-  | 'system-updates'
-  | 'system-recovery'
-  | 'system-ai'
-  | 'system-pro'
-  | 'api'
-  | 'security-overview'
-  | 'security-auth'
-  | 'security-sso'
-  | 'security-roles'
-  | 'security-users'
-  | 'security-audit'
-  | 'security-webhooks';
-
-type AgentKey = 'pve' | 'pbs' | 'pmg';
-
-const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
-  proxmox: {
-    title: 'API Connections',
-    description:
-      'Manage API-only connections for Proxmox VE, Backup Server, and Mail Gateway.',
-  },
-  docker: {
-    title: 'Docker',
-    description:
-      'Monitor Docker and Podman runtimes, containers, images, and volumes across your infrastructure.',
-  },
-  agents: {
-    title: 'Infrastructure',
-    description:
-      'Install and manage the unified Pulse agent, the default monitoring gateway for infrastructure workloads.',
-  },
-  'system-general': {
-    title: 'General Settings',
-    description: 'Configure appearance preferences and UI behavior.',
-  },
-  'system-network': {
-    title: 'Network Settings',
-    description: 'Manage CORS, embedding, and network discovery configuration.',
-  },
-  'system-updates': {
-    title: 'Updates',
-    description:
-      'Check for updates, configure update channels, and manage automatic update checks.',
-  },
-  'system-recovery': {
-    title: 'Backup Polling',
-    description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
-  },
-  'system-ai': {
-    title: 'AI',
-    description: 'Configure AI providers, models, Pulse Assistant, and Patrol.',
-  },
-  'system-pro': {
-    title: 'Pulse Pro',
-    description: 'Manage license activation and Pulse Pro feature access.',
-  },
-  api: {
-    title: 'API access',
-    description:
-      'Generate scoped tokens and manage automation credentials for agents and integrations.',
-  },
-  'security-overview': {
-    title: 'Security Overview',
-    description: 'View your security posture at a glance and monitor authentication status.',
-  },
-  'security-auth': {
-    title: 'Authentication',
-    description: 'Manage password-based authentication and credential rotation.',
-  },
-  'security-sso': {
-    title: 'Single Sign-On',
-    description: 'Configure OIDC providers for team authentication.',
-  },
-  'security-roles': {
-    title: 'Roles',
-    description: 'Define custom roles and manage granular permissions for users and tokens.',
-  },
-  'security-users': {
-    title: 'User Access',
-    description: 'Assign roles to users and view effective permissions across your infrastructure.',
-  },
-  'security-audit': {
-    title: 'Audit Log',
-    description: 'View security events, login attempts, and configuration changes.',
-  },
-  'security-webhooks': {
-    title: 'Audit Webhooks',
-    description: 'Configure real-time delivery of audit events to external systems.',
-  },
-};
 
 const BACKUP_INTERVAL_OPTIONS = [
   { label: 'Default (~90 seconds)', value: 0 },
@@ -251,146 +157,16 @@ const Settings: Component<SettingsProps> = (props) => {
   const { state, connected: _connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
-  const proxmoxApiPrefix = '/settings/infrastructure/api';
-
-  const deriveTabFromPath = (path: string): SettingsTab => {
-    if (path.includes('/settings/workloads/docker')) return 'docker';
-    if (path === '/settings' || path === '/settings/' || path === '/settings/infrastructure')
-      return 'agents';
-    if (path.includes(proxmoxApiPrefix)) return 'proxmox';
-    if (path.includes('/settings/workloads')) return 'agents';
-    if (path.includes('/settings/system-general')) return 'system-general';
-    if (path.includes('/settings/system-network')) return 'system-network';
-    if (path.includes('/settings/system-updates')) return 'system-updates';
-    if (path.includes('/settings/system-recovery')) return 'system-recovery';
-    if (path.includes('/settings/system-ai')) return 'system-ai';
-    if (path.includes('/settings/system-pro')) return 'system-pro';
-    // Generic /settings/system fallback must come AFTER specific system-* paths
-    // because /settings/system-logs contains /settings/system as a substring
-    if (path.includes('/settings/system')) return 'system-general';
-    if (path.includes('/settings/integrations/api')) return 'api';
-    if (path.includes('/settings/security-overview')) return 'security-overview';
-    if (path.includes('/settings/security-auth')) return 'security-auth';
-    if (path.includes('/settings/security-sso')) return 'security-sso';
-    if (path.includes('/settings/security-roles')) return 'security-roles';
-    if (path.includes('/settings/security-users')) return 'security-users';
-    if (path.includes('/settings/security-audit')) return 'security-audit';
-    if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
-    // Generic /settings/security fallback must come AFTER specific security-* paths
-    if (path.includes('/settings/security')) return 'security-overview';
-    return 'agents';
-  };
-
-  const deriveAgentFromPath = (path: string): AgentKey | null => {
-    if (path.includes(`${proxmoxApiPrefix}/pve`)) return 'pve';
-    if (path.includes(`${proxmoxApiPrefix}/pbs`)) return 'pbs';
-    if (path.includes(`${proxmoxApiPrefix}/pmg`)) return 'pmg';
-    return null;
-  };
-
-  const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
-    deriveTabFromPath(location.pathname),
-  );
-  const activeTab = () => currentTab();
-
-  const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
-
-  const agentPaths: Record<AgentKey, string> = {
-    pve: `${proxmoxApiPrefix}/pve`,
-    pbs: `${proxmoxApiPrefix}/pbs`,
-    pmg: `${proxmoxApiPrefix}/pmg`,
-  };
-
-  const handleSelectAgent = (agent: AgentKey) => {
-    setSelectedAgent(agent);
-    if (currentTab() !== 'proxmox') {
-      setCurrentTab('proxmox');
-    }
-    const target = agentPaths[agent];
-    if (target && location.pathname !== target) {
-      navigate(target, { scroll: false });
-    }
-  };
-
-  const setActiveTab = (tab: SettingsTab) => {
-    if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
-      setSelectedAgent('pve');
-    }
-    const targetPath =
-      tab === 'proxmox'
-        ? proxmoxApiPrefix
-        : tab === 'agents'
-          ? '/settings/workloads'
-          : tab === 'docker'
-            ? '/settings/workloads/docker'
-            : tab === 'api'
-              ? '/settings/integrations/api'
-              : tab === 'system-recovery'
-                ? '/settings/system-recovery'
-                : `/settings/${tab}`;
-    if (location.pathname !== targetPath) {
-      navigate(targetPath, { scroll: false });
-      return;
-    }
-    if (currentTab() !== tab) {
-      setCurrentTab(tab);
-    }
-  };
+  const { activeTab, selectedAgent, setActiveTab, handleSelectAgent } = useSettingsNavigation({
+    navigate,
+    location,
+  });
 
   const headerMeta = () =>
     SETTINGS_HEADER_META[activeTab()] ?? {
       title: 'Settings',
       description: 'Manage Pulse configuration.',
     };
-
-  // Keep tab state in sync with URL and handle /settings redirect without flicker
-  createEffect(
-    on(
-      () => location.pathname,
-      (path) => {
-        if (
-          path === '/settings' ||
-          path === '/settings/' ||
-          path === '/settings/infrastructure' ||
-          path === '/settings/infrastructure/'
-        ) {
-          if (path !== '/settings/workloads') {
-            navigate('/settings/workloads', { replace: true, scroll: false });
-            return;
-          }
-          if (currentTab() !== 'agents') {
-            setCurrentTab('agents');
-          }
-          return;
-        }
-
-        if (path === '/settings/infrastructure/pve') {
-          navigate(`${proxmoxApiPrefix}/pve`, { replace: true, scroll: false });
-          return;
-        }
-
-        if (path === '/settings/infrastructure/pbs') {
-          navigate(`${proxmoxApiPrefix}/pbs`, { replace: true, scroll: false });
-          return;
-        }
-
-        if (path === '/settings/infrastructure/pmg') {
-          navigate(`${proxmoxApiPrefix}/pmg`, { replace: true, scroll: false });
-          return;
-        }
-
-        const resolved = deriveTabFromPath(path);
-        if (resolved !== currentTab()) {
-          setCurrentTab(resolved);
-        }
-
-        if (resolved === 'proxmox') {
-          const agentFromPath = deriveAgentFromPath(path);
-          setSelectedAgent(agentFromPath ?? 'pve');
-        }
-      },
-    ),
-  );
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   // Sidebar always starts expanded for discoverability (issue #764)
@@ -2380,19 +2156,20 @@ const Settings: Component<SettingsProps> = (props) => {
                     </svg>
                     <div class="flex-1">
                       <p class="text-sm text-blue-800 dark:text-blue-200">
-                        <strong>Recommended:</strong> Install the Pulse agent on your Proxmox nodes
-                        for extra capabilities like temperature monitoring and Pulse Patrol
-                        automation (it also auto-creates the API token and links the node).
+                        <strong>Recommended:</strong> use the unified agent for Proxmox hosts. It
+                        auto-creates the API token, links the host, and unlocks temperature
+                        monitoring plus Pulse Patrol automation.
                       </p>
                       <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
-                        Prefer not to run an agent on PVE? Use the manual API token setup below.
+                        This page is for API-only connections when you cannot install the unified
+                        agent on the host.
                       </p>
                       <button
                         type="button"
                         onClick={() => navigate('/settings')}
                         class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
                       >
-                        Install agent →
+                        Open infrastructure setup →
                       </button>
                     </div>
                   </div>
@@ -2503,7 +2280,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
                                 <span class="sm:hidden">Add</span>
-                                <span class="hidden sm:inline">Add PVE Node</span>
+                                <span class="hidden sm:inline">Add PVE API Connection</span>
                               </button>
                             </div>
                           </div>
@@ -2535,10 +2312,11 @@ const Settings: Component<SettingsProps> = (props) => {
                                 <Server class="h-8 w-8 text-muted" />
                               </div>
                               <p class="text-base font-medium text-base-content mb-1">
-                                No PVE nodes configured
+                                No PVE API connections configured
                               </p>
                               <p class="text-sm text-muted">
-                                Add a Proxmox VE node to start monitoring your infrastructure
+                                Add a Proxmox VE API connection when the unified agent is not
+                                available
                               </p>
                             </div>
                           </Show>
@@ -2655,7 +2433,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                         <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
-                                        <span class="text-xs text-muted">Click to configure</span>
+                                        <span class="text-xs text-muted">
+                                          Click to configure an API connection
+                                        </span>
                                       </div>
                                     </div>
                                   </div>
@@ -2788,7 +2568,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
                                 <span class="sm:hidden">Add</span>
-                                <span class="hidden sm:inline">Add PBS Node</span>
+                                <span class="hidden sm:inline">Add PBS API Connection</span>
                               </button>
                             </div>
                           </div>
@@ -2819,10 +2599,11 @@ const Settings: Component<SettingsProps> = (props) => {
                                 <HardDrive class="h-8 w-8 text-muted" />
                               </div>
                               <p class="text-base font-medium text-base-content mb-1">
-                                No PBS nodes configured
+                                No PBS API connections configured
                               </p>
                               <p class="text-sm text-muted">
-                                Add a Proxmox Backup Server to monitor your backups
+                                Add a Proxmox Backup Server API connection when the unified agent
+                                is not available
                               </p>
                             </div>
                           </Show>
@@ -2939,7 +2720,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                         <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
-                                        <span class="text-xs text-muted">Click to configure</span>
+                                        <span class="text-xs text-muted">
+                                          Click to configure an API connection
+                                        </span>
                                       </div>
                                     </div>
                                   </div>
@@ -3072,7 +2855,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
                                 <span class="sm:hidden">Add</span>
-                                <span class="hidden sm:inline">Add PMG Node</span>
+                                <span class="hidden sm:inline">Add PMG API Connection</span>
                               </button>
                             </div>
                           </div>
@@ -3099,10 +2882,11 @@ const Settings: Component<SettingsProps> = (props) => {
                                 <Mail class="h-8 w-8 text-muted" />
                               </div>
                               <p class="text-base font-medium text-base-content mb-1">
-                                No PMG nodes configured
+                                No PMG API connections configured
                               </p>
                               <p class="text-sm text-muted">
-                                Add a Proxmox Mail Gateway node to start monitoring
+                                Add a Proxmox Mail Gateway API connection when the unified agent
+                                is not available
                               </p>
                             </div>
                           </Show>
@@ -3229,7 +3013,9 @@ const Settings: Component<SettingsProps> = (props) => {
                                       <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                         Discovered
                                       </span>
-                                      <span class="text-xs text-muted">Click to configure</span>
+                                      <span class="text-xs text-muted">
+                                        Click to configure an API connection
+                                      </span>
                                     </div>
                                   </div>
                                 </div>

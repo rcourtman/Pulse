@@ -271,12 +271,12 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                         <Show when={node.source === 'agent'}>
                           <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
-                            Agent
+                            Agent-linked
                           </span>
                         </Show>
                         <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
                           <span class="text-[0.65rem] px-1.5 py-0.5 bg-surface-alt text-muted rounded w-fit">
-                            API only
+                            API-only
                           </span>
                         </Show>
                       </div>
@@ -491,12 +491,12 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                         <Show when={node.source === 'agent'}>
                           <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
-                            Agent
+                            Agent-linked
                           </span>
                         </Show>
                         <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
                           <span class="text-[0.65rem] px-1.5 py-0.5 bg-surface-alt text-muted rounded w-fit">
-                            API only
+                            API-only
                           </span>
                         </Show>
                       </div>
@@ -718,12 +718,12 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                         <Show when={node.source === 'agent'}>
                           <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-surface-hover text-base-content rounded w-fit">
                             <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
-                            Agent
+                            Agent-linked
                           </span>
                         </Show>
                         <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
                           <span class="text-[0.65rem] px-1.5 py-0.5 bg-surface-alt text-muted rounded w-fit">
-                            API only
+                            API-only
                           </span>
                         </Show>
                       </div>

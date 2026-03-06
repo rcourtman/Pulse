@@ -13,7 +13,7 @@ import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/api',
   docker: '/settings/workloads/docker',
-  agents: '/settings/workloads',
+  agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
@@ -57,10 +57,11 @@ describe('settingsRouting', () => {
   });
 
   it('resolves only canonical settings paths', () => {
+    expect(resolveCanonicalSettingsPath('/settings/workloads')).toBe('/settings');
     expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
       '/settings/system-updates',
     );
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure')).toBe('/settings/workloads');
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure')).toBe('/settings');
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe(
       '/settings/infrastructure/api/pve',
     );
@@ -131,7 +132,7 @@ describe('settingsRouting', () => {
       ['/settings/infrastructure/api/pbs', 'pbs'],
       ['/settings/infrastructure/api/pmg', 'pmg'],
       ['/settings/infrastructure', null],
-      ['/settings/workloads', null],
+      ['/settings', null],
     ];
     for (const [path, expectedAgent] of agentCases) {
       expect(deriveAgentFromPath(path)).toBe(expectedAgent);

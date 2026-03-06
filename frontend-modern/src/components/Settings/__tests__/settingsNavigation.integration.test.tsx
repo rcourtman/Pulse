@@ -5,7 +5,7 @@ import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/api',
   docker: '/settings/workloads/docker',
-  agents: '/settings/workloads',
+  agents: '/settings',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',

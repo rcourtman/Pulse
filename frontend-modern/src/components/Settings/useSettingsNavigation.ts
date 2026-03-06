@@ -68,7 +68,7 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
     }
   };
 
-  // Keep tab state in sync with URL and handle /settings redirect without flicker.
+  // Keep tab state in sync with canonical URLs, while preserving old deep links as aliases.
   createEffect(
     on(
       () => [location.pathname, location.search] as const,

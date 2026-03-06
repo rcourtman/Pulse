@@ -1111,8 +1111,8 @@ export const UnifiedAgents: Component = () => {
   return (
     <div class="space-y-6">
       <SettingsPanel
-        title="Unified Agents"
-        description="Primary install path for monitoring systems, Docker, Kubernetes, Proxmox, and related infrastructure."
+        title="Infrastructure"
+        description="Primary setup hub for unified agents across systems, Docker, Kubernetes, Proxmox, and related infrastructure."
         icon={<Server class="w-5 h-5" strokeWidth={2} />}
         bodyClass="space-y-5"
       >
@@ -1138,7 +1138,7 @@ export const UnifiedAgents: Component = () => {
                 onClick={() => navigate('/settings/infrastructure/api')}
                 class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100 underline"
               >
-                Prefer API-only? Use manual setup →
+                Need API-only setup? Open API Connections →
               </button>
             </div>
           </div>

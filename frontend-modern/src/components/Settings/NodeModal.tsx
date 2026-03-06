@@ -712,7 +712,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               <circle cx="12" cy="12" r="10"></circle>
                               <path d="M12 6v6l4 2"></path>
                             </svg>
-                            Quick Token Setup
+                            Connection Setup
                           </h5>
 
                           <Show when={props.nodeType === 'pve'}>
@@ -761,7 +761,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
                                     }`}
                                   >
-                                    API Only
+                                    API-only Connection
                                   </button>
                                   <button
                                     type="button"
@@ -898,13 +898,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </div>
                               </Show>
 
-                              {/* API Only Tab (formerly Quick Setup) */}
+                              {/* API-only connection tab */}
                               <Show when={formData().setupMode === 'auto'}>
                                 <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900">
                                   <p class="text-xs text-amber-800 dark:text-amber-200">
-                                    <strong>Limited functionality:</strong> API-only mode does not
-                                    include temperature monitoring or Pulse Patrol automation. For
-                                    full functionality, use the Agent Install tab instead.
+                                    <strong>Legacy/API-only mode:</strong> this path keeps a direct
+                                    API connection without installing the unified agent, so it does
+                                    not include temperature monitoring or Pulse Patrol automation.
                                   </p>
                                 </div>
                                 <p class="text-blue-800 dark:text-blue-200">
@@ -1427,7 +1427,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
                                     }`}
                                   >
-                                    API Only
+                                    API-only Connection
                                   </button>
                                   <button
                                     type="button"
@@ -1438,7 +1438,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
                                     }`}
                                   >
-                                    Manual Setup
+                                    Manual API Setup
                                   </button>
                                 </div>
                               </Show>
@@ -1566,7 +1566,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </div>
                               </Show>
 
-                              {/* Quick Setup Tab for PBS (API Only) */}
+                              {/* API-only connection tab for PBS */}
                               <Show when={formData().setupMode === 'auto'}>
                                 <p class="text-blue-800 dark:text-blue-200">
                                   Just copy and run this one command on your Proxmox Backup Server:
@@ -1805,7 +1805,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </div>
                               </Show>
 
-                              {/* Manual Setup Tab for PBS */}
+                              {/* Manual API setup tab for PBS */}
                               <Show when={formData().setupMode === 'manual'}>
                                 <p class="text-blue-800 dark:text-blue-200 mb-2">
                                   Run these commands one by one on your Proxmox Backup Server:
