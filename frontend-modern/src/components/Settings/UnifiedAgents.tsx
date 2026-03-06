@@ -1859,15 +1859,15 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                 const expanded = () => expandedRowKey() === row.rowKey;
                 const agentName = row.displayName || row.hostname || row.name;
                 return (
-                  <div class="flex items-start justify-between gap-3">
-                    <button class="text-left" onClick={() => toggleAgentDetails(row.rowKey)}>
-                      <div class="text-sm font-medium text-base-content">{row.name}</div>
+                  <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                    <div class="min-w-0 text-left">
+                      <div class="truncate text-sm font-medium text-base-content">{row.name}</div>
                       <Show
                         when={row.displayName && row.hostname && row.displayName !== row.hostname}
                       >
-                        <div class="text-xs text-muted">{row.hostname}</div>
+                        <div class="truncate text-xs text-muted">{row.hostname}</div>
                       </Show>
-                    </button>
+                    </div>
                     <button
                       type="button"
                       onClick={(e) => {
