@@ -2834,27 +2834,13 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 	guestBackups := make(map[string]*backupInfo)
 
 	vmidToName := make(map[int]string)
-	rs := snap.readState
-	// Uses canonical ReadState view surface — legacy state fallbacks removed.
-	if rs == nil {
+	guestRows := patrolGuestInventoryRows(snap, scopedSet, nil)
+	if snap.readState == nil {
 		log.Warn().Msg("seedBackupAnalysis: ReadState not wired, backup analysis will be incomplete")
 	}
-	if rs != nil {
-		for _, vmv := range rs.VMs() {
-			if !seedIsInScope(scopedSet, vmv.ID()) {
-				continue
-			}
-			if id := vmv.VMID(); id > 0 {
-				vmidToName[id] = vmv.Name()
-			}
-		}
-		for _, ctv := range rs.Containers() {
-			if !seedIsInScope(scopedSet, ctv.ID()) {
-				continue
-			}
-			if id := ctv.VMID(); id > 0 {
-				vmidToName[id] = ctv.Name()
-			}
+	for _, guest := range guestRows {
+		if guest.vmid > 0 {
+			vmidToName[guest.vmid] = guest.name
 		}
 	}
 
@@ -2902,40 +2888,16 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 		}
 	}
 
-	if rs != nil {
-		for _, vmv := range rs.VMs() {
-			if vmv.Template() || vmv.LastBackup().IsZero() || !seedIsInScope(scopedSet, vmv.ID()) {
-				continue
-			}
-			name := vmv.Name()
-			if existing, ok := guestBackups[name]; !ok || vmv.LastBackup().After(existing.lastBackup) {
-				guestBackups[name] = &backupInfo{lastBackup: vmv.LastBackup(), source: "pve"}
-			}
+	for _, guest := range guestRows {
+		if guest.lastBackup.IsZero() {
+			continue
 		}
-		for _, ctv := range rs.Containers() {
-			if ctv.Template() || ctv.LastBackup().IsZero() || !seedIsInScope(scopedSet, ctv.ID()) {
-				continue
-			}
-			name := ctv.Name()
-			if existing, ok := guestBackups[name]; !ok || ctv.LastBackup().After(existing.lastBackup) {
-				guestBackups[name] = &backupInfo{lastBackup: ctv.LastBackup(), source: "pve"}
-			}
+		if existing, ok := guestBackups[guest.name]; !ok || guest.lastBackup.After(existing.lastBackup) {
+			guestBackups[guest.name] = &backupInfo{lastBackup: guest.lastBackup, source: "pve"}
 		}
 	}
 
-	totalGuests := 0
-	if rs != nil {
-		for _, vmv := range rs.VMs() {
-			if !vmv.Template() && seedIsInScope(scopedSet, vmv.ID()) {
-				totalGuests++
-			}
-		}
-		for _, ctv := range rs.Containers() {
-			if !ctv.Template() && seedIsInScope(scopedSet, ctv.ID()) {
-				totalGuests++
-			}
-		}
-	}
+	totalGuests := len(guestRows)
 
 	if totalGuests == 0 {
 		return ""
@@ -2948,18 +2910,9 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 	recentCount := 0
 	threshold48h := now.Add(-48 * time.Hour)
 
-	allGuestNames := make(map[string]bool)
-	if rs != nil {
-		for _, vmv := range rs.VMs() {
-			if !vmv.Template() && seedIsInScope(scopedSet, vmv.ID()) {
-				allGuestNames[vmv.Name()] = true
-			}
-		}
-		for _, ctv := range rs.Containers() {
-			if !ctv.Template() && seedIsInScope(scopedSet, ctv.ID()) {
-				allGuestNames[ctv.Name()] = true
-			}
-		}
+	allGuestNames := make(map[string]bool, len(guestRows))
+	for _, guest := range guestRows {
+		allGuestNames[guest.name] = true
 	}
 
 	for name := range allGuestNames {
