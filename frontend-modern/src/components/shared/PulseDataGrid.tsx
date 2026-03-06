@@ -1,4 +1,5 @@
-import { JSX, For, Show, createMemo, splitProps } from 'solid-js';
+import { JSX, For, Show, createEffect, createMemo, splitProps } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
   Table,
@@ -85,6 +86,11 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
   ]);
 
   const { isMobile } = useBreakpoint();
+  type StableRow = {
+    __pulseKey: string | number;
+    value: T;
+  };
+  const [stableRows, setStableRows] = createStore<StableRow[]>([]);
 
   const effectiveMinWidth = createMemo(() => {
     if (isMobile()) {
@@ -112,6 +118,18 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
         'button, a, input, select, textarea, summary, [role="button"], [data-row-action]',
       ),
     );
+
+  createEffect(() => {
+    setStableRows(
+      reconcile(
+        local.data.map((row) => ({
+          __pulseKey: local.keyExtractor(row),
+          value: row,
+        })),
+        { key: '__pulseKey' },
+      ),
+    );
+  });
 
   return (
     <div class={`overflow-hidden rounded-md border border-border bg-surface ${local.class || ''}`}>
@@ -147,9 +165,10 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
           </TableHeader>
           <TableBody class="divide-y divide-border transition-colors">
             <Show when={!local.isLoading && local.data.length > 0}>
-              <For each={local.data}>
-                {(row) => {
-                  const expanded = createMemo(() => local.isRowExpanded?.(row));
+              <For each={stableRows}>
+                {(stableRow) => {
+                  const row = () => stableRow.value;
+                  const expanded = createMemo(() => local.isRowExpanded?.(row()));
 
                   return (
                     <>
@@ -166,7 +185,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                           if (isInteractiveTarget(event.target)) {
                             return;
                           }
-                          local.onRowClick?.(row);
+                          local.onRowClick?.(row());
                         }}
                       >
                         <For each={local.columns}>
@@ -181,9 +200,9 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                             >
                               <Show
                                 when={col.render}
-                                fallback={<span>{(row as any)[col.key]}</span>}
+                                fallback={<span>{(row() as any)[col.key]}</span>}
                               >
-                                {col.render!(row)}
+                                {col.render!(row())}
                               </Show>
                             </TableCell>
                           )}
@@ -198,7 +217,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                           }
                         >
                           <TableCell colspan={local.columns.length} class="px-0 py-0 border-t-0">
-                            {local.expandedRender!(row)}
+                            {local.expandedRender!(row())}
                           </TableCell>
                         </TableRow>
                       </Show>

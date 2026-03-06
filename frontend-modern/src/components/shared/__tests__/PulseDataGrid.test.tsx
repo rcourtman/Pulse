@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
@@ -55,5 +56,23 @@ describe('PulseDataGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(onRemove).toHaveBeenCalledTimes(1);
     expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps the same row DOM node when data refreshes with the same key', () => {
+    const [rows, setRows] = createSignal<TestRow[]>([{ id: '1', name: 'Tower' }]);
+
+    render(() => (
+      <PulseDataGrid<TestRow>
+        data={rows()}
+        columns={[{ key: 'name', label: 'Name' }]}
+        keyExtractor={(row) => row.id}
+      />
+    ));
+
+    const initialCell = screen.getByText('Tower');
+    setRows([{ id: '1', name: 'Tower' }]);
+    const refreshedCell = screen.getByText('Tower');
+
+    expect(refreshedCell).toBe(initialCell);
   });
 });
