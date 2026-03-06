@@ -187,3 +187,26 @@ export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIden
 
   return rows;
 };
+
+export const getPreferredResourceHostname = (resource: Resource): string | undefined => {
+  const platformData = getPlatformDataRecord(resource);
+  const platformAgent = getPlatformAgentRecord(resource);
+  const docker = platformData?.docker as Record<string, unknown> | undefined;
+  const pbs = platformData?.pbs as Record<string, unknown> | undefined;
+  const pmg = platformData?.pmg as Record<string, unknown> | undefined;
+
+  return (
+    resource.identity?.hostname ||
+    asTrimmedString(platformAgent?.hostname) ||
+    asTrimmedString(docker?.hostname) ||
+    asTrimmedString(pbs?.hostname) ||
+    asTrimmedString(pmg?.hostname) ||
+    asTrimmedString(resource.name) ||
+    asTrimmedString(resource.platformId)
+  );
+};
+
+export const getPreferredResourceDisplayName = (resource: Resource): string =>
+  resource.displayName ||
+  getPreferredResourceHostname(resource) ||
+  getPrimaryResourceIdentity(resource);

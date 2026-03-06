@@ -6,6 +6,8 @@ import {
   getAgentLikeMetadataIds,
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
@@ -209,5 +211,34 @@ describe('resourceIdentity', () => {
     expect(getInfrastructureMetadataId(node)).toBe('agent-linked');
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('pve1.local');
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' })).toBe('pve1');
+  });
+
+  it('resolves shared resource hostnames and display names', () => {
+    const resource = makeResource({
+      name: 'fallback-name',
+      displayName: '',
+      platformId: 'platform-name',
+      platformData: {
+        agent: {
+          hostname: 'platform-host.local',
+        },
+      },
+    });
+
+    expect(getPreferredResourceHostname(resource)).toBe('platform-host.local');
+    expect(getPreferredResourceDisplayName(resource)).toBe('platform-host.local');
+
+    expect(
+      getPreferredResourceDisplayName(
+        makeResource({
+          displayName: 'Display Label',
+          platformData: {
+            agent: {
+              hostname: 'platform-host.local',
+            },
+          },
+        }),
+      ),
+    ).toBe('Display Label');
   });
 });

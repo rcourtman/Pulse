@@ -295,4 +295,24 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     });
     expect(screen.queryAllByRole('combobox')).toHaveLength(0);
   });
+
+  it('uses shared hostname fallback when identity hostname is absent', async () => {
+    mockResources = [
+      makeAgentResource({
+        displayName: '',
+        identity: undefined,
+        name: '',
+        platformId: 'platform-fallback',
+        platformData: {
+          agent: { hostname: 'platform-host.local' },
+        },
+      }),
+    ];
+
+    render(() => <AgentProfilesPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('platform-host.local')).toBeInTheDocument();
+    });
+  });
 });

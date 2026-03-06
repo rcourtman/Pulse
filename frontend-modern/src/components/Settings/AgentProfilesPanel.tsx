@@ -33,6 +33,10 @@ import {
   getActionableKubernetesClusterIdFromResource,
   isAgentProfileAssignableResource,
 } from '@/utils/agentResources';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -162,16 +166,8 @@ export const AgentProfilesPanel: Component = () => {
       .sort((a, b) => {
         const byPriority = resourcePriority(a.resource) - resourcePriority(b.resource);
         if (byPriority !== 0) return byPriority;
-        const aName =
-          a.resource.displayName ||
-          a.resource.identity?.hostname ||
-          a.resource.name ||
-          a.resource.id;
-        const bName =
-          b.resource.displayName ||
-          b.resource.identity?.hostname ||
-          b.resource.name ||
-          b.resource.id;
+        const aName = getPreferredResourceDisplayName(a.resource);
+        const bName = getPreferredResourceDisplayName(b.resource);
         return aName.localeCompare(bName);
       });
 
@@ -185,7 +181,7 @@ export const AgentProfilesPanel: Component = () => {
       .map(([assignmentId, resource]) => ({
         id: assignmentId,
         assignmentId,
-        hostname: resource.identity?.hostname || resource.name || 'Unknown',
+        hostname: getPreferredResourceHostname(resource) || 'Unknown',
         displayName: resource.displayName,
         status: resource.status || 'unknown',
         lastSeen: resource.lastSeen,

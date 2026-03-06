@@ -15,6 +15,10 @@ import type { Resource } from '@/types/resource';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import { nodeFromResource, pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
 import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
+import {
   getActionableAgentIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
@@ -156,14 +160,13 @@ export const InfrastructureSelector: Component<InfrastructureSelectorProps> = (p
 
       const hostId =
         getActionableAgentIdFromResource(resource) || resource.id;
-      const hostname =
-        resource.identity?.hostname || asString(agent.hostname) || resource.name || hostId;
+      const hostname = getPreferredResourceHostname(resource) || asString(agent.hostname) || hostId;
 
       if (agentsById.has(hostId)) continue;
       agentsById.set(hostId, {
         id: hostId,
         hostname,
-        displayName: resource.displayName || hostname,
+        displayName: getPreferredResourceDisplayName(resource),
         platform: asString(agent.platform),
         osName: asString(agent.osName),
         osVersion: asString(agent.osVersion),
