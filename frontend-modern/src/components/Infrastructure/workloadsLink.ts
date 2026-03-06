@@ -1,5 +1,6 @@
 import type { Resource } from '@/types/resource';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
+import { getPreferredWorkloadsAgentHint } from '@/utils/resourceIdentity';
 
 type ProxmoxPlatformData = {
   nodeName?: string;
@@ -60,30 +61,7 @@ const resolveKubernetesContext = (resource: Resource): string | undefined => {
 };
 
 const resolveHostHint = (resource: Resource): string | undefined => {
-  const platformData = resource.platformData as PlatformData | undefined;
-  if (resource.type === 'docker-host') {
-    return firstNonEmpty([
-      platformData?.docker?.hostname,
-      platformData?.agent?.hostname,
-      resource.identity?.hostname,
-      resource.name,
-      resource.displayName,
-      resource.platformId,
-      resource.id,
-    ]);
-  }
-  if (resource.type === 'agent') {
-    return firstNonEmpty([
-      platformData?.proxmox?.nodeName,
-      platformData?.agent?.hostname,
-      resource.identity?.hostname,
-      resource.platformId,
-      resource.name,
-      resource.displayName,
-      resource.id,
-    ]);
-  }
-  return undefined;
+  return getPreferredWorkloadsAgentHint(resource);
 };
 
 export const buildWorkloadsHref = (resource: Resource): string | null => {

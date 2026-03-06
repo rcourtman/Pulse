@@ -307,4 +307,39 @@ describe('buildWorkloadsHref', () => {
     };
     expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=docker-host-1');
   });
+
+  it('reuses the shared preferred hostname fallback for docker and agent workloads links', () => {
+    const dockerResource: Resource = {
+      ...baseResource(),
+      type: 'docker-host',
+      platformType: 'docker',
+      name: '',
+      displayName: '',
+      platformId: 'docker-platform-id',
+      identity: undefined,
+      platformData: {
+        sources: ['docker', 'agent'],
+        agent: { hostname: 'docker-agent-host.local' },
+      },
+    };
+
+    expect(buildWorkloadsHref(dockerResource)).toBe(
+      '/workloads?type=app-container&agent=docker-agent-host.local',
+    );
+
+    const agentResource: Resource = {
+      ...baseResource(),
+      type: 'agent',
+      name: '',
+      displayName: '',
+      platformId: 'agent-platform-id',
+      identity: undefined,
+      platformData: {
+        sources: ['agent'],
+        agent: { hostname: 'agent-host.local' },
+      },
+    };
+
+    expect(buildWorkloadsHref(agentResource)).toBe('/workloads?agent=agent-host.local');
+  });
 });

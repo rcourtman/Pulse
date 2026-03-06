@@ -8,6 +8,7 @@ import {
   getInfrastructureMetadataId,
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
+  getPreferredWorkloadsAgentHint,
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
@@ -240,5 +241,31 @@ describe('resourceIdentity', () => {
         }),
       ),
     ).toBe('Display Label');
+  });
+
+  it('resolves workloads agent hints with source-specific precedence', () => {
+    expect(
+      getPreferredWorkloadsAgentHint(
+        makeResource({
+          type: 'docker-host',
+          identity: { hostname: 'identity-host' },
+          platformData: {
+            docker: { hostname: 'docker-host-1' },
+          },
+        }),
+      ),
+    ).toBe('docker-host-1');
+
+    expect(
+      getPreferredWorkloadsAgentHint(
+        makeResource({
+          type: 'agent',
+          identity: { hostname: 'identity-host' },
+          platformData: {
+            proxmox: { nodeName: 'pve1' },
+          },
+        }),
+      ),
+    ).toBe('pve1');
   });
 });

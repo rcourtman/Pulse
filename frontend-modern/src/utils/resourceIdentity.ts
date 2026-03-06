@@ -210,3 +210,27 @@ export const getPreferredResourceDisplayName = (resource: Resource): string =>
   resource.displayName ||
   getPreferredResourceHostname(resource) ||
   getPrimaryResourceIdentity(resource);
+
+export const getPreferredWorkloadsAgentHint = (resource: Resource): string | undefined => {
+  const platformData = getPlatformDataRecord(resource);
+  const proxmox = platformData?.proxmox as Record<string, unknown> | undefined;
+  const docker = platformData?.docker as Record<string, unknown> | undefined;
+
+  if (resource.type === 'docker-host') {
+    return (
+      asTrimmedString(docker?.hostname) ||
+      getPreferredResourceHostname(resource) ||
+      resource.id
+    );
+  }
+
+  if (resource.type === 'agent') {
+    return (
+      asTrimmedString(proxmox?.nodeName) ||
+      getPreferredResourceHostname(resource) ||
+      resource.id
+    );
+  }
+
+  return undefined;
+};
