@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestTriageThresholdChecks(t *testing.T) {
@@ -157,6 +158,40 @@ func TestTriageDiskHealthChecks(t *testing.T) {
 	}
 	if triageFindFlag(flags, func(f TriageFlag) bool { return strings.Contains(f.Reason, "wearout at 85% remaining") }) != nil {
 		t.Fatalf("did not expect wearout flag for disk-4 (85%% remaining)")
+	}
+}
+
+func TestTriageDiskHealthChecksState_PrefersUnifiedProvider(t *testing.T) {
+	state := patrolRuntimeState{
+		unifiedResourceProvider: &mockUnifiedResourceProvider{
+			getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+				if t != unifiedresources.ResourceTypePhysicalDisk {
+					return nil
+				}
+				return []unifiedresources.Resource{
+					{
+						ID:   "disk-1",
+						Name: "disk-1",
+						Type: unifiedresources.ResourceTypePhysicalDisk,
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:     "/dev/sda",
+							Model:       "disk-1",
+							Health:      "FAILED",
+							Wearout:     50,
+							Temperature: 40,
+						},
+					},
+				}
+			},
+		},
+	}
+
+	flags := triageDiskHealthChecksState(state, nil)
+	if len(flags) != 1 {
+		t.Fatalf("expected 1 disk-health flag from unified provider, got %d", len(flags))
+	}
+	if !strings.Contains(flags[0].Reason, "Disk health reported FAILED") {
+		t.Fatalf("expected unified-provider flag to use disk health reason, got %#v", flags[0])
 	}
 }
 

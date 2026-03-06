@@ -366,9 +366,14 @@ func triageDiskHealthChecks(snap models.StateSnapshot, scopedSet map[string]bool
 func triageDiskHealthChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
-	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(snap.snapshot())
-	physicalDisks := registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+	var physicalDisks []unifiedresources.Resource
+	if snap.unifiedResourceProvider != nil {
+		physicalDisks = snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk)
+	} else {
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(snap.snapshot())
+		physicalDisks = registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+	}
 
 	for _, disk := range physicalDisks {
 		if disk.PhysicalDisk == nil {
