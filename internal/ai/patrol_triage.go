@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // TriageFlag represents a single deterministic issue detected during triage.
@@ -277,72 +275,11 @@ func triageBackupChecksState(snap patrolRuntimeState, scopedSet map[string]bool)
 func triageDiskHealthChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
-	if snap.unifiedResourceProvider != nil {
-		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
-			if disk.PhysicalDisk == nil {
-				continue
-			}
-			resourceID, resourceName, health, wearout, temperature, ok := patrolUnifiedPhysicalDiskState(disk, scopedSet)
-			if !ok {
-				continue
-			}
-			flags = append(flags, triagePhysicalDiskFlags(resourceID, resourceName, health, wearout, temperature)...)
-		}
-		return flags
-	}
-
-	for _, disk := range snap.PhysicalDisks {
-		resourceID, resourceName, health, wearout, temperature, ok := patrolSnapshotPhysicalDiskState(disk, scopedSet)
-		if !ok {
-			continue
-		}
-		flags = append(flags, triagePhysicalDiskFlags(resourceID, resourceName, health, wearout, temperature)...)
+	for _, disk := range patrolPhysicalDiskRows(snap, scopedSet) {
+		flags = append(flags, triagePhysicalDiskFlags(disk.id, disk.name, disk.health, disk.wearout, disk.temperature)...)
 	}
 
 	return flags
-}
-
-func patrolUnifiedPhysicalDiskState(disk unifiedresources.Resource, scopedSet map[string]bool) (resourceID, resourceName, health string, wearout, temperature int, ok bool) {
-	if disk.PhysicalDisk == nil {
-		return "", "", "", 0, 0, false
-	}
-	d := disk.PhysicalDisk
-	resourceID = strings.TrimSpace(disk.ID)
-	if resourceID == "" {
-		resourceID = strings.TrimSpace(d.DevPath)
-	}
-	if !seedIsInScope(scopedSet, resourceID) {
-		return "", "", "", 0, 0, false
-	}
-	resourceName = strings.TrimSpace(d.DevPath)
-	if resourceName == "" {
-		resourceName = strings.TrimSpace(disk.Name)
-	}
-	if resourceName == "" {
-		resourceName = strings.TrimSpace(d.Model)
-	}
-	if resourceName == "" {
-		resourceName = resourceID
-	}
-	return resourceID, resourceName, strings.TrimSpace(d.Health), d.Wearout, d.Temperature, true
-}
-
-func patrolSnapshotPhysicalDiskState(disk models.PhysicalDisk, scopedSet map[string]bool) (resourceID, resourceName, health string, wearout, temperature int, ok bool) {
-	resourceID = strings.TrimSpace(disk.ID)
-	if resourceID == "" {
-		resourceID = strings.TrimSpace(disk.DevPath)
-	}
-	if !seedIsInScope(scopedSet, resourceID) {
-		return "", "", "", 0, 0, false
-	}
-	resourceName = strings.TrimSpace(disk.DevPath)
-	if resourceName == "" {
-		resourceName = strings.TrimSpace(disk.Model)
-	}
-	if resourceName == "" {
-		resourceName = resourceID
-	}
-	return resourceID, resourceName, strings.TrimSpace(disk.Health), disk.Wearout, disk.Temperature, true
 }
 
 func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, temperature int) []TriageFlag {

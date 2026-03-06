@@ -16,7 +16,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
@@ -1668,17 +1667,8 @@ func patrolAugmentActionabilityMetricsWithPhysicalDisks(dest map[string]map[stri
 	if dest == nil {
 		dest = make(map[string]map[string]float64)
 	}
-	if snap.unifiedResourceProvider != nil {
-		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
-			if disk.PhysicalDisk == nil {
-				continue
-			}
-			patrolRegisterResourceMetrics(dest, map[string]float64{}, disk.ID, disk.Name, disk.PhysicalDisk.DevPath, disk.PhysicalDisk.Model)
-		}
-		return dest
-	}
-	for _, disk := range snap.PhysicalDisks {
-		patrolRegisterResourceMetrics(dest, map[string]float64{}, disk.ID, disk.Model, disk.DevPath)
+	for _, disk := range patrolPhysicalDiskRows(snap, nil) {
+		patrolRegisterResourceMetrics(dest, map[string]float64{}, disk.id, disk.name, disk.devPath, disk.model)
 	}
 	return dest
 }
@@ -1748,34 +1738,17 @@ func patrolLookupPhysicalDiskVerificationWithVisitor(resourceID string, walk fun
 }
 
 func patrolVisitPhysicalDiskVerification(snap patrolRuntimeState, visit patrolPhysicalDiskVisitor) bool {
-	hasInventory := false
-	if snap.unifiedResourceProvider != nil {
-		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
-			if disk.PhysicalDisk == nil {
-				continue
-			}
-			hasInventory = true
-			if !visit([]string{disk.ID, disk.Name, disk.PhysicalDisk.DevPath, disk.PhysicalDisk.Model}, patrolPhysicalDiskVerification{
-				health:      strings.TrimSpace(disk.PhysicalDisk.Health),
-				wearout:     disk.PhysicalDisk.Wearout,
-				temperature: disk.PhysicalDisk.Temperature,
-			}) {
-				return true
-			}
-		}
-		return hasInventory
-	}
-	for _, disk := range snap.PhysicalDisks {
-		hasInventory = true
-		if !visit([]string{disk.ID, disk.Model, disk.DevPath}, patrolPhysicalDiskVerification{
-			health:      strings.TrimSpace(disk.Health),
-			wearout:     disk.Wearout,
-			temperature: disk.Temperature,
+	rows := patrolPhysicalDiskRows(snap, nil)
+	for _, disk := range rows {
+		if !visit([]string{disk.id, disk.name, disk.devPath, disk.model}, patrolPhysicalDiskVerification{
+			health:      strings.TrimSpace(disk.health),
+			wearout:     disk.wearout,
+			temperature: disk.temperature,
 		}) {
 			return true
 		}
 	}
-	return hasInventory
+	return len(rows) > 0
 }
 
 func patrolLookupGuestRuntimeDetailsWithVisitor(guestID string, walk func(patrolGuestRuntimeDetailsVisitor) bool) (patrolGuestRuntimeDetails, bool) {
