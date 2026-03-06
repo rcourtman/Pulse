@@ -149,6 +149,7 @@ func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:          true,
 		Tier:           TierPro,
+		PlanVersion:    "v5_lifetime_grandfathered",
 		Email:          "owner@example.com",
 		ExpiresAt:      &expiresAt,
 		IsLifetime:     false,
@@ -162,6 +163,9 @@ func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
 
 	if !payload.Valid {
 		t.Fatalf("expected valid=true, got %v", payload.Valid)
+	}
+	if payload.PlanVersion != "v5_lifetime_grandfathered" {
+		t.Fatalf("expected plan_version %q, got %q", "v5_lifetime_grandfathered", payload.PlanVersion)
 	}
 	if payload.LicensedEmail != "owner@example.com" {
 		t.Fatalf("expected licensed_email %q, got %q", "owner@example.com", payload.LicensedEmail)

@@ -3,6 +3,7 @@ import { apiClient, apiFetchJSON } from '@/utils/apiClient';
 export interface LicenseStatus {
   valid: boolean;
   tier: string;
+  plan_version?: string;
   email?: string;
   expires_at?: string | null;
   is_lifetime: boolean;

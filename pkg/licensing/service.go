@@ -594,6 +594,7 @@ func (s *Service) Status() *LicenseStatus {
 		// Hosted path: evaluator drives status when no JWT is present.
 		if s.evaluator != nil {
 			status.Tier = TierPro // hosted billing-backed tenants are effectively "pro" for display
+			status.PlanVersion = s.evaluator.PlanVersion()
 			subState := s.evaluator.SubscriptionState()
 			switch subState {
 			case SubStateActive, SubStateTrial, SubStateGrace:
@@ -632,6 +633,7 @@ func (s *Service) Status() *LicenseStatus {
 
 	status.Email = s.license.Claims.Email
 	status.Tier = s.license.Claims.Tier
+	status.PlanVersion = s.license.Claims.PlanVersion
 	status.IsLifetime = s.license.IsLifetime()
 	status.DaysRemaining = s.license.DaysRemaining()
 	status.Features = s.license.AllFeatures()

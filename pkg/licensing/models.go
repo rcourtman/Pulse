@@ -199,6 +199,7 @@ const (
 type LicenseStatus struct {
 	Valid          bool     `json:"valid"`
 	Tier           Tier     `json:"tier"`
+	PlanVersion    string   `json:"plan_version,omitempty"`
 	Email          string   `json:"email,omitempty"`
 	ExpiresAt      *string  `json:"expires_at,omitempty"`
 	IsLifetime     bool     `json:"is_lifetime"`

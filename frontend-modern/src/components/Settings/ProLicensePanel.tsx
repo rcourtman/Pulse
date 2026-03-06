@@ -50,7 +50,7 @@ const FEATURE_LABELS: Record<string, string> = {
 };
 
 const formatTitleCase = (value: string) =>
-  value.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
+  value.replace(/[_-]/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Not available';
@@ -173,6 +173,12 @@ export const ProLicensePanel: Component = () => {
     const current = entitlements();
     if (!current) return 'Unknown';
     return TIER_LABELS[current.tier] ?? formatTitleCase(current.tier);
+  });
+
+  const formattedPlanTerms = createMemo(() => {
+    const planVersion = entitlements()?.plan_version?.trim();
+    if (!planVersion) return null;
+    return formatTitleCase(planVersion);
   });
 
   const formattedFeatures = createMemo(() => {
@@ -420,6 +426,12 @@ export const ProLicensePanel: Component = () => {
                   {entitlements()?.licensed_email || 'Not available'}
                 </p>
               </div>
+              <Show when={formattedPlanTerms()}>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-muted">Plan Terms</p>
+                  <p class="text-sm font-medium text-base-content">{formattedPlanTerms()}</p>
+                </div>
+              </Show>
               <div>
                 <p class="text-xs uppercase tracking-wide text-muted">Expires</p>
                 <p class="text-sm font-medium text-base-content">{displayedExpiry()}</p>

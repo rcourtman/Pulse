@@ -22,6 +22,7 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID: "lic_test",
 		Tier:      "pro",
+		PlanKey:   "v5_lifetime_grandfathered",
 		State:     "active",
 		IssuedAt:  time.Now().Unix(),
 		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
@@ -75,6 +76,8 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 	}
 	if got := svc.Current(); got == nil || got.Claims.LicenseID != "lic_test" {
 		t.Fatalf("expected exchanged license to be active, got %#v", got)
+	} else if got.Claims.PlanVersion != "v5_lifetime_grandfathered" {
+		t.Fatalf("expected exchanged license plan_version to be preserved, got %q", got.Claims.PlanVersion)
 	}
 }
 

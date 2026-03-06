@@ -154,6 +154,7 @@ func BuildEntitlementPayloadWithUsage(
 	payload := EntitlementPayload{
 		Capabilities:      append([]string(nil), status.Features...),
 		Limits:            []LimitStatus{},
+		PlanVersion:       status.PlanVersion,
 		Tier:              string(status.Tier),
 		UpgradeReasons:    []UpgradeReason{},
 		Valid:             status.Valid,

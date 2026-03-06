@@ -209,6 +209,21 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 	}
 }
 
+func TestBuildEntitlementPayload_PreservesPlanVersionForSelfHostedJWT(t *testing.T) {
+	status := &license.LicenseStatus{
+		Valid:       true,
+		Tier:        license.TierPro,
+		PlanVersion: "v5_lifetime_grandfathered",
+		Features:    append([]string(nil), license.TierFeatures[license.TierPro]...),
+	}
+
+	payload := buildEntitlementPayload(status, string(license.SubStateActive))
+
+	if payload.PlanVersion != "v5_lifetime_grandfathered" {
+		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "v5_lifetime_grandfathered")
+	}
+}
+
 func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)

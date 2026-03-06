@@ -118,6 +118,28 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
   });
 
+  it('shows migrated plan terms when plan_version is present', async () => {
+    mockEntitlements = {
+      capabilities: ['ai_patrol'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'v5_lifetime_grandfathered',
+      licensed_email: 'owner@example.com',
+      is_lifetime: true,
+      trial_eligible: false,
+    };
+
+    render(() => <ProLicensePanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Plan Terms')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
+  });
+
   it('renders all capability strings as human-readable labels (no raw snake_case)', async () => {
     mockEntitlements = {
       capabilities: [

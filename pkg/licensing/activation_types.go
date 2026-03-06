@@ -53,14 +53,15 @@ type GrantClaims struct {
 // so that all feature gating (HasFeature, RequireFeature, AgentLimit) works unchanged.
 func grantClaimsToClaims(gc *GrantClaims) Claims {
 	c := Claims{
-		LicenseID: gc.LicenseID,
-		Email:     gc.Email,
-		Tier:      Tier(gc.Tier),
-		IssuedAt:  gc.IssuedAt,
-		ExpiresAt: gc.ExpiresAt,
-		Features:  gc.Features,
-		MaxAgents: gc.MaxAgents,
-		MaxGuests: gc.MaxGuests,
+		LicenseID:   gc.LicenseID,
+		Email:       gc.Email,
+		Tier:        Tier(gc.Tier),
+		IssuedAt:    gc.IssuedAt,
+		ExpiresAt:   gc.ExpiresAt,
+		Features:    gc.Features,
+		MaxAgents:   gc.MaxAgents,
+		MaxGuests:   gc.MaxGuests,
+		PlanVersion: gc.PlanKey,
 	}
 
 	// Map grant state to subscription state. Fail closed: unknown states
