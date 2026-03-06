@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
+import { shouldHideSettingsNavItem } from '../settingsTabs';
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/api',
@@ -44,6 +45,52 @@ const gatedTabs: Array<[SettingsTab, string]> = [
 ];
 
 describe('settingsNavigation integration scaffold', () => {
+  it('hides organization navigation items unless multi-tenant is enabled', () => {
+    expect(
+      shouldHideSettingsNavItem('organization-overview', {
+        hasFeature: hasFeatures([]),
+        licenseLoaded: () => false,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('organization-overview', {
+        hasFeature: hasFeatures(['multi_tenant']),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('hides billing admin outside hosted mode', () => {
+    expect(
+      shouldHideSettingsNavItem('organization-billing-admin', {
+        hasFeature: hasFeatures(['multi_tenant']),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('organization-billing-admin', {
+        hasFeature: hasFeatures(['multi_tenant']),
+        licenseLoaded: () => true,
+        hostedModeEnabled: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps paywalled non-organization tabs visible for upsell flows', () => {
+    expect(
+      shouldHideSettingsNavItem('system-relay', {
+        hasFeature: hasFeatures([]),
+        licenseLoaded: () => true,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(false);
+  });
+
   it('resolves every canonical tab path', () => {
     for (const [tab, path] of Object.entries(canonicalTabPaths) as Array<[SettingsTab, string]>) {
       expect(deriveTabFromPath(path)).toBe(tab);
@@ -112,6 +159,7 @@ describe('settingsNavigation integration scaffold', () => {
     const onMountBody = onMountMatch![1];
     expect(onMountBody).toContain('loadLicenseStatus');
     expect(onMountBody).not.toContain('runDiagnostics');
+    expect(settingsSource).toContain('shouldHideSettingsNavItem');
   });
 
   it('panel registry covers all dispatchable tabs', async () => {

@@ -21,7 +21,9 @@ import Container from 'lucide-solid/icons/container';
 import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
 import CreditCard from 'lucide-solid/icons/credit-card';
-import type { SettingsNavGroup } from './settingsTypes';
+import { isTabLocked } from './settingsFeatureGates';
+import type { SettingsNavGroup, SettingsNavItem } from './settingsTypes';
+import type { SettingsTab } from './settingsTypes';
 
 export const baseTabGroups: SettingsNavGroup[] = [
   {
@@ -43,6 +45,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: Building2,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenUnavailable: true,
       },
       {
         id: 'organization-access',
@@ -50,6 +53,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: Users,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenUnavailable: true,
       },
       {
         id: 'organization-sharing',
@@ -57,6 +61,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: Share2,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenUnavailable: true,
       },
       {
         id: 'organization-billing',
@@ -64,6 +69,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: CreditCard,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenUnavailable: true,
       },
       {
         id: 'organization-billing-admin',
@@ -71,6 +77,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: CreditCard,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenUnavailable: true,
         hostedOnly: true,
         adminOnly: true,
       },
@@ -175,3 +182,56 @@ export const baseTabGroups: SettingsNavGroup[] = [
     ],
   },
 ];
+
+export interface SettingsNavVisibilityContext {
+  hasFeature: (feature: string) => boolean;
+  licenseLoaded: () => boolean;
+  hostedModeEnabled?: boolean;
+  isPlatformAdmin?: boolean;
+}
+
+const navItemsByTab = new Map<SettingsTab, SettingsNavItem>(
+  baseTabGroups.flatMap((group) => group.items.map((item) => [item.id, item] as const)),
+);
+
+function hasRequiredFeatures(
+  item: SettingsNavItem | undefined,
+  hasFeature: (feature: string) => boolean,
+): boolean {
+  const requiredFeatures = item?.features ?? [];
+  return requiredFeatures.every((feature) => hasFeature(feature));
+}
+
+export function shouldHideSettingsNavItem(
+  tab: SettingsTab,
+  context: SettingsNavVisibilityContext,
+): boolean {
+  const item = navItemsByTab.get(tab);
+  if (!item) return false;
+
+  if (item.hostedOnly && !context.hostedModeEnabled) {
+    return true;
+  }
+
+  if (item.adminOnly && context.isPlatformAdmin === false) {
+    return true;
+  }
+
+  if (item.hideWhenUnavailable && !hasRequiredFeatures(item, context.hasFeature)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isSettingsNavItemLocked(
+  tab: SettingsTab,
+  context: SettingsNavVisibilityContext,
+): boolean {
+  const item = navItemsByTab.get(tab);
+  if (!item || item.hideWhenUnavailable) {
+    return false;
+  }
+
+  return isTabLocked(tab, context.hasFeature, context.licenseLoaded);
+}

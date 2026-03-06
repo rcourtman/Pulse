@@ -89,11 +89,20 @@ import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
+import { shouldHideSettingsNavItem } from './settingsTabs';
 import { useSettingsNavigation } from './useSettingsNavigation';
-import type { SettingsTab } from './settingsRouting';
+import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsRouting';
+import { tabFeatureRequirements } from './settingsFeatureGates';
 
 import { updateStore } from '@/stores/updates';
-import { getLimit, isPro, loadLicenseStatus } from '@/stores/license';
+import {
+  getLimit,
+  hasFeature,
+  isHostedModeEnabled,
+  isPro,
+  licenseLoaded,
+  loadLicenseStatus,
+} from '@/stores/license';
 import {
   nodeFromResource,
   pbsInstanceFromResource,
@@ -546,7 +555,7 @@ const Settings: Component<SettingsProps> = (props) => {
   let searchInputRef: HTMLInputElement | undefined;
 
   const tabGroups: {
-    id: 'platforms' | 'operations' | 'system' | 'security';
+    id: 'platforms' | 'organization' | 'operations' | 'system' | 'security';
     label: string;
     items: {
       id: SettingsTab;
@@ -707,13 +716,32 @@ const Settings: Component<SettingsProps> = (props) => {
     },
   ];
 
-  const flatTabs = tabGroups.flatMap((group) => group.items);
+  const visibleTabGroups = createMemo(() => {
+    const hostedModeEnabled = isHostedModeEnabled();
+
+    return tabGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) =>
+            !shouldHideSettingsNavItem(item.id, {
+              hasFeature,
+              licenseLoaded,
+              hostedModeEnabled,
+            }),
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  });
+
+  const flatTabs = createMemo(() => visibleTabGroups().flatMap((group) => group.items));
 
   const filteredTabGroups = createMemo(() => {
     const q = searchQuery().trim().toLowerCase();
-    if (!q) return tabGroups;
+    const groups = visibleTabGroups();
+    if (!q) return groups;
 
-    return tabGroups
+    return groups
       .map((group) => {
         const filteredItems = group.items.filter((item) => {
           const matchLabel = item.label.toLowerCase().includes(q);
@@ -724,6 +752,18 @@ const Settings: Component<SettingsProps> = (props) => {
         return { ...group, items: filteredItems };
       })
       .filter((group) => group.items.length > 0);
+  });
+
+  createEffect(() => {
+    const currentTab = activeTab();
+    const requiresFeatureResolution = Boolean(tabFeatureRequirements[currentTab]?.length);
+    if (requiresFeatureResolution && !licenseLoaded()) {
+      return;
+    }
+
+    if (!flatTabs().some((tab) => tab.id === currentTab)) {
+      setActiveTab(DEFAULT_SETTINGS_TAB);
+    }
   });
 
   createEffect(() => {
@@ -2155,7 +2195,7 @@ const Settings: Component<SettingsProps> = (props) => {
           <div
             class={`flex-1 overflow-hidden ${isMobileMenuOpen() ? 'hidden lg:block' : 'block animate-slideInRight lg:animate-none'}`}
           >
-            <Show when={flatTabs.length > 0}>
+            <Show when={flatTabs().length > 0}>
               <div class="lg:hidden sticky top-0 z-40 bg-surface/95 border-b border-border-subtle px-3 py-2.5 flex items-center shadow-none">
                 <button
                   type="button"
@@ -2174,7 +2214,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   Settings
                 </button>
                 <div class="ml-auto font-semibold text-base-content pr-3">
-                  <Show when={flatTabs.find((t) => t.id === activeTab())}>
+                  <Show when={flatTabs().find((t) => t.id === activeTab())}>
                     {(tab) => tab().label}
                   </Show>
                 </div>

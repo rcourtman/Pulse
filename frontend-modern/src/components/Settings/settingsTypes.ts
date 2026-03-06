@@ -12,6 +12,7 @@ export interface SettingsNavItem {
   iconProps?: { strokeWidth?: number };
   disabled?: boolean;
   locked?: boolean;
+  hideWhenUnavailable?: boolean;
   hostedOnly?: boolean;
   adminOnly?: boolean;
   badge?: string;
