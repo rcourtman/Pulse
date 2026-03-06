@@ -382,6 +382,9 @@ func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 		Nodes: []models.Node{
 			{ID: "node-1", Name: "node-1"},
 		},
+		VMs: []models.VM{
+			{ID: "vm-101", VMID: 101, Name: "vm-101"},
+		},
 		LastUpdate: now,
 		ConnectionHealth: map[string]bool{
 			"node-1": true,
@@ -395,8 +398,26 @@ func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 			{Alert: models.Alert{ID: "r1", ResourceID: "node-1", Message: "resolved scoped"}},
 			{Alert: models.Alert{ID: "r2", ResourceID: "node-2", Message: "resolved global"}},
 		},
+		PVEBackups: models.PVEBackups{
+			BackupTasks: []models.BackupTask{
+				{ID: "bt-101", VMID: 101},
+				{ID: "bt-202", VMID: 202},
+			},
+			StorageBackups: []models.StorageBackup{
+				{ID: "sb-101", VMID: 101},
+				{ID: "sb-202", VMID: 202},
+			},
+			GuestSnapshots: []models.GuestSnapshot{
+				{ID: "gs-101", VMID: 101},
+				{ID: "gs-202", VMID: 202},
+			},
+		},
+		PBSBackups: []models.PBSBackup{
+			{ID: "pb-101", VMID: "101"},
+			{ID: "pb-202", VMID: "202"},
+		},
 	}
-	scope := PatrolScope{ResourceTypes: []string{"node"}}
+	scope := PatrolScope{ResourceTypes: []string{"node", "vm"}}
 
 	filtered := ps.filterStateByScope(state, scope)
 
@@ -414,6 +435,18 @@ func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 	}
 	if len(filtered.RecentlyResolved) != 1 || filtered.RecentlyResolved[0].ResourceID != "node-1" {
 		t.Fatalf("expected only scoped resolved alerts, got %+v", filtered.RecentlyResolved)
+	}
+	if len(filtered.PVEBackups.BackupTasks) != 1 || filtered.PVEBackups.BackupTasks[0].VMID != 101 {
+		t.Fatalf("expected only scoped PVE backup tasks, got %+v", filtered.PVEBackups.BackupTasks)
+	}
+	if len(filtered.PVEBackups.StorageBackups) != 1 || filtered.PVEBackups.StorageBackups[0].VMID != 101 {
+		t.Fatalf("expected only scoped storage backups, got %+v", filtered.PVEBackups.StorageBackups)
+	}
+	if len(filtered.PVEBackups.GuestSnapshots) != 1 || filtered.PVEBackups.GuestSnapshots[0].VMID != 101 {
+		t.Fatalf("expected only scoped guest snapshots, got %+v", filtered.PVEBackups.GuestSnapshots)
+	}
+	if len(filtered.PBSBackups) != 1 || filtered.PBSBackups[0].VMID != "101" {
+		t.Fatalf("expected only scoped PBS backups, got %+v", filtered.PBSBackups)
 	}
 }
 

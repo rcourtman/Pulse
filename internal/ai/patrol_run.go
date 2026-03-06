@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1020,12 +1021,18 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		Stats:                   snap.Stats,
 	}
 	includedResourceIDs := make(map[string]bool)
+	includedGuestVMIDs := make(map[int]bool)
 	includeResourceID := func(ids ...string) {
 		for _, id := range ids {
 			if strings.TrimSpace(id) == "" {
 				continue
 			}
 			includedResourceIDs[id] = true
+		}
+	}
+	includeGuestVMID := func(vmid int) {
+		if vmid > 0 {
+			includedGuestVMIDs[vmid] = true
 		}
 	}
 
@@ -1040,12 +1047,14 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		if matchesType("vm") && matchesID(vm.ID, vm.Name) {
 			filtered.VMs = append(filtered.VMs, vm)
 			includeResourceID(vm.ID)
+			includeGuestVMID(vm.VMID)
 		}
 	}
 	for _, c := range snap.Containers {
 		if matchesType("system-container") && matchesID(c.ID, c.Name) {
 			filtered.Containers = append(filtered.Containers, c)
 			includeResourceID(c.ID)
+			includeGuestVMID(c.VMID)
 		}
 	}
 	for _, d := range snap.DockerHosts {
@@ -1193,6 +1202,33 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 		for resourceID, healthy := range snap.ConnectionHealth {
 			if includedResourceIDs[resourceID] {
 				filtered.ConnectionHealth[resourceID] = healthy
+			}
+		}
+	}
+	if len(includedGuestVMIDs) > 0 {
+		filtered.PVEBackups.BackupTasks = make([]models.BackupTask, 0, len(snap.PVEBackups.BackupTasks))
+		for _, backupTask := range snap.PVEBackups.BackupTasks {
+			if includedGuestVMIDs[backupTask.VMID] {
+				filtered.PVEBackups.BackupTasks = append(filtered.PVEBackups.BackupTasks, backupTask)
+			}
+		}
+		filtered.PVEBackups.StorageBackups = make([]models.StorageBackup, 0, len(snap.PVEBackups.StorageBackups))
+		for _, storageBackup := range snap.PVEBackups.StorageBackups {
+			if includedGuestVMIDs[storageBackup.VMID] {
+				filtered.PVEBackups.StorageBackups = append(filtered.PVEBackups.StorageBackups, storageBackup)
+			}
+		}
+		filtered.PVEBackups.GuestSnapshots = make([]models.GuestSnapshot, 0, len(snap.PVEBackups.GuestSnapshots))
+		for _, guestSnapshot := range snap.PVEBackups.GuestSnapshots {
+			if includedGuestVMIDs[guestSnapshot.VMID] {
+				filtered.PVEBackups.GuestSnapshots = append(filtered.PVEBackups.GuestSnapshots, guestSnapshot)
+			}
+		}
+		filtered.PBSBackups = make([]models.PBSBackup, 0, len(snap.PBSBackups))
+		for _, backup := range snap.PBSBackups {
+			vmid, err := strconv.Atoi(backup.VMID)
+			if err == nil && includedGuestVMIDs[vmid] {
+				filtered.PBSBackups = append(filtered.PBSBackups, backup)
 			}
 		}
 	}
