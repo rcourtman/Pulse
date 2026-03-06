@@ -22,6 +22,10 @@ import type {
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
@@ -328,13 +332,12 @@ export const pbsInstanceFromResource = (resource: Resource): PBSInstance | null 
   const cpu = resource.cpu?.current ?? asNumber(pbs?.cpuPercent) ?? 0;
   const memoryPercent =
     resource.memory?.current ?? (memoryTotal > 0 ? (memoryUsed / memoryTotal) * 100 : 0);
-  const hostName =
-    asString(pbs?.hostname) || resource.identity?.hostname || resource.name || resource.id;
+  const hostName = getPreferredResourceHostname(resource) || resource.id;
   const host = resource.platformId || `https://${hostName}:8007`;
 
   return {
     id: asString(pbs?.instanceId) || resource.id,
-    name: resource.displayName || resource.name || resource.id,
+    name: getPreferredResourceDisplayName(resource),
     host,
     guestURL:
       asString((resource as unknown as Record<string, unknown>).customURL) ||
@@ -486,8 +489,7 @@ export const pmgInstanceFromResource = (resource: Resource): PMGInstance | null 
   if (resource.type !== 'pmg') return null;
   const platform = resourcePlatformData(resource);
   const pmg = asRecord(platform?.pmg);
-  const hostName =
-    asString(pmg?.hostname) || resource.identity?.hostname || resource.name || resource.id;
+  const hostName = getPreferredResourceHostname(resource) || resource.id;
   const host = resource.platformId || `https://${hostName}:8006`;
   const lastSeen = toISOTime(undefined, resource.lastSeen);
   const mailStats =
@@ -501,7 +503,7 @@ export const pmgInstanceFromResource = (resource: Resource): PMGInstance | null 
 
   return {
     id: asString(pmg?.instanceId) || resource.id,
-    name: resource.displayName || resource.name || resource.id,
+    name: getPreferredResourceDisplayName(resource),
     host,
     guestURL:
       asString((resource as unknown as Record<string, unknown>).customURL) ||
