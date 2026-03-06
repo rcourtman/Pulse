@@ -12,6 +12,7 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { notificationStore } from '@/stores/notifications';
 import { formatRelativeTime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
@@ -552,7 +553,13 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
       </div>
 
       <Show when={props.showDeleteNodeModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
+        <Dialog
+          isOpen={true}
+          onClose={props.cancelDeleteNode}
+          panelClass="max-w-lg"
+          closeOnBackdrop={false}
+          ariaLabel={`Remove ${props.nodePendingDeleteLabel()}`}
+        >
           <Card padding="lg" class="w-full max-w-lg space-y-5">
             <SectionHeader title={`Remove ${props.nodePendingDeleteLabel()}`} size="md" class="mb-1" />
             <div class="space-y-3 text-sm text-gray-600">
@@ -614,7 +621,7 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
               </button>
             </div>
           </Card>
-        </div>
+        </Dialog>
       </Show>
 
       {renderNodeModal('pve')}

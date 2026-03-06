@@ -1,6 +1,7 @@
 import { Component, Show, For, createSignal, onMount, createMemo, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Dialog } from '@/components/shared/Dialog';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
@@ -567,8 +568,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   return (
     <div class="space-y-6">
       <Show when={showSamlUpsell()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-          <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
+        <Dialog
+          isOpen={true}
+          onClose={() => setShowSamlUpsell(false)}
+          panelClass="max-w-lg"
+          closeOnBackdrop={false}
+          ariaLabel="Add SAML provider"
+        >
+          <div class="w-full">
             <div class="flex items-center justify-between px-6 py-4 border-b border-border">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Add SAML Provider</h3>
@@ -618,7 +625,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </div>
             </div>
           </div>
-        </div>
+        </Dialog>
       </Show>
 
       {/* License banner */}
@@ -823,14 +830,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
       {/* Add/Edit Modal */}
       <Show when={showModal()}>
-        <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4"
-          onClick={() => setShowModal(false)}
+        <Dialog
+          isOpen={true}
+          onClose={() => setShowModal(false)}
+          panelClass="max-w-2xl"
+          ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${form.type.toUpperCase()} provider`}
         >
-          <div
-            class="bg-surface rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div class="w-full max-h-[90vh] overflow-y-auto">
             <div class="sticky top-0 bg-surface px-6 py-4 border-b border-border z-10">
               <h3 class="text-lg font-semibold text-base-content">
                 {editingProvider() ? 'Edit' : 'Add'} {form.type.toUpperCase()} Provider
@@ -1244,19 +1250,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </div>
             </form>
           </div>
-        </div>
+        </Dialog>
       </Show>
 
       {/* Delete confirmation modal */}
       <Show when={deleteConfirm()}>
-        <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4"
-          onClick={() => setDeleteConfirm(null)}
+        <Dialog
+          isOpen={true}
+          onClose={() => setDeleteConfirm(null)}
+          panelClass="max-w-md"
+          ariaLabel="Delete provider"
         >
-          <div
-            class="bg-surface rounded-md shadow-sm max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div class="w-full p-6">
             <h3 class="text-lg font-semibold text-base-content mb-2">Delete Provider?</h3>
             <p class="text-sm text-muted mb-4">
               This will permanently delete this SSO provider. Users will no longer be able to sign
@@ -1279,19 +1284,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       </Show>
 
       {/* Metadata Preview modal */}
       <Show when={showMetadataPreview() && metadataPreview()}>
-        <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4"
-          onClick={() => setShowMetadataPreview(false)}
+        <Dialog
+          isOpen={true}
+          onClose={() => setShowMetadataPreview(false)}
+          panelClass="max-w-4xl"
+          ariaLabel="IdP metadata preview"
         >
-          <div
-            class="bg-surface rounded-md shadow-sm max-w-4xl w-full max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div class="w-full max-h-[90vh] flex flex-col">
             {/* Modal header */}
             <div class="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
               <h3 class="text-lg font-semibold text-base-content">IdP Metadata Preview</h3>
@@ -1393,7 +1397,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       </Show>
     </div>
   );

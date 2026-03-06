@@ -4,6 +4,7 @@ import { RBACAPI } from '@/api/rbac';
 import type { Role, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { Dialog } from '@/components/shared/Dialog';
 import {
   getUpgradeActionUrlOrFallback,
   hasFeature,
@@ -326,8 +327,14 @@ export const RolesPanel: Component = () => {
 
       {/* Role Modal */}
       <Show when={showModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
-          <div class="w-full max-w-2xl bg-surface rounded-md shadow-sm border border-border mx-4 max-h-[92vh] overflow-hidden">
+        <Dialog
+          isOpen={true}
+          onClose={() => setShowModal(false)}
+          panelClass="max-w-2xl"
+          closeOnBackdrop={false}
+          ariaLabel={editingRole() ? 'Edit role' : 'New role'}
+        >
+          <div class="w-full max-h-[92vh] overflow-hidden">
             <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
               <h3 class="text-lg font-semibold text-base-content">
                 {editingRole() ? 'Edit Role' : 'New Role'}
@@ -448,7 +455,7 @@ export const RolesPanel: Component = () => {
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       </Show>
     </div>
   );

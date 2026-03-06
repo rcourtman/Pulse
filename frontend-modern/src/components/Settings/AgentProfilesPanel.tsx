@@ -11,6 +11,7 @@ import {
 import { AIAPI } from '@/api/ai';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { Dialog } from '@/components/shared/Dialog';
 import { formatRelativeTime } from '@/utils/format';
 import {
   getUpgradeActionUrlOrFallback,
@@ -604,8 +605,14 @@ export const AgentProfilesPanel: Component = () => {
 
           {/* Profile Modal */}
           <Show when={showModal()}>
-            <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div class="w-full max-w-lg bg-surface rounded-md shadow-sm border border-border mx-4">
+            <Dialog
+              isOpen={true}
+              onClose={() => setShowModal(false)}
+              panelClass="max-w-lg"
+              closeOnBackdrop={false}
+              ariaLabel={editingProfile() ? 'Edit profile' : 'New profile'}
+            >
+              <div class="w-full">
                 <div class="flex items-center justify-between px-6 py-4 border-b border-border">
                   <h3 class="text-lg font-semibold text-base-content">
                     {editingProfile() ? 'Edit Profile' : 'New Profile'}
@@ -818,7 +825,7 @@ export const AgentProfilesPanel: Component = () => {
                   </button>
                 </div>
               </div>
-            </div>
+            </Dialog>
           </Show>
 
           {/* Suggest Profile Modal */}

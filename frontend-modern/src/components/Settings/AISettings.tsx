@@ -2,6 +2,7 @@ import { Component, Show, createSignal, onMount, For, createMemo, createEffect }
 import { createStore } from 'solid-js/store';
 import { useNavigate } from '@solidjs/router';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Dialog } from '@/components/shared/Dialog';
 import { Toggle } from '@/components/shared/Toggle';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
@@ -2580,14 +2581,13 @@ export const AISettings: Component = () => {
 
       {/* Session Diff Modal */}
       <Show when={showDiffModal()}>
-        <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4"
-          onClick={() => setShowDiffModal(false)}
+        <Dialog
+          isOpen={true}
+          onClose={() => setShowDiffModal(false)}
+          panelClass="max-w-2xl"
+          ariaLabel="Session file changes"
         >
-          <div
-            class="bg-surface rounded-md shadow-sm max-w-2xl w-full overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div class="w-full overflow-hidden">
             <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-border">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Session File Changes</h3>
@@ -2627,13 +2627,22 @@ export const AISettings: Component = () => {
               </div>
             </div>
           </div>
-        </div>
+        </Dialog>
       </Show>
 
       {/* First-time Setup Modal */}
       <Show when={showSetupModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black">
-          <div class="bg-surface rounded-md shadow-sm max-w-md w-full mx-4 overflow-hidden">
+        <Dialog
+          isOpen={true}
+          onClose={() => {
+            setShowSetupModal(false);
+            setSetupApiKey('');
+          }}
+          panelClass="max-w-md"
+          closeOnBackdrop={false}
+          ariaLabel="Set up Pulse Assistant"
+        >
+          <div class="w-full overflow-hidden">
             {/* Header */}
             <div class="bg-blue-600 px-6 py-4">
               <h3 class="text-lg font-semibold text-white">Set Up Pulse Assistant</h3>
@@ -2890,7 +2899,7 @@ export const AISettings: Component = () => {
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       </Show>
     </>
   );
