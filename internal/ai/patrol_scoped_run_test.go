@@ -117,3 +117,21 @@ func containsScopeID(values []string, want string) bool {
 	}
 	return false
 }
+
+func TestPatrolLogResourceIDs_TruncatesLongLists(t *testing.T) {
+	ids := make([]string, scopedPatrolLogIDLimit+2)
+	for i := range ids {
+		ids[i] = "id-" + string(rune('a'+i))
+	}
+
+	logIDs := patrolLogResourceIDs(ids)
+	if len(logIDs) != scopedPatrolLogIDLimit+1 {
+		t.Fatalf("expected %d logged IDs including truncation marker, got %d", scopedPatrolLogIDLimit+1, len(logIDs))
+	}
+	if logIDs[scopedPatrolLogIDLimit] != "... +2 more" {
+		t.Fatalf("expected truncation marker, got %q", logIDs[scopedPatrolLogIDLimit])
+	}
+	if logIDs[0] != "id-a" || logIDs[scopedPatrolLogIDLimit-1] != "id-j" {
+		t.Fatalf("expected first %d IDs to be preserved, got %v", scopedPatrolLogIDLimit, logIDs)
+	}
+}

@@ -26,6 +26,7 @@ const (
 	scopedPatrolRetryBackoff1 = 5 * time.Second  // First retry backoff for dropped scoped patrols
 	scopedPatrolRetryBackoff2 = 15 * time.Second // Second retry backoff for dropped scoped patrols
 	scopedPatrolMaxRetries    = 2                // Maximum re-queue attempts for dropped scoped patrols
+	scopedPatrolLogIDLimit    = 10               // Maximum number of effective scope IDs to log inline
 )
 
 // Start begins the background patrol loop
@@ -706,6 +707,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 	// Filter state based on scope
 	filteredState := p.filterStateByScopeState(fullState, scope)
+	effectiveScopeIDs := patrolRuntimeSortedResourceIDs(filteredState)
 
 	// Count filtered resources (respect analysis configuration)
 	resourceCount := 0
@@ -738,11 +740,16 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		log.Debug().
 			Strs("requested_ids", scope.ResourceIDs).
 			Strs("requested_types", scope.ResourceTypes).
+			Int("effective_scope_count", len(effectiveScopeIDs)).
 			Msg("AI Patrol: No resources matched scope filter")
 		return
 	}
 
 	log.Debug().
+		Strs("requested_ids", scope.ResourceIDs).
+		Strs("requested_types", scope.ResourceTypes).
+		Strs("effective_scope_ids", patrolLogResourceIDs(effectiveScopeIDs)).
+		Int("effective_scope_count", len(effectiveScopeIDs)).
 		Int("resource_count", resourceCount).
 		Str("reason", string(scope.Reason)).
 		Msg("AI Patrol: Running scoped analysis")
@@ -887,7 +894,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		Type:                      "scoped",
 		TriggerReason:             string(scope.Reason),
 		ScopeResourceIDs:          scope.ResourceIDs,
-		EffectiveScopeResourceIDs: patrolRuntimeSortedResourceIDs(filteredState),
+		EffectiveScopeResourceIDs: effectiveScopeIDs,
 		ScopeResourceTypes:        scope.ResourceTypes,
 		ScopeContext:              scope.Context,
 		AlertID:                   scope.AlertID,
@@ -934,10 +941,24 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	p.runHistoryStore.Add(runRecord)
 
 	log.Info().
+		Strs("requested_ids", scope.ResourceIDs).
+		Strs("requested_types", scope.ResourceTypes).
+		Strs("effective_scope_ids", patrolLogResourceIDs(effectiveScopeIDs)).
+		Int("effective_scope_count", len(effectiveScopeIDs)).
 		Dur("duration", duration).
 		Int("resources", resourceCount).
 		Str("reason", string(scope.Reason)).
 		Msg("AI Patrol: Scoped patrol complete")
+}
+
+func patrolLogResourceIDs(ids []string) []string {
+	if len(ids) <= scopedPatrolLogIDLimit {
+		return ids
+	}
+
+	trimmed := append([]string(nil), ids[:scopedPatrolLogIDLimit]...)
+	trimmed = append(trimmed, fmt.Sprintf("... +%d more", len(ids)-scopedPatrolLogIDLimit))
+	return trimmed
 }
 
 // filterStateByScope filters a StateSnapshot to only include resources matching the scope.
