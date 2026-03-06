@@ -650,7 +650,7 @@ type chatServiceExecutorAccessor interface {
 // the PatrolService's existing FindingsStore and recordFinding method.
 type patrolFindingCreatorAdapter struct {
 	patrol          *PatrolService
-	snap            models.StateSnapshot
+	snap            patrolRuntimeState
 	findingsMu      sync.Mutex
 	findings        []*Finding
 	resolvedIDs     []string
@@ -659,6 +659,10 @@ type patrolFindingCreatorAdapter struct {
 }
 
 func newPatrolFindingCreatorAdapter(p *PatrolService, snap models.StateSnapshot) *patrolFindingCreatorAdapter {
+	return newPatrolFindingCreatorAdapterState(p, newPatrolRuntimeState(snap))
+}
+
+func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState) *patrolFindingCreatorAdapter {
 	return &patrolFindingCreatorAdapter{
 		patrol: p,
 		snap:   snap,
@@ -1341,22 +1345,22 @@ func (p *PatrolService) verifyFixDeterministically(
 	}
 
 	// State-only verifiers (no tools required).
-	fullState := p.stateProvider.ReadSnapshot()
+	fullState := p.currentPatrolRuntimeState()
 	switch key {
 	case "backup-stale":
-		ok, err := verifyBackupFresh(fullState, resourceID)
+		ok, err := verifyBackupFreshState(fullState, resourceID)
 		if err != nil {
 			return false, err
 		}
 		return ok, nil
 	case "cpu-high", "memory-high", "disk-high":
-		ok, err := verifyMetricRecovered(fullState, p.thresholds, key, resourceID, resourceType)
+		ok, err := verifyMetricRecoveredState(fullState, p.thresholds, key, resourceID, resourceType)
 		if err != nil {
 			return false, err
 		}
 		return ok, nil
 	case "guest-unreachable":
-		ok, err := p.verifyGuestReachability(ctx, fullState, resourceID)
+		ok, err := p.verifyGuestReachabilityState(ctx, fullState, resourceID)
 		if err != nil {
 			return false, err
 		}
@@ -1530,6 +1534,10 @@ func isValidJSON(s string) bool {
 }
 
 func verifyBackupFresh(snap models.StateSnapshot, guestID string) (bool, error) {
+	return verifyBackupFreshState(newPatrolRuntimeState(snap), guestID)
+}
+
+func verifyBackupFreshState(snap patrolRuntimeState, guestID string) (bool, error) {
 	vmID := strings.TrimSpace(guestID)
 	if vmID == "" {
 		return false, fmt.Errorf("%w: missing guest id", aicontracts.ErrVerificationUnknown)
@@ -1563,6 +1571,10 @@ func verifyBackupFresh(snap models.StateSnapshot, guestID string) (bool, error) 
 }
 
 func verifyMetricRecovered(snap models.StateSnapshot, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
+	return verifyMetricRecoveredState(newPatrolRuntimeState(snap), thresholds, key, resourceID, resourceType)
+}
+
+func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
 	rid := strings.TrimSpace(resourceID)
 	if rid == "" {
 		return false, fmt.Errorf("%w: missing resource id", aicontracts.ErrVerificationUnknown)
@@ -1628,6 +1640,10 @@ func verifyMetricRecovered(snap models.StateSnapshot, thresholds PatrolThreshold
 }
 
 func (p *PatrolService) verifyGuestReachability(ctx context.Context, snap models.StateSnapshot, guestID string) (bool, error) {
+	return p.verifyGuestReachabilityState(ctx, newPatrolRuntimeState(snap), guestID)
+}
+
+func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap patrolRuntimeState, guestID string) (bool, error) {
 	p.mu.RLock()
 	prober := p.guestProber
 	p.mu.RUnlock()

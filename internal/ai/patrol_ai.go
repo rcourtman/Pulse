@@ -202,6 +202,10 @@ func CleanThinkingTokens(content string) string {
 // The LLM investigates using MCP tools and reports findings via patrol_report_finding.
 // An optional scope focuses the patrol on specific resources.
 func (p *PatrolService) runAIAnalysis(ctx context.Context, snap models.StateSnapshot, scope *PatrolScope) (*AIAnalysisResult, error) {
+	return p.runAIAnalysisState(ctx, newPatrolRuntimeState(snap), scope)
+}
+
+func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRuntimeState, scope *PatrolScope) (*AIAnalysisResult, error) {
 	if p.aiService == nil {
 		return nil, fmt.Errorf("Pulse Patrol service not available")
 	}
@@ -218,7 +222,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, snap models.StateSnap
 	intelCancel()
 
 	// Phase 1: Deterministic triage
-	triageResult := p.RunDeterministicTriage(ctx, snap, scope, guestIntel)
+	triageResult := p.runDeterministicTriageState(ctx, snap, scope, guestIntel)
 	log.Info().
 		Int("flags", len(triageResult.Flags)).
 		Bool("quiet", triageResult.IsQuiet).
@@ -241,7 +245,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, snap models.StateSnap
 	}
 
 	// Phase 2: Build focused seed context from triage results
-	seedContext, seededFindingIDs := p.buildTriageSeedContext(triageResult, snap, scope, guestIntel)
+	seedContext, seededFindingIDs := p.buildTriageSeedContextState(triageResult, snap, scope, guestIntel)
 	if strings.TrimSpace(seedContext) == "" {
 		return nil, nil
 	}
@@ -269,7 +273,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, snap models.StateSnap
 	}
 
 	// Create finding creator adapter
-	adapter := newPatrolFindingCreatorAdapter(p, snap)
+	adapter := newPatrolFindingCreatorAdapterState(p, snap)
 
 	// Get chat service and set the finding creator on the executor
 	cs := p.aiService.GetChatService()
@@ -1163,6 +1167,15 @@ func (p *PatrolService) buildTriageSeedContext(
 	scope *PatrolScope,
 	guestIntel map[string]*GuestIntelligence,
 ) (string, []string) {
+	return p.buildTriageSeedContextState(triage, newPatrolRuntimeState(snap), scope, guestIntel)
+}
+
+func (p *PatrolService) buildTriageSeedContextState(
+	triage *TriageResult,
+	snap patrolRuntimeState,
+	scope *PatrolScope,
+	guestIntel map[string]*GuestIntelligence,
+) (string, []string) {
 	p.mu.RLock()
 	cfg := p.config
 	p.mu.RUnlock()
@@ -1175,22 +1188,22 @@ func (p *PatrolService) buildTriageSeedContext(
 		flaggedSet = map[string]bool{}
 	}
 
-	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, snap)
+	findingsCtx, seededFindingIDs := p.seedFindingsAndContextState(scope, snap)
 	now := time.Now()
 
 	sections := []seedSection{
 		// P0 — always include.
 		{priority: 0, name: "triage_briefing", content: FormatTriageBriefing(triage)},
 		{priority: 0, name: "findings", content: findingsCtx},
-		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(snap, flaggedSet, cfg, now)},
+		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, flaggedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope)},
 
 		// P1 — flagged resource details only.
 		{
 			priority: 1,
 			name:     "flagged_inventory",
-			content:  p.seedResourceInventory(snap, flaggedSet, cfg, now, false, guestIntel),
-			summary:  p.seedResourceInventorySummary(snap, flaggedSet, cfg, now, guestIntel),
+			content:  p.seedResourceInventoryState(snap, flaggedSet, cfg, now, false, guestIntel),
+			summary:  p.seedResourceInventorySummaryState(snap, flaggedSet, cfg, now, guestIntel),
 		},
 	}
 
@@ -1205,19 +1218,23 @@ func (p *PatrolService) buildTriageSeedContext(
 // connection health, and baselines/trends so the model can analyze without tool calls.
 // Tools remain available for targeted deep-dives.
 func (p *PatrolService) buildSeedContext(snap models.StateSnapshot, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
+	return p.buildSeedContextState(newPatrolRuntimeState(snap), scope, guestIntel)
+}
+
+func (p *PatrolService) buildSeedContextState(snap patrolRuntimeState, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
 	p.mu.RLock()
 	cfg := p.config
 	p.mu.RUnlock()
 
 	now := time.Now()
 	scopedSet := p.buildScopedSet(scope)
-	intel := p.seedPrecomputeIntelligence(snap, scopedSet, now)
-	findingsCtx, seededFindingIDs := p.seedFindingsAndContext(scope, snap)
+	intel := p.seedPrecomputeIntelligenceState(snap, scopedSet, now)
+	findingsCtx, seededFindingIDs := p.seedFindingsAndContextState(scope, snap)
 
 	sections := []seedSection{
 		// P0 — always include.
 		{priority: 0, name: "findings", content: findingsCtx},
-		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlerts(snap, scopedSet, cfg, now)},
+		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, scopedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope)},
 
 		// P1 — always include (typically compact).
@@ -1227,16 +1244,16 @@ func (p *PatrolService) buildSeedContext(snap models.StateSnapshot, scope *Patro
 		{
 			priority: 2,
 			name:     "resource_inventory",
-			content:  p.seedResourceInventory(snap, scopedSet, cfg, now, false, guestIntel),
-			summary:  p.seedResourceInventorySummary(snap, scopedSet, cfg, now, guestIntel),
+			content:  p.seedResourceInventoryState(snap, scopedSet, cfg, now, false, guestIntel),
+			summary:  p.seedResourceInventorySummaryState(snap, scopedSet, cfg, now, guestIntel),
 		},
 
 		// P3 — droppable if budget is tight.
 		{priority: 3, name: "intelligence", content: p.seedIntelligenceContext(intel, now)},
-		{priority: 3, name: "backup_analysis", content: p.seedBackupAnalysis(snap, now)},
+		{priority: 3, name: "backup_analysis", content: p.seedBackupAnalysisState(snap, now)},
 
 		// P4 — least critical, dropped first.
-		{priority: 4, name: "pmg_snapshot", content: p.seedPMGSnapshotString(snap, scopedSet, cfg, intel.isQuiet)},
+		{priority: 4, name: "pmg_snapshot", content: p.seedPMGSnapshotStringState(snap, scopedSet, cfg, intel.isQuiet)},
 	}
 
 	budget := p.calculateSeedBudget()
@@ -1444,6 +1461,10 @@ func (p *PatrolService) seedPreviousRun(now time.Time) string {
 // seedPrecomputeIntelligence pre-computes anomalies, forecasts, predictions, changes,
 // and correlations used by multiple seed context sections.
 func (p *PatrolService) seedPrecomputeIntelligence(snap models.StateSnapshot, scopedSet map[string]bool, now time.Time) seedIntelligence {
+	return p.seedPrecomputeIntelligenceState(newPatrolRuntimeState(snap), scopedSet, now)
+}
+
+func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState, scopedSet map[string]bool, now time.Time) seedIntelligence {
 	p.mu.RLock()
 	bs := p.baselineStore
 	mh := p.metricsHistory
@@ -1739,6 +1760,10 @@ func (p *PatrolService) seedPrecomputeIntelligence(snap models.StateSnapshot, sc
 
 // seedResourceInventory builds the node, guest, docker, storage, ceph, and PBS sections.
 func (p *PatrolService) seedResourceInventory(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
+	return p.seedResourceInventoryState(newPatrolRuntimeState(snap), scopedSet, cfg, now, isQuiet, guestIntel)
+}
+
+func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, isQuiet bool, guestIntel map[string]*GuestIntelligence) string {
 	var sb strings.Builder
 
 	// --- Node Metrics ---
@@ -2262,6 +2287,10 @@ func (p *PatrolService) seedResourceInventory(snap models.StateSnapshot, scopedS
 // seedResourceInventorySummary builds a compact, always-condensed inventory snapshot.
 // Unlike seedResourceInventory quiet mode, this summary condenses even when scoped.
 func (p *PatrolService) seedResourceInventorySummary(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, guestIntel map[string]*GuestIntelligence) string {
+	return p.seedResourceInventorySummaryState(newPatrolRuntimeState(snap), scopedSet, cfg, now, guestIntel)
+}
+
+func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time, guestIntel map[string]*GuestIntelligence) string {
 	_ = now
 
 	type compactResource struct {
@@ -2524,13 +2553,17 @@ func (p *PatrolService) seedResourceInventorySummary(snap models.StateSnapshot, 
 }
 
 func (p *PatrolService) seedPMGSnapshotString(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) string {
+	return p.seedPMGSnapshotStringState(newPatrolRuntimeState(snap), scopedSet, cfg, isQuiet)
+}
+
+func (p *PatrolService) seedPMGSnapshotStringState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) string {
 	var sb strings.Builder
-	p.seedPMGSnapshot(&sb, snap, scopedSet, cfg, isQuiet)
+	p.seedPMGSnapshotState(&sb, snap, scopedSet, cfg, isQuiet)
 	return sb.String()
 }
 
 // seedPMGSnapshot adds Proxmox Mail Gateway status to the seed context
-func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) {
+func (p *PatrolService) seedPMGSnapshotState(sb *strings.Builder, snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) {
 	if !cfg.AnalyzePMG {
 		return
 	}
@@ -2606,6 +2639,10 @@ func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, snap models.StateSn
 
 // seedBackupAnalysis builds the backup status section.
 func (p *PatrolService) seedBackupAnalysis(snap models.StateSnapshot, now time.Time) string {
+	return p.seedBackupAnalysisState(newPatrolRuntimeState(snap), now)
+}
+
+func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now time.Time) string {
 	type backupInfo struct {
 		lastBackup time.Time
 		source     string
@@ -2751,6 +2788,10 @@ func (p *PatrolService) seedBackupAnalysis(snap models.StateSnapshot, now time.T
 
 // seedHealthAndAlerts builds the disk health, alerts, connection health, kubernetes, and hosts sections.
 func (p *PatrolService) seedHealthAndAlerts(snap models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time) string {
+	return p.seedHealthAndAlertsState(newPatrolRuntimeState(snap), scopedSet, cfg, now)
+}
+
+func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig, now time.Time) string {
 	var sb strings.Builder
 
 	p.mu.RLock()
@@ -2989,6 +3030,10 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 
 // seedFindingsAndContext builds the thresholds, active findings, dismissed findings, and user notes sections.
 func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, snap models.StateSnapshot) (string, []string) {
+	return p.seedFindingsAndContextState(scope, newPatrolRuntimeState(snap))
+}
+
+func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap patrolRuntimeState) (string, []string) {
 	var sb strings.Builder
 
 	// --- Alert Thresholds ---

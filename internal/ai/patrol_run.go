@@ -266,7 +266,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		return
 	}
 
-	state := p.stateProvider.ReadSnapshot()
+	state := p.currentPatrolRuntimeState()
 
 	// Snapshot readState under lock to avoid races with SetReadState.
 	p.mu.RLock()
@@ -366,7 +366,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		// Ensure stream state is clean for this run before the first streamed event.
 		p.resetStreamForRun(runID)
 		// Run agentic AI analysis — the LLM uses tools to investigate and reports findings
-		aiResult, aiErr := p.runAIAnalysis(ctx, state, scope)
+		aiResult, aiErr := p.runAIAnalysisState(ctx, state, scope)
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
 			runStats.errors++
@@ -490,7 +490,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	// AI-based alert review: check active alerts against current state and auto-resolve fixed issues
 	// Pass llmAllowed so it knows whether AI calls are allowed.
-	alertsResolved := p.reviewAndResolveAlerts(ctx, state, llmAllowed)
+	alertsResolved := p.reviewAndResolveAlertsState(ctx, state, llmAllowed)
 	if alertsResolved > 0 {
 		log.Info().Int("alerts_resolved", alertsResolved).Msg("AI Patrol: Auto-resolved alerts where issues are fixed")
 	}
@@ -703,10 +703,10 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		return
 	}
 
-	fullState := p.stateProvider.ReadSnapshot()
+	fullState := p.currentPatrolRuntimeState()
 
 	// Filter state based on scope
-	filteredState := p.filterStateByScope(fullState, scope)
+	filteredState := p.filterStateByScopeState(fullState, scope)
 
 	// Count filtered resources (respect analysis configuration)
 	resourceCount := 0
@@ -814,7 +814,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			p.resetStreamForRun(runID)
 		}
 		// Run agentic AI analysis on filtered state with scope
-		aiResult, aiErr := p.runAIAnalysis(ctx, filteredState, &scope)
+		aiResult, aiErr := p.runAIAnalysisState(ctx, filteredState, &scope)
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
 			runStats.errors++
@@ -942,6 +942,10 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 // filterStateByScope filters a StateSnapshot to only include resources matching the scope.
 func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope PatrolScope) models.StateSnapshot {
+	return p.filterStateByScopeState(newPatrolRuntimeState(snap), scope).snapshot()
+}
+
+func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
 	// Build lookup sets for efficient matching
 	resourceIDSet := make(map[string]bool)
 	for _, id := range scope.ResourceIDs {
@@ -1011,7 +1015,7 @@ func (p *PatrolService) filterStateByScope(snap models.StateSnapshot, scope Patr
 		return false
 	}
 
-	filtered := models.StateSnapshot{
+	filtered := patrolRuntimeState{
 		LastUpdate:       snap.LastUpdate,
 		ConnectionHealth: snap.ConnectionHealth,
 		Stats:            snap.Stats,
@@ -1502,6 +1506,10 @@ func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
 // This is the core of autonomous alert management - the AI looks at each alert, checks current state,
 // and determines if the underlying issue has been resolved.
 func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models.StateSnapshot, llmAllowed bool) int {
+	return p.reviewAndResolveAlertsState(ctx, newPatrolRuntimeState(state), llmAllowed)
+}
+
+func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state patrolRuntimeState, llmAllowed bool) int {
 	p.mu.RLock()
 	resolver := p.alertResolver
 	aiService := p.aiService
@@ -1544,7 +1552,7 @@ func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models
 	}
 
 	for _, alert := range alertsToReview {
-		shouldResolve, reason := p.shouldResolveAlert(ctx, alert, state, aiSvc)
+		shouldResolve, reason := p.shouldResolveAlertState(ctx, alert, state, aiSvc)
 		if shouldResolve {
 			if resolver.ResolveAlert(alert.ID) {
 				resolvedCount++
@@ -1570,6 +1578,10 @@ func (p *PatrolService) reviewAndResolveAlerts(ctx context.Context, state models
 // shouldResolveAlert determines if an alert should be auto-resolved based on current state.
 // Returns (shouldResolve, reason)
 func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
+	return p.shouldResolveAlertState(ctx, alert, newPatrolRuntimeState(snap), aiService)
+}
+
+func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
 	// First, try smart heuristic checks based on alert type
 	switch alert.Type {
 	case "usage": // Storage usage alert
@@ -1593,7 +1605,7 @@ func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo,
 
 	case "cpu", "memory": // Resource utilization alerts
 		// Check if this is a node, VM, container, or docker container
-		currentValue := p.getCurrentMetricValue(alert, snap)
+		currentValue := p.getCurrentMetricValueState(alert, snap)
 		if currentValue >= 0 && currentValue < alert.Threshold*0.95 {
 			return true, fmt.Sprintf("%s dropped from %.1f%% to %.1f%% (threshold: %.1f%%)",
 				alert.Type, alert.Value, currentValue, alert.Threshold)
@@ -1601,14 +1613,14 @@ func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo,
 
 	case "offline", "stopped", "docker-offline":
 		// Check if the resource is now online
-		if p.isResourceOnline(alert, snap) {
+		if p.isResourceOnlineState(alert, snap) {
 			return true, "resource is now online/running"
 		}
 	}
 
 	// For complex cases or when heuristics don't apply, use AI judgment if available
 	if aiService != nil && aiService.IsEnabled() {
-		return p.askAIAboutAlert(ctx, alert, snap, aiService)
+		return p.askAIAboutAlertState(ctx, alert, snap, aiService)
 	}
 
 	return false, ""
@@ -1616,6 +1628,10 @@ func (p *PatrolService) shouldResolveAlert(ctx context.Context, alert AlertInfo,
 
 // getCurrentMetricValue gets the current value of the metric that triggered the alert
 func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.StateSnapshot) float64 {
+	return p.getCurrentMetricValueState(alert, newPatrolRuntimeState(snap))
+}
+
+func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolRuntimeState) float64 {
 	switch alert.ResourceType {
 	case "node":
 		for _, node := range snap.Nodes {
@@ -1681,6 +1697,10 @@ func (p *PatrolService) getCurrentMetricValue(alert AlertInfo, snap models.State
 
 // isResourceOnline checks if a resource that triggered an offline alert is now online
 func (p *PatrolService) isResourceOnline(alert AlertInfo, snap models.StateSnapshot) bool {
+	return p.isResourceOnlineState(alert, newPatrolRuntimeState(snap))
+}
+
+func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntimeState) bool {
 	switch alert.ResourceType {
 	case "node":
 		for _, node := range snap.Nodes {
@@ -1720,6 +1740,10 @@ func (p *PatrolService) isResourceOnline(alert AlertInfo, snap models.StateSnaps
 
 // askAIAboutAlert uses the AI to determine if an alert should be resolved
 func (p *PatrolService) askAIAboutAlert(ctx context.Context, alert AlertInfo, snap models.StateSnapshot, aiService *Service) (bool, string) {
+	return p.askAIAboutAlertState(ctx, alert, newPatrolRuntimeState(snap), aiService)
+}
+
+func (p *PatrolService) askAIAboutAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
 	// Build a focused prompt for the AI
 	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
 
@@ -1741,7 +1765,7 @@ Respond with ONLY one of:
 - KEEP: <brief reason>`,
 		alert.ID, alert.Type, alert.ResourceName, alert.ResourceType,
 		alert.Message, alert.Value, alert.Threshold, alert.Duration,
-		p.getResourceCurrentState(alert, snap))
+		p.getResourceCurrentStateState(alert, snap))
 
 	// Use a quick, low-cost AI call
 	response, err := aiService.QuickAnalysis(ctx, prompt)
@@ -1764,6 +1788,10 @@ Respond with ONLY one of:
 
 // getResourceCurrentState returns a description of the resource's current state
 func (p *PatrolService) getResourceCurrentState(alert AlertInfo, snap models.StateSnapshot) string {
+	return p.getResourceCurrentStateState(alert, newPatrolRuntimeState(snap))
+}
+
+func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patrolRuntimeState) string {
 	switch alert.ResourceType {
 	case "storage":
 		for _, storage := range snap.Storage {
