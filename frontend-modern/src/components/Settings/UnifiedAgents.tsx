@@ -1893,47 +1893,10 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
           </div>
         </Show>
 
-        <div class="flex flex-wrap items-end gap-3">
-          <div class="space-y-1">
-            <label for="agent-filter-capability" class="text-xs font-medium text-muted">
-              Capability
-            </label>
-            <select
-              id="agent-filter-capability"
-              value={filterCapability()}
-              onChange={(event) =>
-                setFilterCapability(event.currentTarget.value as 'all' | AgentCapability)
-              }
-              class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-            >
-              <option value="all">All capabilities</option>
-              <option value="agent">Agent</option>
-              <option value="docker">Docker</option>
-              <option value="kubernetes">Kubernetes</option>
-              <option value="proxmox">Proxmox</option>
-            </select>
-          </div>
-          <div class="space-y-1">
-            <label for="agent-filter-scope" class="text-xs font-medium text-muted">
-              Scope
-            </label>
-            <select
-              id="agent-filter-scope"
-              value={filterScope()}
-              onChange={(event) =>
-                setFilterScope(event.currentTarget.value as 'all' | Exclude<ScopeCategory, 'na'>)
-              }
-              class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-            >
-              <option value="all">All scopes</option>
-              <option value="default">Default</option>
-              <option value="profile">Profile assigned</option>
-              <option value="ai-managed">Patrol-managed</option>
-            </select>
-          </div>
-          <div class="min-w-[220px] flex-1 space-y-1">
+        <div class="space-y-3">
+          <div class="min-w-[220px] space-y-1">
             <label for="agent-filter-search" class="text-xs font-medium text-muted">
-              Search
+              Search connected infrastructure
             </label>
             <input
               id="agent-filter-search"
@@ -1941,17 +1904,60 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
               value={filterSearch()}
               onInput={(event) => setFilterSearch(event.currentTarget.value)}
               placeholder="Search name, hostname, or ID"
-              class="w-full min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+              class="w-full min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-3 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
             />
           </div>
-          <button
-            type="button"
-            onClick={resetFilters}
-            disabled={!hasFilters()}
-            class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters() ? ' text-base-content hover:bg-surface-alt' : ' text-slate-400 cursor-not-allowed '}`}
-          >
-            Clear
-          </button>
+
+          <div class="flex flex-wrap items-end gap-3">
+            <div class="pb-2 text-xs font-medium uppercase tracking-wide text-muted">
+              Refine results
+            </div>
+            <div class="space-y-1">
+              <label for="agent-filter-capability" class="text-xs font-medium text-muted">
+                Capability
+              </label>
+              <select
+                id="agent-filter-capability"
+                value={filterCapability()}
+                onChange={(event) =>
+                  setFilterCapability(event.currentTarget.value as 'all' | AgentCapability)
+                }
+                class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+              >
+                <option value="all">All capabilities</option>
+                <option value="agent">Agent</option>
+                <option value="docker">Docker</option>
+                <option value="kubernetes">Kubernetes</option>
+                <option value="proxmox">Proxmox</option>
+              </select>
+            </div>
+            <div class="space-y-1">
+              <label for="agent-filter-scope" class="text-xs font-medium text-muted">
+                Scope
+              </label>
+              <select
+                id="agent-filter-scope"
+                value={filterScope()}
+                onChange={(event) =>
+                  setFilterScope(event.currentTarget.value as 'all' | Exclude<ScopeCategory, 'na'>)
+                }
+                class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+              >
+                <option value="all">All scopes</option>
+                <option value="default">Default</option>
+                <option value="profile">Profile assigned</option>
+                <option value="ai-managed">Patrol-managed</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={!hasFilters()}
+              class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters() ? ' text-base-content hover:bg-surface-alt' : ' text-slate-400 cursor-not-allowed '}`}
+            >
+              Clear
+            </button>
+          </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
