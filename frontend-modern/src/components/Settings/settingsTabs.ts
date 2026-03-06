@@ -106,24 +106,28 @@ export const baseTabGroups: SettingsNavGroup[] = [
         label: 'General',
         icon: Sliders,
         iconProps: { strokeWidth: 2 },
+        saveBehavior: 'system',
       },
       {
         id: 'system-network',
         label: 'Network',
         icon: Network,
         iconProps: { strokeWidth: 2 },
+        saveBehavior: 'system',
       },
       {
         id: 'system-updates',
         label: 'Updates',
         icon: RefreshCw,
         iconProps: { strokeWidth: 2 },
+        saveBehavior: 'system',
       },
       {
         id: 'system-recovery',
         label: 'Recovery',
         icon: Clock,
         iconProps: { strokeWidth: 2 },
+        saveBehavior: 'system',
       },
       {
         id: 'system-ai',
@@ -211,6 +215,10 @@ const navItemsByTab = new Map<SettingsTab, SettingsNavItem>(
 
 export function getSettingsNavItem(tab: SettingsTab): SettingsNavItem | undefined {
   return navItemsByTab.get(tab);
+}
+
+export function getSettingsTabSaveBehavior(tab: SettingsTab): SettingsNavItem['saveBehavior'] {
+  return navItemsByTab.get(tab)?.saveBehavior;
 }
 
 function hasRequiredFeatures(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
-import { shouldHideSettingsNavItem } from '../settingsTabs';
+import { getSettingsTabSaveBehavior, shouldHideSettingsNavItem } from '../settingsTabs';
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/api',
@@ -121,6 +121,15 @@ describe('settingsNavigation integration scaffold', () => {
         settingsCapabilities: { relayRead: true, relayWrite: false },
       }),
     ).toBe(false);
+  });
+
+  it('derives global save behavior from tab metadata', () => {
+    expect(getSettingsTabSaveBehavior('system-general')).toBe('system');
+    expect(getSettingsTabSaveBehavior('system-network')).toBe('system');
+    expect(getSettingsTabSaveBehavior('system-updates')).toBe('system');
+    expect(getSettingsTabSaveBehavior('system-recovery')).toBe('system');
+    expect(getSettingsTabSaveBehavior('proxmox')).toBeUndefined();
+    expect(getSettingsTabSaveBehavior('security-auth')).toBeUndefined();
   });
 
   it('resolves every canonical tab path', () => {

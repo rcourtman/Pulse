@@ -56,7 +56,12 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
 import { createSettingsPanelRegistry } from './settingsPanelRegistry';
-import { baseTabGroups, getSettingsNavItem, shouldHideSettingsNavItem } from './settingsTabs';
+import {
+  baseTabGroups,
+  getSettingsNavItem,
+  getSettingsTabSaveBehavior,
+  shouldHideSettingsNavItem,
+} from './settingsTabs';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
 import { tabFeatureRequirements } from './settingsFeatureGates';
@@ -542,6 +547,7 @@ const Settings: Component<SettingsProps> = (props) => {
   });
 
   const settingsCapabilities = createMemo(() => securityStatus()?.settingsCapabilities ?? null);
+  const activeTabSaveBehavior = createMemo(() => getSettingsTabSaveBehavior(activeTab()));
   const agentsPanel: Component = () => (
     <>
       <UnifiedAgents />
@@ -1686,12 +1692,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const saveSettings = async () => {
     try {
-      if (
-        activeTab() === 'system-general' ||
-        activeTab() === 'system-network' ||
-        activeTab() === 'system-updates' ||
-        activeTab() === 'system-recovery'
-      ) {
+      if (activeTabSaveBehavior() === 'system') {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
           pvePollingInterval: pvePollingInterval(),
@@ -2070,12 +2071,7 @@ const Settings: Component<SettingsProps> = (props) => {
         {/* Save notification bar - only show when there are unsaved changes */}
         <Show
           when={
-            hasUnsavedChanges() &&
-            (activeTab() === 'proxmox' ||
-              activeTab() === 'system-general' ||
-              activeTab() === 'system-network' ||
-              activeTab() === 'system-updates' ||
-              activeTab() === 'system-recovery')
+            hasUnsavedChanges() && activeTabSaveBehavior() === 'system'
           }
         >
           <div class="bg-amber-50 dark:bg-amber-900 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
