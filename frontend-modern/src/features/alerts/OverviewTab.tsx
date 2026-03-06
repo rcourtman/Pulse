@@ -107,6 +107,10 @@ export function OverviewTab(props: {
     new Set(INCIDENT_EVENT_TYPES),
   );
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
+  // Tick every 60s so the "Last 24 Hours" count stays fresh as alerts age out
+  const [tick, setTick] = createSignal(Date.now());
+  const tickInterval = setInterval(() => setTick(Date.now()), 60_000);
+  onCleanup(() => clearInterval(tickInterval));
   const processingReleaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   const clearProcessingReleaseTimer = (alertId: string) => {
@@ -185,7 +189,10 @@ export function OverviewTab(props: {
     return {
       active: alerts.filter((a) => !a.acknowledged).length,
       acknowledged: alerts.filter((a) => a.acknowledged).length,
-      total24h: alerts.length, // In real app, would filter by time
+      total24h: alerts.filter((a) => {
+        const age = tick() - new Date(a.startTime).getTime();
+        return age >= 0 && age < 86_400_000;
+      }).length,
       overrides: props.overrides.length,
     };
   });
