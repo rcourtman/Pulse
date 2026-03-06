@@ -391,11 +391,24 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 		DetectedAt:   now.Add(-30 * time.Minute),
 		LastSeenAt:   now.Add(-30 * time.Minute),
 	}
+	dismissedOutOfScope := &Finding{
+		ID:           "find-dismissed-out-of-scope",
+		Severity:     FindingSeverityInfo,
+		Category:     FindingCategoryPerformance,
+		ResourceID:   "node-2",
+		ResourceName: "node-2",
+		Title:        "Ignore node-2",
+		Description:  "out of scope",
+		DetectedAt:   now.Add(-20 * time.Minute),
+		LastSeenAt:   now.Add(-20 * time.Minute),
+	}
 
 	ps.findings.Add(missing)
 	ps.findings.Add(active)
 	ps.findings.Add(dismissed)
+	ps.findings.Add(dismissedOutOfScope)
 	ps.findings.Dismiss(dismissed.ID, "expected_behavior", "known workload")
+	ps.findings.Dismiss(dismissedOutOfScope.ID, "expected_behavior", "different resource")
 
 	resolvedID := ""
 	ps.unifiedFindingResolver = func(findingID string) {
@@ -436,6 +449,9 @@ func TestSeedFindingsAndContext_ResolvesMissingAndAddsNotes(t *testing.T) {
 	}
 	if !strings.Contains(output, "User Feedback on Previous Findings") {
 		t.Fatalf("expected dismissed findings context, got: %s", output)
+	}
+	if strings.Contains(output, dismissedOutOfScope.Title) {
+		t.Fatalf("expected out-of-scope dismissed feedback to be omitted, got: %s", output)
 	}
 	if !strings.Contains(output, "# User Notes") || !strings.Contains(output, "Saved Knowledge") {
 		t.Fatalf("expected knowledge context, got: %s", output)

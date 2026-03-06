@@ -3105,7 +3105,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	}
 
 	// --- Dismissed/Snoozed Findings ---
-	feedbackContext := p.findings.GetDismissedForContext()
+	feedbackContext := p.findings.GetDismissedForContextForResources(scopedResources)
 	if feedbackContext != "" {
 		sb.WriteString("# User Feedback on Previous Findings\n")
 		sb.WriteString("Do NOT re-raise findings the user has dismissed or snoozed.\n\n")

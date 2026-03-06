@@ -458,6 +458,40 @@ func TestFindingsStore_GetDismissedForContext(t *testing.T) {
 	}
 }
 
+func TestFindingsStore_GetDismissedForContextForResources(t *testing.T) {
+	store := NewFindingsStore()
+
+	inScope := &Finding{
+		ID:              "f-in",
+		Title:           "High CPU on web-1",
+		ResourceID:      "web-1",
+		ResourceName:    "web-1",
+		Category:        FindingCategoryPerformance,
+		DismissedReason: "not_an_issue",
+		LastSeenAt:      time.Now(),
+	}
+	outOfScope := &Finding{
+		ID:              "f-out",
+		Title:           "Disk nearly full on db-1",
+		ResourceID:      "db-1",
+		ResourceName:    "db-1",
+		Category:        FindingCategoryCapacity,
+		DismissedReason: "expected_behavior",
+		LastSeenAt:      time.Now(),
+	}
+	store.Add(inScope)
+	store.Add(outOfScope)
+
+	ctx := store.GetDismissedForContextForResources(map[string]bool{"web-1": true})
+
+	if !strings.Contains(ctx, "High CPU on web-1") {
+		t.Fatal("expected scoped dismissed finding in context")
+	}
+	if strings.Contains(ctx, "Disk nearly full on db-1") {
+		t.Fatal("expected out-of-scope dismissed finding to be omitted")
+	}
+}
+
 func TestFindingsStore_Persistence(t *testing.T) {
 	store := NewFindingsStore()
 	mockP := &mockPersistence{}

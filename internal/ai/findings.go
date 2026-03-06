@@ -1427,10 +1427,32 @@ func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 func (s *FindingsStore) GetDismissedForContext() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.dismissedContextLocked(nil)
+}
 
+// GetDismissedForContextForResources returns dismissed/suppressed/snoozed findings
+// limited to the provided resource IDs/names. An empty filter behaves like the
+// unscoped context and returns all eligible findings.
+func (s *FindingsStore) GetDismissedForContextForResources(resourceFilter map[string]bool) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.dismissedContextLocked(resourceFilter)
+}
+
+func (s *FindingsStore) dismissedContextLocked(resourceFilter map[string]bool) string {
 	var suppressed, dismissed, snoozed []string
+	includeFinding := func(f *Finding) bool {
+		if len(resourceFilter) == 0 {
+			return true
+		}
+		return resourceFilter[f.ResourceID] || resourceFilter[f.ResourceName]
+	}
 
 	for _, f := range s.findings {
+		if !includeFinding(f) {
+			continue
+		}
+
 		// Collect suppressed findings
 		if f.Suppressed {
 			note := ""
