@@ -12,21 +12,12 @@ import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { logger } from '@/utils/logger';
-import { UnifiedAgents } from './UnifiedAgents';
-import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { SSOProvidersPanel } from './SSOProvidersPanel';
-import { AISettings } from './AISettings';
-import { AICostDashboard } from '@/components/AI/AICostDashboard';
-import { GeneralSettingsPanel } from './GeneralSettingsPanel';
-import { ProLicensePanel } from './ProLicensePanel';
-import { AgentLedgerPanel } from './AgentLedgerPanel';
 import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
 import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
-import { createSettingsPanelRegistry } from './settingsPanelRegistry';
 import {
   baseTabGroups,
   getSettingsNavItem,
@@ -35,6 +26,7 @@ import {
 } from './settingsTabs';
 import { useBackupTransferFlow } from './useBackupTransferFlow';
 import { useInfrastructureSettingsState } from './useInfrastructureSettingsState';
+import { useSettingsPanelRegistry } from './useSettingsPanelRegistry';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
@@ -373,261 +365,109 @@ const Settings: Component<SettingsProps> = (props) => {
       .filter((group) => group.items.length > 0);
   });
 
-  const settingsCapabilities = createMemo(() => securityStatus()?.settingsCapabilities ?? null);
   const activeTabSaveBehavior = createMemo(() => getSettingsTabSaveBehavior(activeTab()));
-  const agentsPanel: Component = () => (
-    <>
-      <UnifiedAgents />
-      <AgentProfilesPanel />
-    </>
-  );
-  const dockerPanel: Component = () => (
-    <Card padding="lg" class="mb-6">
-      <div class="space-y-4">
-        <div class="space-y-1">
-          <h3 class="text-base font-semibold text-base-content">Docker Settings</h3>
-          <p class="text-sm text-muted">Server-wide settings for Docker container management.</p>
-        </div>
-
-        <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-border bg-surface-hover">
-          <div class="flex-1 space-y-1">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-base-content">Hide Docker Update Buttons</span>
-              <Show when={disableDockerUpdateActionsLocked()}>
-                <span
-                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                  title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"
-                >
-                  <svg
-                    class="w-3 h-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
-                  ENV
-                </span>
-              </Show>
-            </div>
-            <p class="text-xs text-muted">
-              When enabled, the "Update" button on Docker containers will be hidden across all
-              views. Update detection will still work, allowing you to see which containers have
-              updates available. Use this in production environments where you prefer Pulse to be
-              read-only.
-            </p>
-            <p class="text-xs text-muted mt-1">
-              Can also be set via environment variable:{' '}
-              <code class="px-1 py-0.5 rounded bg-surface-hover text-base-content">
-                PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
-              </code>
-            </p>
-          </div>
-          <div class="flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
-              disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
-              class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                disableDockerUpdateActions() ? 'bg-blue-600' : 'bg-surface-alt'
-              } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
-              role="switch"
-              aria-checked={disableDockerUpdateActions()}
-              title={
-                disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined
-              }
-            >
-              <span
-                class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                  disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-  const systemAiPanel: Component = () => (
-    <div class="space-y-6">
-      <AISettings />
-      <AICostDashboard />
-    </div>
-  );
-  const systemGeneralPanel: Component = () => (
-    <>
-      <Show when={!initialLoadComplete()}>
-        <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
-          Loading configuration...
-        </div>
-      </Show>
-      <Show when={initialLoadComplete()}>
-        <GeneralSettingsPanel
-          darkMode={props.darkMode}
-          themePreference={props.themePreference}
-          setThemePreference={props.setThemePreference}
-          pvePollingInterval={pvePollingInterval}
-          setPVEPollingInterval={setPVEPollingInterval}
-          pvePollingSelection={pvePollingSelection}
-          setPVEPollingSelection={setPVEPollingSelection}
-          pvePollingCustomSeconds={pvePollingCustomSeconds}
-          setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
-          pvePollingEnvLocked={pvePollingEnvLocked}
-          setHasUnsavedChanges={setHasUnsavedChanges}
-          disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
-          disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
-          savingUpgradeMetrics={savingUpgradeMetrics}
-          handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
-          telemetryEnabled={telemetryEnabled}
-          telemetryEnabledLocked={telemetryEnabledLocked}
-          savingTelemetry={savingTelemetry}
-          handleTelemetryEnabledChange={handleTelemetryEnabledChange}
-        />
-      </Show>
-    </>
-  );
-  const systemProPanel: Component = () => (
-    <div class="space-y-6">
-      <ProLicensePanel />
-      <AgentLedgerPanel />
-    </div>
-  );
-  const securitySsoPanel: Component = () => (
-    <div class="space-y-6">
-      <SSOProvidersPanel
-        onConfigUpdated={loadSecurityStatus}
-        canManage={settingsCapabilities()?.singleSignOnWrite === true}
-      />
-    </div>
-  );
-  const settingsPanelRegistry = createMemo(() =>
-    createSettingsPanelRegistry({
-      agentsPanel,
-      dockerPanel,
-      systemGeneralPanel,
-      systemAiPanel,
-      systemProPanel,
-      securitySsoPanel,
-      getNetworkPanelProps: () => ({
-        discoveryEnabled,
-        discoveryMode,
-        discoverySubnetDraft,
-        discoverySubnetError,
-        savingDiscoverySettings,
-        envOverrides,
-        allowedOrigins,
-        setAllowedOrigins,
-        allowEmbedding,
-        setAllowEmbedding,
-        allowedEmbedOrigins,
-        setAllowedEmbedOrigins,
-        webhookAllowedPrivateCIDRs,
-        setWebhookAllowedPrivateCIDRs,
-        publicURL,
-        setPublicURL,
-        handleDiscoveryEnabledChange,
-        handleDiscoveryModeChange,
-        setDiscoveryMode,
-        setDiscoverySubnetDraft,
-        setDiscoverySubnetError,
-        setLastCustomSubnet,
-        commitDiscoverySubnet,
-        setHasUnsavedChanges,
-        parseSubnetList,
-        normalizeSubnetList,
-        isValidCIDR,
-        currentDraftSubnetValue,
-        discoverySubnetInputRef: (el: HTMLInputElement) => {
-          discoverySubnetInputRef = el;
-        },
-      }),
-      getUpdatesPanelProps: () => ({
-        versionInfo,
-        updateInfo,
-        checkingForUpdates,
-        updateChannel,
-        setUpdateChannel,
-        autoUpdateEnabled,
-        setAutoUpdateEnabled,
-        autoUpdateCheckInterval,
-        setAutoUpdateCheckInterval,
-        autoUpdateTime,
-        setAutoUpdateTime,
-        checkForUpdates,
-        setHasUnsavedChanges,
-        updatePlan,
-        onInstallUpdate: handleInstallUpdate,
-        isInstalling: isInstallingUpdate,
-      }),
-      getRecoveryPanelProps: () => ({
-        backupPollingEnabled,
-        setBackupPollingEnabled,
-        backupPollingInterval,
-        setBackupPollingInterval,
-        backupPollingCustomMinutes,
-        setBackupPollingCustomMinutes,
-        backupPollingUseCustom,
-        setBackupPollingUseCustom,
-        backupPollingEnvLocked,
-        backupIntervalSelectValue,
-        backupIntervalSummary,
-        setHasUnsavedChanges,
-        showExportDialog,
-        setShowExportDialog,
-        showImportDialog,
-        setShowImportDialog,
-        setUseCustomPassphrase,
-        securityStatus,
-      }),
-      getOrganizationOverviewPanelProps: () => ({}),
-      getOrganizationAccessPanelProps: () => ({}),
-      getOrganizationSharingPanelProps: () => ({}),
-      getOrganizationBillingPanelProps: () => ({
-        nodeUsage: organizationAgentUsage(),
-        guestUsage: organizationGuestUsage(),
-      }),
-      getApiAccessPanelProps: () => ({
-        currentTokenHint: securityStatus()?.apiTokenHint,
-        onTokensChanged: () => {
-          void loadSecurityStatus();
-        },
-        refreshing: securityStatusLoading(),
-        canManage: settingsCapabilities()?.apiAccessWrite === true,
-      }),
-      getSecurityOverviewPanelProps: () => ({
-        securityStatus,
-        securityStatusLoading,
-      }),
-      getSecurityAuthPanelProps: () => ({
-        securityStatus,
-        securityStatusLoading,
-        versionInfo,
-        showQuickSecuritySetup,
-        setShowQuickSecuritySetup,
-        showQuickSecurityWizard,
-        setShowQuickSecurityWizard,
-        showPasswordModal,
-        setShowPasswordModal,
-        hideLocalLogin,
-        hideLocalLoginLocked,
-        savingHideLocalLogin,
-        handleHideLocalLoginChange,
-        loadSecurityStatus,
-        canManage: settingsCapabilities()?.authenticationWrite === true,
-      }),
-      getRelayPanelProps: () => ({
-        canManage: settingsCapabilities()?.relayWrite === true,
-      }),
-      getAuditWebhookPanelProps: () => ({
-        canManage: settingsCapabilities()?.auditWebhooksWrite === true,
-      }),
-    }),
-  );
+  const settingsPanelRegistry = useSettingsPanelRegistry({
+    darkMode: props.darkMode,
+    themePreference: props.themePreference,
+    setThemePreference: props.setThemePreference,
+    initialLoadComplete,
+    pvePollingInterval,
+    setPVEPollingInterval,
+    pvePollingSelection,
+    setPVEPollingSelection,
+    pvePollingCustomSeconds,
+    setPVEPollingCustomSeconds,
+    pvePollingEnvLocked,
+    setHasUnsavedChanges,
+    disableLocalUpgradeMetrics,
+    disableLocalUpgradeMetricsLocked,
+    savingUpgradeMetrics,
+    handleDisableLocalUpgradeMetricsChange,
+    telemetryEnabled,
+    telemetryEnabledLocked,
+    savingTelemetry,
+    handleTelemetryEnabledChange,
+    disableDockerUpdateActions,
+    disableDockerUpdateActionsLocked,
+    savingDockerUpdateActions,
+    handleDisableDockerUpdateActionsChange,
+    discoveryEnabled,
+    discoveryMode,
+    discoverySubnetDraft,
+    discoverySubnetError,
+    savingDiscoverySettings,
+    envOverrides,
+    allowedOrigins,
+    setAllowedOrigins,
+    allowEmbedding,
+    setAllowEmbedding,
+    allowedEmbedOrigins,
+    setAllowedEmbedOrigins,
+    webhookAllowedPrivateCIDRs,
+    setWebhookAllowedPrivateCIDRs,
+    publicURL,
+    setPublicURL,
+    handleDiscoveryEnabledChange,
+    handleDiscoveryModeChange,
+    setDiscoveryMode,
+    setDiscoverySubnetDraft,
+    setDiscoverySubnetError,
+    setLastCustomSubnet,
+    commitDiscoverySubnet,
+    parseSubnetList,
+    normalizeSubnetList,
+    isValidCIDR,
+    currentDraftSubnetValue,
+    assignDiscoverySubnetInputRef: (el) => {
+      discoverySubnetInputRef = el;
+    },
+    versionInfo,
+    updateInfo,
+    checkingForUpdates,
+    updateChannel,
+    setUpdateChannel,
+    autoUpdateEnabled,
+    setAutoUpdateEnabled,
+    autoUpdateCheckInterval,
+    setAutoUpdateCheckInterval,
+    autoUpdateTime,
+    setAutoUpdateTime,
+    checkForUpdates,
+    updatePlan,
+    handleInstallUpdate,
+    isInstallingUpdate,
+    backupPollingEnabled,
+    setBackupPollingEnabled,
+    backupPollingInterval,
+    setBackupPollingInterval,
+    backupPollingCustomMinutes,
+    setBackupPollingCustomMinutes,
+    backupPollingUseCustom,
+    setBackupPollingUseCustom,
+    backupPollingEnvLocked,
+    backupIntervalSelectValue,
+    backupIntervalSummary,
+    showExportDialog,
+    setShowExportDialog,
+    showImportDialog,
+    setShowImportDialog,
+    setUseCustomPassphrase,
+    securityStatus,
+    securityStatusLoading,
+    organizationAgentUsage,
+    organizationGuestUsage,
+    loadSecurityStatus,
+    showQuickSecuritySetup,
+    setShowQuickSecuritySetup,
+    showQuickSecurityWizard,
+    setShowQuickSecurityWizard,
+    showPasswordModal,
+    setShowPasswordModal,
+    hideLocalLogin,
+    hideLocalLoginLocked,
+    savingHideLocalLogin,
+    handleHideLocalLoginChange,
+  });
   const activeSettingsPanelEntry = createMemo(() => {
     const currentTab = activeTab();
     if (currentTab === 'proxmox') {
