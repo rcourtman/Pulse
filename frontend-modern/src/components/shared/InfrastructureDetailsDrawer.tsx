@@ -17,7 +17,7 @@ interface InfrastructureDetailsDrawerProps {
 
 export const InfrastructureDetailsDrawer: Component<InfrastructureDetailsDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
-  const metadataId = () => props.agent?.id || props.node.id || props.node.name;
+  const metadataId = () => props.agent?.id || props.node.linkedAgentId || props.node.id || props.node.name;
   const discoveryHostname = () => props.agent?.hostname || props.node.name;
 
   const switchTab = (tab: 'overview' | 'discovery') => {
