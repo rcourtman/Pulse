@@ -94,6 +94,22 @@ export const getActionableKubernetesClusterIdFromResource = (
   );
 };
 
+export const getMetricsChartKeyCandidatesFromResource = (resource: Resource): string[] => {
+  const candidates = [
+    asTrimmedString(resource.metricsTarget?.resourceId),
+    getActionableDockerRuntimeIdFromResource(resource),
+    getActionableKubernetesClusterIdFromResource(resource),
+    getActionableAgentIdFromResource(resource),
+    asTrimmedString(resource.discoveryTarget?.resourceId),
+    asTrimmedString(resource.discoveryTarget?.agentId),
+    asTrimmedString(resource.id),
+    asTrimmedString(resource.name),
+    asTrimmedString(resource.platformId),
+  ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(candidates));
+};
+
 export const hasAgentFacet = (resource: Resource): boolean =>
   Boolean(
     resource.agent ||

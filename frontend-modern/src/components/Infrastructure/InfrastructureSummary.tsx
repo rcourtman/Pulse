@@ -12,9 +12,8 @@ import {
   readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
 import {
-  getActionableAgentIdFromResource,
-  getActionableDockerRuntimeIdFromResource,
   getExplicitAgentIdFromResource,
+  getMetricsChartKeyCandidatesFromResource,
   getPlatformAgentRecord,
   getPlatformDataRecord,
   hasAgentFacet,
@@ -45,32 +44,9 @@ const asTrimmedString = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const getAgentIdFromResource = (resource: Resource): string | null => {
-  return (
-    getActionableAgentIdFromResource(resource) ||
-    asTrimmedString(resource.discoveryTarget?.resourceId) ||
-    asTrimmedString(resource.discoveryTarget?.agentId)
-  );
-};
-
 const getLinkedNodeIdFromResource = (resource: Resource): string | null =>
   asTrimmedString(getPlatformDataRecord(resource)?.linkedNodeId) ||
   asTrimmedString(getPlatformAgentRecord(resource)?.linkedNodeId);
-
-const getChartKeyCandidates = (resource: Resource): string[] => {
-  const candidates = [
-    asTrimmedString(resource.metricsTarget?.resourceId),
-    getActionableDockerRuntimeIdFromResource(resource),
-    getAgentIdFromResource(resource),
-    asTrimmedString(resource.discoveryTarget?.resourceId),
-    asTrimmedString(resource.discoveryTarget?.agentId),
-    asTrimmedString(resource.id),
-    asTrimmedString(resource.name),
-    asTrimmedString(resource.platformId),
-  ].filter((value): value is string => Boolean(value));
-
-  return Array.from(new Set(candidates));
-};
 
 // Format bytes/sec to human-readable rate
 const formatRate = (bytesPerSec: number): string => {
@@ -142,6 +118,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   const [chartMap, setChartMap] = createSignal<Map<string, ChartData>>(new Map());
   const [chartRange, setChartRange] = createSignal<TimeRange | null>(null);
   const [loadedRange, setLoadedRange] = createSignal<TimeRange | null>(null);
+  const [oldestDataTimestamp, setOldestDataTimestamp] = createSignal<number | null>(null);
   const [fetchFailed, setFetchFailed] = createSignal(false);
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
@@ -238,6 +215,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         setChartMap(map);
         setChartRange(requestedRange);
       }
+      setOldestDataTimestamp(fetched.oldestDataTimestamp);
       setFetchFailed(false);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -251,6 +229,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
           if (cached) {
             setChartMap(cached.map);
             setChartRange(requestedRange);
+            setOldestDataTimestamp(cached.oldestDataTimestamp);
           }
         }
       }
@@ -284,6 +263,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
       setChartMap(new Map());
       setChartRange(null);
       setLoadedRange(null);
+      setOldestDataTimestamp(null);
       return;
     }
 
@@ -303,10 +283,13 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         setChartMap(memCached);
         setChartRange(nextRange);
         setLoadedRange(nextRange);
+        const cached = readInfrastructureSummaryCache(nextRange);
+        setOldestDataTimestamp(cached?.oldestDataTimestamp ?? null);
       } else {
         setChartMap(new Map());
         setChartRange(null);
         setLoadedRange(null);
+        setOldestDataTimestamp(null);
       }
       setFetchFailed(false);
       void fetchCharts({ prioritize: true });
@@ -331,7 +314,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     if (map.size === 0) return undefined;
 
     // 1. Agent ID match from unified platform data (most reliable for agent resources).
-    for (const key of getChartKeyCandidates(resource)) {
+    for (const key of getMetricsChartKeyCandidatesFromResource(resource)) {
       const match = map.get(key);
       if (match) return match;
     }
@@ -418,7 +401,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
       );
 
       if (linkedMatch || hostnameMatch) {
-        for (const key of getChartKeyCandidates(agentResource)) {
+        for (const key of getMetricsChartKeyCandidatesFromResource(agentResource)) {
           const agentData = map.get(key);
           if (agentData) return agentData;
         }
@@ -477,6 +460,26 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const match = resourceSeries().find((s) => s.id === focused);
     return match?.name ?? null;
   });
+
+  const singleDisplayedOnlineResource = createMemo(() => {
+    if (displaySeries().length !== 1 || props.resources.length !== 1) return null;
+    const [resource] = props.resources;
+    if (!resource) return null;
+    return resource.status?.toLowerCase() === 'online' ? resource : null;
+  });
+
+  const isAwaitingFirstSample = createMemo(() => {
+    const resource = singleDisplayedOnlineResource();
+    if (!resource || !isCurrentRangeLoaded() || fetchFailed()) return false;
+
+    const oldest = oldestDataTimestamp();
+    if (oldest === null) return true;
+    return resource.lastSeen >= oldest;
+  });
+
+  const emptyHistoryLabel = createMemo(() =>
+    isAwaitingFirstSample() ? 'Waiting for first sample' : 'No history yet',
+  );
 
   const hasData = (metric: 'cpu' | 'memory' | 'disk') =>
     displaySeries().some((s) => s[metric].length >= 1);
@@ -621,7 +624,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   fallback={
                     isCurrentRangeLoaded() ? (
                       <div class="text-sm text-muted py-2">
-                        {fetchFailed() ? 'Trend data unavailable' : 'No history yet'}
+                        {fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()}
                       </div>
                     ) : (
                       <SparklineSkeleton />
@@ -660,7 +663,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   fallback={
                     isCurrentRangeLoaded() ? (
                       <div class="text-sm text-muted py-2">
-                        {fetchFailed() ? 'Trend data unavailable' : 'No history yet'}
+                        {fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()}
                       </div>
                     ) : (
                       <SparklineSkeleton />
@@ -704,7 +707,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                   fallback={
                     isCurrentRangeLoaded() ? (
                       <div class="text-sm text-muted py-2">
-                        {fetchFailed() ? 'Trend data unavailable' : 'No history yet'}
+                        {fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()}
                       </div>
                     ) : (
                       <SparklineSkeleton />
@@ -792,7 +795,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                     when={hasNetData()}
                     fallback={
                       isCurrentRangeLoaded() ? (
-                        <div class="text-sm text-muted py-2">No history yet</div>
+                        <div class="text-sm text-muted py-2">{emptyHistoryLabel()}</div>
                       ) : (
                         <SparklineSkeleton />
                       )

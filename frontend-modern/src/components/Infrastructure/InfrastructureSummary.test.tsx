@@ -284,7 +284,30 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
-      expect(container.textContent).toContain('No history yet');
+      expect(container.textContent).toContain('Waiting for first sample');
+    });
+  });
+
+  it('shows waiting state for a newly connected online host before the first sample lands', async () => {
+    mockGetCharts.mockReset();
+    mockGetCharts.mockResolvedValueOnce({
+      nodeData: {},
+      dockerHostData: {},
+      agentData: {},
+      timestamp: Date.now(),
+      stats: {
+        oldestDataTimestamp: null,
+      },
+    });
+
+    const { container } = render(() => <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />);
+
+    await waitFor(() => {
+      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Waiting for first sample');
     });
   });
 

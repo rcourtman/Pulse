@@ -5,6 +5,7 @@ import {
   getActionableDockerRuntimeIdFromResource,
   getActionableKubernetesClusterIdFromResource,
   getExplicitAgentIdFromResource,
+  getMetricsChartKeyCandidatesFromResource,
   hasAgentFacet,
   isAgentFacetInfrastructureResource,
   isAgentProfileAssignableResource,
@@ -100,6 +101,24 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('cluster-1');
+  });
+
+  it('builds canonical metrics chart key candidates for host-family resources', () => {
+    expect(
+      getMetricsChartKeyCandidatesFromResource(
+        makeResource({
+          id: 'hash-resource',
+          type: 'docker-host',
+          name: 'tower',
+          platformId: 'tower',
+          metricsTarget: { resourceType: 'docker-host', resourceId: 'docker-host-1' },
+          platformData: {
+            docker: { hostSourceId: 'docker-host-1' },
+            agent: { agentId: 'agent-host-1' },
+          },
+        }),
+      ),
+    ).toEqual(['docker-host-1', 'agent-host-1', 'hash-resource', 'tower']);
   });
 
   it('detects agent facets without relying on node-only typing', () => {
