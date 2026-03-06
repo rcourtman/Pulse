@@ -736,6 +736,12 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		http.Error(w, "failed to generate activation token", http.StatusInternalServerError)
 		return
 	}
+	token, _, err = h.verificationStore.StoreOrLoadActivationToken(requestID, token, now)
+	if err != nil {
+		log.Error().Err(err).Str("request_id", requestID).Msg("failed to persist trial activation token")
+		http.Error(w, "failed to persist activation token", http.StatusInternalServerError)
+		return
+	}
 
 	finalReturnURL, err := appendQueryParams(returnURL, map[string]string{
 		"token": token,

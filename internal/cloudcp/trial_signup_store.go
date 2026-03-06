@@ -79,6 +79,8 @@ type TrialSignupRecord struct {
 	CheckoutStartedAt     time.Time
 	CheckoutCompletedAt   time.Time
 	CheckoutSessionID     string
+	ActivationIssuedAt    time.Time
+	ActivationToken       string
 }
 
 type TrialSignupStore struct {
@@ -150,7 +152,9 @@ func (s *TrialSignupStore) initSchema() error {
 		verified_at INTEGER,
 		checkout_started_at INTEGER,
 		checkout_completed_at INTEGER,
-		checkout_session_id TEXT NOT NULL DEFAULT ''
+		checkout_session_id TEXT NOT NULL DEFAULT '',
+		activation_issued_at INTEGER,
+		activation_token TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS idx_trial_signup_email ON trial_signup_requests(email);
 	CREATE INDEX IF NOT EXISTS idx_trial_signup_verify_expiry ON trial_signup_requests(verification_expires_at);
@@ -206,6 +210,24 @@ func (s *TrialSignupStore) initSchema() error {
 	if !hasCheckoutSessionID {
 		if _, err := s.db.Exec(`ALTER TABLE trial_signup_requests ADD COLUMN checkout_session_id TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("migrate trial_signup_requests: add checkout_session_id: %w", err)
+		}
+	}
+	hasActivationIssuedAt, err := s.tableHasColumn("trial_signup_requests", "activation_issued_at")
+	if err != nil {
+		return fmt.Errorf("check trial_signup_requests schema for activation_issued_at: %w", err)
+	}
+	if !hasActivationIssuedAt {
+		if _, err := s.db.Exec(`ALTER TABLE trial_signup_requests ADD COLUMN activation_issued_at INTEGER`); err != nil {
+			return fmt.Errorf("migrate trial_signup_requests: add activation_issued_at: %w", err)
+		}
+	}
+	hasActivationToken, err := s.tableHasColumn("trial_signup_requests", "activation_token")
+	if err != nil {
+		return fmt.Errorf("check trial_signup_requests schema for activation_token: %w", err)
+	}
+	if !hasActivationToken {
+		if _, err := s.db.Exec(`ALTER TABLE trial_signup_requests ADD COLUMN activation_token TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrate trial_signup_requests: add activation_token: %w", err)
 		}
 	}
 	return nil
@@ -267,8 +289,8 @@ func (s *TrialSignupStore) CreateVerification(rec *TrialSignupRecord) (string, e
 	_, err = db.Exec(
 		`INSERT INTO trial_signup_requests (
 			request_id, verification_token_hash, org_id, return_url, name, email, company,
-			verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, '')`,
+			verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id, activation_issued_at, activation_token
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, '', NULL, '')`,
 		requestID,
 		tokenHash,
 		rec.OrgID,
@@ -318,7 +340,7 @@ func (s *TrialSignupStore) ConsumeVerification(rawToken string, now time.Time) (
 	}()
 
 	rec, err := loadTrialSignupRecord(tx.QueryRow(
-		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id
+		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id, activation_issued_at, activation_token
 		 FROM trial_signup_requests
 		 WHERE verification_token_hash = ?`,
 		tokenHash,
@@ -378,7 +400,7 @@ func (s *TrialSignupStore) GetRecord(id string) (*TrialSignupRecord, error) {
 	defer s.mu.Unlock()
 
 	rec, err := loadTrialSignupRecord(db.QueryRow(
-		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id
+		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id, activation_issued_at, activation_token
 		 FROM trial_signup_requests
 		 WHERE request_id = ?`,
 		id,
@@ -562,7 +584,7 @@ func (s *TrialSignupStore) FindPendingVerificationByEmail(email string, now time
 	defer s.mu.Unlock()
 
 	rec, err := loadTrialSignupRecord(db.QueryRow(
-		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id
+		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id, activation_issued_at, activation_token
 		 FROM trial_signup_requests
 		 WHERE email = ?
 		   AND verified_at IS NULL
@@ -579,6 +601,74 @@ func (s *TrialSignupStore) FindPendingVerificationByEmail(email string, now time
 		return nil, fmt.Errorf("load pending trial signup verification: %w", err)
 	}
 	return rec, nil
+}
+
+func (s *TrialSignupStore) StoreOrLoadActivationToken(id, token string, issuedAt time.Time) (string, bool, error) {
+	if s == nil {
+		return "", false, fmt.Errorf("trial signup store not configured")
+	}
+	id = strings.TrimSpace(id)
+	token = strings.TrimSpace(token)
+	if id == "" {
+		return "", false, ErrTrialSignupRecordNotFound
+	}
+	if token == "" {
+		return "", false, fmt.Errorf("activation token is required")
+	}
+	issuedAt = issuedAt.UTC()
+
+	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return "", false, fmt.Errorf("trial signup store not configured")
+	}
+	defer s.mu.Unlock()
+
+	res, err := db.Exec(
+		`UPDATE trial_signup_requests
+		 SET activation_token = CASE
+		       WHEN activation_token = '' THEN ?
+		       ELSE activation_token
+		     END,
+		     activation_issued_at = CASE
+		       WHEN activation_issued_at IS NULL THEN ?
+		       ELSE activation_issued_at
+		     END
+		 WHERE request_id = ?
+		   AND verified_at IS NOT NULL`,
+		token,
+		issuedAt.Unix(),
+		id,
+	)
+	if err != nil {
+		return "", false, fmt.Errorf("store trial signup activation token: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return "", false, fmt.Errorf("get activation token rows affected: %w", err)
+	}
+	if affected == 0 {
+		return "", false, ErrTrialSignupRecordNotFound
+	}
+
+	rec, err := loadTrialSignupRecord(db.QueryRow(
+		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id, activation_issued_at, activation_token
+		 FROM trial_signup_requests
+		 WHERE request_id = ?`,
+		id,
+	))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, ErrTrialSignupRecordNotFound
+		}
+		return "", false, fmt.Errorf("load activation token record: %w", err)
+	}
+	storedToken := strings.TrimSpace(rec.ActivationToken)
+	if storedToken == "" {
+		return "", false, ErrTrialSignupRecordNotFound
+	}
+	return storedToken, storedToken == token, nil
 }
 
 func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {
@@ -610,7 +700,7 @@ func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {
 	}()
 
 	rec, err := loadTrialSignupRecord(tx.QueryRow(
-		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id
+		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id, activation_issued_at, activation_token
 		 FROM trial_signup_requests
 		 WHERE request_id = ?`,
 		id,
@@ -730,7 +820,7 @@ func loadTrialSignupRecord(scanner interface {
 }) (*TrialSignupRecord, error) {
 	rec := &TrialSignupRecord{}
 	var verificationExpiresAt, createdAt int64
-	var verifiedAt, checkoutStartedAt, checkoutCompletedAt sql.NullInt64
+	var verifiedAt, checkoutStartedAt, checkoutCompletedAt, activationIssuedAt sql.NullInt64
 	if err := scanner.Scan(
 		&rec.ID,
 		&rec.OrgID,
@@ -744,6 +834,8 @@ func loadTrialSignupRecord(scanner interface {
 		&checkoutStartedAt,
 		&checkoutCompletedAt,
 		&rec.CheckoutSessionID,
+		&activationIssuedAt,
+		&rec.ActivationToken,
 	); err != nil {
 		return nil, err
 	}
@@ -757,6 +849,9 @@ func loadTrialSignupRecord(scanner interface {
 	}
 	if checkoutCompletedAt.Valid {
 		rec.CheckoutCompletedAt = time.Unix(checkoutCompletedAt.Int64, 0).UTC()
+	}
+	if activationIssuedAt.Valid {
+		rec.ActivationIssuedAt = time.Unix(activationIssuedAt.Int64, 0).UTC()
 	}
 	return rec, nil
 }

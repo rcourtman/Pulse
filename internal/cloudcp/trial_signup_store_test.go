@@ -217,3 +217,51 @@ func TestTrialSignupStoreFindPendingVerificationByEmail(t *testing.T) {
 		t.Fatalf("pending=%#v, want nil after consume", pending)
 	}
 }
+
+func TestTrialSignupStoreStoreOrLoadActivationToken(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		Name:                  "Owner",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             now,
+		VerificationExpiresAt: now.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, now)
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+
+	storedToken, firstIssue, err := store.StoreOrLoadActivationToken(record.ID, "token-one", now)
+	if err != nil {
+		t.Fatalf("StoreOrLoadActivationToken(first): %v", err)
+	}
+	if !firstIssue {
+		t.Fatal("expected first activation token issuance to report firstIssue=true")
+	}
+	if storedToken != "token-one" {
+		t.Fatalf("storedToken=%q, want %q", storedToken, "token-one")
+	}
+
+	storedToken, firstIssue, err = store.StoreOrLoadActivationToken(record.ID, "token-two", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("StoreOrLoadActivationToken(second): %v", err)
+	}
+	if firstIssue {
+		t.Fatal("expected repeat activation token load to report firstIssue=false")
+	}
+	if storedToken != "token-one" {
+		t.Fatalf("storedToken=%q, want existing token %q", storedToken, "token-one")
+	}
+}
