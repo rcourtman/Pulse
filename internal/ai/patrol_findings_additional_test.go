@@ -101,7 +101,7 @@ func TestPatrolFindingCreatorAdapter_IsActionable(t *testing.T) {
 			},
 		},
 	}
-	lowAdapter := newPatrolFindingCreatorAdapter(ps, lowState)
+	lowAdapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, lowState))
 	_, _, err := lowAdapter.CreateFinding(tools.PatrolFindingInput{
 		Key:          "cpu-high",
 		Severity:     "warning",
@@ -128,7 +128,7 @@ func TestPatrolFindingCreatorAdapter_IsActionable(t *testing.T) {
 			},
 		},
 	}
-	highAdapter := newPatrolFindingCreatorAdapter(ps, highState)
+	highAdapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, highState))
 	_, _, err = highAdapter.CreateFinding(tools.PatrolFindingInput{
 		Key:          "cpu-high",
 		Severity:     "warning",
@@ -214,7 +214,7 @@ func TestActionabilityThreshold_DefaultFallback(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.thresholds = PatrolThresholds{} // all zero
 
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 
 	if got := adapter.actionabilityThreshold("cpu", "node"); got != 50.0 {
 		t.Errorf("cpu threshold = %v, want 50.0", got)
@@ -243,7 +243,7 @@ func TestActionabilityThreshold_CustomThresholds(t *testing.T) {
 		StorageWatch:   75,
 	}
 
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 
 	if got := adapter.actionabilityThreshold("cpu", "node"); got != 65.0 {
 		t.Errorf("cpu threshold = %v, want 65.0", got)
@@ -275,7 +275,7 @@ func TestIsActionable_CustomThresholdsRespected(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.60, Memory: models.Memory{Usage: 30}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	finding := &Finding{
 		Key:          "cpu-high",
@@ -292,7 +292,7 @@ func TestIsActionable_CustomThresholdsRespected(t *testing.T) {
 
 	// Now set lower threshold (40%) - same 60% value should pass
 	ps.thresholds = PatrolThresholds{NodeCPUWatch: 40}
-	adapter2 := newPatrolFindingCreatorAdapter(ps, state)
+	adapter2 := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	if !adapter2.isActionable(finding) {
 		t.Fatal("finding at 60% CPU should be accepted with 40% threshold")
@@ -313,7 +313,7 @@ func TestIsActionable_NodeMemoryUsesNodeThreshold(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.40, Memory: models.Memory{Used: 78, Total: 100}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	nodeFinding := &Finding{
 		Key:          "memory-high",
@@ -335,7 +335,7 @@ func TestIsActionable_NodeMemoryUsesNodeThreshold(t *testing.T) {
 			{ID: "vm-1", Name: "vm-1", CPU: 0.40, Memory: models.Memory{Usage: 78}},
 		},
 	}
-	vmAdapter := newPatrolFindingCreatorAdapter(ps, vmState)
+	vmAdapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, vmState))
 
 	vmFinding := &Finding{
 		Key:          "memory-high",
@@ -612,7 +612,7 @@ func TestIsActionable_ReadStateRejectsMissingResource(t *testing.T) {
 func TestIsBaselineAnomaly_NoStore(t *testing.T) {
 	// No baseline store → always returns false (safe fallback)
 	ps := NewPatrolService(nil, nil)
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 
 	if adapter.isBaselineAnomaly("node-1", "cpu", 45.0) {
 		t.Fatal("expected false when no baseline store is set")
@@ -643,7 +643,7 @@ func TestIsActionable_AnomalyBypass(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.45, Memory: models.Memory{Usage: 30}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	finding := &Finding{
 		Key:        "cpu-high",
@@ -681,7 +681,7 @@ func TestIsActionable_BelowThresholdNoAnomaly(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.45, Memory: models.Memory{Usage: 30}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	finding := &Finding{
 		Key:        "cpu-high",
@@ -703,7 +703,7 @@ func TestIsActionable_EscapeHatchesPreserved(t *testing.T) {
 			{ID: "node-1", Name: "node-1", CPU: 0.10, Memory: models.Memory{Usage: 10}},
 		},
 	}
-	adapter := newPatrolFindingCreatorAdapter(ps, state)
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, state))
 
 	// Critical severity always passes
 	critical := &Finding{
@@ -835,7 +835,7 @@ func TestPatrolFindingCreatorAdapter_ResolveFindingAndChecks(t *testing.T) {
 		resolvedID = id
 	}
 
-	adapter := newPatrolFindingCreatorAdapter(ps, models.StateSnapshot{})
+	adapter := newPatrolFindingCreatorAdapterState(ps, patrolRuntimeStateForTest(ps, models.StateSnapshot{}))
 	if err := adapter.ResolveFinding(finding.ID, "resolved in test"); err != nil {
 		t.Fatalf("ResolveFinding failed: %v", err)
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -657,10 +656,6 @@ type patrolFindingCreatorAdapter struct {
 	resolvedIDs     []string
 	rejectedCount   int
 	checkedFindings bool
-}
-
-func newPatrolFindingCreatorAdapter(p *PatrolService, snap models.StateSnapshot) *patrolFindingCreatorAdapter {
-	return newPatrolFindingCreatorAdapterState(p, p.patrolRuntimeStateForSnapshot(snap))
 }
 
 func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState) *patrolFindingCreatorAdapter {
