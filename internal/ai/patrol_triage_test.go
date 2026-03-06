@@ -326,6 +326,36 @@ func TestTriageDiskHealthChecksState_PrefersUnifiedProvider(t *testing.T) {
 	}
 }
 
+func TestTriageDiskHealthChecksState_UsesPhysicalDiskFallback(t *testing.T) {
+	state := patrolRuntimeState{
+		PhysicalDisks: []models.PhysicalDisk{
+			{ID: "disk-1", DevPath: "/dev/sda", Health: "FAILED", Wearout: 50, Temperature: 40},
+			{ID: "disk-2", DevPath: "/dev/nvme0n1", Health: "PASSED", Wearout: 15, Temperature: 40},
+			{ID: "disk-3", DevPath: "/dev/sdb", Health: "PASSED", Wearout: -1, Temperature: 60},
+		},
+	}
+
+	flags := triageDiskHealthChecksState(state, nil)
+	if len(flags) != 3 {
+		t.Fatalf("expected 3 disk-health flags from physical-disk fallback, got %d", len(flags))
+	}
+	if triageFindFlag(flags, func(f TriageFlag) bool {
+		return f.ResourceID == "disk-1" && strings.Contains(f.Reason, "Disk health reported FAILED")
+	}) == nil {
+		t.Fatalf("expected failed health flag from physical-disk fallback, got %#v", flags)
+	}
+	if triageFindFlag(flags, func(f TriageFlag) bool {
+		return f.ResourceID == "disk-2" && strings.Contains(f.Reason, "wearout at 15% remaining")
+	}) == nil {
+		t.Fatalf("expected wearout flag from physical-disk fallback, got %#v", flags)
+	}
+	if triageFindFlag(flags, func(f TriageFlag) bool {
+		return f.ResourceID == "disk-3" && strings.Contains(f.Reason, "Disk temperature 60")
+	}) == nil {
+		t.Fatalf("expected temperature flag from physical-disk fallback, got %#v", flags)
+	}
+}
+
 func TestTriageAlertChecks(t *testing.T) {
 	state := models.StateSnapshot{
 		ActiveAlerts: []models.Alert{

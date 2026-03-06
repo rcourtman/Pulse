@@ -548,82 +548,113 @@ func triageDiskHealthChecks(snap models.StateSnapshot, scopedSet map[string]bool
 func triageDiskHealthChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
 	flags := make([]TriageFlag, 0)
 
-	var physicalDisks []unifiedresources.Resource
 	if snap.unifiedResourceProvider != nil {
-		physicalDisks = snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk)
-	} else {
-		registry := unifiedresources.NewRegistry(nil)
-		registry.IngestSnapshot(snap.snapshot())
-		physicalDisks = registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+		for _, disk := range snap.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			if disk.PhysicalDisk == nil {
+				continue
+			}
+			resourceID, resourceName, health, wearout, temperature, ok := patrolUnifiedPhysicalDiskState(disk, scopedSet)
+			if !ok {
+				continue
+			}
+			flags = append(flags, triagePhysicalDiskFlags(resourceID, resourceName, health, wearout, temperature)...)
+		}
+		return flags
 	}
 
-	for _, disk := range physicalDisks {
-		if disk.PhysicalDisk == nil {
+	for _, disk := range snap.PhysicalDisks {
+		resourceID, resourceName, health, wearout, temperature, ok := patrolSnapshotPhysicalDiskState(disk, scopedSet)
+		if !ok {
 			continue
 		}
-
-		d := disk.PhysicalDisk
-		resourceID := disk.ID
-		if resourceID == "" {
-			resourceID = d.DevPath
-		}
-		if !seedIsInScope(scopedSet, resourceID) {
-			continue
-		}
-
-		resourceName := d.DevPath
-		if resourceName == "" {
-			resourceName = disk.Name
-		}
-		if resourceName == "" {
-			resourceName = d.Model
-		}
-		if resourceName == "" {
-			resourceName = resourceID
-		}
-
-		health := strings.TrimSpace(d.Health)
-		if health != "" && !strings.EqualFold(health, "PASSED") {
-			flags = append(flags, TriageFlag{
-				ResourceID:   resourceID,
-				ResourceName: resourceName,
-				ResourceType: "storage",
-				Category:     "health",
-				Severity:     "critical",
-				Reason:       fmt.Sprintf("Disk health reported %s", health),
-				Metric:       "disk",
-			})
-		}
-
-		if d.Wearout >= 0 && d.Wearout < 20 {
-			flags = append(flags, TriageFlag{
-				ResourceID:   resourceID,
-				ResourceName: resourceName,
-				ResourceType: "storage",
-				Category:     "health",
-				Severity:     "warning",
-				Reason:       fmt.Sprintf("SSD wearout at %d%% remaining", d.Wearout),
-				Metric:       "disk",
-				Value:        float64(d.Wearout),
-				Threshold:    20,
-			})
-		}
-
-		if d.Temperature > 55 {
-			flags = append(flags, TriageFlag{
-				ResourceID:   resourceID,
-				ResourceName: resourceName,
-				ResourceType: "storage",
-				Category:     "health",
-				Severity:     "warning",
-				Reason:       fmt.Sprintf("Disk temperature %d°C", d.Temperature),
-				Metric:       "disk",
-				Value:        float64(d.Temperature),
-				Threshold:    55,
-			})
-		}
+		flags = append(flags, triagePhysicalDiskFlags(resourceID, resourceName, health, wearout, temperature)...)
 	}
 
+	return flags
+}
+
+func patrolUnifiedPhysicalDiskState(disk unifiedresources.Resource, scopedSet map[string]bool) (resourceID, resourceName, health string, wearout, temperature int, ok bool) {
+	if disk.PhysicalDisk == nil {
+		return "", "", "", 0, 0, false
+	}
+	d := disk.PhysicalDisk
+	resourceID = strings.TrimSpace(disk.ID)
+	if resourceID == "" {
+		resourceID = strings.TrimSpace(d.DevPath)
+	}
+	if !seedIsInScope(scopedSet, resourceID) {
+		return "", "", "", 0, 0, false
+	}
+	resourceName = strings.TrimSpace(d.DevPath)
+	if resourceName == "" {
+		resourceName = strings.TrimSpace(disk.Name)
+	}
+	if resourceName == "" {
+		resourceName = strings.TrimSpace(d.Model)
+	}
+	if resourceName == "" {
+		resourceName = resourceID
+	}
+	return resourceID, resourceName, strings.TrimSpace(d.Health), d.Wearout, d.Temperature, true
+}
+
+func patrolSnapshotPhysicalDiskState(disk models.PhysicalDisk, scopedSet map[string]bool) (resourceID, resourceName, health string, wearout, temperature int, ok bool) {
+	resourceID = strings.TrimSpace(disk.ID)
+	if resourceID == "" {
+		resourceID = strings.TrimSpace(disk.DevPath)
+	}
+	if !seedIsInScope(scopedSet, resourceID) {
+		return "", "", "", 0, 0, false
+	}
+	resourceName = strings.TrimSpace(disk.DevPath)
+	if resourceName == "" {
+		resourceName = strings.TrimSpace(disk.Model)
+	}
+	if resourceName == "" {
+		resourceName = resourceID
+	}
+	return resourceID, resourceName, strings.TrimSpace(disk.Health), disk.Wearout, disk.Temperature, true
+}
+
+func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, temperature int) []TriageFlag {
+	flags := make([]TriageFlag, 0, 3)
+	if health != "" && !strings.EqualFold(health, "PASSED") {
+		flags = append(flags, TriageFlag{
+			ResourceID:   resourceID,
+			ResourceName: resourceName,
+			ResourceType: "storage",
+			Category:     "health",
+			Severity:     "critical",
+			Reason:       fmt.Sprintf("Disk health reported %s", health),
+			Metric:       "disk",
+		})
+	}
+	if wearout >= 0 && wearout < 20 {
+		flags = append(flags, TriageFlag{
+			ResourceID:   resourceID,
+			ResourceName: resourceName,
+			ResourceType: "storage",
+			Category:     "health",
+			Severity:     "warning",
+			Reason:       fmt.Sprintf("SSD wearout at %d%% remaining", wearout),
+			Metric:       "disk",
+			Value:        float64(wearout),
+			Threshold:    20,
+		})
+	}
+	if temperature > 55 {
+		flags = append(flags, TriageFlag{
+			ResourceID:   resourceID,
+			ResourceName: resourceName,
+			ResourceType: "storage",
+			Category:     "health",
+			Severity:     "warning",
+			Reason:       fmt.Sprintf("Disk temperature %d°C", temperature),
+			Metric:       "disk",
+			Value:        float64(temperature),
+			Threshold:    55,
+		})
+	}
 	return flags
 }
 
