@@ -1250,7 +1250,7 @@ func (p *PatrolService) buildSeedContextState(snap patrolRuntimeState, scope *Pa
 
 		// P3 — droppable if budget is tight.
 		{priority: 3, name: "intelligence", content: p.seedIntelligenceContext(intel, now)},
-		{priority: 3, name: "backup_analysis", content: p.seedBackupAnalysisState(snap, now)},
+		{priority: 3, name: "backup_analysis", content: p.seedBackupAnalysisState(snap, scopedSet, now)},
 
 		// P4 — least critical, dropped first.
 		{priority: 4, name: "pmg_snapshot", content: p.seedPMGSnapshotStringState(snap, scopedSet, cfg, intel.isQuiet)},
@@ -2852,10 +2852,10 @@ func (p *PatrolService) seedPMGSnapshotState(sb *strings.Builder, snap patrolRun
 
 // seedBackupAnalysis builds the backup status section.
 func (p *PatrolService) seedBackupAnalysis(snap models.StateSnapshot, now time.Time) string {
-	return p.seedBackupAnalysisState(p.patrolRuntimeStateForSnapshot(snap), now)
+	return p.seedBackupAnalysisState(p.patrolRuntimeStateForSnapshot(snap), nil, now)
 }
 
-func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now time.Time) string {
+func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedSet map[string]bool, now time.Time) string {
 	type backupInfo struct {
 		lastBackup time.Time
 		source     string
@@ -2870,11 +2870,17 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 	}
 	if rs != nil {
 		for _, vmv := range rs.VMs() {
+			if !seedIsInScope(scopedSet, vmv.ID()) {
+				continue
+			}
 			if id := vmv.VMID(); id > 0 {
 				vmidToName[id] = vmv.Name()
 			}
 		}
 		for _, ctv := range rs.Containers() {
+			if !seedIsInScope(scopedSet, ctv.ID()) {
+				continue
+			}
 			if id := ctv.VMID(); id > 0 {
 				vmidToName[id] = ctv.Name()
 			}
@@ -2886,6 +2892,9 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 			continue
 		}
 		name := vmidToName[bt.VMID]
+		if scopedSet != nil && name == "" {
+			continue
+		}
 		if name == "" {
 			name = fmt.Sprintf("vmid-%d", bt.VMID)
 		}
@@ -2896,6 +2905,9 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 
 	for _, stb := range snap.PVEBackups.StorageBackups {
 		name := vmidToName[stb.VMID]
+		if scopedSet != nil && name == "" {
+			continue
+		}
 		if name == "" {
 			name = fmt.Sprintf("vmid-%d", stb.VMID)
 		}
@@ -2911,6 +2923,9 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 				name = n
 			}
 		}
+		if scopedSet != nil && name == pb.VMID {
+			continue
+		}
 		if existing, ok := guestBackups[name]; !ok || pb.BackupTime.After(existing.lastBackup) {
 			guestBackups[name] = &backupInfo{lastBackup: pb.BackupTime, source: "pbs"}
 		}
@@ -2918,7 +2933,7 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 
 	if rs != nil {
 		for _, vmv := range rs.VMs() {
-			if vmv.Template() || vmv.LastBackup().IsZero() {
+			if vmv.Template() || vmv.LastBackup().IsZero() || !seedIsInScope(scopedSet, vmv.ID()) {
 				continue
 			}
 			name := vmv.Name()
@@ -2927,7 +2942,7 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 			}
 		}
 		for _, ctv := range rs.Containers() {
-			if ctv.Template() || ctv.LastBackup().IsZero() {
+			if ctv.Template() || ctv.LastBackup().IsZero() || !seedIsInScope(scopedSet, ctv.ID()) {
 				continue
 			}
 			name := ctv.Name()
@@ -2940,12 +2955,12 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 	totalGuests := 0
 	if rs != nil {
 		for _, vmv := range rs.VMs() {
-			if !vmv.Template() {
+			if !vmv.Template() && seedIsInScope(scopedSet, vmv.ID()) {
 				totalGuests++
 			}
 		}
 		for _, ctv := range rs.Containers() {
-			if !ctv.Template() {
+			if !ctv.Template() && seedIsInScope(scopedSet, ctv.ID()) {
 				totalGuests++
 			}
 		}
@@ -2965,12 +2980,12 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, now tim
 	allGuestNames := make(map[string]bool)
 	if rs != nil {
 		for _, vmv := range rs.VMs() {
-			if !vmv.Template() {
+			if !vmv.Template() && seedIsInScope(scopedSet, vmv.ID()) {
 				allGuestNames[vmv.Name()] = true
 			}
 		}
 		for _, ctv := range rs.Containers() {
-			if !ctv.Template() {
+			if !ctv.Template() && seedIsInScope(scopedSet, ctv.ID()) {
 				allGuestNames[ctv.Name()] = true
 			}
 		}

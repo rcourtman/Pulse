@@ -246,6 +246,40 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 	}
 }
 
+func TestSeedBackupAnalysisState_ScopesGuestsToRuntime(t *testing.T) {
+	now := time.Now()
+	ps := NewPatrolService(nil, nil)
+
+	vm1 := newTestVMView("qemu/101", "vm-1", 101, "pve1", "", ur.StatusOnline, false, nil)
+	vm2 := newTestVMView("qemu/102", "vm-2", 102, "pve1", "", ur.StatusOnline, false, nil)
+
+	runtimeState := newPatrolRuntimeState(models.StateSnapshot{
+		PVEBackups: models.PVEBackups{
+			BackupTasks: []models.BackupTask{
+				{VMID: 101, Status: "OK", EndTime: now.Add(-24 * time.Hour)},
+				{VMID: 102, Status: "OK", EndTime: now.Add(-72 * time.Hour)},
+			},
+		},
+		PBSBackups: []models.PBSBackup{
+			{VMID: "102", BackupTime: now.Add(-72 * time.Hour)},
+		},
+	})
+	runtimeState.readState = &mockReadState{
+		vms: []*ur.VMView{vm1, vm2},
+	}
+
+	output := ps.seedBackupAnalysisState(runtimeState, map[string]bool{vm1.ID(): true}, now)
+	if output == "" {
+		t.Fatalf("expected scoped backup analysis output")
+	}
+	if !strings.Contains(output, "Guests with recent backups: 1/1") {
+		t.Fatalf("expected scoped recent backup count, got: %s", output)
+	}
+	if strings.Contains(output, "vm-2") {
+		t.Fatalf("expected out-of-scope guest to be omitted, got: %s", output)
+	}
+}
+
 func TestSeedPrecomputeIntelligenceState_UsesRuntimeReadState(t *testing.T) {
 	now := time.Now()
 	ps := NewPatrolService(nil, nil)
