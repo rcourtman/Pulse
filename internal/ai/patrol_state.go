@@ -8,6 +8,28 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+type patrolRuntimeResourceKind string
+
+const (
+	patrolRuntimeResourceNode         patrolRuntimeResourceKind = "node"
+	patrolRuntimeResourceVM           patrolRuntimeResourceKind = "vm"
+	patrolRuntimeResourceContainer    patrolRuntimeResourceKind = "container"
+	patrolRuntimeResourceStorage      patrolRuntimeResourceKind = "storage"
+	patrolRuntimeResourceDockerHost   patrolRuntimeResourceKind = "docker-host"
+	patrolRuntimeResourceDockerItem   patrolRuntimeResourceKind = "docker-container"
+	patrolRuntimeResourceHost         patrolRuntimeResourceKind = "host"
+	patrolRuntimeResourcePBS          patrolRuntimeResourceKind = "pbs"
+	patrolRuntimeResourcePMG          patrolRuntimeResourceKind = "pmg"
+	patrolRuntimeResourceK8sCluster   patrolRuntimeResourceKind = "k8s-cluster"
+	patrolRuntimeResourcePhysicalDisk patrolRuntimeResourceKind = "physical-disk"
+)
+
+type patrolRuntimeResourceRecord struct {
+	kind    patrolRuntimeResourceKind
+	ids     []string
+	aliases []string
+}
+
 // patrolRuntimeState is the patrol subsystem's internal runtime state contract.
 // It intentionally includes only the fields patrol currently consumes, so the
 // subsystem can stop mirroring the full global StateSnapshot shape.
@@ -118,6 +140,139 @@ func (p *PatrolService) patrolRuntimeStateForSnapshot(snapshot models.StateSnaps
 	return newPatrolRuntimeStateWithProviders(snapshot, readState, unifiedResourceProvider)
 }
 
+func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeResourceRecord) bool) {
+	emit := func(kind patrolRuntimeResourceKind, ids []string, aliases ...string) bool {
+		return visit(patrolRuntimeResourceRecord{kind: kind, ids: ids, aliases: aliases})
+	}
+
+	if rs := s.readState; rs != nil {
+		for _, n := range rs.Nodes() {
+			if !emit(patrolRuntimeResourceNode, []string{n.ID(), n.SourceID()}, n.Name()) {
+				return
+			}
+		}
+		for _, vm := range rs.VMs() {
+			if !emit(patrolRuntimeResourceVM, []string{vm.ID(), vm.SourceID()}, vm.Name()) {
+				return
+			}
+		}
+		for _, ct := range rs.Containers() {
+			if !emit(patrolRuntimeResourceContainer, []string{ct.ID(), ct.SourceID()}, ct.Name()) {
+				return
+			}
+		}
+		for _, storage := range rs.StoragePools() {
+			if !emit(patrolRuntimeResourceStorage, []string{storage.ID(), storage.SourceID()}, storage.Name()) {
+				return
+			}
+		}
+		for _, dh := range rs.DockerHosts() {
+			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID(), dh.HostSourceID()}, dh.Name(), dh.Hostname()) {
+				return
+			}
+		}
+		for _, dc := range rs.DockerContainers() {
+			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name()) {
+				return
+			}
+		}
+		for _, h := range rs.Hosts() {
+			if !emit(patrolRuntimeResourceHost, []string{h.ID()}, h.Name(), h.Hostname()) {
+				return
+			}
+		}
+		for _, pbs := range rs.PBSInstances() {
+			if !emit(patrolRuntimeResourcePBS, []string{pbs.ID()}, pbs.Name()) {
+				return
+			}
+		}
+		for _, pmg := range rs.PMGInstances() {
+			if !emit(patrolRuntimeResourcePMG, []string{pmg.ID()}, pmg.Name()) {
+				return
+			}
+		}
+		for _, k := range rs.K8sClusters() {
+			if !emit(patrolRuntimeResourceK8sCluster, []string{k.ID()}, k.Name()) {
+				return
+			}
+		}
+	} else {
+		for _, n := range s.Nodes {
+			if !emit(patrolRuntimeResourceNode, []string{n.ID}, n.Name) {
+				return
+			}
+		}
+		for _, vm := range s.VMs {
+			if !emit(patrolRuntimeResourceVM, []string{vm.ID}, vm.Name) {
+				return
+			}
+		}
+		for _, ct := range s.Containers {
+			if !emit(patrolRuntimeResourceContainer, []string{ct.ID}, ct.Name) {
+				return
+			}
+		}
+		for _, storage := range s.Storage {
+			if !emit(patrolRuntimeResourceStorage, []string{storage.ID}, storage.Name) {
+				return
+			}
+		}
+		for _, dh := range s.DockerHosts {
+			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID}, dh.DisplayName, dh.CustomDisplayName, dh.Hostname) {
+				return
+			}
+			for _, dc := range dh.Containers {
+				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name) {
+					return
+				}
+			}
+		}
+		for _, h := range s.Hosts {
+			if !emit(patrolRuntimeResourceHost, []string{h.ID}, h.DisplayName, h.Hostname) {
+				return
+			}
+		}
+		for _, pbs := range s.PBSInstances {
+			if !emit(patrolRuntimeResourcePBS, []string{pbs.ID}, pbs.Name, pbs.Host) {
+				return
+			}
+		}
+		for _, pmg := range s.PMGInstances {
+			if !emit(patrolRuntimeResourcePMG, []string{pmg.ID}, pmg.Name, pmg.Host) {
+				return
+			}
+		}
+		for _, k := range s.KubernetesClusters {
+			if !emit(patrolRuntimeResourceK8sCluster, []string{k.ID}, k.Name, k.DisplayName, k.CustomDisplayName) {
+				return
+			}
+		}
+	}
+
+	if s.unifiedResourceProvider != nil {
+		for _, disk := range s.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			ids := []string{disk.ID}
+			aliases := []string{disk.Name}
+			if disk.PhysicalDisk != nil {
+				if strings.TrimSpace(disk.PhysicalDisk.DevPath) != "" {
+					ids = append(ids, disk.PhysicalDisk.DevPath)
+				}
+				aliases = append(aliases, disk.PhysicalDisk.Model)
+			}
+			if !emit(patrolRuntimeResourcePhysicalDisk, ids, aliases...) {
+				return
+			}
+		}
+		return
+	}
+
+	for _, disk := range s.PhysicalDisks {
+		if !emit(patrolRuntimeResourcePhysicalDisk, []string{disk.ID, disk.DevPath}, disk.Model) {
+			return
+		}
+	}
+}
+
 func patrolRuntimeKnownResources(s patrolRuntimeState) map[string]bool {
 	known := make(map[string]bool)
 	add := func(values ...string) {
@@ -128,47 +283,11 @@ func patrolRuntimeKnownResources(s patrolRuntimeState) map[string]bool {
 		}
 	}
 
-	if rs := s.readState; rs != nil {
-		for _, n := range rs.Nodes() {
-			add(n.ID(), n.Name())
-		}
-		for _, vm := range rs.VMs() {
-			add(vm.ID(), vm.Name())
-		}
-		for _, ct := range rs.Containers() {
-			add(ct.ID(), ct.Name())
-		}
-		for _, s := range rs.StoragePools() {
-			add(s.ID(), s.Name())
-		}
-		for _, dh := range rs.DockerHosts() {
-			add(dh.ID(), dh.Name(), dh.Hostname())
-		}
-		for _, dc := range rs.DockerContainers() {
-			add(dc.ID(), dc.Name())
-		}
-		for _, h := range rs.Hosts() {
-			add(h.ID(), h.Name(), h.Hostname())
-		}
-		for _, pbs := range rs.PBSInstances() {
-			add(pbs.ID(), pbs.Name())
-		}
-		for _, pmg := range rs.PMGInstances() {
-			add(pmg.ID(), pmg.Name())
-		}
-		for _, k := range rs.K8sClusters() {
-			add(k.ID(), k.Name())
-		}
-	}
-	if s.unifiedResourceProvider != nil {
-		for _, disk := range s.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
-			add(disk.ID, disk.Name)
-			if disk.PhysicalDisk != nil {
-				add(disk.PhysicalDisk.DevPath, disk.PhysicalDisk.Model)
-			}
-		}
-	}
-
+	patrolVisitRuntimeResources(s, func(record patrolRuntimeResourceRecord) bool {
+		add(record.ids...)
+		add(record.aliases...)
+		return true
+	})
 	for _, n := range s.Nodes {
 		add(n.ID, n.Name)
 	}
@@ -221,47 +340,12 @@ func patrolRuntimeResourceIDs(s patrolRuntimeState) []string {
 		ids = append(ids, id)
 	}
 
-	if rs := s.readState; rs != nil {
-		for _, n := range rs.Nodes() {
-			add(n.ID())
+	patrolVisitRuntimeResources(s, func(record patrolRuntimeResourceRecord) bool {
+		for _, id := range record.ids {
+			add(id)
 		}
-		for _, vm := range rs.VMs() {
-			add(vm.ID())
-		}
-		for _, ct := range rs.Containers() {
-			add(ct.ID())
-		}
-		for _, storage := range rs.StoragePools() {
-			add(storage.ID())
-		}
-		for _, dh := range rs.DockerHosts() {
-			add(dh.ID())
-		}
-		for _, dc := range rs.DockerContainers() {
-			add(dc.ID())
-		}
-		for _, h := range rs.Hosts() {
-			add(h.ID())
-		}
-		for _, pbs := range rs.PBSInstances() {
-			add(pbs.ID())
-		}
-		for _, pmg := range rs.PMGInstances() {
-			add(pmg.ID())
-		}
-		for _, k := range rs.K8sClusters() {
-			add(k.ID())
-		}
-	}
-	if s.unifiedResourceProvider != nil {
-		for _, disk := range s.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
-			add(disk.ID)
-			if disk.PhysicalDisk != nil {
-				add(disk.PhysicalDisk.DevPath)
-			}
-		}
-	}
-
+		return true
+	})
 	for _, n := range s.Nodes {
 		add(n.ID)
 	}
@@ -311,16 +395,12 @@ func patrolRuntimeSortedResourceIDs(s patrolRuntimeState) []string {
 
 func patrolRuntimeStorageResourceCount(s patrolRuntimeState) int {
 	count := 0
-	if rs := s.readState; rs != nil {
-		count += len(rs.StoragePools())
-	} else {
-		count += len(s.Storage)
-	}
-	if s.unifiedResourceProvider != nil {
-		count += len(s.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
-	} else {
-		count += len(s.PhysicalDisks)
-	}
+	patrolVisitRuntimeResources(s, func(record patrolRuntimeResourceRecord) bool {
+		if record.kind == patrolRuntimeResourceStorage || record.kind == patrolRuntimeResourcePhysicalDisk {
+			count++
+		}
+		return true
+	})
 	return count
 }
 
@@ -340,27 +420,27 @@ func (c patrolRuntimeResourceCounts) total() int {
 }
 
 func patrolRuntimeCountResources(s patrolRuntimeState) patrolRuntimeResourceCounts {
-	if rs := s.readState; rs != nil {
-		return patrolRuntimeResourceCounts{
-			nodes:      len(rs.Nodes()),
-			guests:     len(rs.VMs()) + len(rs.Containers()),
-			docker:     len(rs.DockerHosts()),
-			storage:    patrolRuntimeStorageResourceCount(s),
-			hosts:      len(rs.Hosts()),
-			pbs:        len(rs.PBSInstances()),
-			pmg:        len(rs.PMGInstances()),
-			kubernetes: len(rs.K8sClusters()),
+	var counts patrolRuntimeResourceCounts
+	patrolVisitRuntimeResources(s, func(record patrolRuntimeResourceRecord) bool {
+		switch record.kind {
+		case patrolRuntimeResourceNode:
+			counts.nodes++
+		case patrolRuntimeResourceVM, patrolRuntimeResourceContainer:
+			counts.guests++
+		case patrolRuntimeResourceDockerHost:
+			counts.docker++
+		case patrolRuntimeResourceStorage, patrolRuntimeResourcePhysicalDisk:
+			counts.storage++
+		case patrolRuntimeResourceHost:
+			counts.hosts++
+		case patrolRuntimeResourcePBS:
+			counts.pbs++
+		case patrolRuntimeResourcePMG:
+			counts.pmg++
+		case patrolRuntimeResourceK8sCluster:
+			counts.kubernetes++
 		}
-	}
-
-	return patrolRuntimeResourceCounts{
-		nodes:      len(s.Nodes),
-		guests:     len(s.VMs) + len(s.Containers),
-		docker:     len(s.DockerHosts),
-		storage:    patrolRuntimeStorageResourceCount(s),
-		hosts:      len(s.Hosts),
-		pbs:        len(s.PBSInstances),
-		pmg:        len(s.PMGInstances),
-		kubernetes: len(s.KubernetesClusters),
-	}
+		return true
+	})
+	return counts
 }

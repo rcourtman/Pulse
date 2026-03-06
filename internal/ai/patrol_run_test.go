@@ -564,6 +564,119 @@ func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
 	}
 }
 
+func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:   "node-1",
+		Name: "node-a",
+		Type: unifiedresources.ResourceTypeAgent,
+	})
+	vmView := newTestVMView("qemu/100", "vm-a", 100, "pve1", "", unifiedresources.StatusOnline, false, nil)
+	ctView := newTestContainerView("lxc/200", "ct-a", 200, "pve1", "", unifiedresources.StatusOnline, false, nil)
+	storageView := unifiedresources.NewStoragePoolView(&unifiedresources.Resource{
+		ID:   "storage-1",
+		Name: "local-zfs",
+		Type: unifiedresources.ResourceTypeStorage,
+	})
+	dockerHostView := unifiedresources.NewDockerHostView(&unifiedresources.Resource{
+		ID:   "docker-1",
+		Name: "docker-a",
+		Type: unifiedresources.ResourceTypeAgent,
+		Docker: &unifiedresources.DockerData{
+			Hostname: "docker.local",
+		},
+	})
+	dockerCtrView := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:   "ctr-1",
+		Name: "web",
+		Type: unifiedresources.ResourceTypeAppContainer,
+	})
+	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID:   "agent-1",
+		Name: "agent-a",
+		Type: unifiedresources.ResourceTypeAgent,
+		Agent: &unifiedresources.AgentData{
+			Hostname: "agent.local",
+		},
+	})
+	pbsView := unifiedresources.NewPBSInstanceView(&unifiedresources.Resource{
+		ID:   "pbs-1",
+		Name: "pbs-a",
+		Type: unifiedresources.ResourceTypePBS,
+	})
+	pmgView := unifiedresources.NewPMGInstanceView(&unifiedresources.Resource{
+		ID:   "pmg-1",
+		Name: "pmg-a",
+		Type: unifiedresources.ResourceTypePMG,
+	})
+	k8sView := unifiedresources.NewK8sClusterView(&unifiedresources.Resource{
+		ID:   "k8s-1",
+		Name: "cluster-a",
+		Type: unifiedresources.ResourceTypeK8sCluster,
+	})
+
+	state := patrolRuntimeState{
+		readState: &mockReadState{
+			nodes:       []*unifiedresources.NodeView{&nodeView},
+			vms:         []*unifiedresources.VMView{vmView},
+			containers:  []*unifiedresources.ContainerView{ctView},
+			hosts:       []*unifiedresources.HostView{&hostView},
+			dockerHosts: []*unifiedresources.DockerHostView{&dockerHostView},
+			dockerCtrs:  []*unifiedresources.DockerContainerView{&dockerCtrView},
+			storage:     []*unifiedresources.StoragePoolView{&storageView},
+			pbs:         []*unifiedresources.PBSInstanceView{&pbsView},
+			pmg:         []*unifiedresources.PMGInstanceView{&pmgView},
+			k8sClusters: []*unifiedresources.K8sClusterView{&k8sView},
+		},
+		unifiedResourceProvider: &mockUnifiedResourceProvider{
+			getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+				if t != unifiedresources.ResourceTypePhysicalDisk {
+					return nil
+				}
+				return []unifiedresources.Resource{
+					{
+						ID:   "disk-1",
+						Name: "disk-a",
+						Type: unifiedresources.ResourceTypePhysicalDisk,
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath: "/dev/sda",
+							Model:   "Samsung SSD",
+						},
+					},
+				}
+			},
+		},
+	}
+
+	counts := patrolRuntimeCountResources(state)
+	if counts.nodes != 1 || counts.guests != 2 || counts.storage != 2 || counts.docker != 1 || counts.hosts != 1 || counts.pbs != 1 || counts.pmg != 1 || counts.kubernetes != 1 {
+		t.Fatalf("unexpected canonical runtime counts: %#v", counts)
+	}
+	if counts.total() != 10 {
+		t.Fatalf("expected canonical runtime total 10, got %#v", counts)
+	}
+
+	resourceIDs := patrolRuntimeSortedResourceIDs(state)
+	for _, want := range []string{"node-1", "qemu/100", "lxc/200", "storage-1", "docker-1", "ctr-1", "agent-1", "pbs-1", "pmg-1", "k8s-1", "disk-1", "/dev/sda"} {
+		found := false
+		for _, got := range resourceIDs {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected runtime resource IDs to include %q, got %v", want, resourceIDs)
+		}
+	}
+
+	known := patrolRuntimeKnownResources(state)
+	for _, want := range []string{"node-a", "vm-a", "ct-a", "local-zfs", "docker.local", "web", "agent.local", "cluster-a", "Samsung SSD"} {
+		if !known[want] {
+			t.Fatalf("expected known runtime resources to include %q", want)
+		}
+	}
+}
+
 func TestFilterStateByScope_WhitespaceInIDs(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
