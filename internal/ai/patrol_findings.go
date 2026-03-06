@@ -1614,10 +1614,6 @@ func patrolLookupPhysicalDiskVerificationState(snap patrolRuntimeState, resource
 	})
 }
 
-func (p *PatrolService) verifyGuestReachability(ctx context.Context, snap models.StateSnapshot, guestID string) (bool, error) {
-	return p.verifyGuestReachabilityState(ctx, p.patrolRuntimeStateForSnapshot(snap), guestID)
-}
-
 func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap patrolRuntimeState, guestID string) (bool, error) {
 	p.mu.RLock()
 	prober := p.guestProber
