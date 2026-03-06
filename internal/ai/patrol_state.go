@@ -323,3 +323,44 @@ func patrolRuntimeStorageResourceCount(s patrolRuntimeState) int {
 	}
 	return count
 }
+
+type patrolRuntimeResourceCounts struct {
+	nodes      int
+	guests     int
+	docker     int
+	storage    int
+	hosts      int
+	pbs        int
+	pmg        int
+	kubernetes int
+}
+
+func (c patrolRuntimeResourceCounts) total() int {
+	return c.nodes + c.guests + c.docker + c.storage + c.hosts + c.pbs + c.pmg + c.kubernetes
+}
+
+func patrolRuntimeCountResources(s patrolRuntimeState) patrolRuntimeResourceCounts {
+	if rs := s.readState; rs != nil {
+		return patrolRuntimeResourceCounts{
+			nodes:      len(rs.Nodes()),
+			guests:     len(rs.VMs()) + len(rs.Containers()),
+			docker:     len(rs.DockerHosts()),
+			storage:    patrolRuntimeStorageResourceCount(s),
+			hosts:      len(rs.Hosts()),
+			pbs:        len(rs.PBSInstances()),
+			pmg:        len(rs.PMGInstances()),
+			kubernetes: len(rs.K8sClusters()),
+		}
+	}
+
+	return patrolRuntimeResourceCounts{
+		nodes:      len(s.Nodes),
+		guests:     len(s.VMs) + len(s.Containers),
+		docker:     len(s.DockerHosts),
+		storage:    patrolRuntimeStorageResourceCount(s),
+		hosts:      len(s.Hosts),
+		pbs:        len(s.PBSInstances),
+		pmg:        len(s.PMGInstances),
+		kubernetes: len(s.KubernetesClusters),
+	}
+}

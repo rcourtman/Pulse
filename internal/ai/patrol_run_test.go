@@ -554,6 +554,14 @@ func TestFilterStateByScope_RebuildsScopedProviders(t *testing.T) {
 	if got := len(filteredDisks.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk)); got != 1 {
 		t.Fatalf("expected 1 scoped physical disk resource in provider, got %d", got)
 	}
+
+	counts := patrolRuntimeCountResources(filteredDisks)
+	if counts.storage != 1 {
+		t.Fatalf("expected scoped runtime counts to include 1 storage resource, got %#v", counts)
+	}
+	if counts.total() != 1 {
+		t.Fatalf("expected scoped runtime total to be 1, got %#v", counts)
+	}
 }
 
 func TestFilterStateByScope_WhitespaceInIDs(t *testing.T) {

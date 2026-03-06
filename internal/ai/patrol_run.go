@@ -271,8 +271,6 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	state := p.currentPatrolRuntimeState()
 
-	rs := state.readState
-
 	// Helper to track findings
 	// Note: Only warning+ severity findings count toward newFindings since watch/info are filtered from UI
 	trackFinding := func(f *Finding) bool {
@@ -295,31 +293,32 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		return isNew
 	}
 
-	// Count resources for statistics (respect analysis configuration).
-	// Uses canonical ReadState view surface — legacy state fallbacks removed.
-	if cfg.AnalyzeNodes && rs != nil {
-		runStats.nodesChecked = len(rs.Nodes())
+	// Count resources for statistics from the patrol runtime state so scoped and
+	// unscoped runs share the same read-state-first semantics.
+	resourceCounts := patrolRuntimeCountResources(state)
+	if cfg.AnalyzeNodes {
+		runStats.nodesChecked = resourceCounts.nodes
 	}
-	if cfg.AnalyzeGuests && rs != nil {
-		runStats.guestsChecked = len(rs.VMs()) + len(rs.Containers())
+	if cfg.AnalyzeGuests {
+		runStats.guestsChecked = resourceCounts.guests
 	}
-	if cfg.AnalyzeDocker && rs != nil {
-		runStats.dockerChecked = len(rs.DockerHosts())
+	if cfg.AnalyzeDocker {
+		runStats.dockerChecked = resourceCounts.docker
 	}
-	if cfg.AnalyzeStorage && rs != nil {
-		runStats.storageChecked = patrolRuntimeStorageResourceCount(state)
+	if cfg.AnalyzeStorage {
+		runStats.storageChecked = resourceCounts.storage
 	}
-	if cfg.AnalyzePBS && rs != nil {
-		runStats.pbsChecked = len(rs.PBSInstances())
+	if cfg.AnalyzePBS {
+		runStats.pbsChecked = resourceCounts.pbs
 	}
-	if cfg.AnalyzePMG && rs != nil {
-		runStats.pmgChecked = len(rs.PMGInstances())
+	if cfg.AnalyzePMG {
+		runStats.pmgChecked = resourceCounts.pmg
 	}
-	if cfg.AnalyzeHosts && rs != nil {
-		runStats.hostsChecked = len(rs.Hosts())
+	if cfg.AnalyzeHosts {
+		runStats.hostsChecked = resourceCounts.hosts
 	}
-	if cfg.AnalyzeKubernetes && rs != nil {
-		runStats.kubernetesChecked = len(rs.K8sClusters())
+	if cfg.AnalyzeKubernetes {
+		runStats.kubernetesChecked = resourceCounts.kubernetes
 	}
 	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked +
 		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.pmgChecked + runStats.hostsChecked +
@@ -709,31 +708,31 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	filteredState := p.filterStateByScopeState(fullState, scope)
 	effectiveScopeIDs := patrolRuntimeSortedResourceIDs(filteredState)
 
-	// Count filtered resources (respect analysis configuration)
+	resourceCounts := patrolRuntimeCountResources(filteredState)
 	resourceCount := 0
 	if cfg.AnalyzeNodes {
-		resourceCount += len(filteredState.Nodes)
+		resourceCount += resourceCounts.nodes
 	}
 	if cfg.AnalyzeGuests {
-		resourceCount += len(filteredState.VMs) + len(filteredState.Containers)
+		resourceCount += resourceCounts.guests
 	}
 	if cfg.AnalyzeDocker {
-		resourceCount += len(filteredState.DockerHosts)
+		resourceCount += resourceCounts.docker
 	}
 	if cfg.AnalyzeStorage {
-		resourceCount += patrolRuntimeStorageResourceCount(filteredState)
+		resourceCount += resourceCounts.storage
 	}
 	if cfg.AnalyzePBS {
-		resourceCount += len(filteredState.PBSInstances)
+		resourceCount += resourceCounts.pbs
 	}
 	if cfg.AnalyzeHosts {
-		resourceCount += len(filteredState.Hosts)
+		resourceCount += resourceCounts.hosts
 	}
 	if cfg.AnalyzeKubernetes {
-		resourceCount += len(filteredState.KubernetesClusters)
+		resourceCount += resourceCounts.kubernetes
 	}
 	if cfg.AnalyzePMG {
-		resourceCount += len(filteredState.PMGInstances)
+		resourceCount += resourceCounts.pmg
 	}
 
 	if resourceCount == 0 {
@@ -756,28 +755,28 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 	// Track run statistics
 	if cfg.AnalyzeNodes {
-		runStats.nodesChecked = len(filteredState.Nodes)
+		runStats.nodesChecked = resourceCounts.nodes
 	}
 	if cfg.AnalyzeGuests {
-		runStats.guestsChecked = len(filteredState.VMs) + len(filteredState.Containers)
+		runStats.guestsChecked = resourceCounts.guests
 	}
 	if cfg.AnalyzeDocker {
-		runStats.dockerChecked = len(filteredState.DockerHosts)
+		runStats.dockerChecked = resourceCounts.docker
 	}
 	if cfg.AnalyzeStorage {
-		runStats.storageChecked = patrolRuntimeStorageResourceCount(filteredState)
+		runStats.storageChecked = resourceCounts.storage
 	}
 	if cfg.AnalyzePBS {
-		runStats.pbsChecked = len(filteredState.PBSInstances)
+		runStats.pbsChecked = resourceCounts.pbs
 	}
 	if cfg.AnalyzeHosts {
-		runStats.hostsChecked = len(filteredState.Hosts)
+		runStats.hostsChecked = resourceCounts.hosts
 	}
 	if cfg.AnalyzeKubernetes {
-		runStats.kubernetesChecked = len(filteredState.KubernetesClusters)
+		runStats.kubernetesChecked = resourceCounts.kubernetes
 	}
 	if cfg.AnalyzePMG {
-		runStats.pmgChecked = len(filteredState.PMGInstances)
+		runStats.pmgChecked = resourceCounts.pmg
 	}
 	runStats.resourceCount = resourceCount
 
