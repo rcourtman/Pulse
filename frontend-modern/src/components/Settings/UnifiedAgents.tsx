@@ -1130,15 +1130,15 @@ export const UnifiedAgents: Component = () => {
             <div class="flex-1">
               <p class="text-sm">
                 Proxmox nodes can be added here with the unified agent for extra capabilities like
-                temperature monitoring and Pulse Patrol automation (auto-creates the API token and
-                links the node).
+                temperature monitoring and Pulse Patrol automation (auto-creates the required token
+                and links the node).
               </p>
               <button
                 type="button"
                 onClick={() => navigate('/settings/infrastructure/proxmox')}
                 class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100 underline"
               >
-                Need API-only setup? Open Proxmox →
+                Need direct setup instead? Open Proxmox →
               </button>
             </div>
           </div>
