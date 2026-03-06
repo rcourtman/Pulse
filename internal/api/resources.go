@@ -31,6 +31,13 @@ type ResourceHandlers struct {
 	tenantStateProvider TenantStateProvider
 }
 
+type registrySeed struct {
+	snapshot      models.StateSnapshot
+	resources     []unified.Resource
+	lastUpdate    time.Time
+	unifiedSource bool
+}
+
 // SupplementalRecordsProvider provides out-of-band ingest records for a specific source.
 type SupplementalRecordsProvider interface {
 	GetCurrentRecords() []unified.IngestRecord
@@ -562,20 +569,14 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	}
 	key := cacheKey(orgID)
 
-	var snapshot models.StateSnapshot
-	if orgID != "" && orgID != "default" {
-		// Security: non-default orgs must use tenant-scoped state only.
-		if h.tenantStateProvider == nil {
-			return nil, errors.New("tenant state provider unavailable")
-		}
-		snapshot = h.tenantStateProvider.GetStateForTenant(orgID)
-	} else if h.stateProvider != nil {
-		snapshot = h.stateProvider.ReadSnapshot()
+	seed, err := h.registrySeed(orgID)
+	if err != nil {
+		return nil, err
 	}
 
 	h.cacheMu.Lock()
 	entry, ok := h.registryCache[key]
-	if ok && entry.registry != nil && entry.lastUpdate.Equal(snapshot.LastUpdate) {
+	if ok && entry.registry != nil && !seed.lastUpdate.IsZero() && entry.lastUpdate.Equal(seed.lastUpdate) {
 		h.cacheMu.Unlock()
 		return entry.registry, nil
 	}
@@ -589,30 +590,72 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	h.supplementalMu.RUnlock()
 
 	registry := unified.NewRegistry(store)
-	ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
-	registry.IngestSnapshot(unified.SnapshotWithoutSources(snapshot, ownedSources))
+	if seed.unifiedSource {
+		registry.IngestResources(seed.resources)
+	} else {
+		ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
+		registry.IngestSnapshot(unified.SnapshotWithoutSources(seed.snapshot, ownedSources))
 
-	for source, provider := range supplementalProviders {
-		if provider == nil {
-			continue
+		for source, provider := range supplementalProviders {
+			if provider == nil {
+				continue
+			}
+			var records []unified.IngestRecord
+			if tenantProvider, ok := any(provider).(TenantSupplementalRecordsProvider); ok {
+				records = tenantProvider.GetCurrentRecordsForOrg(orgID)
+			} else {
+				records = provider.GetCurrentRecords()
+			}
+			if len(records) == 0 {
+				continue
+			}
+			registry.IngestRecords(source, records)
 		}
-		var records []unified.IngestRecord
-		if tenantProvider, ok := any(provider).(TenantSupplementalRecordsProvider); ok {
-			records = tenantProvider.GetCurrentRecordsForOrg(orgID)
-		} else {
-			records = provider.GetCurrentRecords()
-		}
-		if len(records) == 0 {
-			continue
-		}
-		registry.IngestRecords(source, records)
 	}
 
 	h.cacheMu.Lock()
-	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: snapshot.LastUpdate}
+	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: seed.lastUpdate}
 	h.cacheMu.Unlock()
 
 	return registry, nil
+}
+
+func (h *ResourceHandlers) registrySeed(orgID string) (registrySeed, error) {
+	seed := registrySeed{}
+
+	if orgID != "" && orgID != "default" {
+		if h.tenantStateProvider == nil {
+			return seed, errors.New("tenant state provider unavailable")
+		}
+		if provider, ok := h.tenantStateProvider.(TenantUnifiedResourceSnapshotProvider); ok {
+			resources, lastUpdate := provider.UnifiedResourceSnapshotForTenant(orgID)
+			if len(resources) > 0 || !lastUpdate.IsZero() {
+				seed.resources = resources
+				seed.lastUpdate = lastUpdate
+				seed.unifiedSource = true
+				return seed, nil
+			}
+		}
+		seed.snapshot = h.tenantStateProvider.GetStateForTenant(orgID)
+		seed.lastUpdate = seed.snapshot.LastUpdate
+		return seed, nil
+	}
+
+	if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotProvider); ok {
+		resources, lastUpdate := provider.UnifiedResourceSnapshot()
+		if len(resources) > 0 || !lastUpdate.IsZero() {
+			seed.resources = resources
+			seed.lastUpdate = lastUpdate
+			seed.unifiedSource = true
+			return seed, nil
+		}
+	}
+
+	if h.stateProvider != nil {
+		seed.snapshot = h.stateProvider.ReadSnapshot()
+		seed.lastUpdate = seed.snapshot.LastUpdate
+	}
+	return seed, nil
 }
 
 func supplementalSnapshotOwnedSources(providers map[unified.DataSource]SupplementalRecordsProvider, orgID string) []unified.DataSource {

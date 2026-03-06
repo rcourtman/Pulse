@@ -80,6 +80,33 @@ func TestMultiTenantStateProvider_DefaultAndTenant(t *testing.T) {
 	}
 }
 
+func TestMultiTenantStateProvider_UnifiedResourceSnapshotForTenant(t *testing.T) {
+	defaultMonitor, defaultState, _ := newTestMonitor(t)
+	defaultState.Hosts = []models.Host{{ID: "host-default", Hostname: "default-host", Status: "online"}}
+	syncTestResourceStore(t, defaultMonitor, defaultState)
+
+	tenantMonitor, tenantState, _ := newTestMonitor(t)
+	tenantState.Hosts = []models.Host{{ID: "host-tenant", Hostname: "tenant-host", Status: "online"}}
+	syncTestResourceStore(t, tenantMonitor, tenantState)
+
+	mtm := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		"tenant-1": tenantMonitor,
+	})
+
+	provider := NewMultiTenantStateProvider(mtm, defaultMonitor)
+
+	defaultResources, _ := provider.UnifiedResourceSnapshotForTenant("default")
+	if len(defaultResources) != 1 || defaultResources[0].Name != "default-host" {
+		t.Fatalf("unexpected default unified resources: %#v", defaultResources)
+	}
+
+	tenantResources, _ := provider.UnifiedResourceSnapshotForTenant("tenant-1")
+	if len(tenantResources) != 1 || tenantResources[0].Name != "tenant-host" {
+		t.Fatalf("unexpected tenant unified resources: %#v", tenantResources)
+	}
+}
+
 func TestMultiTenantStateProvider_FallbackOnError(t *testing.T) {
 	defaultMonitor, defaultState, _ := newTestMonitor(t)
 	defaultState.VMs = []models.VM{{ID: "vm-default"}}

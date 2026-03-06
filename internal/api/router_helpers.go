@@ -2,9 +2,11 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -63,6 +65,31 @@ func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateS
 
 	// Security: fail closed for non-default orgs when tenant monitor is unavailable.
 	return models.StateSnapshot{}
+}
+
+// UnifiedResourceSnapshotForTenant returns the canonical unified-resource seed
+// for a specific tenant, along with its freshness marker.
+func (p *MultiTenantStateProvider) UnifiedResourceSnapshotForTenant(orgID string) ([]unifiedresources.Resource, time.Time) {
+	// Default org uses the default monitor.
+	if orgID == "" || orgID == "default" {
+		if p.defaultMonitor != nil {
+			return p.defaultMonitor.UnifiedResourceSnapshot()
+		}
+		return nil, time.Time{}
+	}
+
+	if p.mtMonitor != nil {
+		monitor, err := p.mtMonitor.GetMonitor(orgID)
+		if err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor for unified resource snapshot")
+			return nil, time.Time{}
+		}
+		if monitor != nil {
+			return monitor.UnifiedResourceSnapshot()
+		}
+	}
+
+	return nil, time.Time{}
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor manager.

@@ -243,6 +243,45 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 	rr.mu.Unlock()
 }
 
+// IngestResources seeds the registry from already-unified resources.
+// This is used when a caller already has a canonical unified read model and
+// only needs store-backed manual links/exclusions applied on top.
+func (rr *ResourceRegistry) IngestResources(resources []Resource) {
+	for _, incoming := range resources {
+		resource := cloneResourcePtr(&incoming)
+		if resource == nil {
+			continue
+		}
+
+		resource.ID = CanonicalResourceID(resource.ID)
+		if resource.ID == "" {
+			continue
+		}
+		resource.Type = CanonicalResourceType(resource.Type)
+		if resource.SourceStatus == nil && len(resource.Sources) > 0 {
+			resource.SourceStatus = make(map[DataSource]SourceStatus, len(resource.Sources))
+			for _, source := range resource.Sources {
+				resource.SourceStatus[source] = SourceStatus{
+					Status:   "online",
+					LastSeen: resource.LastSeen,
+				}
+			}
+		}
+
+		rr.mu.Lock()
+		rr.resources[resource.ID] = resource
+		rr.viewsDirty = true
+		rr.mu.Unlock()
+	}
+
+	rr.mu.Lock()
+	rr.applyManualLinks()
+	rr.buildChildCounts()
+	rr.markStaleLocked(time.Now().UTC(), nil)
+	rr.viewsDirty = true
+	rr.mu.Unlock()
+}
+
 // List returns all resources.
 func (rr *ResourceRegistry) List() []Resource {
 	rr.mu.RLock()

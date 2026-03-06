@@ -107,6 +107,18 @@ func (s *State) GetSnapshot() StateSnapshot {
 	return snapshot
 }
 
+// GetLastUpdate returns the current state freshness marker without cloning the
+// full snapshot payload.
+func (s *State) GetLastUpdate() time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.LastUpdate
+}
+
 // ResourceLocation describes where a resource lives in the infrastructure hierarchy.
 // This is the authoritative source of truth for routing commands to resources.
 type ResourceLocation struct {

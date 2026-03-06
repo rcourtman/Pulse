@@ -2896,6 +2896,34 @@ func (m *Monitor) GetUnifiedResources() []unifiedresources.Resource {
 	return store.GetAll()
 }
 
+// UnifiedResourceSnapshot returns a canonical unified-resource seed plus the
+// associated freshness marker. It respects mock mode by falling back to the
+// current mock-aware state snapshot instead of the live resource store.
+func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
+	if m == nil {
+		return nil, time.Time{}
+	}
+
+	if mock.IsMockEnabled() {
+		snapshot := m.GetState()
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(snapshot)
+		return registry.List(), snapshot.LastUpdate
+	}
+
+	if resources := m.GetUnifiedResources(); resources != nil {
+		if m.state == nil {
+			return resources, time.Time{}
+		}
+		return resources, m.state.GetLastUpdate()
+	}
+
+	snapshot := m.GetState()
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	return registry.List(), snapshot.LastUpdate
+}
+
 // GetUnifiedReadState returns a typed unified read-state provider when the
 // configured resource store supports it.
 func (m *Monitor) GetUnifiedReadState() unifiedresources.ReadState {

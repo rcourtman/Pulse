@@ -22,6 +22,21 @@ func (s resourceStateProvider) ReadSnapshot() models.StateSnapshot {
 	return s.snapshot
 }
 
+type resourceUnifiedSeedProvider struct {
+	snapshot  models.StateSnapshot
+	resources []unified.Resource
+}
+
+func (p resourceUnifiedSeedProvider) ReadSnapshot() models.StateSnapshot {
+	return p.snapshot
+}
+
+func (p resourceUnifiedSeedProvider) UnifiedResourceSnapshot() ([]unified.Resource, time.Time) {
+	out := make([]unified.Resource, len(p.resources))
+	copy(out, p.resources)
+	return out, p.snapshot.LastUpdate
+}
+
 type mockSupplementalRecordsProvider struct {
 	records      []unified.IngestRecord
 	ownedSources []unified.DataSource
@@ -116,6 +131,48 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 	}
 	if resource.DiscoveryTarget.AgentID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
 		t.Fatalf("discovery target = %+v, want host-1/host-1", resource.DiscoveryTarget)
+	}
+}
+
+func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
+	now := time.Now().UTC()
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "agent-seeded",
+				Type:      unified.ResourceTypeAgent,
+				Name:      "seeded-agent",
+				Status:    unified.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceAgent},
+				Identity: unified.ResourceIdentity{
+					Hostnames: []string{"seeded-agent"},
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(resp.Data))
+	}
+	if got := resp.Data[0].Name; got != "seeded-agent" {
+		t.Fatalf("resource name = %q, want seeded-agent", got)
 	}
 }
 
@@ -1112,6 +1169,68 @@ func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	}
 	if !containsSource(resource.Sources, unified.SourceTrueNAS) {
 		t.Fatalf("expected truenas source, got %+v", resource.Sources)
+	}
+}
+
+func TestResourceListUnifiedSeedSkipsSupplementalReingest(t *testing.T) {
+	now := time.Now().UTC()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "agent-truenas-seeded",
+				Type:      unified.ResourceTypeAgent,
+				Name:      "truenas-main",
+				Status:    unified.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceTrueNAS},
+				Identity: unified.ResourceIdentity{
+					MachineID: "tn-main",
+					Hostnames: []string{"truenas-main"},
+				},
+			},
+		},
+	})
+	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
+		records: []unified.IngestRecord{
+			{
+				SourceID: "system:truenas-main",
+				Resource: unified.Resource{
+					Type:      unified.ResourceTypeAgent,
+					Name:      "truenas-main-duplicate",
+					Status:    unified.StatusOnline,
+					LastSeen:  now,
+					UpdatedAt: now,
+				},
+				Identity: unified.ResourceIdentity{
+					MachineID: "tn-main-duplicate",
+					Hostnames: []string{"truenas-main-duplicate"},
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?source=truenas", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected unified seed to avoid duplicate supplemental ingest, got %d resources", len(resp.Data))
+	}
+	if got := resp.Data[0].Name; got != "truenas-main" {
+		t.Fatalf("resource name = %q, want truenas-main", got)
 	}
 }
 
