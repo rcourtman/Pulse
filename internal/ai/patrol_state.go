@@ -268,6 +268,68 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 	}
 }
 
+func patrolVisitRuntimeSupplementalSnapshotFields(s patrolRuntimeState, visit func(ids []string, aliases []string) bool) {
+	emit := func(ids []string, aliases ...string) bool {
+		return visit(ids, aliases)
+	}
+
+	for _, n := range s.Nodes {
+		if !emit([]string{n.ID}, n.Name) {
+			return
+		}
+	}
+	for _, vm := range s.VMs {
+		if !emit([]string{vm.ID}, vm.Name) {
+			return
+		}
+	}
+	for _, ct := range s.Containers {
+		if !emit([]string{ct.ID}, ct.Name) {
+			return
+		}
+	}
+	for _, storage := range s.Storage {
+		if !emit([]string{storage.ID}, storage.Name) {
+			return
+		}
+	}
+	for _, dh := range s.DockerHosts {
+		if !emit([]string{dh.ID}, dh.DisplayName, dh.CustomDisplayName, dh.Hostname) {
+			return
+		}
+		for _, dc := range dh.Containers {
+			if !emit([]string{dc.ID}, dc.Name) {
+				return
+			}
+		}
+	}
+	for _, h := range s.Hosts {
+		if !emit([]string{h.ID}, h.DisplayName, h.Hostname) {
+			return
+		}
+	}
+	for _, pbs := range s.PBSInstances {
+		if !emit([]string{pbs.ID}, pbs.Name, pbs.Host) {
+			return
+		}
+	}
+	for _, pmg := range s.PMGInstances {
+		if !emit([]string{pmg.ID}, pmg.Name, pmg.Host) {
+			return
+		}
+	}
+	for _, k := range s.KubernetesClusters {
+		if !emit([]string{k.ID}, k.Name, k.DisplayName, k.CustomDisplayName) {
+			return
+		}
+	}
+	for _, disk := range s.PhysicalDisks {
+		if !emit([]string{disk.ID, disk.DevPath}, disk.Model) {
+			return
+		}
+	}
+}
+
 func patrolRuntimeKnownResources(s patrolRuntimeState) map[string]bool {
 	known := make(map[string]bool)
 	add := func(values ...string) {
@@ -283,39 +345,11 @@ func patrolRuntimeKnownResources(s patrolRuntimeState) map[string]bool {
 		add(record.aliases...)
 		return true
 	})
-	for _, n := range s.Nodes {
-		add(n.ID, n.Name)
-	}
-	for _, vm := range s.VMs {
-		add(vm.ID, vm.Name)
-	}
-	for _, ct := range s.Containers {
-		add(ct.ID, ct.Name)
-	}
-	for _, storage := range s.Storage {
-		add(storage.ID, storage.Name)
-	}
-	for _, dh := range s.DockerHosts {
-		add(dh.ID, dh.DisplayName, dh.CustomDisplayName, dh.Hostname)
-		for _, dc := range dh.Containers {
-			add(dc.ID, dc.Name)
-		}
-	}
-	for _, h := range s.Hosts {
-		add(h.ID, h.DisplayName, h.Hostname)
-	}
-	for _, pbs := range s.PBSInstances {
-		add(pbs.ID, pbs.Name, pbs.Host)
-	}
-	for _, pmg := range s.PMGInstances {
-		add(pmg.ID, pmg.Name, pmg.Host)
-	}
-	for _, k := range s.KubernetesClusters {
-		add(k.ID, k.Name, k.DisplayName, k.CustomDisplayName)
-	}
-	for _, disk := range s.PhysicalDisks {
-		add(disk.ID, disk.DevPath, disk.Model)
-	}
+	patrolVisitRuntimeSupplementalSnapshotFields(s, func(ids []string, aliases []string) bool {
+		add(ids...)
+		add(aliases...)
+		return true
+	})
 
 	return known
 }
@@ -341,40 +375,12 @@ func patrolRuntimeResourceIDs(s patrolRuntimeState) []string {
 		}
 		return true
 	})
-	for _, n := range s.Nodes {
-		add(n.ID)
-	}
-	for _, vm := range s.VMs {
-		add(vm.ID)
-	}
-	for _, ct := range s.Containers {
-		add(ct.ID)
-	}
-	for _, storage := range s.Storage {
-		add(storage.ID)
-	}
-	for _, dh := range s.DockerHosts {
-		add(dh.ID)
-		for _, dc := range dh.Containers {
-			add(dc.ID)
+	patrolVisitRuntimeSupplementalSnapshotFields(s, func(ids []string, _ []string) bool {
+		for _, id := range ids {
+			add(id)
 		}
-	}
-	for _, h := range s.Hosts {
-		add(h.ID)
-	}
-	for _, pbs := range s.PBSInstances {
-		add(pbs.ID)
-	}
-	for _, pmg := range s.PMGInstances {
-		add(pmg.ID)
-	}
-	for _, k := range s.KubernetesClusters {
-		add(k.ID)
-	}
-	for _, disk := range s.PhysicalDisks {
-		add(disk.ID)
-		add(disk.DevPath)
-	}
+		return true
+	})
 
 	return ids
 }

@@ -624,6 +624,22 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 			pmg:         []*unifiedresources.PMGInstanceView{&pmgView},
 			k8sClusters: []*unifiedresources.K8sClusterView{&k8sView},
 		},
+		DockerHosts: []models.DockerHost{
+			{
+				ID:                "docker-1",
+				CustomDisplayName: "docker-custom",
+				Hostname:          "docker.local",
+				Containers: []models.DockerContainer{
+					{ID: "ctr-1", Name: "web-snapshot"},
+				},
+			},
+		},
+		Hosts: []models.Host{
+			{ID: "agent-1", DisplayName: "agent-display", Hostname: "agent.local"},
+		},
+		KubernetesClusters: []models.KubernetesCluster{
+			{ID: "k8s-1", CustomDisplayName: "cluster-custom", Name: "cluster-a"},
+		},
 		unifiedResourceProvider: &mockUnifiedResourceProvider{
 			getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
 				if t != unifiedresources.ResourceTypePhysicalDisk {
@@ -667,7 +683,7 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 	}
 
 	known := patrolRuntimeKnownResources(state)
-	for _, want := range []string{"node-a", "vm-a", "ct-a", "local-zfs", "docker.local", "web", "agent.local", "cluster-a", "Samsung SSD"} {
+	for _, want := range []string{"node-a", "vm-a", "ct-a", "local-zfs", "docker.local", "docker-custom", "web", "web-snapshot", "agent.local", "agent-display", "cluster-a", "cluster-custom", "Samsung SSD"} {
 		if !known[want] {
 			t.Fatalf("expected known runtime resources to include %q", want)
 		}
