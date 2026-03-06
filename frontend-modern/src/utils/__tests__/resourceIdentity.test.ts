@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import {
   getAgentLikeIdentityAliases,
   getAgentLikeMetadataIds,
+  getPreferredConfiguredNodeLabel,
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
   getPreferredResourceDisplayName,
@@ -212,6 +213,26 @@ describe('resourceIdentity', () => {
     expect(getInfrastructureMetadataId(node)).toBe('agent-linked');
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('pve1.local');
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' })).toBe('pve1');
+  });
+
+  it('resolves configured node labels with display-first precedence', () => {
+    expect(
+      getPreferredConfiguredNodeLabel({
+        id: 'node-1',
+        displayName: 'Cluster Node',
+        name: 'pve1',
+        host: 'pve1.local',
+      } as never),
+    ).toBe('Cluster Node');
+
+    expect(
+      getPreferredConfiguredNodeLabel({
+        id: 'node-2',
+        displayName: '',
+        name: '',
+        host: 'pbs.local',
+      } as never),
+    ).toBe('pbs.local');
   });
 
   it('resolves shared resource hostnames and display names', () => {

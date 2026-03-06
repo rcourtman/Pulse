@@ -1,5 +1,6 @@
 import type { Agent, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import type { NodeConfig } from '@/types/nodes';
 import {
   getActionableAgentIdFromResource,
   getActionableDockerRuntimeIdFromResource,
@@ -153,6 +154,14 @@ export const getInfrastructureDiscoveryHostname = (
   node: Pick<Node, 'name'>,
   agent?: Pick<Agent, 'hostname'>,
 ): string => asTrimmedString(agent?.hostname) || node.name;
+
+export const getPreferredConfiguredNodeLabel = (
+  node: Pick<NodeConfig, 'displayName' | 'name' | 'host' | 'id'>,
+): string =>
+  asTrimmedString(node.displayName) ||
+  asTrimmedString(node.name) ||
+  asTrimmedString(node.host) ||
+  node.id;
 
 export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIdentityRow[] => {
   const rows: ResourceIdentityRow[] = [];

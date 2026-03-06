@@ -13,6 +13,7 @@ import { logger } from '@/utils/logger';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { useResources } from '@/hooks/useResources';
+import { getPreferredConfiguredNodeLabel } from '@/utils/resourceIdentity';
 import type { Resource } from '@/types/resource';
 import type { Temperature } from '@/types/api';
 import type { ClusterEndpoint, NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
@@ -646,7 +647,7 @@ export function useInfrastructureSettingsState({
   const nodePendingDeleteLabel = () => {
     const node = nodePendingDelete();
     if (!node) return '';
-    return node.displayName || node.name || node.host || node.id;
+    return getPreferredConfiguredNodeLabel(node);
   };
 
   const nodePendingDeleteHost = () => nodePendingDelete()?.host || '';
@@ -683,7 +684,7 @@ export function useInfrastructureSettingsState({
     try {
       await NodesAPI.deleteNode(pending.id);
       setNodes(nodes().filter((n) => n.id !== pending.id));
-      const label = pending.displayName || pending.name || pending.host || pending.id;
+      const label = getPreferredConfiguredNodeLabel(pending);
       notificationStore.success(`${label} removed successfully`);
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Failed to delete node');
