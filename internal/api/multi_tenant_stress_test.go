@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -610,6 +611,21 @@ func seedOrgMetrics(t *testing.T, store *metrics.Store, orgID string, metricType
 // per-org state snapshots from a pre-built map.
 type multiTenantStateProvider struct {
 	states map[string]*models.State
+}
+
+func (p *multiTenantStateProvider) UnifiedReadStateForTenant(orgID string) unifiedresources.ReadState {
+	return SnapshotReadState(p.GetStateForTenant(orgID))
+}
+
+func (p *multiTenantStateProvider) UnifiedResourceSnapshotForTenant(orgID string) ([]unifiedresources.Resource, time.Time) {
+	snapshot := p.GetStateForTenant(orgID)
+	if snapshot.LastUpdate.IsZero() {
+		return nil, time.Time{}
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	return registry.List(), snapshot.LastUpdate
 }
 
 func (p *multiTenantStateProvider) GetStateForTenant(orgID string) models.StateSnapshot {

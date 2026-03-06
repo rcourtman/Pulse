@@ -80,6 +80,45 @@ func TestMultiTenantStateProvider_DefaultAndTenant(t *testing.T) {
 	}
 }
 
+func TestMultiTenantStateProvider_UnifiedReadStateForTenant(t *testing.T) {
+	defaultMonitor, defaultState, _ := newTestMonitor(t)
+	defaultState.Hosts = []models.Host{{ID: "host-default", Hostname: "default-host", Status: "online"}}
+	syncTestResourceStore(t, defaultMonitor, defaultState)
+
+	tenantMonitor, tenantState, _ := newTestMonitor(t)
+	tenantState.Hosts = []models.Host{{ID: "host-tenant", Hostname: "tenant-host", Status: "online"}}
+	syncTestResourceStore(t, tenantMonitor, tenantState)
+
+	mtm := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		"tenant-1": tenantMonitor,
+	})
+
+	provider := NewMultiTenantStateProvider(mtm, defaultMonitor)
+
+	defaultReadState := provider.UnifiedReadStateForTenant("default")
+	if defaultReadState == nil {
+		t.Fatal("expected default unified read state")
+	}
+	if defaultReadState != defaultMonitor.GetUnifiedReadState() {
+		t.Fatal("expected default monitor-scoped read state")
+	}
+	if hosts := defaultReadState.Hosts(); len(hosts) != 1 || hosts[0].Name() != "default-host" {
+		t.Fatalf("unexpected default hosts: %#v", hosts)
+	}
+
+	tenantReadState := provider.UnifiedReadStateForTenant("tenant-1")
+	if tenantReadState == nil {
+		t.Fatal("expected tenant unified read state")
+	}
+	if tenantReadState != tenantMonitor.GetUnifiedReadState() {
+		t.Fatal("expected tenant monitor-scoped read state")
+	}
+	if hosts := tenantReadState.Hosts(); len(hosts) != 1 || hosts[0].Name() != "tenant-host" {
+		t.Fatalf("unexpected tenant hosts: %#v", hosts)
+	}
+}
+
 func TestMultiTenantStateProvider_UnifiedResourceSnapshotForTenant(t *testing.T) {
 	defaultMonitor, defaultState, _ := newTestMonitor(t)
 	defaultState.Hosts = []models.Host{{ID: "host-default", Hostname: "default-host", Status: "online"}}
@@ -120,6 +159,9 @@ func TestMultiTenantStateProvider_FallbackOnError(t *testing.T) {
 	snap := provider.GetStateForTenant("../bad")
 	if len(snap.VMs) != 0 {
 		t.Fatalf("expected empty snapshot for tenant error, got %#v", snap.VMs)
+	}
+	if readState := provider.UnifiedReadStateForTenant("../bad"); readState != nil {
+		t.Fatalf("expected nil read state for tenant error, got %#v", readState)
 	}
 }
 

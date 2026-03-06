@@ -18,6 +18,10 @@ type tenantResourceStateProvider struct {
 	snapshots map[string]models.StateSnapshot
 }
 
+func (p tenantResourceStateProvider) UnifiedReadStateForTenant(orgID string) unified.ReadState {
+	return SnapshotReadState(p.GetStateForTenant(orgID))
+}
+
 func (p tenantResourceStateProvider) GetStateForTenant(orgID string) models.StateSnapshot {
 	if p.snapshots == nil {
 		return models.StateSnapshot{}

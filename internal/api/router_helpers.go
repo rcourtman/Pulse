@@ -40,56 +40,53 @@ func NewMultiTenantStateProvider(mtm *monitoring.MultiTenantMonitor, defaultM *m
 	}
 }
 
-// GetStateForTenant returns the state for a specific tenant.
-func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateSnapshot {
-	// Default org uses the default monitor
+func (p *MultiTenantStateProvider) monitorForTenant(orgID string) *monitoring.Monitor {
 	if orgID == "" || orgID == "default" {
-		if p.defaultMonitor != nil {
-			return p.defaultMonitor.ReadSnapshot()
-		}
-		return models.StateSnapshot{}
+		return p.defaultMonitor
 	}
 
-	// Try to get tenant-specific monitor
 	if p.mtMonitor != nil {
 		monitor, err := p.mtMonitor.GetMonitor(orgID)
 		if err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor for state")
-			// Security: never fall back to default org state for non-default org requests.
-			return models.StateSnapshot{}
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor")
+			return nil
 		}
-		if monitor != nil {
-			return monitor.ReadSnapshot()
-		}
+		return monitor
 	}
 
-	// Security: fail closed for non-default orgs when tenant monitor is unavailable.
-	return models.StateSnapshot{}
+	return nil
+}
+
+// UnifiedReadStateForTenant returns the canonical typed unified read-state for a
+// specific tenant, falling back to a snapshot-backed adapter only when the
+// monitor has not been wired with a resource store yet.
+func (p *MultiTenantStateProvider) UnifiedReadStateForTenant(orgID string) unifiedresources.ReadState {
+	monitor := p.monitorForTenant(orgID)
+	if monitor == nil {
+		return nil
+	}
+	return monitor.GetUnifiedReadStateOrSnapshot()
+}
+
+// GetStateForTenant returns the legacy state snapshot bridge for a specific
+// tenant. New code should prefer UnifiedReadStateForTenant.
+func (p *MultiTenantStateProvider) GetStateForTenant(orgID string) models.StateSnapshot {
+	monitor := p.monitorForTenant(orgID)
+	if monitor == nil {
+		return models.StateSnapshot{}
+	}
+	return monitor.ReadSnapshot()
 }
 
 // UnifiedResourceSnapshotForTenant returns the canonical unified-resource seed
 // for a specific tenant, along with its freshness marker.
 func (p *MultiTenantStateProvider) UnifiedResourceSnapshotForTenant(orgID string) ([]unifiedresources.Resource, time.Time) {
-	// Default org uses the default monitor.
-	if orgID == "" || orgID == "default" {
-		if p.defaultMonitor != nil {
-			return p.defaultMonitor.UnifiedResourceSnapshot()
-		}
+	monitor := p.monitorForTenant(orgID)
+	if monitor == nil {
 		return nil, time.Time{}
 	}
 
-	if p.mtMonitor != nil {
-		monitor, err := p.mtMonitor.GetMonitor(orgID)
-		if err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to get tenant monitor for unified resource snapshot")
-			return nil, time.Time{}
-		}
-		if monitor != nil {
-			return monitor.UnifiedResourceSnapshot()
-		}
-	}
-
-	return nil, time.Time{}
+	return monitor.UnifiedResourceSnapshot()
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor manager.
