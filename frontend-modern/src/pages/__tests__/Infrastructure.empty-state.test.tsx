@@ -52,7 +52,7 @@ describe('Infrastructure empty state', () => {
     expect(button.closest('button')).toBeInTheDocument();
   });
 
-  it('navigates to /settings/infrastructure when Add Infrastructure button is clicked', async () => {
+  it('navigates to /settings when Add Infrastructure button is clicked', async () => {
     const { getByText } = render(() => <Infrastructure />);
 
     await waitFor(() => {
@@ -61,6 +61,6 @@ describe('Infrastructure empty state', () => {
 
     fireEvent.click(getByText('Add Infrastructure'));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings');
   });
 });

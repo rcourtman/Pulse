@@ -11,7 +11,7 @@ import {
 import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure',
+  proxmox: '/settings/infrastructure/api',
   docker: '/settings/workloads/docker',
   agents: '/settings/workloads',
   'system-general': '/settings/system-general',
@@ -60,8 +60,9 @@ describe('settingsRouting', () => {
     expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
       '/settings/system-updates',
     );
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure')).toBe('/settings/workloads');
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe(
-      '/settings/infrastructure/pve',
+      '/settings/infrastructure/api/pve',
     );
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
   });
@@ -80,8 +81,10 @@ describe('settingsRouting', () => {
 
   it('maps query deep-links contract values', () => {
     const queryCases: Array<[string, SettingsTab | null]> = [
-      ['?tab=infrastructure', 'proxmox'],
+      ['?tab=infrastructure', 'agents'],
+      ['?tab=agents', 'agents'],
       ['?tab=workloads', 'agents'],
+      ['?tab=proxmox', 'proxmox'],
       ['?tab=docker', 'docker'],
       ['?tab=system-recovery', 'system-recovery'],
       ['?tab=organization-overview', 'organization-overview'],
@@ -124,9 +127,10 @@ describe('settingsRouting', () => {
 
   it('maps deriveAgentFromPath contracts for canonical infrastructure routes', () => {
     const agentCases: Array<[string, 'pve' | 'pbs' | 'pmg' | null]> = [
-      ['/settings/infrastructure/pve', 'pve'],
-      ['/settings/infrastructure/pbs', 'pbs'],
-      ['/settings/infrastructure/pmg', 'pmg'],
+      ['/settings/infrastructure/api/pve', 'pve'],
+      ['/settings/infrastructure/api/pbs', 'pbs'],
+      ['/settings/infrastructure/api/pmg', 'pmg'],
+      ['/settings/infrastructure', null],
       ['/settings/workloads', null],
     ];
     for (const [path, expectedAgent] of agentCases) {

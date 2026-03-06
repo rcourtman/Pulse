@@ -37,9 +37,9 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 
   const agentPaths: Record<AgentKey, string> = {
-    pve: '/settings/infrastructure/pve',
-    pbs: '/settings/infrastructure/pbs',
-    pmg: '/settings/infrastructure/pmg',
+    pve: '/settings/infrastructure/api/pve',
+    pbs: '/settings/infrastructure/api/pbs',
+    pmg: '/settings/infrastructure/api/pmg',
   };
 
   const handleSelectAgent = (agent: AgentKey) => {

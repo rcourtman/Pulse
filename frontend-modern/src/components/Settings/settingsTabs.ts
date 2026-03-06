@@ -28,8 +28,8 @@ export const baseTabGroups: SettingsNavGroup[] = [
     id: 'resources',
     label: 'Resources',
     items: [
-      { id: 'proxmox', label: 'Infrastructure', icon: ProxmoxIcon },
-      { id: 'agents', label: 'Unified Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
+      { id: 'agents', label: 'Infrastructure', icon: Bot, iconProps: { strokeWidth: 2 } },
+      { id: 'proxmox', label: 'API Connections', icon: ProxmoxIcon },
       { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
     ],
   },

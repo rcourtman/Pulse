@@ -27,6 +27,8 @@ export type AgentKey = 'pve' | 'pbs' | 'pmg';
 
 // Default landing tab for /settings when no deep-link tab is provided.
 export const DEFAULT_SETTINGS_TAB: SettingsTab = 'agents';
+const LEGACY_INFRASTRUCTURE_PREFIX = '/settings/infrastructure';
+const PROXMOX_API_PREFIX = '/settings/infrastructure/api';
 
 const normalizeSettingsPath = (path: string): string => {
   const trimmed = (path || '').trim();
@@ -40,6 +42,18 @@ const normalizeSettingsPath = (path: string): string => {
 export function resolveCanonicalSettingsPath(path: string): string | null {
   const normalizedPath = normalizeSettingsPath(path);
   if (!normalizedPath.startsWith('/settings')) return null;
+  if (normalizedPath === LEGACY_INFRASTRUCTURE_PREFIX) {
+    return settingsTabPath(DEFAULT_SETTINGS_TAB);
+  }
+  if (normalizedPath === `${LEGACY_INFRASTRUCTURE_PREFIX}/pve`) {
+    return `${PROXMOX_API_PREFIX}/pve`;
+  }
+  if (normalizedPath === `${LEGACY_INFRASTRUCTURE_PREFIX}/pbs`) {
+    return `${PROXMOX_API_PREFIX}/pbs`;
+  }
+  if (normalizedPath === `${LEGACY_INFRASTRUCTURE_PREFIX}/pmg`) {
+    return `${PROXMOX_API_PREFIX}/pmg`;
+  }
   return normalizedPath;
 }
 
@@ -47,7 +61,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
   const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
 
   if (canonicalPath.includes('/settings/workloads/docker')) return 'docker';
-  if (canonicalPath.includes('/settings/infrastructure')) return 'proxmox';
+  if (canonicalPath.includes(PROXMOX_API_PREFIX)) return 'proxmox';
   if (canonicalPath.includes('/settings/workloads')) return 'agents';
 
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';
@@ -80,9 +94,9 @@ export function deriveTabFromPath(path: string): SettingsTab {
 export function deriveAgentFromPath(path: string): AgentKey | null {
   const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
 
-  if (canonicalPath.includes('/settings/infrastructure/pve')) return 'pve';
-  if (canonicalPath.includes('/settings/infrastructure/pbs')) return 'pbs';
-  if (canonicalPath.includes('/settings/infrastructure/pmg')) return 'pmg';
+  if (canonicalPath.includes(`${PROXMOX_API_PREFIX}/pve`)) return 'pve';
+  if (canonicalPath.includes(`${PROXMOX_API_PREFIX}/pbs`)) return 'pbs';
+  if (canonicalPath.includes(`${PROXMOX_API_PREFIX}/pmg`)) return 'pmg';
   return null;
 }
 
@@ -93,10 +107,11 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
 
   switch (tab) {
     case 'infrastructure':
+    case 'workloads':
+    case 'agents':
+      return 'agents';
     case 'proxmox':
       return 'proxmox';
-    case 'workloads':
-      return 'agents';
     case 'docker':
       return 'docker';
     case 'system-recovery':
@@ -141,7 +156,7 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
 export function settingsTabPath(tab: SettingsTab): string {
   switch (tab) {
     case 'proxmox':
-      return '/settings/infrastructure';
+      return PROXMOX_API_PREFIX;
     case 'agents':
       return '/settings/workloads';
     case 'docker':

@@ -139,9 +139,9 @@ type AgentKey = 'pve' | 'pbs' | 'pmg';
 
 const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   proxmox: {
-    title: 'Proxmox',
+    title: 'API Connections',
     description:
-      'Monitor your Proxmox Virtual Environment, Backup Server, and Mail Gateway infrastructure.',
+      'Manage API-only connections for Proxmox VE, Backup Server, and Mail Gateway.',
   },
   docker: {
     title: 'Docker',
@@ -149,8 +149,9 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
       'Monitor Docker and Podman runtimes, containers, images, and volumes across your infrastructure.',
   },
   agents: {
-    title: 'Agents',
-    description: 'Install and manage the unified Pulse agent for system and Docker monitoring.',
+    title: 'Infrastructure',
+    description:
+      'Install and manage the unified Pulse agent, the default monitoring gateway for infrastructure workloads.',
   },
   'system-general': {
     title: 'General Settings',
@@ -250,10 +251,13 @@ const Settings: Component<SettingsProps> = (props) => {
   const { state, connected: _connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
+  const proxmoxApiPrefix = '/settings/infrastructure/api';
 
   const deriveTabFromPath = (path: string): SettingsTab => {
     if (path.includes('/settings/workloads/docker')) return 'docker';
-    if (path.includes('/settings/infrastructure')) return 'proxmox';
+    if (path === '/settings' || path === '/settings/' || path === '/settings/infrastructure')
+      return 'agents';
+    if (path.includes(proxmoxApiPrefix)) return 'proxmox';
     if (path.includes('/settings/workloads')) return 'agents';
     if (path.includes('/settings/system-general')) return 'system-general';
     if (path.includes('/settings/system-network')) return 'system-network';
@@ -274,13 +278,13 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
     // Generic /settings/security fallback must come AFTER specific security-* paths
     if (path.includes('/settings/security')) return 'security-overview';
-    return 'proxmox';
+    return 'agents';
   };
 
   const deriveAgentFromPath = (path: string): AgentKey | null => {
-    if (path.includes('/settings/infrastructure/pve')) return 'pve';
-    if (path.includes('/settings/infrastructure/pbs')) return 'pbs';
-    if (path.includes('/settings/infrastructure/pmg')) return 'pmg';
+    if (path.includes(`${proxmoxApiPrefix}/pve`)) return 'pve';
+    if (path.includes(`${proxmoxApiPrefix}/pbs`)) return 'pbs';
+    if (path.includes(`${proxmoxApiPrefix}/pmg`)) return 'pmg';
     return null;
   };
 
@@ -292,9 +296,9 @@ const Settings: Component<SettingsProps> = (props) => {
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 
   const agentPaths: Record<AgentKey, string> = {
-    pve: '/settings/infrastructure/pve',
-    pbs: '/settings/infrastructure/pbs',
-    pmg: '/settings/infrastructure/pmg',
+    pve: `${proxmoxApiPrefix}/pve`,
+    pbs: `${proxmoxApiPrefix}/pbs`,
+    pmg: `${proxmoxApiPrefix}/pmg`,
   };
 
   const handleSelectAgent = (agent: AgentKey) => {
@@ -314,7 +318,7 @@ const Settings: Component<SettingsProps> = (props) => {
     }
     const targetPath =
       tab === 'proxmox'
-        ? '/settings/infrastructure'
+        ? proxmoxApiPrefix
         : tab === 'agents'
           ? '/settings/workloads'
           : tab === 'docker'
@@ -344,11 +348,34 @@ const Settings: Component<SettingsProps> = (props) => {
     on(
       () => location.pathname,
       (path) => {
-        if (path === '/settings' || path === '/settings/') {
-          if (currentTab() !== 'proxmox') {
-            setCurrentTab('proxmox');
+        if (
+          path === '/settings' ||
+          path === '/settings/' ||
+          path === '/settings/infrastructure' ||
+          path === '/settings/infrastructure/'
+        ) {
+          if (path !== '/settings/workloads') {
+            navigate('/settings/workloads', { replace: true, scroll: false });
+            return;
           }
-          setSelectedAgent('pve');
+          if (currentTab() !== 'agents') {
+            setCurrentTab('agents');
+          }
+          return;
+        }
+
+        if (path === '/settings/infrastructure/pve') {
+          navigate(`${proxmoxApiPrefix}/pve`, { replace: true, scroll: false });
+          return;
+        }
+
+        if (path === '/settings/infrastructure/pbs') {
+          navigate(`${proxmoxApiPrefix}/pbs`, { replace: true, scroll: false });
+          return;
+        }
+
+        if (path === '/settings/infrastructure/pmg') {
+          navigate(`${proxmoxApiPrefix}/pmg`, { replace: true, scroll: false });
           return;
         }
 
@@ -749,8 +776,8 @@ const Settings: Component<SettingsProps> = (props) => {
       id: 'platforms',
       label: 'Platforms',
       items: [
-        { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
-        { id: 'agents', label: 'Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
+        { id: 'agents', label: 'Infrastructure', icon: Bot, iconProps: { strokeWidth: 2 } },
+        { id: 'proxmox', label: 'API Connections', icon: ProxmoxIcon },
         { id: 'docker', label: 'Docker', icon: Container, iconProps: { strokeWidth: 2 } },
       ],
     },
@@ -2362,7 +2389,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       </p>
                       <button
                         type="button"
-                        onClick={() => navigate('/settings/workloads')}
+                        onClick={() => navigate('/settings')}
                         class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
                       >
                         Install agent →

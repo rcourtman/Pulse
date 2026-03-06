@@ -3,7 +3,7 @@ import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../setting
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure',
+  proxmox: '/settings/infrastructure/api',
   docker: '/settings/workloads/docker',
   agents: '/settings/workloads',
   'system-general': '/settings/system-general',

@@ -10,7 +10,7 @@ describe('buildStorageRecoveryTabSpecs', () => {
     expect(specs.map((spec) => spec.label)).toEqual(['Storage', 'Recovery']);
     expect(specs.map((spec) => spec.route)).toEqual([buildStoragePath(), buildRecoveryPath()]);
     expect(specs.map((spec) => spec.settingsRoute)).toEqual([
-      '/settings/infrastructure/pbs',
+      '/settings/infrastructure/api/pbs',
       '/settings/system-recovery',
     ]);
     expect(specs.every((spec) => spec.badge === undefined)).toBe(true);

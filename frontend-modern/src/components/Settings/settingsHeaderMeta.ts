@@ -2,9 +2,9 @@ import type { SettingsHeaderMetaMap } from './settingsTypes';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {
-    title: 'Infrastructure',
+    title: 'API Connections',
     description:
-      'Manage infrastructure integrations for Proxmox VE, Backup Server, and Mail Gateway.',
+      'Manage API-only integrations for Proxmox VE, Backup Server, and Mail Gateway.',
   },
   docker: {
     title: 'Docker Workloads',
@@ -12,8 +12,9 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Configure Docker-specific workload controls and update behavior across monitored resources.',
   },
   agents: {
-    title: 'Unified Agents',
-    description: 'Install and manage agent, Docker, and Kubernetes monitoring from one workflow.',
+    title: 'Infrastructure',
+    description:
+      'Install and manage unified agents, the default monitoring gateway for infrastructure and workloads.',
   },
   'system-general': {
     title: 'General Settings',
