@@ -861,6 +861,9 @@ func TestHostedEntitlementLookupAndIssue(t *testing.T) {
 	if loaded == nil || loaded.TenantID != tenant.ID {
 		t.Fatalf("expected tenant %q, got %#v", tenant.ID, loaded)
 	}
+	if loaded.Kind != HostedEntitlementKindPaid {
+		t.Fatalf("kind=%q, want %q", loaded.Kind, HostedEntitlementKindPaid)
+	}
 	if loaded.IssuedAt.Unix() != now.Unix() {
 		t.Fatalf("issued_at=%v, want %v", loaded.IssuedAt, now)
 	}
@@ -876,7 +879,7 @@ func TestHostedEntitlementLookupAndIssue(t *testing.T) {
 		t.Fatalf("stored token on second issue = %q, want %q", stored, "etr_paid_one")
 	}
 
-	if err := reg.MarkHostedEntitlementRefreshed(tenant.ID, now.Add(2*time.Minute)); err != nil {
+	if err := reg.MarkHostedEntitlementRefreshed(paidHostedEntitlementID(tenant.ID), now.Add(2*time.Minute)); err != nil {
 		t.Fatalf("MarkHostedEntitlementRefreshed: %v", err)
 	}
 	loaded, err = reg.GetHostedEntitlementByRefreshToken("etr_paid_one")
@@ -907,6 +910,69 @@ func TestHostedEntitlementLookupAndIssue(t *testing.T) {
 	}
 	if stored != "etr_paid_three" {
 		t.Fatalf("stored token after revoke = %q, want %q", stored, "etr_paid_three")
+	}
+}
+
+func TestStoreOrIssueTrialHostedEntitlement(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	now := time.Now().UTC()
+	stored, firstIssue, err := reg.StoreOrIssueTrialHostedEntitlement(TrialHostedEntitlementInput{
+		RequestID:      "trial_request_1",
+		OrgID:          "default",
+		Email:          "owner@example.com",
+		ReturnURL:      "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:  "tsi_test",
+		InstanceHost:   "pulse.example.com",
+		TrialStartedAt: now,
+		IssuedAt:       now,
+		RedeemedAt:     now,
+		RefreshToken:   "etr_trial_one",
+	})
+	if err != nil {
+		t.Fatalf("StoreOrIssueTrialHostedEntitlement(first): %v", err)
+	}
+	if !firstIssue {
+		t.Fatal("first trial issue should report firstIssue=true")
+	}
+	if stored != "etr_trial_one" {
+		t.Fatalf("stored token=%q, want %q", stored, "etr_trial_one")
+	}
+
+	loaded, err := reg.GetHostedEntitlementByRefreshToken("etr_trial_one")
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByRefreshToken: %v", err)
+	}
+	if loaded == nil || loaded.Kind != HostedEntitlementKindTrial {
+		t.Fatalf("expected trial entitlement, got %#v", loaded)
+	}
+	if loaded.TrialRequestID != "trial_request_1" {
+		t.Fatalf("TrialRequestID=%q, want %q", loaded.TrialRequestID, "trial_request_1")
+	}
+	if loaded.RedeemedAt == nil || loaded.TrialStartedAt == nil {
+		t.Fatalf("expected redeemed/trial_started timestamps, got %#v", loaded)
+	}
+
+	stored, firstIssue, err = reg.StoreOrIssueTrialHostedEntitlement(TrialHostedEntitlementInput{
+		RequestID:      "trial_request_1",
+		OrgID:          "default",
+		Email:          "owner@example.com",
+		ReturnURL:      "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:  "tsi_test",
+		InstanceHost:   "pulse.example.com",
+		TrialStartedAt: now,
+		IssuedAt:       now.Add(time.Minute),
+		RedeemedAt:     now.Add(time.Minute),
+		RefreshToken:   "etr_trial_two",
+	})
+	if err != nil {
+		t.Fatalf("StoreOrIssueTrialHostedEntitlement(second): %v", err)
+	}
+	if firstIssue {
+		t.Fatal("second trial issue should report firstIssue=false")
+	}
+	if stored != "etr_trial_one" {
+		t.Fatalf("stored token on second issue=%q, want %q", stored, "etr_trial_one")
 	}
 }
 

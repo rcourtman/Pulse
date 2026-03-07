@@ -19,7 +19,7 @@ import (
 )
 
 func TestTrialSignupHandleStartProTrialRendersCheckoutForm(t *testing.T) {
-	h := NewTrialSignupHandlers(&CPConfig{}, nil, nil)
+	h := NewTrialSignupHandlers(&CPConfig{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com:7655/auth/trial-activate&instance_token=tsi_test", nil)
 	rec := httptest.NewRecorder()
 
@@ -414,7 +414,7 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, nil, store, nil)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
@@ -508,7 +508,7 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, nil, store, nil)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
@@ -606,7 +606,7 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, nil, store, nil)
 	h.now = func() time.Time { return now }
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
@@ -724,10 +724,17 @@ func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
 		t.Fatalf("StoreOrRotateActivationToken(actual): %v", err)
 	}
 
+	reg, err := registry.NewTenantRegistry(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
 	h := NewTrialSignupHandlers(&CPConfig{
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, nil, store, svc)
 	h.now = func() time.Time { return now }
+	h.entitlements.SetNow(h.now)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/redeem", strings.NewReader(`{"token":"`+activationToken+`"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -766,8 +773,12 @@ func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
 	if updatedRecord.RedemptionRecordedAt.IsZero() {
 		t.Fatalf("expected redemption_recorded_at to be set")
 	}
-	if strings.TrimSpace(updatedRecord.EntitlementRefreshToken) == "" {
-		t.Fatalf("expected entitlement_refresh_token to be persisted")
+	entitlement, err := reg.GetHostedEntitlementByRefreshToken(resp.EntitlementRefreshToken)
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByRefreshToken: %v", err)
+	}
+	if entitlement == nil || entitlement.TrialRequestID != record.ID {
+		t.Fatalf("expected hosted trial entitlement for request %q, got %#v", record.ID, entitlement)
 	}
 
 	claims, err := pkglicensing.VerifyTrialActivationToken(activationToken, pub, "pulse.example.com", now)
@@ -812,7 +823,7 @@ func TestTrialSignupHandleRedeemRejectsHostMismatch(t *testing.T) {
 
 	h := NewTrialSignupHandlers(&CPConfig{
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, nil, store, nil)
 	h.now = func() time.Time { return now }
 
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/redeem", strings.NewReader(`{"token":"`+activationToken+`"}`))
@@ -834,62 +845,29 @@ func TestTrialSignupHandleRefreshReturnsLease(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 
-	store, err := NewTrialSignupStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { store.Close() })
-
 	now := time.Unix(1710000000, 0).UTC()
-	record := &TrialSignupRecord{
-		OrgID:         "default",
-		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
-		InstanceToken: "tsi_test",
-		Name:          "Owner",
-		Email:         "owner@example.com",
-		Company:       "Pulse Labs",
-		CreatedAt:     now,
-	}
-	if err := store.CreateCheckoutRequest(record); err != nil {
-		t.Fatalf("CreateCheckoutRequest: %v", err)
-	}
-	if err := store.MarkCheckoutStarted(record.ID, "cs_test_refresh", now); err != nil {
-		t.Fatalf("MarkCheckoutStarted: %v", err)
-	}
-	if err := store.MarkCheckoutCompleted(record.ID, "cs_test_refresh", now); err != nil {
-		t.Fatalf("MarkCheckoutCompleted: %v", err)
-	}
-	activationToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
-		OrgID:         "default",
-		Email:         "owner@example.com",
-		InstanceHost:  "pulse.example.com",
-		InstanceToken: "tsi_test",
-		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   "cs_test_refresh",
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
-		},
-	})
+	reg, err := registry.NewTenantRegistry(t.TempDir())
 	if err != nil {
-		t.Fatalf("SignTrialActivationToken: %v", err)
+		t.Fatalf("NewTenantRegistry: %v", err)
 	}
-	if _, _, err := store.StoreOrRotateActivationToken(record.ID, activationToken, now, trialSignupActivationTokenTTL); err != nil {
-		t.Fatalf("StoreOrRotateActivationToken: %v", err)
+	t.Cleanup(func() { _ = reg.Close() })
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
+	svc.SetNow(func() time.Time { return now.Add(time.Hour) })
+	if _, _, err := reg.StoreOrIssueTrialHostedEntitlement(registry.TrialHostedEntitlementInput{
+		RequestID:      "trial_request_refresh",
+		OrgID:          "default",
+		Email:          "owner@example.com",
+		ReturnURL:      "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:  "tsi_test",
+		InstanceHost:   "pulse.example.com",
+		TrialStartedAt: now,
+		IssuedAt:       now,
+		RedeemedAt:     now,
+		RefreshToken:   "etr_test_refresh",
+	}); err != nil {
+		t.Fatalf("StoreOrIssueTrialHostedEntitlement: %v", err)
 	}
-	if _, _, err := store.StoreOrIssueEntitlementRefreshToken(record.ID, "etr_test_refresh", now); err != nil {
-		t.Fatalf("StoreOrIssueEntitlementRefreshToken: %v", err)
-	}
-	if err := store.MarkRedemptionRecorded("default", "https://pulse.example.com/auth/trial-activate", "tsi_test", "pulse.example.com", activationToken, now); err != nil {
-		t.Fatalf("MarkRedemptionRecorded: %v", err)
-	}
-
-	svc := entitlements.NewService(nil, "", base64.StdEncoding.EncodeToString(priv))
-	h := NewHostedEntitlementHandlers(&CPConfig{
-		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, store, svc)
-	h.now = func() time.Time { return now.Add(time.Hour) }
-	h.entitlements.SetNow(h.now)
+	h := NewHostedEntitlementHandlers(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/entitlements/refresh", strings.NewReader(`{"org_id":"default","instance_host":"pulse.example.com","entitlement_refresh_token":"etr_test_refresh"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -963,12 +941,8 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 		t.Fatalf("StoreOrIssueHostedEntitlement: %v", err)
 	}
 	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
-	h := NewHostedEntitlementHandlers(&CPConfig{
-		BaseURL:                   "https://cloud.example.com",
-		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, svc)
-	h.now = func() time.Time { return now }
-	h.entitlements.SetNow(h.now)
+	svc.SetNow(func() time.Time { return now })
+	h := NewHostedEntitlementHandlers(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/entitlements/refresh", strings.NewReader(`{"org_id":"default","instance_host":"t-PAIDREF01.cloud.example.com","entitlement_refresh_token":"etr_paid_refresh"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -1191,7 +1165,7 @@ func TestTrialSignupHandleCompleteRejectsNonTrialCheckoutSession(t *testing.T) {
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, nil, store, nil)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
@@ -1256,7 +1230,7 @@ func TestTrialSignupHandleCompleteRejectsMissingVerifiedTrialMetadata(t *testing
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, nil, store, nil)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
@@ -1298,14 +1272,21 @@ func newTrialSignupTestHandler(t *testing.T) (*TrialSignupHandlers, *TrialSignup
 		t.Fatalf("NewTrialSignupStore: %v", err)
 	}
 	t.Cleanup(func() { store.Close() })
+	reg, err := registry.NewTenantRegistry(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
 
 	sender := &captureEmailSender{}
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(activationPriv))
 	h := NewTrialSignupHandlers(&CPConfig{
 		BaseURL:                   "https://cloud.example.com",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(activationPriv),
 		EmailFrom:                 "noreply@pulserelay.pro",
-	}, sender, store)
+	}, sender, store, svc)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
+	h.entitlements.SetNow(h.now)
 	return h, store, sender
 }
 

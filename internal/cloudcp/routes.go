@@ -116,8 +116,8 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	}
 
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
-	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore)
-	hostedEntitlementHandlers := NewHostedEntitlementHandlers(deps.Config, deps.TrialSignupStore, hostedEntitlements)
+	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, hostedEntitlements)
+	hostedEntitlementHandlers := NewHostedEntitlementHandlers(hostedEntitlements)
 	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
 	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
 	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))

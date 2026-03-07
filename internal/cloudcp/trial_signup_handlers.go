@@ -15,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -385,6 +386,7 @@ type TrialSignupHandlers struct {
 	cfg                   *CPConfig
 	emailSender           cpemail.Sender
 	verificationStore     *TrialSignupStore
+	entitlements          *entitlements.Service
 	createCheckoutSession func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 	getCheckoutSession    func(id string, params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 	now                   func() time.Time
@@ -422,11 +424,12 @@ type trialSignupRedeemResponse struct {
 	EntitlementRefreshToken string `json:"entitlement_refresh_token"`
 }
 
-func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender, verificationStore *TrialSignupStore) *TrialSignupHandlers {
+func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender, verificationStore *TrialSignupStore, entitlementService *entitlements.Service) *TrialSignupHandlers {
 	return &TrialSignupHandlers{
 		cfg:                   cfg,
 		emailSender:           emailSender,
 		verificationStore:     verificationStore,
+		entitlements:          entitlementService,
 		createCheckoutSession: stripesession.New,
 		getCheckoutSession:    stripesession.Get,
 		now:                   func() time.Time { return time.Now().UTC() },
@@ -1031,39 +1034,34 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 		}
 		return
 	}
-	refreshToken, err := h.ensureEntitlementRefreshToken(record.ID, now)
-	if err != nil {
-		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to issue hosted trial entitlement refresh token")
-		http.Error(w, "failed to issue entitlement refresh token", http.StatusInternalServerError)
-		return
+	trialStartedAt := now
+	if !record.CheckoutCompletedAt.IsZero() {
+		trialStartedAt = record.CheckoutCompletedAt.UTC()
 	}
-
-	entitlementJWT, err := pkglicensing.SignEntitlementLeaseToken(privateKey, buildTrialEntitlementLeaseClaims(record, claims.InstanceHost, now))
+	redemption, err := h.entitlements.RedeemTrialEntitlement(entitlements.TrialEntitlementInput{
+		RequestID:      record.ID,
+		OrgID:          claims.OrgID,
+		Email:          record.Email,
+		ReturnURL:      claims.ReturnURL,
+		InstanceToken:  record.InstanceToken,
+		InstanceHost:   claims.InstanceHost,
+		TrialStartedAt: trialStartedAt,
+		IssuedAt:       now,
+		RedeemedAt:     now,
+	})
 	if err != nil {
-		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to sign hosted trial entitlement lease")
+		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to redeem hosted trial entitlement")
 		http.Error(w, "failed to generate entitlement lease", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(trialSignupRedeemResponse{
-		EntitlementJWT:          entitlementJWT,
-		EntitlementRefreshToken: refreshToken,
+		EntitlementJWT:          redemption.EntitlementJWT,
+		EntitlementRefreshToken: redemption.EntitlementRefreshToken,
 	}); err != nil {
 		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to encode hosted trial redemption response")
 	}
-}
-
-func (h *TrialSignupHandlers) ensureEntitlementRefreshToken(requestID string, now time.Time) (string, error) {
-	if h == nil || h.verificationStore == nil {
-		return "", ErrTrialSignupRecordNotFound
-	}
-	rawToken, err := randomPrefixedToken()
-	if err != nil {
-		return "", err
-	}
-	storedToken, _, err := h.verificationStore.StoreOrIssueEntitlementRefreshToken(requestID, rawToken, now)
-	return storedToken, err
 }
 
 func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *http.Request, status int, data trialSignupPageData) {
@@ -1209,32 +1207,6 @@ func buildTrialSignupCancelURL(baseURL string, data trialSignupPageData, verifie
 		return buildTrialSignupVerifiedURL(baseURL, verifiedToken, true)
 	}
 	return buildTrialSignupStartURL(baseURL, data, true)
-}
-
-func buildTrialEntitlementLeaseClaims(record *TrialSignupRecord, instanceHost string, now time.Time) pkglicensing.EntitlementLeaseClaims {
-	trialState := pkglicensing.BuildTrialBillingState(now, pkglicensing.TierFeatures[pkglicensing.TierPro])
-	if record != nil {
-		if !record.CheckoutCompletedAt.IsZero() {
-			trialState = pkglicensing.BuildTrialBillingState(record.CheckoutCompletedAt.UTC(), pkglicensing.TierFeatures[pkglicensing.TierPro])
-		}
-	}
-	return pkglicensing.EntitlementLeaseClaims{
-		OrgID:             normalizeTrialOrgID(record.OrgID),
-		Email:             strings.TrimSpace(record.Email),
-		InstanceHost:      instanceHost,
-		PlanVersion:       trialState.PlanVersion,
-		SubscriptionState: trialState.SubscriptionState,
-		Capabilities:      append([]string(nil), trialState.Capabilities...),
-		Limits:            map[string]int64{},
-		MetersEnabled:     []string{},
-		TrialStartedAt:    trialState.TrialStartedAt,
-		TrialEndsAt:       trialState.TrialEndsAt,
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(time.Unix(*trialState.TrialEndsAt, 0).UTC()),
-			Subject:   strings.TrimSpace(record.ID),
-		},
-	}
 }
 
 func summarizeTrialReturnTarget(raw string) string {

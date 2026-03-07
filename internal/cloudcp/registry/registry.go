@@ -133,14 +133,27 @@ func (r *TenantRegistry) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_memberships_account_id_created_at ON account_memberships(account_id, created_at DESC);
 
 	CREATE TABLE IF NOT EXISTS hosted_entitlements (
-		tenant_id TEXT PRIMARY KEY,
+		id TEXT PRIMARY KEY,
+		kind TEXT NOT NULL DEFAULT 'paid',
+		tenant_id TEXT,
+		trial_request_id TEXT,
+		org_id TEXT NOT NULL DEFAULT '',
+		email TEXT NOT NULL DEFAULT '',
+		return_url TEXT NOT NULL DEFAULT '',
+		instance_token TEXT NOT NULL DEFAULT '',
+		instance_host TEXT NOT NULL DEFAULT '',
+		trial_started_at INTEGER,
 		refresh_token TEXT NOT NULL UNIQUE,
 		issued_at INTEGER NOT NULL,
 		last_refreshed_at INTEGER,
+		redeemed_at INTEGER,
 		revoked_at INTEGER,
 		FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_tenant_id ON hosted_entitlements(tenant_id) WHERE tenant_id <> '';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_trial_request_id ON hosted_entitlements(trial_request_id) WHERE trial_request_id <> '';
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_refresh_token ON hosted_entitlements(refresh_token);
+	CREATE INDEX IF NOT EXISTS idx_hosted_entitlements_kind ON hosted_entitlements(kind);
 	`
 	if _, err := r.db.Exec(schema); err != nil {
 		return fmt.Errorf("init tenant registry schema: %w", err)
@@ -165,13 +178,34 @@ func (r *TenantRegistry) initSchema() error {
 	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tenants_account_id ON tenants(account_id)`); err != nil {
 		return fmt.Errorf("init tenant registry schema: create idx_tenants_account_id: %w", err)
 	}
+	hasHostedEntitlementID, err := r.tableHasColumn("hosted_entitlements", "id")
+	if err != nil {
+		return fmt.Errorf("check hosted_entitlements schema for id: %w", err)
+	}
+	if !hasHostedEntitlementID {
+		if err := r.migrateLegacyHostedEntitlementsTable(); err != nil {
+			return fmt.Errorf("migrate hosted_entitlements table: %w", err)
+		}
+	}
+	if _, err := r.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_tenant_id ON hosted_entitlements(tenant_id) WHERE tenant_id <> ''`); err != nil {
+		return fmt.Errorf("init tenant registry schema: create idx_hosted_entitlements_tenant_id: %w", err)
+	}
+	if _, err := r.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_trial_request_id ON hosted_entitlements(trial_request_id) WHERE trial_request_id <> ''`); err != nil {
+		return fmt.Errorf("init tenant registry schema: create idx_hosted_entitlements_trial_request_id: %w", err)
+	}
 	if _, err := r.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_refresh_token ON hosted_entitlements(refresh_token)`); err != nil {
 		return fmt.Errorf("init tenant registry schema: create idx_hosted_entitlements_refresh_token: %w", err)
 	}
+	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_hosted_entitlements_kind ON hosted_entitlements(kind)`); err != nil {
+		return fmt.Errorf("init tenant registry schema: create idx_hosted_entitlements_kind: %w", err)
+	}
 	if hasEntitlementRefreshToken {
 		if _, err := r.db.Exec(`
-			INSERT OR IGNORE INTO hosted_entitlements (tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at)
-			SELECT id, entitlement_refresh_token, updated_at, NULL, NULL
+			INSERT OR IGNORE INTO hosted_entitlements (
+				id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+				trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+			)
+			SELECT 'paid:' || id, 'paid', id, NULL, '', '', '', '', '', NULL, entitlement_refresh_token, updated_at, NULL, NULL, NULL
 			FROM tenants
 			WHERE entitlement_refresh_token <> ''
 		`); err != nil {
@@ -325,6 +359,80 @@ func (r *TenantRegistry) removeLegacyTenantEntitlementRefreshTokenColumn() error
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit tenants migration: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
+func (r *TenantRegistry) migrateLegacyHostedEntitlementsTable() error {
+	if _, err := r.db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("disable foreign keys for hosted entitlements migration: %w", err)
+	}
+	defer func() {
+		_, _ = r.db.Exec(`PRAGMA foreign_keys = ON`)
+	}()
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin hosted entitlements migration: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err := tx.Exec(`
+		CREATE TABLE hosted_entitlements_new (
+			id TEXT PRIMARY KEY,
+			kind TEXT NOT NULL DEFAULT 'paid',
+			tenant_id TEXT,
+			trial_request_id TEXT,
+			org_id TEXT NOT NULL DEFAULT '',
+			email TEXT NOT NULL DEFAULT '',
+			return_url TEXT NOT NULL DEFAULT '',
+			instance_token TEXT NOT NULL DEFAULT '',
+			instance_host TEXT NOT NULL DEFAULT '',
+			trial_started_at INTEGER,
+			refresh_token TEXT NOT NULL UNIQUE,
+			issued_at INTEGER NOT NULL,
+			last_refreshed_at INTEGER,
+			redeemed_at INTEGER,
+			revoked_at INTEGER,
+			FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+		);
+		INSERT INTO hosted_entitlements_new (
+			id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+			trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+		)
+		SELECT
+			'paid:' || tenant_id,
+			'paid',
+			tenant_id,
+			NULL,
+			'',
+			'',
+			'',
+			'',
+			'',
+			NULL,
+			refresh_token,
+			issued_at,
+			last_refreshed_at,
+			NULL,
+			revoked_at
+		FROM hosted_entitlements;
+		DROP TABLE hosted_entitlements;
+		ALTER TABLE hosted_entitlements_new RENAME TO hosted_entitlements;
+		CREATE UNIQUE INDEX idx_hosted_entitlements_tenant_id ON hosted_entitlements(tenant_id) WHERE tenant_id <> '';
+		CREATE UNIQUE INDEX idx_hosted_entitlements_trial_request_id ON hosted_entitlements(trial_request_id) WHERE trial_request_id <> '';
+		CREATE UNIQUE INDEX idx_hosted_entitlements_refresh_token ON hosted_entitlements(refresh_token);
+		CREATE INDEX idx_hosted_entitlements_kind ON hosted_entitlements(kind);
+	`); err != nil {
+		return fmt.Errorf("rebuild hosted_entitlements table: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit hosted entitlements migration: %w", err)
 	}
 	tx = nil
 	return nil
@@ -593,7 +701,15 @@ func scanTenant(s scanner) (*Tenant, error) {
 	return &t, nil
 }
 
-// StoreOrIssueHostedEntitlement stores a new hosted entitlement refresh token for a tenant,
+func paidHostedEntitlementID(tenantID string) string {
+	return "paid:" + strings.TrimSpace(tenantID)
+}
+
+func trialHostedEntitlementID(requestID string) string {
+	return "trial:" + strings.TrimSpace(requestID)
+}
+
+// StoreOrIssueHostedEntitlement stores a new hosted entitlement refresh token for a paid tenant,
 // or returns the existing active token if one has already been issued.
 func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, issuedAt time.Time) (string, bool, error) {
 	tenantID = strings.TrimSpace(tenantID)
@@ -624,7 +740,8 @@ func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, i
 	}
 
 	rec, err := loadHostedEntitlement(tx.QueryRow(`
-		SELECT tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at
+		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+		       trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
 		FROM hosted_entitlements WHERE tenant_id = ?`,
 		tenantID,
 	))
@@ -641,8 +758,12 @@ func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, i
 
 	if rec == nil {
 		if _, err := tx.Exec(`
-			INSERT INTO hosted_entitlements (tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at)
-			VALUES (?, ?, ?, NULL, NULL)`,
+			INSERT INTO hosted_entitlements (
+				id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+				trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+			) VALUES (?, ?, ?, NULL, '', '', '', '', '', NULL, ?, ?, NULL, NULL, NULL)`,
+			paidHostedEntitlementID(tenantID),
+			string(HostedEntitlementKindPaid),
 			tenantID,
 			token,
 			issuedAt.Unix(),
@@ -652,8 +773,13 @@ func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, i
 	} else {
 		if _, err := tx.Exec(`
 			UPDATE hosted_entitlements
-			SET refresh_token = ?, issued_at = ?, last_refreshed_at = NULL, revoked_at = NULL
+			SET id = ?, kind = ?, tenant_id = ?, trial_request_id = NULL, org_id = '', email = '',
+			    return_url = '', instance_token = '', instance_host = '', trial_started_at = NULL,
+			    refresh_token = ?, issued_at = ?, last_refreshed_at = NULL, redeemed_at = NULL, revoked_at = NULL
 			WHERE tenant_id = ?`,
+			paidHostedEntitlementID(tenantID),
+			string(HostedEntitlementKindPaid),
+			tenantID,
 			token,
 			issuedAt.Unix(),
 			tenantID,
@@ -664,6 +790,119 @@ func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, i
 
 	if err := tx.Commit(); err != nil {
 		return "", false, fmt.Errorf("commit hosted entitlement tx: %w", err)
+	}
+	tx = nil
+	return token, true, nil
+}
+
+func (r *TenantRegistry) StoreOrIssueTrialHostedEntitlement(input TrialHostedEntitlementInput) (string, bool, error) {
+	requestID := strings.TrimSpace(input.RequestID)
+	token := strings.TrimSpace(input.RefreshToken)
+	if requestID == "" {
+		return "", false, fmt.Errorf("missing trial request id")
+	}
+	if token == "" {
+		return "", false, fmt.Errorf("missing entitlement refresh token")
+	}
+	if strings.TrimSpace(input.OrgID) == "" || strings.TrimSpace(input.Email) == "" || strings.TrimSpace(input.ReturnURL) == "" || strings.TrimSpace(input.InstanceHost) == "" {
+		return "", false, fmt.Errorf("trial entitlement input is incomplete")
+	}
+
+	issuedAt := input.IssuedAt.UTC()
+	redeemedAt := input.RedeemedAt.UTC()
+	trialStartedAt := input.TrialStartedAt.UTC()
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return "", false, fmt.Errorf("begin trial hosted entitlement tx: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rec, err := loadHostedEntitlement(tx.QueryRow(`
+		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+		       trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+		FROM hosted_entitlements WHERE trial_request_id = ?`,
+		requestID,
+	))
+	if err != nil {
+		return "", false, fmt.Errorf("load trial hosted entitlement: %w", err)
+	}
+	if rec != nil && strings.TrimSpace(rec.RefreshToken) != "" && rec.RevokedAt == nil {
+		if _, err := tx.Exec(`
+			UPDATE hosted_entitlements
+			SET org_id = ?, email = ?, return_url = ?, instance_token = ?, instance_host = ?, trial_started_at = ?,
+			    redeemed_at = COALESCE(redeemed_at, ?)
+			WHERE id = ?`,
+			strings.TrimSpace(input.OrgID),
+			strings.TrimSpace(input.Email),
+			strings.TrimSpace(input.ReturnURL),
+			strings.TrimSpace(input.InstanceToken),
+			strings.TrimSpace(input.InstanceHost),
+			trialStartedAt.Unix(),
+			redeemedAt.Unix(),
+			rec.ID,
+		); err != nil {
+			return "", false, fmt.Errorf("update trial hosted entitlement metadata: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return "", false, fmt.Errorf("commit trial hosted entitlement tx: %w", err)
+		}
+		tx = nil
+		return rec.RefreshToken, false, nil
+	}
+
+	if rec == nil {
+		if _, err := tx.Exec(`
+			INSERT INTO hosted_entitlements (
+				id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+				trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+			) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
+			trialHostedEntitlementID(requestID),
+			string(HostedEntitlementKindTrial),
+			requestID,
+			strings.TrimSpace(input.OrgID),
+			strings.TrimSpace(input.Email),
+			strings.TrimSpace(input.ReturnURL),
+			strings.TrimSpace(input.InstanceToken),
+			strings.TrimSpace(input.InstanceHost),
+			trialStartedAt.Unix(),
+			token,
+			issuedAt.Unix(),
+			redeemedAt.Unix(),
+		); err != nil {
+			return "", false, fmt.Errorf("insert trial hosted entitlement: %w", err)
+		}
+	} else {
+		if _, err := tx.Exec(`
+			UPDATE hosted_entitlements
+			SET id = ?, kind = ?, tenant_id = NULL, trial_request_id = ?, org_id = ?, email = ?, return_url = ?,
+			    instance_token = ?, instance_host = ?, trial_started_at = ?, refresh_token = ?, issued_at = ?,
+			    last_refreshed_at = NULL, redeemed_at = ?, revoked_at = NULL
+			WHERE trial_request_id = ?`,
+			trialHostedEntitlementID(requestID),
+			string(HostedEntitlementKindTrial),
+			requestID,
+			strings.TrimSpace(input.OrgID),
+			strings.TrimSpace(input.Email),
+			strings.TrimSpace(input.ReturnURL),
+			strings.TrimSpace(input.InstanceToken),
+			strings.TrimSpace(input.InstanceHost),
+			trialStartedAt.Unix(),
+			token,
+			issuedAt.Unix(),
+			redeemedAt.Unix(),
+			requestID,
+		); err != nil {
+			return "", false, fmt.Errorf("rotate trial hosted entitlement: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", false, fmt.Errorf("commit trial hosted entitlement tx: %w", err)
 	}
 	tx = nil
 	return token, true, nil
@@ -684,7 +923,8 @@ func scanTenants(rows *sql.Rows) ([]*Tenant, error) {
 // GetHostedEntitlementByRefreshToken retrieves the hosted entitlement record for a refresh token.
 func (r *TenantRegistry) GetHostedEntitlementByRefreshToken(token string) (*HostedEntitlement, error) {
 	row := r.db.QueryRow(`
-		SELECT tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at
+		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+		       trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
 		FROM hosted_entitlements
 		WHERE refresh_token = ?`,
 		strings.TrimSpace(token),
@@ -693,17 +933,17 @@ func (r *TenantRegistry) GetHostedEntitlementByRefreshToken(token string) (*Host
 }
 
 // MarkHostedEntitlementRefreshed records the last successful hosted entitlement refresh time.
-func (r *TenantRegistry) MarkHostedEntitlementRefreshed(tenantID string, refreshedAt time.Time) error {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return fmt.Errorf("missing tenant id")
+func (r *TenantRegistry) MarkHostedEntitlementRefreshed(id string, refreshedAt time.Time) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("missing hosted entitlement id")
 	}
 	res, err := r.db.Exec(`
 		UPDATE hosted_entitlements
 		SET last_refreshed_at = ?
-		WHERE tenant_id = ? AND revoked_at IS NULL`,
+		WHERE id = ? AND revoked_at IS NULL`,
 		refreshedAt.UTC().Unix(),
-		tenantID,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("mark hosted entitlement refreshed: %w", err)
@@ -713,7 +953,7 @@ func (r *TenantRegistry) MarkHostedEntitlementRefreshed(tenantID string, refresh
 		return fmt.Errorf("get rows affected: %w", err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("hosted entitlement for tenant %q not found", tenantID)
+		return fmt.Errorf("hosted entitlement %q not found", id)
 	}
 	return nil
 }
@@ -727,9 +967,10 @@ func (r *TenantRegistry) RevokeHostedEntitlement(tenantID string, revokedAt time
 	_, err := r.db.Exec(`
 		UPDATE hosted_entitlements
 		SET revoked_at = COALESCE(revoked_at, ?)
-		WHERE tenant_id = ?`,
+		WHERE tenant_id = ? AND kind = ?`,
 		revokedAt.UTC().Unix(),
 		tenantID,
+		string(HostedEntitlementKindPaid),
 	)
 	if err != nil {
 		return fmt.Errorf("revoke hosted entitlement: %w", err)
@@ -739,19 +980,58 @@ func (r *TenantRegistry) RevokeHostedEntitlement(tenantID string, revokedAt time
 
 func loadHostedEntitlement(s scanner) (*HostedEntitlement, error) {
 	var rec HostedEntitlement
+	var kind string
+	var tenantID sql.NullString
+	var trialRequestID sql.NullString
 	var issuedAt int64
+	var trialStartedAt sql.NullInt64
 	var lastRefreshedAt sql.NullInt64
+	var redeemedAt sql.NullInt64
 	var revokedAt sql.NullInt64
-	if err := s.Scan(&rec.TenantID, &rec.RefreshToken, &issuedAt, &lastRefreshedAt, &revokedAt); err != nil {
+	if err := s.Scan(
+		&rec.ID,
+		&kind,
+		&tenantID,
+		&trialRequestID,
+		&rec.OrgID,
+		&rec.Email,
+		&rec.ReturnURL,
+		&rec.InstanceToken,
+		&rec.InstanceHost,
+		&trialStartedAt,
+		&rec.RefreshToken,
+		&issuedAt,
+		&lastRefreshedAt,
+		&redeemedAt,
+		&revokedAt,
+	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("scan hosted entitlement: %w", err)
 	}
+	if strings.TrimSpace(kind) == "" {
+		kind = string(HostedEntitlementKindPaid)
+	}
+	rec.Kind = HostedEntitlementKind(kind)
+	if tenantID.Valid {
+		rec.TenantID = tenantID.String
+	}
+	if trialRequestID.Valid {
+		rec.TrialRequestID = trialRequestID.String
+	}
+	if trialStartedAt.Valid {
+		ts := time.Unix(trialStartedAt.Int64, 0).UTC()
+		rec.TrialStartedAt = &ts
+	}
 	rec.IssuedAt = time.Unix(issuedAt, 0).UTC()
 	if lastRefreshedAt.Valid {
 		ts := time.Unix(lastRefreshedAt.Int64, 0).UTC()
 		rec.LastRefreshedAt = &ts
+	}
+	if redeemedAt.Valid {
+		ts := time.Unix(redeemedAt.Int64, 0).UTC()
+		rec.RedeemedAt = &ts
 	}
 	if revokedAt.Valid {
 		ts := time.Unix(revokedAt.Int64, 0).UTC()

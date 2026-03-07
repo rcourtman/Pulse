@@ -34,6 +34,23 @@ type RefreshResult struct {
 	EntitlementJWT string
 }
 
+type TrialEntitlementInput struct {
+	RequestID      string
+	OrgID          string
+	Email          string
+	ReturnURL      string
+	InstanceToken  string
+	InstanceHost   string
+	TrialStartedAt time.Time
+	IssuedAt       time.Time
+	RedeemedAt     time.Time
+}
+
+type TrialRedemptionResult struct {
+	EntitlementJWT          string
+	EntitlementRefreshToken string
+}
+
 func NewService(reg *registry.TenantRegistry, baseURL, trialActivationPrivateKey string) *Service {
 	return &Service{
 		registry:                  reg,
@@ -75,11 +92,11 @@ func (s *Service) IssueTenantBillingState(tenant *registry.Tenant, requestedSubS
 		}, nil
 	}
 
-	refreshToken, err := s.ensureRefreshToken(tenant.ID)
+	refreshToken, err := s.ensurePaidRefreshToken(tenant.ID)
 	if err != nil {
 		return nil, fmt.Errorf("issue hosted entitlement refresh token: %w", err)
 	}
-	entitlementJWT, err := s.signTenantLease(ctx, tenantInstanceHost(s.baseURL, tenant.ID), s.now().UTC())
+	entitlementJWT, err := s.signPaidLease(ctx, tenantInstanceHost(s.baseURL, tenant.ID), s.now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +113,70 @@ func (s *Service) IssueTenantBillingState(tenant *registry.Tenant, requestedSubS
 	}, nil
 }
 
-func (s *Service) RefreshPaidEntitlement(refreshToken, instanceHost string) (*RefreshResult, error) {
+func (s *Service) RedeemTrialEntitlement(input TrialEntitlementInput) (*TrialRedemptionResult, error) {
+	if s == nil || s.registry == nil {
+		return nil, fmt.Errorf("hosted entitlement service is unavailable")
+	}
+	requestID := strings.TrimSpace(input.RequestID)
+	orgID := strings.TrimSpace(input.OrgID)
+	email := strings.TrimSpace(input.Email)
+	returnURL := strings.TrimSpace(input.ReturnURL)
+	instanceToken := strings.TrimSpace(input.InstanceToken)
+	instanceHost := strings.ToLower(strings.TrimSpace(input.InstanceHost))
+	if requestID == "" || orgID == "" || email == "" || returnURL == "" || instanceHost == "" {
+		return nil, fmt.Errorf("trial entitlement input is incomplete")
+	}
+
+	issuedAt := input.IssuedAt.UTC()
+	if issuedAt.IsZero() {
+		issuedAt = s.now().UTC()
+	}
+	redeemedAt := input.RedeemedAt.UTC()
+	if redeemedAt.IsZero() {
+		redeemedAt = issuedAt
+	}
+	trialStartedAt := input.TrialStartedAt.UTC()
+	if trialStartedAt.IsZero() {
+		trialStartedAt = issuedAt
+	}
+
+	rawToken, err := randomRefreshToken()
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, _, err := s.registry.StoreOrIssueTrialHostedEntitlement(registry.TrialHostedEntitlementInput{
+		RequestID:      requestID,
+		OrgID:          orgID,
+		Email:          email,
+		ReturnURL:      returnURL,
+		InstanceToken:  instanceToken,
+		InstanceHost:   instanceHost,
+		TrialStartedAt: trialStartedAt,
+		IssuedAt:       issuedAt,
+		RedeemedAt:     redeemedAt,
+		RefreshToken:   rawToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	entitlementJWT, err := s.signTrialLease(trialEntitlementContext{
+		requestID:      requestID,
+		orgID:          orgID,
+		email:          email,
+		instanceHost:   instanceHost,
+		trialStartedAt: trialStartedAt,
+	}, issuedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &TrialRedemptionResult{
+		EntitlementJWT:          entitlementJWT,
+		EntitlementRefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *Service) RefreshEntitlement(refreshToken, instanceHost string) (*RefreshResult, error) {
 	if s == nil || s.registry == nil {
 		return nil, fmt.Errorf("hosted entitlement service is unavailable")
 	}
@@ -120,6 +200,42 @@ func (s *Service) RefreshPaidEntitlement(refreshToken, instanceHost string) (*Re
 		return nil, ErrHostedEntitlementInactive
 	}
 
+	switch entitlement.Kind {
+	case "", registry.HostedEntitlementKindPaid:
+		return s.refreshPaidEntitlement(entitlement, instanceHost)
+	case registry.HostedEntitlementKindTrial:
+		return s.refreshTrialEntitlement(entitlement, instanceHost)
+	default:
+		return nil, ErrHostedEntitlementNotFound
+	}
+}
+
+func (s *Service) RevokeTenantEntitlement(tenantID string, revokedAt time.Time) error {
+	if s == nil || s.registry == nil {
+		return fmt.Errorf("hosted entitlement service is unavailable")
+	}
+	return s.registry.RevokeHostedEntitlement(tenantID, revokedAt)
+}
+
+type tenantLeaseContext struct {
+	tenant            *registry.Tenant
+	stripeAccount     *registry.StripeAccount
+	subscriptionState pkglicensing.SubscriptionState
+	planVersion       string
+}
+
+type trialEntitlementContext struct {
+	requestID      string
+	orgID          string
+	email          string
+	instanceHost   string
+	trialStartedAt time.Time
+}
+
+func (s *Service) refreshPaidEntitlement(entitlement *registry.HostedEntitlement, instanceHost string) (*RefreshResult, error) {
+	if entitlement == nil {
+		return nil, ErrHostedEntitlementNotFound
+	}
 	tenant, err := s.registry.Get(entitlement.TenantID)
 	if err != nil {
 		return nil, err
@@ -142,28 +258,48 @@ func (s *Service) RefreshPaidEntitlement(refreshToken, instanceHost string) (*Re
 	}
 
 	now := s.now().UTC()
-	entitlementJWT, err := s.signTenantLease(ctx, expectedInstanceHost, now)
+	entitlementJWT, err := s.signPaidLease(ctx, expectedInstanceHost, now)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.registry.MarkHostedEntitlementRefreshed(tenant.ID, now); err != nil {
+	if err := s.registry.MarkHostedEntitlementRefreshed(entitlement.ID, now); err != nil {
 		return nil, err
 	}
 	return &RefreshResult{EntitlementJWT: entitlementJWT}, nil
 }
 
-func (s *Service) RevokeTenantEntitlement(tenantID string, revokedAt time.Time) error {
-	if s == nil || s.registry == nil {
-		return fmt.Errorf("hosted entitlement service is unavailable")
+func (s *Service) refreshTrialEntitlement(entitlement *registry.HostedEntitlement, instanceHost string) (*RefreshResult, error) {
+	if entitlement == nil {
+		return nil, ErrHostedEntitlementNotFound
 	}
-	return s.registry.RevokeHostedEntitlement(tenantID, revokedAt)
-}
+	if entitlement.RedeemedAt == nil || entitlement.TrialStartedAt == nil {
+		return nil, ErrHostedEntitlementInactive
+	}
+	expectedInstanceHost := strings.ToLower(strings.TrimSpace(entitlement.InstanceHost))
+	if expectedInstanceHost == "" || instanceHost != expectedInstanceHost {
+		return nil, ErrHostedEntitlementTargetMismatch
+	}
 
-type tenantLeaseContext struct {
-	tenant            *registry.Tenant
-	stripeAccount     *registry.StripeAccount
-	subscriptionState pkglicensing.SubscriptionState
-	planVersion       string
+	now := s.now().UTC()
+	ctx := trialEntitlementContext{
+		requestID:      strings.TrimSpace(entitlement.TrialRequestID),
+		orgID:          strings.TrimSpace(entitlement.OrgID),
+		email:          strings.TrimSpace(entitlement.Email),
+		instanceHost:   expectedInstanceHost,
+		trialStartedAt: entitlement.TrialStartedAt.UTC(),
+	}
+	claims := buildTrialLeaseClaims(ctx, now)
+	if claims.TrialEndsAt == nil || now.Unix() >= *claims.TrialEndsAt {
+		return nil, ErrHostedEntitlementInactive
+	}
+	entitlementJWT, err := s.signTrialLease(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.registry.MarkHostedEntitlementRefreshed(entitlement.ID, now); err != nil {
+		return nil, err
+	}
+	return &RefreshResult{EntitlementJWT: entitlementJWT}, nil
 }
 
 func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSubState pkglicensing.SubscriptionState, requestedPlanVersion string) (*tenantLeaseContext, error) {
@@ -215,7 +351,7 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 	return ctx, nil
 }
 
-func (s *Service) ensureRefreshToken(tenantID string) (string, error) {
+func (s *Service) ensurePaidRefreshToken(tenantID string) (string, error) {
 	rawToken, err := randomRefreshToken()
 	if err != nil {
 		return "", err
@@ -227,7 +363,7 @@ func (s *Service) ensureRefreshToken(tenantID string) (string, error) {
 	return storedToken, nil
 }
 
-func (s *Service) signTenantLease(ctx *tenantLeaseContext, instanceHost string, now time.Time) (string, error) {
+func (s *Service) signPaidLease(ctx *tenantLeaseContext, instanceHost string, now time.Time) (string, error) {
 	privateKey, err := s.entitlementPrivateKey()
 	if err != nil {
 		return "", err
@@ -236,6 +372,19 @@ func (s *Service) signTenantLease(ctx *tenantLeaseContext, instanceHost string, 
 	signed, err := pkglicensing.SignEntitlementLeaseToken(privateKey, claims)
 	if err != nil {
 		return "", fmt.Errorf("sign hosted entitlement lease: %w", err)
+	}
+	return signed, nil
+}
+
+func (s *Service) signTrialLease(ctx trialEntitlementContext, now time.Time) (string, error) {
+	privateKey, err := s.entitlementPrivateKey()
+	if err != nil {
+		return "", err
+	}
+	claims := buildTrialLeaseClaims(ctx, now)
+	signed, err := pkglicensing.SignEntitlementLeaseToken(privateKey, claims)
+	if err != nil {
+		return "", fmt.Errorf("sign hosted trial entitlement lease: %w", err)
 	}
 	return signed, nil
 }
@@ -253,7 +402,7 @@ func randomRefreshToken() (string, error) {
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("generate entitlement refresh token: %w", err)
 	}
-	return "etr_paid_" + hex.EncodeToString(raw), nil
+	return "etr_hosted_" + hex.EncodeToString(raw), nil
 }
 
 func tenantSubscriptionState(tenant *registry.Tenant) pkglicensing.SubscriptionState {
@@ -304,6 +453,27 @@ func buildPaidEntitlementLeaseClaims(ctx *tenantLeaseContext, instanceHost strin
 		claims.ExpiresAt = jwt.NewNumericDate(time.Unix(trialEndsAt, 0).UTC())
 	}
 	return claims
+}
+
+func buildTrialLeaseClaims(ctx trialEntitlementContext, now time.Time) pkglicensing.EntitlementLeaseClaims {
+	trialState := pkglicensing.BuildTrialBillingState(ctx.trialStartedAt.UTC(), pkglicensing.TierFeatures[pkglicensing.TierPro])
+	return pkglicensing.EntitlementLeaseClaims{
+		OrgID:             strings.TrimSpace(ctx.orgID),
+		Email:             strings.TrimSpace(ctx.email),
+		InstanceHost:      strings.TrimSpace(ctx.instanceHost),
+		PlanVersion:       trialState.PlanVersion,
+		SubscriptionState: trialState.SubscriptionState,
+		Capabilities:      append([]string(nil), trialState.Capabilities...),
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		TrialStartedAt:    trialState.TrialStartedAt,
+		TrialEndsAt:       trialState.TrialEndsAt,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now.UTC()),
+			ExpiresAt: jwt.NewNumericDate(time.Unix(*trialState.TrialEndsAt, 0).UTC()),
+			Subject:   strings.TrimSpace(ctx.requestID),
+		},
+	}
 }
 
 func tenantInstanceHost(baseURL, tenantID string) string {
