@@ -4,7 +4,7 @@ import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
 import { SparklineSkeleton } from '@/components/shared/SparklineSkeleton';
 import type { Resource } from '@/types/resource';
-import { getDisplayName, getDiskPercent } from '@/types/resource';
+import { getDiskPercent } from '@/types/resource';
 import type { MetricPoint, ChartData, TimeRange } from '@/api/charts';
 import { useResources } from '@/hooks/useResources';
 import {
@@ -18,7 +18,11 @@ import {
   getPlatformDataRecord,
   hasAgentFacet,
 } from '@/utils/agentResources';
-import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+  getResourceIdentityAliases,
+} from '@/utils/resourceIdentity';
 import {
   SUMMARY_TIME_RANGES,
   SUMMARY_TIME_RANGE_LABEL,
@@ -43,9 +47,8 @@ const getNormalizedResourceIdentifiers = (resource: Resource): Set<string> =>
   new Set<string>([
     ...normalizeResourceIdentifier(resource.id),
     ...normalizeResourceIdentifier(resource.platformId),
-    ...normalizeResourceIdentifier(resource.name),
-    ...normalizeResourceIdentifier(resource.displayName),
-    ...normalizeResourceIdentifier(resource.identity?.hostname),
+    ...normalizeResourceIdentifier(getPreferredResourceDisplayName(resource)),
+    ...normalizeResourceIdentifier(getPreferredResourceHostname(resource)),
     ...getResourceIdentityAliases(resource).flatMap((value) => normalizeResourceIdentifier(value)),
   ]);
 
@@ -340,7 +343,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
 
     // 3. Suffix match for standalone Proxmox nodes: key ends with "-{nodeName}"
     // Handles cases where the instance name prefix is unknown to the frontend
-    const nameToMatch = resource.platformId || resource.name;
+    const nameToMatch =
+      getPreferredResourceHostname(resource) || resource.platformId || resource.name;
     if (nameToMatch) {
       const suffix = `-${nameToMatch}`;
       for (const [key, data] of map) {
@@ -383,7 +387,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     if (!agentFacetResources || agentFacetResources.length === 0) return undefined;
 
     const nodeRefCandidates = new Set<string>(
-      [resource.id, resource.name, resource.platformId]
+      [resource.id, resource.platformId, getPreferredResourceHostname(resource)]
         .map((value) => value?.trim().toLowerCase())
         .filter((value): value is string => Boolean(value)),
     );
@@ -445,7 +449,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
           metricSeries('diskwrite'),
         ),
         color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
-        name: getDisplayName(resource),
+        name: getPreferredResourceDisplayName(resource),
       };
     });
   });
