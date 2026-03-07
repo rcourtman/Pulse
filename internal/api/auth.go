@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -1040,6 +1041,15 @@ var oidcRefreshMutex sync.Map
 // refreshOIDCSessionTokens refreshes OIDC tokens for a session in the background
 // If refresh fails, the session is invalidated and the user will need to re-login
 func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *SessionData) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().
+				Interface("panic", r).
+				Bytes("stack", debug.Stack()).
+				Msg("Recovered panic in OIDC token refresh")
+		}
+	}()
+
 	// Prevent concurrent refresh attempts for the same session
 	if _, loaded := oidcRefreshMutex.LoadOrStore(sessionToken, true); loaded {
 		return // Another goroutine is already refreshing this session

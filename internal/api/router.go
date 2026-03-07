@@ -2136,7 +2136,11 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 		r.hostAgentHandlers.SetMonitor(m)
 	}
 	if r.systemSettingsHandler != nil {
-		r.systemSettingsHandler.SetMonitor(m)
+		if m == nil {
+			r.systemSettingsHandler.SetMonitor(nil)
+		} else {
+			r.systemSettingsHandler.SetMonitor(m)
+		}
 	}
 	if m != nil {
 		if url := strings.TrimSpace(r.config.PublicURL); url != "" {

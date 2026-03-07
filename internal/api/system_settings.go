@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -44,11 +45,29 @@ type SystemSettingsHandler struct {
 	legacyMonitor            SystemSettingsMonitor
 }
 
+func normalizeSystemSettingsMonitor(m SystemSettingsMonitor) SystemSettingsMonitor {
+	if m == nil {
+		return nil
+	}
+
+	v := reflect.ValueOf(m)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		if v.IsNil() {
+			return nil
+		}
+	}
+
+	return m
+}
+
 // NewSystemSettingsHandler creates a new system settings handler
 func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub, mtm *monitoring.MultiTenantMonitor, monitor SystemSettingsMonitor, reloadSystemSettingsFunc func(), reloadMonitorFunc func() error) *SystemSettingsHandler {
+	monitor = normalizeSystemSettingsMonitor(monitor)
+
 	// If mtm is provided, try to populate legacyMonitor from "default" org if not provided
 	if monitor == nil && mtm != nil {
-		if m, err := mtm.GetMonitor("default"); err == nil {
+		if m, err := mtm.GetMonitor("default"); err == nil && m != nil {
 			monitor = m
 		}
 	}
@@ -64,17 +83,15 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 }
 
 // SetMonitor updates the monitor reference used by the handler at runtime.
-// Callers must not pass a typed nil (e.g. (*Monitor)(nil)) — use an untyped nil instead,
-// or guard at the call site, since Go interfaces hide typed nils.
 func (h *SystemSettingsHandler) SetMonitor(m SystemSettingsMonitor) {
-	h.legacyMonitor = m
+	h.legacyMonitor = normalizeSystemSettingsMonitor(m)
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor reference
 func (h *SystemSettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	h.mtMonitor = mtm
 	if mtm != nil {
-		if m, err := mtm.GetMonitor("default"); err == nil {
+		if m, err := mtm.GetMonitor("default"); err == nil && m != nil {
 			h.legacyMonitor = m
 		}
 	}
