@@ -680,6 +680,66 @@ func TestResourceListCollapsesHostLinkedNodeViewsAcrossEndpointForms(t *testing.
 	}
 }
 
+func TestResourceListIncludesHostSMARTPhysicalDisks(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-tower",
+				Hostname: "tower",
+				Status:   "online",
+				LastSeen: now,
+				Disks: []models.Disk{
+					{Device: "/dev/sdb", Total: 12 * 1024, Mountpoint: "/mnt/disk1"},
+				},
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/sdb",
+							Model:       "Seagate IronWolf",
+							Serial:      "SERIAL-TOWER-1",
+							Type:        "sata",
+							Temperature: 37,
+							Health:      "PASSED",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=physical_disk", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 tower physical disk resource, got %d", len(resp.Data))
+	}
+	resource := resp.Data[0]
+	if !containsSource(resource.Sources, unified.SourceAgent) {
+		t.Fatalf("expected agent-backed physical disk source, got %+v", resource.Sources)
+	}
+	if resource.PhysicalDisk == nil || resource.PhysicalDisk.Serial != "SERIAL-TOWER-1" {
+		t.Fatalf("expected SMART-backed physical disk metadata, got %+v", resource.PhysicalDisk)
+	}
+	if resource.MetricsTarget == nil || resource.MetricsTarget.ResourceType != "disk" || resource.MetricsTarget.ResourceID != "SERIAL-TOWER-1" {
+		t.Fatalf("expected disk metrics target SERIAL-TOWER-1, got %+v", resource.MetricsTarget)
+	}
+}
+
 func TestResourceGetResource(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.Host{

@@ -327,6 +327,68 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	return resource, identity
 }
 
+func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Resource, ResourceIdentity) {
+	name := strings.TrimSpace(disk.Model)
+	if name == "" {
+		name = strings.TrimSpace(disk.Device)
+	}
+	if name == "" {
+		name = strings.TrimSpace(host.Hostname)
+	}
+
+	var matchedDisk *models.Disk
+	normalizedDevice := strings.TrimSpace(strings.TrimPrefix(disk.Device, "/dev/"))
+	for i := range host.Disks {
+		hostDevice := strings.TrimSpace(strings.TrimPrefix(host.Disks[i].Device, "/dev/"))
+		if normalizedDevice == "" || hostDevice == "" {
+			continue
+		}
+		if strings.EqualFold(hostDevice, normalizedDevice) {
+			matchedDisk = &host.Disks[i]
+			break
+		}
+	}
+
+	sizeBytes := int64(0)
+	used := ""
+	if matchedDisk != nil {
+		sizeBytes = matchedDisk.Total
+		used = strings.TrimSpace(matchedDisk.Mountpoint)
+	}
+
+	resource := Resource{
+		Type:      ResourceTypePhysicalDisk,
+		Name:      name,
+		Status:    statusFromPhysicalDisk(disk.Health),
+		LastSeen:  host.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		PhysicalDisk: &PhysicalDiskMeta{
+			DevPath:     strings.TrimSpace(disk.Device),
+			Model:       strings.TrimSpace(disk.Model),
+			Serial:      strings.TrimSpace(disk.Serial),
+			WWN:         strings.TrimSpace(disk.WWN),
+			DiskType:    strings.TrimSpace(disk.Type),
+			SizeBytes:   sizeBytes,
+			Health:      strings.TrimSpace(disk.Health),
+			Wearout:     -1,
+			Temperature: disk.Temperature,
+			Used:        used,
+			SMART:       convertSMARTAttributes(disk.Attributes),
+		},
+	}
+
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{host.Hostname}),
+	}
+	if disk.Serial != "" {
+		identity.MachineID = strings.TrimSpace(disk.Serial)
+	} else if disk.WWN != "" {
+		identity.MachineID = strings.TrimSpace(disk.WWN)
+	}
+
+	return resource, identity
+}
+
 func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity) {
 	name := host.Hostname
 	if host.CustomDisplayName != "" {

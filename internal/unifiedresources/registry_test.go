@@ -376,6 +376,113 @@ func TestResourceRegistry_IngestSnapshotUnifiesHostLinkedProxmoxNodeViewsAcrossE
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotCreatesPhysicalDisksFromHostSMART(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-tower",
+				Hostname: "tower",
+				Status:   "online",
+				LastSeen: now,
+				Disks: []models.Disk{
+					{Device: "/dev/sdb", Total: 12 * 1024, Mountpoint: "/mnt/disk1"},
+				},
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/sdb",
+							Model:       "Seagate IronWolf",
+							Serial:      "SERIAL-TOWER-1",
+							Type:        "sata",
+							Temperature: 37,
+							Health:      "PASSED",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 physical disk resource, got %d", len(disks))
+	}
+	disk := disks[0]
+	if !containsDataSource(disk.Sources, SourceAgent) {
+		t.Fatalf("expected agent-backed physical disk source, got %+v", disk.Sources)
+	}
+	if disk.ParentID == nil {
+		t.Fatalf("expected host parent on physical disk")
+	}
+	parent, ok := rr.Get(*disk.ParentID)
+	if !ok || parent == nil || parent.Name != "tower" {
+		t.Fatalf("expected disk parent to resolve to tower host, got %+v", parent)
+	}
+	if disk.PhysicalDisk == nil || disk.PhysicalDisk.Serial != "SERIAL-TOWER-1" {
+		t.Fatalf("expected SMART-backed disk metadata, got %+v", disk.PhysicalDisk)
+	}
+	if disk.Identity.MachineID != "SERIAL-TOWER-1" {
+		t.Fatalf("MachineID = %q, want SERIAL-TOWER-1", disk.Identity.MachineID)
+	}
+}
+
+func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIdentity(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "pve-disk-1",
+				Node:        "tower",
+				Instance:    "pve-tower",
+				DevPath:     "/dev/sdb",
+				Model:       "Seagate IronWolf",
+				Serial:      "SERIAL-TOWER-1",
+				Type:        "sata",
+				Health:      "PASSED",
+				Temperature: 34,
+				LastChecked: now,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:       "host-tower",
+				Hostname: "tower",
+				Status:   "online",
+				LastSeen: now,
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/sdb",
+							Model:       "Seagate IronWolf",
+							Serial:      "SERIAL-TOWER-1",
+							Type:        "sata",
+							Temperature: 37,
+							Health:      "PASSED",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 merged physical disk resource, got %d", len(disks))
+	}
+	disk := disks[0]
+	if !containsDataSource(disk.Sources, SourceAgent) || !containsDataSource(disk.Sources, SourceProxmox) {
+		t.Fatalf("expected merged proxmox+agent disk sources, got %+v", disk.Sources)
+	}
+	if disk.PhysicalDisk == nil || disk.PhysicalDisk.Temperature != 37 {
+		t.Fatalf("expected merged SMART temperature from agent disk, got %+v", disk.PhysicalDisk)
+	}
+}
+
 func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 2, 12, 1, 0, 0, 0, time.UTC)

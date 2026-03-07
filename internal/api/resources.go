@@ -1182,6 +1182,9 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 		if st, ok := bySource[unified.SourceProxmox]; ok {
 			return &unified.MetricsTarget{ResourceType: "disk", ResourceID: st.SourceID}
 		}
+		if st, ok := bySource[unified.SourceAgent]; ok {
+			return &unified.MetricsTarget{ResourceType: "disk", ResourceID: st.SourceID}
+		}
 	case unified.ResourceTypePod:
 		if st, ok := bySource[unified.SourceK8s]; ok {
 			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypePod), ResourceID: st.SourceID}

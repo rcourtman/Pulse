@@ -131,6 +131,9 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	for _, host := range snapshot.Hosts {
 		rr.ingestHost(host)
 	}
+	for _, host := range snapshot.Hosts {
+		rr.ingestHostSMARTDisks(host)
+	}
 	for _, dh := range snapshot.DockerHosts {
 		rr.ingestDockerHost(dh)
 	}
@@ -442,6 +445,28 @@ func (rr *ResourceRegistry) ingestHost(host models.Host) {
 	rr.ingest(SourceAgent, host.ID, resource, identity)
 }
 
+func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
+	if len(host.Sensors.SMART) == 0 {
+		return
+	}
+
+	parentID := rr.sourceResourceID(SourceAgent, host.ID)
+	for _, disk := range host.Sensors.SMART {
+		resource, identity := resourceFromHostSMARTDisk(host, disk)
+		if resource.PhysicalDisk == nil {
+			continue
+		}
+		if parentID != "" {
+			resource.ParentID = &parentID
+		}
+		sourceID := hostSMARTDiskSourceID(host, disk)
+		if sourceID == "" {
+			continue
+		}
+		rr.ingest(SourceAgent, sourceID, resource, identity)
+	}
+}
+
 func (rr *ResourceRegistry) ingestDockerHost(host models.DockerHost) {
 	resource, identity := resourceFromDockerHost(host)
 	rr.ingest(SourceDocker, host.ID, resource, identity)
@@ -590,7 +615,7 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 
 	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
-	if resource.Type == ResourceTypeAgent {
+	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
 		if match, excluded := rr.findMatch(identity, resource.Type, candidateID); match != nil {
 			existing := rr.resources[match.ResourceB]
 			if existing != nil {
@@ -759,8 +784,29 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	// Update source payload
 	switch source {
 	case SourceProxmox:
+		if incoming.PhysicalDisk != nil {
+			previous := existing.PhysicalDisk
+			existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
+			if previous != nil && hasDataSource(existing.Sources, SourceAgent) {
+				if previous.Temperature > 0 {
+					existing.PhysicalDisk.Temperature = previous.Temperature
+				}
+				if previous.Wearout >= 0 {
+					existing.PhysicalDisk.Wearout = previous.Wearout
+				}
+				if previous.SMART != nil {
+					smart := *previous.SMART
+					existing.PhysicalDisk.SMART = &smart
+				}
+			}
+			break
+		}
 		existing.Proxmox = mergeProxmoxData(existing.Proxmox, incoming.Proxmox)
 	case SourceAgent:
+		if incoming.PhysicalDisk != nil {
+			existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
+			break
+		}
 		existing.Agent = incoming.Agent
 	case SourceDocker:
 		existing.Docker = incoming.Docker
@@ -873,6 +919,56 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	}
 	if incoming.LinkedAgentID != "" {
 		merged.LinkedAgentID = incoming.LinkedAgentID
+	}
+
+	return &merged
+}
+
+func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMeta) *PhysicalDiskMeta {
+	if existing == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return existing
+	}
+
+	merged := *existing
+	if incoming.DevPath != "" {
+		merged.DevPath = incoming.DevPath
+	}
+	if incoming.Model != "" {
+		merged.Model = incoming.Model
+	}
+	if incoming.Serial != "" {
+		merged.Serial = incoming.Serial
+	}
+	if incoming.WWN != "" {
+		merged.WWN = incoming.WWN
+	}
+	if incoming.DiskType != "" {
+		merged.DiskType = incoming.DiskType
+	}
+	if incoming.SizeBytes > 0 {
+		merged.SizeBytes = incoming.SizeBytes
+	}
+	if incoming.Health != "" {
+		merged.Health = incoming.Health
+	}
+	if incoming.Wearout >= 0 && (merged.Wearout < 0 || incoming.SMART != nil || merged.SMART == nil) {
+		merged.Wearout = incoming.Wearout
+	}
+	if incoming.Temperature > 0 && (merged.Temperature == 0 || incoming.SMART != nil || merged.SMART == nil) {
+		merged.Temperature = incoming.Temperature
+	}
+	if incoming.RPM > 0 {
+		merged.RPM = incoming.RPM
+	}
+	if incoming.Used != "" {
+		merged.Used = incoming.Used
+	}
+	if incoming.SMART != nil {
+		smart := *incoming.SMART
+		merged.SMART = &smart
 	}
 
 	return &merged
@@ -1003,11 +1099,15 @@ func (rr *ResourceRegistry) buildChildCounts() {
 }
 
 func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity ResourceIdentity, source DataSource, sourceID string) string {
-	if resourceType != ResourceTypeAgent {
-		return rr.sourceSpecificID(resourceType, source, sourceID)
-	}
-	if identity.MachineID != "" || identity.DMIUUID != "" || identity.ClusterName != "" {
-		return rr.canonicalIDFromIdentity(resourceType, identity)
+	switch resourceType {
+	case ResourceTypeAgent:
+		if identity.MachineID != "" || identity.DMIUUID != "" || identity.ClusterName != "" {
+			return rr.canonicalIDFromIdentity(resourceType, identity)
+		}
+	case ResourceTypePhysicalDisk:
+		if identity.MachineID != "" || identity.DMIUUID != "" {
+			return rr.canonicalIDFromIdentity(resourceType, identity)
+		}
 	}
 	return rr.sourceSpecificID(resourceType, source, sourceID)
 }
@@ -1058,6 +1158,20 @@ func proxmoxNodeSourceID(instance, nodeName string) string {
 		return nodeName
 	}
 	return fmt.Sprintf("%s-%s", instance, nodeName)
+}
+
+func hostSMARTDiskSourceID(host models.Host, disk models.HostDiskSMART) string {
+	if serial := strings.TrimSpace(disk.Serial); serial != "" {
+		return serial
+	}
+	if wwn := strings.TrimSpace(disk.WWN); wwn != "" {
+		return wwn
+	}
+	device := strings.TrimSpace(disk.Device)
+	if device == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), strings.TrimPrefix(device, "/dev/"))
 }
 
 func kubernetesClusterSourceID(cluster models.KubernetesCluster) string {
@@ -1244,6 +1358,15 @@ func addSource(sources []DataSource, source DataSource) []DataSource {
 		}
 	}
 	return append(sources, source)
+}
+
+func hasDataSource(sources []DataSource, source DataSource) bool {
+	for _, existing := range sources {
+		if existing == source {
+			return true
+		}
+	}
+	return false
 }
 
 func addSources(sources []DataSource, more []DataSource) []DataSource {
