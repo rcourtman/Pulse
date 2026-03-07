@@ -193,12 +193,18 @@ func TestStateUpdateNodesForInstanceLinksUniqueHostname(t *testing.T) {
 	if nodes[0].LinkedAgentID != "host-a" {
 		t.Fatalf("LinkedAgentID = %q, want host-a", nodes[0].LinkedAgentID)
 	}
+	if state.Hosts[0].LinkedNodeID != "node-1" {
+		t.Fatalf("LinkedNodeID = %q, want node-1", state.Hosts[0].LinkedNodeID)
+	}
+	if state.Hosts[0].LinkedVMID != "" || state.Hosts[0].LinkedContainerID != "" {
+		t.Fatalf("expected guest links cleared when host links to node")
+	}
 }
 
 func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
 	state := &State{
 		Hosts: []Host{
-			{ID: "host-1", Hostname: "pve01"},
+			{ID: "host-1", Hostname: "pve01", LinkedNodeID: "cluster-a-pve01-old"},
 		},
 		Nodes: []Node{
 			{
@@ -231,6 +237,9 @@ func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
 	}
 	if state.Nodes[0].LinkedAgentID != "host-1" {
 		t.Fatalf("linkedAgentID = %q, want host-1", state.Nodes[0].LinkedAgentID)
+	}
+	if state.Hosts[0].LinkedNodeID != "cluster-a-pve01-new" {
+		t.Fatalf("host LinkedNodeID = %q, want cluster-a-pve01-new", state.Hosts[0].LinkedNodeID)
 	}
 }
 

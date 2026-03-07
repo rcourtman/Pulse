@@ -1470,6 +1470,43 @@ func preferNodeForMerge(existing Node, candidate Node) Node {
 	return existing
 }
 
+func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node) {
+	linkedNodeByHostID := make(map[string]string)
+	multipleNodeLinksByHostID := make(map[string]struct{})
+	for _, node := range nodes {
+		hostID := strings.TrimSpace(node.LinkedAgentID)
+		nodeID := strings.TrimSpace(node.ID)
+		if hostID == "" || nodeID == "" {
+			continue
+		}
+		if existingNodeID, ok := linkedNodeByHostID[hostID]; ok && existingNodeID != nodeID {
+			multipleNodeLinksByHostID[hostID] = struct{}{}
+			continue
+		}
+		linkedNodeByHostID[hostID] = nodeID
+	}
+
+	for i := range hosts {
+		hostID := strings.TrimSpace(hosts[i].ID)
+		if hostID == "" {
+			continue
+		}
+
+		nodeID, hasLinkedNode := linkedNodeByHostID[hostID]
+		_, ambiguous := multipleNodeLinksByHostID[hostID]
+		switch {
+		case ambiguous:
+			hosts[i].LinkedNodeID = ""
+		case hasLinkedNode:
+			hosts[i].LinkedNodeID = nodeID
+			hosts[i].LinkedVMID = ""
+			hosts[i].LinkedContainerID = ""
+		case hosts[i].LinkedNodeID != "":
+			hosts[i].LinkedNodeID = ""
+		}
+	}
+}
+
 // UpdateNodesForInstance updates nodes for a specific instance, merging with existing nodes
 func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	s.mu.Lock()
@@ -1626,6 +1663,8 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	sort.Slice(newNodes, func(i, j int) bool {
 		return newNodes[i].Name < newNodes[j].Name
 	})
+
+	reconcileHostNodeLinksLocked(s.Hosts, newNodes)
 
 	s.Nodes = newNodes
 	s.LastUpdate = time.Now()
