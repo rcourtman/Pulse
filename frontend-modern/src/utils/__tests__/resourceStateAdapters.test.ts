@@ -65,6 +65,29 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.linkedAgentId).toBe('agent-from-facet');
   });
 
+  it('uses typed canonical identity for node labels when proxmox nodeName is absent', () => {
+    const node = nodeFromResource(
+      ({
+        ...createNodeResource({
+          proxmox: {},
+        } as Record<string, unknown>),
+        name: '',
+        displayName: '',
+        platformId: '',
+        canonicalIdentity: {
+          displayName: 'Tower',
+          hostname: 'tower.local',
+          platformId: 'pve-canonical',
+        },
+      }) as Resource,
+    );
+
+    expect(node?.name).toBe('tower.local');
+    expect(node?.displayName).toBe('Tower');
+    expect(node?.host).toBe('tower.local');
+    expect(node?.instance).toBe('pve-canonical');
+  });
+
   it('maps PBS display and host identity through shared resource helpers', () => {
     const instance = pbsInstanceFromResource(
       createServiceResource('pbs', {
