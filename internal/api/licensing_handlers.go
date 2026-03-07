@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,7 @@ type LicenseHandlers struct {
 	trialLimiter       *RateLimiter
 	trialReplay        *jtiReplayStore
 	trialInitiations   *trialSignupInitiationStore
+	trialRedeemer      func(token string) error
 	monitor            *monitoring.Monitor
 	mtMonitor          *monitoring.MultiTenantMonitor
 	conversionRecorder *conversionRecorder
@@ -164,12 +166,7 @@ func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
 	return baseURL + "/auth/trial-activate"
 }
 
-func trialSignupActionURLForRequest(r *http.Request, cfg *config.Config, orgID, instanceToken string) (string, error) {
-	returnURL := trialCallbackURLForRequest(r, cfg)
-	if returnURL == "" {
-		return "", fmt.Errorf("trial callback URL is unavailable")
-	}
-
+func trialSignupActionURLForRequest(cfg *config.Config, orgID, returnURL, instanceToken string) (string, error) {
 	signupBaseURL := ""
 	if cfg != nil {
 		signupBaseURL = strings.TrimSpace(cfg.ProTrialSignupURL)
@@ -186,7 +183,7 @@ func trialSignupActionURLForRequest(r *http.Request, cfg *config.Config, orgID, 
 
 	query := parsed.Query()
 	query.Set("org_id", strings.TrimSpace(orgID))
-	query.Set("return_url", returnURL)
+	query.Set("return_url", strings.TrimSpace(returnURL))
 	query.Set("instance_token", strings.TrimSpace(instanceToken))
 	parsed.RawQuery = query.Encode()
 
@@ -437,14 +434,20 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
 		return
 	}
-	instanceToken, err := h.trialInitiations.issue(orgID, time.Now().UTC().Add(trialSignupInitiationTTL))
+	returnURL := trialCallbackURLForRequest(r, h.cfg)
+	if returnURL == "" {
+		log.Error().Str("org_id", orgID).Msg("Trial callback URL unavailable for initiation")
+		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
+		return
+	}
+	instanceToken, err := h.trialInitiations.issue(orgID, returnURL, time.Now().UTC().Add(trialSignupInitiationTTL))
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial signup initiation token unavailable")
 		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
 		return
 	}
 
-	actionURL, err := trialSignupActionURLForRequest(r, h.cfg, orgID, instanceToken)
+	actionURL, err := trialSignupActionURLForRequest(h.cfg, orgID, returnURL, instanceToken)
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial signup redirect unavailable")
 		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
@@ -553,7 +556,8 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
 		return
 	}
-	ok, err := h.trialInitiations.validate(orgID, claims.InstanceToken, time.Now().UTC())
+	returnURL := strings.TrimSpace(claims.ReturnURL)
+	ok, err := h.trialInitiations.validate(orgID, returnURL, claims.InstanceToken, time.Now().UTC())
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation initiation token validation failed")
 		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
@@ -616,12 +620,75 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		Surface: "hosted_signup",
 	})
 
+	if consumed, consumeErr := h.trialInitiations.consume(orgID, returnURL, claims.InstanceToken, time.Now().UTC()); consumeErr != nil {
+		log.Warn().Err(consumeErr).Str("org_id", orgID).Msg("Trial initiation token consume failed after activation")
+	} else if !consumed {
+		log.Warn().Str("org_id", orgID).Msg("Trial initiation token was not consumed after activation")
+	}
+
+	redeemer := h.trialRedeemer
+	if redeemer == nil {
+		redeemer = h.acknowledgeHostedTrialRedemption
+	}
+	if redeemer != nil {
+		if err := redeemer(token); err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted trial redemption acknowledgement failed")
+		}
+	}
+
 	log.Info().
 		Str("org_id", orgID).
 		Str("email", strings.TrimSpace(claims.Email)).
 		Msg("Trial activation succeeded")
 
 	http.Redirect(w, r, "/settings?trial=activated", http.StatusTemporaryRedirect)
+}
+
+func (h *LicenseHandlers) acknowledgeHostedTrialRedemption(token string) error {
+	if h == nil {
+		return nil
+	}
+	redemptionURL := trialSignupRedemptionURLFromConfig(h.cfg)
+	if redemptionURL == "" {
+		return nil
+	}
+	payload, err := json.Marshal(map[string]string{"token": strings.TrimSpace(token)})
+	if err != nil {
+		return fmt.Errorf("marshal trial redemption payload: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, redemptionURL, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("build trial redemption request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("post trial redemption acknowledgement: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("trial redemption acknowledgement returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func trialSignupRedemptionURLFromConfig(cfg *config.Config) string {
+	signupBaseURL := ""
+	if cfg != nil {
+		signupBaseURL = strings.TrimSpace(cfg.ProTrialSignupURL)
+	}
+	signupURL := strings.TrimSpace(proTrialSignupURLFromLicensing(signupBaseURL))
+	if signupURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(signupURL)
+	if err != nil || parsed == nil {
+		return ""
+	}
+	parsed.Path = "/api/trial-signup/redeem"
+	parsed.RawQuery = ""
+	return parsed.String()
 }
 
 // HandleLicenseStatus handles GET /api/license/status

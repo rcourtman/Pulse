@@ -118,7 +118,7 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 		Version:          "test",
 	})
 
-	pageReq := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com/auth/trial-activate", nil)
+	pageReq := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com/auth/trial-activate&instance_token=tsi_test", nil)
 	pageRec := httptest.NewRecorder()
 	mux.ServeHTTP(pageRec, pageReq)
 	if pageRec.Code != http.StatusOK {
@@ -147,6 +147,13 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 	mux.ServeHTTP(checkoutRec, checkoutReq)
 	if checkoutRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET /api/trial-signup/checkout status=%d, want %d", checkoutRec.Code, http.StatusMethodNotAllowed)
+	}
+
+	redeemReq := httptest.NewRequest(http.MethodGet, "/api/trial-signup/redeem", nil)
+	redeemRec := httptest.NewRecorder()
+	mux.ServeHTTP(redeemRec, redeemReq)
+	if redeemRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /api/trial-signup/redeem status=%d, want %d", redeemRec.Code, http.StatusMethodNotAllowed)
 	}
 }
 

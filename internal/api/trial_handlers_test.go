@@ -21,12 +21,12 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-func issueTrialSignupInitiationToken(t *testing.T, h *LicenseHandlers, orgID string) string {
+func issueTrialSignupInitiationToken(t *testing.T, h *LicenseHandlers, orgID, returnURL string) string {
 	t.Helper()
 	if h == nil || h.trialInitiations == nil {
 		t.Fatal("trial initiation store is not configured")
 	}
-	token, err := h.trialInitiations.issue(orgID, time.Now().UTC().Add(trialSignupInitiationTTL))
+	token, err := h.trialInitiations.issue(orgID, returnURL, time.Now().UTC().Add(trialSignupInitiationTTL))
 	if err != nil {
 		t.Fatalf("issue trial initiation token: %v", err)
 	}
@@ -210,13 +210,15 @@ func TestTrialActivation_SignedTokenStartsTrial(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-	instanceToken := issueTrialSignupInitiationToken(t, h, "default")
+	returnURL := "https://pulse.example.com/auth/trial-activate"
+	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
 
 	token, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
 		OrgID:         "default",
 		Email:         "owner@example.com",
 		InstanceHost:  "pulse.example.com",
 		InstanceToken: instanceToken,
+		ReturnURL:     returnURL,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 		},
@@ -257,13 +259,15 @@ func TestTrialActivation_ReplayTokenRejected(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-	instanceToken := issueTrialSignupInitiationToken(t, h, "default")
+	returnURL := "https://pulse.example.com/auth/trial-activate"
+	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
 
 	token, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
 		OrgID:         "default",
 		Email:         "owner@example.com",
 		InstanceHost:  "pulse.example.com",
 		InstanceToken: instanceToken,
+		ReturnURL:     returnURL,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 		},
@@ -303,7 +307,8 @@ func TestTrialActivation_ReissuedTokenForSameSessionRejected(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-	instanceToken := issueTrialSignupInitiationToken(t, h, "default")
+	returnURL := "https://pulse.example.com/auth/trial-activate"
+	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
 
 	expiresAt := jwt.NewNumericDate(time.Now().Add(10 * time.Minute))
 	firstToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
@@ -311,6 +316,7 @@ func TestTrialActivation_ReissuedTokenForSameSessionRejected(t *testing.T) {
 		Email:         "owner@example.com",
 		InstanceHost:  "pulse.example.com",
 		InstanceToken: instanceToken,
+		ReturnURL:     returnURL,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "cs_same_session",
 			ExpiresAt: expiresAt,
@@ -324,6 +330,7 @@ func TestTrialActivation_ReissuedTokenForSameSessionRejected(t *testing.T) {
 		Email:         "owner@example.com",
 		InstanceHost:  "pulse.example.com",
 		InstanceToken: instanceToken,
+		ReturnURL:     returnURL,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "cs_same_session",
 			ExpiresAt: expiresAt,
@@ -373,6 +380,7 @@ func TestTrialActivation_RequiresPendingInitiationToken(t *testing.T) {
 		Email:         "owner@example.com",
 		InstanceHost:  "pulse.example.com",
 		InstanceToken: "tsi_missing",
+		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 		},
@@ -391,5 +399,78 @@ func TestTrialActivation_RequiresPendingInitiationToken(t *testing.T) {
 	}
 	if got := rec.Header().Get("Location"); got != "/settings?trial=invalid" {
 		t.Fatalf("redirect=%q, want %q", got, "/settings?trial=invalid")
+	}
+}
+
+func TestTrialActivation_ConsumedInitiationTokenCannotBeReused(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	returnURL := "https://pulse.example.com/auth/trial-activate"
+	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
+
+	firstToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:         "default",
+		Email:         "owner@example.com",
+		InstanceHost:  "pulse.example.com",
+		InstanceToken: instanceToken,
+		ReturnURL:     returnURL,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "cs_first",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken(first): %v", err)
+	}
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(firstToken), nil)
+	firstReq.Host = "pulse.example.com"
+	firstRec := httptest.NewRecorder()
+	h.HandleTrialActivation(firstRec, firstReq)
+	if firstRec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("first status=%d, want %d", firstRec.Code, http.StatusTemporaryRedirect)
+	}
+	if got := firstRec.Header().Get("Location"); got != "/settings?trial=activated" {
+		t.Fatalf("first redirect=%q, want %q", got, "/settings?trial=activated")
+	}
+
+	billingStore := config.NewFileBillingStore(baseDir)
+	if err := billingStore.SaveBillingState("default", &entitlements.BillingState{}); err != nil {
+		t.Fatalf("SaveBillingState(reset): %v", err)
+	}
+
+	secondToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:         "default",
+		Email:         "owner@example.com",
+		InstanceHost:  "pulse.example.com",
+		InstanceToken: instanceToken,
+		ReturnURL:     returnURL,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "cs_second",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken(second): %v", err)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(secondToken), nil)
+	secondReq.Host = "pulse.example.com"
+	secondRec := httptest.NewRecorder()
+	h.HandleTrialActivation(secondRec, secondReq)
+
+	if secondRec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("second status=%d, want %d", secondRec.Code, http.StatusTemporaryRedirect)
+	}
+	if got := secondRec.Header().Get("Location"); got != "/settings?trial=invalid" {
+		t.Fatalf("second redirect=%q, want %q", got, "/settings?trial=invalid")
 	}
 }

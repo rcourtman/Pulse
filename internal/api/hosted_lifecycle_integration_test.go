@@ -24,12 +24,12 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-func issueHostedLifecycleTrialInitiationToken(t *testing.T, h *LicenseHandlers, orgID string) string {
+func issueHostedLifecycleTrialInitiationToken(t *testing.T, h *LicenseHandlers, orgID, returnURL string) string {
 	t.Helper()
 	if h == nil || h.trialInitiations == nil {
 		t.Fatal("trial initiation store is not configured")
 	}
-	token, err := h.trialInitiations.issue(orgID, time.Now().UTC().Add(trialSignupInitiationTTL))
+	token, err := h.trialInitiations.issue(orgID, returnURL, time.Now().UTC().Add(trialSignupInitiationTTL))
 	if err != nil {
 		t.Fatalf("issue trial initiation token: %v", err)
 	}
@@ -116,13 +116,15 @@ func TestHostedLifecycle(t *testing.T) {
 			t.Fatalf("GenerateKey: %v", err)
 		}
 		t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-		instanceToken := issueHostedLifecycleTrialInitiationToken(t, handlers, "default")
+		returnURL := "https://pulse.example.com/auth/trial-activate"
+		instanceToken := issueHostedLifecycleTrialInitiationToken(t, handlers, "default", returnURL)
 
 		token, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
 			OrgID:         "default",
 			Email:         "owner@example.com",
 			InstanceHost:  "pulse.example.com",
 			InstanceToken: instanceToken,
+			ReturnURL:     returnURL,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 			},
@@ -218,13 +220,15 @@ func TestHostedLifecycle(t *testing.T) {
 
 		org1 := "trial-org-1"
 		ctx1 := context.WithValue(context.Background(), OrgIDContextKey, org1)
-		instanceToken1 := issueHostedLifecycleTrialInitiationToken(t, handlers, org1)
+		returnURL := "https://pulse.example.com/auth/trial-activate"
+		instanceToken1 := issueHostedLifecycleTrialInitiationToken(t, handlers, org1, returnURL)
 
 		token1, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
 			OrgID:         org1,
 			Email:         "owner1@example.com",
 			InstanceHost:  "pulse.example.com",
 			InstanceToken: instanceToken1,
+			ReturnURL:     returnURL,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 			},
@@ -246,6 +250,7 @@ func TestHostedLifecycle(t *testing.T) {
 			Email:         "owner1@example.com",
 			InstanceHost:  "pulse.example.com",
 			InstanceToken: instanceToken1,
+			ReturnURL:     returnURL,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 			},
@@ -261,18 +266,19 @@ func TestHostedLifecycle(t *testing.T) {
 		if rec2.Code != http.StatusTemporaryRedirect {
 			t.Fatalf("org1 second activation status=%d, want %d: %s", rec2.Code, http.StatusTemporaryRedirect, rec2.Body.String())
 		}
-		if got := rec2.Header().Get("Location"); got != "/settings?trial=ineligible" {
-			t.Fatalf("org1 second activation redirect=%q, want %q", got, "/settings?trial=ineligible")
+		if got := rec2.Header().Get("Location"); got != "/settings?trial=invalid" {
+			t.Fatalf("org1 second activation redirect=%q, want %q", got, "/settings?trial=invalid")
 		}
 
 		org2 := "trial-org-2"
 		ctx2 := context.WithValue(context.Background(), OrgIDContextKey, org2)
-		instanceToken2 := issueHostedLifecycleTrialInitiationToken(t, handlers, org2)
+		instanceToken2 := issueHostedLifecycleTrialInitiationToken(t, handlers, org2, returnURL)
 		token3, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
 			OrgID:         org2,
 			Email:         "owner2@example.com",
 			InstanceHost:  "pulse.example.com",
 			InstanceToken: instanceToken2,
+			ReturnURL:     returnURL,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 			},

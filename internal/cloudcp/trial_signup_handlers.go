@@ -2,6 +2,8 @@ package cloudcp
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net"
@@ -273,6 +275,10 @@ type trialSignupPageData struct {
 	Verified         bool
 	VerifiedToken    string
 	Nonce            string
+}
+
+type trialSignupRedeemRequest struct {
+	Token string `json:"token"`
 }
 
 func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender, verificationStore *TrialSignupStore) *TrialSignupHandlers {
@@ -637,9 +643,8 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		http.Error(w, "invalid return url", http.StatusBadRequest)
 		return
 	}
-	parsedReturnURL, _ := url.Parse(returnURL)
-	instanceHost := strings.TrimSpace(parsedReturnURL.Hostname())
-	if instanceHost == "" {
+	instanceHost, err := trialSignupReturnURLHost(returnURL)
+	if err != nil {
 		http.Error(w, "invalid return url host", http.StatusBadRequest)
 		return
 	}
@@ -721,6 +726,7 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		Email:         email,
 		InstanceHost:  instanceHost,
 		InstanceToken: record.InstanceToken,
+		ReturnURL:     returnURL,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
@@ -748,6 +754,77 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		return
 	}
 	http.Redirect(w, r, finalReturnURL, http.StatusSeeOther)
+}
+
+func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.verificationStore == nil {
+		http.Error(w, "trial signup store not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var reqBody trialSignupRedeemRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	token := strings.TrimSpace(reqBody.Token)
+	if token == "" {
+		http.Error(w, "token is required", http.StatusBadRequest)
+		return
+	}
+
+	privateKey, err := pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialActivationPrivateKey))
+	if err != nil {
+		log.Error().Err(err).Msg("trial activation private key invalid")
+		http.Error(w, "trial activation verifier unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok || len(publicKey) != ed25519.PublicKeySize {
+		http.Error(w, "trial activation verifier unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	now := h.now().UTC()
+	claims, err := pkglicensing.VerifyTrialActivationToken(token, publicKey, "", now)
+	if err != nil {
+		http.Error(w, "invalid activation token", http.StatusBadRequest)
+		return
+	}
+	if !isValidTrialReturnURL(claims.ReturnURL) {
+		http.Error(w, "invalid return url", http.StatusBadRequest)
+		return
+	}
+	instanceHost, err := trialSignupReturnURLHost(claims.ReturnURL)
+	if err != nil {
+		http.Error(w, "invalid return url host", http.StatusBadRequest)
+		return
+	}
+	if !strings.EqualFold(instanceHost, strings.TrimSpace(claims.InstanceHost)) {
+		http.Error(w, "activation token host mismatch", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(claims.InstanceToken) == "" {
+		http.Error(w, "activation token missing initiation token", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.verificationStore.MarkRedemptionRecorded(claims.OrgID, claims.ReturnURL, claims.InstanceToken, claims.InstanceHost, token, now); err != nil {
+		switch {
+		case errors.Is(err, ErrTrialSignupRecordNotFound):
+			http.Error(w, "invalid trial redemption", http.StatusBadRequest)
+		default:
+			log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to record hosted trial redemption")
+			http.Error(w, "failed to record trial redemption", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *http.Request, status int, data trialSignupPageData) {

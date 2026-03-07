@@ -284,6 +284,95 @@ func TestTrialSignupStoreStoreOrRotateActivationToken(t *testing.T) {
 	}
 }
 
+func TestTrialSignupStoreMarkRedemptionRecorded(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
+		Name:                  "Owner",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             now,
+		VerificationExpiresAt: now.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, now)
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+	if err := store.MarkCheckoutCompleted(record.ID, "cs_test_redeem", now); err != nil {
+		t.Fatalf("MarkCheckoutCompleted: %v", err)
+	}
+	if _, _, err := store.StoreOrRotateActivationToken(record.ID, "activation-token", now, trialSignupActivationTokenTTL); err != nil {
+		t.Fatalf("StoreOrRotateActivationToken: %v", err)
+	}
+
+	if err := store.MarkRedemptionRecorded("default", "https://pulse.example.com/auth/trial-activate", "tsi_test", "pulse.example.com", "activation-token", now); err != nil {
+		t.Fatalf("MarkRedemptionRecorded(first): %v", err)
+	}
+	if err := store.MarkRedemptionRecorded("default", "https://pulse.example.com/auth/trial-activate", "tsi_test", "pulse.example.com", "activation-token", now.Add(time.Minute)); err != nil {
+		t.Fatalf("MarkRedemptionRecorded(repeat): %v", err)
+	}
+
+	updated, err := store.GetRecord(record.ID)
+	if err != nil {
+		t.Fatalf("GetRecord(updated): %v", err)
+	}
+	if updated.RedemptionRecordedAt.IsZero() {
+		t.Fatalf("expected redemption_recorded_at to be populated")
+	}
+	if !updated.RedemptionRecordedAt.Equal(now) {
+		t.Fatalf("redemption_recorded_at=%v, want %v", updated.RedemptionRecordedAt, now)
+	}
+}
+
+func TestTrialSignupStoreMarkRedemptionRecordedRejectsMismatchedReturnTarget(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
+		Name:                  "Owner",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             now,
+		VerificationExpiresAt: now.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, now)
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+	if err := store.MarkCheckoutCompleted(record.ID, "cs_test_redeem", now); err != nil {
+		t.Fatalf("MarkCheckoutCompleted: %v", err)
+	}
+	if _, _, err := store.StoreOrRotateActivationToken(record.ID, "activation-token", now, trialSignupActivationTokenTTL); err != nil {
+		t.Fatalf("StoreOrRotateActivationToken: %v", err)
+	}
+
+	err = store.MarkRedemptionRecorded("default", "https://other.example.com/auth/trial-activate", "tsi_test", "other.example.com", "activation-token", now)
+	if !errors.Is(err, ErrTrialSignupRecordNotFound) {
+		t.Fatalf("MarkRedemptionRecorded error=%v, want %v", err, ErrTrialSignupRecordNotFound)
+	}
+}
+
 func TestTrialSignupStoreIssueCheckoutTokenAndLookup(t *testing.T) {
 	store, err := NewTrialSignupStore(t.TempDir())
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	stripe "github.com/stripe/stripe-go/v82"
 )
@@ -448,6 +449,9 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	if claims.OrgID != "default" {
 		t.Fatalf("claims.OrgID=%q, want %q", claims.OrgID, "default")
 	}
+	if claims.ReturnURL != "https://pulse.example.com/auth/trial-activate" {
+		t.Fatalf("claims.ReturnURL=%q, want %q", claims.ReturnURL, "https://pulse.example.com/auth/trial-activate")
+	}
 	updatedRecord, err := store.GetRecord(record.ID)
 	if err != nil {
 		t.Fatalf("GetRecord(updated): %v", err)
@@ -562,6 +566,9 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	if claims.Subject != "cs_test_reuse" {
 		t.Fatalf("claims.Subject=%q, want %q", claims.Subject, "cs_test_reuse")
 	}
+	if claims.ReturnURL != "https://pulse.example.com/auth/trial-activate" {
+		t.Fatalf("claims.ReturnURL=%q, want %q", claims.ReturnURL, "https://pulse.example.com/auth/trial-activate")
+	}
 }
 
 func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
@@ -660,6 +667,140 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	}
 	if claims.Subject != "cs_test_rotate" {
 		t.Fatalf("claims.Subject=%q, want %q", claims.Subject, "cs_test_rotate")
+	}
+	if claims.ReturnURL != "https://pulse.example.com/auth/trial-activate" {
+		t.Fatalf("claims.ReturnURL=%q, want %q", claims.ReturnURL, "https://pulse.example.com/auth/trial-activate")
+	}
+}
+
+func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
+		Name:                  "Test User",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             now,
+		VerificationExpiresAt: now.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, now)
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+	if err := store.MarkCheckoutCompleted(record.ID, "cs_test_redeem", now); err != nil {
+		t.Fatalf("MarkCheckoutCompleted: %v", err)
+	}
+
+	activationToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:         "default",
+		Email:         "owner@example.com",
+		InstanceHost:  "pulse.example.com",
+		InstanceToken: "tsi_test",
+		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "cs_test_redeem",
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken: %v", err)
+	}
+	if _, _, err := store.StoreOrRotateActivationToken(record.ID, activationToken, now, trialSignupActivationTokenTTL); err != nil {
+		t.Fatalf("StoreOrRotateActivationToken(actual): %v", err)
+	}
+
+	h := NewTrialSignupHandlers(&CPConfig{
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+	}, nil, store)
+	h.now = func() time.Time { return now }
+
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/redeem", strings.NewReader(`{"token":"`+activationToken+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupRedeem(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+
+	updatedRecord, err := store.GetRecord(record.ID)
+	if err != nil {
+		t.Fatalf("GetRecord(updated): %v", err)
+	}
+	if updatedRecord.RedemptionRecordedAt.IsZero() {
+		t.Fatalf("expected redemption_recorded_at to be set")
+	}
+
+	claims, err := pkglicensing.VerifyTrialActivationToken(activationToken, pub, "pulse.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyTrialActivationToken: %v", err)
+	}
+	if claims.ReturnURL != "https://pulse.example.com/auth/trial-activate" {
+		t.Fatalf("claims.ReturnURL=%q, want %q", claims.ReturnURL, "https://pulse.example.com/auth/trial-activate")
+	}
+}
+
+func TestTrialSignupHandleRedeemRejectsHostMismatch(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	activationToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:         "default",
+		Email:         "owner@example.com",
+		InstanceHost:  "wrong.example.com",
+		InstanceToken: "tsi_test",
+		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "cs_bad_host",
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken: %v", err)
+	}
+
+	h := NewTrialSignupHandlers(&CPConfig{
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+	}, nil, store)
+	h.now = func() time.Time { return now }
+
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/redeem", strings.NewReader(`{"token":"`+activationToken+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupRedeem(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "host mismatch") {
+		t.Fatalf("expected host mismatch error, got %q", rec.Body.String())
 	}
 }
 

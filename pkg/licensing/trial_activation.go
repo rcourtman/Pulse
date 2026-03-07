@@ -45,6 +45,7 @@ type TrialActivationClaims struct {
 	Email         string `json:"email,omitempty"`
 	InstanceHost  string `json:"instance_host"`
 	InstanceToken string `json:"instance_token,omitempty"`
+	ReturnURL     string `json:"return_url,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -180,6 +181,7 @@ func VerifyTrialActivationToken(token string, publicKey ed25519.PublicKey, expec
 		return nil, ErrTrialActivationOrgIDMissing
 	}
 	claims.InstanceHost = normalizeHost(claims.InstanceHost)
+	claims.ReturnURL = strings.TrimSpace(claims.ReturnURL)
 	if claims.InstanceHost == "" {
 		return nil, ErrTrialActivationInstanceMissing
 	}
