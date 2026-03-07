@@ -12,6 +12,7 @@ import (
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
@@ -103,6 +104,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Build HTTP routes
 	mux := http.NewServeMux()
+	hostedEntitlements := entitlements.NewService(reg, cfg.BaseURL, cfg.TrialActivationPrivateKey)
 	provisioner := cpstripe.NewProvisioner(
 		reg,
 		cfg.TenantsDir(),
@@ -112,17 +114,19 @@ func Run(ctx context.Context, version string) error {
 		emailSender,
 		cfg.EmailFrom,
 		cfg.AllowDockerlessProvisioning,
+		cpstripe.WithHostedEntitlementService(hostedEntitlements),
 		cpstripe.WithTrialActivationPrivateKey(cfg.TrialActivationPrivateKey),
 	)
 	deps := &Deps{
-		Config:           cfg,
-		Registry:         reg,
-		Docker:           dockerMgr,
-		MagicLinks:       magicLinkSvc,
-		TrialSignupStore: trialSignupStore,
-		Provisioner:      provisioner,
-		Version:          version,
-		EmailSender:      emailSender,
+		Config:             cfg,
+		Registry:           reg,
+		Docker:             dockerMgr,
+		MagicLinks:         magicLinkSvc,
+		TrialSignupStore:   trialSignupStore,
+		Provisioner:        provisioner,
+		HostedEntitlements: hostedEntitlements,
+		Version:            version,
+		EmailSender:        emailSender,
 	}
 	RegisterRoutes(mux, deps)
 

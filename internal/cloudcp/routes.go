@@ -11,6 +11,7 @@ import (
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/handoff"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -19,14 +20,15 @@ import (
 
 // Deps holds shared dependencies injected into HTTP handlers.
 type Deps struct {
-	Config           *CPConfig
-	Registry         *registry.TenantRegistry
-	Docker           *docker.Manager // nil if Docker is unavailable
-	MagicLinks       *cpauth.Service // control plane magic link service
-	TrialSignupStore *TrialSignupStore
-	Provisioner      *cpstripe.Provisioner
-	Version          string
-	EmailSender      email.Sender
+	Config             *CPConfig
+	Registry           *registry.TenantRegistry
+	Docker             *docker.Manager // nil if Docker is unavailable
+	MagicLinks         *cpauth.Service // control plane magic link service
+	TrialSignupStore   *TrialSignupStore
+	Provisioner        *cpstripe.Provisioner
+	HostedEntitlements *entitlements.Service
+	Version            string
+	EmailSender        email.Sender
 }
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
@@ -84,6 +86,10 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	}
 
 	// Stripe webhook (signature-authenticated)
+	hostedEntitlements := deps.HostedEntitlements
+	if hostedEntitlements == nil {
+		hostedEntitlements = entitlements.NewService(deps.Registry, deps.Config.BaseURL, deps.Config.TrialActivationPrivateKey)
+	}
 	provisioner := deps.Provisioner
 	if provisioner == nil {
 		provisioner = cpstripe.NewProvisioner(
@@ -95,6 +101,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 			deps.EmailSender,
 			deps.Config.EmailFrom,
 			deps.Config.AllowDockerlessProvisioning,
+			cpstripe.WithHostedEntitlementService(hostedEntitlements),
 			cpstripe.WithTrialActivationPrivateKey(deps.Config.TrialActivationPrivateKey),
 		)
 	}
@@ -110,7 +117,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
 	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore)
-	hostedEntitlementHandlers := NewHostedEntitlementHandlers(deps.Config, deps.TrialSignupStore, deps.Registry)
+	hostedEntitlementHandlers := NewHostedEntitlementHandlers(deps.Config, deps.TrialSignupStore, hostedEntitlements)
 	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
 	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
 	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))

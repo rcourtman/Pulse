@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -883,10 +884,12 @@ func TestTrialSignupHandleRefreshReturnsLease(t *testing.T) {
 		t.Fatalf("MarkRedemptionRecorded: %v", err)
 	}
 
+	svc := entitlements.NewService(nil, "", base64.StdEncoding.EncodeToString(priv))
 	h := NewHostedEntitlementHandlers(&CPConfig{
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, store, nil)
+	}, store, svc)
 	h.now = func() time.Time { return now.Add(time.Hour) }
+	h.entitlements.SetNow(h.now)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/entitlements/refresh", strings.NewReader(`{"org_id":"default","instance_host":"pulse.example.com","entitlement_refresh_token":"etr_test_refresh"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -959,11 +962,13 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 	if _, _, err := reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_paid_refresh", now); err != nil {
 		t.Fatalf("StoreOrIssueHostedEntitlement: %v", err)
 	}
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
 	h := NewHostedEntitlementHandlers(&CPConfig{
 		BaseURL:                   "https://cloud.example.com",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, reg)
+	}, nil, svc)
 	h.now = func() time.Time { return now }
+	h.entitlements.SetNow(h.now)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/entitlements/refresh", strings.NewReader(`{"org_id":"default","instance_host":"t-PAIDREF01.cloud.example.com","entitlement_refresh_token":"etr_paid_refresh"}`))
 	req.Header.Set("Content-Type", "application/json")

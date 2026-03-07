@@ -1,10 +1,14 @@
 package registry
 
 import (
+	"database/sql"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 func newTestRegistry(t *testing.T) *TenantRegistry {
@@ -16,6 +20,92 @@ func newTestRegistry(t *testing.T) *TenantRegistry {
 	}
 	t.Cleanup(func() { _ = reg.Close() })
 	return reg
+}
+
+func TestNewTenantRegistryDoesNotCreateLegacyEntitlementColumn(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	hasLegacyColumn, err := reg.tenantsHasColumn("entitlement_refresh_token")
+	if err != nil {
+		t.Fatalf("tenantsHasColumn(entitlement_refresh_token): %v", err)
+	}
+	if hasLegacyColumn {
+		t.Fatal("new registry should not create tenants.entitlement_refresh_token")
+	}
+}
+
+func TestNewTenantRegistryMigratesLegacyTenantEntitlementRefreshTokens(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "tenants.db")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.Exec(`
+		CREATE TABLE tenants (
+			id TEXT PRIMARY KEY,
+			account_id TEXT NOT NULL DEFAULT '',
+			email TEXT NOT NULL DEFAULT '',
+			display_name TEXT NOT NULL DEFAULT '',
+			state TEXT NOT NULL DEFAULT 'provisioning',
+			entitlement_refresh_token TEXT NOT NULL DEFAULT '',
+			stripe_customer_id TEXT NOT NULL DEFAULT '',
+			stripe_subscription_id TEXT NOT NULL DEFAULT '',
+			stripe_price_id TEXT NOT NULL DEFAULT '',
+			plan_version TEXT NOT NULL DEFAULT '',
+			container_id TEXT NOT NULL DEFAULT '',
+			current_image_digest TEXT NOT NULL DEFAULT '',
+			desired_image_digest TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL,
+			last_health_check INTEGER,
+			health_check_ok INTEGER NOT NULL DEFAULT 0
+		);
+		INSERT INTO tenants (
+			id, account_id, email, display_name, state, entitlement_refresh_token,
+			stripe_customer_id, stripe_subscription_id, stripe_price_id,
+			plan_version, container_id, current_image_digest, desired_image_digest,
+			created_at, updated_at, last_health_check, health_check_ok
+		) VALUES (
+			't-LEGACY001', 'a_legacy_1', 'legacy@example.com', 'Legacy Tenant', 'active', 'etr_legacy_one',
+			'cus_legacy_1', 'sub_legacy_1', 'price_legacy_1',
+			'cloud_v1', '', '', '',
+			1710000000, 1710000000, NULL, 1
+		);
+	`); err != nil {
+		t.Fatalf("seed legacy registry: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seeded legacy registry: %v", err)
+	}
+
+	reg, err := NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	hasLegacyColumn, err := reg.tenantsHasColumn("entitlement_refresh_token")
+	if err != nil {
+		t.Fatalf("tenantsHasColumn(entitlement_refresh_token): %v", err)
+	}
+	if hasLegacyColumn {
+		t.Fatal("legacy entitlement_refresh_token column should be removed during migration")
+	}
+
+	entitlement, err := reg.GetHostedEntitlementByRefreshToken("etr_legacy_one")
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByRefreshToken: %v", err)
+	}
+	if entitlement == nil {
+		t.Fatal("expected hosted entitlement backfilled from legacy tenant column")
+	}
+	if entitlement.TenantID != "t-LEGACY001" {
+		t.Fatalf("TenantID=%q, want %q", entitlement.TenantID, "t-LEGACY001")
+	}
 }
 
 func TestGenerateTenantID(t *testing.T) {

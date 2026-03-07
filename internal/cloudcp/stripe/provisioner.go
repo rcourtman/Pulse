@@ -2,9 +2,7 @@ package stripe
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
@@ -36,6 +34,7 @@ type Provisioner struct {
 	emailSender               cpemail.Sender
 	emailFrom                 string
 	trialActivationPrivateKey string
+	hostedEntitlements        *entitlements.Service
 }
 
 type ProvisionerOption func(*Provisioner)
@@ -46,6 +45,15 @@ func WithTrialActivationPrivateKey(privateKey string) ProvisionerOption {
 			return
 		}
 		p.trialActivationPrivateKey = strings.TrimSpace(privateKey)
+	}
+}
+
+func WithHostedEntitlementService(service *entitlements.Service) ProvisionerOption {
+	return func(p *Provisioner) {
+		if p == nil {
+			return
+		}
+		p.hostedEntitlements = service
 	}
 }
 
@@ -72,6 +80,9 @@ func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *
 		if opt != nil {
 			opt(p)
 		}
+	}
+	if p.hostedEntitlements == nil {
+		p.hostedEntitlements = entitlements.NewService(p.registry, p.baseURL, p.trialActivationPrivateKey)
 	}
 	return p
 }
@@ -222,180 +233,17 @@ func (p *Provisioner) writeBillingState(tenantDataDir string, state *pkglicensin
 	return nil
 }
 
-func (p *Provisioner) entitlementPrivateKey() (ed25519.PrivateKey, error) {
-	privateKey, err := pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(p.trialActivationPrivateKey))
-	if err != nil {
-		return nil, fmt.Errorf("decode hosted entitlement signing key: %w", err)
-	}
-	return privateKey, nil
-}
-
-func (p *Provisioner) tenantInstanceHost(tenantID string) string {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return ""
-	}
-	baseDomain := strings.TrimSpace(baseDomainFromProvisionerURL(p.baseURL))
-	if baseDomain == "" {
-		return ""
-	}
-	return strings.ToLower(fmt.Sprintf("%s.%s", tenantID, baseDomain))
-}
-
-func baseDomainFromProvisionerURL(baseURL string) string {
-	baseURL = strings.TrimSpace(baseURL)
-	for _, prefix := range []string{"https://", "http://"} {
-		if strings.HasPrefix(baseURL, prefix) {
-			baseURL = strings.TrimPrefix(baseURL, prefix)
-			break
-		}
-	}
-	for i := 0; i < len(baseURL); i++ {
-		if baseURL[i] == ':' || baseURL[i] == '/' {
-			return baseURL[:i]
-		}
-	}
-	return baseURL
-}
-
-func randomEntitlementRefreshToken() (string, error) {
-	raw := make([]byte, 24)
-	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generate entitlement refresh token: %w", err)
-	}
-	return "etr_paid_" + hex.EncodeToString(raw), nil
-}
-
-func (p *Provisioner) ensureTenantEntitlementRefreshToken(tenantID string) (string, error) {
-	if p == nil || p.registry == nil {
-		return "", fmt.Errorf("tenant registry not configured")
-	}
-	rawToken, err := randomEntitlementRefreshToken()
-	if err != nil {
-		return "", err
-	}
-	storedToken, _, err := p.registry.StoreOrIssueHostedEntitlement(tenantID, rawToken, time.Now().UTC())
-	if err != nil {
-		return "", err
-	}
-	return storedToken, nil
-}
-
-func tenantSubscriptionStateForLease(tenant *registry.Tenant, sa *registry.StripeAccount) pkglicensing.SubscriptionState {
-	if sa != nil {
-		state := pkglicensing.MapStripeSubscriptionStatusToState(sa.SubscriptionState)
-		if state == pkglicensing.SubStateTrial && sa.TrialEndsAt == nil {
-			return pkglicensing.SubStateActive
-		}
-		if state != "" {
-			return state
-		}
-	}
-	if tenant == nil {
-		return pkglicensing.SubStateExpired
-	}
-	switch tenant.State {
-	case registry.TenantStateSuspended:
-		return pkglicensing.SubStateSuspended
-	case registry.TenantStateCanceled, registry.TenantStateDeleted, registry.TenantStateDeleting:
-		return pkglicensing.SubStateCanceled
-	default:
-		return pkglicensing.SubStateActive
-	}
-}
-
-func buildPaidEntitlementLeaseClaims(tenant *registry.Tenant, sa *registry.StripeAccount, instanceHost, planVersion string, subState pkglicensing.SubscriptionState, now time.Time) pkglicensing.EntitlementLeaseClaims {
-	if subState == "" {
-		subState = tenantSubscriptionStateForLease(tenant, sa)
-	}
-	limits, known := pkglicensing.LimitsForCloudPlan(planVersion)
-	if !known && tenant != nil {
-		log.Warn().
-			Str("tenant_id", tenant.ID).
-			Str("plan_version", planVersion).
-			Int64("default_max_agents", limits["max_agents"]).
-			Msg("Unknown plan version during hosted entitlement lease build; applying safe default agent limit")
-	}
-	var capabilities []string
-	if pkglicensing.ShouldGrantPaidCapabilities(subState) {
-		capabilities = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
-	}
-	claims := pkglicensing.EntitlementLeaseClaims{
-		OrgID:             "default",
-		Email:             strings.TrimSpace(tenant.Email),
-		InstanceHost:      instanceHost,
-		PlanVersion:       strings.TrimSpace(planVersion),
-		SubscriptionState: subState,
-		Capabilities:      capabilities,
-		Limits:            limits,
-		MetersEnabled:     []string{},
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(now.UTC()),
-			ExpiresAt: jwt.NewNumericDate(now.UTC().Add(24 * time.Hour)),
-		},
-	}
-	if sa != nil && subState == pkglicensing.SubStateTrial && sa.TrialEndsAt != nil && *sa.TrialEndsAt > 0 {
-		trialEndsAt := *sa.TrialEndsAt
-		claims.TrialEndsAt = &trialEndsAt
-		claims.ExpiresAt = jwt.NewNumericDate(time.Unix(trialEndsAt, 0).UTC())
-	}
-	return claims
-}
-
 func (p *Provisioner) writeHostedEntitlementLeaseState(tenant *registry.Tenant, subState pkglicensing.SubscriptionState, planVersion, stripeCustomerID, stripeSubscriptionID, stripePriceID string) error {
 	if tenant == nil {
 		return fmt.Errorf("tenant is nil")
 	}
 	tenantDataDir := p.tenantDataDir(tenant.ID)
-
-	if !pkglicensing.ShouldGrantPaidCapabilities(subState) {
-		state := &pkglicensing.BillingState{
-			Capabilities:         []string{},
-			Limits:               map[string]int64{},
-			MetersEnabled:        []string{},
-			PlanVersion:          strings.TrimSpace(planVersion),
-			SubscriptionState:    subState,
-			StripeCustomerID:     strings.TrimSpace(stripeCustomerID),
-			StripeSubscriptionID: strings.TrimSpace(stripeSubscriptionID),
-			StripePriceID:        strings.TrimSpace(stripePriceID),
-		}
-		return p.writeBillingState(tenantDataDir, state)
+	if p.hostedEntitlements == nil {
+		return fmt.Errorf("hosted entitlement service is unavailable")
 	}
-
-	privateKey, err := p.entitlementPrivateKey()
+	state, err := p.hostedEntitlements.IssueTenantBillingState(tenant, subState, planVersion, stripeCustomerID, stripeSubscriptionID, stripePriceID)
 	if err != nil {
 		return err
-	}
-	refreshToken, err := p.ensureTenantEntitlementRefreshToken(tenant.ID)
-	if err != nil {
-		return fmt.Errorf("issue tenant entitlement refresh token: %w", err)
-	}
-
-	sa, err := p.registry.GetStripeAccount(tenant.AccountID)
-	if err != nil {
-		return fmt.Errorf("load stripe account for tenant %s: %w", tenant.ID, err)
-	}
-	instanceHost := p.tenantInstanceHost(tenant.ID)
-	if instanceHost == "" {
-		return fmt.Errorf("tenant instance host is unavailable")
-	}
-	claims := buildPaidEntitlementLeaseClaims(tenant, sa, instanceHost, planVersion, subState, time.Now().UTC())
-	signed, err := pkglicensing.SignEntitlementLeaseToken(privateKey, claims)
-	if err != nil {
-		return fmt.Errorf("sign hosted entitlement lease: %w", err)
-	}
-
-	state := &pkglicensing.BillingState{
-		Capabilities:            []string{},
-		Limits:                  map[string]int64{},
-		MetersEnabled:           []string{},
-		EntitlementJWT:          signed,
-		EntitlementRefreshToken: refreshToken,
-		PlanVersion:             "",
-		SubscriptionState:       "",
-		StripeCustomerID:        strings.TrimSpace(stripeCustomerID),
-		StripeSubscriptionID:    strings.TrimSpace(stripeSubscriptionID),
-		StripePriceID:           strings.TrimSpace(stripePriceID),
 	}
 	return p.writeBillingState(tenantDataDir, state)
 }
@@ -1009,7 +857,7 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 	if err := p.registry.Update(tenant); err != nil {
 		return fmt.Errorf("update tenant record: %w", err)
 	}
-	if err := p.registry.RevokeHostedEntitlement(tenant.ID, time.Now().UTC()); err != nil {
+	if err := p.hostedEntitlements.RevokeTenantEntitlement(tenant.ID, time.Now().UTC()); err != nil {
 		return fmt.Errorf("revoke hosted entitlement for tenant %s: %w", tenant.ID, err)
 	}
 	if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateCanceled, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), ""); err != nil {
@@ -1186,7 +1034,7 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 		if err := p.registry.Update(tenant); err != nil {
 			return fmt.Errorf("update tenant record: %w", err)
 		}
-		if err := p.registry.RevokeHostedEntitlement(tenant.ID, time.Now().UTC()); err != nil {
+		if err := p.hostedEntitlements.RevokeTenantEntitlement(tenant.ID, time.Now().UTC()); err != nil {
 			return fmt.Errorf("revoke hosted entitlement for tenant %s: %w", tenant.ID, err)
 		}
 		if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateCanceled, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), ""); err != nil {

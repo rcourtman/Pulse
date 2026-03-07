@@ -3,13 +3,11 @@ package cloudcp
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
@@ -27,15 +25,15 @@ type hostedEntitlementRefreshResponse struct {
 type HostedEntitlementHandlers struct {
 	cfg               *CPConfig
 	verificationStore *TrialSignupStore
-	registry          *registry.TenantRegistry
+	entitlements      *entitlements.Service
 	now               func() time.Time
 }
 
-func NewHostedEntitlementHandlers(cfg *CPConfig, verificationStore *TrialSignupStore, reg *registry.TenantRegistry) *HostedEntitlementHandlers {
+func NewHostedEntitlementHandlers(cfg *CPConfig, verificationStore *TrialSignupStore, svc *entitlements.Service) *HostedEntitlementHandlers {
 	return &HostedEntitlementHandlers{
 		cfg:               cfg,
 		verificationStore: verificationStore,
-		registry:          reg,
+		entitlements:      svc,
 		now:               func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -45,7 +43,7 @@ func (h *HostedEntitlementHandlers) HandleRefresh(w http.ResponseWriter, r *http
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.verificationStore == nil && h.registry == nil {
+	if h.verificationStore == nil && h.entitlements == nil {
 		http.Error(w, "hosted entitlement refresh is unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -130,7 +128,7 @@ func (h *HostedEntitlementHandlers) handleTrialEntitlementRefresh(w http.Respons
 }
 
 func (h *HostedEntitlementHandlers) handlePaidEntitlementRefresh(w http.ResponseWriter, orgID, instanceHost, refreshToken string) (bool, error) {
-	if h == nil || h.registry == nil {
+	if h == nil || h.entitlements == nil {
 		return false, nil
 	}
 	if normalizeTrialOrgID(orgID) != trialSignupDefaultOrgID {
@@ -138,129 +136,23 @@ func (h *HostedEntitlementHandlers) handlePaidEntitlementRefresh(w http.Response
 		return true, nil
 	}
 
-	entitlement, err := h.registry.GetHostedEntitlementByRefreshToken(refreshToken)
-	if err != nil {
-		return true, err
-	}
-	if entitlement == nil {
+	result, err := h.entitlements.RefreshPaidEntitlement(refreshToken, instanceHost)
+	switch {
+	case errors.Is(err, entitlements.ErrHostedEntitlementNotFound):
 		return false, nil
-	}
-	if entitlement.RevokedAt != nil {
-		http.Error(w, "hosted entitlement is no longer active", http.StatusGone)
-		return true, nil
-	}
-	tenant, err := h.registry.Get(entitlement.TenantID)
-	if err != nil {
-		return true, err
-	}
-	if tenant == nil {
-		http.Error(w, "invalid entitlement refresh token", http.StatusUnauthorized)
-		return true, nil
-	}
-	if paidTenantInstanceHost(h.cfg, tenant.ID) != instanceHost {
+	case errors.Is(err, entitlements.ErrHostedEntitlementTargetMismatch):
 		http.Error(w, "invalid entitlement refresh target", http.StatusUnauthorized)
 		return true, nil
-	}
-
-	subState, planVersion, err := h.paidTenantLeaseState(tenant)
-	if err != nil {
-		return true, err
-	}
-	if !pkglicensing.ShouldGrantPaidCapabilities(subState) {
+	case errors.Is(err, entitlements.ErrHostedEntitlementInactive):
 		http.Error(w, "hosted entitlement is no longer active", http.StatusGone)
 		return true, nil
-	}
-
-	privateKey, err := pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialActivationPrivateKey))
-	if err != nil {
-		log.Error().Err(err).Msg("trial activation private key invalid")
-		http.Error(w, "trial activation verifier unavailable", http.StatusServiceUnavailable)
-		return true, nil
-	}
-
-	now := h.now().UTC()
-	leaseClaims := buildPaidHostedEntitlementLeaseClaims(tenant, instanceHost, planVersion, subState, now)
-	entitlementJWT, err := pkglicensing.SignEntitlementLeaseToken(privateKey, leaseClaims)
-	if err != nil {
+	case err != nil:
 		return true, err
 	}
 
-	if err := h.registry.MarkHostedEntitlementRefreshed(tenant.ID, now); err != nil {
-		return true, err
-	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(hostedEntitlementRefreshResponse{EntitlementJWT: entitlementJWT}); err != nil {
+	if err := json.NewEncoder(w).Encode(hostedEntitlementRefreshResponse{EntitlementJWT: result.EntitlementJWT}); err != nil {
 		return true, err
 	}
 	return true, nil
-}
-
-func (h *HostedEntitlementHandlers) paidTenantLeaseState(tenant *registry.Tenant) (pkglicensing.SubscriptionState, string, error) {
-	if tenant == nil {
-		return pkglicensing.SubStateExpired, "", ErrTrialSignupRecordNotFound
-	}
-	planVersion := strings.TrimSpace(tenant.PlanVersion)
-	if planVersion == "" {
-		planVersion = "cloud_v1"
-	}
-	subState := pkglicensing.SubStateActive
-
-	if strings.TrimSpace(tenant.AccountID) != "" {
-		sa, err := h.registry.GetStripeAccount(tenant.AccountID)
-		if err != nil {
-			return "", "", fmt.Errorf("load stripe account for tenant %s: %w", tenant.ID, err)
-		}
-		if sa != nil {
-			if strings.TrimSpace(sa.PlanVersion) != "" {
-				planVersion = strings.TrimSpace(sa.PlanVersion)
-			}
-			subState = pkglicensing.MapStripeSubscriptionStatusToState(sa.SubscriptionState)
-			if subState == pkglicensing.SubStateTrial && sa.TrialEndsAt == nil {
-				subState = pkglicensing.SubStateActive
-			}
-		}
-	}
-
-	if subState == "" {
-		switch tenant.State {
-		case registry.TenantStateSuspended:
-			subState = pkglicensing.SubStateSuspended
-		case registry.TenantStateCanceled, registry.TenantStateDeleted, registry.TenantStateDeleting:
-			subState = pkglicensing.SubStateCanceled
-		default:
-			subState = pkglicensing.SubStateActive
-		}
-	}
-	return subState, planVersion, nil
-}
-
-func paidTenantInstanceHost(cfg *CPConfig, tenantID string) string {
-	baseDomain := strings.TrimSpace(baseDomainFromURL(cfg.BaseURL))
-	tenantID = strings.TrimSpace(tenantID)
-	if baseDomain == "" || tenantID == "" {
-		return ""
-	}
-	return strings.ToLower(tenantID + "." + baseDomain)
-}
-
-func buildPaidHostedEntitlementLeaseClaims(tenant *registry.Tenant, instanceHost, planVersion string, subState pkglicensing.SubscriptionState, now time.Time) pkglicensing.EntitlementLeaseClaims {
-	limits, _ := pkglicensing.LimitsForCloudPlan(planVersion)
-	var capabilities []string
-	if pkglicensing.ShouldGrantPaidCapabilities(subState) {
-		capabilities = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
-	}
-	return pkglicensing.EntitlementLeaseClaims{
-		OrgID:             trialSignupDefaultOrgID,
-		Email:             strings.TrimSpace(tenant.Email),
-		InstanceHost:      instanceHost,
-		PlanVersion:       strings.TrimSpace(planVersion),
-		SubscriptionState: subState,
-		Capabilities:      capabilities,
-		Limits:            limits,
-		MetersEnabled:     []string{},
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(now.UTC()),
-			ExpiresAt: jwt.NewNumericDate(now.UTC().Add(24 * time.Hour)),
-		},
-	}
 }
