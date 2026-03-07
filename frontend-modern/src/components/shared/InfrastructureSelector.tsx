@@ -158,9 +158,8 @@ export const InfrastructureSelector: Component<InfrastructureSelectorProps> = (p
         })
         .filter((disk): disk is NonNullable<typeof disk> => Boolean(disk));
 
-      const hostId =
-        getActionableAgentIdFromResource(resource) || resource.id;
-      const hostname = getPreferredResourceHostname(resource) || asString(agent.hostname) || hostId;
+      const hostId = getActionableAgentIdFromResource(resource) || resource.id;
+      const hostname = getPreferredResourceHostname(resource) || hostId;
 
       if (agentsById.has(hostId)) continue;
       agentsById.set(hostId, {

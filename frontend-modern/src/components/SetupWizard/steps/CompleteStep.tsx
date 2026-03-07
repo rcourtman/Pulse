@@ -72,13 +72,7 @@ const toNodeSummaryShape = (resource: Resource) => {
 };
 
 const toAgentSummaryShape = (resource: Resource) => {
-  const platformData = pd(resource);
-  const agent = {
-    ...(asRecord(platformData?.agent) || {}),
-    ...(resource.agent || {}),
-  } as Record<string, unknown>;
-  const hostname =
-    getPreferredResourceHostname(resource) || asString(agent.hostname) || resource.id;
+  const hostname = getPreferredResourceHostname(resource) || resource.id;
   const id = getActionableAgentIdFromResource(resource) || resource.id;
   return {
     id,
