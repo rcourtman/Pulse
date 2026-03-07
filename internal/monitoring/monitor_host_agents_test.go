@@ -57,6 +57,38 @@ func TestFindLinkedProxmoxEntity_AmbiguousNodeNameReturnsNoLink(t *testing.T) {
 	}
 }
 
+func TestFindLinkedProxmoxEntityWithHints_UsesEndpointIPToDisambiguateNodes(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve", Instance: "pve-a", Host: "https://10.0.0.1:8006"},
+		{ID: "node-2", Name: "pve", Instance: "pve-b", Host: "https://10.0.0.2:8006"},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntityWithHints("pve", "10.0.0.2", nil)
+	if nodeID != "node-2" || vmID != "" || ctID != "" {
+		t.Fatalf("expected endpoint IP to disambiguate node-2, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
+func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFallback(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	monitor.state.UpdateNodes([]models.Node{
+		{ID: "node-1", Name: "pve", Instance: "pve-a", Host: "https://pve-a.lab:8006"},
+		{ID: "node-2", Name: "pve", Instance: "pve-b", Host: "https://pve-b.lab:8006"},
+	})
+
+	nodeID, vmID, ctID := monitor.findLinkedProxmoxEntityWithHints("pve-b.lab", "", nil)
+	if nodeID != "node-2" || vmID != "" || ctID != "" {
+		t.Fatalf("expected endpoint hostname to disambiguate node-2, got node=%q vm=%q ct=%q", nodeID, vmID, ctID)
+	}
+}
+
 func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	t.Helper()
 

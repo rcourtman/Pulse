@@ -1611,7 +1611,11 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	// Link host agent to matching PVE node/VM/container by hostname
 	// This prevents duplication when users install agents on PVE cluster nodes
-	linkedNodeID, linkedVMID, linkedContainerID := m.findLinkedProxmoxEntity(hostname)
+	linkedNodeID, linkedVMID, linkedContainerID := m.findLinkedProxmoxEntityWithHints(
+		hostname,
+		report.Host.ReportIP,
+		report.Network,
+	)
 	if linkedNodeID != "" {
 		host.LinkedNodeID = linkedNodeID
 		log.Debug().
@@ -1806,6 +1810,53 @@ func (m *Monitor) applyClusterSensors(entries []agentshost.ClusterNodeSensors, r
 // named "pve"), this function returns empty strings to avoid incorrect linking. Users should
 // manually link agents to nodes via the UI in such cases.
 func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, containerID string) {
+	return m.findLinkedProxmoxEntityWithHints(hostname, "", nil)
+}
+
+func collectReportedHostIPs(
+	reportIP string,
+	network []agentshost.NetworkInterface,
+) map[string]struct{} {
+	ips := make(map[string]struct{})
+	if normalized := unifiedresources.NormalizeIP(reportIP); normalized != "" {
+		ips[normalized] = struct{}{}
+	}
+
+	for _, nic := range network {
+		for _, address := range nic.Addresses {
+			if normalized := unifiedresources.NormalizeIP(address); normalized != "" {
+				ips[normalized] = struct{}{}
+			}
+		}
+	}
+
+	return ips
+}
+
+func endpointHostMatchesReportedHints(
+	endpointHost string,
+	reportedHostname string,
+	reportedIPs map[string]struct{},
+) bool {
+	normalizedEndpointHost := strings.TrimSpace(strings.ToLower(endpointHost))
+	if normalizedEndpointHost == "" {
+		return false
+	}
+
+	if normalizedReportedIP := unifiedresources.NormalizeIP(normalizedEndpointHost); normalizedReportedIP != "" {
+		_, ok := reportedIPs[normalizedReportedIP]
+		return ok
+	}
+
+	normalizedReportedHostname := strings.TrimSpace(strings.ToLower(reportedHostname))
+	return normalizedReportedHostname != "" && normalizedEndpointHost == normalizedReportedHostname
+}
+
+func (m *Monitor) findLinkedProxmoxEntityWithHints(
+	hostname string,
+	reportIP string,
+	network []agentshost.NetworkInterface,
+) (nodeID, vmID, containerID string) {
 	if hostname == "" {
 		return "", "", ""
 	}
@@ -1836,12 +1887,38 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 		return "", "", ""
 	}
 
-	// Check PVE nodes first - but detect ambiguity when multiple nodes match
 	type linkedEntityMatch struct {
 		id       string
 		instance string
 	}
 
+	reportedIPs := collectReportedHostIPs(reportIP, network)
+
+	// First, try to match the configured PVE node endpoint against the host report.
+	// This is stronger than node-name matching and can disambiguate clustered nodes
+	// that share the same short hostname but have different management addresses.
+	var endpointMatchedNodes []linkedEntityMatch
+	for _, node := range readState.Nodes() {
+		if endpointHostMatchesReportedHints(extractHostname(node.HostURL()), hostname, reportedIPs) {
+			endpointMatchedNodes = append(endpointMatchedNodes, linkedEntityMatch{
+				id:       node.SourceID(),
+				instance: node.Instance(),
+			})
+		}
+	}
+	if len(endpointMatchedNodes) == 1 {
+		return endpointMatchedNodes[0].id, "", ""
+	}
+	if len(endpointMatchedNodes) > 1 {
+		log.Warn().
+			Str("hostname", hostname).
+			Str("reportIP", strings.TrimSpace(reportIP)).
+			Int("matchCount", len(endpointMatchedNodes)).
+			Msg("Multiple PVE node endpoints match host report hints - cannot auto-link host agent. Manual linking required via UI.")
+		return "", "", ""
+	}
+
+	// Check PVE nodes first - but detect ambiguity when multiple nodes match
 	var matchingNodes []linkedEntityMatch
 	for _, node := range readState.Nodes() {
 		if matchHostname(node.Name()) {
