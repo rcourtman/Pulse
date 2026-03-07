@@ -24,6 +24,7 @@ var (
 	ErrTrialSignupVerificationInvalid = errors.New("trial signup verification token is invalid")
 	ErrTrialSignupVerificationExpired = errors.New("trial signup verification token is expired")
 	ErrTrialSignupVerificationUsed    = errors.New("trial signup verification token already used")
+	ErrTrialSignupVerificationPending = errors.New("trial signup verification already pending")
 	ErrTrialSignupRecordNotFound      = errors.New("trial signup record not found")
 	ErrTrialSignupEmailAlreadyUsed    = errors.New("trial signup email already used")
 	ErrTrialSignupOrganizationUsed    = errors.New("trial signup organization already used")
@@ -540,6 +541,44 @@ func (s *TrialSignupStore) FindIssuedTrialConflict(email, company string) (*Tria
 	defer s.mu.Unlock()
 
 	return findTrialSignupIssuanceConflict(db, email, company, "")
+}
+
+func (s *TrialSignupStore) FindPendingVerificationByEmail(email string, now time.Time) (*TrialSignupRecord, error) {
+	if s == nil {
+		return nil, fmt.Errorf("trial signup store not configured")
+	}
+	email = normalizeTrialSignupEmail(email)
+	if email == "" {
+		return nil, nil
+	}
+	now = now.UTC()
+
+	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("trial signup store not configured")
+	}
+	defer s.mu.Unlock()
+
+	rec, err := loadTrialSignupRecord(db.QueryRow(
+		`SELECT request_id, org_id, return_url, name, email, company, verification_expires_at, created_at, verified_at, checkout_started_at, checkout_completed_at, checkout_session_id
+		 FROM trial_signup_requests
+		 WHERE email = ?
+		   AND verified_at IS NULL
+		   AND verification_expires_at >= ?
+		 ORDER BY created_at DESC
+		 LIMIT 1`,
+		email,
+		now.Unix(),
+	))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load pending trial signup verification: %w", err)
+	}
+	return rec, nil
 }
 
 func (s *TrialSignupStore) MarkTrialIssued(id string, now time.Time) error {

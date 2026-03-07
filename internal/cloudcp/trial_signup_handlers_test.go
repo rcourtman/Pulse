@@ -91,6 +91,40 @@ func TestTrialSignupHandleRequestVerificationRejectsConsumerEmailDomain(t *testi
 	}
 }
 
+func TestTrialSignupHandleRequestVerificationRejectsPendingVerificationResend(t *testing.T) {
+	h, _, sender := newTrialSignupTestHandler(t)
+	form := url.Values{
+		"org_id":     {"default"},
+		"return_url": {"https://pulse.example.com/auth/trial-activate"},
+		"name":       {"Test User"},
+		"email":      {"owner@example.com"},
+		"company":    {"Pulse Labs"},
+	}
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
+	firstReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	firstRec := httptest.NewRecorder()
+	h.HandleRequestVerification(firstRec, firstReq)
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusOK, firstRec.Body.String())
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
+	secondReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	secondRec := httptest.NewRecorder()
+	h.HandleRequestVerification(secondRec, secondReq)
+
+	if secondRec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusTooManyRequests, secondRec.Body.String())
+	}
+	if sender.calls != 1 {
+		t.Fatalf("email sender calls=%d, want 1", sender.calls)
+	}
+	if !strings.Contains(secondRec.Body.String(), "verification email was already sent recently") {
+		t.Fatalf("expected pending verification message, got %q", secondRec.Body.String())
+	}
+}
+
 func TestTrialSignupHandleRequestVerificationRejectsEmailThatAlreadyUsedTrial(t *testing.T) {
 	h, store, sender := newTrialSignupTestHandler(t)
 	rawToken := requestTrialVerification(t, h, sender)

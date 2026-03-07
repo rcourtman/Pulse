@@ -2,6 +2,7 @@ package cloudcp
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -170,5 +171,49 @@ func TestTrialSignupStoreFindIssuedTrialConflictUsesCompanyForPublicEmailDomains
 	}
 	if noConflict != nil {
 		t.Fatalf("noConflict=%#v, want nil", noConflict)
+	}
+}
+
+func TestTrialSignupStoreFindPendingVerificationByEmail(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	token, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		Name:                  "Owner",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             now,
+		VerificationExpiresAt: now.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	if strings.TrimSpace(token) == "" {
+		t.Fatalf("expected raw token")
+	}
+
+	pending, err := store.FindPendingVerificationByEmail("owner@example.com", now)
+	if err != nil {
+		t.Fatalf("FindPendingVerificationByEmail: %v", err)
+	}
+	if pending == nil {
+		t.Fatal("expected pending verification record")
+	}
+
+	if _, err := store.ConsumeVerification(token, now); err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+	pending, err = store.FindPendingVerificationByEmail("owner@example.com", now)
+	if err != nil {
+		t.Fatalf("FindPendingVerificationByEmail after consume: %v", err)
+	}
+	if pending != nil {
+		t.Fatalf("pending=%#v, want nil after consume", pending)
 	}
 }

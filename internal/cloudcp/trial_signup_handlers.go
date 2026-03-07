@@ -351,6 +351,18 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		return
 	}
 	if h.verificationStore != nil {
+		pendingRecord, err := h.verificationStore.FindPendingVerificationByEmail(data.Email, h.now().UTC())
+		if err != nil {
+			log.Error().Err(err).Str("email", data.Email).Msg("trial signup pending verification lookup failed")
+			data.ErrorMessage = "Unable to validate trial eligibility right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
+			return
+		}
+		if pendingRecord != nil {
+			data.ErrorMessage = "A verification email was already sent recently. Check your inbox or wait for the current link to expire before requesting another one."
+			h.renderTrialSignupPage(w, r, http.StatusTooManyRequests, data)
+			return
+		}
 		conflict, err := h.verificationStore.FindIssuedTrialConflict(data.Email, data.Company)
 		if err != nil {
 			log.Error().Err(err).Str("email", data.Email).Msg("trial signup issuance lookup failed")
