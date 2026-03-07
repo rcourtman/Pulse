@@ -133,6 +133,16 @@ func (r *TenantRegistry) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON account_memberships(user_id);
 	CREATE INDEX IF NOT EXISTS idx_memberships_user_id_created_at ON account_memberships(user_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_memberships_account_id_created_at ON account_memberships(account_id, created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS hosted_entitlements (
+		tenant_id TEXT PRIMARY KEY,
+		refresh_token TEXT NOT NULL UNIQUE,
+		issued_at INTEGER NOT NULL,
+		last_refreshed_at INTEGER,
+		revoked_at INTEGER,
+		FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_refresh_token ON hosted_entitlements(refresh_token);
 	`
 	if _, err := r.db.Exec(schema); err != nil {
 		return fmt.Errorf("init tenant registry schema: %w", err)
@@ -164,6 +174,19 @@ func (r *TenantRegistry) initSchema() error {
 	}
 	if _, err := r.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_entitlement_refresh_token ON tenants(entitlement_refresh_token) WHERE entitlement_refresh_token <> ''`); err != nil {
 		return fmt.Errorf("init tenant registry schema: create idx_tenants_entitlement_refresh_token: %w", err)
+	}
+	if _, err := r.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_refresh_token ON hosted_entitlements(refresh_token)`); err != nil {
+		return fmt.Errorf("init tenant registry schema: create idx_hosted_entitlements_refresh_token: %w", err)
+	}
+	if hasEntitlementRefreshToken {
+		if _, err := r.db.Exec(`
+			INSERT OR IGNORE INTO hosted_entitlements (tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at)
+			SELECT id, entitlement_refresh_token, updated_at, NULL, NULL
+			FROM tenants
+			WHERE entitlement_refresh_token <> ''
+		`); err != nil {
+			return fmt.Errorf("migrate hosted entitlements from tenants: %w", err)
+		}
 	}
 
 	// Migration: add session_version to users if missing.
@@ -278,7 +301,7 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 			plan_version, container_id, current_image_digest, desired_image_digest,
 			created_at, updated_at, last_health_check, health_check_ok
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.AccountID, t.Email, t.DisplayName, string(t.State), t.EntitlementRefreshToken,
+		t.ID, t.AccountID, t.Email, t.DisplayName, string(t.State), "",
 		t.StripeCustomerID, t.StripeSubscriptionID, t.StripePriceID,
 		t.PlanVersion, t.ContainerID, t.CurrentImageDigest, t.DesiredImageDigest,
 		t.CreatedAt.Unix(), t.UpdatedAt.Unix(), nullableTimeUnix(t.LastHealthCheck), boolToInt(t.HealthCheckOK),
@@ -311,17 +334,6 @@ func (r *TenantRegistry) GetByStripeCustomerID(customerID string) (*Tenant, erro
 	return scanTenant(row)
 }
 
-// GetByEntitlementRefreshToken retrieves a tenant by its hosted entitlement refresh token.
-func (r *TenantRegistry) GetByEntitlementRefreshToken(token string) (*Tenant, error) {
-	row := r.db.QueryRow(`SELECT
-		id, account_id, email, display_name, state, entitlement_refresh_token,
-		stripe_customer_id, stripe_subscription_id, stripe_price_id,
-		plan_version, container_id, current_image_digest, desired_image_digest,
-		created_at, updated_at, last_health_check, health_check_ok
-		FROM tenants WHERE entitlement_refresh_token = ?`, strings.TrimSpace(token))
-	return scanTenant(row)
-}
-
 // Update modifies an existing tenant record.
 func (r *TenantRegistry) Update(t *Tenant) error {
 	if t == nil {
@@ -336,7 +348,7 @@ func (r *TenantRegistry) Update(t *Tenant) error {
 			plan_version = ?, container_id = ?, current_image_digest = ?, desired_image_digest = ?,
 			updated_at = ?, last_health_check = ?, health_check_ok = ?
 		WHERE id = ?`,
-		t.AccountID, t.Email, t.DisplayName, string(t.State), strings.TrimSpace(t.EntitlementRefreshToken),
+		t.AccountID, t.Email, t.DisplayName, string(t.State), "",
 		t.StripeCustomerID, t.StripeSubscriptionID, t.StripePriceID,
 		t.PlanVersion, t.ContainerID, t.CurrentImageDigest, t.DesiredImageDigest,
 		t.UpdatedAt.Unix(), nullableTimeUnix(t.LastHealthCheck), boolToInt(t.HealthCheckOK),
@@ -357,6 +369,9 @@ func (r *TenantRegistry) Update(t *Tenant) error {
 
 // Delete removes a tenant record by ID.
 func (r *TenantRegistry) Delete(id string) error {
+	if _, err := r.db.Exec(`DELETE FROM hosted_entitlements WHERE tenant_id = ?`, id); err != nil {
+		return fmt.Errorf("delete hosted entitlement: %w", err)
+	}
 	res, err := r.db.Exec(`DELETE FROM tenants WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete tenant: %w", err)
@@ -495,7 +510,7 @@ func scanTenant(s scanner) (*Tenant, error) {
 	var healthOK int
 
 	err := s.Scan(
-		&t.ID, &t.AccountID, &t.Email, &t.DisplayName, &state, &t.EntitlementRefreshToken,
+		&t.ID, &t.AccountID, &t.Email, &t.DisplayName, &state, new(string),
 		&t.StripeCustomerID, &t.StripeSubscriptionID, &t.StripePriceID,
 		&t.PlanVersion, &t.ContainerID, &t.CurrentImageDigest, &t.DesiredImageDigest,
 		&createdAt, &updatedAt, &lastHealthCheck, &healthOK,
@@ -518,11 +533,12 @@ func scanTenant(s scanner) (*Tenant, error) {
 	return &t, nil
 }
 
-// StoreOrIssueEntitlementRefreshToken stores a new hosted entitlement refresh token for a tenant,
-// or returns the existing token if one has already been issued.
-func (r *TenantRegistry) StoreOrIssueEntitlementRefreshToken(tenantID, token string) (string, bool, error) {
+// StoreOrIssueHostedEntitlement stores a new hosted entitlement refresh token for a tenant,
+// or returns the existing active token if one has already been issued.
+func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, issuedAt time.Time) (string, bool, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	token = strings.TrimSpace(token)
+	issuedAt = issuedAt.UTC()
 	if tenantID == "" {
 		return "", false, fmt.Errorf("missing tenant id")
 	}
@@ -540,54 +556,54 @@ func (r *TenantRegistry) StoreOrIssueEntitlementRefreshToken(tenantID, token str
 		}
 	}()
 
-	var existing string
-	if err := tx.QueryRow(`SELECT entitlement_refresh_token FROM tenants WHERE id = ?`, tenantID).Scan(&existing); err != nil {
+	if err := tx.QueryRow(`SELECT id FROM tenants WHERE id = ?`, tenantID).Scan(new(string)); err != nil {
 		if err == sql.ErrNoRows {
 			return "", false, fmt.Errorf("tenant %q not found", tenantID)
 		}
-		return "", false, fmt.Errorf("load tenant entitlement refresh token: %w", err)
-	}
-	existing = strings.TrimSpace(existing)
-	if existing != "" {
-		if err := tx.Commit(); err != nil {
-			return "", false, fmt.Errorf("commit entitlement refresh token tx: %w", err)
-		}
-		tx = nil
-		return existing, false, nil
+		return "", false, fmt.Errorf("load tenant for hosted entitlement: %w", err)
 	}
 
-	res, err := tx.Exec(`
-		UPDATE tenants
-		SET entitlement_refresh_token = ?, updated_at = ?
-		WHERE id = ? AND entitlement_refresh_token = ''`,
-		token,
-		time.Now().UTC().Unix(),
+	rec, err := loadHostedEntitlement(tx.QueryRow(`
+		SELECT tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at
+		FROM hosted_entitlements WHERE tenant_id = ?`,
 		tenantID,
-	)
+	))
 	if err != nil {
-		return "", false, fmt.Errorf("store entitlement refresh token: %w", err)
+		return "", false, fmt.Errorf("load hosted entitlement: %w", err)
 	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return "", false, fmt.Errorf("get entitlement refresh token rows affected: %w", err)
-	}
-	if affected == 0 {
-		if err := tx.QueryRow(`SELECT entitlement_refresh_token FROM tenants WHERE id = ?`, tenantID).Scan(&existing); err != nil {
-			return "", false, fmt.Errorf("reload tenant entitlement refresh token: %w", err)
-		}
-		existing = strings.TrimSpace(existing)
-		if existing == "" {
-			return "", false, fmt.Errorf("tenant %q entitlement refresh token was not stored", tenantID)
-		}
+	if rec != nil && strings.TrimSpace(rec.RefreshToken) != "" && rec.RevokedAt == nil {
 		if err := tx.Commit(); err != nil {
-			return "", false, fmt.Errorf("commit entitlement refresh token tx: %w", err)
+			return "", false, fmt.Errorf("commit hosted entitlement tx: %w", err)
 		}
 		tx = nil
-		return existing, false, nil
+		return rec.RefreshToken, false, nil
+	}
+
+	if rec == nil {
+		if _, err := tx.Exec(`
+			INSERT INTO hosted_entitlements (tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at)
+			VALUES (?, ?, ?, NULL, NULL)`,
+			tenantID,
+			token,
+			issuedAt.Unix(),
+		); err != nil {
+			return "", false, fmt.Errorf("insert hosted entitlement: %w", err)
+		}
+	} else {
+		if _, err := tx.Exec(`
+			UPDATE hosted_entitlements
+			SET refresh_token = ?, issued_at = ?, last_refreshed_at = NULL, revoked_at = NULL
+			WHERE tenant_id = ?`,
+			token,
+			issuedAt.Unix(),
+			tenantID,
+		); err != nil {
+			return "", false, fmt.Errorf("rotate hosted entitlement: %w", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return "", false, fmt.Errorf("commit entitlement refresh token tx: %w", err)
+		return "", false, fmt.Errorf("commit hosted entitlement tx: %w", err)
 	}
 	tx = nil
 	return token, true, nil
@@ -603,6 +619,85 @@ func scanTenants(rows *sql.Rows) ([]*Tenant, error) {
 		tenants = append(tenants, t)
 	}
 	return tenants, rows.Err()
+}
+
+// GetHostedEntitlementByRefreshToken retrieves the hosted entitlement record for a refresh token.
+func (r *TenantRegistry) GetHostedEntitlementByRefreshToken(token string) (*HostedEntitlement, error) {
+	row := r.db.QueryRow(`
+		SELECT tenant_id, refresh_token, issued_at, last_refreshed_at, revoked_at
+		FROM hosted_entitlements
+		WHERE refresh_token = ?`,
+		strings.TrimSpace(token),
+	)
+	return loadHostedEntitlement(row)
+}
+
+// MarkHostedEntitlementRefreshed records the last successful hosted entitlement refresh time.
+func (r *TenantRegistry) MarkHostedEntitlementRefreshed(tenantID string, refreshedAt time.Time) error {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return fmt.Errorf("missing tenant id")
+	}
+	res, err := r.db.Exec(`
+		UPDATE hosted_entitlements
+		SET last_refreshed_at = ?
+		WHERE tenant_id = ? AND revoked_at IS NULL`,
+		refreshedAt.UTC().Unix(),
+		tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("mark hosted entitlement refreshed: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("hosted entitlement for tenant %q not found", tenantID)
+	}
+	return nil
+}
+
+// RevokeHostedEntitlement revokes a tenant's hosted entitlement refresh authority.
+func (r *TenantRegistry) RevokeHostedEntitlement(tenantID string, revokedAt time.Time) error {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return fmt.Errorf("missing tenant id")
+	}
+	_, err := r.db.Exec(`
+		UPDATE hosted_entitlements
+		SET revoked_at = COALESCE(revoked_at, ?)
+		WHERE tenant_id = ?`,
+		revokedAt.UTC().Unix(),
+		tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke hosted entitlement: %w", err)
+	}
+	return nil
+}
+
+func loadHostedEntitlement(s scanner) (*HostedEntitlement, error) {
+	var rec HostedEntitlement
+	var issuedAt int64
+	var lastRefreshedAt sql.NullInt64
+	var revokedAt sql.NullInt64
+	if err := s.Scan(&rec.TenantID, &rec.RefreshToken, &issuedAt, &lastRefreshedAt, &revokedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("scan hosted entitlement: %w", err)
+	}
+	rec.IssuedAt = time.Unix(issuedAt, 0).UTC()
+	if lastRefreshedAt.Valid {
+		ts := time.Unix(lastRefreshedAt.Int64, 0).UTC()
+		rec.LastRefreshedAt = &ts
+	}
+	if revokedAt.Valid {
+		ts := time.Unix(revokedAt.Int64, 0).UTC()
+		rec.RevokedAt = &ts
+	}
+	return &rec, nil
 }
 
 // CreateAccount inserts a new account record.

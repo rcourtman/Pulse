@@ -138,12 +138,24 @@ func (h *HostedEntitlementHandlers) handlePaidEntitlementRefresh(w http.Response
 		return true, nil
 	}
 
-	tenant, err := h.registry.GetByEntitlementRefreshToken(refreshToken)
+	entitlement, err := h.registry.GetHostedEntitlementByRefreshToken(refreshToken)
+	if err != nil {
+		return true, err
+	}
+	if entitlement == nil {
+		return false, nil
+	}
+	if entitlement.RevokedAt != nil {
+		http.Error(w, "hosted entitlement is no longer active", http.StatusGone)
+		return true, nil
+	}
+	tenant, err := h.registry.Get(entitlement.TenantID)
 	if err != nil {
 		return true, err
 	}
 	if tenant == nil {
-		return false, nil
+		http.Error(w, "invalid entitlement refresh token", http.StatusUnauthorized)
+		return true, nil
 	}
 	if paidTenantInstanceHost(h.cfg, tenant.ID) != instanceHost {
 		http.Error(w, "invalid entitlement refresh target", http.StatusUnauthorized)
@@ -173,6 +185,9 @@ func (h *HostedEntitlementHandlers) handlePaidEntitlementRefresh(w http.Response
 		return true, err
 	}
 
+	if err := h.registry.MarkHostedEntitlementRefreshed(tenant.ID, now); err != nil {
+		return true, err
+	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(hostedEntitlementRefreshResponse{EntitlementJWT: entitlementJWT}); err != nil {
 		return true, err

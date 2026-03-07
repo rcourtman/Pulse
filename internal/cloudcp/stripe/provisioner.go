@@ -274,7 +274,7 @@ func (p *Provisioner) ensureTenantEntitlementRefreshToken(tenantID string) (stri
 	if err != nil {
 		return "", err
 	}
-	storedToken, _, err := p.registry.StoreOrIssueEntitlementRefreshToken(tenantID, rawToken)
+	storedToken, _, err := p.registry.StoreOrIssueHostedEntitlement(tenantID, rawToken, time.Now().UTC())
 	if err != nil {
 		return "", err
 	}
@@ -385,7 +385,6 @@ func (p *Provisioner) writeHostedEntitlementLeaseState(tenant *registry.Tenant, 
 		return fmt.Errorf("sign hosted entitlement lease: %w", err)
 	}
 
-	tenant.EntitlementRefreshToken = refreshToken
 	state := &pkglicensing.BillingState{
 		Capabilities:            []string{},
 		Limits:                  map[string]int64{},
@@ -1007,9 +1006,11 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 
 	// Update registry
 	tenant.State = registry.TenantStateCanceled
-	tenant.EntitlementRefreshToken = ""
 	if err := p.registry.Update(tenant); err != nil {
 		return fmt.Errorf("update tenant record: %w", err)
+	}
+	if err := p.registry.RevokeHostedEntitlement(tenant.ID, time.Now().UTC()); err != nil {
+		return fmt.Errorf("revoke hosted entitlement for tenant %s: %w", tenant.ID, err)
 	}
 	if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateCanceled, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), ""); err != nil {
 		return fmt.Errorf("write canceled hosted entitlement state for tenant %s: %w", tenant.ID, err)
@@ -1182,9 +1183,11 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 			continue
 		}
 		tenant.State = registry.TenantStateCanceled
-		tenant.EntitlementRefreshToken = ""
 		if err := p.registry.Update(tenant); err != nil {
 			return fmt.Errorf("update tenant record: %w", err)
+		}
+		if err := p.registry.RevokeHostedEntitlement(tenant.ID, time.Now().UTC()); err != nil {
+			return fmt.Errorf("revoke hosted entitlement for tenant %s: %w", tenant.ID, err)
 		}
 		if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateCanceled, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), ""); err != nil {
 			return fmt.Errorf("write canceled hosted entitlement state for tenant %s: %w", tenant.ID, err)

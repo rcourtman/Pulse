@@ -89,13 +89,12 @@ func TestCRUD(t *testing.T) {
 	reg := newTestRegistry(t)
 
 	tenant := &Tenant{
-		ID:                      "t-TEST00001",
-		Email:                   "test@example.com",
-		DisplayName:             "Test Tenant",
-		State:                   TenantStateProvisioning,
-		EntitlementRefreshToken: "etr_test_123",
-		StripeCustomerID:        "cus_test123",
-		PlanVersion:             "stripe",
+		ID:               "t-TEST00001",
+		Email:            "test@example.com",
+		DisplayName:      "Test Tenant",
+		State:            TenantStateProvisioning,
+		StripeCustomerID: "cus_test123",
+		PlanVersion:      "stripe",
 	}
 
 	// Create
@@ -120,10 +119,6 @@ func TestCRUD(t *testing.T) {
 	if got.State != TenantStateProvisioning {
 		t.Errorf("State = %q, want %q", got.State, TenantStateProvisioning)
 	}
-	if got.EntitlementRefreshToken != "etr_test_123" {
-		t.Errorf("EntitlementRefreshToken = %q, want %q", got.EntitlementRefreshToken, "etr_test_123")
-	}
-
 	// Get not found
 	notFound, err := reg.Get("t-NONEXIST1")
 	if err != nil {
@@ -145,7 +140,6 @@ func TestCRUD(t *testing.T) {
 	// Update
 	got.State = TenantStateActive
 	got.ContainerID = "abc123"
-	got.EntitlementRefreshToken = "etr_test_456"
 	if err := reg.Update(got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -160,10 +154,6 @@ func TestCRUD(t *testing.T) {
 	if got3.ContainerID != "abc123" {
 		t.Errorf("ContainerID = %q, want %q", got3.ContainerID, "abc123")
 	}
-	if got3.EntitlementRefreshToken != "etr_test_456" {
-		t.Errorf("EntitlementRefreshToken = %q, want %q", got3.EntitlementRefreshToken, "etr_test_456")
-	}
-
 	// Update not found
 	phantom := &Tenant{ID: "t-NONEXIST1"}
 	if err := reg.Update(phantom); err == nil {
@@ -749,7 +739,7 @@ func TestStripeAccountCRUD(t *testing.T) {
 	}
 }
 
-func TestTenantEntitlementRefreshTokenLookupAndIssue(t *testing.T) {
+func TestHostedEntitlementLookupAndIssue(t *testing.T) {
 	reg := newTestRegistry(t)
 
 	tenant := &Tenant{
@@ -762,9 +752,10 @@ func TestTenantEntitlementRefreshTokenLookupAndIssue(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	stored, firstIssue, err := reg.StoreOrIssueEntitlementRefreshToken(tenant.ID, "etr_paid_one")
+	now := time.Now().UTC()
+	stored, firstIssue, err := reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_paid_one", now)
 	if err != nil {
-		t.Fatalf("StoreOrIssueEntitlementRefreshToken(first): %v", err)
+		t.Fatalf("StoreOrIssueHostedEntitlement(first): %v", err)
 	}
 	if !firstIssue {
 		t.Fatal("first token issue should report firstIssue=true")
@@ -773,23 +764,59 @@ func TestTenantEntitlementRefreshTokenLookupAndIssue(t *testing.T) {
 		t.Fatalf("stored token = %q, want %q", stored, "etr_paid_one")
 	}
 
-	loaded, err := reg.GetByEntitlementRefreshToken("etr_paid_one")
+	loaded, err := reg.GetHostedEntitlementByRefreshToken("etr_paid_one")
 	if err != nil {
-		t.Fatalf("GetByEntitlementRefreshToken: %v", err)
+		t.Fatalf("GetHostedEntitlementByRefreshToken: %v", err)
 	}
-	if loaded == nil || loaded.ID != tenant.ID {
+	if loaded == nil || loaded.TenantID != tenant.ID {
 		t.Fatalf("expected tenant %q, got %#v", tenant.ID, loaded)
 	}
+	if loaded.IssuedAt.Unix() != now.Unix() {
+		t.Fatalf("issued_at=%v, want %v", loaded.IssuedAt, now)
+	}
 
-	stored, firstIssue, err = reg.StoreOrIssueEntitlementRefreshToken(tenant.ID, "etr_paid_two")
+	stored, firstIssue, err = reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_paid_two", now.Add(time.Minute))
 	if err != nil {
-		t.Fatalf("StoreOrIssueEntitlementRefreshToken(second): %v", err)
+		t.Fatalf("StoreOrIssueHostedEntitlement(second): %v", err)
 	}
 	if firstIssue {
 		t.Fatal("second token issue should report firstIssue=false")
 	}
 	if stored != "etr_paid_one" {
 		t.Fatalf("stored token on second issue = %q, want %q", stored, "etr_paid_one")
+	}
+
+	if err := reg.MarkHostedEntitlementRefreshed(tenant.ID, now.Add(2*time.Minute)); err != nil {
+		t.Fatalf("MarkHostedEntitlementRefreshed: %v", err)
+	}
+	loaded, err = reg.GetHostedEntitlementByRefreshToken("etr_paid_one")
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByRefreshToken(after refresh): %v", err)
+	}
+	if loaded.LastRefreshedAt == nil || loaded.LastRefreshedAt.Unix() != now.Add(2*time.Minute).Unix() {
+		t.Fatalf("last_refreshed_at=%v, want %v", loaded.LastRefreshedAt, now.Add(2*time.Minute))
+	}
+
+	if err := reg.RevokeHostedEntitlement(tenant.ID, now.Add(3*time.Minute)); err != nil {
+		t.Fatalf("RevokeHostedEntitlement: %v", err)
+	}
+	loaded, err = reg.GetHostedEntitlementByRefreshToken("etr_paid_one")
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByRefreshToken(after revoke): %v", err)
+	}
+	if loaded.RevokedAt == nil || loaded.RevokedAt.Unix() != now.Add(3*time.Minute).Unix() {
+		t.Fatalf("revoked_at=%v, want %v", loaded.RevokedAt, now.Add(3*time.Minute))
+	}
+
+	stored, firstIssue, err = reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_paid_three", now.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("StoreOrIssueHostedEntitlement(after revoke): %v", err)
+	}
+	if !firstIssue {
+		t.Fatal("reissue after revoke should report firstIssue=true")
+	}
+	if stored != "etr_paid_three" {
+		t.Fatalf("stored token after revoke = %q, want %q", stored, "etr_paid_three")
 	}
 }
 
