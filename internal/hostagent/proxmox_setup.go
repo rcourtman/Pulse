@@ -106,8 +106,45 @@ func proxmoxTokenScope(candidates ...string) string {
 	return "server"
 }
 
+func proxmoxMonitorTokenScope(hostname, pulseURL string) string {
+	parts := make([]string, 0, 2)
+	seen := make(map[string]struct{}, 2)
+
+	for _, candidate := range []string{hostname, pulseURL} {
+		host := proxmoxTokenHostCandidate(candidate)
+		if host == "" {
+			continue
+		}
+		slug := proxmoxTokenSlug(host)
+		if slug == "" {
+			continue
+		}
+		if _, exists := seen[slug]; exists {
+			continue
+		}
+		seen[slug] = struct{}{}
+		parts = append(parts, slug)
+	}
+
+	if len(parts) == 0 {
+		return "server"
+	}
+
+	scope := parts[0]
+	const maxScopeLen = 48
+	for _, part := range parts[1:] {
+		candidate := scope + "-" + part
+		if len(candidate) > maxScopeLen {
+			break
+		}
+		scope = candidate
+	}
+
+	return scope
+}
+
 func (p *ProxmoxSetup) monitorTokenName() string {
-	return "pulse-" + proxmoxTokenScope(p.pulseURL, p.hostname)
+	return "pulse-" + proxmoxMonitorTokenScope(p.hostname, p.pulseURL)
 }
 
 func tokenAlreadyExists(err error, output string) bool {

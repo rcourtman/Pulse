@@ -420,6 +420,110 @@ func TestAutoRegisterDuplicateHostnameSeparateNodes(t *testing.T) {
 	}
 }
 
+func TestHandleAutoRegisterClusterMergeRefreshesStoredToken(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		endpoints := []config.ClusterEndpoint{
+			{
+				NodeID:      "node-1",
+				NodeName:    "pve-a",
+				Host:        "https://10.0.1.10:8006",
+				Fingerprint: "fp-a",
+				Online:      true,
+			},
+		}
+		if strings.Contains(clientConfig.Host, "10.0.1.11") {
+			endpoints = append(endpoints, config.ClusterEndpoint{
+				NodeID:      "node-2",
+				NodeName:    "pve-b",
+				Host:        "https://10.0.1.11:8006",
+				Fingerprint: "fp-b",
+				Online:      true,
+			})
+		}
+		return true, "cluster-a", endpoints
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	const authToken = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(authToken)
+
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	firstReq := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.1.10:8006",
+		TokenID:    "pulse-monitor@pam!pulse-pve-a-pulse-example-com",
+		TokenValue: "old-secret",
+		ServerName: "pve-a",
+		Source:     "agent",
+		AuthToken:  authToken,
+	}
+	firstBody, _ := json.Marshal(firstReq)
+	firstHTTPReq := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(firstBody))
+	firstRec := httptest.NewRecorder()
+	handler.HandleAutoRegister(firstRec, firstHTTPReq)
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first registration failed: status=%d body=%s", firstRec.Code, firstRec.Body.String())
+	}
+
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	secondReq := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.1.11:8006",
+		TokenID:    "pulse-monitor@pam!pulse-pve-b-pulse-example-com",
+		TokenValue: "new-secret",
+		ServerName: "pve-b",
+		Source:     "agent",
+		AuthToken:  authToken,
+	}
+	secondBody, _ := json.Marshal(secondReq)
+	secondHTTPReq := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(secondBody))
+	secondRec := httptest.NewRecorder()
+	handler.HandleAutoRegister(secondRec, secondHTTPReq)
+	if secondRec.Code != http.StatusOK {
+		t.Fatalf("second registration failed: status=%d body=%s", secondRec.Code, secondRec.Body.String())
+	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 merged cluster instance, got %d", len(cfg.PVEInstances))
+	}
+
+	instance := cfg.PVEInstances[0]
+	if instance.TokenName != secondReq.TokenID {
+		t.Fatalf("merged cluster TokenName = %q, want %q", instance.TokenName, secondReq.TokenID)
+	}
+	if instance.TokenValue != secondReq.TokenValue {
+		t.Fatalf("merged cluster TokenValue = %q, want %q", instance.TokenValue, secondReq.TokenValue)
+	}
+	if instance.Host != firstReq.Host {
+		t.Fatalf("merged cluster Host = %q, want original primary host %q", instance.Host, firstReq.Host)
+	}
+	if len(instance.ClusterEndpoints) != 2 {
+		t.Fatalf("expected 2 cluster endpoints after merge, got %d", len(instance.ClusterEndpoints))
+	}
+}
+
 // TestExtractHostIP verifies the IP extraction from host URLs.
 func TestExtractHostIP(t *testing.T) {
 	tests := []struct {

@@ -41,14 +41,28 @@ func TestParsePBSTokenValue_RegexFallback(t *testing.T) {
 }
 
 func TestMonitorTokenName_Deterministic(t *testing.T) {
-	p := &ProxmoxSetup{pulseURL: "https://Pulse.EXAMPLE.com:7655"}
-	if got := p.monitorTokenName(); got != "pulse-pulse-example-com" {
+	p := &ProxmoxSetup{hostname: "node-01", pulseURL: "https://Pulse.EXAMPLE.com:7655"}
+	if got := p.monitorTokenName(); got != "pulse-node-01-pulse-example-com" {
 		t.Fatalf("monitorTokenName() = %q", got)
 	}
 
 	p = &ProxmoxSetup{hostname: "Pulse Host"}
 	if got := p.monitorTokenName(); got != "pulse-pulse-host" {
 		t.Fatalf("monitorTokenName() with hostname fallback = %q", got)
+	}
+
+	p = &ProxmoxSetup{pulseURL: "https://Pulse.EXAMPLE.com:7655"}
+	if got := p.monitorTokenName(); got != "pulse-pulse-example-com" {
+		t.Fatalf("monitorTokenName() with Pulse URL fallback = %q", got)
+	}
+}
+
+func TestMonitorTokenName_UniquePerNodeForSamePulse(t *testing.T) {
+	first := (&ProxmoxSetup{hostname: "pve-a", pulseURL: "https://pulse.example.com:7655"}).monitorTokenName()
+	second := (&ProxmoxSetup{hostname: "pve-b", pulseURL: "https://pulse.example.com:7655"}).monitorTokenName()
+
+	if first == second {
+		t.Fatalf("expected unique token names per node, got %q for both", first)
 	}
 }
 

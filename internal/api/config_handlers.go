@@ -5226,6 +5226,26 @@ type AutoRegisterRequest struct {
 	Password     string `json:"password,omitempty"`     // Password for authentication (never stored)
 }
 
+func refreshClusterCredentialsFromAutoRegister(instance *config.PVEInstance, nodeConfig NodeConfigRequest, req *AutoRegisterRequest) {
+	if instance == nil {
+		return
+	}
+
+	tokenName := strings.TrimSpace(nodeConfig.TokenName)
+	tokenValue := strings.TrimSpace(nodeConfig.TokenValue)
+	if tokenName == "" || tokenValue == "" {
+		return
+	}
+
+	instance.User = ""
+	instance.Password = ""
+	instance.TokenName = tokenName
+	instance.TokenValue = tokenValue
+	if req != nil && req.Source != "" {
+		instance.Source = req.Source
+	}
+}
+
 // HandleAutoRegister receives token details from the setup script and auto-configures the node
 func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -5759,6 +5779,12 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 									Msg("Added new endpoint to existing cluster via auto-registration")
 							}
 						}
+
+						refreshClusterCredentialsFromAutoRegister(existingInstance, nodeConfig, &req)
+						log.Info().
+							Str("cluster", clusterName).
+							Str("tokenName", existingInstance.TokenName).
+							Msg("Refreshed existing cluster credentials from auto-registration")
 
 						// Save and reload
 						if h.getPersistence(r.Context()) != nil {
