@@ -87,6 +87,7 @@ Pulse is available in three plans:
 - **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
 - **[TrueNAS](TRUENAS.md)** – TrueNAS SCALE/CORE integration.
 - **[ZFS Monitoring](ZFS_MONITORING.md)** – Proxmox-native ZFS pool monitoring.
+- **[Storage Architecture](STORAGE_ARCHITECTURE.md)** – Proposed canonical storage, disk, S.M.A.R.T., and topology model for making storage genuinely operator-useful.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
 - **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy has been removed.
 - **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
