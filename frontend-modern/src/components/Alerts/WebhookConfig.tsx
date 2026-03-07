@@ -384,9 +384,6 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                     {webhook.method}
                   </span>
-                  <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
-                    ID: {webhook.id || '—'}
-                  </span>
                 </div>
                 <p class="mt-2 break-all text-[11px] font-mono text-muted sm:text-xs">
                   {webhook.url}

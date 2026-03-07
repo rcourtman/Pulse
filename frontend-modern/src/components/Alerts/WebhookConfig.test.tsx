@@ -108,7 +108,7 @@ describe('WebhookConfig', () => {
     expect(screen.getByText('+ Add Webhook')).toBeInTheDocument();
   });
 
-  it('renders webhook list with names, services, methods, IDs, and URLs', () => {
+  it('renders webhook list with names, services, methods, and URLs', () => {
     const webhooks = [
       makeWebhook({
         id: 'wh-1',
@@ -142,8 +142,6 @@ describe('WebhookConfig', () => {
     expect(screen.getByText('Slack')).toBeInTheDocument();
     expect(screen.getByText('POST')).toBeInTheDocument();
     expect(screen.getByText('PUT')).toBeInTheDocument();
-    expect(screen.getByText('ID: wh-1')).toBeInTheDocument();
-    expect(screen.getByText('ID: wh-2')).toBeInTheDocument();
     expect(screen.getByText('https://discord.com/api/webhooks/123')).toBeInTheDocument();
     expect(screen.getByText('https://hooks.slack.com/services/abc')).toBeInTheDocument();
   });
@@ -204,8 +202,8 @@ describe('WebhookConfig', () => {
     expect(screen.getByText('Generic')).toBeInTheDocument();
   });
 
-  it('displays "—" for webhook with no id', () => {
-    const webhooks = [makeWebhook({ id: '' })];
+  it('does not display internal webhook ID in the card', () => {
+    const webhooks = [makeWebhook({ id: 'wh-1', name: 'Test Hook' })];
 
     render(() => (
       <WebhookConfig
@@ -217,7 +215,7 @@ describe('WebhookConfig', () => {
       />
     ));
 
-    expect(screen.getByText('ID: —')).toBeInTheDocument();
+    expect(screen.queryByText('ID: wh-1')).not.toBeInTheDocument();
   });
 
   // --- Enable/Disable toggles ---
