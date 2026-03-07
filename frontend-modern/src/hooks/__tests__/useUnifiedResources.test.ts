@@ -42,6 +42,16 @@ const waitForResourceCount = async (getCount: () => number, expectedMin = 1) => 
   throw new Error(`Timed out waiting for at least ${expectedMin} resources`);
 };
 
+const waitForValue = async <T>(readValue: () => T, expected: T) => {
+  for (let i = 0; i < 20; i++) {
+    if (readValue() === expected) {
+      return;
+    }
+    await flushAsync();
+  }
+  throw new Error(`Timed out waiting for expected value: ${String(expected)}`);
+};
+
 describe('useUnifiedResources', () => {
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let setWsState: SetStoreFunction<TestWsState>;
@@ -478,6 +488,61 @@ describe('useUnifiedResources', () => {
     vi.advanceTimersByTime(2_500);
     await flushAsync();
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    dispose();
+  });
+
+  it('replaces stale canonical resources when websocket lastUpdate triggers a refetch', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              ...v2Resource,
+              id: 'agent-old',
+              name: 'seeded-agent-old',
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              ...v2Resource,
+              id: 'agent-new',
+              name: 'seeded-agent-new',
+              lastSeen: '2026-02-06T12:01:00Z',
+            },
+          ],
+        }),
+      });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.resources()[0]?.id).toBe('agent-old');
+    expect(result!.resources()[0]?.name).toBe('seeded-agent-old');
+
+    setWsState('lastUpdate', '2026-02-06T12:00:09Z');
+    await flushAsync();
+
+    vi.advanceTimersByTime(2_500);
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    await waitForValue(() => result!.resources()[0]?.id, 'agent-new');
+    expect(result!.resources()[0]?.id).toBe('agent-new');
+    expect(result!.resources()[0]?.name).toBe('seeded-agent-new');
 
     dispose();
   });
