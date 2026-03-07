@@ -23,7 +23,7 @@ func runServer(ctx context.Context) error {
 	return server.Run(ctx, Version)
 }
 
-func newProgram(env *pulsecli.Env, process pulsecli.Process) *pulsecli.Program {
+func newProgram(env *pulsecli.Env, process pulsecli.ProcessIO, mockFS pulsecli.MockFS) *pulsecli.Program {
 	if env == nil {
 		env = pulsecli.NewEnv()
 	}
@@ -39,7 +39,7 @@ func newProgram(env *pulsecli.Env, process pulsecli.Process) *pulsecli.Program {
 		Runtime: pulsecli.RuntimeSpec{
 			Run: runServer,
 		},
-		Deps: env.CommandDeps(process),
+		Deps: env.CommandDeps(process, mockFS),
 		Exit: process.Exit,
 	}
 }
@@ -55,7 +55,7 @@ func printVersion(w io.Writer) {
 }
 
 func main() {
-	newProgram(pulsecli.NewEnv(), pulsecli.NewProcess()).Run(context.Background(), os.Args[1:])
+	newProgram(pulsecli.NewEnv(), pulsecli.NewProcessIO(), pulsecli.NewMockFS()).Run(context.Background(), os.Args[1:])
 }
 
 // Force rebuild 1769525035

@@ -15,10 +15,14 @@ func newTestCLIEnv() *pulsecli.Env {
 	return pulsecli.NewEnv()
 }
 
-func newTestCLIProcess() pulsecli.Process {
-	process := pulsecli.NewProcess()
+func newTestCLIProcess() pulsecli.ProcessIO {
+	process := pulsecli.NewProcessIO()
 	process.Exit = func(int) {}
 	return process
+}
+
+func newTestMockFS() pulsecli.MockFS {
+	return pulsecli.NewMockFS()
 }
 
 func createTestEncryptionKey(t *testing.T, dir string) {

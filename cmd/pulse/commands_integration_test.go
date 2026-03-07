@@ -83,13 +83,14 @@ func TestMainActual(t *testing.T) {
 
 	env := newTestCLIEnv()
 	process := newTestCLIProcess()
+	mockFS := newTestMockFS()
 	exitCode := 0
 	process.Exit = func(code int) { exitCode = code }
 
-	newProgram(env, process).Run(context.Background(), []string{"version"})
+	newProgram(env, process, mockFS).Run(context.Background(), []string{"version"})
 	assert.Equal(t, 0, exitCode)
 
-	newProgram(env, process).Run(context.Background(), []string{"--invalid-flag"})
+	newProgram(env, process, mockFS).Run(context.Background(), []string{"--invalid-flag"})
 	assert.Equal(t, 1, exitCode)
 }
 
@@ -159,7 +160,7 @@ func TestMainCmd(t *testing.T) {
 	createTestEncryptionKey(t, tempDir)
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644))
 
-	cmd := newProgram(newTestCLIEnv(), newTestCLIProcess()).RootCommand()
+	cmd := newProgram(newTestCLIEnv(), newTestCLIProcess(), newTestMockFS()).RootCommand()
 	oldRunE := cmd.RunE
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return runServer(ctx)

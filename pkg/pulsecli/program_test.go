@@ -8,12 +8,13 @@ import (
 
 func TestProgramRootCommandUsesEnvForConfigFlags(t *testing.T) {
 	env := NewEnv()
-	process := NewProcess()
+	process := NewProcessIO()
+	mockFS := NewMockFS()
 	program := &Program{
 		Command: CommandSpec{
 			Use: "pulse",
 		},
-		Deps: env.CommandDeps(process),
+		Deps: env.CommandDeps(process, mockFS),
 		Exit: process.Exit,
 	}
 
@@ -50,7 +51,7 @@ func TestProgramRootCommandUsesEnvForConfigFlags(t *testing.T) {
 }
 
 func TestProgramRunReportsErrorAndExits(t *testing.T) {
-	process := NewProcess()
+	process := NewProcessIO()
 	exitCode := 0
 	process.Exit = func(code int) {
 		exitCode = code
