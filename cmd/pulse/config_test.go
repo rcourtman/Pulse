@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli"
 )
 
 func TestGetPassphrase_FromEnv(t *testing.T) {
@@ -9,7 +11,7 @@ func TestGetPassphrase_FromEnv(t *testing.T) {
 	passphrase = ""
 	t.Cleanup(func() { passphrase = "" })
 
-	got := getPassphrase("ignored", false)
+	got := pulsecli.GetPassphrase(configDeps, "ignored", false)
 	if got != "from-env" {
 		t.Fatalf("got %q", got)
 	}
@@ -20,7 +22,7 @@ func TestGetPassphrase_FromFlag(t *testing.T) {
 	passphrase = "from-flag"
 	t.Cleanup(func() { passphrase = "" })
 
-	got := getPassphrase("ignored", false)
+	got := pulsecli.GetPassphrase(configDeps, "ignored", false)
 	if got != "from-flag" {
 		t.Fatalf("got %q", got)
 	}

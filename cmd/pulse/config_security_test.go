@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli"
 )
 
 func TestReadBoundedRegularFileSuccess(t *testing.T) {
@@ -15,7 +17,7 @@ func TestReadBoundedRegularFileSuccess(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	got, err := readBoundedRegularFile(path, int64(len(want)))
+	got, err := pulsecli.ReadBoundedRegularFile(path, int64(len(want)))
 	if err != nil {
 		t.Fatalf("readBoundedRegularFile: %v", err)
 	}
@@ -30,7 +32,7 @@ func TestReadBoundedRegularFileRejectsOversized(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	_, err := readBoundedRegularFile(path, 8)
+	_, err := pulsecli.ReadBoundedRegularFile(path, 8)
 	if err == nil {
 		t.Fatal("expected oversized file error")
 	}
@@ -51,7 +53,7 @@ func TestReadBoundedRegularFileRejectsSymlink(t *testing.T) {
 		t.Skipf("symlink not supported: %v", err)
 	}
 
-	_, err := readBoundedRegularFile(link, 1024)
+	_, err := pulsecli.ReadBoundedRegularFile(link, 1024)
 	if err == nil {
 		t.Fatal("expected non-regular file error")
 	}
@@ -62,7 +64,7 @@ func TestReadBoundedRegularFileRejectsSymlink(t *testing.T) {
 
 func TestReadBoundedHTTPBodySuccess(t *testing.T) {
 	data := []byte("payload")
-	got, err := readBoundedHTTPBody(bytes.NewReader(data), int64(len(data)), int64(len(data)), "configuration response")
+	got, err := pulsecli.ReadBoundedHTTPBody(bytes.NewReader(data), int64(len(data)), int64(len(data)), "configuration response")
 	if err != nil {
 		t.Fatalf("readBoundedHTTPBody: %v", err)
 	}
@@ -72,7 +74,7 @@ func TestReadBoundedHTTPBodySuccess(t *testing.T) {
 }
 
 func TestReadBoundedHTTPBodyRejectsOversizedContentLength(t *testing.T) {
-	_, err := readBoundedHTTPBody(bytes.NewReader([]byte("ok")), 9, 8, "configuration response")
+	_, err := pulsecli.ReadBoundedHTTPBody(bytes.NewReader([]byte("ok")), 9, 8, "configuration response")
 	if err == nil {
 		t.Fatal("expected oversized content-length error")
 	}
@@ -82,7 +84,7 @@ func TestReadBoundedHTTPBodyRejectsOversizedContentLength(t *testing.T) {
 }
 
 func TestReadBoundedHTTPBodyRejectsOversizedStream(t *testing.T) {
-	_, err := readBoundedHTTPBody(bytes.NewReader([]byte("0123456789")), -1, 8, "configuration response")
+	_, err := pulsecli.ReadBoundedHTTPBody(bytes.NewReader([]byte("0123456789")), -1, 8, "configuration response")
 	if err == nil {
 		t.Fatal("expected oversized stream error")
 	}
