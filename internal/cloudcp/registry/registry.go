@@ -60,6 +60,7 @@ func (r *TenantRegistry) initSchema() error {
 		email                 TEXT NOT NULL DEFAULT '',
 		display_name          TEXT NOT NULL DEFAULT '',
 		state                 TEXT NOT NULL DEFAULT 'provisioning',
+		entitlement_refresh_token TEXT NOT NULL DEFAULT '',
 		stripe_customer_id    TEXT NOT NULL DEFAULT '',
 		stripe_subscription_id TEXT NOT NULL DEFAULT '',
 		stripe_price_id       TEXT NOT NULL DEFAULT '',
@@ -74,6 +75,7 @@ func (r *TenantRegistry) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_tenants_state ON tenants(state);
 	CREATE INDEX IF NOT EXISTS idx_tenants_stripe_customer_id ON tenants(stripe_customer_id);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_entitlement_refresh_token ON tenants(entitlement_refresh_token) WHERE entitlement_refresh_token <> '';
 	CREATE INDEX IF NOT EXISTS idx_tenants_created_at ON tenants(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_tenants_state_created_at ON tenants(state, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_tenants_account_id_created_at ON tenants(account_id, created_at DESC);
@@ -148,8 +150,20 @@ func (r *TenantRegistry) initSchema() error {
 			return fmt.Errorf("migrate tenants: add account_id: %w", err)
 		}
 	}
+	hasEntitlementRefreshToken, err := r.tenantsHasColumn("entitlement_refresh_token")
+	if err != nil {
+		return fmt.Errorf("check tenants schema for entitlement_refresh_token: %w", err)
+	}
+	if !hasEntitlementRefreshToken {
+		if _, err := r.db.Exec(`ALTER TABLE tenants ADD COLUMN entitlement_refresh_token TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrate tenants: add entitlement_refresh_token: %w", err)
+		}
+	}
 	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tenants_account_id ON tenants(account_id)`); err != nil {
 		return fmt.Errorf("init tenant registry schema: create idx_tenants_account_id: %w", err)
+	}
+	if _, err := r.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_entitlement_refresh_token ON tenants(entitlement_refresh_token) WHERE entitlement_refresh_token <> ''`); err != nil {
+		return fmt.Errorf("init tenant registry schema: create idx_tenants_entitlement_refresh_token: %w", err)
 	}
 
 	// Migration: add session_version to users if missing.
@@ -259,12 +273,12 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 
 	_, err := r.db.Exec(`
 		INSERT INTO tenants (
-			id, account_id, email, display_name, state,
+			id, account_id, email, display_name, state, entitlement_refresh_token,
 			stripe_customer_id, stripe_subscription_id, stripe_price_id,
 			plan_version, container_id, current_image_digest, desired_image_digest,
 			created_at, updated_at, last_health_check, health_check_ok
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.AccountID, t.Email, t.DisplayName, string(t.State),
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.AccountID, t.Email, t.DisplayName, string(t.State), t.EntitlementRefreshToken,
 		t.StripeCustomerID, t.StripeSubscriptionID, t.StripePriceID,
 		t.PlanVersion, t.ContainerID, t.CurrentImageDigest, t.DesiredImageDigest,
 		t.CreatedAt.Unix(), t.UpdatedAt.Unix(), nullableTimeUnix(t.LastHealthCheck), boolToInt(t.HealthCheckOK),
@@ -278,7 +292,7 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 // Get retrieves a tenant by ID.
 func (r *TenantRegistry) Get(tenantID string) (*Tenant, error) {
 	row := r.db.QueryRow(`SELECT
-		id, account_id, email, display_name, state,
+		id, account_id, email, display_name, state, entitlement_refresh_token,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
 		created_at, updated_at, last_health_check, health_check_ok
@@ -289,11 +303,22 @@ func (r *TenantRegistry) Get(tenantID string) (*Tenant, error) {
 // GetByStripeCustomerID retrieves a tenant by Stripe customer ID.
 func (r *TenantRegistry) GetByStripeCustomerID(customerID string) (*Tenant, error) {
 	row := r.db.QueryRow(`SELECT
-		id, account_id, email, display_name, state,
+		id, account_id, email, display_name, state, entitlement_refresh_token,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
 		created_at, updated_at, last_health_check, health_check_ok
 		FROM tenants WHERE stripe_customer_id = ?`, customerID)
+	return scanTenant(row)
+}
+
+// GetByEntitlementRefreshToken retrieves a tenant by its hosted entitlement refresh token.
+func (r *TenantRegistry) GetByEntitlementRefreshToken(token string) (*Tenant, error) {
+	row := r.db.QueryRow(`SELECT
+		id, account_id, email, display_name, state, entitlement_refresh_token,
+		stripe_customer_id, stripe_subscription_id, stripe_price_id,
+		plan_version, container_id, current_image_digest, desired_image_digest,
+		created_at, updated_at, last_health_check, health_check_ok
+		FROM tenants WHERE entitlement_refresh_token = ?`, strings.TrimSpace(token))
 	return scanTenant(row)
 }
 
@@ -306,12 +331,12 @@ func (r *TenantRegistry) Update(t *Tenant) error {
 
 	res, err := r.db.Exec(`
 		UPDATE tenants SET
-			account_id = ?, email = ?, display_name = ?, state = ?,
+			account_id = ?, email = ?, display_name = ?, state = ?, entitlement_refresh_token = ?,
 			stripe_customer_id = ?, stripe_subscription_id = ?, stripe_price_id = ?,
 			plan_version = ?, container_id = ?, current_image_digest = ?, desired_image_digest = ?,
 			updated_at = ?, last_health_check = ?, health_check_ok = ?
 		WHERE id = ?`,
-		t.AccountID, t.Email, t.DisplayName, string(t.State),
+		t.AccountID, t.Email, t.DisplayName, string(t.State), strings.TrimSpace(t.EntitlementRefreshToken),
 		t.StripeCustomerID, t.StripeSubscriptionID, t.StripePriceID,
 		t.PlanVersion, t.ContainerID, t.CurrentImageDigest, t.DesiredImageDigest,
 		t.UpdatedAt.Unix(), nullableTimeUnix(t.LastHealthCheck), boolToInt(t.HealthCheckOK),
@@ -349,7 +374,7 @@ func (r *TenantRegistry) Delete(id string) error {
 // List returns all tenants.
 func (r *TenantRegistry) List() ([]*Tenant, error) {
 	rows, err := r.db.Query(`SELECT
-		id, account_id, email, display_name, state,
+		id, account_id, email, display_name, state, entitlement_refresh_token,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
 		created_at, updated_at, last_health_check, health_check_ok
@@ -364,7 +389,7 @@ func (r *TenantRegistry) List() ([]*Tenant, error) {
 // ListByState returns all tenants matching the given state.
 func (r *TenantRegistry) ListByState(state TenantState) ([]*Tenant, error) {
 	rows, err := r.db.Query(`SELECT
-		id, account_id, email, display_name, state,
+		id, account_id, email, display_name, state, entitlement_refresh_token,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
 		created_at, updated_at, last_health_check, health_check_ok
@@ -379,7 +404,7 @@ func (r *TenantRegistry) ListByState(state TenantState) ([]*Tenant, error) {
 // ListByAccountID returns all tenants belonging to the given account ID.
 func (r *TenantRegistry) ListByAccountID(accountID string) ([]*Tenant, error) {
 	rows, err := r.db.Query(`SELECT
-		id, account_id, email, display_name, state,
+		id, account_id, email, display_name, state, entitlement_refresh_token,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
 		created_at, updated_at, last_health_check, health_check_ok
@@ -470,7 +495,7 @@ func scanTenant(s scanner) (*Tenant, error) {
 	var healthOK int
 
 	err := s.Scan(
-		&t.ID, &t.AccountID, &t.Email, &t.DisplayName, &state,
+		&t.ID, &t.AccountID, &t.Email, &t.DisplayName, &state, &t.EntitlementRefreshToken,
 		&t.StripeCustomerID, &t.StripeSubscriptionID, &t.StripePriceID,
 		&t.PlanVersion, &t.ContainerID, &t.CurrentImageDigest, &t.DesiredImageDigest,
 		&createdAt, &updatedAt, &lastHealthCheck, &healthOK,
@@ -491,6 +516,81 @@ func scanTenant(s scanner) (*Tenant, error) {
 	}
 	t.HealthCheckOK = healthOK != 0
 	return &t, nil
+}
+
+// StoreOrIssueEntitlementRefreshToken stores a new hosted entitlement refresh token for a tenant,
+// or returns the existing token if one has already been issued.
+func (r *TenantRegistry) StoreOrIssueEntitlementRefreshToken(tenantID, token string) (string, bool, error) {
+	tenantID = strings.TrimSpace(tenantID)
+	token = strings.TrimSpace(token)
+	if tenantID == "" {
+		return "", false, fmt.Errorf("missing tenant id")
+	}
+	if token == "" {
+		return "", false, fmt.Errorf("missing entitlement refresh token")
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return "", false, fmt.Errorf("begin entitlement refresh token tx: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var existing string
+	if err := tx.QueryRow(`SELECT entitlement_refresh_token FROM tenants WHERE id = ?`, tenantID).Scan(&existing); err != nil {
+		if err == sql.ErrNoRows {
+			return "", false, fmt.Errorf("tenant %q not found", tenantID)
+		}
+		return "", false, fmt.Errorf("load tenant entitlement refresh token: %w", err)
+	}
+	existing = strings.TrimSpace(existing)
+	if existing != "" {
+		if err := tx.Commit(); err != nil {
+			return "", false, fmt.Errorf("commit entitlement refresh token tx: %w", err)
+		}
+		tx = nil
+		return existing, false, nil
+	}
+
+	res, err := tx.Exec(`
+		UPDATE tenants
+		SET entitlement_refresh_token = ?, updated_at = ?
+		WHERE id = ? AND entitlement_refresh_token = ''`,
+		token,
+		time.Now().UTC().Unix(),
+		tenantID,
+	)
+	if err != nil {
+		return "", false, fmt.Errorf("store entitlement refresh token: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return "", false, fmt.Errorf("get entitlement refresh token rows affected: %w", err)
+	}
+	if affected == 0 {
+		if err := tx.QueryRow(`SELECT entitlement_refresh_token FROM tenants WHERE id = ?`, tenantID).Scan(&existing); err != nil {
+			return "", false, fmt.Errorf("reload tenant entitlement refresh token: %w", err)
+		}
+		existing = strings.TrimSpace(existing)
+		if existing == "" {
+			return "", false, fmt.Errorf("tenant %q entitlement refresh token was not stored", tenantID)
+		}
+		if err := tx.Commit(); err != nil {
+			return "", false, fmt.Errorf("commit entitlement refresh token tx: %w", err)
+		}
+		tx = nil
+		return existing, false, nil
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", false, fmt.Errorf("commit entitlement refresh token tx: %w", err)
+	}
+	tx = nil
+	return token, true, nil
 }
 
 func scanTenants(rows *sql.Rows) ([]*Tenant, error) {

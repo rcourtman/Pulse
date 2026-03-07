@@ -3,6 +3,9 @@ package account
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,7 +23,22 @@ func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir str
 	t.Helper()
 
 	mux := http.NewServeMux()
-	provisioner := cpstripe.NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicKey))
+	provisioner := cpstripe.NewProvisioner(
+		reg,
+		tenantsDir,
+		nil,
+		nil,
+		"https://cloud.example.com",
+		nil,
+		"",
+		true,
+		cpstripe.WithTrialActivationPrivateKey(base64.StdEncoding.EncodeToString(privateKey)),
+	)
 
 	listTenants := HandleListTenants(reg)
 	createTenant := HandleCreateTenant(reg, provisioner)

@@ -103,7 +103,17 @@ func Run(ctx context.Context, version string) error {
 
 	// Build HTTP routes
 	mux := http.NewServeMux()
-	provisioner := cpstripe.NewProvisioner(reg, cfg.TenantsDir(), dockerMgr, magicLinkSvc, cfg.BaseURL, emailSender, cfg.EmailFrom, cfg.AllowDockerlessProvisioning)
+	provisioner := cpstripe.NewProvisioner(
+		reg,
+		cfg.TenantsDir(),
+		dockerMgr,
+		magicLinkSvc,
+		cfg.BaseURL,
+		emailSender,
+		cfg.EmailFrom,
+		cfg.AllowDockerlessProvisioning,
+		cpstripe.WithTrialActivationPrivateKey(cfg.TrialActivationPrivateKey),
+	)
 	deps := &Deps{
 		Config:           cfg,
 		Registry:         reg,

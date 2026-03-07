@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/account"
@@ -28,7 +31,7 @@ import (
 func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
-	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
 
 	// ── Phase 1: MSP account creation ──────────────────────────────────
 
@@ -108,6 +111,13 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		}
 		if len(bs.Capabilities) == 0 {
 			t.Fatalf("workspace %s: expected capabilities, got empty", ws.ID)
+		}
+		raw := loadRawBillingState(t, provisioner.tenantDataDir(ws.ID))
+		if strings.TrimSpace(raw.EntitlementJWT) == "" || strings.TrimSpace(raw.EntitlementRefreshToken) == "" {
+			t.Fatalf("workspace %s: expected raw hosted entitlement lease state, got %+v", ws.ID, raw)
+		}
+		if raw.SubscriptionState != "" || len(raw.Capabilities) != 0 {
+			t.Fatalf("workspace %s: expected raw lease-only state, got %+v", ws.ID, raw)
 		}
 	}
 
@@ -355,6 +365,10 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		if bs.StripeSubscriptionID != "sub_msp_lifecycle_test" {
 			t.Fatalf("workspace %s: StripeSubscriptionID = %q, want %q", ws.ID, bs.StripeSubscriptionID, "sub_msp_lifecycle_test")
 		}
+		raw := loadRawBillingState(t, provisioner.tenantDataDir(ws.ID))
+		if strings.TrimSpace(raw.EntitlementJWT) == "" || strings.TrimSpace(raw.EntitlementRefreshToken) == "" {
+			t.Fatalf("workspace %s: expected raw entitlement lease during grace, got %+v", ws.ID, raw)
+		}
 	}
 
 	// ── Phase 6: Subscription deletion revokes access ──────────────────
@@ -408,6 +422,10 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		}
 		if len(bs.Capabilities) != 0 {
 			t.Fatalf("workspace %s: expected empty capabilities after cancellation, got %v", ws.ID, bs.Capabilities)
+		}
+		raw := loadRawBillingState(t, provisioner.tenantDataDir(ws.ID))
+		if raw.EntitlementJWT != "" || raw.EntitlementRefreshToken != "" {
+			t.Fatalf("workspace %s: expected canceled raw state without lease tokens, got %+v", ws.ID, raw)
 		}
 	}
 
@@ -479,7 +497,7 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 func TestMSPLifecycle_TenantIsolation(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
-	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
 
 	// Create two separate MSP accounts.
 	msp1ID, err := registry.GenerateAccountID()
@@ -577,7 +595,7 @@ func TestMSPLifecycle_TenantIsolation(t *testing.T) {
 func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
-	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
 
 	tests := []struct {
 		name        string
@@ -642,7 +660,7 @@ func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
-	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {
@@ -752,4 +770,18 @@ func newTenantMux(reg *registry.TenantRegistry, provisioner *Provisioner) *http.
 	mux.Handle("/api/accounts/{account_id}/tenants", admin.AdminKeyMiddleware("secret-key", collection))
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", admin.AdminKeyMiddleware("secret-key", tenantItem))
 	return mux
+}
+
+func loadRawBillingState(t *testing.T, tenantDataDir string) pkglicensing.BillingState {
+	t.Helper()
+	rawPath := filepath.Join(tenantDataDir, "billing.json")
+	data, err := os.ReadFile(rawPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", rawPath, err)
+	}
+	var state pkglicensing.BillingState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("Unmarshal(%s): %v", rawPath, err)
+	}
+	return state
 }

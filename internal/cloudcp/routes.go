@@ -86,7 +86,17 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Stripe webhook (signature-authenticated)
 	provisioner := deps.Provisioner
 	if provisioner == nil {
-		provisioner = cpstripe.NewProvisioner(deps.Registry, deps.Config.TenantsDir(), deps.Docker, deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom, deps.Config.AllowDockerlessProvisioning)
+		provisioner = cpstripe.NewProvisioner(
+			deps.Registry,
+			deps.Config.TenantsDir(),
+			deps.Docker,
+			deps.MagicLinks,
+			deps.Config.BaseURL,
+			deps.EmailSender,
+			deps.Config.EmailFrom,
+			deps.Config.AllowDockerlessProvisioning,
+			cpstripe.WithTrialActivationPrivateKey(deps.Config.TrialActivationPrivateKey),
+		)
 	}
 	webhookHandler := cpstripe.NewWebhookHandler(deps.Config.StripeWebhookSecret, provisioner)
 	mux.Handle("/api/stripe/webhook", webhookLimiter.Middleware(webhookHandler))
@@ -99,7 +109,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	}
 
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
-	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore)
+	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, WithTrialSignupTenantRegistry(deps.Registry))
 	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
 	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
 	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	stripe "github.com/stripe/stripe-go/v82"
 )
@@ -909,6 +910,85 @@ func TestTrialSignupHandleRefreshReturnsLease(t *testing.T) {
 	}
 	if claims.OrgID != "default" {
 		t.Fatalf("claims.OrgID=%q, want %q", claims.OrgID, "default")
+	}
+}
+
+func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	reg, err := registry.NewTenantRegistry(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindIndividual,
+		DisplayName: "Pulse Labs",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "cus_paid_refresh",
+		PlanVersion:       "cloud_v1",
+		SubscriptionState: "active",
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+	tenant := &registry.Tenant{
+		ID:                      "t-PAIDREF01",
+		AccountID:               accountID,
+		Email:                   "owner@example.com",
+		State:                   registry.TenantStateActive,
+		EntitlementRefreshToken: "etr_paid_refresh",
+		StripeCustomerID:        "cus_paid_refresh",
+		PlanVersion:             "cloud_v1",
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	now := time.Unix(1710000000, 0).UTC()
+	h := NewTrialSignupHandlers(&CPConfig{
+		BaseURL:                   "https://cloud.example.com",
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+	}, nil, nil, WithTrialSignupTenantRegistry(reg))
+	h.now = func() time.Time { return now }
+
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/refresh", strings.NewReader(`{"org_id":"default","instance_host":"t-PAIDREF01.cloud.example.com","entitlement_refresh_token":"etr_paid_refresh"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupRefresh(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp trialSignupRefreshResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(resp.EntitlementJWT, pub, "t-PAIDREF01.cloud.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.SubscriptionState != pkglicensing.SubStateActive {
+		t.Fatalf("claims.SubscriptionState=%q, want %q", claims.SubscriptionState, pkglicensing.SubStateActive)
+	}
+	if claims.PlanVersion != "cloud_v1" {
+		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_v1")
+	}
+	if len(claims.Capabilities) == 0 {
+		t.Fatal("expected paid capabilities in refreshed lease")
 	}
 }
 

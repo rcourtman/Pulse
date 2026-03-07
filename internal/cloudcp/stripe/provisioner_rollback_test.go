@@ -2,6 +2,9 @@ package stripe
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"os"
 	"testing"
 
@@ -38,6 +41,26 @@ func newFailingDockerManager(t *testing.T) *docker.Manager {
 	return mgr
 }
 
+func newTestProvisioner(t *testing.T, reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, allowDockerless bool) *Provisioner {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicKey))
+	return NewProvisioner(
+		reg,
+		tenantsDir,
+		dockerMgr,
+		nil,
+		"https://cloud.example.com",
+		nil,
+		"",
+		allowDockerless,
+		WithTrialActivationPrivateKey(base64.StdEncoding.EncodeToString(privateKey)),
+	)
+}
+
 func TestProvisionWorkspaceRollbackOnContainerFailure(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
@@ -55,7 +78,7 @@ func TestProvisionWorkspaceRollbackOnContainerFailure(t *testing.T) {
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
-	p := NewProvisioner(reg, tenantsDir, dockerMgr, nil, "https://cloud.example.com", nil, "", false)
+	p := newTestProvisioner(t, reg, tenantsDir, dockerMgr, false)
 	if _, err := p.ProvisionWorkspace(context.Background(), accountID, "Tenant One"); err == nil {
 		t.Fatal("expected container startup error")
 	}
@@ -81,7 +104,7 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
 
-	failProvisioner := NewProvisioner(reg, tenantsDir, newFailingDockerManager(t), nil, "https://cloud.example.com", nil, "", false)
+	failProvisioner := newTestProvisioner(t, reg, tenantsDir, newFailingDockerManager(t), false)
 	session := CheckoutSession{
 		Customer:      "cus_retry_123",
 		Subscription:  "sub_retry_123",
@@ -108,7 +131,7 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 		t.Fatalf("expected no tenant dirs after rollback, got %d", len(entries))
 	}
 
-	retryProvisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+	retryProvisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
 	if err := retryProvisioner.HandleCheckout(context.Background(), session); err != nil {
 		t.Fatalf("retry HandleCheckout: %v", err)
 	}
@@ -129,7 +152,7 @@ func TestHandleCheckoutDockerlessFallbackWhenDockerDaemonUnavailable(t *testing.
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
 
-	p := NewProvisioner(reg, tenantsDir, newFailingDockerManager(t), nil, "https://cloud.example.com", nil, "", true)
+	p := newTestProvisioner(t, reg, tenantsDir, newFailingDockerManager(t), true)
 	session := CheckoutSession{
 		Customer:      "cus_dockerless_123",
 		Subscription:  "sub_dockerless_123",

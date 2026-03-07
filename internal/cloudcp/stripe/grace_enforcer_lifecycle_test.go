@@ -15,7 +15,7 @@ import (
 func TestGraceEnforcerRevokesBillingCapabilitiesAfterExpiry(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()
-	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", true)
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {

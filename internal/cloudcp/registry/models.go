@@ -64,22 +64,23 @@ const (
 
 // Tenant represents a Cloud tenant record in the registry.
 type Tenant struct {
-	ID                   string      `json:"id"`
-	AccountID            string      `json:"account_id"`
-	Email                string      `json:"email"`
-	DisplayName          string      `json:"display_name"`
-	State                TenantState `json:"state"`
-	StripeCustomerID     string      `json:"stripe_customer_id"`
-	StripeSubscriptionID string      `json:"stripe_subscription_id"`
-	StripePriceID        string      `json:"stripe_price_id"`
-	PlanVersion          string      `json:"plan_version"`
-	ContainerID          string      `json:"container_id"`
-	CurrentImageDigest   string      `json:"current_image_digest"`
-	DesiredImageDigest   string      `json:"desired_image_digest"`
-	CreatedAt            time.Time   `json:"created_at"`
-	UpdatedAt            time.Time   `json:"updated_at"`
-	LastHealthCheck      *time.Time  `json:"last_health_check,omitempty"`
-	HealthCheckOK        bool        `json:"health_check_ok"`
+	ID                      string      `json:"id"`
+	AccountID               string      `json:"account_id"`
+	Email                   string      `json:"email"`
+	DisplayName             string      `json:"display_name"`
+	State                   TenantState `json:"state"`
+	EntitlementRefreshToken string      `json:"entitlement_refresh_token"`
+	StripeCustomerID        string      `json:"stripe_customer_id"`
+	StripeSubscriptionID    string      `json:"stripe_subscription_id"`
+	StripePriceID           string      `json:"stripe_price_id"`
+	PlanVersion             string      `json:"plan_version"`
+	ContainerID             string      `json:"container_id"`
+	CurrentImageDigest      string      `json:"current_image_digest"`
+	DesiredImageDigest      string      `json:"desired_image_digest"`
+	CreatedAt               time.Time   `json:"created_at"`
+	UpdatedAt               time.Time   `json:"updated_at"`
+	LastHealthCheck         *time.Time  `json:"last_health_check,omitempty"`
+	HealthCheckOK           bool        `json:"health_check_ok"`
 }
 
 // StripeAccount maps a control-plane account to a single Stripe customer +
