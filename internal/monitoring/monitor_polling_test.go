@@ -148,6 +148,35 @@ func (s *testSupplementalResourceStore) PopulateSupplementalRecords(source unifi
 	s.recordsBySource[source] = append(s.recordsBySource[source], cloned...)
 }
 
+type testAtomicResourceStore struct {
+	snapshotCalls    int
+	atomicCalls      int
+	lastSnapshot     models.StateSnapshot
+	lastRecordsBySrc map[unifiedresources.DataSource][]unifiedresources.IngestRecord
+}
+
+func (s *testAtomicResourceStore) ShouldSkipAPIPolling(string) bool { return false }
+
+func (s *testAtomicResourceStore) GetPollingRecommendations() map[string]float64 { return nil }
+
+func (s *testAtomicResourceStore) GetAll() []unifiedresources.Resource { return nil }
+
+func (s *testAtomicResourceStore) PopulateFromSnapshot(snapshot models.StateSnapshot) {
+	s.lastSnapshot = snapshot
+	s.snapshotCalls++
+}
+
+func (s *testAtomicResourceStore) PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord) {
+	s.lastSnapshot = snapshot
+	s.atomicCalls++
+	s.lastRecordsBySrc = make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(recordsBySource))
+	for source, records := range recordsBySource {
+		cloned := make([]unifiedresources.IngestRecord, len(records))
+		copy(cloned, records)
+		s.lastRecordsBySrc[source] = cloned
+	}
+}
+
 func TestBuildScheduledTasksUsesConfiguredIntervals(t *testing.T) {
 	now := time.Now()
 	cfg := &config.Config{
@@ -1113,6 +1142,53 @@ func TestUpdateResourceStore_IngestsRegisteredSupplementalProvider(t *testing.T)
 	records := store.recordsBySource[unifiedresources.SourceTrueNAS]
 	if len(records) != 1 {
 		t.Fatalf("expected 1 supplemental record from direct provider, got %d", len(records))
+	}
+	if records[0].SourceID != "tn-host-1" {
+		t.Fatalf("expected source ID tn-host-1, got %q", records[0].SourceID)
+	}
+}
+
+func TestUpdateResourceStore_UsesAtomicStoreReplacementWhenAvailable(t *testing.T) {
+	store := &testAtomicResourceStore{}
+	provider := &testMonitorSupplementalProvider{
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {
+				{
+					SourceID: "tn-host-1",
+					Resource: unifiedresources.Resource{
+						Type:     unifiedresources.ResourceTypeAgent,
+						Name:     "tn-host-1",
+						Status:   unifiedresources.StatusOnline,
+						LastSeen: time.Now().UTC(),
+					},
+					Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tn-host-1"}},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{{ID: "host-1", Hostname: "minipc", Status: "online"}},
+	}
+
+	monitor.updateResourceStore(snapshot)
+
+	if store.atomicCalls != 1 {
+		t.Fatalf("expected atomic populate to be called once, got %d", store.atomicCalls)
+	}
+	if store.snapshotCalls != 0 {
+		t.Fatalf("expected legacy PopulateFromSnapshot to be skipped, got %d calls", store.snapshotCalls)
+	}
+	if len(store.lastSnapshot.Hosts) != 1 || store.lastSnapshot.Hosts[0].Hostname != "minipc" {
+		t.Fatalf("expected snapshot to be passed atomically, got %#v", store.lastSnapshot)
+	}
+	records := store.lastRecordsBySrc[unifiedresources.SourceTrueNAS]
+	if len(records) != 1 {
+		t.Fatalf("expected 1 atomic supplemental record, got %d", len(records))
 	}
 	if records[0].SourceID != "tn-host-1" {
 		t.Fatalf("expected source ID tn-host-1, got %q", records[0].SourceID)

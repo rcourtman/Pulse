@@ -117,6 +117,13 @@ type SupplementalRecordStore interface {
 	PopulateSupplementalRecords(source unifiedresources.DataSource, records []unifiedresources.IngestRecord)
 }
 
+// AtomicSnapshotResourceStore is an optional extension for stores that can
+// atomically replace their canonical registry from a snapshot plus
+// supplemental records in a single swap.
+type AtomicSnapshotResourceStore interface {
+	PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord)
+}
+
 // MonitorSupplementalRecordsProvider emits source-native records outside the
 // poll-provider scheduling path (for example, dedicated background pollers).
 type MonitorSupplementalRecordsProvider interface {
@@ -1316,6 +1323,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if alertConfig, err := m.configPersist.LoadAlertConfig(); err == nil {
 		m.alertManager.UpdateConfig(*alertConfig)
 		// Apply schedule settings to notification manager
+		m.notificationMgr.SetEnabled(alertConfig.Enabled && alertConfig.ActivationState == alerts.ActivationActive)
 		m.notificationMgr.SetCooldown(alertConfig.Schedule.Cooldown)
 		m.notificationMgr.SetGroupingWindow(alertConfig.Schedule.Grouping.Window)
 		m.notificationMgr.SetGroupingOptions(
@@ -3054,6 +3062,21 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 			Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
 	}
 
+	recordsBySource := m.collectSupplementalRecordsBySource()
+	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
+		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
+		for source, records := range recordsBySource {
+			if len(records) == 0 {
+				continue
+			}
+			log.Debug().
+				Str("source", string(source)).
+				Int("records", len(records)).
+				Msg("[Resources] Atomically ingested supplemental records")
+		}
+		return
+	}
+
 	store.PopulateFromSnapshot(snapshotForStore)
 
 	supplementalStore, ok := store.(SupplementalRecordStore)
@@ -3061,7 +3084,6 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		return
 	}
 
-	recordsBySource := m.collectSupplementalRecordsBySource()
 	for source, records := range recordsBySource {
 		if len(records) == 0 {
 			continue

@@ -217,6 +217,48 @@ func TestMonitorAdapterPopulateFromSnapshot(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterPopulateFromSnapshotReplacesPreviousRegistryState(t *testing.T) {
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+
+	first := models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-1",
+				Hostname:  "minipc.local",
+				MachineID: "machine-1",
+				Status:    "online",
+				LastSeen:  now,
+			},
+		},
+	}
+	second := models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-2",
+				Hostname:  "delly.local",
+				MachineID: "machine-2",
+				Status:    "online",
+				LastSeen:  now.Add(time.Minute),
+			},
+		},
+	}
+
+	adapter.PopulateFromSnapshot(first)
+	if resources := adapter.GetAll(); len(resources) != 1 || resources[0].Name != "minipc.local" {
+		t.Fatalf("expected first snapshot only, got %#v", resources)
+	}
+
+	adapter.PopulateFromSnapshot(second)
+	resources := adapter.GetAll()
+	if len(resources) != 1 {
+		t.Fatalf("expected previous snapshot resources to be replaced, got %#v", resources)
+	}
+	if resources[0].Name != "delly.local" {
+		t.Fatalf("expected only second snapshot resource to remain, got %#v", resources)
+	}
+}
+
 func TestMonitorAdapterPopulateSupplementalRecords(t *testing.T) {
 	now := time.Date(2026, 2, 21, 10, 0, 0, 0, time.UTC)
 	adapter := NewMonitorAdapter(NewRegistry(nil))

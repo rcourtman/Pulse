@@ -28,6 +28,38 @@ func NewMonitorAdapter(registry *ResourceRegistry) *MonitorAdapter {
 	}
 }
 
+func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
+	if a == nil {
+		return nil
+	}
+
+	a.mu.RLock()
+	registry := a.registry
+	a.mu.RUnlock()
+	return registry
+}
+
+func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return
+	}
+
+	rebuilt := NewRegistry(registry.store)
+	rebuilt.IngestSnapshot(snapshot)
+	for source, records := range recordsBySource {
+		if len(records) == 0 || strings.TrimSpace(string(source)) == "" {
+			continue
+		}
+		rebuilt.IngestRecords(source, records)
+	}
+
+	a.mu.Lock()
+	a.registry = rebuilt
+	a.activeAlerts = append([]models.Alert(nil), snapshot.ActiveAlerts...)
+	a.mu.Unlock()
+}
+
 // ShouldSkipAPIPolling returns true when agent coverage indicates API
 // polling for the hostname should be skipped entirely.
 func (a *MonitorAdapter) ShouldSkipAPIPolling(hostname string) bool {
@@ -77,18 +109,20 @@ func (a *MonitorAdapter) GetPollingRecommendations() map[string]float64 {
 
 // GetAll returns all unified resources for monitor broadcast usage.
 func (a *MonitorAdapter) GetAll() []Resource {
-	if a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
 
-	return a.registry.List()
+	return registry.List()
 }
 
 func (a *MonitorAdapter) unifiedAIAdapter() *UnifiedAIAdapter {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return &UnifiedAIAdapter{registry: a.registry}
+	return &UnifiedAIAdapter{registry: registry}
 }
 
 // GetInfrastructure returns infrastructure resources for unified AI context.
@@ -178,144 +212,158 @@ func (a *MonitorAdapter) FindContainerHost(containerNameOrID string) string {
 
 // PopulateFromSnapshot ingests a fresh state snapshot into the registry.
 func (a *MonitorAdapter) PopulateFromSnapshot(snapshot models.StateSnapshot) {
-	if a.registry == nil {
-		return
-	}
+	a.replaceRegistry(snapshot, nil)
+}
 
-	a.registry.IngestSnapshot(snapshot)
-
-	a.mu.Lock()
-	a.activeAlerts = append([]models.Alert(nil), snapshot.ActiveAlerts...)
-	a.mu.Unlock()
+// PopulateSnapshotAndSupplemental atomically rebuilds the registry from a
+// snapshot plus source-native supplemental records before exposing the result.
+func (a *MonitorAdapter) PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
+	a.replaceRegistry(snapshot, recordsBySource)
 }
 
 // PopulateSupplementalRecords ingests source-native records emitted outside the
 // legacy state snapshot pipeline.
 func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records []IngestRecord) {
-	if a.registry == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
+	registry := a.currentRegistry()
+	if registry == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 		return
 	}
-	a.registry.IngestRecords(source, records)
+	registry.IngestRecords(source, records)
 }
 
 // VMs returns cached VM views for AI/read-state consumers.
 func (a *MonitorAdapter) VMs() []*VMView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.VMs()
+	return registry.VMs()
 }
 
 // Containers returns cached LXC container views for AI/read-state consumers.
 func (a *MonitorAdapter) Containers() []*ContainerView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.Containers()
+	return registry.Containers()
 }
 
 // Nodes returns cached Proxmox node views for AI/read-state consumers.
 func (a *MonitorAdapter) Nodes() []*NodeView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.Nodes()
+	return registry.Nodes()
 }
 
 // Hosts returns cached agent-host views for AI/read-state consumers.
 func (a *MonitorAdapter) Hosts() []*HostView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.Hosts()
+	return registry.Hosts()
 }
 
 // DockerHosts returns cached Docker host views for AI/read-state consumers.
 func (a *MonitorAdapter) DockerHosts() []*DockerHostView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.DockerHosts()
+	return registry.DockerHosts()
 }
 
 // DockerContainers returns cached Docker container views for AI/read-state consumers.
 func (a *MonitorAdapter) DockerContainers() []*DockerContainerView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.DockerContainers()
+	return registry.DockerContainers()
 }
 
 // StoragePools returns cached storage pool views for AI/read-state consumers.
 func (a *MonitorAdapter) StoragePools() []*StoragePoolView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.StoragePools()
+	return registry.StoragePools()
 }
 
 // PBSInstances returns cached PBS instance views for AI/read-state consumers.
 func (a *MonitorAdapter) PBSInstances() []*PBSInstanceView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.PBSInstances()
+	return registry.PBSInstances()
 }
 
 // PMGInstances returns cached PMG instance views for AI/read-state consumers.
 func (a *MonitorAdapter) PMGInstances() []*PMGInstanceView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.PMGInstances()
+	return registry.PMGInstances()
 }
 
 // K8sClusters returns cached Kubernetes cluster views for AI/read-state consumers.
 func (a *MonitorAdapter) K8sClusters() []*K8sClusterView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.K8sClusters()
+	return registry.K8sClusters()
 }
 
 // K8sNodes returns cached Kubernetes node views for AI/read-state consumers.
 func (a *MonitorAdapter) K8sNodes() []*K8sNodeView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.K8sNodes()
+	return registry.K8sNodes()
 }
 
 // Pods returns cached pod views for AI/read-state consumers.
 func (a *MonitorAdapter) Pods() []*PodView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.Pods()
+	return registry.Pods()
 }
 
 // K8sDeployments returns cached deployment views for AI/read-state consumers.
 func (a *MonitorAdapter) K8sDeployments() []*K8sDeploymentView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.K8sDeployments()
+	return registry.K8sDeployments()
 }
 
 // Workloads returns cached polymorphic workload views for AI/read-state consumers.
 func (a *MonitorAdapter) Workloads() []*WorkloadView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.Workloads()
+	return registry.Workloads()
 }
 
 // Infrastructure returns cached polymorphic infrastructure views for AI/read-state consumers.
 func (a *MonitorAdapter) Infrastructure() []*InfrastructureView {
-	if a == nil || a.registry == nil {
+	registry := a.currentRegistry()
+	if registry == nil {
 		return nil
 	}
-	return a.registry.Infrastructure()
+	return registry.Infrastructure()
 }
 
 func monitorSourceType(sources []DataSource) string {
