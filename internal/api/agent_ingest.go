@@ -23,7 +23,8 @@ import (
 
 const (
 	configSignatureTTL    = 15 * time.Minute
-	agentAgentRoutePrefix = "/api/agents/agent/"
+	agentRoutePrefix      = "/api/agents/agent/"
+	legacyHostRoutePrefix = "/api/agents/host/"
 )
 
 var configSigningState struct {
@@ -38,7 +39,12 @@ type HostAgentHandlers struct {
 }
 
 func trimHostAgentRoutePath(path string) string {
-	return strings.TrimPrefix(path, agentAgentRoutePrefix)
+	for _, prefix := range []string{agentRoutePrefix, legacyHostRoutePrefix} {
+		if strings.HasPrefix(path, prefix) {
+			return strings.TrimPrefix(path, prefix)
+		}
+	}
+	return path
 }
 
 // NewHostAgentHandlers constructs a new handler set for host agents.
@@ -227,7 +233,7 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Extract agent ID from URL path.
-	// Expected format: /api/agents/agent/{agentId}
+	// Expected format: /api/agents/agent/{agentId} or legacy /api/agents/host/{agentId}
 	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
 	agentID := strings.TrimSpace(trimmedPath)
 	if agentID == "" {
@@ -256,9 +262,10 @@ func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Requ
 // HandleConfig handles GET (fetch config) and PATCH (update config) for agents.
 // GET /api/agents/agent/{agentId}/config - Agent fetches its server-side config.
 // PATCH /api/agents/agent/{agentId}/config - UI updates agent config (e.g., commandsEnabled).
+// Legacy clients may also use /api/agents/host/{agentId}/config.
 func (h *HostAgentHandlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	// Extract agent ID from URL path.
-	// Expected format: /api/agents/agent/{agentId}/config
+	// Expected format: /api/agents/agent/{agentId}/config or legacy /api/agents/host/{agentId}/config
 	trimmedPath := trimHostAgentRoutePath(r.URL.Path)
 	trimmedPath = strings.TrimSuffix(trimmedPath, "/config")
 	agentID := strings.TrimSpace(trimmedPath)

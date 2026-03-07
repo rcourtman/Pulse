@@ -151,7 +151,7 @@ func TestHostAgentHandlers_HandleReport_EnforcesMaxAgentsForNewHostsOnly(t *test
 }
 
 func TestHostAgentHandlers_HandleDeleteHost(t *testing.T) {
-	for _, prefix := range []string{"/api/agents/agent/", "/api/agents/agent/"} {
+	for _, prefix := range []string{"/api/agents/agent/", "/api/agents/host/"} {
 		handler, monitor := newHostAgentHandlers(t, nil)
 		hostID := seedHostAgent(t, monitor)
 
@@ -166,7 +166,7 @@ func TestHostAgentHandlers_HandleDeleteHost(t *testing.T) {
 }
 
 func TestHostAgentHandlers_HandleConfigPatch(t *testing.T) {
-	for _, prefix := range []string{"/api/agents/agent/", "/api/agents/agent/"} {
+	for _, prefix := range []string{"/api/agents/agent/", "/api/agents/host/"} {
 		handler, monitor := newHostAgentHandlers(t, nil)
 		hostID := seedHostAgent(t, monitor)
 

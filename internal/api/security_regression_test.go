@@ -370,9 +370,9 @@ func TestHostAgentManagementRequiresSettingsWriteScope(t *testing.T) {
 		{name: "link", method: http.MethodPost, path: "/api/agents/agent/link"},
 		{name: "unlink", method: http.MethodPost, path: "/api/agents/agent/unlink"},
 		{name: "delete", method: http.MethodDelete, path: "/api/agents/agent/agent-1"},
-		{name: "agent link alias", method: http.MethodPost, path: "/api/agents/agent/link"},
-		{name: "agent unlink alias", method: http.MethodPost, path: "/api/agents/agent/unlink"},
-		{name: "agent delete alias", method: http.MethodDelete, path: "/api/agents/agent/agent-1"},
+		{name: "host link alias", method: http.MethodPost, path: "/api/agents/host/link"},
+		{name: "host unlink alias", method: http.MethodPost, path: "/api/agents/host/unlink"},
+		{name: "host delete alias", method: http.MethodDelete, path: "/api/agents/host/agent-1"},
 	}
 
 	for _, tc := range cases {
@@ -2186,10 +2186,10 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
 		{method: http.MethodPatch, path: "/api/agents/agent/host-1/config", body: `{}`},
 		{method: http.MethodDelete, path: "/api/agents/agent/agent-1", body: ``},
-		{method: http.MethodPost, path: "/api/agents/agent/link", body: `{}`},
-		{method: http.MethodPost, path: "/api/agents/agent/unlink", body: `{}`},
-		{method: http.MethodPatch, path: "/api/agents/agent/host-1/config", body: `{}`},
-		{method: http.MethodDelete, path: "/api/agents/agent/agent-1", body: ``},
+		{method: http.MethodPost, path: "/api/agents/host/link", body: `{}`},
+		{method: http.MethodPost, path: "/api/agents/host/unlink", body: `{}`},
+		{method: http.MethodPatch, path: "/api/agents/host/host-1/config", body: `{}`},
+		{method: http.MethodDelete, path: "/api/agents/host/agent-1", body: ``},
 		{method: http.MethodGet, path: "/api/admin/profiles/", body: ""},
 		{method: http.MethodPost, path: "/api/agent-install-command", body: `{}`},
 		{method: http.MethodPost, path: "/api/setup-script-url", body: `{}`},
@@ -2318,9 +2318,9 @@ func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
 		"/api/agents/agent/report",
 		"/api/agents/agent/lookup",
 		"/api/agents/agent/uninstall",
-		"/api/agents/agent/report",
-		"/api/agents/agent/lookup",
-		"/api/agents/agent/uninstall",
+		"/api/agents/host/report",
+		"/api/agents/host/lookup",
+		"/api/agents/host/uninstall",
 	}
 
 	for _, path := range paths {
@@ -2343,7 +2343,7 @@ func TestHostAgentConfigPatchRequiresHostManageScope(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	for _, path := range []string{"/api/agents/agent/host-1/config", "/api/agents/agent/host-1/config"} {
+	for _, path := range []string{"/api/agents/agent/host-1/config", "/api/agents/host/host-1/config"} {
 		req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(`{}`))
 		req.Header.Set("X-API-Token", rawToken)
 		rec := httptest.NewRecorder()

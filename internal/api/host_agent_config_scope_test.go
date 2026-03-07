@@ -15,7 +15,7 @@ func TestHostAgentConfigRequiresHostConfigScope(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	for _, path := range []string{"/api/agents/agent/host-1/config", "/api/agents/agent/host-1/config"} {
+	for _, path := range []string{"/api/agents/agent/host-1/config", "/api/agents/host/host-1/config"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("X-API-Token", rawToken)
 		rec := httptest.NewRecorder()
