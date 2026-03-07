@@ -14,7 +14,6 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -130,15 +129,15 @@ func agentCount(monitor *monitoring.Monitor) int {
 	return len(monitor.GetLiveHostsSnapshot())
 }
 
-func legacyConnectionCounts(monitor *monitoring.Monitor) pkglicensing.LegacyConnectionCounts {
+func legacyConnectionCounts(monitor *monitoring.Monitor) legacyConnectionCountsModel {
 	if monitor == nil {
-		return pkglicensing.LegacyConnectionCounts{}
+		return legacyConnectionCountsModel{}
 	}
 	return legacyConnectionCountsFromReadState(monitor.GetUnifiedReadStateOrSnapshot())
 }
 
-func legacyConnectionCountsFromReadState(rs unifiedresources.ReadState) pkglicensing.LegacyConnectionCounts {
-	counts := pkglicensing.LegacyConnectionCounts{}
+func legacyConnectionCountsFromReadState(rs unifiedresources.ReadState) legacyConnectionCountsModel {
+	counts := legacyConnectionCountsModel{}
 	if rs == nil {
 		return counts
 	}

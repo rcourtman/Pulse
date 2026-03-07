@@ -5,6 +5,7 @@ type BillingState struct {
 	Capabilities      []string          `json:"capabilities"`
 	Limits            map[string]int64  `json:"limits"`
 	MetersEnabled     []string          `json:"meters_enabled"`
+	EntitlementJWT    string            `json:"entitlement_jwt,omitempty"`
 	PlanVersion       string            `json:"plan_version"`
 	SubscriptionState SubscriptionState `json:"subscription_state"`
 	// TrialStartedAt is the Unix timestamp when a trial was started (one per org ever).

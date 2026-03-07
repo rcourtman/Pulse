@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
@@ -107,6 +108,10 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 		}
 	}
 
+	if strings.TrimSpace(state.EntitlementJWT) != "" {
+		resolved := pkglicensing.ResolveEntitlementLeaseBillingState(state, "", time.Now().UTC())
+		return &resolved, nil
+	}
 	return &state, nil
 }
 

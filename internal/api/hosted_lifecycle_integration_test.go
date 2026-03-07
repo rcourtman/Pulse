@@ -108,7 +108,6 @@ func TestHostedLifecycle(t *testing.T) {
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
 		handlers := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
-		handlers.trialRedeemer = func(string) error { return nil }
 
 		ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 
@@ -116,7 +115,17 @@ func TestHostedLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GenerateKey: %v", err)
 		}
+		handlers.trialRedeemer = func(token string) (string, error) {
+			claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "", time.Now().UTC())
+			if err != nil {
+				return "", err
+			}
+			return issueTrialEntitlementLease(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now().UTC()), nil
+		}
 		t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+		handlers.trialRedeemer = func(string) (string, error) {
+			return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+		}
 		returnURL := "https://pulse.example.com/auth/trial-activate"
 		instanceToken := issueHostedLifecycleTrialInitiationToken(t, handlers, "default", returnURL)
 
@@ -141,8 +150,8 @@ func TestHostedLifecycle(t *testing.T) {
 		if startRec.Code != http.StatusTemporaryRedirect {
 			t.Fatalf("trial activation status=%d, want %d: %s", startRec.Code, http.StatusTemporaryRedirect, startRec.Body.String())
 		}
-		if got := startRec.Header().Get("Location"); got != "/settings?trial=activated" {
-			t.Fatalf("trial activation redirect=%q, want %q", got, "/settings?trial=activated")
+		if got := startRec.Header().Get("Location"); got != "/settings/system-pro?trial=activated" {
+			t.Fatalf("trial activation redirect=%q, want %q", got, "/settings/system-pro?trial=activated")
 		}
 
 		billingStore := config.NewFileBillingStore(baseDir)
@@ -172,14 +181,12 @@ func TestHostedLifecycle(t *testing.T) {
 			t.Fatalf("expected trial_days_remaining to be populated and > 0, got %v", payload1.TrialDaysRemaining)
 		}
 
-		// Manually expire the trial by moving TrialEndsAt into the past.
+		// Manually expire the trial by replacing the entitlement lease with an already-expired one.
 		loaded, err := billingStore.GetBillingState("default")
 		if err != nil || loaded == nil {
 			t.Fatalf("GetBillingState(default) failed: %v state=%v", err, loaded)
 		}
-		endsAtPast := time.Now().Add(-2 * time.Hour).Unix()
-		loaded.SubscriptionState = entitlements.SubStateTrial // keep trial; evaluator normalizes to expired when endsAt is in the past
-		loaded.TrialEndsAt = &endsAtPast
+		loaded.EntitlementJWT = issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now().Add(-15*24*time.Hour))
 		if err := billingStore.SaveBillingState("default", loaded); err != nil {
 			t.Fatalf("SaveBillingState(default) failed: %v", err)
 		}
@@ -212,13 +219,26 @@ func TestHostedLifecycle(t *testing.T) {
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
 		handlers := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
-		handlers.trialRedeemer = func(string) error { return nil }
 
 		pub, priv, err := ed25519.GenerateKey(nil)
 		if err != nil {
 			t.Fatalf("GenerateKey: %v", err)
 		}
+		handlers.trialRedeemer = func(token string) (string, error) {
+			claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "", time.Now().UTC())
+			if err != nil {
+				return "", err
+			}
+			return issueTrialEntitlementLease(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now().UTC()), nil
+		}
 		t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+		handlers.trialRedeemer = func(token string) (string, error) {
+			claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "pulse.example.com", time.Now())
+			if err != nil {
+				t.Fatalf("VerifyTrialActivationToken(redeemer): %v", err)
+			}
+			return issueTrialEntitlementLease(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now()), nil
+		}
 
 		org1 := "trial-org-1"
 		ctx1 := context.WithValue(context.Background(), OrgIDContextKey, org1)
@@ -268,8 +288,8 @@ func TestHostedLifecycle(t *testing.T) {
 		if rec2.Code != http.StatusTemporaryRedirect {
 			t.Fatalf("org1 second activation status=%d, want %d: %s", rec2.Code, http.StatusTemporaryRedirect, rec2.Body.String())
 		}
-		if got := rec2.Header().Get("Location"); got != "/settings?trial=invalid" {
-			t.Fatalf("org1 second activation redirect=%q, want %q", got, "/settings?trial=invalid")
+		if got := rec2.Header().Get("Location"); got != "/settings/system-pro?trial=invalid" {
+			t.Fatalf("org1 second activation redirect=%q, want %q", got, "/settings/system-pro?trial=invalid")
 		}
 
 		org2 := "trial-org-2"

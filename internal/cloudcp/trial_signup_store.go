@@ -358,6 +358,72 @@ func (s *TrialSignupStore) CreateVerification(rec *TrialSignupRecord) (string, e
 	return rawToken, nil
 }
 
+func (s *TrialSignupStore) CreateCheckoutRequest(rec *TrialSignupRecord) error {
+	if s == nil {
+		return fmt.Errorf("trial signup store not configured")
+	}
+	if rec == nil {
+		return fmt.Errorf("trial signup record is required")
+	}
+	requestID, err := randomHex(16)
+	if err != nil {
+		return fmt.Errorf("generate request id: %w", err)
+	}
+	rawToken, err := randomPrefixedToken()
+	if err != nil {
+		return fmt.Errorf("generate request token: %w", err)
+	}
+	tokenHash := hashTrialSignupToken(rawToken)
+
+	now := rec.CreatedAt.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	expiresAt := rec.VerificationExpiresAt.UTC()
+	if expiresAt.IsZero() {
+		expiresAt = now.Add(trialSignupVerificationTTL)
+	}
+	email := normalizeTrialSignupEmail(rec.Email)
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+
+	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return fmt.Errorf("trial signup store not configured")
+	}
+	defer s.mu.Unlock()
+
+	_, err = db.Exec(
+		`INSERT INTO trial_signup_requests (
+			request_id, verification_token_hash, org_id, return_url, instance_token, name, email, company,
+			verification_expires_at, created_at, verified_at, checkout_token_expires_at, checkout_started_at, checkout_completed_at, checkout_token_hash, checkout_session_id, activation_issued_at, activation_token, redemption_recorded_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, '', '', NULL, '', NULL)`,
+		requestID,
+		tokenHash,
+		rec.OrgID,
+		rec.ReturnURL,
+		rec.InstanceToken,
+		rec.Name,
+		email,
+		rec.Company,
+		expiresAt.Unix(),
+		now.Unix(),
+		now.Unix(),
+	)
+	if err != nil {
+		return fmt.Errorf("insert trial signup checkout request: %w", err)
+	}
+	rec.ID = requestID
+	rec.CreatedAt = now
+	rec.VerificationExpiresAt = expiresAt
+	rec.VerifiedAt = now
+	rec.Email = email
+	return nil
+}
+
 func (s *TrialSignupStore) ConsumeVerification(rawToken string, now time.Time) (*TrialSignupRecord, error) {
 	if s == nil {
 		return nil, ErrTrialSignupVerificationInvalid
@@ -461,6 +527,38 @@ func (s *TrialSignupStore) GetRecord(id string) (*TrialSignupRecord, error) {
 	return rec, nil
 }
 
+func (s *TrialSignupStore) GetRecordByActivationToken(token string) (*TrialSignupRecord, error) {
+	if s == nil {
+		return nil, ErrTrialSignupRecordNotFound
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, ErrTrialSignupRecordNotFound
+	}
+
+	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return nil, ErrTrialSignupRecordNotFound
+	}
+	defer s.mu.Unlock()
+
+	rec, err := loadTrialSignupRecord(db.QueryRow(
+		`SELECT request_id, org_id, return_url, instance_token, name, email, company, verification_expires_at, created_at, verified_at, checkout_token_expires_at, checkout_started_at, checkout_completed_at, checkout_token_hash, checkout_session_id, activation_issued_at, activation_token, redemption_recorded_at
+		 FROM trial_signup_requests
+		 WHERE activation_token = ?`,
+		token,
+	))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTrialSignupRecordNotFound
+		}
+		return nil, fmt.Errorf("load trial signup request by activation token: %w", err)
+	}
+	return rec, nil
+}
+
 func (s *TrialSignupStore) MarkCheckoutStarted(id, sessionID string, now time.Time) error {
 	if s == nil {
 		return fmt.Errorf("trial signup store not configured")
@@ -485,14 +583,10 @@ func (s *TrialSignupStore) MarkCheckoutStarted(id, sessionID string, now time.Ti
 
 	res, err := db.Exec(
 		`UPDATE trial_signup_requests
-		 SET checkout_started_at = COALESCE(checkout_started_at, ?),
-		     checkout_session_id = CASE
-		       WHEN checkout_session_id = '' OR checkout_session_id = ? THEN ?
-		       ELSE checkout_session_id
-		     END
+		 SET checkout_started_at = ?,
+		     checkout_session_id = ?
 		 WHERE request_id = ? AND verified_at IS NOT NULL`,
 		now.Unix(),
-		sessionID,
 		sessionID,
 		id,
 	)

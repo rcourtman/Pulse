@@ -34,6 +34,32 @@ func issueTrialSignupInitiationToken(t *testing.T, h *LicenseHandlers, orgID, re
 	return token
 }
 
+func issueTrialEntitlementLease(t *testing.T, priv ed25519.PrivateKey, orgID, instanceHost, email string, now time.Time) string {
+	t.Helper()
+	trialState := pkglicensing.BuildTrialBillingState(now.UTC(), license.TierFeatures[license.TierPro])
+	token, err := pkglicensing.SignEntitlementLeaseToken(priv, pkglicensing.EntitlementLeaseClaims{
+		OrgID:             orgID,
+		Email:             email,
+		InstanceHost:      instanceHost,
+		PlanVersion:       trialState.PlanVersion,
+		SubscriptionState: trialState.SubscriptionState,
+		Capabilities:      append([]string(nil), trialState.Capabilities...),
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		TrialStartedAt:    trialState.TrialStartedAt,
+		TrialEndsAt:       trialState.TrialEndsAt,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now.UTC()),
+			ExpiresAt: jwt.NewNumericDate(time.Unix(*trialState.TrialEndsAt, 0).UTC()),
+			Subject:   "test_trial_entitlement",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken: %v", err)
+	}
+	return token
+}
+
 func TestTrialStart_DefaultOrgReturnsHostedSignupRedirect(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -156,7 +182,6 @@ func TestTrialEntitlements_TrialDaysRemainingFromBillingState(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
-	h.trialRedeemer = func(string) error { return nil }
 
 	orgID := "default"
 	store := config.NewFileBillingStore(baseDir)
@@ -206,13 +231,14 @@ func TestTrialActivation_SignedTokenStartsTrial(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
-	h.trialRedeemer = func(string) error { return nil }
-
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	h.trialRedeemer = func(string) (string, error) {
+		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	}
 	returnURL := "https://pulse.example.com/auth/trial-activate"
 	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
 
@@ -238,8 +264,8 @@ func TestTrialActivation_SignedTokenStartsTrial(t *testing.T) {
 	if rec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
 	}
-	if got := rec.Header().Get("Location"); got != "/settings?trial=activated" {
-		t.Fatalf("redirect=%q, want %q", got, "/settings?trial=activated")
+	if got := rec.Header().Get("Location"); got != "/settings/system-pro?trial=activated" {
+		t.Fatalf("redirect=%q, want %q", got, "/settings/system-pro?trial=activated")
 	}
 
 	store := config.NewFileBillingStore(baseDir)
@@ -256,13 +282,14 @@ func TestTrialActivation_ReplayTokenRejected(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
-	h.trialRedeemer = func(string) error { return nil }
-
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	h.trialRedeemer = func(string) (string, error) {
+		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	}
 	returnURL := "https://pulse.example.com/auth/trial-activate"
 	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
 
@@ -296,8 +323,8 @@ func TestTrialActivation_ReplayTokenRejected(t *testing.T) {
 	if replayRec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("replay status=%d, want %d", replayRec.Code, http.StatusTemporaryRedirect)
 	}
-	if got := replayRec.Header().Get("Location"); got != "/settings?trial=replayed" {
-		t.Fatalf("replay redirect=%q, want %q", got, "/settings?trial=replayed")
+	if got := replayRec.Header().Get("Location"); got != "/settings/system-pro?trial=replayed" {
+		t.Fatalf("replay redirect=%q, want %q", got, "/settings/system-pro?trial=replayed")
 	}
 }
 
@@ -305,13 +332,14 @@ func TestTrialActivation_ReissuedTokenForSameSessionRejected(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
-	h.trialRedeemer = func(string) error { return nil }
-
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	h.trialRedeemer = func(string) (string, error) {
+		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	}
 	returnURL := "https://pulse.example.com/auth/trial-activate"
 	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
 
@@ -364,8 +392,8 @@ func TestTrialActivation_ReissuedTokenForSameSessionRejected(t *testing.T) {
 	if secondRec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("second status=%d, want %d", secondRec.Code, http.StatusTemporaryRedirect)
 	}
-	if got := secondRec.Header().Get("Location"); got != "/settings?trial=replayed" {
-		t.Fatalf("second redirect=%q, want %q", got, "/settings?trial=replayed")
+	if got := secondRec.Header().Get("Location"); got != "/settings/system-pro?trial=replayed" {
+		t.Fatalf("second redirect=%q, want %q", got, "/settings/system-pro?trial=replayed")
 	}
 }
 
@@ -402,8 +430,8 @@ func TestTrialActivation_RequiresPendingInitiationToken(t *testing.T) {
 	if rec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusTemporaryRedirect)
 	}
-	if got := rec.Header().Get("Location"); got != "/settings?trial=invalid" {
-		t.Fatalf("redirect=%q, want %q", got, "/settings?trial=invalid")
+	if got := rec.Header().Get("Location"); got != "/settings/system-pro?trial=invalid" {
+		t.Fatalf("redirect=%q, want %q", got, "/settings/system-pro?trial=invalid")
 	}
 }
 
@@ -411,13 +439,14 @@ func TestTrialActivation_ConsumedInitiationTokenCannotBeReused(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	h := NewLicenseHandlers(mtp, false)
-	h.trialRedeemer = func(string) error { return nil }
-
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	h.trialRedeemer = func(string) (string, error) {
+		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	}
 
 	returnURL := "https://pulse.example.com/auth/trial-activate"
 	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
@@ -444,8 +473,8 @@ func TestTrialActivation_ConsumedInitiationTokenCannotBeReused(t *testing.T) {
 	if firstRec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("first status=%d, want %d", firstRec.Code, http.StatusTemporaryRedirect)
 	}
-	if got := firstRec.Header().Get("Location"); got != "/settings?trial=activated" {
-		t.Fatalf("first redirect=%q, want %q", got, "/settings?trial=activated")
+	if got := firstRec.Header().Get("Location"); got != "/settings/system-pro?trial=activated" {
+		t.Fatalf("first redirect=%q, want %q", got, "/settings/system-pro?trial=activated")
 	}
 
 	billingStore := config.NewFileBillingStore(baseDir)
@@ -476,8 +505,8 @@ func TestTrialActivation_ConsumedInitiationTokenCannotBeReused(t *testing.T) {
 	if secondRec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("second status=%d, want %d", secondRec.Code, http.StatusTemporaryRedirect)
 	}
-	if got := secondRec.Header().Get("Location"); got != "/settings?trial=invalid" {
-		t.Fatalf("second redirect=%q, want %q", got, "/settings?trial=invalid")
+	if got := secondRec.Header().Get("Location"); got != "/settings/system-pro?trial=invalid" {
+		t.Fatalf("second redirect=%q, want %q", got, "/settings/system-pro?trial=invalid")
 	}
 }
 
@@ -509,7 +538,7 @@ func TestTrialActivation_RedeemerFailureReturnsUnavailableAndAllowsRetry(t *test
 		t.Fatalf("SignTrialActivationToken: %v", err)
 	}
 
-	h.trialRedeemer = func(string) error { return errors.New("control plane unavailable") }
+	h.trialRedeemer = func(string) (string, error) { return "", errors.New("control plane unavailable") }
 
 	firstReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil)
 	firstReq.Host = "pulse.example.com"
@@ -519,8 +548,8 @@ func TestTrialActivation_RedeemerFailureReturnsUnavailableAndAllowsRetry(t *test
 	if firstRec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("first status=%d, want %d", firstRec.Code, http.StatusTemporaryRedirect)
 	}
-	if got := firstRec.Header().Get("Location"); got != "/settings?trial=unavailable" {
-		t.Fatalf("first redirect=%q, want %q", got, "/settings?trial=unavailable")
+	if got := firstRec.Header().Get("Location"); got != "/settings/system-pro?trial=unavailable" {
+		t.Fatalf("first redirect=%q, want %q", got, "/settings/system-pro?trial=unavailable")
 	}
 
 	store := config.NewFileBillingStore(baseDir)
@@ -532,7 +561,9 @@ func TestTrialActivation_RedeemerFailureReturnsUnavailableAndAllowsRetry(t *test
 		t.Fatalf("trial state should not be written when redemption fails")
 	}
 
-	h.trialRedeemer = func(string) error { return nil }
+	h.trialRedeemer = func(string) (string, error) {
+		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	}
 
 	secondReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil)
 	secondReq.Host = "pulse.example.com"
@@ -542,7 +573,7 @@ func TestTrialActivation_RedeemerFailureReturnsUnavailableAndAllowsRetry(t *test
 	if secondRec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("second status=%d, want %d", secondRec.Code, http.StatusTemporaryRedirect)
 	}
-	if got := secondRec.Header().Get("Location"); got != "/settings?trial=activated" {
-		t.Fatalf("second redirect=%q, want %q", got, "/settings?trial=activated")
+	if got := secondRec.Header().Get("Location"); got != "/settings/system-pro?trial=activated" {
+		t.Fatalf("second redirect=%q, want %q", got, "/settings/system-pro?trial=activated")
 	}
 }

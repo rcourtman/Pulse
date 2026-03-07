@@ -1,13 +1,17 @@
 package config
 
 import (
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -81,6 +85,50 @@ func TestBillingState_RoundTrip(t *testing.T) {
 	assert.ElementsMatch(t, []string{"relay", "ai_autofix"}, loaded.Capabilities)
 	assert.Equal(t, now, *loaded.TrialStartedAt)
 	assert.Equal(t, endsAt, *loaded.TrialEndsAt)
+}
+
+func TestBillingState_GetBillingStateResolvesEntitlementLease(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	embeddedBefore := pkglicensing.EmbeddedPublicKey
+	pkglicensing.EmbeddedPublicKey = ""
+	t.Cleanup(func() { pkglicensing.EmbeddedPublicKey = embeddedBefore })
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	store := NewFileBillingStore(dir)
+	now := time.Now().UTC()
+	trialState := pkglicensing.BuildTrialBillingState(now, []string{"ai_autofix"})
+	lease, err := pkglicensing.SignEntitlementLeaseToken(priv, pkglicensing.EntitlementLeaseClaims{
+		OrgID:             "default",
+		InstanceHost:      "pulse.example.com",
+		PlanVersion:       trialState.PlanVersion,
+		SubscriptionState: trialState.SubscriptionState,
+		Capabilities:      append([]string(nil), trialState.Capabilities...),
+		TrialStartedAt:    trialState.TrialStartedAt,
+		TrialEndsAt:       trialState.TrialEndsAt,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(time.Unix(*trialState.TrialEndsAt, 0).UTC()),
+		},
+	})
+	require.NoError(t, err)
+
+	state := &entitlements.BillingState{
+		SubscriptionState: entitlements.SubStateExpired,
+		PlanVersion:       string(entitlements.SubStateExpired),
+		EntitlementJWT:    lease,
+	}
+	require.NoError(t, store.SaveBillingState("default", state))
+
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, entitlements.SubStateTrial, loaded.SubscriptionState)
+	assert.Contains(t, loaded.Capabilities, "ai_autofix")
 }
 
 func TestBillingState_TamperDetection(t *testing.T) {

@@ -46,7 +46,6 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
       --muted: #4d5f57;
       --accent: #0f766e;
       --accent-deep: #115e59;
-      --soft-accent: #def7ec;
       --error-bg: #fef2f2;
       --error-line: #fecaca;
       --error-text: #991b1b;
@@ -169,17 +168,17 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
       <div class="hero">
         <div class="eyebrow">Pulse Pro Trial</div>
         <h1>Start a 14-day Pro trial for {{.ReturnTarget}}</h1>
-        <p>Use your work email to confirm ownership, then continue to secure setup. When registration completes, Pulse returns you to this instance automatically.</p>
+        <p>Checkout creates the trial entitlement for this Pulse instance directly. I only keep your work email as a fallback record if recovery or support is ever needed.</p>
       </div>
       <div class="content">
         <div class="form-col">
           {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
           {{if .Cancelled}}<div class="note">Secure setup was cancelled. You can continue again below.</div>{{end}}
-          {{if .VerificationSent}}<div class="note">Check {{.Email}} for a verification link. It expires in 20 minutes.</div>{{end}}
+          {{if .VerificationSent}}<div class="note">A backup link was sent to {{.Email}}. You do not need it unless this browser session is lost.</div>{{end}}
 
           {{if .Verified}}
-          <h2>Email verified</h2>
-          <p>Your work email has been confirmed. Continue to secure setup to register the Pro trial for this Pulse instance.</p>
+          <h2>Backup link confirmed</h2>
+          <p>This fallback link is valid. Continue to secure checkout to register the Pro trial for this Pulse instance.</p>
 
           <div class="summary">
             <strong>Work email</strong>
@@ -196,14 +195,14 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
 
           <form method="POST" action="/api/trial-signup/checkout">
             <input type="hidden" name="verified_token" value="{{.VerifiedToken}}">
-            <button class="cta" type="submit">Continue To Secure Setup</button>
+            <button class="cta" type="submit">Continue To Secure Checkout</button>
           </form>
-          <p class="fine">No credit card is required to start the trial.</p>
+          <p class="fine">This backup link is optional. Checkout remains the authoritative handoff for this entitlement.</p>
           {{else}}
-          <h2>Verify your work email</h2>
-          <p>I’ll send a one-time verification link before trial setup continues.</p>
+          <h2>Continue to secure checkout</h2>
+          <p>Start checkout from this Pulse-initiated session. Email is attached as backup contact information only.</p>
 
-          <form method="POST" action="/api/trial-signup/request-verification">
+          <form method="POST" action="/api/trial-signup/checkout">
             <input type="hidden" name="org_id" value="{{.OrgID}}">
             <input type="hidden" name="return_url" value="{{.ReturnURL}}">
             <input type="hidden" name="instance_token" value="{{.InstanceToken}}">
@@ -222,9 +221,9 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
             <label for="company">Company</label>
             <input id="company" name="company" type="text" value="{{.Company}}" autocomplete="organization">
 
-            <button class="cta" type="submit">Email Me a Verification Link</button>
+            <button class="cta" type="submit">Continue To Secure Checkout</button>
           </form>
-          <p class="fine">I only use this email to verify the trial request and attach the resulting entitlement.</p>
+          <p class="fine">Email is backup only. The checkout session and the signed return to Pulse carry the entitlement.</p>
           {{end}}
         </div>
 
@@ -237,14 +236,145 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
             <strong>Workspace</strong>
             <div>{{.OrgID}}</div>
           </div>
-          <p class="mini">After trial setup completes, Pulse sends you straight back to the instance that started this flow.</p>
+          <p class="mini">After checkout completes, Pulse sends you back to the exact instance that opened this flow.</p>
           <ol class="steps">
-            <li>Confirm the request from your work inbox.</li>
+            <li>Create a secure checkout session for this Pulse instance.</li>
             <li>Complete secure setup for the 14-day Pro trial.</li>
-            <li>Return to Pulse with a signed activation token.</li>
+            <li>Return to Pulse and activate the entitlement immediately.</li>
           </ol>
         </div>
       </div>
+    </div>
+  </div>
+</body>
+</html>
+`))
+
+var trialSignupSuccessTemplate = template.Must(template.New("trial-signup-success").Parse(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pulse Pro Trial Ready</title>
+  <style nonce="{{.Nonce}}">
+    :root {
+      color-scheme: light;
+      --bg-top: #f7f3ea;
+      --bg-bottom: #e9efe8;
+      --card: #fffdf8;
+      --line: #d8dccf;
+      --text: #14261f;
+      --muted: #4d5f57;
+      --accent: #0f766e;
+      --accent-deep: #115e59;
+      --good-bg: #eefbf4;
+      --good-line: #bfe8ce;
+      --good-text: #166534;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(15,118,110,.10), transparent 34%),
+        linear-gradient(155deg, var(--bg-top), var(--bg-bottom));
+      color: var(--text);
+    }
+    .wrap { max-width: 760px; margin: 40px auto; padding: 0 18px; }
+    .card {
+      background: var(--card);
+      border-radius: 18px;
+      border: 1px solid rgba(20,38,31,.10);
+      box-shadow: 0 18px 60px rgba(20,38,31,.10);
+      padding: 28px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(15,118,110,.10);
+      color: var(--accent-deep);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    h1 { margin: 0 0 10px; font-size: 34px; line-height: 1.05; }
+    p { margin: 0 0 16px; line-height: 1.6; color: var(--muted); }
+    .status {
+      background: var(--good-bg);
+      border: 1px solid var(--good-line);
+      border-radius: 12px;
+      color: var(--good-text);
+      padding: 14px 16px;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .meta {
+      display: grid;
+      gap: 16px;
+      margin: 20px 0;
+    }
+    @media (min-width: 680px) { .meta { grid-template-columns: 1fr 1fr; } }
+    .meta-card {
+      background: rgba(255,255,255,.78);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .meta-card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 13px 18px;
+      text-decoration: none;
+    }
+    .cta:hover { background: var(--accent-deep); }
+    .fine { font-size: 12px; color: #64748b; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="eyebrow">Pulse Pro Trial</div>
+      <h1>Trial entitlement ready</h1>
+      <p>Checkout completed successfully. This session has prepared the signed activation handoff for {{.ReturnTarget}}.</p>
+
+      <div class="status">
+        Pulse can activate the Pro trial immediately when you return to the originating instance.
+      </div>
+
+      <div class="meta">
+        <div class="meta-card">
+          <strong>Pulse instance</strong>
+          <div>{{.ReturnTarget}}</div>
+        </div>
+        <div class="meta-card">
+          <strong>Backup email</strong>
+          <div>{{.Email}}</div>
+        </div>
+      </div>
+
+      <a class="cta" href="{{.ActivateURL}}">Return To Pulse</a>
+      <p class="fine">Email is only a fallback record. The checkout session and this signed return are the authoritative entitlement handoff.</p>
     </div>
   </div>
 </body>
@@ -276,8 +406,19 @@ type trialSignupPageData struct {
 	Nonce            string
 }
 
+type trialSignupSuccessData struct {
+	ReturnTarget string
+	Email        string
+	ActivateURL  string
+	Nonce        string
+}
+
 type trialSignupRedeemRequest struct {
 	Token string `json:"token"`
+}
+
+type trialSignupRedeemResponse struct {
+	EntitlementJWT string `json:"entitlement_jwt"`
 }
 
 func NewTrialSignupHandlers(cfg *CPConfig, emailSender cpemail.Sender, verificationStore *TrialSignupStore) *TrialSignupHandlers {
@@ -488,25 +629,97 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 	}
 
 	verifiedToken := strings.TrimSpace(r.FormValue("verified_token"))
-	record, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
-	if err != nil {
-		log.Warn().Err(err).Msg("trial signup checkout requested without valid verified token")
-		h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
-			ErrorMessage: "Please verify your work email before continuing to secure setup.",
-			ReturnTarget: "your Pulse instance",
-		})
-		return
-	}
-
-	data := trialSignupPageData{
-		OrgID:         record.OrgID,
-		ReturnURL:     record.ReturnURL,
-		ReturnTarget:  summarizeTrialReturnTarget(record.ReturnURL),
-		Name:          record.Name,
-		Email:         record.Email,
-		Company:       record.Company,
-		Verified:      true,
-		VerifiedToken: verifiedToken,
+	record := &TrialSignupRecord{}
+	data := trialSignupPageData{}
+	if verifiedToken != "" {
+		verifiedRecord, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
+		if err != nil {
+			log.Warn().Err(err).Msg("trial signup checkout requested without valid verified token")
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
+				ErrorMessage: "That backup link is invalid or expired. Restart from Pulse to create a fresh checkout session.",
+				ReturnTarget: "your Pulse instance",
+			})
+			return
+		}
+		record = verifiedRecord
+		data = trialSignupPageData{
+			OrgID:         record.OrgID,
+			ReturnURL:     record.ReturnURL,
+			InstanceToken: record.InstanceToken,
+			ReturnTarget:  summarizeTrialReturnTarget(record.ReturnURL),
+			Name:          record.Name,
+			Email:         record.Email,
+			Company:       record.Company,
+			Verified:      true,
+			VerifiedToken: verifiedToken,
+		}
+	} else {
+		data = trialSignupPageData{
+			OrgID:         normalizeTrialOrgID(r.FormValue("org_id")),
+			ReturnURL:     strings.TrimSpace(r.FormValue("return_url")),
+			InstanceToken: strings.TrimSpace(r.FormValue("instance_token")),
+			Name:          strings.TrimSpace(r.FormValue("name")),
+			Email:         strings.TrimSpace(r.FormValue("email")),
+			Company:       strings.TrimSpace(r.FormValue("company")),
+			ReturnTarget:  summarizeTrialReturnTarget(r.FormValue("return_url")),
+		}
+		if strings.TrimSpace(data.InstanceToken) == "" {
+			data.ErrorMessage = "This checkout must be started from Pulse. Return to Pulse Settings > Pro License and try again."
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+			return
+		}
+		if !isValidTrialReturnURL(data.ReturnURL) {
+			data.ErrorMessage = "A valid Pulse return URL is required. Please restart from Pulse Settings > Pro License."
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+			return
+		}
+		if strings.TrimSpace(data.Name) == "" {
+			data.ErrorMessage = "Your name is required."
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+			return
+		}
+		if !isValidTrialEmail(data.Email) {
+			data.ErrorMessage = "A valid work email address is required."
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+			return
+		}
+		if isPublicTrialSignupEmailDomain(normalizeTrialSignupEmailDomain(data.Email)) {
+			data.ErrorMessage = "Use your work email to start a Pulse Pro trial. Consumer email addresses are not eligible."
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+			return
+		}
+		if h.verificationStore == nil {
+			data.ErrorMessage = "Trial checkout is unavailable right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
+			return
+		}
+		conflict, err := h.verificationStore.FindIssuedTrialConflict(data.Email, data.Company)
+		if err != nil {
+			log.Error().Err(err).Str("email", data.Email).Msg("trial signup issuance lookup failed")
+			data.ErrorMessage = "Unable to validate trial eligibility right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
+			return
+		}
+		if conflict != nil {
+			data.ErrorMessage = "This organization has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
+			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
+			return
+		}
+		record = &TrialSignupRecord{
+			OrgID:         data.OrgID,
+			ReturnURL:     data.ReturnURL,
+			InstanceToken: data.InstanceToken,
+			Name:          data.Name,
+			Email:         data.Email,
+			Company:       data.Company,
+			CreatedAt:     h.now().UTC(),
+		}
+		if err := h.verificationStore.CreateCheckoutRequest(record); err != nil {
+			log.Error().Err(err).Str("email", data.Email).Msg("trial signup checkout request creation failed")
+			data.ErrorMessage = "Unable to prepare checkout. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
+			return
+		}
 	}
 
 	if !isValidTrialReturnURL(data.ReturnURL) {
@@ -521,23 +734,8 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 	}
 
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
-	if existingSessionID := strings.TrimSpace(record.CheckoutSessionID); existingSessionID != "" {
-		existingSession, err := h.getCheckoutSession(existingSessionID, nil)
-		if err == nil && existingSession != nil {
-			switch existingSession.Status {
-			case stripe.CheckoutSessionStatusComplete:
-				http.Redirect(w, r, buildTrialSignupSuccessURLWithSession(h.cfg.BaseURL, existingSessionID), http.StatusSeeOther)
-				return
-			case stripe.CheckoutSessionStatusOpen:
-				if existingURL := strings.TrimSpace(existingSession.URL); existingURL != "" {
-					http.Redirect(w, r, existingURL, http.StatusSeeOther)
-					return
-				}
-			}
-		}
-	}
 	successURL := buildTrialSignupSuccessURL(h.cfg.BaseURL)
-	cancelURL := buildTrialSignupVerifiedURL(h.cfg.BaseURL, verifiedToken, true)
+	cancelURL := buildTrialSignupCancelURL(h.cfg.BaseURL, data, verifiedToken)
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:                    stripe.String(string(stripe.CheckoutSessionModeSubscription)),
@@ -562,12 +760,13 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		Metadata: map[string]string{
 			"org_id":           data.OrgID,
 			"return_url":       data.ReturnURL,
+			"instance_token":   data.InstanceToken,
 			"name":             data.Name,
 			"email":            data.Email,
 			"company":          data.Company,
 			"trial_request_id": record.ID,
 			"signup_source":    "pulse_pro_trial",
-			"email_verified":   "true",
+			"email_mode":       "backup",
 		},
 	}
 
@@ -588,8 +787,8 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 	http.Redirect(w, r, session.URL, http.StatusSeeOther)
 }
 
-// HandleTrialSignupComplete validates the Stripe checkout session and redirects
-// back to Pulse with a signed one-time activation token.
+// HandleTrialSignupComplete validates the Stripe checkout session and renders
+// the hosted success page with the signed activation handoff back to Pulse.
 func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -630,10 +829,6 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	}
 	if strings.TrimSpace(session.Metadata["signup_source"]) != "pulse_pro_trial" {
 		http.Error(w, "invalid trial signup source", http.StatusBadRequest)
-		return
-	}
-	if !strings.EqualFold(strings.TrimSpace(session.Metadata["email_verified"]), "true") {
-		http.Error(w, "trial email not verified", http.StatusBadRequest)
 		return
 	}
 
@@ -752,7 +947,11 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		http.Error(w, "failed to build redirect URL", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, finalReturnURL, http.StatusSeeOther)
+	h.renderTrialSignupSuccessPage(w, r, http.StatusOK, trialSignupSuccessData{
+		ReturnTarget: summarizeTrialReturnTarget(returnURL),
+		Email:        email,
+		ActivateURL:  finalReturnURL,
+	})
 }
 
 func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *http.Request) {
@@ -820,8 +1019,29 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 		}
 		return
 	}
+	record, err := h.verificationStore.GetRecordByActivationToken(token)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrTrialSignupRecordNotFound):
+			http.Error(w, "invalid trial redemption", http.StatusBadRequest)
+		default:
+			log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to load hosted trial redemption record")
+			http.Error(w, "failed to load trial redemption", http.StatusInternalServerError)
+		}
+		return
+	}
 
-	w.WriteHeader(http.StatusNoContent)
+	entitlementJWT, err := pkglicensing.SignEntitlementLeaseToken(privateKey, buildTrialEntitlementLeaseClaims(record, claims.InstanceHost, now))
+	if err != nil {
+		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to sign hosted trial entitlement lease")
+		http.Error(w, "failed to generate entitlement lease", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(trialSignupRedeemResponse{EntitlementJWT: entitlementJWT}); err != nil {
+		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to encode hosted trial redemption response")
+	}
 }
 
 func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *http.Request, status int, data trialSignupPageData) {
@@ -830,6 +1050,15 @@ func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *ht
 	w.WriteHeader(status)
 	if err := trialSignupPageTemplate.Execute(w, data); err != nil {
 		log.Error().Err(err).Msg("trial signup page render failed")
+	}
+}
+
+func (h *TrialSignupHandlers) renderTrialSignupSuccessPage(w http.ResponseWriter, r *http.Request, status int, data trialSignupSuccessData) {
+	data.Nonce = cpsec.NonceFromContext(r.Context())
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := trialSignupSuccessTemplate.Execute(w, data); err != nil {
+		log.Error().Err(err).Msg("trial signup success page render failed")
 	}
 }
 
@@ -919,24 +1148,27 @@ func buildTrialSignupSuccessURL(baseURL string) string {
 	return parsed.String()
 }
 
-func buildTrialSignupSuccessURLWithSession(baseURL, sessionID string) string {
-	parsed, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil || parsed == nil {
-		return "/trial-signup/complete?session_id=" + url.QueryEscape(strings.TrimSpace(sessionID))
-	}
-	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/trial-signup/complete"
-	parsed.RawQuery = url.Values{
-		"session_id": {strings.TrimSpace(sessionID)},
-	}.Encode()
-	return parsed.String()
-}
-
 func buildTrialSignupVerificationURL(baseURL, token string) string {
 	query := url.Values{}
 	if strings.TrimSpace(token) != "" {
 		query.Set("token", strings.TrimSpace(token))
 	}
 	return buildCPURL(baseURL, "/trial-signup/verify", query)
+}
+
+func buildTrialSignupStartURL(baseURL string, data trialSignupPageData, cancelled bool) string {
+	query := url.Values{
+		"org_id":         {data.OrgID},
+		"return_url":     {data.ReturnURL},
+		"instance_token": {data.InstanceToken},
+		"name":           {data.Name},
+		"email":          {data.Email},
+		"company":        {data.Company},
+	}
+	if cancelled {
+		query.Set("cancelled", "1")
+	}
+	return buildCPURL(baseURL, "/start-pro-trial", query)
 }
 
 func buildTrialSignupVerifiedURL(baseURL, verifiedToken string, cancelled bool) string {
@@ -948,6 +1180,39 @@ func buildTrialSignupVerifiedURL(baseURL, verifiedToken string, cancelled bool) 
 		query.Set("cancelled", "1")
 	}
 	return buildCPURL(baseURL, "/trial-signup/verify", query)
+}
+
+func buildTrialSignupCancelURL(baseURL string, data trialSignupPageData, verifiedToken string) string {
+	if strings.TrimSpace(verifiedToken) != "" {
+		return buildTrialSignupVerifiedURL(baseURL, verifiedToken, true)
+	}
+	return buildTrialSignupStartURL(baseURL, data, true)
+}
+
+func buildTrialEntitlementLeaseClaims(record *TrialSignupRecord, instanceHost string, now time.Time) pkglicensing.EntitlementLeaseClaims {
+	trialState := pkglicensing.BuildTrialBillingState(now, pkglicensing.TierFeatures[pkglicensing.TierPro])
+	if record != nil {
+		if !record.CheckoutCompletedAt.IsZero() {
+			trialState = pkglicensing.BuildTrialBillingState(record.CheckoutCompletedAt.UTC(), pkglicensing.TierFeatures[pkglicensing.TierPro])
+		}
+	}
+	return pkglicensing.EntitlementLeaseClaims{
+		OrgID:             normalizeTrialOrgID(record.OrgID),
+		Email:             strings.TrimSpace(record.Email),
+		InstanceHost:      instanceHost,
+		PlanVersion:       trialState.PlanVersion,
+		SubscriptionState: trialState.SubscriptionState,
+		Capabilities:      append([]string(nil), trialState.Capabilities...),
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		TrialStartedAt:    trialState.TrialStartedAt,
+		TrialEndsAt:       trialState.TrialEndsAt,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(time.Unix(*trialState.TrialEndsAt, 0).UTC()),
+			Subject:   strings.TrimSpace(record.ID),
+		},
+	}
 }
 
 func summarizeTrialReturnTarget(raw string) string {

@@ -3,6 +3,7 @@ package cloudcp
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,7 +16,7 @@ import (
 	stripe "github.com/stripe/stripe-go/v82"
 )
 
-func TestTrialSignupHandleStartProTrialRendersVerificationForm(t *testing.T) {
+func TestTrialSignupHandleStartProTrialRendersCheckoutForm(t *testing.T) {
 	h := NewTrialSignupHandlers(&CPConfig{}, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com:7655/auth/trial-activate&instance_token=tsi_test", nil)
 	rec := httptest.NewRecorder()
@@ -26,8 +27,8 @@ func TestTrialSignupHandleStartProTrialRendersVerificationForm(t *testing.T) {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Verify your work email") {
-		t.Fatalf("expected verification CTA in response body")
+	if !strings.Contains(body, "Continue to secure checkout") {
+		t.Fatalf("expected checkout CTA in response body")
 	}
 	if !strings.Contains(body, "pulse.example.com:7655") {
 		t.Fatalf("expected instance host in response body")
@@ -59,7 +60,7 @@ func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
 	if sender.calls != 1 {
 		t.Fatalf("email sender calls=%d, want 1", sender.calls)
 	}
-	if !strings.Contains(rec.Body.String(), "Check owner@example.com for a verification link") {
+	if !strings.Contains(rec.Body.String(), "A backup link was sent to owner@example.com") {
 		t.Fatalf("expected verification sent message")
 	}
 	if !strings.Contains(sender.msg.Text, "/trial-signup/verify?token=") {
@@ -246,12 +247,12 @@ func TestTrialSignupHandleVerifyEmailRendersVerifiedState(t *testing.T) {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Email verified") || !strings.Contains(body, "Continue To Secure Setup") {
+	if !strings.Contains(body, "Backup link confirmed") || !strings.Contains(body, "Continue To Secure Checkout") {
 		t.Fatalf("expected verified state in response body")
 	}
 }
 
-func TestTrialSignupHandleCheckoutRejectsUnverifiedRequest(t *testing.T) {
+func TestTrialSignupHandleCheckoutRejectsRequestWithoutPulseContext(t *testing.T) {
 	h, _, _ := newTrialSignupTestHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(url.Values{}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -262,15 +263,16 @@ func TestTrialSignupHandleCheckoutRejectsUnverifiedRequest(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Please verify your work email") {
-		t.Fatalf("expected verification error, got %q", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "must be started from Pulse") {
+		t.Fatalf("expected Pulse context error, got %q", rec.Body.String())
 	}
 }
 
 func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
-	h, store, sender := newTrialSignupTestHandler(t)
+	h, store, _ := newTrialSignupTestHandler(t)
 	capturedSuccessURL := ""
 	capturedCancelURL := ""
+	capturedRequestID := ""
 	h.cfg.StripeAPIKey = "sk_test_123"
 	h.cfg.TrialSignupPriceID = "price_test_123"
 	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
@@ -280,21 +282,29 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 		if got := strings.TrimSpace(params.Metadata["org_id"]); got != "default" {
 			t.Fatalf("metadata org_id=%q, want %q", got, "default")
 		}
-		if got := strings.TrimSpace(params.Metadata["email_verified"]); got != "true" {
-			t.Fatalf("metadata email_verified=%q, want %q", got, "true")
+		if got := strings.TrimSpace(params.Metadata["email_mode"]); got != "backup" {
+			t.Fatalf("metadata email_mode=%q, want %q", got, "backup")
 		}
-		if strings.TrimSpace(params.Metadata["trial_request_id"]) == "" {
+		capturedRequestID = strings.TrimSpace(params.Metadata["trial_request_id"])
+		if capturedRequestID == "" {
 			t.Fatalf("expected trial_request_id metadata")
+		}
+		if got := strings.TrimSpace(params.Metadata["instance_token"]); got != "tsi_test" {
+			t.Fatalf("metadata instance_token=%q, want %q", got, "tsi_test")
 		}
 		capturedSuccessURL = strings.TrimSpace(stripe.StringValue(params.SuccessURL))
 		capturedCancelURL = strings.TrimSpace(stripe.StringValue(params.CancelURL))
 		return &stripe.CheckoutSession{ID: "cs_test_new", URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
 	}
 
-	rawToken := requestTrialVerification(t, h, sender)
-	verifiedToken := verifyTrialRequest(t, h, rawToken)
-
-	form := url.Values{"verified_token": {verifiedToken}}
+	form := url.Values{
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -310,12 +320,11 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 	if !strings.Contains(capturedSuccessURL, "session_id={CHECKOUT_SESSION_ID}") {
 		t.Fatalf("success_url=%q, expected unescaped Stripe session placeholder", capturedSuccessURL)
 	}
-	if !strings.Contains(capturedCancelURL, "/trial-signup/verify?") || !strings.Contains(capturedCancelURL, "verified=") || !strings.Contains(capturedCancelURL, "cancelled=1") {
-		t.Fatalf("cancel_url=%q, expected verified page return", capturedCancelURL)
+	if !strings.Contains(capturedCancelURL, "/start-pro-trial?") || !strings.Contains(capturedCancelURL, "cancelled=1") {
+		t.Fatalf("cancel_url=%q, expected hosted start page return", capturedCancelURL)
 	}
 
-	recordID := parseVerifiedTokenRequestID(t, h, verifiedToken)
-	record, err := store.GetRecord(recordID)
+	record, err := store.GetRecord(capturedRequestID)
 	if err != nil {
 		t.Fatalf("GetRecord: %v", err)
 	}
@@ -327,7 +336,7 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 	}
 }
 
-func TestTrialSignupHandleCheckoutReusesExistingOpenSession(t *testing.T) {
+func TestTrialSignupHandleCheckoutCreatesFreshSessionWhenRecordAlreadyHasSession(t *testing.T) {
 	h, store, sender := newTrialSignupTestHandler(t)
 	h.cfg.StripeAPIKey = "sk_test_123"
 	h.cfg.TrialSignupPriceID = "price_test_123"
@@ -342,17 +351,7 @@ func TestTrialSignupHandleCheckoutReusesExistingOpenSession(t *testing.T) {
 	createCalls := 0
 	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		createCalls++
-		return &stripe.CheckoutSession{ID: "cs_should_not_exist", URL: "https://checkout.stripe.com/c/pay/cs_should_not_exist"}, nil
-	}
-	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
-		if id != "cs_existing_open" {
-			t.Fatalf("getCheckoutSession id=%q, want %q", id, "cs_existing_open")
-		}
-		return &stripe.CheckoutSession{
-			ID:     id,
-			Status: stripe.CheckoutSessionStatusOpen,
-			URL:    "https://checkout.stripe.com/c/pay/cs_existing_open",
-		}, nil
+		return &stripe.CheckoutSession{ID: "cs_fresh_new", URL: "https://checkout.stripe.com/c/pay/cs_fresh_new"}, nil
 	}
 
 	form := url.Values{"verified_token": {verifiedToken}}
@@ -365,11 +364,18 @@ func TestTrialSignupHandleCheckoutReusesExistingOpenSession(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusSeeOther, rec.Body.String())
 	}
-	if loc := rec.Header().Get("Location"); loc != "https://checkout.stripe.com/c/pay/cs_existing_open" {
-		t.Fatalf("location=%q, want existing checkout URL", loc)
+	if loc := rec.Header().Get("Location"); loc != "https://checkout.stripe.com/c/pay/cs_fresh_new" {
+		t.Fatalf("location=%q, want fresh checkout URL", loc)
 	}
-	if createCalls != 0 {
-		t.Fatalf("createCheckoutSession calls=%d, want 0", createCalls)
+	if createCalls != 1 {
+		t.Fatalf("createCheckoutSession calls=%d, want 1", createCalls)
+	}
+	updatedRecord, err := store.GetRecord(recordID)
+	if err != nil {
+		t.Fatalf("GetRecord(updated): %v", err)
+	}
+	if updatedRecord.CheckoutSessionID != "cs_fresh_new" {
+		t.Fatalf("checkout_session_id=%q, want %q", updatedRecord.CheckoutSessionID, "cs_fresh_new")
 	}
 }
 
@@ -419,7 +425,7 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": record.ID,
 				"signup_source":    "pulse_pro_trial",
-				"email_verified":   "true",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}
@@ -428,20 +434,18 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.HandleTrialSignupComplete(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusSeeOther, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Trial entitlement ready") {
+		t.Fatalf("expected success page body, got %q", rec.Body.String())
 	}
 
-	loc := rec.Header().Get("Location")
-	parsed, err := url.Parse(loc)
+	updatedRecord, err := store.GetRecord(record.ID)
 	if err != nil {
-		t.Fatalf("parse redirect location: %v", err)
+		t.Fatalf("GetRecord(updated): %v", err)
 	}
-	token := strings.TrimSpace(parsed.Query().Get("token"))
-	if token == "" {
-		t.Fatalf("expected activation token in redirect URL")
-	}
-
+	token := strings.TrimSpace(updatedRecord.ActivationToken)
 	claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "pulse.example.com", h.now().UTC())
 	if err != nil {
 		t.Fatalf("VerifyTrialActivationToken: %v", err)
@@ -451,10 +455,6 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	}
 	if claims.ReturnURL != "https://pulse.example.com/auth/trial-activate" {
 		t.Fatalf("claims.ReturnURL=%q, want %q", claims.ReturnURL, "https://pulse.example.com/auth/trial-activate")
-	}
-	updatedRecord, err := store.GetRecord(record.ID)
-	if err != nil {
-		t.Fatalf("GetRecord(updated): %v", err)
 	}
 	if updatedRecord.CheckoutSessionID != "cs_test_123" {
 		t.Fatalf("checkout_session_id=%q, want %q", updatedRecord.CheckoutSessionID, "cs_test_123")
@@ -519,7 +519,7 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": record.ID,
 				"signup_source":    "pulse_pro_trial",
-				"email_verified":   "true",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}
@@ -527,15 +527,14 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	firstReq := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_reuse", nil)
 	firstRec := httptest.NewRecorder()
 	h.HandleTrialSignupComplete(firstRec, firstReq)
-	if firstRec.Code != http.StatusSeeOther {
-		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusSeeOther, firstRec.Body.String())
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusOK, firstRec.Body.String())
 	}
-	firstLocation := firstRec.Header().Get("Location")
-	firstParsed, err := url.Parse(firstLocation)
+	firstLoaded, err := store.GetRecord(record.ID)
 	if err != nil {
-		t.Fatalf("parse first redirect: %v", err)
+		t.Fatalf("GetRecord(first): %v", err)
 	}
-	firstIssuedToken := strings.TrimSpace(firstParsed.Query().Get("token"))
+	firstIssuedToken := strings.TrimSpace(firstLoaded.ActivationToken)
 	if firstIssuedToken == "" {
 		t.Fatal("expected first activation token")
 	}
@@ -543,15 +542,14 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	secondReq := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_reuse", nil)
 	secondRec := httptest.NewRecorder()
 	h.HandleTrialSignupComplete(secondRec, secondReq)
-	if secondRec.Code != http.StatusSeeOther {
-		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusSeeOther, secondRec.Body.String())
+	if secondRec.Code != http.StatusOK {
+		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusOK, secondRec.Body.String())
 	}
-	secondLocation := secondRec.Header().Get("Location")
-	secondParsed, err := url.Parse(secondLocation)
+	secondLoaded, err := store.GetRecord(record.ID)
 	if err != nil {
-		t.Fatalf("parse second redirect: %v", err)
+		t.Fatalf("GetRecord(second): %v", err)
 	}
-	secondIssuedToken := strings.TrimSpace(secondParsed.Query().Get("token"))
+	secondIssuedToken := strings.TrimSpace(secondLoaded.ActivationToken)
 	if secondIssuedToken == "" {
 		t.Fatal("expected second activation token")
 	}
@@ -619,7 +617,7 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": record.ID,
 				"signup_source":    "pulse_pro_trial",
-				"email_verified":   "true",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}
@@ -627,15 +625,14 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	firstReq := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_rotate", nil)
 	firstRec := httptest.NewRecorder()
 	h.HandleTrialSignupComplete(firstRec, firstReq)
-	if firstRec.Code != http.StatusSeeOther {
-		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusSeeOther, firstRec.Body.String())
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusOK, firstRec.Body.String())
 	}
-	firstLocation := firstRec.Header().Get("Location")
-	firstParsed, err := url.Parse(firstLocation)
+	firstLoaded, err := store.GetRecord(record.ID)
 	if err != nil {
-		t.Fatalf("parse first redirect: %v", err)
+		t.Fatalf("GetRecord(first): %v", err)
 	}
-	firstIssuedToken := strings.TrimSpace(firstParsed.Query().Get("token"))
+	firstIssuedToken := strings.TrimSpace(firstLoaded.ActivationToken)
 	if firstIssuedToken == "" {
 		t.Fatal("expected first activation token")
 	}
@@ -645,15 +642,14 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	secondReq := httptest.NewRequest(http.MethodGet, "/trial-signup/complete?session_id=cs_test_rotate", nil)
 	secondRec := httptest.NewRecorder()
 	h.HandleTrialSignupComplete(secondRec, secondReq)
-	if secondRec.Code != http.StatusSeeOther {
-		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusSeeOther, secondRec.Body.String())
+	if secondRec.Code != http.StatusOK {
+		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusOK, secondRec.Body.String())
 	}
-	secondLocation := secondRec.Header().Get("Location")
-	secondParsed, err := url.Parse(secondLocation)
+	secondLoaded, err := store.GetRecord(record.ID)
 	if err != nil {
-		t.Fatalf("parse second redirect: %v", err)
+		t.Fatalf("GetRecord(second): %v", err)
 	}
-	secondIssuedToken := strings.TrimSpace(secondParsed.Query().Get("token"))
+	secondIssuedToken := strings.TrimSpace(secondLoaded.ActivationToken)
 	if secondIssuedToken == "" {
 		t.Fatal("expected second activation token")
 	}
@@ -736,8 +732,26 @@ func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.HandleTrialSignupRedeem(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusNoContent, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp trialSignupRedeemResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if strings.TrimSpace(resp.EntitlementJWT) == "" {
+		t.Fatal("expected entitlement_jwt in response")
+	}
+	entitlementClaims, err := pkglicensing.VerifyEntitlementLeaseToken(resp.EntitlementJWT, pub, "pulse.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if entitlementClaims.OrgID != "default" {
+		t.Fatalf("entitlementClaims.OrgID=%q, want %q", entitlementClaims.OrgID, "default")
+	}
+	if entitlementClaims.SubscriptionState != pkglicensing.SubStateTrial {
+		t.Fatalf("entitlementClaims.SubscriptionState=%q, want %q", entitlementClaims.SubscriptionState, pkglicensing.SubStateTrial)
 	}
 
 	updatedRecord, err := store.GetRecord(record.ID)
@@ -832,7 +846,7 @@ func TestTrialSignupHandleCompleteRejectsDuplicateIssuedEmail(t *testing.T) {
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": secondRequestID,
 				"signup_source":    "pulse_pro_trial",
-				"email_verified":   "true",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}
@@ -903,7 +917,7 @@ func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": secondRecord.ID,
 				"signup_source":    "pulse_pro_trial",
-				"email_verified":   "true",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}
@@ -942,7 +956,7 @@ func TestTrialSignupHandleCompleteRejectsCheckoutSessionMismatch(t *testing.T) {
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": requestID,
 				"signup_source":    "pulse_pro_trial",
-				"email_verified":   "true",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}
@@ -1005,7 +1019,7 @@ func TestTrialSignupHandleCompleteRejectsNonTrialCheckoutSession(t *testing.T) {
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": record.ID,
 				"signup_source":    "pulse_pro_trial",
-				"email_verified":   "true",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}
@@ -1070,7 +1084,7 @@ func TestTrialSignupHandleCompleteRejectsMissingVerifiedTrialMetadata(t *testing
 				"return_url":       "https://pulse.example.com/auth/trial-activate",
 				"trial_request_id": record.ID,
 				"signup_source":    "something_else",
-				"email_verified":   "false",
+				"email_mode":       "backup",
 			},
 		}, nil
 	}

@@ -224,6 +224,84 @@ func TestTrialSignupStoreFindPendingVerificationByEmail(t *testing.T) {
 	}
 }
 
+func TestTrialSignupStoreCreateCheckoutRequestMarksRecordVerified(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	record := &TrialSignupRecord{
+		OrgID:         "default",
+		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
+		InstanceToken: "tsi_test",
+		Name:          "Owner",
+		Email:         "owner@example.com",
+		Company:       "Pulse Labs",
+		CreatedAt:     now,
+	}
+	if err := store.CreateCheckoutRequest(record); err != nil {
+		t.Fatalf("CreateCheckoutRequest: %v", err)
+	}
+	if strings.TrimSpace(record.ID) == "" {
+		t.Fatal("expected request id")
+	}
+	if record.VerifiedAt.IsZero() {
+		t.Fatal("expected verified_at to be set immediately")
+	}
+
+	loaded, err := store.GetRecord(record.ID)
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if loaded.VerifiedAt.IsZero() {
+		t.Fatal("expected persisted verified_at")
+	}
+	if loaded.Email != "owner@example.com" {
+		t.Fatalf("loaded.Email=%q, want %q", loaded.Email, "owner@example.com")
+	}
+}
+
+func TestTrialSignupStoreMarkCheckoutStartedOverwritesSessionBinding(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	record := &TrialSignupRecord{
+		OrgID:         "default",
+		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
+		InstanceToken: "tsi_test",
+		Name:          "Owner",
+		Email:         "owner@example.com",
+		Company:       "Pulse Labs",
+		CreatedAt:     now,
+	}
+	if err := store.CreateCheckoutRequest(record); err != nil {
+		t.Fatalf("CreateCheckoutRequest: %v", err)
+	}
+	if err := store.MarkCheckoutStarted(record.ID, "cs_first", now); err != nil {
+		t.Fatalf("MarkCheckoutStarted(first): %v", err)
+	}
+	if err := store.MarkCheckoutStarted(record.ID, "cs_second", now.Add(time.Minute)); err != nil {
+		t.Fatalf("MarkCheckoutStarted(second): %v", err)
+	}
+
+	loaded, err := store.GetRecord(record.ID)
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if loaded.CheckoutSessionID != "cs_second" {
+		t.Fatalf("checkout_session_id=%q, want %q", loaded.CheckoutSessionID, "cs_second")
+	}
+	if !loaded.CheckoutStartedAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("checkout_started_at=%v, want %v", loaded.CheckoutStartedAt, now.Add(time.Minute))
+	}
+}
+
 func TestTrialSignupStoreStoreOrRotateActivationToken(t *testing.T) {
 	store, err := NewTrialSignupStore(t.TempDir())
 	if err != nil {

@@ -231,7 +231,7 @@ func TestTrialExpiryReverts(t *testing.T) {
 	// The DatabaseSource's normalizeTrialExpiry will detect that the trial
 	// has expired and set SubscriptionState to "expired" with nil capabilities.
 	svc := handler.Service(context.Background())
-	eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, "default", 0)
+	eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, "default", 0, "")
 	svc.SetEvaluator(eval)
 
 	// Features endpoint must show free-tier only.

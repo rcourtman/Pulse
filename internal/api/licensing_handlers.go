@@ -34,7 +34,7 @@ type LicenseHandlers struct {
 	trialLimiter       *RateLimiter
 	trialReplay        *jtiReplayStore
 	trialInitiations   *trialSignupInitiationStore
-	trialRedeemer      func(token string) error
+	trialRedeemer      func(token string) (string, error)
 	monitor            *monitoring.Monitor
 	mtMonitor          *monitoring.MultiTenantMonitor
 	conversionRecorder *conversionRecorder
@@ -318,7 +318,7 @@ func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseSe
 
 	// Hosted non-default tenants always consult billing state (fail-open).
 	if h.hostedMode && orgID != "default" && orgID != "" {
-		evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, time.Hour)
+		evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, time.Hour, entitlementExpectedInstanceHost(h.cfg))
 		service.SetEvaluator(evaluator)
 		return nil
 	}
@@ -351,7 +351,7 @@ func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseSe
 	}
 
 	// Billing state exists: wire evaluator without caching so UI updates immediately after writes.
-	evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, evaluatorOrgID, 0)
+	evaluator := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, evaluatorOrgID, 0, entitlementExpectedInstanceHost(h.cfg))
 	service.SetEvaluator(evaluator)
 	return nil
 }
@@ -474,20 +474,20 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		return
 	}
 	if h == nil || h.mtPersistence == nil {
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {
-		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("invalid"), http.StatusTemporaryRedirect)
 		return
 	}
 
 	publicKey, err := trialActivationPublicKeyFromLicensing()
 	if err != nil {
 		log.Error().Err(err).Msg("Trial activation public key not configured")
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -500,7 +500,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		expectedHost = normalizeHostForTrial(h.cfg.PublicURL)
 		if expectedHost == "" {
 			log.Error().Msg("PublicURL configured but could not extract host for trial activation binding")
-			http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+			http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 			return
 		}
 	} else {
@@ -508,13 +508,13 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	}
 	if expectedHost == "" {
 		log.Error().Msg("Could not determine host for trial activation binding")
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 	claims, err := verifyTrialActivationTokenFromLicensing(token, publicKey, expectedHost, time.Now().UTC())
 	if err != nil {
 		log.Warn().Err(err).Msg("Trial activation token verification failed")
-		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("invalid"), http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -528,7 +528,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	}
 	if replaySubject == "" {
 		log.Warn().Msg("Trial activation token missing subject and jti")
-		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("invalid"), http.StatusTemporaryRedirect)
 		return
 	}
 	replayID := "trial_activate:" + replaySubject
@@ -539,12 +539,12 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	stored, err := replayStore.checkAndStore(replayID, expiresAt)
 	if err != nil {
 		log.Error().Err(err).Msg("Trial activation replay-store failure")
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 	if !stored {
 		log.Warn().Str("replay_id_prefix", replayID[:24]).Msg("Trial activation token replay blocked")
-		http.Redirect(w, r, "/settings?trial=replayed", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("replayed"), http.StatusTemporaryRedirect)
 		return
 	}
 	clearReplay := func(reason string, err error) {
@@ -566,7 +566,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	}
 	if h.trialInitiations == nil {
 		clearReplay("initiation_store_unavailable", nil)
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 	returnURL := strings.TrimSpace(claims.ReturnURL)
@@ -574,12 +574,12 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	if err != nil {
 		clearReplay("initiation_validation_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation initiation token validation failed")
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 	if !ok {
 		log.Warn().Str("org_id", orgID).Msg("Trial activation missing or invalid initiation token")
-		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("invalid"), http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -588,7 +588,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	if err != nil {
 		clearReplay("tenant_resolution_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation tenant resolution failed")
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -597,7 +597,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	if err != nil {
 		clearReplay("billing_state_load_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation billing state load failed")
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 	decision := evaluateTrialStartEligibilityFromLicensing(svc.Current() != nil && svc.IsValid(), existing)
@@ -606,7 +606,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 			Str("org_id", orgID).
 			Str("reason", string(decision.Reason)).
 			Msg("Trial activation denied due to ineligible state")
-		http.Redirect(w, r, "/settings?trial=ineligible", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("ineligible"), http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -614,24 +614,59 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	if redeemer == nil {
 		redeemer = h.acknowledgeHostedTrialRedemption
 	}
+	entitlementJWT := ""
 	if redeemer != nil {
-		if err := redeemer(token); err != nil {
+		entitlementJWT, err = redeemer(token)
+		if err != nil {
 			clearReplay("redemption_ack_failed", err)
 			log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted trial redemption acknowledgement failed")
-			http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+			http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 			return
 		}
 	}
+	if strings.TrimSpace(entitlementJWT) == "" {
+		clearReplay("entitlement_lease_missing", nil)
+		log.Warn().Str("org_id", orgID).Msg("Hosted trial redemption returned no entitlement lease")
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
+		return
+	}
+	leaseClaims, err := verifyEntitlementLeaseTokenFromLicensing(entitlementJWT, publicKey, expectedHost, time.Now().UTC())
+	if err != nil {
+		clearReplay("entitlement_lease_invalid", err)
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted trial entitlement lease verification failed")
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
+		return
+	}
+	if strings.TrimSpace(leaseClaims.OrgID) != orgID {
+		clearReplay("entitlement_lease_org_mismatch", nil)
+		log.Warn().
+			Str("org_id", orgID).
+			Str("lease_org_id", strings.TrimSpace(leaseClaims.OrgID)).
+			Msg("Hosted trial entitlement lease org mismatch")
+		http.Redirect(w, r, trialActivationResultURL("invalid"), http.StatusTemporaryRedirect)
+		return
+	}
 
 	state := buildProTrialBillingStateFromLicensing(time.Now())
+	state.EntitlementJWT = entitlementJWT
+	state.PlanVersion = leaseClaims.PlanVersion
+	state.SubscriptionState = leaseClaims.SubscriptionState
+	state.Capabilities = append([]string(nil), leaseClaims.Capabilities...)
+	state.Limits = map[string]int64{}
+	for key, value := range leaseClaims.Limits {
+		state.Limits[key] = value
+	}
+	state.MetersEnabled = append([]string(nil), leaseClaims.MetersEnabled...)
+	state.TrialStartedAt = leaseClaims.TrialStartedAt
+	state.TrialEndsAt = leaseClaims.TrialEndsAt
 	if err := billingStore.SaveBillingState(orgID, state); err != nil {
 		clearReplay("billing_state_save_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation billing state save failed")
-		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
 	if svc.Current() == nil {
-		eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0)
+		eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0, expectedHost)
 		svc.SetEvaluator(eval)
 	}
 
@@ -661,36 +696,51 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		Str("email", strings.TrimSpace(claims.Email)).
 		Msg("Trial activation succeeded")
 
-	http.Redirect(w, r, "/settings?trial=activated", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, trialActivationResultURL("activated"), http.StatusTemporaryRedirect)
 }
 
-func (h *LicenseHandlers) acknowledgeHostedTrialRedemption(token string) error {
+func trialActivationResultURL(result string) string {
+	return "/settings/system-pro?trial=" + url.QueryEscape(strings.TrimSpace(result))
+}
+
+type hostedTrialRedemptionResponse struct {
+	EntitlementJWT string `json:"entitlement_jwt"`
+}
+
+func (h *LicenseHandlers) acknowledgeHostedTrialRedemption(token string) (string, error) {
 	if h == nil {
-		return nil
+		return "", nil
 	}
 	redemptionURL := trialSignupRedemptionURLFromConfig(h.cfg)
 	if redemptionURL == "" {
-		return nil
+		return "", nil
 	}
 	payload, err := json.Marshal(map[string]string{"token": strings.TrimSpace(token)})
 	if err != nil {
-		return fmt.Errorf("marshal trial redemption payload: %w", err)
+		return "", fmt.Errorf("marshal trial redemption payload: %w", err)
 	}
 	req, err := http.NewRequest(http.MethodPost, redemptionURL, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("build trial redemption request: %w", err)
+		return "", fmt.Errorf("build trial redemption request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("post trial redemption acknowledgement: %w", err)
+		return "", fmt.Errorf("post trial redemption acknowledgement: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("trial redemption acknowledgement returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("trial redemption acknowledgement returned status %d", resp.StatusCode)
 	}
-	return nil
+	var response hostedTrialRedemptionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", fmt.Errorf("decode trial redemption acknowledgement: %w", err)
+	}
+	if strings.TrimSpace(response.EntitlementJWT) == "" {
+		return "", fmt.Errorf("trial redemption acknowledgement missing entitlement_jwt")
+	}
+	return response.EntitlementJWT, nil
 }
 
 func trialSignupRedemptionURLFromConfig(cfg *config.Config) string {
@@ -709,6 +759,13 @@ func trialSignupRedemptionURLFromConfig(cfg *config.Config) string {
 	parsed.Path = "/api/trial-signup/redeem"
 	parsed.RawQuery = ""
 	return parsed.String()
+}
+
+func entitlementExpectedInstanceHost(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return normalizeHostForTrial(cfg.PublicURL)
 }
 
 // HandleLicenseStatus handles GET /api/license/status
@@ -949,6 +1006,7 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 			existing.Capabilities = []string{}
 			existing.Limits = map[string]int64{}
 			existing.MetersEnabled = []string{}
+			existing.EntitlementJWT = ""
 			existing.PlanVersion = string(subscriptionStateExpiredValue)
 			existing.SubscriptionState = subscriptionStateExpiredValue
 			existing.TrialEndsAt = nil

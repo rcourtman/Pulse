@@ -9,13 +9,14 @@ const defaultDatabaseSourceCacheTTL = time.Hour
 
 // DatabaseSource implements EntitlementSource from hosted billing state.
 type DatabaseSource struct {
-	store     BillingStore
-	orgID     string
-	cache     *BillingState
-	cacheTime time.Time
-	cacheTTL  time.Duration
-	mu        sync.RWMutex
-	defaults  BillingState // trial-equivalent defaults for fail-open
+	store                BillingStore
+	orgID                string
+	cache                *BillingState
+	cacheTime            time.Time
+	cacheTTL             time.Duration
+	mu                   sync.RWMutex
+	defaults             BillingState // trial-equivalent defaults for fail-open
+	expectedInstanceHost string
 }
 
 // NewDatabaseSource creates a DatabaseSource for a hosted org.
@@ -34,6 +35,16 @@ func NewDatabaseSource(store BillingStore, orgID string, cacheTTL time.Duration)
 			SubscriptionState: SubStateTrial,
 		},
 	}
+}
+
+// WithExpectedInstanceHost binds hosted entitlement lease validation to the
+// current instance host when a canonical public URL is configured.
+func (d *DatabaseSource) WithExpectedInstanceHost(host string) *DatabaseSource {
+	if d == nil {
+		return nil
+	}
+	d.expectedInstanceHost = normalizeHost(host)
+	return d
 }
 
 // Capabilities returns the current capability keys.
@@ -93,7 +104,7 @@ func (d *DatabaseSource) OverflowGrantedAt() *int64 {
 func (d *DatabaseSource) currentState() BillingState {
 	defaults := d.defaultState()
 	if d == nil {
-		return defaults
+		return normalizeTrialExpiry(defaults, time.Now())
 	}
 
 	cacheTTL := d.cacheTTL
@@ -101,7 +112,7 @@ func (d *DatabaseSource) currentState() BillingState {
 
 	// cacheTTL < 0 means "defaults only" (e.g., fail-open / offline mode).
 	if cacheTTL < 0 {
-		return normalizeTrialExpiry(defaults, now)
+		return d.resolveState(defaults, now)
 	}
 
 	// cacheTTL == 0 means "no caching" (always refresh).
@@ -115,7 +126,7 @@ func (d *DatabaseSource) currentState() BillingState {
 	if !noCache && d.cache != nil && now.Sub(d.cacheTime) <= cacheTTL {
 		cached := cloneBillingState(*d.cache)
 		d.mu.RUnlock()
-		return normalizeTrialExpiry(cached, now)
+		return d.resolveState(cached, now)
 	}
 
 	var stale BillingState
@@ -128,15 +139,15 @@ func (d *DatabaseSource) currentState() BillingState {
 
 	if d.store == nil {
 		if hasStale {
-			return normalizeTrialExpiry(stale, now)
+			return d.resolveState(stale, now)
 		}
-		return normalizeTrialExpiry(defaults, now)
+		return d.resolveState(defaults, now)
 	}
 
 	fresh, err := d.store.GetBillingState(d.orgID)
 	if err == nil && fresh != nil {
 		cached := cloneBillingState(*fresh)
-		cached = normalizeTrialExpiry(cached, now)
+		cached = d.resolveState(cached, now)
 		d.mu.Lock()
 		d.cache = &cached
 		d.cacheTime = time.Now()
@@ -145,10 +156,10 @@ func (d *DatabaseSource) currentState() BillingState {
 	}
 
 	if hasStale {
-		return normalizeTrialExpiry(stale, now)
+		return d.resolveState(stale, now)
 	}
 
-	return normalizeTrialExpiry(defaults, now)
+	return d.resolveState(defaults, now)
 }
 
 func (d *DatabaseSource) defaultState() BillingState {
@@ -226,4 +237,8 @@ func normalizeTrialExpiry(state BillingState, now time.Time) BillingState {
 	state.Limits = nil
 	state.MetersEnabled = nil
 	return state
+}
+
+func (d *DatabaseSource) resolveState(state BillingState, now time.Time) BillingState {
+	return ResolveEntitlementLeaseBillingState(state, d.expectedInstanceHost, now)
 }

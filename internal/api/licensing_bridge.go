@@ -41,6 +41,7 @@ type entitlementPayloadModel = pkglicensing.EntitlementPayload
 type limitStatusModel = pkglicensing.LimitStatus
 type upgradeReasonModel = pkglicensing.UpgradeReason
 type entitlementUsageSnapshotModel = pkglicensing.EntitlementUsageSnapshot
+type legacyConnectionCountsModel = pkglicensing.LegacyConnectionCounts
 type conversionRecorder = pkglicensing.Recorder
 type conversionPipelineHealth = pkglicensing.PipelineHealth
 type conversionCollectionConfig = pkglicensing.CollectionConfig
@@ -49,6 +50,7 @@ type conversionEvent = pkglicensing.ConversionEvent
 type conversionHealthStatus = pkglicensing.HealthStatus
 type conversionCollectionConfigSnapshot = pkglicensing.CollectionConfigSnapshot
 type trialActivationClaimsModel = pkglicensing.TrialActivationClaims
+type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 type licenseTier = pkglicensing.Tier
 
 const (
@@ -141,8 +143,10 @@ func isLicenseValidationDevModeFromLicensing() bool {
 	return pkglicensing.IsLicenseValidationDevMode()
 }
 
-func newLicenseEvaluatorForBillingStoreFromLicensing(store billingStoreModel, orgID string, cacheTTL time.Duration) *licenseEvaluator {
-	return pkglicensing.NewEvaluator(pkglicensing.NewDatabaseSource(store, orgID, cacheTTL))
+func newLicenseEvaluatorForBillingStoreFromLicensing(store billingStoreModel, orgID string, cacheTTL time.Duration, expectedInstanceHost string) *licenseEvaluator {
+	return pkglicensing.NewEvaluator(
+		pkglicensing.NewDatabaseSource(store, orgID, cacheTTL).WithExpectedInstanceHost(expectedInstanceHost),
+	)
 }
 
 func maxUsersLimitFromLicensing(lic *licenseModel) int {
@@ -228,6 +232,10 @@ func trialActivationPublicKeyFromLicensing() (ed25519.PublicKey, error) {
 
 func verifyTrialActivationTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string, now time.Time) (*trialActivationClaimsModel, error) {
 	return pkglicensing.VerifyTrialActivationToken(token, key, expectedInstanceHost, now)
+}
+
+func verifyEntitlementLeaseTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string, now time.Time) (*entitlementLeaseClaimsModel, error) {
+	return pkglicensing.VerifyEntitlementLeaseToken(token, key, expectedInstanceHost, now)
 }
 
 func writePaymentRequiredFromLicensing(w http.ResponseWriter, payload map[string]interface{}) {

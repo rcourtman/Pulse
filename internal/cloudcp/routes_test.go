@@ -124,7 +124,7 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 	if pageRec.Code != http.StatusOK {
 		t.Fatalf("GET /start-pro-trial status=%d, want %d", pageRec.Code, http.StatusOK)
 	}
-	if !strings.Contains(pageRec.Body.String(), "Verify your work email") {
+	if !strings.Contains(pageRec.Body.String(), "Continue to secure checkout") {
 		t.Fatalf("expected trial signup page body")
 	}
 
