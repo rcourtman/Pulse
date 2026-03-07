@@ -516,13 +516,9 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 
 // writeSMARTMetrics writes SMART attribute metrics to the persistent metrics store for a single disk.
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
-	// Determine resource ID: serial (preferred) → WWN → composite fallback
-	resourceID := disk.Serial
+	resourceID := unifiedresources.PhysicalDiskMetricID(disk)
 	if resourceID == "" {
-		resourceID = disk.WWN
-	}
-	if resourceID == "" {
-		resourceID = fmt.Sprintf("%s-%s-%s", disk.Instance, disk.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+		return
 	}
 
 	// Temperature (always write if > 0)

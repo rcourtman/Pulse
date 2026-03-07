@@ -459,7 +459,7 @@ func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
 		if parentID != "" {
 			resource.ParentID = &parentID
 		}
-		sourceID := hostSMARTDiskSourceID(host, disk)
+		sourceID := HostSMARTDiskSourceID(host, disk)
 		if sourceID == "" {
 			continue
 		}
@@ -1158,20 +1158,6 @@ func proxmoxNodeSourceID(instance, nodeName string) string {
 		return nodeName
 	}
 	return fmt.Sprintf("%s-%s", instance, nodeName)
-}
-
-func hostSMARTDiskSourceID(host models.Host, disk models.HostDiskSMART) string {
-	if serial := strings.TrimSpace(disk.Serial); serial != "" {
-		return serial
-	}
-	if wwn := strings.TrimSpace(disk.WWN); wwn != "" {
-		return wwn
-	}
-	device := strings.TrimSpace(disk.Device)
-	if device == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), strings.TrimPrefix(device, "/dev/"))
 }
 
 func kubernetesClusterSourceID(cluster models.KubernetesCluster) string {

@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 func TestFindLinkedProxmoxEntity_MatchesCanonicalReadStateViews(t *testing.T) {
@@ -467,6 +468,169 @@ func TestApplyHostReport_PreservesPreviousTokenMetadata(t *testing.T) {
 	}
 	if host.TokenLastUsedAt == nil || !host.TokenLastUsedAt.Equal(lastUsed) {
 		t.Fatalf("expected TokenLastUsedAt %v, got %v", lastUsed, host.TokenLastUsedAt)
+	}
+}
+
+func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
+	t.Helper()
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	powerOnHours := int64(1234)
+	reallocated := int64(2)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower",
+			Hostname:  "tower",
+			MachineID: "machine-tower",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{
+					Device:      "/dev/sda",
+					Model:       "IronWolf",
+					Serial:      "SERIAL-TOWER-1",
+					Temperature: 41,
+					Attributes: &agentshost.SMARTAttributes{
+						PowerOnHours:       &powerOnHours,
+						ReallocatedSectors: &reallocated,
+					},
+				},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	points := waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_temp")
+	if len(points) == 0 {
+		t.Fatal("expected SMART temperature metric for agent disk")
+	}
+
+	points = waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_power_on_hours")
+	if len(points) == 0 || points[len(points)-1].Value != float64(powerOnHours) {
+		t.Fatalf("expected power-on-hours metric %.0f, got %+v", float64(powerOnHours), points)
+	}
+
+	points = waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_reallocated_sectors")
+	if len(points) == 0 || points[len(points)-1].Value != float64(reallocated) {
+		t.Fatalf("expected reallocated-sectors metric %.0f, got %+v", float64(reallocated), points)
+	}
+}
+
+func TestApplyHostReportPersistsSMARTMetricsForAgentDisksWithFallbackID(t *testing.T) {
+	t.Helper()
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	mediaErrors := int64(7)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower-fallback",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower",
+			Hostname:  "tower",
+			MachineID: "machine-tower",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{
+					Device:      "/dev/nvme0n1",
+					Model:       "CacheDisk",
+					Temperature: 39,
+					Attributes: &agentshost.SMARTAttributes{
+						MediaErrors: &mediaErrors,
+					},
+				},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	resourceID := "machine-tower:nvme0n1"
+	points := waitForStoredDiskMetric(t, store, resourceID, "smart_temp")
+	if len(points) == 0 {
+		t.Fatal("expected SMART temperature metric for fallback-id agent disk")
+	}
+
+	points = waitForStoredDiskMetric(t, store, resourceID, "smart_media_errors")
+	if len(points) == 0 || points[len(points)-1].Value != float64(mediaErrors) {
+		t.Fatalf("expected media-errors metric %.0f, got %+v", float64(mediaErrors), points)
+	}
+}
+
+func waitForStoredDiskMetric(t *testing.T, store *metrics.Store, resourceID, metric string) []metrics.MetricPoint {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		now := time.Now().UTC()
+		points, err := store.Query("disk", resourceID, metric, now.Add(-time.Hour), now.Add(time.Hour), 60)
+		if err != nil {
+			t.Fatalf("Query %s: %v", metric, err)
+		}
+		if len(points) > 0 {
+			return points
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for disk metric %s for %s", metric, resourceID)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

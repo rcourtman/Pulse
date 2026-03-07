@@ -1737,6 +1737,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
 		m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
 		m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
+		m.writeHostSMARTMetrics(host, now)
 		if netInRate >= 0 {
 			m.metricsStore.Write("agent", host.ID, "netin", netInRate, now)
 		}
@@ -1755,6 +1756,55 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	m.applyClusterSensors(report.ClusterSensors, timestamp)
 
 	return host, nil
+}
+
+func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
+	for _, disk := range host.Sensors.SMART {
+		resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		if resourceID == "" {
+			continue
+		}
+
+		if disk.Temperature > 0 {
+			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
+		}
+
+		attrs := disk.Attributes
+		if attrs == nil {
+			continue
+		}
+
+		if attrs.PowerOnHours != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_power_on_hours", float64(*attrs.PowerOnHours), now)
+		}
+		if attrs.PowerCycles != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_power_cycles", float64(*attrs.PowerCycles), now)
+		}
+		if attrs.ReallocatedSectors != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_reallocated_sectors", float64(*attrs.ReallocatedSectors), now)
+		}
+		if attrs.PendingSectors != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_pending_sectors", float64(*attrs.PendingSectors), now)
+		}
+		if attrs.OfflineUncorrectable != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_offline_uncorrectable", float64(*attrs.OfflineUncorrectable), now)
+		}
+		if attrs.UDMACRCErrors != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_crc_errors", float64(*attrs.UDMACRCErrors), now)
+		}
+		if attrs.PercentageUsed != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_percentage_used", float64(*attrs.PercentageUsed), now)
+		}
+		if attrs.AvailableSpare != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_available_spare", float64(*attrs.AvailableSpare), now)
+		}
+		if attrs.MediaErrors != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_media_errors", float64(*attrs.MediaErrors), now)
+		}
+		if attrs.UnsafeShutdowns != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns), now)
+		}
+	}
 }
 
 // applyClusterSensors stores temperature data collected from Proxmox cluster

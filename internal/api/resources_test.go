@@ -740,6 +740,48 @@ func TestResourceListIncludesHostSMARTPhysicalDisks(t *testing.T) {
 	}
 }
 
+func TestResourceListUsesCanonicalMetricIDForProxmoxPhysicalDisks(t *testing.T) {
+	snapshot := models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "pve1-node1-/dev-sda",
+				Instance:    "pve1",
+				Node:        "node1",
+				DevPath:     "/dev/sda",
+				Model:       "Exos",
+				Serial:      "SERIAL-PVE-1",
+				Temperature: 34,
+				LastChecked: time.Now().UTC(),
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=physical_disk", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 proxmox physical disk resource, got %d", len(resp.Data))
+	}
+	resource := resp.Data[0]
+	if resource.MetricsTarget == nil || resource.MetricsTarget.ResourceType != "disk" || resource.MetricsTarget.ResourceID != "SERIAL-PVE-1" {
+		t.Fatalf("expected canonical disk metrics target SERIAL-PVE-1, got %+v", resource.MetricsTarget)
+	}
+}
+
 func TestResourceGetResource(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.Host{
