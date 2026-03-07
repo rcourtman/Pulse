@@ -31,3 +31,17 @@ func TestGetMockEnvPathFallsBackToDefaultDir(t *testing.T) {
 		t.Fatalf("GetMockEnvPath() = %q", got)
 	}
 }
+
+func TestGetMockEnvPathFallsBackToDefaultDirWithoutFile(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", "")
+
+	defaultDir := filepath.Join(t.TempDir(), "missing-dir")
+	mock := &MockDeps{
+		DefaultEnvDir: func() string { return defaultDir },
+		Stat:          os.Stat,
+	}
+
+	if got := GetMockEnvPath(mock); got != filepath.Join(defaultDir, "mock.env") {
+		t.Fatalf("GetMockEnvPath() = %q", got)
+	}
+}
