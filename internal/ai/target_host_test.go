@@ -12,7 +12,7 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "minipc"},
 		{AgentID: "agent-3", Hostname: "pimox"},
 	}
@@ -55,13 +55,13 @@ func TestRouteToAgent_TargetHostExplicit(t *testing.T) {
 				TargetType: "agent",
 				TargetID:   "",
 				Context: map[string]interface{}{
-					"node":       "delly",
+					"node":       "pve-node",
 					"guest_node": "minipc", // Should be ignored when node is set
 				},
 			},
 			command:      "uptime",
 			wantAgentID:  "agent-1",
-			wantHostname: "delly",
+			wantHostname: "pve-node",
 			wantMethod:   "context_node",
 		},
 	}
@@ -94,7 +94,7 @@ func TestRouteToAgent_SingleAgentFallback(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 	}
 
 	req := ExecuteRequest{
@@ -128,7 +128,7 @@ func TestRouteToAgent_MultiAgentNoContext(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "minipc"},
 	}
 
@@ -165,7 +165,7 @@ func TestRouteToAgent_VMIDInCommandWithContext(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "minipc"},
 	}
 

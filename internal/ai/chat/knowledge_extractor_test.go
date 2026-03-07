@@ -23,14 +23,14 @@ func TestExtractFacts_QueryGet(t *testing.T) {
 	input := map[string]interface{}{"action": "get", "resource_type": "lxc", "resource_id": "106"}
 	// Actual format from NewJSONResult(ResourceResponse): direct JSON, no wrapper.
 	// CPU/Memory are nested structs.
-	result := `{"type":"lxc","name":"postfix-server","status":"running","node":"delly","id":"lxc/106","vmid":106,"cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
+	result := `{"type":"lxc","name":"postfix-server","status":"running","node":"pve-node","id":"lxc/106","vmid":106,"cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 2) // primary + cached key
 
 	f := facts[0]
 	assert.Equal(t, FactCategoryResource, f.Category)
-	assert.Equal(t, "lxc:delly:106:status", f.Key)
+	assert.Equal(t, "lxc:pve-node:106:status", f.Key)
 	assert.Contains(t, f.Value, "running")
 	assert.Contains(t, f.Value, "postfix-server")
 	assert.Contains(t, f.Value, "CPU=2.5%")
@@ -44,11 +44,11 @@ func TestExtractFacts_QueryGet(t *testing.T) {
 func TestExtractFacts_QueryGet_NoResourceID(t *testing.T) {
 	// Without resource_id in input, only primary fact should be emitted (no cached key)
 	input := map[string]interface{}{"action": "get", "resource_type": "lxc"}
-	result := `{"type":"lxc","name":"postfix-server","status":"running","node":"delly","id":"lxc/106","vmid":106,"cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
+	result := `{"type":"lxc","name":"postfix-server","status":"running","node":"pve-node","id":"lxc/106","vmid":106,"cpu":{"percent":2.5,"cores":4},"memory":{"percent":45.0,"used_gb":1.2,"total_gb":4.0}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1) // only primary fact
-	assert.Equal(t, "lxc:delly:106:status", facts[0].Key)
+	assert.Equal(t, "lxc:pve-node:106:status", facts[0].Key)
 }
 
 func TestExtractFacts_QueryGet_NotFound(t *testing.T) {
@@ -126,7 +126,7 @@ func TestExtractFacts_QuerySearch_Empty(t *testing.T) {
 
 func TestExtractFacts_StoragePools(t *testing.T) {
 	input := map[string]interface{}{"action": "pools"}
-	result := `{"pools":[{"name":"pbs-minipc","node":"","nodes":["delly","minipc"],"type":"PBS","status":"available","active":true,"usage_percent":42.7,"total_gb":1000,"used_gb":427}]}`
+	result := `{"pools":[{"name":"pbs-minipc","node":"","nodes":["pve-node","minipc"],"type":"PBS","status":"available","active":true,"usage_percent":42.7,"total_gb":1000,"used_gb":427}]}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 2) // marker + 1 pool
@@ -146,7 +146,7 @@ func TestExtractFacts_StoragePools(t *testing.T) {
 
 func TestExtractFacts_BackupTasks_OnlyFailures(t *testing.T) {
 	input := map[string]interface{}{"action": "backup_tasks"}
-	result := `{"tasks":[{"vmid":106,"node":"delly","status":"OK"},{"vmid":200,"node":"minipc","status":"failed","start_time":"2024-01-15T03:00","error":"snapshot failed"}],"total":2}`
+	result := `{"tasks":[{"vmid":106,"node":"pve-node","status":"OK"},{"vmid":200,"node":"minipc","status":"failed","start_time":"2024-01-15T03:00","error":"snapshot failed"}],"total":2}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 2) // marker + 1 failure
@@ -165,7 +165,7 @@ func TestExtractFacts_BackupTasks_OnlyFailures(t *testing.T) {
 
 func TestExtractFacts_BackupTasks_AllOK(t *testing.T) {
 	input := map[string]interface{}{"action": "backup_tasks"}
-	result := `{"tasks":[{"vmid":106,"node":"delly","status":"OK"},{"vmid":200,"node":"minipc","status":"success"}],"total":2}`
+	result := `{"tasks":[{"vmid":106,"node":"pve-node","status":"OK"},{"vmid":200,"node":"minipc","status":"success"}],"total":2}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 1) // marker only (no failures)
@@ -180,15 +180,15 @@ func TestPredictFactKeys_BackupTasks(t *testing.T) {
 }
 
 func TestExtractFacts_Discovery(t *testing.T) {
-	input := map[string]interface{}{"target_id": "delly", "resource_id": "106"}
-	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","target_id":"delly","resource_id":"106","ports":[{"port":25},{"port":22}]}`
+	input := map[string]interface{}{"target_id": "pve-node", "resource_id": "106"}
+	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","target_id":"pve-node","resource_id":"106","ports":[{"port":25},{"port":22}]}`
 
 	facts := ExtractFacts("pulse_discovery", input, result)
 	require.Len(t, facts, 1)
 
 	f := facts[0]
 	assert.Equal(t, FactCategoryDiscovery, f.Category)
-	assert.Equal(t, "discovery:delly:106", f.Key)
+	assert.Equal(t, "discovery:pve-node:106", f.Key)
 	assert.Contains(t, f.Value, "service=Postfix")
 	assert.Contains(t, f.Value, "hostname=patrol-signal-test")
 	assert.Contains(t, f.Value, "ports=[25,22]")
@@ -202,7 +202,7 @@ func TestExtractFacts_Discovery_RequiresTargetID(t *testing.T) {
 }
 
 func TestExtractFacts_Exec_JSON(t *testing.T) {
-	input := map[string]interface{}{"command": "pvesm status | grep pbs-minipc", "target_host": "delly"}
+	input := map[string]interface{}{"command": "pvesm status | grep pbs-minipc", "target_host": "pve-node"}
 	result := `{"success":true,"exit_code":0,"output":"pbs-minipc    active   42.68%"}`
 
 	facts := ExtractFacts("pulse_read", input, result)
@@ -210,7 +210,7 @@ func TestExtractFacts_Exec_JSON(t *testing.T) {
 
 	f := facts[0]
 	assert.Equal(t, FactCategoryExec, f.Category)
-	assert.Contains(t, f.Key, "exec:delly:")
+	assert.Contains(t, f.Key, "exec:pve-node:")
 	assert.Contains(t, f.Value, "exit=0")
 	assert.Contains(t, f.Value, "pbs-minipc")
 }
@@ -310,11 +310,11 @@ func TestExtractFacts_Finding_MissingFields(t *testing.T) {
 
 func TestPredictFactKeys_Discovery(t *testing.T) {
 	keys := PredictFactKeys("pulse_discovery", map[string]interface{}{
-		"target_id":   "delly",
+		"target_id":   "pve-node",
 		"resource_id": "106",
 	})
 	require.Len(t, keys, 1)
-	assert.Equal(t, "discovery:delly:106", keys[0])
+	assert.Equal(t, "discovery:pve-node:106", keys[0])
 }
 
 func TestPredictFactKeys_DiscoveryLegacyHostIDRejected(t *testing.T) {
@@ -327,11 +327,11 @@ func TestPredictFactKeys_DiscoveryLegacyHostIDRejected(t *testing.T) {
 
 func TestPredictFactKeys_Exec(t *testing.T) {
 	keys := PredictFactKeys("pulse_read", map[string]interface{}{
-		"target_host": "delly",
+		"target_host": "pve-node",
 		"command":     "pvesm status",
 	})
 	require.Len(t, keys, 1)
-	assert.Equal(t, "exec:delly:pvesm status", keys[0])
+	assert.Equal(t, "exec:pve-node:pvesm status", keys[0])
 }
 
 func TestPredictFactKeys_Metrics(t *testing.T) {
@@ -354,18 +354,18 @@ func TestPredictFactKeys_MissingFields(t *testing.T) {
 	// Discovery without target_id should return nil
 	assert.Nil(t, PredictFactKeys("pulse_discovery", map[string]interface{}{"resource_id": "106"}))
 	// Exec without command should return nil
-	assert.Nil(t, PredictFactKeys("pulse_read", map[string]interface{}{"target_host": "delly"}))
+	assert.Nil(t, PredictFactKeys("pulse_read", map[string]interface{}{"target_host": "pve-node"}))
 }
 
 func TestPredictFactKeys_FileReadDistinctPaths(t *testing.T) {
 	// Different file paths on the same host should produce different keys
 	keys1 := PredictFactKeys("pulse_read", map[string]interface{}{
-		"target_host": "delly",
+		"target_host": "pve-node",
 		"action":      "file",
 		"path":        "/etc/pve/storage.cfg",
 	})
 	keys2 := PredictFactKeys("pulse_read", map[string]interface{}{
-		"target_host": "delly",
+		"target_host": "pve-node",
 		"action":      "file",
 		"path":        "/var/log/pve/tasks/some-task-log",
 	})
@@ -380,13 +380,13 @@ func TestExtractFacts_Exec_LogsDistinctKeys(t *testing.T) {
 	// Two different log queries on the same host should produce different keys
 	input1 := map[string]interface{}{
 		"action":      "logs",
-		"target_host": "delly",
+		"target_host": "pve-node",
 		"since":       "1h",
 		"grep":        "error",
 	}
 	input2 := map[string]interface{}{
 		"action":      "logs",
-		"target_host": "delly",
+		"target_host": "pve-node",
 		"since":       "24h",
 		"unit":        "nginx",
 	}
@@ -407,13 +407,13 @@ func TestExtractFacts_Exec_LogsDistinctKeys(t *testing.T) {
 
 func TestPredictFactKeys_LogsDistinct(t *testing.T) {
 	keys1 := PredictFactKeys("pulse_read", map[string]interface{}{
-		"target_host": "delly",
+		"target_host": "pve-node",
 		"action":      "logs",
 		"since":       "1h",
 		"grep":        "error",
 	})
 	keys2 := PredictFactKeys("pulse_read", map[string]interface{}{
-		"target_host": "delly",
+		"target_host": "pve-node",
 		"action":      "logs",
 		"since":       "24h",
 		"unit":        "nginx",
@@ -428,7 +428,7 @@ func TestPredictFactKeys_LogsDistinct(t *testing.T) {
 
 func TestExtractFacts_QueryTopology(t *testing.T) {
 	input := map[string]interface{}{"action": "topology"}
-	result := `{"summary":{"total_nodes":3,"total_vms":3,"running_vms":1,"total_system_containers":22,"running_containers":22,"total_docker_hosts":1},"proxmox":{"nodes":[{"name":"delly","status":"online"},{"name":"minipc","status":"online"},{"name":"pi","status":"online"}]}}`
+	result := `{"summary":{"total_nodes":3,"total_vms":3,"running_vms":1,"total_system_containers":22,"running_containers":22,"total_docker_hosts":1},"proxmox":{"nodes":[{"name":"pve-node","status":"online"},{"name":"minipc","status":"online"},{"name":"pi","status":"online"}]}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1)
@@ -437,7 +437,7 @@ func TestExtractFacts_QueryTopology(t *testing.T) {
 	assert.Equal(t, FactCategoryResource, f.Category)
 	assert.Equal(t, "topology:summary", f.Key)
 	assert.Contains(t, f.Value, "3 nodes")
-	assert.Contains(t, f.Value, "delly=online")
+	assert.Contains(t, f.Value, "pve-node=online")
 	assert.Contains(t, f.Value, "minipc=online")
 	assert.Contains(t, f.Value, "pi=online")
 	assert.Contains(t, f.Value, "3 VMs (1 running)")
@@ -449,7 +449,7 @@ func TestExtractFacts_QueryTopology(t *testing.T) {
 
 func TestExtractFacts_QueryHealth(t *testing.T) {
 	input := map[string]interface{}{"action": "health"}
-	result := `{"connections":[{"instance_id":"delly","connected":true},{"instance_id":"minipc","connected":true},{"instance_id":"pi","connected":true}]}`
+	result := `{"connections":[{"instance_id":"pve-node","connected":true},{"instance_id":"minipc","connected":true},{"instance_id":"pi","connected":true}]}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1)
@@ -462,7 +462,7 @@ func TestExtractFacts_QueryHealth(t *testing.T) {
 
 func TestExtractFacts_QueryHealth_Disconnected(t *testing.T) {
 	input := map[string]interface{}{"action": "health"}
-	result := `{"connections":[{"instance_id":"delly","connected":true},{"instance_id":"minipc","connected":false},{"instance_id":"pi","connected":true}]}`
+	result := `{"connections":[{"instance_id":"pve-node","connected":true},{"instance_id":"minipc","connected":false},{"instance_id":"pi","connected":true}]}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1)
@@ -525,7 +525,7 @@ func TestExtractFacts_AlertsList(t *testing.T) {
 func TestExtractFacts_MetricsBaselines(t *testing.T) {
 	input := map[string]interface{}{"action": "baselines"}
 	// Real format: baselines.{nodeName}.{resourceKey:metricType} with mean/std_dev/min/max
-	result := `{"baselines":{"delly":{"delly:101:cpu":{"mean":12.3,"std_dev":5.0,"min":0.1,"max":78.5},"delly:101:memory":{"mean":65.0,"std_dev":10.0,"min":20.0,"max":89.0}},"minipc":{"minipc:200:cpu":{"mean":5.0,"std_dev":2.0,"min":0.5,"max":20.0},"minipc:200:memory":{"mean":40.0,"std_dev":8.0,"min":10.0,"max":55.0}}}}`
+	result := `{"baselines":{"pve-node":{"pve-node:101:cpu":{"mean":12.3,"std_dev":5.0,"min":0.1,"max":78.5},"pve-node:101:memory":{"mean":65.0,"std_dev":10.0,"min":20.0,"max":89.0}},"minipc":{"minipc:200:cpu":{"mean":5.0,"std_dev":2.0,"min":0.5,"max":20.0},"minipc:200:memory":{"mean":40.0,"std_dev":8.0,"min":10.0,"max":55.0}}}}`
 
 	facts := ExtractFacts("pulse_metrics", input, result)
 	require.Len(t, facts, 3) // marker + 2 nodes
@@ -534,19 +534,19 @@ func TestExtractFacts_MetricsBaselines(t *testing.T) {
 	assert.Equal(t, "baselines:queried", facts[0].Key)
 	assert.Equal(t, "2 nodes extracted", facts[0].Value)
 
-	// Find delly fact
-	var dellyFact *FactEntry
+	// Find pve-node fact
+	var pveNodeFact *FactEntry
 	for i := range facts[1:] {
 		idx := i + 1
-		if facts[idx].Key == "baseline:delly" {
-			dellyFact = &facts[idx]
+		if facts[idx].Key == "baseline:pve-node" {
+			pveNodeFact = &facts[idx]
 			break
 		}
 	}
-	require.NotNil(t, dellyFact)
-	assert.Equal(t, FactCategoryMetrics, dellyFact.Category)
-	assert.Contains(t, dellyFact.Value, "cpu: avg=12.3% max=78.5%")
-	assert.Contains(t, dellyFact.Value, "memory: avg=65.0% max=89.0%")
+	require.NotNil(t, pveNodeFact)
+	assert.Equal(t, FactCategoryMetrics, pveNodeFact.Category)
+	assert.Contains(t, pveNodeFact.Value, "cpu: avg=12.3% max=78.5%")
+	assert.Contains(t, pveNodeFact.Value, "memory: avg=65.0% max=89.0%")
 }
 
 func TestExtractFacts_MetricsBaselines_Cap(t *testing.T) {
@@ -572,7 +572,7 @@ func TestExtractFacts_MetricsBaselines_Cap(t *testing.T) {
 
 func TestExtractFacts_StorageDiskHealth(t *testing.T) {
 	input := map[string]interface{}{"action": "disk_health"}
-	result := `{"hosts":[{"hostname":"delly","smart":[{"device":"/dev/sda","model":"WD Blue","health":"PASSED"},{"device":"/dev/sdb","model":"Samsung","health":"FAILED"}]},{"hostname":"minipc","smart":[{"device":"/dev/sda","model":"Crucial","health":"PASSED"}]}]}`
+	result := `{"hosts":[{"hostname":"pve-node","smart":[{"device":"/dev/sda","model":"WD Blue","health":"PASSED"},{"device":"/dev/sdb","model":"Samsung","health":"FAILED"}]},{"hostname":"minipc","smart":[{"device":"/dev/sda","model":"Crucial","health":"PASSED"}]}]}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 3) // marker + 2 hosts
@@ -581,24 +581,24 @@ func TestExtractFacts_StorageDiskHealth(t *testing.T) {
 	assert.Equal(t, "disk_health:queried", facts[0].Key)
 	assert.Equal(t, "2 hosts extracted", facts[0].Value)
 
-	// Find delly fact
-	var dellyFact *FactEntry
+	// Find pve-node fact
+	var pveNodeFact *FactEntry
 	var minipcFact *FactEntry
 	for i := range facts[1:] {
 		idx := i + 1
 		switch facts[idx].Key {
-		case "disk_health:delly":
-			dellyFact = &facts[idx]
+		case "disk_health:pve-node":
+			pveNodeFact = &facts[idx]
 		case "disk_health:minipc":
 			minipcFact = &facts[idx]
 		}
 	}
 
-	require.NotNil(t, dellyFact)
-	assert.Equal(t, FactCategoryStorage, dellyFact.Category)
-	assert.Contains(t, dellyFact.Value, "1 PASSED")
-	assert.Contains(t, dellyFact.Value, "1 FAILED")
-	assert.Contains(t, dellyFact.Value, "/dev/sdb")
+	require.NotNil(t, pveNodeFact)
+	assert.Equal(t, FactCategoryStorage, pveNodeFact.Category)
+	assert.Contains(t, pveNodeFact.Value, "1 PASSED")
+	assert.Contains(t, pveNodeFact.Value, "1 FAILED")
+	assert.Contains(t, pveNodeFact.Value, "/dev/sdb")
 
 	require.NotNil(t, minipcFact)
 	assert.Contains(t, minipcFact.Value, "1 disks all PASSED")
@@ -696,7 +696,7 @@ func TestPredictFactKeys_MetricsDisks(t *testing.T) {
 
 func TestExtractFacts_MetricsTemperatures(t *testing.T) {
 	input := map[string]interface{}{"action": "temperatures"}
-	result := `[{"hostname":"delly","cpu_temps":{"core0":52,"core1":55},"disk_temps":{"sda":38,"sdb":42}},{"hostname":"minipc","cpu_temps":{"core0":45},"disk_temps":{}}]`
+	result := `[{"hostname":"pve-node","cpu_temps":{"core0":52,"core1":55},"disk_temps":{"sda":38,"sdb":42}},{"hostname":"minipc","cpu_temps":{"core0":45},"disk_temps":{}}]`
 
 	facts := ExtractFacts("pulse_metrics", input, result)
 	require.Len(t, facts, 3) // marker + 2 hosts
@@ -704,21 +704,21 @@ func TestExtractFacts_MetricsTemperatures(t *testing.T) {
 	assert.Equal(t, "temperatures:queried", facts[0].Key)
 	assert.Equal(t, "2 hosts", facts[0].Value)
 
-	var dellyFact, minipcFact *FactEntry
+	var pveNodeFact, minipcFact *FactEntry
 	for i := range facts[1:] {
 		idx := i + 1
 		switch facts[idx].Key {
-		case "temperatures:delly":
-			dellyFact = &facts[idx]
+		case "temperatures:pve-node":
+			pveNodeFact = &facts[idx]
 		case "temperatures:minipc":
 			minipcFact = &facts[idx]
 		}
 	}
 
-	require.NotNil(t, dellyFact)
-	assert.Equal(t, FactCategoryMetrics, dellyFact.Category)
-	assert.Contains(t, dellyFact.Value, "cpu_max=55°C")
-	assert.Contains(t, dellyFact.Value, "disk_max=42°C")
+	require.NotNil(t, pveNodeFact)
+	assert.Equal(t, FactCategoryMetrics, pveNodeFact.Category)
+	assert.Contains(t, pveNodeFact.Value, "cpu_max=55°C")
+	assert.Contains(t, pveNodeFact.Value, "disk_max=42°C")
 
 	require.NotNil(t, minipcFact)
 	assert.Contains(t, minipcFact.Value, "cpu_max=45°C")
@@ -739,7 +739,7 @@ func TestExtractFacts_MetricsTemperatures_Empty(t *testing.T) {
 
 func TestExtractFacts_StorageRAID(t *testing.T) {
 	input := map[string]interface{}{"action": "raid"}
-	result := `{"hosts":[{"hostname":"delly","arrays":[{"device":"/dev/md0","level":"raid1","state":"clean","failed_devices":0,"total_devices":2},{"device":"/dev/md1","level":"raid5","state":"degraded","failed_devices":1,"total_devices":4}]}]}`
+	result := `{"hosts":[{"hostname":"pve-node","arrays":[{"device":"/dev/md0","level":"raid1","state":"clean","failed_devices":0,"total_devices":2},{"device":"/dev/md1","level":"raid5","state":"degraded","failed_devices":1,"total_devices":4}]}]}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 2) // marker + 1 host
@@ -747,7 +747,7 @@ func TestExtractFacts_StorageRAID(t *testing.T) {
 	assert.Equal(t, "raid:queried", facts[0].Key)
 	assert.Equal(t, "1 hosts", facts[0].Value)
 
-	assert.Equal(t, "raid:delly", facts[1].Key)
+	assert.Equal(t, "raid:pve-node", facts[1].Key)
 	assert.Equal(t, FactCategoryStorage, facts[1].Category)
 	assert.Contains(t, facts[1].Value, "2 arrays")
 	assert.Contains(t, facts[1].Value, "1 degraded/failed")
@@ -840,7 +840,7 @@ func TestExtractFacts_ValueTruncation(t *testing.T) {
 
 func TestExtractFacts_QueryList(t *testing.T) {
 	input := map[string]interface{}{"action": "list"}
-	result := `{"nodes":[{"name":"delly","status":"online"},{"name":"minipc","status":"online"}],"vms":[{"name":"win10","status":"running"},{"name":"ubuntu","status":"stopped"}],"containers":[{"name":"postfix","status":"running"},{"name":"nginx","status":"running"},{"name":"test","status":"stopped"}],"docker_hosts":[{"hostname":"delly","display_name":"Delly Docker","container_count":5}],"total":{"nodes":2,"vms":2,"containers":3,"docker_hosts":1}}`
+	result := `{"nodes":[{"name":"pve-node","status":"online"},{"name":"minipc","status":"online"}],"vms":[{"name":"win10","status":"running"},{"name":"ubuntu","status":"stopped"}],"containers":[{"name":"postfix","status":"running"},{"name":"nginx","status":"running"},{"name":"test","status":"stopped"}],"docker_hosts":[{"hostname":"pve-node","display_name":"Delly Docker","container_count":5}],"total":{"nodes":2,"vms":2,"containers":3,"docker_hosts":1}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1)
@@ -866,7 +866,7 @@ func TestExtractFacts_QueryList_TypeFiltered(t *testing.T) {
 	// Real-world: model calls pulse_query with action=list AND type=vms
 	// The response only has the vms array, but total has all counts
 	input := map[string]interface{}{"action": "list", "type": "vms"}
-	result := `{"vms":[{"vmid":100,"name":"docker","status":"running","node":"minipc","cpu_percent":0.71,"memory_percent":4593.75},{"vmid":160,"name":"windows-runner","status":"stopped","node":"delly"},{"vmid":250,"name":"tails-anon","status":"stopped","node":"delly"}],"total":{"nodes":3,"vms":3,"containers":22,"docker_hosts":1}}`
+	result := `{"vms":[{"vmid":100,"name":"docker","status":"running","node":"minipc","cpu_percent":0.71,"memory_percent":4593.75},{"vmid":160,"name":"windows-runner","status":"stopped","node":"pve-node"},{"vmid":250,"name":"tails-anon","status":"stopped","node":"pve-node"}],"total":{"nodes":3,"vms":3,"containers":22,"docker_hosts":1}}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 1, "type-filtered list should still extract inventory:summary")
@@ -897,15 +897,15 @@ func TestPredictFactKeys_QueryList(t *testing.T) {
 // --- Change 3: Query Config Extractor ---
 
 func TestExtractFacts_QueryConfig_LXC(t *testing.T) {
-	input := map[string]interface{}{"action": "config", "resource_id": "106", "node": "delly"}
-	result := `{"guest_type":"lxc","vmid":106,"name":"postfix-server","node":"delly","hostname":"postfix","os_type":"ubuntu","onboot":true,"mounts":[{"key":"mp0","mountpoint":"/data"},{"key":"mp1","mountpoint":"/logs"}],"disks":[{"key":"rootfs"}]}`
+	input := map[string]interface{}{"action": "config", "resource_id": "106", "node": "pve-node"}
+	result := `{"guest_type":"lxc","vmid":106,"name":"postfix-server","node":"pve-node","hostname":"postfix","os_type":"ubuntu","onboot":true,"mounts":[{"key":"mp0","mountpoint":"/data"},{"key":"mp1","mountpoint":"/logs"}],"disks":[{"key":"rootfs"}]}`
 
 	facts := ExtractFacts("pulse_query", input, result)
 	require.Len(t, facts, 2) // primary + cached key
 
 	f := facts[0]
 	assert.Equal(t, FactCategoryResource, f.Category)
-	assert.Equal(t, "config:delly:106", f.Key)
+	assert.Equal(t, "config:pve-node:106", f.Key)
 	assert.Contains(t, f.Value, "lxc")
 	assert.Contains(t, f.Value, "hostname=postfix")
 	assert.Contains(t, f.Value, "os=ubuntu")
@@ -946,11 +946,11 @@ func TestPredictFactKeys_QueryConfig(t *testing.T) {
 	keys := PredictFactKeys("pulse_query", map[string]interface{}{
 		"action":      "config",
 		"resource_id": "106",
-		"node":        "delly",
+		"node":        "pve-node",
 	})
 	require.Len(t, keys, 2)
 	assert.Equal(t, "config:106:cached", keys[0])
-	assert.Equal(t, "config:delly:106", keys[1])
+	assert.Equal(t, "config:pve-node:106", keys[1])
 }
 
 func TestPredictFactKeys_QueryConfig_NoNode(t *testing.T) {
@@ -1053,7 +1053,7 @@ func TestNegativeMarker_NotStoredOnSuccess(t *testing.T) {
 	// Simulate: tool returns valid JSON that ExtractFacts can parse
 	toolName := "pulse_storage"
 	toolInput := map[string]interface{}{"action": "raid"}
-	resultText := `{"hosts":[{"hostname":"delly","arrays":[{"device":"/dev/md0","level":"raid1","state":"clean","failed_devices":0,"total_devices":2}]}]}`
+	resultText := `{"hosts":[{"hostname":"pve-node","arrays":[{"device":"/dev/md0","level":"raid1","state":"clean","failed_devices":0,"total_devices":2}]}]}`
 
 	facts := ExtractFacts(toolName, toolInput, resultText)
 	require.NotEmpty(t, facts)
@@ -1098,16 +1098,16 @@ func TestCategoryForPredictedKey(t *testing.T) {
 		{"backups:queried", FactCategoryStorage},
 		{"physical_disks:queried", FactCategoryStorage},
 		{"metrics:vm101", FactCategoryMetrics},
-		{"baseline:delly", FactCategoryMetrics},
+		{"baseline:pve-node", FactCategoryMetrics},
 		{"baselines:queried", FactCategoryMetrics},
 		{"temperatures:queried", FactCategoryMetrics},
-		{"exec:delly:some-cmd", FactCategoryExec},
-		{"discovery:delly:106", FactCategoryDiscovery},
+		{"exec:pve-node:some-cmd", FactCategoryExec},
+		{"discovery:pve-node:106", FactCategoryDiscovery},
 		{"topology:summary", FactCategoryResource},
 		{"health:connections", FactCategoryResource},
 		{"search:postfix:summary", FactCategoryResource},
 		{"inventory:summary", FactCategoryResource},
-		{"config:delly:106", FactCategoryResource},
+		{"config:pve-node:106", FactCategoryResource},
 		{"finding:high-cpu", FactCategoryFinding},
 		{"findings:overview", FactCategoryFinding},
 		{"alert:vm101:cpu", FactCategoryAlert},
@@ -1232,7 +1232,7 @@ func TestPredictFactKeys_CephDetails(t *testing.T) {
 
 func TestExtractFacts_Snapshots(t *testing.T) {
 	input := map[string]interface{}{"action": "snapshots"}
-	result := `{"snapshots":[{"vmid":100,"vm_name":"docker","type":"qemu","node":"minipc","snapshot_name":"snap1"},{"vmid":100,"vm_name":"docker","type":"qemu","node":"minipc","snapshot_name":"snap2"},{"vmid":106,"vm_name":"postfix","type":"lxc","node":"delly","snapshot_name":"backup"}],"total":3}`
+	result := `{"snapshots":[{"vmid":100,"vm_name":"docker","type":"qemu","node":"minipc","snapshot_name":"snap1"},{"vmid":100,"vm_name":"docker","type":"qemu","node":"minipc","snapshot_name":"snap2"},{"vmid":106,"vm_name":"postfix","type":"lxc","node":"pve-node","snapshot_name":"backup"}],"total":3}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 2) // marker + summary
@@ -1264,7 +1264,7 @@ func TestPredictFactKeys_Snapshots(t *testing.T) {
 
 func TestExtractFacts_Replication(t *testing.T) {
 	input := map[string]interface{}{"action": "replication"}
-	result := `[{"id":"106-0","guest_id":106,"guest_name":"postfix","source_node":"delly","target_node":"minipc","status":"ok","error":""},{"id":"200-0","guest_id":200,"guest_name":"win10","source_node":"delly","target_node":"minipc","status":"error","error":"connection refused"}]`
+	result := `[{"id":"106-0","guest_id":106,"guest_name":"postfix","source_node":"pve-node","target_node":"minipc","status":"ok","error":""},{"id":"200-0","guest_id":200,"guest_name":"win10","source_node":"pve-node","target_node":"minipc","status":"error","error":"connection refused"}]`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 2) // marker + summary
@@ -1280,7 +1280,7 @@ func TestExtractFacts_Replication(t *testing.T) {
 
 func TestExtractFacts_Replication_AllOK(t *testing.T) {
 	input := map[string]interface{}{"action": "replication"}
-	result := `[{"id":"106-0","guest_id":106,"guest_name":"postfix","source_node":"delly","target_node":"minipc","status":"ok","error":""}]`
+	result := `[{"id":"106-0","guest_id":106,"guest_name":"postfix","source_node":"pve-node","target_node":"minipc","status":"ok","error":""}]`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 2)
@@ -1341,7 +1341,7 @@ func TestPredictFactKeys_PBSJobs(t *testing.T) {
 
 func TestExtractFacts_ResourceDisks(t *testing.T) {
 	input := map[string]interface{}{"action": "resource_disks"}
-	result := `{"resources":[{"vmid":106,"name":"postfix","type":"lxc","node":"delly","disks":[{"mountpoint":"/","usage_percent":45.2},{"mountpoint":"/data","usage_percent":85.0}]},{"vmid":200,"name":"win10","type":"qemu","node":"minipc","disks":[{"mountpoint":"C:","usage_percent":92.3}]}],"total":2}`
+	result := `{"resources":[{"vmid":106,"name":"postfix","type":"lxc","node":"pve-node","disks":[{"mountpoint":"/","usage_percent":45.2},{"mountpoint":"/data","usage_percent":85.0}]},{"vmid":200,"name":"win10","type":"qemu","node":"minipc","disks":[{"mountpoint":"C:","usage_percent":92.3}]}],"total":2}`
 
 	facts := ExtractFacts("pulse_storage", input, result)
 	require.Len(t, facts, 2) // marker + summary
@@ -1375,7 +1375,7 @@ func TestPredictFactKeys_ResourceDisks(t *testing.T) {
 
 func TestExtractFacts_DockerServices(t *testing.T) {
 	input := map[string]interface{}{"action": "services"}
-	result := `{"host":"delly","services":[{"name":"nginx","mode":"replicated","desired_tasks":3,"running_tasks":3},{"name":"redis","mode":"replicated","desired_tasks":2,"running_tasks":1}],"total":2}`
+	result := `{"host":"pve-node","services":[{"name":"nginx","mode":"replicated","desired_tasks":3,"running_tasks":3},{"name":"redis","mode":"replicated","desired_tasks":2,"running_tasks":1}],"total":2}`
 
 	facts := ExtractFacts("pulse_docker", input, result)
 	require.Len(t, facts, 2) // marker + summary
@@ -1392,7 +1392,7 @@ func TestExtractFacts_DockerServices(t *testing.T) {
 
 func TestExtractFacts_DockerServices_Empty(t *testing.T) {
 	input := map[string]interface{}{"action": "services"}
-	result := `{"host":"delly","services":[],"total":0}`
+	result := `{"host":"pve-node","services":[],"total":0}`
 
 	facts := ExtractFacts("pulse_docker", input, result)
 	require.Len(t, facts, 1) // marker only
@@ -1431,7 +1431,7 @@ func TestPredictFactKeys_DockerUpdates(t *testing.T) {
 
 func TestExtractFacts_DockerSwarm(t *testing.T) {
 	input := map[string]interface{}{"action": "swarm"}
-	result := `{"host":"delly","status":{"node_role":"manager","local_state":"active","control_available":true,"cluster_name":"prod"}}`
+	result := `{"host":"pve-node","status":{"node_role":"manager","local_state":"active","control_available":true,"cluster_name":"prod"}}`
 
 	facts := ExtractFacts("pulse_docker", input, result)
 	require.Len(t, facts, 1)
@@ -1439,7 +1439,7 @@ func TestExtractFacts_DockerSwarm(t *testing.T) {
 	assert.Equal(t, "docker_swarm:status", facts[0].Key)
 	assert.Contains(t, facts[0].Value, "role=manager")
 	assert.Contains(t, facts[0].Value, "state=active")
-	assert.Contains(t, facts[0].Value, "host=delly")
+	assert.Contains(t, facts[0].Value, "host=pve-node")
 }
 
 func TestPredictFactKeys_DockerSwarm(t *testing.T) {
@@ -1452,7 +1452,7 @@ func TestPredictFactKeys_DockerSwarm(t *testing.T) {
 
 func TestExtractFacts_DockerTasks(t *testing.T) {
 	input := map[string]interface{}{"action": "tasks"}
-	result := `{"host":"delly","service":"nginx","tasks":[{"current_state":"running"},{"current_state":"running"},{"current_state":"failed","error":"OOM killed"}],"total":3}`
+	result := `{"host":"pve-node","service":"nginx","tasks":[{"current_state":"running"},{"current_state":"running"},{"current_state":"failed","error":"OOM killed"}],"total":3}`
 
 	facts := ExtractFacts("pulse_docker", input, result)
 	require.Len(t, facts, 1)

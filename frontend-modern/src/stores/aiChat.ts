@@ -14,7 +14,7 @@ interface AIChatContext {
 
 // A single context item that can be accumulated
 interface ContextItem {
-  id: string; // unique identifier (e.g., "vm-delly-101")
+  id: string; // unique identifier (e.g., "vm-pve-node-101")
   type: string; // "vm", "agent", "storage", etc.
   name: string; // display name
   data: Record<string, unknown>; // the actual context data

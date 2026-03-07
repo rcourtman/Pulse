@@ -4,10 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INTEGRATION_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-PVE_HOST="${PVE_HOST:-delly}"
+# Require explicit sandbox targeting so private lab topology never becomes a
+# committed default.
+PVE_HOST="${PVE_HOST:?set PVE_HOST to the disposable PVE host}"
 PVE_USER="${PVE_USER:-root}"
 PVE_TARGET="${PVE_USER}@${PVE_HOST}"
-PVE_CTID="${PVE_CTID:-211}"
+PVE_CTID="${PVE_CTID:?set PVE_CTID to the disposable test container ID}"
 PVE_SNAPSHOT="${PVE_SNAPSHOT:-pre-eval-baseline}"
 
 LOCAL_PULSE_PORT="${LOCAL_PULSE_PORT:-17655}"

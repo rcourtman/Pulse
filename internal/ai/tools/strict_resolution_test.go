@@ -552,7 +552,7 @@ func TestCommandRiskShellMetacharacters(t *testing.T) {
 
 func TestErrRoutingMismatch(t *testing.T) {
 	err := &ErrRoutingMismatch{
-		TargetHost:            "delly",
+		TargetHost:            "pve-node",
 		MoreSpecificResources: []string{"homepage-docker", "jellyfin"},
 		Message:               "test message",
 	}
@@ -584,8 +584,8 @@ func TestErrRoutingMismatch(t *testing.T) {
 	if response.Error.Details == nil {
 		t.Fatal("ToToolResponse().Error.Details should not be nil")
 	}
-	if response.Error.Details["target_host"] != "delly" {
-		t.Errorf("Details[target_host] = %v, want %q", response.Error.Details["target_host"], "delly")
+	if response.Error.Details["target_host"] != "pve-node" {
+		t.Errorf("Details[target_host] = %v, want %q", response.Error.Details["target_host"], "pve-node")
 	}
 	resources, ok := response.Error.Details["more_specific_resources"].([]string)
 	if !ok {
@@ -609,7 +609,7 @@ func TestRoutingValidationResult(t *testing.T) {
 	// Test blocked result
 	result = RoutingValidationResult{
 		RoutingError: &ErrRoutingMismatch{
-			TargetHost:            "delly",
+			TargetHost:            "pve-node",
 			MoreSpecificResources: []string{"homepage-docker"},
 			Message:               "test message",
 		},
@@ -620,16 +620,16 @@ func TestRoutingValidationResult(t *testing.T) {
 }
 
 // TestRoutingMismatch_RegressionHomepageScenario tests the exact scenario from the bug report:
-// User says "@homepage-docker config" but model targets "delly" (the Proxmox host)
+// User says "@homepage-docker config" but model targets "pve-node" (the Proxmox host)
 //
 // BEFORE FIX (broken):
-//  1. Model runs pulse_file_edit with target_host="delly"
+//  1. Model runs pulse_file_edit with target_host="pve-node"
 //  2. File is edited on the Proxmox host, not inside the LXC
 //  3. Homepage (running in LXC 141) doesn't see the change
 //
 // AFTER FIX (working):
-//  1. Model runs pulse_file_edit with target_host="delly"
-//  2. Routing validation detects that "homepage-docker" (LXC) exists on "delly"
+//  1. Model runs pulse_file_edit with target_host="pve-node"
+//  2. Routing validation detects that "homepage-docker" (LXC) exists on "pve-node"
 //  3. Returns ROUTING_MISMATCH error suggesting target_host="homepage-docker"
 //  4. Model retries with correct target
 func TestRoutingMismatch_RegressionHomepageScenario(t *testing.T) {
@@ -644,9 +644,9 @@ func TestRoutingMismatch_RegressionHomepageScenario(t *testing.T) {
 
 	// For now, we test the error structure is correct
 	err := &ErrRoutingMismatch{
-		TargetHost:            "delly",
+		TargetHost:            "pve-node",
 		MoreSpecificResources: []string{"homepage-docker"},
-		Message:               "target_host 'delly' is a Proxmox node, but you have discovered more specific resources on it: [homepage-docker]. Did you mean to target one of these instead?",
+		Message:               "target_host 'pve-node' is a Proxmox node, but you have discovered more specific resources on it: [homepage-docker]. Did you mean to target one of these instead?",
 	}
 
 	response := err.ToToolResponse()
@@ -682,14 +682,14 @@ func containsSubstr(s, substr string) bool {
 // operations are NOT blocked when child resources exist in the session but were NOT
 // recently accessed.
 //
-// Scenario: User wants to run "apt update" on their Proxmox host "delly".
-// The session has discovered LXC containers on delly, but the user is explicitly
+// Scenario: User wants to run "apt update" on their Proxmox host "pve-node".
+// The session has discovered LXC containers on pve-node, but the user is explicitly
 // targeting the host for a host-level operation.
 //
 // Expected behavior: NOT blocked (child resources exist but weren't recently referenced)
 func TestRoutingValidation_HostIntendedOperationNotBlocked(t *testing.T) {
 	// Setup: Create executor with mock state provider and resolved context
-	// The resolved context has a child resource ("homepage-docker") on node "delly",
+	// The resolved context has a child resource ("homepage-docker") on node "pve-node",
 	// but it was NOT recently accessed (simulating "exists in session but not this turn")
 
 	// Create a mock with a child resource but NO recent access timestamp
@@ -699,7 +699,7 @@ func TestRoutingValidation_HostIntendedOperationNotBlocked(t *testing.T) {
 			"homepage-docker": &mockResource{
 				resourceID:   "lxc:141",
 				kind:         "lxc",
-				node:         "delly",
+				node:         "pve-node",
 				vmID:         141,
 				targetHost:   "homepage-docker",
 				providerUID:  "141",
@@ -726,8 +726,8 @@ func TestRoutingValidation_HostIntendedOperationNotBlocked(t *testing.T) {
 	// and hasn't recently referenced any child resources, the command should pass.
 	//
 	// The actual validateRoutingContext function would check:
-	// 1. Is targetHost="delly" a direct match in ResolvedContext? No (it's the node, not an LXC)
-	// 2. Is targetHost="delly" a Proxmox node? Yes
+	// 1. Is targetHost="pve-node" a direct match in ResolvedContext? No (it's the node, not an LXC)
+	// 2. Is targetHost="pve-node" a Proxmox node? Yes
 	// 3. Are there RECENTLY ACCESSED children on this node? No (lastAccessed is empty)
 	// 4. Result: Not blocked
 	//
@@ -740,7 +740,7 @@ func TestRoutingValidation_HostIntendedOperationNotBlocked(t *testing.T) {
 // when the user recently referenced a child resource but the model targets the parent host.
 //
 // Scenario: User says "edit the Homepage config on @homepage-docker" but the model
-// incorrectly targets "delly" (the Proxmox host) instead of "homepage-docker" (the LXC).
+// incorrectly targets "pve-node" (the Proxmox host) instead of "homepage-docker" (the LXC).
 //
 // Expected behavior: BLOCKED (user recently referenced the child, implying they
 // intended to target the child, not the host)
@@ -752,7 +752,7 @@ func TestRoutingValidation_ChildIntendedOperationBlocked(t *testing.T) {
 			"homepage-docker": &mockResource{
 				resourceID:   "lxc:141",
 				kind:         "lxc",
-				node:         "delly",
+				node:         "pve-node",
 				vmID:         141,
 				targetHost:   "homepage-docker",
 				providerUID:  "141",
@@ -777,8 +777,8 @@ func TestRoutingValidation_ChildIntendedOperationBlocked(t *testing.T) {
 	}
 
 	// The actual validateRoutingContext function would check:
-	// 1. Is targetHost="delly" a direct match in ResolvedContext? No
-	// 2. Is targetHost="delly" a Proxmox node? Yes
+	// 1. Is targetHost="pve-node" a direct match in ResolvedContext? No
+	// 2. Is targetHost="pve-node" a Proxmox node? Yes
 	// 3. Are there RECENTLY ACCESSED children on this node? Yes (homepage-docker)
 	// 4. Result: BLOCKED with ROUTING_MISMATCH error
 	//
@@ -961,7 +961,7 @@ func TestRoutingValidation_ExplicitGetShouldMarkAccess(t *testing.T) {
 	mockCtx.aliases["homepage-docker"] = &mockResource{
 		resourceID:   "lxc:141",
 		kind:         "lxc",
-		node:         "delly",
+		node:         "pve-node",
 		providerUID:  "141",
 		resourceType: "lxc",
 	}
@@ -986,7 +986,7 @@ func TestRoutingValidation_ExplicitGetShouldMarkAccess(t *testing.T) {
 	}
 
 	// This validates the key invariant: after explicit get, host operations
-	// on delly should be BLOCKED because homepage-docker was explicitly accessed.
+	// on pve-node should be BLOCKED because homepage-docker was explicitly accessed.
 	t.Log("✓ Explicit get marks access - routing validation will block host ops")
 }
 
@@ -994,17 +994,17 @@ func TestRoutingValidation_ExplicitGetShouldMarkAccess(t *testing.T) {
 // are blocked when the routing would execute on the Proxmox node instead of inside the LXC.
 //
 // This catches the scenario where:
-// 1. target_host="homepage-docker" (an LXC on delly)
+// 1. target_host="homepage-docker" (an LXC on pve-node)
 // 2. An agent registered as "homepage-docker" matches directly
-// 3. Command would run on delly's filesystem, not inside the LXC
+// 3. Command would run on pve-node's filesystem, not inside the LXC
 func TestWriteExecutionContext_BlocksNodeFallbackForLXC(t *testing.T) {
 	// Create executor with state that knows homepage-docker is an LXC
 	state := models.StateSnapshot{
-		Nodes: []models.Node{{Name: "delly"}},
+		Nodes: []models.Node{{Name: "pve-node"}},
 		Containers: []models.Container{{
 			VMID:   141,
 			Name:   "homepage-docker",
-			Node:   "delly",
+			Node:   "pve-node",
 			Status: "running",
 		}},
 	}
@@ -1016,13 +1016,13 @@ func TestWriteExecutionContext_BlocksNodeFallbackForLXC(t *testing.T) {
 	// Simulate: routing resolved as "direct" (agent hostname match)
 	// This means the command would run directly on the agent, which is on the node
 	routing := CommandRoutingResult{
-		AgentID:       "agent-delly",
-		TargetType:    "agent",  // Direct agent match -> "agent" type
-		TargetID:      "",       // No VMID
-		AgentHostname: "delly",  // Agent is on delly
-		ResolvedKind:  "agent",  // Resolved as agent (direct match)
-		ResolvedNode:  "",       // No node info (direct match doesn't resolve)
-		Transport:     "direct", // Direct execution
+		AgentID:       "agent-pve-node",
+		TargetType:    "agent",    // Direct agent match -> "agent" type
+		TargetID:      "",         // No VMID
+		AgentHostname: "pve-node", // Agent is on pve-node
+		ResolvedKind:  "agent",    // Resolved as agent (direct match)
+		ResolvedNode:  "",         // No node info (direct match doesn't resolve)
+		Transport:     "direct",   // Direct execution
 	}
 
 	// validateWriteExecutionContext should block this
@@ -1053,11 +1053,11 @@ func TestWriteExecutionContext_BlocksNodeFallbackForLXC(t *testing.T) {
 // are allowed when the routing correctly uses pct_exec.
 func TestWriteExecutionContext_AllowsProperLXCRouting(t *testing.T) {
 	state := models.StateSnapshot{
-		Nodes: []models.Node{{Name: "delly"}},
+		Nodes: []models.Node{{Name: "pve-node"}},
 		Containers: []models.Container{{
 			VMID:   141,
 			Name:   "homepage-docker",
-			Node:   "delly",
+			Node:   "pve-node",
 			Status: "running",
 		}},
 	}
@@ -1068,12 +1068,12 @@ func TestWriteExecutionContext_AllowsProperLXCRouting(t *testing.T) {
 
 	// Simulate: routing correctly resolved as LXC with pct_exec
 	routing := CommandRoutingResult{
-		AgentID:       "agent-delly",
+		AgentID:       "agent-pve-node",
 		TargetType:    "container",
 		TargetID:      "141",
-		AgentHostname: "delly",
+		AgentHostname: "pve-node",
 		ResolvedKind:  "system-container",
-		ResolvedNode:  "delly",
+		ResolvedNode:  "pve-node",
 		Transport:     "pct_exec",
 	}
 
@@ -1090,25 +1090,25 @@ func TestWriteExecutionContext_AllowsProperLXCRouting(t *testing.T) {
 // (not a child resource) are allowed normally.
 func TestWriteExecutionContext_AllowsHostWrites(t *testing.T) {
 	state := models.StateSnapshot{
-		Nodes: []models.Node{{Name: "delly"}},
-		Hosts: []models.Host{{Hostname: "delly"}},
+		Nodes: []models.Node{{Name: "pve-node"}},
+		Hosts: []models.Host{{Hostname: "pve-node"}},
 	}
 
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: &mockStateProvider{state: state},
 	})
 
-	// Simulate: writing to delly directly (it's a host, not LXC/VM)
+	// Simulate: writing to pve-node directly (it's a host, not LXC/VM)
 	routing := CommandRoutingResult{
-		AgentID:       "agent-delly",
+		AgentID:       "agent-pve-node",
 		TargetType:    "agent",
-		AgentHostname: "delly",
+		AgentHostname: "pve-node",
 		ResolvedKind:  "node",
-		ResolvedNode:  "delly",
+		ResolvedNode:  "pve-node",
 		Transport:     "direct",
 	}
 
-	err := executor.validateWriteExecutionContext("delly", routing)
+	err := executor.validateWriteExecutionContext("pve-node", routing)
 	if err != nil {
 		t.Fatalf("Expected no error for host write, got: %s", err.Message)
 	}
@@ -1120,12 +1120,12 @@ func TestWriteExecutionContext_AllowsHostWrites(t *testing.T) {
 // structure is populated correctly for debugging.
 func TestCommandRoutingResult_ProvenanceFields(t *testing.T) {
 	routing := CommandRoutingResult{
-		AgentID:       "agent-delly",
+		AgentID:       "agent-pve-node",
 		TargetType:    "container",
 		TargetID:      "141",
-		AgentHostname: "delly",
+		AgentHostname: "pve-node",
 		ResolvedKind:  "system-container",
-		ResolvedNode:  "delly",
+		ResolvedNode:  "pve-node",
 		Transport:     "pct_exec",
 	}
 
@@ -1139,8 +1139,8 @@ func TestCommandRoutingResult_ProvenanceFields(t *testing.T) {
 	if provenance["transport"] != "pct_exec" {
 		t.Errorf("Expected transport=pct_exec, got %v", provenance["transport"])
 	}
-	if provenance["agent_host"] != "delly" {
-		t.Errorf("Expected agent_host=delly, got %v", provenance["agent_host"])
+	if provenance["agent_host"] != "pve-node" {
+		t.Errorf("Expected agent_host=pve-node, got %v", provenance["agent_host"])
 	}
 	if provenance["target_id"] != "141" {
 		t.Errorf("Expected target_id=141, got %v", provenance["target_id"])
@@ -1160,21 +1160,21 @@ func TestCommandRoutingResult_ProvenanceFields(t *testing.T) {
 //
 // Scenario:
 //   - request target_host = "homepage-docker"
-//   - state.ResolveResource says it's lxc:delly:141
+//   - state.ResolveResource says it's lxc:pve-node:141
 //   - agent lookup finds an agent with hostname "homepage-docker" (name collision)
 //
 // MUST:
 //   - Use pct_exec transport (topology wins over hostname match)
-//   - Route through the node agent (agent-delly)
+//   - Route through the node agent (agent-pve-node)
 //   - OR block with EXECUTION_CONTEXT_UNAVAILABLE if pct_exec unavailable
 func TestRoutingOrder_TopologyBeatsHostnameMatch(t *testing.T) {
-	// Setup: state knows homepage-docker is an LXC on delly
+	// Setup: state knows homepage-docker is an LXC on pve-node
 	state := models.StateSnapshot{
-		Nodes: []models.Node{{Name: "delly"}},
+		Nodes: []models.Node{{Name: "pve-node"}},
 		Containers: []models.Container{{
 			VMID:   141,
 			Name:   "homepage-docker",
-			Node:   "delly",
+			Node:   "pve-node",
 			Status: "running",
 		}},
 	}
@@ -1184,8 +1184,8 @@ func TestRoutingOrder_TopologyBeatsHostnameMatch(t *testing.T) {
 	agentServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
 			{
-				AgentID:  "agent-delly",
-				Hostname: "delly",
+				AgentID:  "agent-pve-node",
+				Hostname: "pve-node",
 			},
 			{
 				AgentID:  "agent-homepage-docker",
@@ -1216,12 +1216,12 @@ func TestRoutingOrder_TopologyBeatsHostnameMatch(t *testing.T) {
 	if routing.TargetID != "141" {
 		t.Errorf("TargetID = %q, want %q", routing.TargetID, "141")
 	}
-	if routing.ResolvedNode != "delly" {
-		t.Errorf("ResolvedNode = %q, want %q", routing.ResolvedNode, "delly")
+	if routing.ResolvedNode != "pve-node" {
+		t.Errorf("ResolvedNode = %q, want %q", routing.ResolvedNode, "pve-node")
 	}
-	// Agent must be the delly agent (the Proxmox node), NOT the "homepage-docker" agent
-	if routing.AgentID != "agent-delly" {
-		t.Errorf("AgentID = %q, want %q (must route through node agent)", routing.AgentID, "agent-delly")
+	// Agent must be the pve-node agent (the Proxmox node), NOT the "homepage-docker" agent
+	if routing.AgentID != "agent-pve-node" {
+		t.Errorf("AgentID = %q, want %q (must route through node agent)", routing.AgentID, "agent-pve-node")
 	}
 
 	t.Log("✓ Topology resolution wins over agent hostname match — LXC routes via pct_exec")
@@ -1232,7 +1232,7 @@ func TestRoutingOrder_TopologyBeatsHostnameMatch(t *testing.T) {
 func TestRoutingOrder_HostnameMatchUsedWhenTopologyUnknown(t *testing.T) {
 	// Setup: state has NO containers — doesn't know about "standalone-host"
 	state := models.StateSnapshot{
-		Nodes: []models.Node{{Name: "delly"}},
+		Nodes: []models.Node{{Name: "pve-node"}},
 	}
 
 	agentServer := &mockAgentServer{

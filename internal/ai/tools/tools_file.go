@@ -46,13 +46,13 @@ Actions:
 This tool handles escaping automatically - just provide the content as-is.
 Use this instead of shell commands for editing config files (YAML, JSON, etc.)
 
-Routing: target_host can be a node (delly), a container name (homepage-docker), or a VM name. Commands are automatically routed through the appropriate agent.
+Routing: target_host can be a node (pve-node), a container name (homepage-docker), or a VM name. Commands are automatically routed through the appropriate agent.
 
 Docker container support: Use container to access files INSIDE a Docker container. The target_host specifies where Docker runs.
 
 Examples:
 - Read from container: action="read", path="/opt/app/config.yaml", target_host="homepage-docker"
-- Write to host: action="write", path="/tmp/test.txt", content="hello", target_host="delly"
+- Write to host: action="write", path="/tmp/test.txt", content="hello", target_host="pve-node"
 - Read from Docker: action="read", path="/config/settings.json", target_host="tower", container="jellyfin"
 - Write to Docker: action="write", path="/tmp/test.txt", content="hello", target_host="tower", container="nginx"`,
 			InputSchema: InputSchema{

@@ -21,8 +21,8 @@ func TestExtractVMIDFromTargetID(t *testing.T) {
 		// Standard formats
 		{"plain vmid", "106", 106},
 		{"node-vmid", "minipc-106", 106},
-		{"instance-node-vmid", "delly-minipc-106", 106},
-		{"colon-delimited", "delly:minipc:112", 112},
+		{"instance-node-vmid", "pve-node-minipc-106", 106},
+		{"colon-delimited", "pve-node:minipc:112", 112},
 		{"slash-delimited", "cluster/node/205", 205},
 
 		// Edge cases with hyphenated names
@@ -58,7 +58,7 @@ func TestRoutingError(t *testing.T) {
 	t.Run("with suggestion", func(t *testing.T) {
 		err := &RoutingError{
 			TargetNode:      "minipc",
-			AvailableAgents: []string{"delly", "pimox"},
+			AvailableAgents: []string{"pve-node", "pimox"},
 			Reason:          "No agent connected to node \"minipc\"",
 			Suggestion:      "Install pulse-agent on minipc",
 		}
@@ -108,7 +108,7 @@ func TestRouteToAgent_ExactMatch(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "minipc"},
 		{AgentID: "agent-3", Hostname: "pimox"},
 	}
@@ -124,7 +124,7 @@ func TestRouteToAgent_ExactMatch(t *testing.T) {
 			name: "route by context node",
 			req: ExecuteRequest{
 				TargetType: "container",
-				TargetID:   "delly-minipc-106",
+				TargetID:   "pve-node-minipc-106",
 				Context:    map[string]interface{}{"node": "minipc"},
 			},
 			command:      "hostname",
@@ -135,11 +135,11 @@ func TestRouteToAgent_ExactMatch(t *testing.T) {
 			name: "route by context hostname for host target",
 			req: ExecuteRequest{
 				TargetType: "agent",
-				Context:    map[string]interface{}{"hostname": "delly"},
+				Context:    map[string]interface{}{"hostname": "pve-node"},
 			},
 			command:      "uptime",
 			wantAgentID:  "agent-1",
-			wantHostname: "delly",
+			wantHostname: "pve-node",
 		},
 		{
 			name: "route by guest_node context",
@@ -250,7 +250,7 @@ func TestRouteToAgent_ActionableErrorMessages(t *testing.T) {
 	s := &Service{}
 
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 	}
 
 	req := ExecuteRequest{
@@ -288,7 +288,7 @@ func TestRoutingError_ForAI(t *testing.T) {
 	t.Run("clarification", func(t *testing.T) {
 		err := &RoutingError{
 			Reason:              "Cannot determine which host should execute this command",
-			AvailableAgents:     []string{"delly", "pimox"},
+			AvailableAgents:     []string{"pve-node", "pimox"},
 			AskForClarification: true,
 		}
 
@@ -296,7 +296,7 @@ func TestRoutingError_ForAI(t *testing.T) {
 		if !strings.Contains(msg, "ROUTING_CLARIFICATION_NEEDED") {
 			t.Errorf("expected clarification marker, got %q", msg)
 		}
-		if !strings.Contains(msg, "delly, pimox") {
+		if !strings.Contains(msg, "pve-node, pimox") {
 			t.Errorf("expected available hosts list, got %q", msg)
 		}
 		if !strings.Contains(msg, err.Reason) {
@@ -593,7 +593,7 @@ func TestRouteToAgent_SingleAgentFallbackForHost(t *testing.T) {
 func TestRouteToAgent_AsksForClarification(t *testing.T) {
 	s := &Service{}
 	agents := []agentexec.ConnectedAgent{
-		{AgentID: "agent-1", Hostname: "delly"},
+		{AgentID: "agent-1", Hostname: "pve-node"},
 		{AgentID: "agent-2", Hostname: "pimox"},
 	}
 

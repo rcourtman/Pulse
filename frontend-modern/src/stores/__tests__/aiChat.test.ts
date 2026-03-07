@@ -71,10 +71,10 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.targetId).toBe('vm-101');
 
     // openForTarget should replace, not add to existing context
-    aiChatStore.openForTarget('agent', 'agent-1', { name: 'delly' });
+    aiChatStore.openForTarget('agent', 'agent-1', { name: 'pve-node' });
     expect(aiChatStore.isOpen).toBe(true);
     expect(aiChatStore.contextItems).toHaveLength(1);
-    expect(aiChatStore.contextItems[0].name).toBe('delly');
+    expect(aiChatStore.contextItems[0].name).toBe('pve-node');
     expect(aiChatStore.context.targetId).toBe('agent-1');
   });
 

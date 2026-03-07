@@ -127,7 +127,7 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 	if node == "" {
 		node = resource.Host
 	}
-	// Prefer VMID (numeric) over composite ID (which may contain node prefix like "delly:minipc:100")
+	// Prefer VMID (numeric) over composite ID (which may contain node prefix like "homelab:pve-node:100")
 	id := ""
 	if resource.VMID > 0 {
 		id = fmt.Sprintf("%d", resource.VMID)
@@ -965,7 +965,7 @@ func extractMetricsPerformanceFacts(input map[string]interface{}, resultText str
 func extractMetricsBaselinesFacts(resultText string) []FactEntry {
 	// BaselinesResponse — real format is nested: baselines.{nodeName}.{resourceKey:metricType}
 	// where each metric entry has mean/std_dev/min/max.
-	// Example: baselines.delly."delly:101:cpu" = {mean: 0.9, std_dev: 0.5, min: -0.2, max: 2.1}
+	// Example: baselines.pve_node."pve-node:101:cpu" = {mean: 0.9, std_dev: 0.5, min: -0.2, max: 2.1}
 	// Node-level metrics use just "cpu"/"memory" as keys.
 	var resp struct {
 		Baselines map[string]map[string]struct {
@@ -1002,7 +1002,7 @@ func extractMetricsBaselinesFacts(resultText string) []FactEntry {
 		var cpuMeans, memMeans []float64
 		var cpuMax, memMax float64
 		for metricKey, stat := range metrics {
-			// Keys are like "delly:101:cpu", "delly:101:memory", or bare "cpu", "memory"
+			// Keys are like "pve-node:101:cpu", "pve-node:101:memory", or bare "cpu", "memory"
 			if strings.HasSuffix(metricKey, ":cpu") || metricKey == "cpu" {
 				cpuMeans = append(cpuMeans, stat.Mean)
 				if stat.Max > cpuMax {

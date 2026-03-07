@@ -112,6 +112,9 @@ cd tests/integration
 PVE_HOST=<pve-host> PVE_CTID=<ctid> ./scripts/run-lxc-sandbox-evals.sh
 ```
 
+The runner intentionally requires explicit `PVE_HOST` and `PVE_CTID` values so
+private sandbox topology is never baked into repo-tracked defaults.
+
 ### Optional: Inject Latest Control-Plane Binary Per Rollback
 
 If your snapshot contains an older control-plane binary, build a Linux binary from current source and inject it on every rollback:

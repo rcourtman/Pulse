@@ -363,7 +363,7 @@ func TestRequiresToolUse(t *testing.T) {
 		{"restart request", "please restart nginx", true},
 		{"status query", "is homepage running?", true},
 		{"logs request", "show me the logs for influxdb", true},
-		{"cpu query", "what's the cpu usage on delly?", true},
+		{"cpu query", "what's the cpu usage on pve-node?", true},
 		{"memory query", "how much memory is traefik using?", true},
 		{"container query", "list my docker containers", true},
 		{"my infrastructure", "what's happening on my server?", true},

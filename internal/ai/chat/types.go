@@ -59,7 +59,7 @@ type StreamCallback func(event StreamEvent)
 // The frontend resolves these from the autocomplete and sends them alongside the prompt,
 // so the backend doesn't need to re-derive resource identity from text.
 type StructuredMention struct {
-	ID   string `json:"id"`             // e.g. "system-container:delly:123", "docker:docker-host-1:container", "agent:host-1"
+	ID   string `json:"id"`             // e.g. "system-container:pve-node:123", "docker:docker-host-1:container", "agent:host-1"
 	Name string `json:"name"`           // Display name, e.g. "ntfy"
 	Type string `json:"type"`           // "vm", "system-container", "app-container", "node", "agent"
 	Node string `json:"node,omitempty"` // Proxmox node or parent host
@@ -208,11 +208,11 @@ type ResolvedResource struct {
 	ResourceType string `json:"resource_type"`
 
 	// DisplayPath is the human-readable location string
-	// e.g., "docker:jellyfin @ lxc:media-server @ node:delly"
+	// e.g., "docker:jellyfin @ lxc:media-server @ node:pve-node"
 	DisplayPath string `json:"display_path,omitempty"`
 
 	// LocationChain is the hierarchical path (for backwards compatibility)
-	// Example: ["node:delly", "lxc:media-server", "docker:jellyfin"]
+	// Example: ["node:pve-node", "lxc:media-server", "docker:jellyfin"]
 	LocationChain []string `json:"location_chain"`
 
 	// === Executor Paths ===
@@ -802,10 +802,10 @@ func (rc *ResolvedContext) AddResolvedResource(reg tools.ResourceRegistration) {
 	//         {kind}:{provider_uid} for global resources (nodes, clusters)
 	//
 	// Examples:
-	//   lxc:delly:141         (LXC container 141 on node delly)
+	//   lxc:pve-node:141      (LXC container 141 on node pve-node)
 	//   vm:minipc:203         (VM 203 on node minipc)
 	//   app-container:media-server:abc123  (Docker container on host media-server)
-	//   node:delly            (Proxmox node - no parent scope)
+	//   node:pve-node         (Proxmox node - no parent scope)
 	var resourceID string
 	if reg.ProviderUID != "" {
 		// Include host scope for resources that have a parent host

@@ -268,7 +268,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		expected := sha256.Sum256([]byte(content))
 		expectedHex := hex.EncodeToString(expected[:])
 
-		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
@@ -295,7 +295,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 
 		state := models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 141, Name: "homepage-docker", Node: "delly"},
+				{VMID: 141, Name: "homepage-docker", Node: "pve-node"},
 			},
 		}
 
@@ -325,7 +325,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		expected := sha256.Sum256([]byte(content))
 		expectedHex := hex.EncodeToString(expected[:])
 
-		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
@@ -349,7 +349,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 
 		state := models.StateSnapshot{
 			VMs: []models.VM{
-				{VMID: 100, Name: "test-vm", Node: "delly"},
+				{VMID: 100, Name: "test-vm", Node: "pve-node"},
 			},
 		}
 
@@ -422,7 +422,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		expected := sha256.Sum256([]byte(content))
 		expectedHex := hex.EncodeToString(expected[:])
 
-		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
@@ -448,7 +448,7 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 
 		state := models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 141, Name: "homepage-docker", Node: "delly"},
+				{VMID: 141, Name: "homepage-docker", Node: "pve-node"},
 			},
 		}
 

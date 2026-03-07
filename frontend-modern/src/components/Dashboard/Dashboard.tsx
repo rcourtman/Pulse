@@ -872,7 +872,7 @@ export function Dashboard(props: DashboardProps) {
         let { guestId, url } = customEvent.detail.payload;
         if (guestId) {
           // Normalize guestId if it's in the canonical AI format (instance:node:vmid)
-          // Frontend uses 'instance-vmid' (e.g., 'delly-101') but AI sends 'delly:delly:101'
+          // Frontend uses 'instance-vmid' (e.g., 'pve-node-101') but AI sends 'homelab:pve-node:101'
           if (guestId.includes(':')) {
             const parts = guestId.split(':');
             if (parts.length === 3) {

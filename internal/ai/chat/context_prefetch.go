@@ -23,7 +23,7 @@ type ResourceMention struct {
 	DockerHostName string // Name of system-container/VM/host running Docker (e.g., "homepage-docker")
 	DockerHostType string // "system-container", "vm", or "standalone" (from ResolveResource)
 	DockerHostVMID int    // Guest ID (VMID) if DockerHost is a system container or VM
-	NodeName       string // Hypervisor node name (e.g., "delly")
+	NodeName       string // Hypervisor node name (e.g., "pve-node")
 	TargetHost     string // The correct target_host to use for commands
 }
 

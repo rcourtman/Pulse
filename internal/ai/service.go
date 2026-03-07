@@ -2819,7 +2819,7 @@ func (s *Service) getTools() []providers.Tool {
 				"properties": map[string]interface{}{
 					"url": map[string]interface{}{
 						"type":        "string",
-						"description": "The URL to fetch (e.g., 'http://192.168.1.50:8080/api/health' or 'https://example.com/docs')",
+						"description": "The URL to fetch (e.g., 'http://192.0.2.50:8080/api/health' or 'https://example.com/docs')",
 					},
 				},
 				"required": []string{"url"},
@@ -2838,11 +2838,11 @@ func (s *Service) getTools() []providers.Tool {
 					},
 					"resource_id": map[string]interface{}{
 						"type":        "string",
-						"description": "The resource ID from context. For VMs/LXC, use the canonical resource ID shown by Pulse (for example 'delly:minipc:150'). For app containers, use the container resource ID (for example 'hostid:container:containerid').",
+						"description": "The resource ID from context. For VMs/LXC, use the canonical resource ID shown by Pulse (for example 'homelab:pve-node:150'). For app containers, use the container resource ID (for example 'hostid:container:containerid').",
 					},
 					"url": map[string]interface{}{
 						"type":        "string",
-						"description": "The discovered URL (e.g., 'http://192.168.1.50:8096' for Jellyfin). Use an empty string to remove the URL.",
+						"description": "The discovered URL (e.g., 'http://192.0.2.50:8096' for Jellyfin). Use an empty string to remove the URL.",
 					},
 				},
 				"required": []string{"resource_type", "resource_id"},
@@ -3537,7 +3537,7 @@ func sanitizeError(err error) error {
 	errMsg := err.Error()
 
 	// Replace raw TCP connection details with generic message
-	// e.g., "write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout"
+	// e.g., "write tcp 192.0.2.10:7655->198.51.100.20:58004: i/o timeout"
 	// becomes "connection to agent timed out"
 	if strings.Contains(errMsg, "i/o timeout") {
 		if strings.Contains(errMsg, "failed to send command") {
@@ -3831,7 +3831,7 @@ When finding web URLs for resources:
 4. Save with set_resource_url tool
 
 resource_id format: {instance}:{node}:{vmid} (colons, not dashes)
-Example: "delly:minipc:201" for VMID 201 on node minipc in instance delly
+Example: "homelab:pve-node:201" for VMID 201 on node pve-node in instance homelab
 
 ## Installing/Updating Pulse
 curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash

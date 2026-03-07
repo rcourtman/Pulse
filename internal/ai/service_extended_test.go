@@ -153,11 +153,11 @@ func TestService_SetResourceURL(t *testing.T) {
 	svc.SetMetadataProvider(mockMP)
 
 	// Valid VM URL
-	err := svc.SetResourceURL("vm", "delly-150", "http://192.168.1.10")
+	err := svc.SetResourceURL("vm", "pve-node-150", "http://192.168.1.10")
 	if err != nil {
 		t.Errorf("SetResourceURL failed: %v", err)
 	}
-	if mockMP.lastGuestID != "delly-150" || mockMP.lastGuestURL != "http://192.168.1.10" {
+	if mockMP.lastGuestID != "pve-node-150" || mockMP.lastGuestURL != "http://192.168.1.10" {
 		t.Error("Mock did not receive correct guest data")
 	}
 
@@ -1381,7 +1381,7 @@ func TestService_ExecuteOnAgent_RejectsLegacyContainerTargetTypeAlias(t *testing
 
 	req := ExecuteRequest{
 		TargetType: "CONTAINER",
-		TargetID:   "delly:minipc:112",
+		TargetID:   "pve-node:minipc:112",
 		Context: map[string]interface{}{
 			"node": "node-1",
 		},
@@ -1417,7 +1417,7 @@ func TestService_ExecuteOnAgent_AcceptsSystemContainerTargetType(t *testing.T) {
 
 	req := ExecuteRequest{
 		TargetType: "system-container",
-		TargetID:   "delly:minipc:113",
+		TargetID:   "pve-node:minipc:113",
 		Context: map[string]interface{}{
 			"node": "node-1",
 		},
@@ -1446,7 +1446,7 @@ func TestService_ExecuteOnAgent_RejectsLegacyGuestTargetType(t *testing.T) {
 
 	_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
 		TargetType: "guest",
-		TargetID:   "delly:minipc:101",
+		TargetID:   "pve-node:minipc:101",
 		Context:    map[string]interface{}{"node": "node-1"},
 	}, "uptime")
 	if err == nil || !strings.Contains(err.Error(), "unsupported target_type") {
@@ -1659,7 +1659,7 @@ func TestService_ExecuteOnAgent_TargetIDExtractionOnly(t *testing.T) {
 	// No vmid in context, but TargetID has a number
 	req := ExecuteRequest{
 		TargetType: "system-container",
-		TargetID:   "delly-135",
+		TargetID:   "pve-node-135",
 		Context: map[string]interface{}{
 			"node": "host-1", // Force routing
 		},
@@ -1670,7 +1670,7 @@ func TestService_ExecuteOnAgent_TargetIDExtractionOnly(t *testing.T) {
 		t.Fatalf("executeOnAgent failed: %v", err)
 	}
 
-	// Should have extracted 135 from delly-135
+	// Should have extracted 135 from pve-node-135
 	if capturedCmd.TargetID != "135" {
 		t.Errorf("Expected extracted TargetID '135', got '%s'", capturedCmd.TargetID)
 	}
@@ -2751,7 +2751,7 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 	finding := &Finding{
 		ID:           "test-finding-123",
 		Node:         "minipc",
-		ResourceID:   "delly:minipc:112",
+		ResourceID:   "pve-node:minipc:112",
 		ResourceName: "debian-go",
 		ResourceType: "system-container",
 		Title:        "Test Finding",
@@ -2774,8 +2774,8 @@ func TestService_EnrichRequestFromFinding(t *testing.T) {
 	if req.Context["guestName"] != "debian-go" {
 		t.Errorf("Expected guestName 'debian-go', got %v", req.Context["guestName"])
 	}
-	if req.TargetID != "delly:minipc:112" {
-		t.Errorf("Expected TargetID 'delly:minipc:112', got %s", req.TargetID)
+	if req.TargetID != "pve-node:minipc:112" {
+		t.Errorf("Expected TargetID 'pve-node:minipc:112', got %s", req.TargetID)
 	}
 	if req.TargetType != "system-container" {
 		t.Errorf("Expected TargetType 'system-container', got %s", req.TargetType)
@@ -2843,7 +2843,7 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 	mockState := &mockStateProvider{
 		state: models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "delly"},
+				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "pve-node"},
 			},
 		},
 	}
@@ -2854,7 +2854,7 @@ func TestService_FindingContextInSystemPrompt(t *testing.T) {
 	finding := &Finding{
 		ID:           "disk-growth-finding",
 		Node:         "minipc",
-		ResourceID:   "delly:minipc:112",
+		ResourceID:   "pve-node:minipc:112",
 		ResourceName: "debian-go",
 		ResourceType: "system-container",
 		Title:        "Container disk usage growing",
@@ -2896,7 +2896,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 
 	mockAgentServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
-			{AgentID: "agent-delly", Hostname: "delly"},
+			{AgentID: "agent-pve-node", Hostname: "pve-node"},
 			{AgentID: "agent-minipc", Hostname: "minipc"},
 		},
 		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
@@ -2922,7 +2922,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 	mockState := &mockStateProvider{
 		state: models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "delly"},
+				{VMID: 112, Node: "minipc", Name: "debian-go", Instance: "pve-node"},
 			},
 		},
 	}
@@ -2933,7 +2933,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 	finding := &Finding{
 		ID:           "test-routing-finding",
 		Node:         "minipc",
-		ResourceID:   "delly:minipc:112",
+		ResourceID:   "pve-node:minipc:112",
 		ResourceName: "debian-go",
 		ResourceType: "system-container",
 	}
@@ -2962,7 +2962,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 		t.Errorf("Command execution failed: %s", result)
 	}
 
-	// Verify it routed to the correct agent (minipc, not delly)
+	// Verify it routed to the correct agent (minipc, not pve-node)
 	if routedToAgent != "agent-minipc" {
 		t.Errorf("Expected command to route to agent-minipc, but went to: %s", routedToAgent)
 	}

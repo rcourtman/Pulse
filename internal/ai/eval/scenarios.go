@@ -25,18 +25,18 @@ type evalTargets struct {
 	RequireStrictRecovery  bool
 	// Guest control eval targets
 	ControlGuest     string // Guest name for start/stop tests (e.g. "ntfy")
-	ControlGuestID   string // Full resource ID (e.g. "delly:delly:150")
+	ControlGuestID   string // Full resource ID (e.g. "homelab:pve-node:150")
 	ControlGuestType string // Resource type (e.g. "container")
-	ControlGuestNode string // Proxmox node (e.g. "delly")
+	ControlGuestNode string // Proxmox node (e.g. "pve-node")
 	// Second guest for multi-mention eval
 	ControlGuest2     string // Second guest name (e.g. "grafana")
-	ControlGuest2ID   string // Second guest resource ID (e.g. "delly:delly:124")
+	ControlGuest2ID   string // Second guest resource ID (e.g. "homelab:pve-node:124")
 	ControlGuest2Type string // Second guest resource type (e.g. "container")
-	ControlGuest2Node string // Second guest node (e.g. "delly")
+	ControlGuest2Node string // Second guest node (e.g. "pve-node")
 }
 
 func loadEvalTargets() evalTargets {
-	node := envOrDefault("EVAL_NODE", "delly")
+	node := envOrDefault("EVAL_NODE", "pve-node")
 	nodeContainer := envOrDefault("EVAL_NODE_CONTAINER", "homeassistant")
 	dockerHost := envOrDefault("EVAL_DOCKER_HOST", "homepage-docker")
 	homepage := envOrDefault("EVAL_HOMEPAGE_CONTAINER", "homepage")
@@ -67,13 +67,13 @@ func loadEvalTargets() evalTargets {
 		StrictResolution:       envBoolDefault("EVAL_STRICT_RESOLUTION", false),
 		RequireStrictRecovery:  envBoolDefault("EVAL_REQUIRE_STRICT_RECOVERY", false),
 		ControlGuest:           envOrDefault("EVAL_CONTROL_GUEST", "ntfy"),
-		ControlGuestID:         envOrDefault("EVAL_CONTROL_GUEST_ID", "delly:delly:150"),
+		ControlGuestID:         envOrDefault("EVAL_CONTROL_GUEST_ID", "homelab:pve-node:150"),
 		ControlGuestType:       envOrDefault("EVAL_CONTROL_GUEST_TYPE", "container"),
-		ControlGuestNode:       envOrDefault("EVAL_CONTROL_GUEST_NODE", "delly"),
+		ControlGuestNode:       envOrDefault("EVAL_CONTROL_GUEST_NODE", "pve-node"),
 		ControlGuest2:          envOrDefault("EVAL_CONTROL_GUEST2", "grafana"),
-		ControlGuest2ID:        envOrDefault("EVAL_CONTROL_GUEST2_ID", "delly:delly:124"),
+		ControlGuest2ID:        envOrDefault("EVAL_CONTROL_GUEST2_ID", "homelab:pve-node:124"),
 		ControlGuest2Type:      envOrDefault("EVAL_CONTROL_GUEST2_TYPE", "container"),
-		ControlGuest2Node:      envOrDefault("EVAL_CONTROL_GUEST2_NODE", "delly"),
+		ControlGuest2Node:      envOrDefault("EVAL_CONTROL_GUEST2_NODE", "pve-node"),
 	}
 }
 

@@ -22,8 +22,8 @@ import (
 // This is the core contract for Invariant 7: routing validation.
 func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	// Simulate: User message contains "@homepage-docker"
-	// Prefetch resolves it to system-container:delly:141 and marks explicit access
-	// Tool call attempts to write with target_host="delly"
+	// Prefetch resolves it to system-container:pve-node:141 and marks explicit access
+	// Tool call attempts to write with target_host="pve-node"
 	// Assert: ROUTING_MISMATCH with target_resource_id suggestion
 
 	// Step 1: Create resolved context (simulating session creation)
@@ -34,10 +34,10 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 		Kind:        "system-container",
 		ProviderUID: "141",
 		Name:        "homepage-docker",
-		HostName:    "delly",
-		HostUID:     "delly",
+		HostName:    "pve-node",
+		HostUID:     "pve-node",
 		Executors: []tools.ExecutorRegistration{{
-			ExecutorID: "delly",
+			ExecutorID: "pve-node",
 			Adapter:    "proxmox",
 			Actions:    []string{"restart", "stop", "start"},
 			Priority:   10,
@@ -46,27 +46,27 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 
 	// Step 3: Simulate prefetch marking @mention as explicit access
 	// This is what service.go does when it finds a @mention
-	resourceID := "system-container:delly:141" // kind:scope:provider_uid format
+	resourceID := "system-container:pve-node:141" // kind:scope:provider_uid format
 	resolvedCtx.MarkExplicitAccess(resourceID)
 
 	// Verify: Resource is marked as recently accessed
 	if !resolvedCtx.WasRecentlyAccessed(resourceID, tools.RecentAccessWindow) {
-		t.Fatal("Expected system-container:delly:141 to be marked as recently accessed after @mention")
+		t.Fatal("Expected system-container:pve-node:141 to be marked as recently accessed after @mention")
 	}
 
-	// Step 4: Create tool executor with state showing delly is a Proxmox node
+	// Step 4: Create tool executor with state showing pve-node is a Proxmox node
 	mockState := &mockRoutingStateProvider{
 		state: models.StateSnapshot{
 			Nodes: []models.Node{
 				{
-					Name: "delly",
+					Name: "pve-node",
 				},
 			},
 			Containers: []models.Container{
 				{
 					VMID:   141,
 					Name:   "homepage-docker",
-					Node:   "delly",
+					Node:   "pve-node",
 					Status: "running",
 				},
 			},
@@ -78,8 +78,8 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	})
 	executor.SetResolvedContext(resolvedCtx)
 
-	// Step 5: Simulate tool call targeting the host (delly) instead of the LXC
-	// In a real scenario, the model would call pulse_file with target_host="delly"
+	// Step 5: Simulate tool call targeting the host (pve-node) instead of the LXC
+	// In a real scenario, the model would call pulse_file with target_host="pve-node"
 	// Here we directly test the routing validation logic
 
 	// The validateRoutingContext is private, so we test through the public interface
@@ -91,11 +91,11 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 
 	// Step 6: Verify the ErrRoutingMismatch response structure
 	err := &tools.ErrRoutingMismatch{
-		TargetHost:            "delly",
+		TargetHost:            "pve-node",
 		MoreSpecificResources: []string{"homepage-docker"},
-		MoreSpecificIDs:       []string{"system-container:delly:141"},
+		MoreSpecificIDs:       []string{"system-container:pve-node:141"},
 		ChildKinds:            []string{"system-container"},
-		Message:               "You targeted 'delly' but recently referenced 'homepage-docker'. Did you mean to target the LXC?",
+		Message:               "You targeted 'pve-node' but recently referenced 'homepage-docker'. Did you mean to target the LXC?",
 	}
 
 	response := err.ToToolResponse()
@@ -117,8 +117,8 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 	if details["auto_recoverable"] != true {
 		t.Error("Expected auto_recoverable=true in response")
 	}
-	if details["target_resource_id"] != "system-container:delly:141" {
-		t.Errorf("Expected target_resource_id='system-container:delly:141', got %v", details["target_resource_id"])
+	if details["target_resource_id"] != "system-container:pve-node:141" {
+		t.Errorf("Expected target_resource_id='system-container:pve-node:141', got %v", details["target_resource_id"])
 	}
 	if details["recovery_hint"] == nil {
 		t.Error("Expected recovery_hint in response")
@@ -132,11 +132,11 @@ func TestContract_MentionTriggersRoutingMismatchBlock(t *testing.T) {
 // resources were recently accessed by the user.
 //
 // This is important to prevent false positives: if user wants to run
-// "apt update on delly" and hasn't mentioned any LXCs, allow it.
+// "apt update on pve-node" and hasn't mentioned any LXCs, allow it.
 func TestContract_HostOpAllowedWhenNoRecentChildAccess(t *testing.T) {
-	// Simulate: User says "run apt update on delly" without @mentions
+	// Simulate: User says "run apt update on pve-node" without @mentions
 	// No explicit access marking happens
-	// Tool call targets delly
+	// Tool call targets pve-node
 	// Assert: Allowed (no routing mismatch)
 
 	// Step 1: Create resolved context
@@ -148,15 +148,15 @@ func TestContract_HostOpAllowedWhenNoRecentChildAccess(t *testing.T) {
 		Kind:        "system-container",
 		ProviderUID: "141",
 		Name:        "homepage-docker",
-		HostName:    "delly",
-		HostUID:     "delly",
+		HostName:    "pve-node",
+		HostUID:     "pve-node",
 	})
 	resolvedCtx.AddResolvedResource(tools.ResourceRegistration{
 		Kind:        "system-container",
 		ProviderUID: "142",
 		Name:        "nginx-proxy",
-		HostName:    "delly",
-		HostUID:     "delly",
+		HostName:    "pve-node",
+		HostUID:     "pve-node",
 	})
 
 	// Step 3: Verify NO resources are marked as recently accessed
@@ -166,14 +166,14 @@ func TestContract_HostOpAllowedWhenNoRecentChildAccess(t *testing.T) {
 	}
 
 	// Step 4: Since no children are recently accessed, host operation should be allowed
-	// The validateRoutingContext would check WasRecentlyAccessed for children on delly
+	// The validateRoutingContext would check WasRecentlyAccessed for children on pve-node
 	// and find none, so it would NOT block.
 
 	// Verify the interface contract
-	if resolvedCtx.WasRecentlyAccessed("system-container:delly:141", tools.RecentAccessWindow) {
+	if resolvedCtx.WasRecentlyAccessed("system-container:pve-node:141", tools.RecentAccessWindow) {
 		t.Error("lxc:141 should NOT be recently accessed after bulk discovery")
 	}
-	if resolvedCtx.WasRecentlyAccessed("system-container:delly:142", tools.RecentAccessWindow) {
+	if resolvedCtx.WasRecentlyAccessed("system-container:pve-node:142", tools.RecentAccessWindow) {
 		t.Error("lxc:142 should NOT be recently accessed after bulk discovery")
 	}
 
@@ -190,9 +190,9 @@ func TestContract_HostOpAllowedWhenNoRecentChildAccess(t *testing.T) {
 // Note: This policy may be relaxed in the future with an escape hatch
 // (e.g., explicit node: prefix or similar).
 func TestContract_HostTargetingBlockedEvenWithHostMention(t *testing.T) {
-	// Simulate: User mentions both @homepage-docker and @delly
+	// Simulate: User mentions both @homepage-docker and @pve-node
 	// We mark homepage-docker as explicitly accessed
-	// Tool call targets delly
+	// Tool call targets pve-node
 	// Assert: Still BLOCKED (current policy decision)
 
 	// Step 1: Create resolved context
@@ -203,20 +203,20 @@ func TestContract_HostTargetingBlockedEvenWithHostMention(t *testing.T) {
 		Kind:        "system-container",
 		ProviderUID: "141",
 		Name:        "homepage-docker",
-		HostName:    "delly",
-		HostUID:     "delly",
+		HostName:    "pve-node",
+		HostUID:     "pve-node",
 	})
 
 	// Step 3: Mark the child as explicitly accessed (from @mention)
-	resolvedCtx.MarkExplicitAccess("system-container:delly:141")
+	resolvedCtx.MarkExplicitAccess("system-container:pve-node:141")
 
-	// Note: We don't mark "delly" (the host) because:
+	// Note: We don't mark "pve-node" (the host) because:
 	// a) Hosts aren't resources in the same sense
 	// b) The prefetch logic only marks lxc/vm/docker resources
 
 	// Step 4: Verify the child IS recently accessed
-	if !resolvedCtx.WasRecentlyAccessed("system-container:delly:141", tools.RecentAccessWindow) {
-		t.Fatal("Expected system-container:delly:141 to be recently accessed")
+	if !resolvedCtx.WasRecentlyAccessed("system-container:pve-node:141", tools.RecentAccessWindow) {
+		t.Fatal("Expected system-container:pve-node:141 to be recently accessed")
 	}
 
 	// Step 5: This documents the CURRENT POLICY:
@@ -224,13 +224,13 @@ func TestContract_HostTargetingBlockedEvenWithHostMention(t *testing.T) {
 	// because a child was recently accessed.
 	//
 	// The reasoning: "user mentioned @homepage-docker" is a strong signal
-	// that they want to target that container. Mentioning @delly is
-	// typically for context (e.g., "restart @homepage-docker on @delly").
+	// that they want to target that container. Mentioning @pve-node is
+	// typically for context (e.g., "restart @homepage-docker on @pve-node").
 
 	// If we want to change this policy in the future, update this test.
 	t.Log("✓ POLICY: Host targeting blocked when child recently accessed (even if host also mentioned)")
 	t.Log("  This is a deliberate policy decision to prevent accidental host operations")
-	t.Log("  Future: May add escape hatch like 'node:delly' or 'host:delly' prefix")
+	t.Log("  Future: May add escape hatch like 'node:pve-node' or 'host:pve-node' prefix")
 }
 
 // TestContract_ExplicitAccessExpiry verifies that explicit access marks expire
@@ -240,10 +240,10 @@ func TestContract_ExplicitAccessExpiry(t *testing.T) {
 	ctx := NewResolvedContextWithConfig("test-session", 1*time.Hour, 1000)
 
 	// Mark resource as explicitly accessed
-	ctx.MarkExplicitAccess("system-container:delly:141")
+	ctx.MarkExplicitAccess("system-container:pve-node:141")
 
 	// Immediately should be recently accessed
-	if !ctx.WasRecentlyAccessed("system-container:delly:141", 50*time.Millisecond) {
+	if !ctx.WasRecentlyAccessed("system-container:pve-node:141", 50*time.Millisecond) {
 		t.Error("Expected resource to be recently accessed immediately after marking")
 	}
 
@@ -251,7 +251,7 @@ func TestContract_ExplicitAccessExpiry(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Should no longer be recently accessed
-	if ctx.WasRecentlyAccessed("system-container:delly:141", 50*time.Millisecond) {
+	if ctx.WasRecentlyAccessed("system-container:pve-node:141", 50*time.Millisecond) {
 		t.Error("Expected resource to NOT be recently accessed after window expires")
 	}
 
@@ -265,9 +265,9 @@ func TestContract_ExplicitAccessCleanup(t *testing.T) {
 	ctx := NewResolvedContextWithConfig("test-session", 1*time.Hour, 1000)
 
 	// Mark several resources as explicitly accessed
-	ctx.MarkExplicitAccess("system-container:delly:141")
-	ctx.MarkExplicitAccess("system-container:delly:142")
-	ctx.MarkExplicitAccess("vm:delly:100")
+	ctx.MarkExplicitAccess("system-container:pve-node:141")
+	ctx.MarkExplicitAccess("system-container:pve-node:142")
+	ctx.MarkExplicitAccess("vm:pve-node:100")
 
 	// Verify all are tracked
 	if len(ctx.explicitlyAccessed) != 3 {
@@ -277,9 +277,9 @@ func TestContract_ExplicitAccessCleanup(t *testing.T) {
 	// Simulate time passing beyond RecentAccessWindow (30s)
 	// We manually set the timestamps to simulate aging
 	oldTime := time.Now().Add(-1 * time.Minute)
-	ctx.explicitlyAccessed["system-container:delly:141"] = oldTime
-	ctx.explicitlyAccessed["system-container:delly:142"] = oldTime
-	// Leave vm:delly:100 as recent
+	ctx.explicitlyAccessed["system-container:pve-node:141"] = oldTime
+	ctx.explicitlyAccessed["system-container:pve-node:142"] = oldTime
+	// Leave vm:pve-node:100 as recent
 
 	// Add a resource to trigger eviction sweep
 	ctx.AddResolvedResource(tools.ResourceRegistration{
@@ -292,11 +292,11 @@ func TestContract_ExplicitAccessCleanup(t *testing.T) {
 	if len(ctx.explicitlyAccessed) != 1 {
 		t.Errorf("Expected 1 explicit access entry after cleanup, got %d", len(ctx.explicitlyAccessed))
 	}
-	if _, exists := ctx.explicitlyAccessed["vm:delly:100"]; !exists {
-		t.Error("Expected vm:delly:100 to survive (recent)")
+	if _, exists := ctx.explicitlyAccessed["vm:pve-node:100"]; !exists {
+		t.Error("Expected vm:pve-node:100 to survive (recent)")
 	}
-	if _, exists := ctx.explicitlyAccessed["system-container:delly:141"]; exists {
-		t.Error("Expected system-container:delly:141 to be pruned (old)")
+	if _, exists := ctx.explicitlyAccessed["system-container:pve-node:141"]; exists {
+		t.Error("Expected system-container:pve-node:141 to be pruned (old)")
 	}
 
 	t.Log("✓ Explicit access entries are cleaned up during eviction sweeps")

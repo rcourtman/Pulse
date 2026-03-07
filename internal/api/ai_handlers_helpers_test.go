@@ -44,13 +44,13 @@ func TestIsMCPToolCall(t *testing.T) {
 }
 
 func TestCleanTargetHost(t *testing.T) {
-	if got := cleanTargetHost("delly (The container's host is 'delly')"); got != "delly" {
+	if got := cleanTargetHost("pve-node (The container's host is 'pve-node')"); got != "pve-node" {
 		t.Fatalf("expected cleaned host, got %q", got)
 	}
-	if got := cleanTargetHost("delly extra"); got != "delly" {
+	if got := cleanTargetHost("pve-node extra"); got != "pve-node" {
 		t.Fatalf("expected first token, got %q", got)
 	}
-	if got := cleanTargetHost("  delly "); got != "delly" {
+	if got := cleanTargetHost("  pve-node "); got != "pve-node" {
 		t.Fatalf("expected trimmed host, got %q", got)
 	}
 	if got := cleanTargetHost(""); got != "" {

@@ -20,7 +20,7 @@ func TestBuildUnifiedResourceContext_NilProvider(t *testing.T) {
 func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	nodeWithAgent := unifiedresources.Resource{
 		ID:     "node-1",
-		Name:   "delly",
+		Name:   "pve-node",
 		Type:   unifiedresources.ResourceTypeAgent,
 		Status: unifiedresources.StatusOnline,
 		Identity: unifiedresources.ResourceIdentity{
@@ -31,7 +31,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 			Memory: &unifiedresources.MetricValue{Percent: 45.6},
 		},
 		Proxmox: &unifiedresources.ProxmoxData{
-			NodeName:    "delly",
+			NodeName:    "pve-node",
 			ClusterName: "cluster-a",
 		},
 	}
@@ -203,7 +203,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	}
 	s.agentServer = &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
-			{AgentID: "agent-1", Hostname: "delly"},
+			{AgentID: "agent-1", Hostname: "pve-node"},
 		},
 	}
 
@@ -230,7 +230,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	assertContains("Docker/Podman Hosts")
 	assertContains("1/2 containers running")
 	assertContains("Workloads (VMs & Containers)")
-	assertContains("On delly")
+	assertContains("On pve-node")
 	assertContains("On unknown-parent")
 	assertContains("Other workloads")
 	assertContains("10.0.0.1, 10.0.0.2")

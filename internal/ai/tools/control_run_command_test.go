@@ -212,7 +212,7 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 	t.Run("LXCCommandRoutedCorrectly", func(t *testing.T) {
 		// Test that commands targeting LXCs are routed with correct target type/ID
 		// The agent handles sh -c wrapping, so tool just sends raw command
-		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
@@ -227,7 +227,7 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 
 		state := models.StateSnapshot{
 			Containers: []models.Container{
-				{VMID: 108, Name: "jellyfin", Node: "delly"},
+				{VMID: 108, Name: "jellyfin", Node: "pve-node"},
 			},
 		}
 
@@ -249,7 +249,7 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 
 	t.Run("VMCommandRoutedCorrectly", func(t *testing.T) {
 		// Test that commands targeting VMs are routed with correct target type/ID
-		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
+		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "pve-node"}}
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
@@ -263,7 +263,7 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 
 		state := models.StateSnapshot{
 			VMs: []models.VM{
-				{VMID: 100, Name: "test-vm", Node: "delly"},
+				{VMID: 100, Name: "test-vm", Node: "pve-node"},
 			},
 		}
 

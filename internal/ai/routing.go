@@ -291,7 +291,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 
 // extractVMIDFromTargetID extracts a numeric VMID from various target ID formats.
 // Handles formats like:
-// - "delly-minipc-106" -> 106
+// - "homelab-pve-node-106" -> 106
 // - "minipc-106" -> 106
 // - "106" -> 106
 // - "lxc-106" -> 106
@@ -308,7 +308,7 @@ func extractVMIDFromTargetID(targetID string) int {
 	}
 
 	// Accept IDs that end with a numeric VMID token, separated by a common
-	// delimiter used across Pulse IDs (e.g. "delly-minipc-106", "delly:minipc:106").
+	// delimiter used across Pulse IDs (e.g. "homelab-pve-node-106", "homelab:pve-node:106").
 	end := len(trimmed) - 1
 	start := end
 	for start >= 0 && trimmed[start] >= '0' && trimmed[start] <= '9' {

@@ -16,17 +16,17 @@ func TestResolveResource_NilReadState(t *testing.T) {
 func TestResolveResource_Node(t *testing.T) {
 	rr := NewRegistry(nil)
 	rr.IngestSnapshot(models.StateSnapshot{
-		Nodes: []models.Node{{ID: "n1", Name: "delly"}},
+		Nodes: []models.Node{{ID: "n1", Name: "pve-node"}},
 	})
-	loc := ResolveResource(rr, "delly")
+	loc := ResolveResource(rr, "pve-node")
 	if !loc.Found {
 		t.Fatal("expected node to be found")
 	}
 	if loc.ResourceType != "node" {
 		t.Fatalf("expected node type, got %q", loc.ResourceType)
 	}
-	if loc.TargetHost != "delly" {
-		t.Fatalf("expected target_host delly, got %q", loc.TargetHost)
+	if loc.TargetHost != "pve-node" {
+		t.Fatalf("expected target_host pve-node, got %q", loc.TargetHost)
 	}
 }
 

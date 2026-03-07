@@ -126,7 +126,7 @@ describe('ThinkingBlock', () => {
   // --- Content sanitization ---
 
   it('sanitizes TCP connection details in expanded content', async () => {
-    const rawContent = 'Error: write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout';
+    const rawContent = 'Error: write tcp 192.0.2.10:7655->198.51.100.20:58004: i/o timeout';
     render(() => <ThinkingBlock content={rawContent} />);
     const button = screen.getByRole('button');
     await fireEvent.click(button);
@@ -134,7 +134,7 @@ describe('ThinkingBlock', () => {
     const preElement = document.querySelector('pre');
     expect(preElement).not.toBeNull();
     // Should NOT show raw IP addresses
-    expect(preElement!.textContent).not.toContain('192.168.0.123');
+    expect(preElement!.textContent).not.toContain('192.0.2.10');
     expect(preElement!.textContent).toContain('connection timed out');
   });
 

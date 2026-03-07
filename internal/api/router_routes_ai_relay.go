@@ -785,7 +785,7 @@ func isMCPToolCall(command string) bool {
 }
 
 // cleanTargetHost extracts just the hostname from a target host string.
-// Handles cases like "delly (The container's host is 'delly')" → "delly".
+// Handles cases like "pve-node (The container's host is 'pve-node')" → "pve-node".
 func cleanTargetHost(targetHost string) string {
 	if targetHost == "" {
 		return ""

@@ -51,17 +51,17 @@ describe('aiChatUtils', () => {
   describe('sanitizeThinking', () => {
     it('replaces raw tcp timeout and connection errors', () => {
       const input = [
-        'write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout',
+        'write tcp 192.0.2.10:7655->198.51.100.20:58004: i/o timeout',
         'read tcp 10.0.0.1: i/o timeout',
         'dial tcp 127.0.0.1: connection refused',
-        'failed to send command: write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout',
+        'failed to send command: write tcp 192.0.2.10:7655->198.51.100.20:58004: i/o timeout',
       ].join('\n');
 
       const output = utils.sanitizeThinking(input);
       expect(output).toContain('connection timed out');
       expect(output).toContain('connection refused');
       expect(output).toContain('failed to send command: connection error');
-      expect(output).not.toContain('192.168.0.123');
+      expect(output).not.toContain('192.0.2.10');
       expect(output).not.toContain('10.0.0.1');
       expect(output).not.toContain('127.0.0.1');
     });

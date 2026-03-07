@@ -1832,8 +1832,8 @@ func (r *RoutingValidationResult) IsBlocked() bool {
 //   - If target_host is a Proxmox node AND the user RECENTLY referenced child resources
 //     on that node (within RecentAccessWindow) → block with ROUTING_MISMATCH
 //
-// This prevents blocking legitimate host-level operations like "apt update on @delly"
-// while still catching the "user said @homepage-docker but model targets delly" scenario.
+// This prevents blocking legitimate host-level operations like "apt update on @pve-node"
+// while still catching the "user said @homepage-docker but model targets pve-node" scenario.
 //
 // The key insight: if the user explicitly mentioned a child resource in this turn/exchange,
 // they probably intend to target that child, not the parent host.

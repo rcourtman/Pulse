@@ -472,7 +472,7 @@ func isTransientError(err error) bool {
 }
 
 // nodeMatchesTargetID checks if a node name matches a target ID which may be
-// a plain node name ("delly") or a composite instance-node ID ("homelab-delly").
+// a plain node name ("pve-node") or a composite instance-node ID ("homelab-pve-node").
 func nodeMatchesTargetID(nodeName, targetID string) bool {
 	if strings.EqualFold(nodeName, targetID) {
 		return true
