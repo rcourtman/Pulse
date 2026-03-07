@@ -119,10 +119,6 @@ func buildTrialBillingStateWithPlanFromLicensing(now time.Time, capabilities []s
 	return pkglicensing.BuildTrialBillingStateWithPlan(now, capabilities, planVersion, duration)
 }
 
-func buildProTrialBillingStateFromLicensing(now time.Time) *billingState {
-	return pkglicensing.BuildTrialBillingState(now, pkglicensing.TierFeatures[pkglicensing.TierPro])
-}
-
 func evaluateTrialStartEligibilityFromLicensing(hasActiveLicense bool, existing *billingState) trialStartDecisionModel {
 	return pkglicensing.EvaluateTrialStartEligibility(hasActiveLicense, existing)
 }

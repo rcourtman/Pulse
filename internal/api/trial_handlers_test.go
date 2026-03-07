@@ -276,6 +276,39 @@ func TestTrialActivation_SignedTokenStartsTrial(t *testing.T) {
 	if state == nil || state.SubscriptionState != entitlements.SubStateTrial {
 		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
 	}
+	if strings.TrimSpace(state.EntitlementJWT) == "" {
+		t.Fatal("expected entitlement_jwt to be stored")
+	}
+
+	rawData, err := os.ReadFile(filepath.Join(baseDir, "billing.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(billing.json): %v", err)
+	}
+	var rawState entitlements.BillingState
+	if err := json.Unmarshal(rawData, &rawState); err != nil {
+		t.Fatalf("Unmarshal(raw billing.json): %v", err)
+	}
+	if strings.TrimSpace(rawState.EntitlementJWT) == "" {
+		t.Fatal("expected raw entitlement_jwt to be persisted")
+	}
+	if rawState.SubscriptionState != "" {
+		t.Fatalf("raw subscription_state=%q, want empty", rawState.SubscriptionState)
+	}
+	if rawState.PlanVersion != "" {
+		t.Fatalf("raw plan_version=%q, want empty", rawState.PlanVersion)
+	}
+	if len(rawState.Capabilities) != 0 {
+		t.Fatalf("raw capabilities=%v, want empty", rawState.Capabilities)
+	}
+	if len(rawState.Limits) != 0 {
+		t.Fatalf("raw limits=%v, want empty", rawState.Limits)
+	}
+	if rawState.TrialStartedAt == nil {
+		t.Fatal("expected raw trial_started_at to be preserved")
+	}
+	if rawState.TrialEndsAt != nil {
+		t.Fatalf("raw trial_ends_at=%v, want nil", rawState.TrialEndsAt)
+	}
 }
 
 func TestTrialActivation_ReplayTokenRejected(t *testing.T) {

@@ -466,8 +466,8 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 }
 
 // HandleTrialActivation handles GET /auth/trial-activate.
-// It verifies a hosted signup trial activation token, blocks replay, starts a
-// local 14-day Pro trial, then redirects to Settings.
+// It verifies a hosted signup trial activation token, blocks replay, persists a
+// signed hosted entitlement lease, then redirects to Settings.
 func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -647,18 +647,21 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	state := buildProTrialBillingStateFromLicensing(time.Now())
-	state.EntitlementJWT = entitlementJWT
-	state.PlanVersion = leaseClaims.PlanVersion
-	state.SubscriptionState = leaseClaims.SubscriptionState
-	state.Capabilities = append([]string(nil), leaseClaims.Capabilities...)
-	state.Limits = map[string]int64{}
-	for key, value := range leaseClaims.Limits {
-		state.Limits[key] = value
+	state := &billingState{}
+	if existing != nil {
+		state = normalizeBillingStateFromLicensing(existing)
 	}
-	state.MetersEnabled = append([]string(nil), leaseClaims.MetersEnabled...)
+	// Keep only the signed hosted lease plus trial-used bookkeeping locally.
+	// Effective Pro capabilities and limits must resolve from the lease on read.
+	state.EntitlementJWT = entitlementJWT
+	state.Capabilities = []string{}
+	state.Limits = map[string]int64{}
+	state.MetersEnabled = []string{}
+	state.PlanVersion = ""
+	state.SubscriptionState = ""
 	state.TrialStartedAt = leaseClaims.TrialStartedAt
-	state.TrialEndsAt = leaseClaims.TrialEndsAt
+	state.TrialEndsAt = nil
+	state.TrialExtendedAt = nil
 	if err := billingStore.SaveBillingState(orgID, state); err != nil {
 		clearReplay("billing_state_save_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation billing state save failed")

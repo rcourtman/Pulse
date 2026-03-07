@@ -1,11 +1,15 @@
 package licensing
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type mockBillingStore struct {
@@ -236,6 +240,61 @@ func TestDatabaseSourceTrialExpiryMarksExpiredAndStripsCapabilities(t *testing.T
 	}
 	if got := source.MetersEnabled(); got != nil && len(got) != 0 {
 		t.Fatalf("expected meters_enabled to be stripped on expiry, got %v", got)
+	}
+}
+
+func TestDatabaseSourceLeaseOnlyStateResolvesTrialEntitlement(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	embeddedBefore := EmbeddedPublicKey
+	EmbeddedPublicKey = ""
+	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
+	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	now := time.Now().UTC()
+	trialState := BuildTrialBillingState(now, []string{"ai_autofix"})
+	token, err := SignEntitlementLeaseToken(priv, EntitlementLeaseClaims{
+		OrgID:             "org-1",
+		InstanceHost:      "pulse.example.com",
+		PlanVersion:       trialState.PlanVersion,
+		SubscriptionState: trialState.SubscriptionState,
+		Capabilities:      append([]string(nil), trialState.Capabilities...),
+		Limits:            map[string]int64{"max_agents": 25},
+		TrialStartedAt:    trialState.TrialStartedAt,
+		TrialEndsAt:       trialState.TrialEndsAt,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(time.Unix(*trialState.TrialEndsAt, 0).UTC()),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken: %v", err)
+	}
+
+	store := &mockBillingStore{
+		state: &BillingState{
+			EntitlementJWT: token,
+			TrialStartedAt: trialState.TrialStartedAt,
+		},
+	}
+	source := NewDatabaseSource(store, "org-1", time.Hour).WithExpectedInstanceHost("pulse.example.com")
+
+	if got := source.SubscriptionState(); got != SubStateTrial {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateTrial, got)
+	}
+	if got := source.Capabilities(); !reflect.DeepEqual(got, []string{"ai_autofix"}) {
+		t.Fatalf("expected capabilities %v, got %v", []string{"ai_autofix"}, got)
+	}
+	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_agents": 25}) {
+		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_agents": 25}, got)
+	}
+	if got := source.TrialStartedAt(); got == nil || *got != *trialState.TrialStartedAt {
+		t.Fatalf("expected trial_started_at %v, got %v", trialState.TrialStartedAt, got)
+	}
+	if got := source.TrialEndsAt(); got == nil || *got != *trialState.TrialEndsAt {
+		t.Fatalf("expected trial_ends_at %v, got %v", trialState.TrialEndsAt, got)
 	}
 }
 

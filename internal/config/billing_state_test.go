@@ -118,9 +118,8 @@ func TestBillingState_GetBillingStateResolvesEntitlementLease(t *testing.T) {
 	require.NoError(t, err)
 
 	state := &entitlements.BillingState{
-		SubscriptionState: entitlements.SubStateExpired,
-		PlanVersion:       string(entitlements.SubStateExpired),
-		EntitlementJWT:    lease,
+		EntitlementJWT: lease,
+		TrialStartedAt: trialState.TrialStartedAt,
 	}
 	require.NoError(t, store.SaveBillingState("default", state))
 
@@ -129,6 +128,10 @@ func TestBillingState_GetBillingStateResolvesEntitlementLease(t *testing.T) {
 	require.NotNil(t, loaded)
 	assert.Equal(t, entitlements.SubStateTrial, loaded.SubscriptionState)
 	assert.Contains(t, loaded.Capabilities, "ai_autofix")
+	require.NotNil(t, loaded.TrialStartedAt)
+	assert.Equal(t, *trialState.TrialStartedAt, *loaded.TrialStartedAt)
+	require.NotNil(t, loaded.TrialEndsAt)
+	assert.Equal(t, *trialState.TrialEndsAt, *loaded.TrialEndsAt)
 }
 
 func TestBillingState_TamperDetection(t *testing.T) {

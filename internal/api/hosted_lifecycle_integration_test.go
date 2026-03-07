@@ -162,6 +162,32 @@ func TestHostedLifecycle(t *testing.T) {
 		if state.SubscriptionState != entitlements.SubStateTrial {
 			t.Fatalf("trial activation subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
 		}
+		rawData, err := os.ReadFile(filepath.Join(baseDir, "billing.json"))
+		if err != nil {
+			t.Fatalf("ReadFile(billing.json): %v", err)
+		}
+		var rawState entitlements.BillingState
+		if err := json.Unmarshal(rawData, &rawState); err != nil {
+			t.Fatalf("Unmarshal(raw billing.json): %v", err)
+		}
+		if rawState.SubscriptionState != "" {
+			t.Fatalf("raw subscription_state=%q, want empty", rawState.SubscriptionState)
+		}
+		if rawState.PlanVersion != "" {
+			t.Fatalf("raw plan_version=%q, want empty", rawState.PlanVersion)
+		}
+		if len(rawState.Capabilities) != 0 {
+			t.Fatalf("raw capabilities=%v, want empty", rawState.Capabilities)
+		}
+		if rawState.TrialEndsAt != nil {
+			t.Fatalf("raw trial_ends_at=%v, want nil", rawState.TrialEndsAt)
+		}
+		if rawState.TrialStartedAt == nil {
+			t.Fatal("expected raw trial_started_at to be preserved")
+		}
+		if rawState.EntitlementJWT == "" {
+			t.Fatal("expected raw entitlement_jwt to be stored")
+		}
 
 		entReq1 := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
 		entRec1 := httptest.NewRecorder()
