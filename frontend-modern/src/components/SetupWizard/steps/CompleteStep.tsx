@@ -66,18 +66,19 @@ const toNodeSummaryShape = (resource: Resource) => {
   return {
     id: resource.id,
     name,
-    displayName: resource.displayName,
+    displayName: name,
     host: asString(proxmox?.instance) || '',
   };
 };
 
 const toAgentSummaryShape = (resource: Resource) => {
   const hostname = getPreferredResourceHostname(resource) || resource.id;
+  const name = getPreferredResourceDisplayName(resource);
   const id = getActionableAgentIdFromResource(resource) || resource.id;
   return {
     id,
     hostname,
-    displayName: resource.displayName,
+    displayName: name,
   };
 };
 
@@ -129,7 +130,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
         const agentMap = new Map<string, ConnectedAgent>();
 
         for (const node of nodes) {
-          const name = node.name || node.displayName || 'Unknown';
+          const name = node.displayName || node.name || 'Unknown';
           const existing = agentMap.get(name);
           if (existing) {
             if (!existing.type.includes('Proxmox')) {
