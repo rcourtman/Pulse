@@ -259,6 +259,39 @@ func TestMonitorAdapterPopulateFromSnapshotReplacesPreviousRegistryState(t *test
 	}
 }
 
+func TestMonitorAdapterUnifiedResourceFreshnessTracksRegistryUpdates(t *testing.T) {
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "host-1", Hostname: "minipc.local", Status: "online", LastSeen: now},
+		},
+	})
+	firstFreshness := adapter.UnifiedResourceFreshness()
+	if firstFreshness.IsZero() {
+		t.Fatal("expected non-zero freshness after snapshot populate")
+	}
+
+	time.Sleep(5 * time.Millisecond)
+	adapter.PopulateSupplementalRecords(DataSource("xcp"), []IngestRecord{
+		{
+			SourceID: "xcp-host-1",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "xcp-host-1",
+				Status:   StatusOnline,
+				LastSeen: now.Add(time.Minute),
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"xcp-host-1"}},
+		},
+	})
+	secondFreshness := adapter.UnifiedResourceFreshness()
+	if !secondFreshness.After(firstFreshness) {
+		t.Fatalf("expected supplemental ingest to advance freshness: first=%v second=%v", firstFreshness, secondFreshness)
+	}
+}
+
 func TestMonitorAdapterPopulateSupplementalRecords(t *testing.T) {
 	now := time.Date(2026, 2, 21, 10, 0, 0, 0, time.UTC)
 	adapter := NewMonitorAdapter(NewRegistry(nil))

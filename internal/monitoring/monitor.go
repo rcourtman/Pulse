@@ -124,6 +124,12 @@ type AtomicSnapshotResourceStore interface {
 	PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord)
 }
 
+// UnifiedResourceFreshnessStore is an optional extension for stores that track
+// their own canonical-resource freshness independent of state.LastUpdate.
+type UnifiedResourceFreshnessStore interface {
+	UnifiedResourceFreshness() time.Time
+}
+
 // MonitorSupplementalRecordsProvider emits source-native records outside the
 // poll-provider scheduling path (for example, dedicated background pollers).
 type MonitorSupplementalRecordsProvider interface {
@@ -2952,7 +2958,10 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 
 	resources := store.GetAll()
 	freshness := time.Time{}
-	if state != nil {
+	if freshnessStore, ok := store.(UnifiedResourceFreshnessStore); ok {
+		freshness = freshnessStore.UnifiedResourceFreshness()
+	}
+	if freshness.IsZero() && state != nil {
 		freshness = state.GetLastUpdate()
 	}
 

@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -12,8 +13,9 @@ import (
 type MonitorAdapter struct {
 	registry *ResourceRegistry
 
-	mu           sync.RWMutex
-	activeAlerts []models.Alert
+	mu            sync.RWMutex
+	activeAlerts  []models.Alert
+	lastRebuiltAt time.Time
 }
 
 // NewMonitorAdapter creates a monitor-facing adapter around a registry.
@@ -53,10 +55,15 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 		}
 		rebuilt.IngestRecords(source, records)
 	}
+	rebuiltAt := time.Now().UTC()
+	if !snapshot.LastUpdate.IsZero() && snapshot.LastUpdate.After(rebuiltAt) {
+		rebuiltAt = snapshot.LastUpdate
+	}
 
 	a.mu.Lock()
 	a.registry = rebuilt
 	a.activeAlerts = append([]models.Alert(nil), snapshot.ActiveAlerts...)
+	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()
 }
 
@@ -229,6 +236,21 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 		return
 	}
 	registry.IngestRecords(source, records)
+	a.mu.Lock()
+	a.lastRebuiltAt = time.Now().UTC()
+	a.mu.Unlock()
+}
+
+// UnifiedResourceFreshness returns the most recent point at which the adapter
+// replaced or mutated its canonical registry contents.
+func (a *MonitorAdapter) UnifiedResourceFreshness() time.Time {
+	if a == nil {
+		return time.Time{}
+	}
+
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.lastRebuiltAt
 }
 
 // VMs returns cached VM views for AI/read-state consumers.
