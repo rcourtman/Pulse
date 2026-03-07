@@ -3,6 +3,8 @@ package unifiedresources
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestResourceRegistry_ListByType(t *testing.T) {
@@ -130,6 +132,64 @@ func TestResourceRegistry_IngestRecords_UnknownSource(t *testing.T) {
 	}
 	if targets[0].SourceID != "host-1" {
 		t.Fatalf("expected source ID host-1, got %q", targets[0].SourceID)
+	}
+}
+
+func TestResourceRegistry_IngestSnapshotUnifiesLinkedProxmoxNodeViewsByHostIdentity(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:              "homelab-minipc",
+				Name:            "minipc",
+				Instance:        "homelab-entry",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.5:8006",
+				LinkedAgentID:   "host-1",
+				Status:          "online",
+				LastSeen:        now,
+			},
+			{
+				ID:            "standalone-minipc",
+				Name:          "minipc",
+				Instance:      "minipc-standalone",
+				Host:          "https://10.0.0.5:8006",
+				LinkedAgentID: "host-1",
+				Status:        "online",
+				LastSeen:      now,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:        "host-1",
+				Hostname:  "minipc.local",
+				MachineID: "machine-1",
+				ReportIP:  "10.0.0.5",
+				Status:    "online",
+				LastSeen:  now,
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"10.0.0.5/24"}},
+				},
+			},
+		},
+	})
+
+	agents := rr.ListByType(ResourceTypeAgent)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 unified agent resource, got %d", len(agents))
+	}
+	resource := agents[0]
+	if resource.Identity.MachineID != "machine-1" {
+		t.Fatalf("MachineID = %q, want machine-1", resource.Identity.MachineID)
+	}
+	if !containsDataSource(resource.Sources, SourceAgent) || !containsDataSource(resource.Sources, SourceProxmox) {
+		t.Fatalf("expected merged agent+proxmox sources, got %+v", resource.Sources)
+	}
+	if resource.Proxmox == nil || resource.Proxmox.NodeName != "minipc" {
+		t.Fatalf("expected proxmox node metadata for minipc, got %+v", resource.Proxmox)
 	}
 }
 

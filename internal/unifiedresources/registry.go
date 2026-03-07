@@ -109,6 +109,14 @@ func (rr *ResourceRegistry) loadOverrides() {
 
 // IngestSnapshot ingests all resources from the current state snapshot.
 func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
+	hostByID := make(map[string]*models.Host, len(snapshot.Hosts))
+	for i := range snapshot.Hosts {
+		host := snapshot.Hosts[i]
+		if id := strings.TrimSpace(host.ID); id != "" {
+			hostByID[id] = &snapshot.Hosts[i]
+		}
+	}
+
 	// Build instance→clusterName lookup from nodes so we can propagate
 	// cluster names to VMs/Containers (their parent-ID lookup may fail
 	// when the node ID uses clusterName instead of instanceName).
@@ -117,7 +125,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		if node.ClusterName != "" && node.Instance != "" {
 			clusterByInstance[node.Instance] = node.ClusterName
 		}
-		rr.ingestProxmoxNode(node)
+		rr.ingestProxmoxNode(node, hostByID[strings.TrimSpace(node.LinkedAgentID)])
 	}
 	for _, host := range snapshot.Hosts {
 		rr.ingestHost(host)
@@ -423,8 +431,8 @@ func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSo
 	}
 }
 
-func (rr *ResourceRegistry) ingestProxmoxNode(node models.Node) {
-	resource, identity := resourceFromProxmoxNode(node)
+func (rr *ResourceRegistry) ingestProxmoxNode(node models.Node, linkedHost *models.Host) {
+	resource, identity := resourceFromProxmoxNode(node, linkedHost)
 	rr.ingest(SourceProxmox, node.ID, resource, identity)
 }
 

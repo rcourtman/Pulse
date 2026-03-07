@@ -239,11 +239,18 @@ func CollectHostCandidates(
 	configTrueNAS []ConfigEntry,
 ) []HostCandidate {
 	var candidates []HostCandidate
+	hostByID := make(map[string]*models.Host, len(state.Hosts))
+	for i := range state.Hosts {
+		host := state.Hosts[i]
+		if id := strings.TrimSpace(host.ID); id != "" {
+			hostByID[id] = &state.Hosts[i]
+		}
+	}
 
 	// PVE nodes: prefer runtime state, fall back to config.
 	if len(state.Nodes) > 0 {
 		for _, n := range state.Nodes {
-			candidates = append(candidates, pveNodeCandidate(n))
+			candidates = append(candidates, pveNodeCandidate(n, hostByID[strings.TrimSpace(n.LinkedAgentID)]))
 		}
 	} else {
 		for _, c := range configPVE {
@@ -314,7 +321,7 @@ func CollectHostCandidates(
 // Per-source candidate builders
 // ---------------------------------------------------------------------------
 
-func pveNodeCandidate(n models.Node) HostCandidate {
+func pveNodeCandidate(n models.Node, linkedHost *models.Host) HostCandidate {
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{n.Name}),
 	}
@@ -324,6 +331,9 @@ func pveNodeCandidate(n models.Node) HostCandidate {
 		} else {
 			identity.Hostnames = uniqueStrings(append(identity.Hostnames, endpointHost))
 		}
+	}
+	if linkedHost != nil {
+		identity = mergeIdentity(identity, identityFromHost(*linkedHost))
 	}
 	return HostCandidate{
 		ID:       "pve:" + n.ID,

@@ -388,45 +388,17 @@ func TestResolveHosts_EndToEnd_PVEWithAgent(t *testing.T) {
 	candidates := CollectHostCandidates(state, nil, nil, nil, nil)
 	result := ResolveHosts(candidates)
 
-	// The PVE node lacks machine-id, but the host agent and docker host share
-	// machine-id "machine-1" so those two merge. The PVE node shares
-	// hostname "pve1" with both, which is only 0.50 confidence — not enough.
-	// However, PVE hostname + agent MAC should give hostname+MAC = 0.90.
-	// Let's check: PVE identity has hostname "pve1". Host agent has hostname "pve1"
-	// + MAC "00:11:22:33:44:55". In the IdentityMatcher, PVE is indexed with
-	// hostname "pve1". When we FindCandidates for the host agent, we get a
-	// hostname match. But PVE has no MAC, so no hostname+MAC match for the
-	// PVE→host direction. However, host agent→PVE: PVE is indexed, host agent
-	// has hostname+MAC. The matcher looks for the host agent's hostname in
-	// PVE's index (match "pve1") and the host agent's MAC in PVE's MAC index
-	// (no match, PVE has no MAC). So hostname+MAC won't fire.
-	//
-	// This means PVE stays separate from (host+docker) unless they share
-	// machine-id. The PVE node identity doesn't include machine-id.
-	// This is correct behavior — PVE nodes from the Proxmox API don't expose
-	// machine-id, so they can only merge if the host agent identity somehow
-	// gets propagated (which it doesn't yet for PVE).
-	//
-	// For the host agent and docker host: they share machine-id = "machine-1"
-	// → confidence 1.0 → they merge.
-	//
-	// So we expect 2 resolved hosts: PVE node (alone) + host agent+docker (merged).
-	if len(result.Hosts) != 2 {
-		t.Fatalf("expected 2 resolved hosts (PVE alone + agent+docker merged), got %d", len(result.Hosts))
+	if len(result.Hosts) != 1 {
+		t.Fatalf("expected 1 resolved host after linked host identity propagation, got %d", len(result.Hosts))
 	}
-
-	// Find the merged one
-	var merged *ResolvedHost
-	for i := range result.Hosts {
-		if len(result.Hosts[i].Sources) > 1 {
-			merged = &result.Hosts[i]
-		}
+	if result.Hosts[0].PrimaryType != "proxmox-pve" {
+		t.Fatalf("expected proxmox-pve primary type, got %q", result.Hosts[0].PrimaryType)
 	}
-	if merged == nil {
-		t.Fatalf("expected one merged host entry")
+	if len(result.Hosts[0].Sources) != 3 {
+		t.Fatalf("expected 3 merged sources, got %d", len(result.Hosts[0].Sources))
 	}
-	if len(merged.Sources) != 2 {
-		t.Fatalf("expected 2 sources in merged entry, got %d", len(merged.Sources))
+	if result.Hosts[0].Identity.MachineID != "machine-1" {
+		t.Fatalf("expected propagated machine-id, got %q", result.Hosts[0].Identity.MachineID)
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
+func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resource, ResourceIdentity) {
 	name := node.Name
 	if node.DisplayName != "" {
 		name = node.DisplayName
@@ -30,6 +30,9 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 
 	if node.ClusterName != "" {
 		identity.Hostnames = uniqueStrings(append(identity.Hostnames, node.ClusterName+":"+node.Name))
+	}
+	if linkedHost != nil {
+		identity = mergeIdentity(identity, identityFromHost(*linkedHost))
 	}
 
 	proxmox := &ProxmoxData{
@@ -66,23 +69,27 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 	return resource, identity
 }
 
+func identityFromHost(host models.Host) ResourceIdentity {
+	ips, macs := collectInterfaceIDs(host.NetworkInterfaces)
+	if host.ReportIP != "" {
+		ips = append(ips, host.ReportIP)
+	}
+
+	return ResourceIdentity{
+		MachineID:    strings.TrimSpace(host.MachineID),
+		Hostnames:    uniqueStrings([]string{host.Hostname}),
+		IPAddresses:  uniqueStrings(ips),
+		MACAddresses: uniqueStrings(macs),
+	}
+}
+
 func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	name := host.Hostname
 	if host.DisplayName != "" {
 		name = host.DisplayName
 	}
 
-	ips, macs := collectInterfaceIDs(host.NetworkInterfaces)
-	if host.ReportIP != "" {
-		ips = append(ips, host.ReportIP)
-	}
-
-	identity := ResourceIdentity{
-		MachineID:    strings.TrimSpace(host.MachineID),
-		Hostnames:    uniqueStrings([]string{host.Hostname}),
-		IPAddresses:  uniqueStrings(ips),
-		MACAddresses: uniqueStrings(macs),
-	}
+	identity := identityFromHost(host)
 
 	agent := &AgentData{
 		AgentID:           host.ID,

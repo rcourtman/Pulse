@@ -19,7 +19,7 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 		},
 	}
 
-	resource, _ := resourceFromProxmoxNode(node)
+	resource, _ := resourceFromProxmoxNode(node, nil)
 	if resource.Proxmox == nil {
 		t.Fatal("expected proxmox payload")
 	}
@@ -41,12 +41,38 @@ func TestResourceFromProxmoxNodeStoresEndpointIPAsIPAddress(t *testing.T) {
 		Host: "https://10.0.0.5:8006",
 	}
 
-	_, identity := resourceFromProxmoxNode(node)
+	_, identity := resourceFromProxmoxNode(node, nil)
 	if len(identity.Hostnames) != 1 || identity.Hostnames[0] != "minipc" {
 		t.Fatalf("Hostnames = %v, want [minipc]", identity.Hostnames)
 	}
 	if len(identity.IPAddresses) != 1 || identity.IPAddresses[0] != "10.0.0.5" {
 		t.Fatalf("IPAddresses = %v, want [10.0.0.5]", identity.IPAddresses)
+	}
+}
+
+func TestResourceFromProxmoxNodeInheritsLinkedHostIdentity(t *testing.T) {
+	node := models.Node{
+		ID:            "mock-cluster-minipc",
+		Name:          "minipc",
+		Host:          "https://10.0.0.5:8006",
+		LinkedAgentID: "host-1",
+	}
+	host := &models.Host{
+		ID:        "host-1",
+		Hostname:  "minipc.local",
+		MachineID: "machine-1",
+		ReportIP:  "10.0.0.5",
+		NetworkInterfaces: []models.HostNetworkInterface{
+			{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"10.0.0.5/24"}},
+		},
+	}
+
+	_, identity := resourceFromProxmoxNode(node, host)
+	if identity.MachineID != "machine-1" {
+		t.Fatalf("MachineID = %q, want machine-1", identity.MachineID)
+	}
+	if len(identity.MACAddresses) != 1 || identity.MACAddresses[0] != "00:11:22:33:44:55" {
+		t.Fatalf("MACAddresses = %v, want [00:11:22:33:44:55]", identity.MACAddresses)
 	}
 }
 
