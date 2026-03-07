@@ -7,9 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli"
 )
+
+func newTestCLIEnv() *cliEnv {
+	env := newCLIEnv()
+	env.exit = func(int) {}
+	return env
+}
 
 func createTestEncryptionKey(t *testing.T, dir string) {
 	t.Helper()
@@ -40,8 +44,4 @@ func captureOutput(f func()) string {
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, r)
 	return buf.String()
-}
-
-func resetFlags() {
-	pulsecli.ResetFlags(currentConfigDeps())
 }

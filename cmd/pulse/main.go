@@ -20,46 +20,47 @@ var (
 	metricsPort = 9091
 )
 
-var (
+type cliEnv struct {
 	exportFile        string
 	importFile        string
 	passphrase        string
 	forceImport       bool
-	osExit            = os.Exit
-	readPassword      = term.ReadPassword
-	mockEnvDefaultDir = "/opt/pulse"
-	mockEnvStat       = os.Stat
-)
+	exit              func(int)
+	readPassword      func(int) ([]byte, error)
+	mockEnvDefaultDir string
+	mockEnvStat       func(string) (os.FileInfo, error)
+}
 
-func currentConfigDeps() *pulsecli.ConfigDeps {
+func newCLIEnv() *cliEnv {
+	return &cliEnv{
+		exit:              os.Exit,
+		readPassword:      term.ReadPassword,
+		mockEnvDefaultDir: "/opt/pulse",
+		mockEnvStat:       os.Stat,
+	}
+}
+
+func (env *cliEnv) configDeps() *pulsecli.ConfigDeps {
 	return pulsecli.NewConfigDeps(
-		&exportFile,
-		&importFile,
-		&passphrase,
-		&forceImport,
-		func(fd int) ([]byte, error) {
-			return readPassword(fd)
-		},
+		&env.exportFile,
+		&env.importFile,
+		&env.passphrase,
+		&env.forceImport,
+		env.readPassword,
 	)
 }
 
-func currentBootstrapDeps() *pulsecli.BootstrapDeps {
-	return pulsecli.NewBootstrapDeps(func(code int) {
-		osExit(code)
-	})
+func (env *cliEnv) bootstrapDeps() *pulsecli.BootstrapDeps {
+	return pulsecli.NewBootstrapDeps(env.exit)
 }
 
-func currentMockDeps() *pulsecli.MockDeps {
+func (env *cliEnv) mockDeps() *pulsecli.MockDeps {
 	return pulsecli.NewMockDeps(
-		func(code int) {
-			osExit(code)
-		},
+		env.exit,
 		func() string {
-			return mockEnvDefaultDir
+			return env.mockEnvDefaultDir
 		},
-		func(path string) (os.FileInfo, error) {
-			return mockEnvStat(path)
-		},
+		env.mockEnvStat,
 	)
 }
 
@@ -68,7 +69,10 @@ func runServer(ctx context.Context) error {
 	return server.Run(ctx, Version)
 }
 
-func newRootCmd() *cobra.Command {
+func newRootCmd(env *cliEnv) *cobra.Command {
+	if env == nil {
+		env = newCLIEnv()
+	}
 	return pulsecli.NewRootCommand(pulsecli.Options{
 		Use:             "pulse",
 		Short:           "Pulse - Proxmox VE and PBS monitoring system",
@@ -77,10 +81,25 @@ func newRootCmd() *cobra.Command {
 		VersionTemplate: "Pulse {{.Version}}\n",
 		RunE:            runServer,
 		VersionPrinter:  printVersion,
-		Config:          currentConfigDeps(),
-		Bootstrap:       currentBootstrapDeps(),
-		Mock:            currentMockDeps(),
+		Config:          env.configDeps(),
+		Bootstrap:       env.bootstrapDeps(),
+		Mock:            env.mockDeps(),
 	})
+}
+
+func executeCLI(env *cliEnv, args []string) error {
+	cmd := newRootCmd(env)
+	cmd.SetArgs(args)
+	return cmd.Execute()
+}
+
+func runMain(env *cliEnv, args []string) {
+	if env == nil {
+		env = newCLIEnv()
+	}
+	if err := executeCLI(env, args); err != nil {
+		env.exit(1)
+	}
 }
 
 func printVersion(w io.Writer) {
@@ -94,9 +113,7 @@ func printVersion(w io.Writer) {
 }
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		osExit(1)
-	}
+	runMain(newCLIEnv(), os.Args[1:])
 }
 
 // Force rebuild 1769525035

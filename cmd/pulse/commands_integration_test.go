@@ -81,21 +81,14 @@ func TestMainActual(t *testing.T) {
 	metricsPort = 0
 	defer func() { metricsPort = oldPort }()
 
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-
-	os.Args = []string{"pulse", "version"}
-	main()
-
-	oldExit := osExit
-	defer func() { osExit = oldExit }()
+	env := newTestCLIEnv()
 	exitCode := 0
-	osExit = func(code int) { exitCode = code }
+	env.exit = func(code int) { exitCode = code }
 
-	os.Args = []string{"pulse", "--invalid-flag"}
-	captureOutput(func() {
-		main()
-	})
+	runMain(env, []string{"version"})
+	assert.Equal(t, 0, exitCode)
+
+	runMain(env, []string{"--invalid-flag"})
 	assert.Equal(t, 1, exitCode)
 }
 
@@ -165,7 +158,7 @@ func TestMainCmd(t *testing.T) {
 	createTestEncryptionKey(t, tempDir)
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644))
 
-	cmd := newRootCmd()
+	cmd := newRootCmd(newTestCLIEnv())
 	oldRunE := cmd.RunE
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return runServer(ctx)
@@ -197,8 +190,6 @@ func TestRunServer_AutoImportFail(t *testing.T) {
 }
 
 func TestRunServer_WebSocket(t *testing.T) {
-	resetFlags()
-
 	l, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
 	port := l.Addr().(*net.TCPAddr).Port
@@ -258,7 +249,6 @@ func TestRunServer_WebSocket(t *testing.T) {
 }
 
 func TestRunServer_AllowedOrigins(t *testing.T) {
-	resetFlags()
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 	createTestEncryptionKey(t, tempDir)
@@ -279,8 +269,6 @@ func TestRunServer_AllowedOrigins(t *testing.T) {
 }
 
 func TestRunServer_FrontendFail(t *testing.T) {
-	resetFlags()
-
 	oldMetricsPort := metricsPort
 	metricsPort = 0
 	defer func() { metricsPort = oldMetricsPort }()
