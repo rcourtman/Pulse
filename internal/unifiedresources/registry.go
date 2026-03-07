@@ -116,6 +116,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 			hostByID[id] = &snapshot.Hosts[i]
 		}
 	}
+	inferredLinkedHostByNodeID := inferLinkedHostsForProxmoxNodes(snapshot.Nodes, hostByID)
 
 	// Build instance→clusterName lookup from nodes so we can propagate
 	// cluster names to VMs/Containers (their parent-ID lookup may fail
@@ -125,7 +126,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		if node.ClusterName != "" && node.Instance != "" {
 			clusterByInstance[node.Instance] = node.ClusterName
 		}
-		rr.ingestProxmoxNode(node, hostByID[strings.TrimSpace(node.LinkedAgentID)])
+		rr.ingestProxmoxNode(node, inferredLinkedHostByNodeID[strings.TrimSpace(node.ID)])
 	}
 	for _, host := range snapshot.Hosts {
 		rr.ingestHost(host)
@@ -607,6 +608,12 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	}
 
 	resource.ID = rr.chooseNewID(resource.Type, identity, source, sourceID)
+	if existing := rr.resources[resource.ID]; existing != nil {
+		rr.mergeInto(existing, resource, source)
+		rr.bySource[source][sourceID] = existing.ID
+		rr.matcher.Add(existing.ID, existing.Identity)
+		return existing.ID
+	}
 	rr.resources[resource.ID] = &resource
 	rr.bySource[source][sourceID] = resource.ID
 	rr.matcher.Add(resource.ID, identity)
@@ -752,7 +759,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	// Update source payload
 	switch source {
 	case SourceProxmox:
-		existing.Proxmox = incoming.Proxmox
+		existing.Proxmox = mergeProxmoxData(existing.Proxmox, incoming.Proxmox)
 	case SourceAgent:
 		existing.Agent = incoming.Agent
 	case SourceDocker:
@@ -785,6 +792,90 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 			existing.Name = incoming.Name
 		}
 	}
+}
+
+func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData {
+	if existing == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return existing
+	}
+
+	merged := *existing
+	if incoming.SourceID != "" {
+		merged.SourceID = incoming.SourceID
+	}
+	if incoming.NodeName != "" {
+		merged.NodeName = incoming.NodeName
+	}
+	if incoming.ClusterName != "" {
+		merged.ClusterName = incoming.ClusterName
+	}
+	if incoming.IsClusterMember {
+		merged.IsClusterMember = true
+	}
+	if incoming.Instance != "" {
+		merged.Instance = incoming.Instance
+	}
+	if incoming.HostURL != "" {
+		merged.HostURL = incoming.HostURL
+	}
+	if incoming.VMID != 0 {
+		merged.VMID = incoming.VMID
+	}
+	if incoming.CPUs != 0 {
+		merged.CPUs = incoming.CPUs
+	}
+	if incoming.Template {
+		merged.Template = true
+	}
+	if incoming.Temperature != nil {
+		temperature := *incoming.Temperature
+		merged.Temperature = &temperature
+	}
+	if incoming.PVEVersion != "" {
+		merged.PVEVersion = incoming.PVEVersion
+	}
+	if incoming.KernelVersion != "" {
+		merged.KernelVersion = incoming.KernelVersion
+	}
+	if incoming.Uptime != 0 {
+		merged.Uptime = incoming.Uptime
+	}
+	if !incoming.LastBackup.IsZero() {
+		merged.LastBackup = incoming.LastBackup
+	}
+	if incoming.CPUInfo != nil {
+		cpuInfo := *incoming.CPUInfo
+		merged.CPUInfo = &cpuInfo
+	}
+	if len(incoming.LoadAverage) > 0 {
+		merged.LoadAverage = append([]float64(nil), incoming.LoadAverage...)
+	}
+	if incoming.PendingUpdates != 0 {
+		merged.PendingUpdates = incoming.PendingUpdates
+	}
+	if len(incoming.Disks) > 0 {
+		merged.Disks = append([]DiskInfo(nil), incoming.Disks...)
+	}
+	if incoming.SwapUsed != 0 {
+		merged.SwapUsed = incoming.SwapUsed
+	}
+	if incoming.SwapTotal != 0 {
+		merged.SwapTotal = incoming.SwapTotal
+	}
+	if incoming.Balloon != 0 {
+		merged.Balloon = incoming.Balloon
+	}
+	if incoming.Lock != "" {
+		merged.Lock = incoming.Lock
+	}
+	if incoming.LinkedAgentID != "" {
+		merged.LinkedAgentID = incoming.LinkedAgentID
+	}
+
+	return &merged
 }
 
 func (rr *ResourceRegistry) applyManualLinks() {

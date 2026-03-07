@@ -402,6 +402,38 @@ func TestResolveHosts_EndToEnd_PVEWithAgent(t *testing.T) {
 	}
 }
 
+func TestResolveHosts_EndToEnd_PVEWithAsymmetricLinkedNodeViews(t *testing.T) {
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "n1", Name: "minipc", ClusterName: "homelab", Host: "https://10.0.0.5:8006", Status: "online",
+				LinkedAgentID: "h1",
+				LastSeen:      time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC)},
+			{ID: "n2", Name: "minipc", ClusterName: "homelab", Host: "https://10.0.0.5:8006", Status: "online",
+				LastSeen: time.Date(2026, 3, 7, 9, 59, 0, 0, time.UTC)},
+		},
+		Hosts: []models.Host{
+			{ID: "h1", Hostname: "minipc", MachineID: "machine-1", Status: "online",
+				LastSeen: time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC),
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"10.0.0.5/24"}},
+				}},
+		},
+	}
+
+	candidates := CollectHostCandidates(state, nil, nil, nil, nil)
+	result := ResolveHosts(candidates)
+
+	if len(result.Hosts) != 1 {
+		t.Fatalf("expected 1 resolved host after asymmetric linked-host propagation, got %d", len(result.Hosts))
+	}
+	if result.Hosts[0].Identity.MachineID != "machine-1" {
+		t.Fatalf("expected propagated machine-id, got %q", result.Hosts[0].Identity.MachineID)
+	}
+	if len(result.Hosts[0].Sources) != 3 {
+		t.Fatalf("expected 3 merged sources, got %d", len(result.Hosts[0].Sources))
+	}
+}
+
 func TestResolveHosts_EndToEnd_MachineIDPropagation(t *testing.T) {
 	// When PVE node and host agent both report the same machine-id, they merge.
 	candidates := []HostCandidate{

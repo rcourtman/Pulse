@@ -35,6 +35,11 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		identity = mergeIdentity(identity, identityFromHost(*linkedHost))
 	}
 
+	linkedAgentID := strings.TrimSpace(node.LinkedAgentID)
+	if linkedAgentID == "" && linkedHost != nil {
+		linkedAgentID = strings.TrimSpace(linkedHost.ID)
+	}
+
 	proxmox := &ProxmoxData{
 		SourceID:        node.ID,
 		NodeName:        node.Name,
@@ -49,7 +54,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		CPUInfo:         &CPUInfo{Model: node.CPUInfo.Model, Cores: node.CPUInfo.Cores, Sockets: node.CPUInfo.Sockets},
 		LoadAverage:     append([]float64(nil), node.LoadAverage...),
 		PendingUpdates:  node.PendingUpdates,
-		LinkedAgentID:   node.LinkedAgentID,
+		LinkedAgentID:   linkedAgentID,
 	}
 
 	metrics := metricsFromProxmoxNode(node)

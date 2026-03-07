@@ -246,11 +246,12 @@ func CollectHostCandidates(
 			hostByID[id] = &state.Hosts[i]
 		}
 	}
+	inferredLinkedHostByNodeID := inferLinkedHostsForProxmoxNodes(state.Nodes, hostByID)
 
 	// PVE nodes: prefer runtime state, fall back to config.
 	if len(state.Nodes) > 0 {
 		for _, n := range state.Nodes {
-			candidates = append(candidates, pveNodeCandidate(n, hostByID[strings.TrimSpace(n.LinkedAgentID)]))
+			candidates = append(candidates, pveNodeCandidate(n, inferredLinkedHostByNodeID[strings.TrimSpace(n.ID)]))
 		}
 	} else {
 		for _, c := range configPVE {
