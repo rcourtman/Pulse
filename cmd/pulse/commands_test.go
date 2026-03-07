@@ -23,7 +23,7 @@ func TestVersionCmd(t *testing.T) {
 	GitCommit = "abcdef"
 
 	output := captureOutput(func() {
-		cmd := newRootCmd(newTestCLIEnv())
+		cmd := newProgram(newTestCLIEnv()).RootCommand()
 		cmd.SetArgs([]string{"version"})
 		_ = cmd.Execute()
 	})
@@ -35,7 +35,7 @@ func TestVersionCmd(t *testing.T) {
 	BuildTime = "unknown"
 	GitCommit = "unknown"
 	output = captureOutput(func() {
-		cmd := newRootCmd(newTestCLIEnv())
+		cmd := newProgram(newTestCLIEnv()).RootCommand()
 		cmd.SetArgs([]string{"version"})
 		_ = cmd.Execute()
 	})

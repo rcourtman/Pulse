@@ -85,10 +85,10 @@ func TestMainActual(t *testing.T) {
 	exitCode := 0
 	env.Exit = func(code int) { exitCode = code }
 
-	runMain(env, []string{"version"})
+	newProgram(env).Run(context.Background(), []string{"version"})
 	assert.Equal(t, 0, exitCode)
 
-	runMain(env, []string{"--invalid-flag"})
+	newProgram(env).Run(context.Background(), []string{"--invalid-flag"})
 	assert.Equal(t, 1, exitCode)
 }
 
@@ -158,7 +158,7 @@ func TestMainCmd(t *testing.T) {
 	createTestEncryptionKey(t, tempDir)
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644))
 
-	cmd := newRootCmd(newTestCLIEnv())
+	cmd := newProgram(newTestCLIEnv()).RootCommand()
 	oldRunE := cmd.RunE
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return runServer(ctx)
