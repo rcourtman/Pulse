@@ -2613,6 +2613,9 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
 	m.updateResourceStore(snapshot)
 	frontendState.Resources = m.getResourcesForBroadcast()
+	if freshness := m.currentUnifiedResourceFreshness(); !freshness.IsZero() {
+		frontendState.LastUpdate = freshness.UnixMilli()
+	}
 	return frontendState
 }
 
@@ -2957,13 +2960,7 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	}
 
 	resources := store.GetAll()
-	freshness := time.Time{}
-	if freshnessStore, ok := store.(UnifiedResourceFreshnessStore); ok {
-		freshness = freshnessStore.UnifiedResourceFreshness()
-	}
-	if freshness.IsZero() && state != nil {
-		freshness = state.GetLastUpdate()
-	}
+	freshness := unifiedResourceFreshness(store, state)
 
 	if readState, ok := store.(unifiedresources.ReadState); ok {
 		return monitorUnifiedStateView{
@@ -2978,6 +2975,29 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	}
 
 	return monitorUnifiedStateViewFromSnapshot(m.GetState())
+}
+
+func (m *Monitor) currentUnifiedResourceFreshness() time.Time {
+	if m == nil {
+		return time.Time{}
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	state := m.state
+	m.mu.RUnlock()
+	return unifiedResourceFreshness(store, state)
+}
+
+func unifiedResourceFreshness(store ResourceStoreInterface, state *models.State) time.Time {
+	freshness := time.Time{}
+	if freshnessStore, ok := store.(UnifiedResourceFreshnessStore); ok {
+		freshness = freshnessStore.UnifiedResourceFreshness()
+	}
+	if freshness.IsZero() && state != nil {
+		freshness = state.GetLastUpdate()
+	}
+	return freshness
 }
 
 // UnifiedResourceSnapshot returns a canonical unified-resource seed plus the

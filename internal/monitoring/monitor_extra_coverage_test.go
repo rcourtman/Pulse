@@ -763,6 +763,7 @@ type mockResourceStoreExtra struct {
 	ResourceStoreInterface
 	resources []unifiedresources.Resource
 	snapshots []models.StateSnapshot
+	freshness time.Time
 }
 
 func (m *mockResourceStoreExtra) GetAll() []unifiedresources.Resource {
@@ -771,6 +772,10 @@ func (m *mockResourceStoreExtra) GetAll() []unifiedresources.Resource {
 
 func (m *mockResourceStoreExtra) PopulateFromSnapshot(snapshot models.StateSnapshot) {
 	m.snapshots = append(m.snapshots, snapshot)
+}
+
+func (m *mockResourceStoreExtra) UnifiedResourceFreshness() time.Time {
+	return m.freshness
 }
 
 func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
@@ -839,8 +844,10 @@ func TestMonitor_BuildBroadcastFrontendState_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),
 	}
-	m.state.UpdateNodes([]models.Node{{ID: "node-1", Name: "Node One", Status: "online"}})
+	stateUpdate := time.Now().Add(-time.Minute).UTC()
+	m.state.UpdateNodes([]models.Node{{ID: "node-1", Name: "Node One", Status: "online", LastSeen: stateUpdate}})
 
+	storeFreshness := time.Now().UTC()
 	store := &mockResourceStoreExtra{
 		resources: []unifiedresources.Resource{
 			{
@@ -856,6 +863,7 @@ func TestMonitor_BuildBroadcastFrontendState_Extra(t *testing.T) {
 				},
 			},
 		},
+		freshness: storeFreshness,
 	}
 	m.resourceStore = store
 
@@ -875,6 +883,9 @@ func TestMonitor_BuildBroadcastFrontendState_Extra(t *testing.T) {
 	}
 	if frontendState.Resources[0].ID != "node-1" {
 		t.Fatalf("expected broadcast resource node-1, got %#v", frontendState.Resources[0])
+	}
+	if frontendState.LastUpdate != storeFreshness.UnixMilli() {
+		t.Fatalf("expected broadcast lastUpdate %d from unified store freshness, got %d", storeFreshness.UnixMilli(), frontendState.LastUpdate)
 	}
 }
 
