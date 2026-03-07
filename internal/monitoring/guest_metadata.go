@@ -26,6 +26,7 @@ const (
 	defaultGuestAgentNetworkTimeout = 10 * time.Second // GUEST_AGENT_NETWORK_TIMEOUT
 	defaultGuestAgentOSInfoTimeout  = 10 * time.Second // GUEST_AGENT_OSINFO_TIMEOUT
 	defaultGuestAgentVersionTimeout = 10 * time.Second // GUEST_AGENT_VERSION_TIMEOUT
+	defaultGuestAgentVMBudget       = 10 * time.Second // Hard cap per VM so one bad agent cannot starve later VMIDs (refs #1319)
 	defaultGuestAgentRetries        = 1                // GUEST_AGENT_RETRIES (0 = no retry, 1 = one retry)
 	defaultGuestAgentRetryDelay     = 500 * time.Millisecond
 
@@ -113,6 +114,48 @@ func (m *Monitor) releaseGuestMetadataSlot() {
 	case <-m.guestMetadataSlots:
 	default:
 	}
+}
+
+func (m *Monitor) guestAgentVMContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		return context.WithTimeout(context.Background(), defaultGuestAgentVMBudget)
+	}
+
+	budget := defaultGuestAgentVMBudget
+	if deadline, ok := parent.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return context.WithCancel(parent)
+		}
+		if remaining < budget {
+			budget = remaining
+		}
+	}
+
+	return context.WithTimeout(parent, budget)
+}
+
+func (m *Monitor) runGuestAgentVMWork(parent context.Context, instanceName, nodeName, vmName string, vmid int, fn func(context.Context)) {
+	if fn == nil {
+		return
+	}
+
+	ctx, cancel := m.guestAgentVMContext(parent)
+	defer cancel()
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Warn().
+				Str("instance", instanceName).
+				Str("node", nodeName).
+				Str("vm", vmName).
+				Int("vmid", vmid).
+				Interface("panic", recovered).
+				Msg("Recovered from guest agent processing failure; continuing with remaining VMs")
+		}
+	}()
+
+	fn(ctx)
 }
 
 // retryGuestAgentCall executes a guest agent API call with timeout and retry logic (refs #592)

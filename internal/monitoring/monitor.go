@@ -7069,7 +7069,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			// We should prefer guest agent data when available for accurate metrics
 			if res.Status == "running" && res.Type == "qemu" {
 				// First check if agent is enabled by getting VM status
-				status, err := client.GetVMStatus(ctx, res.Node, res.VMID)
+				statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				status, err := client.GetVMStatus(statusCtx, res.Node, res.VMID)
+				cancel()
 				if err != nil {
 					log.Debug().
 						Err(err).
@@ -7119,28 +7121,84 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					if detailedStatus.MaxMem > 0 {
 						memTotal = detailedStatus.MaxMem
 					}
+				} else {
+					// No vmStatus available - keep cluster/resources data
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", res.Name).
+						Int("vmid", res.VMID).
+						Msg("Could not get VM status, using cluster/resources disk data")
+				}
+			}
 
-					// Gather guest metadata from the agent when available
-					guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
-					if len(guestIPs) > 0 {
-						ipAddresses = guestIPs
+			// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available:
+			// try Proxmox RRD memory first, even if detailed status was unavailable.
+			if res.Status == "running" && memAvailable == 0 {
+				if rrdEntry, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, res.Node, res.VMID); rrdErr == nil {
+					if rrdEntry.total > 0 {
+						memTotal = rrdEntry.total
 					}
-					if len(guestIfaces) > 0 {
-						networkInterfaces = guestIfaces
+					if rrdEntry.available > 0 {
+						memAvailable = rrdEntry.available
+						memorySource = "rrd-memavailable"
+						guestRaw.RRDAvailable = rrdEntry.available
+						guestRaw.MemInfoAvailable = rrdEntry.available
+						log.Debug().
+							Str("vm", res.Name).
+							Str("node", res.Node).
+							Int("vmid", res.VMID).
+							Uint64("total", memTotal).
+							Uint64("available", memAvailable).
+							Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
+					} else if rrdEntry.used > 0 {
+						rrdUsed = rrdEntry.used
+						memorySource = "rrd-memused"
+						guestRaw.RRDUsed = rrdEntry.used
+						log.Debug().
+							Str("vm", res.Name).
+							Str("node", res.Node).
+							Int("vmid", res.VMID).
+							Uint64("total", memTotal).
+							Uint64("used", rrdUsed).
+							Msg("QEMU memory: using RRD memused fallback")
 					}
-					if guestOSName != "" {
-						osName = guestOSName
-					}
-					if guestOSVersion != "" {
-						osVersion = guestOSVersion
-					}
-					if guestAgentVersion != "" {
-						agentVersion = guestAgentVersion
-					}
+				} else {
+					log.Debug().
+						Err(rrdErr).
+						Str("instance", instanceName).
+						Str("vm", res.Name).
+						Int("vmid", res.VMID).
+						Msg("RRD memory data unavailable for VM, using status/cluster resources values")
+				}
+			}
 
-					// Always try to get filesystem info if agent is enabled
-					// Prefer guest agent data over cluster/resources data for accuracy
-					if detailedStatus.Agent.Value > 0 {
+			// Fallback: use linked Pulse host agent's memory data.
+			// gopsutil's Used = Total - Available (excludes page cache),
+			// so we can derive accurate available memory. Refs: #1270
+			if res.Status == "running" && memAvailable == 0 {
+				if agentHost, ok := vmIDToHostAgent[guestID]; ok {
+					agentAvailable := agentHost.Memory.Total - agentHost.Memory.Used
+					if agentAvailable > 0 {
+						memAvailable = uint64(agentAvailable)
+						memorySource = "host-agent"
+						guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+						guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
+						log.Debug().
+							Str("vm", res.Name).
+							Str("node", res.Node).
+							Int("vmid", res.VMID).
+							Uint64("total", memTotal).
+							Uint64("available", memAvailable).
+							Int64("agentTotal", agentHost.Memory.Total).
+							Int64("agentUsed", agentHost.Memory.Used).
+							Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+					}
+				}
+			}
+
+			if res.Status == "running" && agentEnabled {
+				m.runGuestAgentVMWork(ctx, instanceName, res.Node, res.Name, res.VMID, func(agentCtx context.Context) {
+					if detailedStatus != nil && detailedStatus.Agent.Value > 0 {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", res.Name).
@@ -7151,7 +7209,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
 
 						// Use retry logic for guest agent calls to handle transient timeouts (refs #630)
-						fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+						fsInfoRaw, err := m.retryGuestAgentCall(agentCtx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
 							return client.GetVMFSInfo(ctx, res.Node, res.VMID)
 						})
 						var fsInfo []proxmox.VMFileSystem
@@ -7173,7 +7231,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Str("instance", instanceName).
 									Str("vm", res.Name).
 									Msg("To verify: ssh into VM and run 'systemctl status qemu-guest-agent' or 'ps aux | grep qemu-ga'")
-							} else if strings.Contains(errMsg, "timeout") {
+							} else if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded") {
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -7427,110 +7485,44 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 							}
 						}
-					} else {
-						// Agent disabled - show allocated disk size
-						if diskTotal > 0 {
-							diskUsage = -1 // Show as allocated size
+					}
+
+					// Last-resort fallback before status-mem: read /proc/meminfo via the
+					// QEMU guest agent's file-read endpoint. This works for Linux VMs with
+					// the guest agent running even when the balloon driver doesn't populate
+					// the meminfo fields. Results are cached with negative backoff. Refs: #1270
+					if memAvailable == 0 {
+						if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
+							memAvailable = agentAvail
+							memorySource = "guest-agent-meminfo"
+							guestRaw.MemInfoAvailable = memAvailable
+							log.Debug().
+								Str("vm", res.Name).
+								Str("node", res.Node).
+								Int("vmid", res.VMID).
+								Uint64("total", memTotal).
+								Uint64("available", memAvailable).
+								Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
 						}
-						log.Debug().
-							Str("instance", instanceName).
-							Str("vm", res.Name).
-							Int("vmid", res.VMID).
-							Int("agent", detailedStatus.Agent.Value).
-							Msg("VM does not have guest agent enabled in config")
 					}
-				} else {
-					// No vmStatus available - keep cluster/resources data
-					log.Debug().
-						Str("instance", instanceName).
-						Str("vm", res.Name).
-						Int("vmid", res.VMID).
-						Msg("Could not get VM status, using cluster/resources disk data")
-				}
-			}
 
-			// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available:
-			// try Proxmox RRD memory first, even if detailed status was unavailable.
-			if res.Status == "running" && memAvailable == 0 {
-				if rrdEntry, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, res.Node, res.VMID); rrdErr == nil {
-					if rrdEntry.total > 0 {
-						memTotal = rrdEntry.total
+					guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(agentCtx, client, instanceName, res.Node, res.Name, res.VMID, detailedStatus)
+					if len(guestIPs) > 0 {
+						ipAddresses = guestIPs
 					}
-					if rrdEntry.available > 0 {
-						memAvailable = rrdEntry.available
-						memorySource = "rrd-memavailable"
-						guestRaw.RRDAvailable = rrdEntry.available
-						guestRaw.MemInfoAvailable = rrdEntry.available
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("available", memAvailable).
-							Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
-					} else if rrdEntry.used > 0 {
-						rrdUsed = rrdEntry.used
-						memorySource = "rrd-memused"
-						guestRaw.RRDUsed = rrdEntry.used
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("used", rrdUsed).
-							Msg("QEMU memory: using RRD memused fallback")
+					if len(guestIfaces) > 0 {
+						networkInterfaces = guestIfaces
 					}
-				} else {
-					log.Debug().
-						Err(rrdErr).
-						Str("instance", instanceName).
-						Str("vm", res.Name).
-						Int("vmid", res.VMID).
-						Msg("RRD memory data unavailable for VM, using status/cluster resources values")
-				}
-			}
-
-			// Fallback: use linked Pulse host agent's memory data.
-			// gopsutil's Used = Total - Available (excludes page cache),
-			// so we can derive accurate available memory. Refs: #1270
-			if res.Status == "running" && memAvailable == 0 {
-				if agentHost, ok := vmIDToHostAgent[guestID]; ok {
-					agentAvailable := agentHost.Memory.Total - agentHost.Memory.Used
-					if agentAvailable > 0 {
-						memAvailable = uint64(agentAvailable)
-						memorySource = "host-agent"
-						guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
-						guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("available", memAvailable).
-							Int64("agentTotal", agentHost.Memory.Total).
-							Int64("agentUsed", agentHost.Memory.Used).
-							Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+					if guestOSName != "" {
+						osName = guestOSName
 					}
-				}
-			}
-
-			// Last-resort fallback before status-mem: read /proc/meminfo via the
-			// QEMU guest agent's file-read endpoint. This works for Linux VMs with
-			// the guest agent running even when the balloon driver doesn't populate
-			// the meminfo fields. Results are cached with negative backoff. Refs: #1270
-			if res.Status == "running" && memAvailable == 0 && agentEnabled {
-				if agentAvail, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
-					memAvailable = agentAvail
-					memorySource = "guest-agent-meminfo"
-					guestRaw.MemInfoAvailable = memAvailable
-					log.Debug().
-						Str("vm", res.Name).
-						Str("node", res.Node).
-						Int("vmid", res.VMID).
-						Uint64("total", memTotal).
-						Uint64("available", memAvailable).
-						Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
-				}
+					if guestOSVersion != "" {
+						osVersion = guestOSVersion
+					}
+					if guestAgentVersion != "" {
+						agentVersion = guestAgentVersion
+					}
+				})
 			}
 
 			// Last-chance MemInfo fallback: use Total-Used only after RRD/agent

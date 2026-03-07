@@ -394,18 +394,20 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 				}
 
 				if vm.Status == "running" && memAvailable == 0 && agentEnabled {
-					if agentAvail, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, n.Node, vm.VMID); agentErr == nil && agentAvail > 0 {
-						memAvailable = agentAvail
-						memorySource = "guest-agent-meminfo"
-						guestRaw.MemInfoAvailable = memAvailable
-						log.Debug().
-							Str("vm", vm.Name).
-							Str("node", n.Node).
-							Int("vmid", vm.VMID).
-							Uint64("total", memTotal).
-							Uint64("available", memAvailable).
-							Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
-					}
+					m.runGuestAgentVMWork(ctx, instanceName, n.Node, vm.Name, vm.VMID, func(agentCtx context.Context) {
+						if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, n.Node, vm.VMID); agentErr == nil && agentAvail > 0 {
+							memAvailable = agentAvail
+							memorySource = "guest-agent-meminfo"
+							guestRaw.MemInfoAvailable = memAvailable
+							log.Debug().
+								Str("vm", vm.Name).
+								Str("node", n.Node).
+								Int("vmid", vm.VMID).
+								Uint64("total", memTotal).
+								Uint64("available", memAvailable).
+								Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
+						}
+					})
 				}
 
 				if vm.Status == "running" && memAvailable == 0 && memInfoTotalMinusUsed > 0 {
@@ -441,22 +443,24 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 				}
 
 				if vm.Status == "running" && vmStatus != nil {
-					guestIPs, guestIfaces, guestOSName, guestOSVersion, agentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
-					if len(guestIPs) > 0 {
-						ipAddresses = guestIPs
-					}
-					if len(guestIfaces) > 0 {
-						networkInterfaces = guestIfaces
-					}
-					if guestOSName != "" {
-						osName = guestOSName
-					}
-					if guestOSVersion != "" {
-						osVersion = guestOSVersion
-					}
-					if agentVersion != "" {
-						guestAgentVersion = agentVersion
-					}
+					m.runGuestAgentVMWork(ctx, instanceName, n.Node, vm.Name, vm.VMID, func(agentCtx context.Context) {
+						guestIPs, guestIfaces, guestOSName, guestOSVersion, agentVersion := m.fetchGuestAgentMetadata(agentCtx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
+						if len(guestIPs) > 0 {
+							ipAddresses = guestIPs
+						}
+						if len(guestIfaces) > 0 {
+							networkInterfaces = guestIfaces
+						}
+						if guestOSName != "" {
+							osName = guestOSName
+						}
+						if guestOSVersion != "" {
+							osVersion = guestOSVersion
+						}
+						if agentVersion != "" {
+							guestAgentVersion = agentVersion
+						}
+					})
 				}
 
 				// Calculate I/O rates after we have the actual values
@@ -532,214 +536,216 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								Msg("Guest agent disabled in VM config")
 						}
 					} else if vmStatus.Agent.Value > 0 || diskUsed == 0 {
-						if logging.IsLevelEnabled(zerolog.DebugLevel) {
-							log.Debug().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Msg("Guest agent enabled, fetching filesystem info")
-						}
-
-						// Filesystem info with configurable timeout and retry (refs #592)
-						fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
-							return client.GetVMFSInfo(ctx, n.Node, vm.VMID)
-						})
-						var fsInfo []proxmox.VMFileSystem
-						if err == nil {
-							if fs, ok := fsInfoRaw.([]proxmox.VMFileSystem); ok {
-								fsInfo = fs
+						m.runGuestAgentVMWork(ctx, instanceName, n.Node, vm.Name, vm.VMID, func(agentCtx context.Context) {
+							if logging.IsLevelEnabled(zerolog.DebugLevel) {
+								log.Debug().
+									Str("instance", instanceName).
+									Str("vm", vm.Name).
+									Int("vmid", vm.VMID).
+									Msg("Guest agent enabled, fetching filesystem info")
 							}
-						}
-						if err != nil {
-							// Handle errors
-							errStr := err.Error()
-							errStrLower := strings.ToLower(errStr)
-							log.Warn().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Str("error", errStr).
-								Msg("Failed to get VM filesystem info from guest agent")
 
-							// Classify the error type for better user messaging
-							// Order matters: check most specific patterns first
-							if strings.Contains(errStr, "QEMU guest agent is not running") {
-								diskStatusReason = "agent-not-running"
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
-							} else if strings.Contains(errStr, "timeout") {
-								diskStatusReason = "agent-timeout"
-							} else if strings.Contains(errStr, "500") && (strings.Contains(errStr, "not running") || strings.Contains(errStr, "not available")) {
-								// Proxmox API error 500 with "not running"/"not available" indicates guest agent issue, not permissions
-								// This commonly happens when guest agent is not installed or not running
-								diskStatusReason = "agent-not-running"
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Msg("Guest agent communication failed (API error 500). Install and start qemu-guest-agent in the VM")
-							} else if (strings.Contains(errStr, "403") || strings.Contains(errStr, "401")) &&
-								(strings.Contains(errStrLower, "permission") || strings.Contains(errStrLower, "forbidden") || strings.Contains(errStrLower, "not allowed")) {
-								// Only treat as permission-denied if we get explicit auth/permission error codes (401/403)
-								// This distinguishes actual permission issues from guest agent unavailability
-								diskStatusReason = "permission-denied"
+							// Filesystem info with configurable timeout and retry (refs #592)
+							fsInfoRaw, err := m.retryGuestAgentCall(agentCtx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+								return client.GetVMFSInfo(ctx, n.Node, vm.VMID)
+							})
+							var fsInfo []proxmox.VMFileSystem
+							if err == nil {
+								if fs, ok := fsInfoRaw.([]proxmox.VMFileSystem); ok {
+									fsInfo = fs
+								}
+							}
+							if err != nil {
+								// Handle errors
+								errStr := err.Error()
+								errStrLower := strings.ToLower(errStr)
 								log.Warn().
 									Str("instance", instanceName).
 									Str("vm", vm.Name).
 									Int("vmid", vm.VMID).
-									Msg("Permission denied accessing guest agent. Verify Pulse user has VM.Monitor (PVE 8) or VM.Audit+VM.GuestAgent.Audit (PVE 9) permissions")
-							} else if strings.Contains(errStr, "500") {
-								// Generic 500 error without clear indicators - likely agent unavailable
-								// Refs #596: Proxmox returns 500 errors when guest agent isn't installed/running
-								diskStatusReason = "agent-not-running"
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Msg("Failed to communicate with guest agent (API error 500). This usually means qemu-guest-agent is not installed or not running in the VM")
-							} else {
-								diskStatusReason = "agent-error"
-							}
-						} else if len(fsInfo) == 0 {
-							diskStatusReason = "no-filesystems"
-							log.Warn().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Msg("Guest agent returned empty filesystem list")
-						} else {
-							log.Info().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Int("filesystems", len(fsInfo)).
-								Msg("Got filesystem info from guest agent")
-							// Aggregate disk usage from all filesystems
-							// Fix for #425: Track seen devices to avoid counting duplicates
-							var totalBytes, usedBytes uint64
-							seenDevices := make(map[string]bool)
+									Str("error", errStr).
+									Msg("Failed to get VM filesystem info from guest agent")
 
-							for _, fs := range fsInfo {
-								// Log each filesystem for debugging
-								log.Debug().
-									Str("vm", vm.Name).
-									Str("mountpoint", fs.Mountpoint).
-									Str("type", fs.Type).
-									Str("disk", fs.Disk).
-									Uint64("total", fs.TotalBytes).
-									Uint64("used", fs.UsedBytes).
-									Msg("Processing filesystem from guest agent")
-
-								// Skip special filesystems and Windows System Reserved
-								// For Windows, mountpoints are like "C:\\" or "D:\\" - don't skip those
-								isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
-
-								if !isWindowsDrive {
-									if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Str("type", fs.Type).
-											Str("skipReason", reason).
-											Uint64("total", fs.TotalBytes).
-											Uint64("used", fs.UsedBytes).
-											Msg("Skipping read-only filesystem from guest agent")
-										continue
-									}
-
-									if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
-										strings.HasPrefix(fs.Mountpoint, "/dev") ||
-										strings.HasPrefix(fs.Mountpoint, "/proc") ||
-										strings.HasPrefix(fs.Mountpoint, "/sys") ||
-										strings.HasPrefix(fs.Mountpoint, "/run") ||
-										fs.Mountpoint == "/boot/efi" ||
-										fs.Mountpoint == "System Reserved" ||
-										strings.Contains(fs.Mountpoint, "System Reserved") ||
-										strings.HasPrefix(fs.Mountpoint, "/snap") { // Skip snap mounts
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Str("type", fs.Type).
-											Msg("Skipping special filesystem")
-										continue
-									}
-								}
-
-								// Skip if we've already seen this device (duplicate mount point)
-								if fs.Disk != "" && seenDevices[fs.Disk] {
-									log.Debug().
+								// Classify the error type for better user messaging
+								// Order matters: check most specific patterns first
+								if strings.Contains(errStr, "QEMU guest agent is not running") {
+									diskStatusReason = "agent-not-running"
+									log.Info().
+										Str("instance", instanceName).
 										Str("vm", vm.Name).
-										Str("mountpoint", fs.Mountpoint).
-										Str("disk", fs.Disk).
-										Msg("Skipping duplicate mount of same device")
-									continue
-								}
-
-								// Only count real filesystems with valid data
-								if fs.TotalBytes > 0 {
-									// Mark this device as seen
-									if fs.Disk != "" {
-										seenDevices[fs.Disk] = true
-									}
-
-									totalBytes += fs.TotalBytes
-									usedBytes += fs.UsedBytes
-									individualDisks = append(individualDisks, models.Disk{
-										Total:      int64(fs.TotalBytes),
-										Used:       int64(fs.UsedBytes),
-										Free:       int64(fs.TotalBytes - fs.UsedBytes),
-										Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
-										Mountpoint: fs.Mountpoint,
-										Type:       fs.Type,
-										Device:     fs.Disk,
-									})
-									log.Debug().
+										Int("vmid", vm.VMID).
+										Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
+								} else if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
+									diskStatusReason = "agent-timeout"
+								} else if strings.Contains(errStr, "500") && (strings.Contains(errStr, "not running") || strings.Contains(errStr, "not available")) {
+									// Proxmox API error 500 with "not running"/"not available" indicates guest agent issue, not permissions
+									// This commonly happens when guest agent is not installed or not running
+									diskStatusReason = "agent-not-running"
+									log.Info().
+										Str("instance", instanceName).
 										Str("vm", vm.Name).
-										Str("mountpoint", fs.Mountpoint).
-										Str("disk", fs.Disk).
-										Uint64("added_total", fs.TotalBytes).
-										Uint64("added_used", fs.UsedBytes).
-										Msg("Adding filesystem to total")
+										Int("vmid", vm.VMID).
+										Msg("Guest agent communication failed (API error 500). Install and start qemu-guest-agent in the VM")
+								} else if (strings.Contains(errStr, "403") || strings.Contains(errStr, "401")) &&
+									(strings.Contains(errStrLower, "permission") || strings.Contains(errStrLower, "forbidden") || strings.Contains(errStrLower, "not allowed")) {
+									// Only treat as permission-denied if we get explicit auth/permission error codes (401/403)
+									// This distinguishes actual permission issues from guest agent unavailability
+									diskStatusReason = "permission-denied"
+									log.Warn().
+										Str("instance", instanceName).
+										Str("vm", vm.Name).
+										Int("vmid", vm.VMID).
+										Msg("Permission denied accessing guest agent. Verify Pulse user has VM.Monitor (PVE 8) or VM.Audit+VM.GuestAgent.Audit (PVE 9) permissions")
+								} else if strings.Contains(errStr, "500") {
+									// Generic 500 error without clear indicators - likely agent unavailable
+									// Refs #596: Proxmox returns 500 errors when guest agent isn't installed/running
+									diskStatusReason = "agent-not-running"
+									log.Info().
+										Str("instance", instanceName).
+										Str("vm", vm.Name).
+										Int("vmid", vm.VMID).
+										Msg("Failed to communicate with guest agent (API error 500). This usually means qemu-guest-agent is not installed or not running in the VM")
 								} else {
-									log.Debug().
-										Str("vm", vm.Name).
-										Str("mountpoint", fs.Mountpoint).
-										Msg("Skipping filesystem with 0 total bytes")
+									diskStatusReason = "agent-error"
 								}
-							}
-
-							// If we got valid data from guest agent, use it
-							if totalBytes > 0 {
-								diskTotal = totalBytes
-								diskUsed = usedBytes
-								diskFree = totalBytes - usedBytes
-								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
-								diskStatusReason = "" // Clear reason on success
-
+							} else if len(fsInfo) == 0 {
+								diskStatusReason = "no-filesystems"
+								log.Warn().
+									Str("instance", instanceName).
+									Str("vm", vm.Name).
+									Int("vmid", vm.VMID).
+									Msg("Guest agent returned empty filesystem list")
+							} else {
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", vm.Name).
 									Int("vmid", vm.VMID).
-									Uint64("totalBytes", totalBytes).
-									Uint64("usedBytes", usedBytes).
-									Float64("usage", diskUsage).
-									Msg("✓ Successfully retrieved disk usage from guest agent")
-							} else {
-								// Only special filesystems found - show allocated disk size instead
-								diskStatusReason = "special-filesystems-only"
-								if diskTotal > 0 {
-									diskUsage = -1 // Show as allocated size
+									Int("filesystems", len(fsInfo)).
+									Msg("Got filesystem info from guest agent")
+								// Aggregate disk usage from all filesystems
+								// Fix for #425: Track seen devices to avoid counting duplicates
+								var totalBytes, usedBytes uint64
+								seenDevices := make(map[string]bool)
+
+								for _, fs := range fsInfo {
+									// Log each filesystem for debugging
+									log.Debug().
+										Str("vm", vm.Name).
+										Str("mountpoint", fs.Mountpoint).
+										Str("type", fs.Type).
+										Str("disk", fs.Disk).
+										Uint64("total", fs.TotalBytes).
+										Uint64("used", fs.UsedBytes).
+										Msg("Processing filesystem from guest agent")
+
+									// Skip special filesystems and Windows System Reserved
+									// For Windows, mountpoints are like "C:\\" or "D:\\" - don't skip those
+									isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
+
+									if !isWindowsDrive {
+										if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
+											log.Debug().
+												Str("vm", vm.Name).
+												Str("mountpoint", fs.Mountpoint).
+												Str("type", fs.Type).
+												Str("skipReason", reason).
+												Uint64("total", fs.TotalBytes).
+												Uint64("used", fs.UsedBytes).
+												Msg("Skipping read-only filesystem from guest agent")
+											continue
+										}
+
+										if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
+											strings.HasPrefix(fs.Mountpoint, "/dev") ||
+											strings.HasPrefix(fs.Mountpoint, "/proc") ||
+											strings.HasPrefix(fs.Mountpoint, "/sys") ||
+											strings.HasPrefix(fs.Mountpoint, "/run") ||
+											fs.Mountpoint == "/boot/efi" ||
+											fs.Mountpoint == "System Reserved" ||
+											strings.Contains(fs.Mountpoint, "System Reserved") ||
+											strings.HasPrefix(fs.Mountpoint, "/snap") { // Skip snap mounts
+											log.Debug().
+												Str("vm", vm.Name).
+												Str("mountpoint", fs.Mountpoint).
+												Str("type", fs.Type).
+												Msg("Skipping special filesystem")
+											continue
+										}
+									}
+
+									// Skip if we've already seen this device (duplicate mount point)
+									if fs.Disk != "" && seenDevices[fs.Disk] {
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Str("disk", fs.Disk).
+											Msg("Skipping duplicate mount of same device")
+										continue
+									}
+
+									// Only count real filesystems with valid data
+									if fs.TotalBytes > 0 {
+										// Mark this device as seen
+										if fs.Disk != "" {
+											seenDevices[fs.Disk] = true
+										}
+
+										totalBytes += fs.TotalBytes
+										usedBytes += fs.UsedBytes
+										individualDisks = append(individualDisks, models.Disk{
+											Total:      int64(fs.TotalBytes),
+											Used:       int64(fs.UsedBytes),
+											Free:       int64(fs.TotalBytes - fs.UsedBytes),
+											Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
+											Mountpoint: fs.Mountpoint,
+											Type:       fs.Type,
+											Device:     fs.Disk,
+										})
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Str("disk", fs.Disk).
+											Uint64("added_total", fs.TotalBytes).
+											Uint64("added_used", fs.UsedBytes).
+											Msg("Adding filesystem to total")
+									} else {
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Msg("Skipping filesystem with 0 total bytes")
+									}
 								}
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("filesystems_found", len(fsInfo)).
-									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
+
+								// If we got valid data from guest agent, use it
+								if totalBytes > 0 {
+									diskTotal = totalBytes
+									diskUsed = usedBytes
+									diskFree = totalBytes - usedBytes
+									diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+									diskStatusReason = "" // Clear reason on success
+
+									log.Info().
+										Str("instance", instanceName).
+										Str("vm", vm.Name).
+										Int("vmid", vm.VMID).
+										Uint64("totalBytes", totalBytes).
+										Uint64("usedBytes", usedBytes).
+										Float64("usage", diskUsage).
+										Msg("✓ Successfully retrieved disk usage from guest agent")
+								} else {
+									// Only special filesystems found - show allocated disk size instead
+									diskStatusReason = "special-filesystems-only"
+									if diskTotal > 0 {
+										diskUsage = -1 // Show as allocated size
+									}
+									log.Info().
+										Str("instance", instanceName).
+										Str("vm", vm.Name).
+										Int("filesystems_found", len(fsInfo)).
+										Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
+								}
 							}
-						}
+						})
 					} else {
 						// No vmStatus available or agent disabled - show allocated disk
 						if diskTotal > 0 {
