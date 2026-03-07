@@ -173,6 +173,75 @@ func TestMonitor_ConsolidateDuplicateClusters_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_ConsolidateDuplicateClusters_RemovesStandaloneCoveredByClusterEndpoint(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+					},
+				},
+				{
+					Name:        "minipc-standalone",
+					Host:        "10.0.0.5",
+					GuestURL:    "https://minipc.example",
+					Fingerprint: "fp-standalone",
+				},
+			},
+		},
+	}
+
+	m.consolidateDuplicateClusters()
+
+	if len(m.config.PVEInstances) != 1 {
+		t.Fatalf("expected 1 instance after consolidation, got %d", len(m.config.PVEInstances))
+	}
+	cluster := m.config.PVEInstances[0]
+	if !cluster.IsCluster {
+		t.Fatalf("expected remaining instance to be cluster")
+	}
+	if len(cluster.ClusterEndpoints) != 1 {
+		t.Fatalf("expected 1 cluster endpoint, got %d", len(cluster.ClusterEndpoints))
+	}
+	if cluster.ClusterEndpoints[0].GuestURL != "https://minipc.example" {
+		t.Fatalf("GuestURL = %q, want https://minipc.example", cluster.ClusterEndpoints[0].GuestURL)
+	}
+	if cluster.ClusterEndpoints[0].Fingerprint != "fp-standalone" {
+		t.Fatalf("Fingerprint = %q, want fp-standalone", cluster.ClusterEndpoints[0].Fingerprint)
+	}
+}
+
+func TestMonitor_ConsolidateDuplicateClusters_KeepsStandaloneWithoutExplicitEndpointOverlap(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://minipc.local:8006"},
+					},
+				},
+				{
+					Name: "minipc-standalone",
+					Host: "https://10.0.0.5:8006",
+				},
+			},
+		},
+	}
+
+	m.consolidateDuplicateClusters()
+
+	if len(m.config.PVEInstances) != 2 {
+		t.Fatalf("expected standalone to remain without exact endpoint overlap, got %d instances", len(m.config.PVEInstances))
+	}
+}
+
 func TestMonitor_CleanupGuestMetadataCache_Extra(t *testing.T) {
 	m := &Monitor{
 		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
