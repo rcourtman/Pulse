@@ -129,6 +129,25 @@ describe('license store', () => {
     await expect(startProTrial()).rejects.toThrow('Failed to start trial');
   });
 
+  it('startProTrial preserves backend error details for trial-not-available responses', async () => {
+    vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: vi.fn().mockResolvedValue({
+        code: 'trial_not_available',
+        error: 'Trial cannot be started while a paid v5 license migration is pending',
+        details: { org_id: 'default' },
+      }),
+    } as unknown as Response);
+
+    await expect(startProTrial()).rejects.toMatchObject({
+      status: 409,
+      code: 'trial_not_available',
+      message: 'Trial cannot be started while a paid v5 license migration is pending',
+      details: { org_id: 'default' },
+    });
+  });
+
   it('startProTrial returns redirect action when hosted signup is required', async () => {
     vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
       ok: false,

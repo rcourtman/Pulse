@@ -265,4 +265,81 @@ describe('ProLicensePanel', () => {
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
     ).not.toBeInTheDocument();
   });
+
+  it('shows reason-specific guidance when migration is rate limited', async () => {
+    mockEntitlements = {
+      capabilities: [],
+      limits: [],
+      subscription_state: 'expired',
+      upgrade_reasons: [],
+      tier: 'free',
+      trial_eligible: false,
+      trial_eligibility_reason: 'commercial_migration_pending',
+      commercial_migration: {
+        source: 'v5_license',
+        state: 'pending',
+        reason: 'exchange_rate_limited',
+        recommended_action: 'retry_activation',
+      },
+    };
+
+    render(() => <ProLicensePanel />);
+
+    expect(screen.getByText('v5 license migration pending')).toBeInTheDocument();
+    expect(screen.getByText(/rate-limited right now/i)).toBeInTheDocument();
+    expect(screen.getByText(/retry activation from this instance/i)).toBeInTheDocument();
+  });
+
+  it('shows reason-specific guidance when the v5 key is unsupported', async () => {
+    mockEntitlements = {
+      capabilities: [],
+      limits: [],
+      subscription_state: 'expired',
+      upgrade_reasons: [],
+      tier: 'free',
+      trial_eligible: false,
+      trial_eligibility_reason: 'commercial_migration_failed',
+      commercial_migration: {
+        source: 'v5_license',
+        state: 'failed',
+        reason: 'exchange_unsupported',
+        recommended_action: 'enter_supported_v5_key',
+      },
+    };
+
+    render(() => <ProLicensePanel />);
+
+    expect(screen.getByText('v5 license migration needs attention')).toBeInTheDocument();
+    expect(
+      screen.getByText(/not a supported v5 pro\/lifetime migration input/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/retry with the original v5 pro\/lifetime key from this instance/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start 14-day pro trial/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('surfaces backend trial-start messages instead of collapsing every conflict into already-used', async () => {
+    startProTrialMock.mockRejectedValue(
+      Object.assign(
+        new Error('Trial cannot be started while a paid v5 license migration is pending'),
+        {
+          status: 409,
+          code: 'trial_not_available',
+        },
+      ),
+    );
+
+    render(() => <ProLicensePanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        'Trial cannot be started while a paid v5 license migration is pending',
+      );
+    });
+  });
 });

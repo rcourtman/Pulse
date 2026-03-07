@@ -19,6 +19,12 @@ type TrialStartErrorPayload = {
   details?: Record<string, string>;
 };
 
+type TrialStartRequestError = Error & {
+  status: number;
+  code?: string;
+  details?: Record<string, string>;
+};
+
 export type StartProTrialResult =
   | { outcome: 'activated' }
   | { outcome: 'redirect'; actionUrl: string };
@@ -89,12 +95,12 @@ export async function startProTrial(): Promise<StartProTrialResult> {
       return { outcome: 'redirect', actionUrl };
     }
 
-    const err = new Error(`Failed to start trial (status ${res.status})`) as Error & {
-      status: number;
-      code?: string;
-    };
+    const err = new Error(
+      payload?.error?.trim() || `Failed to start trial (status ${res.status})`,
+    ) as TrialStartRequestError;
     err.status = res.status;
     err.code = payload?.code;
+    err.details = payload?.details;
     throw err;
   }
   await loadLicenseStatus(true);
