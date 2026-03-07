@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
@@ -809,13 +808,6 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		return
 	}
 
-	privateKey, err := pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialActivationPrivateKey))
-	if err != nil {
-		log.Error().Err(err).Msg("trial activation private key invalid")
-		http.Error(w, "trial activation signer unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
 	session, err := h.getCheckoutSession(sessionID, nil)
 	if err != nil || session == nil {
@@ -919,26 +911,24 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		}
 		return
 	}
-	token, err := pkglicensing.SignTrialActivationToken(privateKey, pkglicensing.TrialActivationClaims{
-		OrgID:         orgID,
-		Email:         email,
-		InstanceHost:  instanceHost,
-		InstanceToken: record.InstanceToken,
-		ReturnURL:     returnURL,
-		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
-			Subject:   sessionID,
-		},
-	})
-	if err != nil {
-		log.Error().Err(err).Str("session_id", sessionID).Msg("trial activation token signing failed")
-		http.Error(w, "failed to generate activation token", http.StatusInternalServerError)
+	if h.entitlements == nil {
+		http.Error(w, "hosted entitlement service unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	token, _, err = h.verificationStore.StoreOrRotateActivationToken(requestID, token, now, trialSignupActivationTokenTTL)
+	token, err := h.entitlements.IssueTrialActivation(entitlements.TrialActivationInput{
+		RequestID:         requestID,
+		OrgID:             orgID,
+		Email:             email,
+		ReturnURL:         returnURL,
+		InstanceToken:     record.InstanceToken,
+		InstanceHost:      instanceHost,
+		CheckoutSessionID: sessionID,
+		TrialStartedAt:    now,
+		IssuedAt:          now,
+		TTL:               trialSignupActivationTokenTTL,
+	})
 	if err != nil {
-		log.Error().Err(err).Str("request_id", requestID).Msg("failed to persist trial activation token")
+		log.Error().Err(err).Str("request_id", requestID).Str("session_id", sessionID).Msg("failed to persist trial activation token")
 		http.Error(w, "failed to persist activation token", http.StatusInternalServerError)
 		return
 	}
@@ -965,6 +955,10 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 	}
 	if h.verificationStore == nil {
 		http.Error(w, "trial signup store not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if h.entitlements == nil {
+		http.Error(w, "hosted entitlement service unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -1013,7 +1007,18 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 		return
 	}
 
-	if err := h.verificationStore.MarkRedemptionRecorded(claims.OrgID, claims.ReturnURL, claims.InstanceToken, claims.InstanceHost, token, now); err != nil {
+	entitlement, err := h.entitlements.ResolveTrialActivation(token, claims.InstanceHost)
+	if err != nil {
+		switch {
+		case errors.Is(err, entitlements.ErrHostedEntitlementNotFound), errors.Is(err, entitlements.ErrHostedEntitlementTargetMismatch), errors.Is(err, entitlements.ErrHostedEntitlementInactive), errors.Is(err, entitlements.ErrHostedEntitlementInvalid):
+			http.Error(w, "invalid trial redemption", http.StatusBadRequest)
+		default:
+			log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to resolve hosted trial activation")
+			http.Error(w, "failed to load trial redemption", http.StatusInternalServerError)
+		}
+		return
+	}
+	if err := h.verificationStore.MarkRedemptionRecorded(entitlement.TrialRequestID, claims.OrgID, claims.ReturnURL, claims.InstanceToken, claims.InstanceHost, now); err != nil {
 		switch {
 		case errors.Is(err, ErrTrialSignupRecordNotFound):
 			http.Error(w, "invalid trial redemption", http.StatusBadRequest)
@@ -1023,7 +1028,7 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 		}
 		return
 	}
-	record, err := h.verificationStore.GetRecordByActivationToken(token)
+	record, err := h.verificationStore.GetRecord(entitlement.TrialRequestID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrTrialSignupRecordNotFound):
@@ -1039,7 +1044,7 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 		trialStartedAt = record.CheckoutCompletedAt.UTC()
 	}
 	redemption, err := h.entitlements.RedeemTrialEntitlement(entitlements.TrialEntitlementInput{
-		RequestID:      record.ID,
+		RequestID:      entitlement.TrialRequestID,
 		OrgID:          claims.OrgID,
 		Email:          record.Email,
 		ReturnURL:      claims.ReturnURL,

@@ -410,12 +410,19 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConsumeVerification: %v", err)
 	}
+	reg, err := registry.NewTenantRegistry(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
 
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store, nil)
+	}, nil, store, svc)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
+	h.entitlements.SetNow(h.now)
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
 			ID:            id,
@@ -447,7 +454,14 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRecord(updated): %v", err)
 	}
-	token := strings.TrimSpace(updatedRecord.ActivationToken)
+	entitlement, err := reg.GetHostedEntitlementByTrialRequestID(record.ID)
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByTrialRequestID: %v", err)
+	}
+	if entitlement == nil {
+		t.Fatal("expected hosted entitlement record")
+	}
+	token := strings.TrimSpace(entitlement.ActivationToken)
 	claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "pulse.example.com", h.now().UTC())
 	if err != nil {
 		t.Fatalf("VerifyTrialActivationToken: %v", err)
@@ -464,14 +478,14 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	if updatedRecord.CheckoutCompletedAt.IsZero() {
 		t.Fatalf("expected checkout_completed_at to be recorded")
 	}
-	if updatedRecord.ActivationIssuedAt.IsZero() {
+	if entitlement.ActivationIssuedAt == nil || entitlement.ActivationIssuedAt.IsZero() {
 		t.Fatalf("expected activation_issued_at to be recorded")
 	}
-	if strings.TrimSpace(updatedRecord.ActivationToken) == "" {
+	if strings.TrimSpace(entitlement.ActivationToken) == "" {
 		t.Fatalf("expected activation_token to be persisted")
 	}
-	if updatedRecord.ActivationToken != token {
-		t.Fatalf("activation_token=%q, want issued redirect token", updatedRecord.ActivationToken)
+	if entitlement.ActivationToken != token {
+		t.Fatalf("activation_token=%q, want issued redirect token", entitlement.ActivationToken)
 	}
 }
 
@@ -504,12 +518,19 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConsumeVerification: %v", err)
 	}
+	reg, err := registry.NewTenantRegistry(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
 
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store, nil)
+	}, nil, store, svc)
 	h.now = func() time.Time { return time.Unix(1710000000, 0).UTC() }
+	h.entitlements.SetNow(h.now)
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
 			ID:            id,
@@ -532,11 +553,11 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	if firstRec.Code != http.StatusOK {
 		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusOK, firstRec.Body.String())
 	}
-	firstLoaded, err := store.GetRecord(record.ID)
+	firstEntitlement, err := reg.GetHostedEntitlementByTrialRequestID(record.ID)
 	if err != nil {
-		t.Fatalf("GetRecord(first): %v", err)
+		t.Fatalf("GetHostedEntitlementByTrialRequestID(first): %v", err)
 	}
-	firstIssuedToken := strings.TrimSpace(firstLoaded.ActivationToken)
+	firstIssuedToken := strings.TrimSpace(firstEntitlement.ActivationToken)
 	if firstIssuedToken == "" {
 		t.Fatal("expected first activation token")
 	}
@@ -547,11 +568,11 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	if secondRec.Code != http.StatusOK {
 		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusOK, secondRec.Body.String())
 	}
-	secondLoaded, err := store.GetRecord(record.ID)
+	secondEntitlement, err := reg.GetHostedEntitlementByTrialRequestID(record.ID)
 	if err != nil {
-		t.Fatalf("GetRecord(second): %v", err)
+		t.Fatalf("GetHostedEntitlementByTrialRequestID(second): %v", err)
 	}
-	secondIssuedToken := strings.TrimSpace(secondLoaded.ActivationToken)
+	secondIssuedToken := strings.TrimSpace(secondEntitlement.ActivationToken)
 	if secondIssuedToken == "" {
 		t.Fatal("expected second activation token")
 	}
@@ -601,13 +622,20 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConsumeVerification: %v", err)
 	}
+	reg, err := registry.NewTenantRegistry(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
 
 	now := baseNow
 	h := NewTrialSignupHandlers(&CPConfig{
 		StripeAPIKey:              "sk_test_123",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store, nil)
+	}, nil, store, svc)
 	h.now = func() time.Time { return now }
+	h.entitlements.SetNow(h.now)
 	h.getCheckoutSession = func(id string, _ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{
 			ID:            id,
@@ -630,11 +658,11 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	if firstRec.Code != http.StatusOK {
 		t.Fatalf("first status=%d, want %d body=%q", firstRec.Code, http.StatusOK, firstRec.Body.String())
 	}
-	firstLoaded, err := store.GetRecord(record.ID)
+	firstEntitlement, err := reg.GetHostedEntitlementByTrialRequestID(record.ID)
 	if err != nil {
-		t.Fatalf("GetRecord(first): %v", err)
+		t.Fatalf("GetHostedEntitlementByTrialRequestID(first): %v", err)
 	}
-	firstIssuedToken := strings.TrimSpace(firstLoaded.ActivationToken)
+	firstIssuedToken := strings.TrimSpace(firstEntitlement.ActivationToken)
 	if firstIssuedToken == "" {
 		t.Fatal("expected first activation token")
 	}
@@ -647,11 +675,11 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	if secondRec.Code != http.StatusOK {
 		t.Fatalf("second status=%d, want %d body=%q", secondRec.Code, http.StatusOK, secondRec.Body.String())
 	}
-	secondLoaded, err := store.GetRecord(record.ID)
+	secondEntitlement, err := reg.GetHostedEntitlementByTrialRequestID(record.ID)
 	if err != nil {
-		t.Fatalf("GetRecord(second): %v", err)
+		t.Fatalf("GetHostedEntitlementByTrialRequestID(second): %v", err)
 	}
-	secondIssuedToken := strings.TrimSpace(secondLoaded.ActivationToken)
+	secondIssuedToken := strings.TrimSpace(secondEntitlement.ActivationToken)
 	if secondIssuedToken == "" {
 		t.Fatal("expected second activation token")
 	}
@@ -705,25 +733,6 @@ func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
 		t.Fatalf("MarkCheckoutCompleted: %v", err)
 	}
 
-	activationToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
-		OrgID:         "default",
-		Email:         "owner@example.com",
-		InstanceHost:  "pulse.example.com",
-		InstanceToken: "tsi_test",
-		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   "cs_test_redeem",
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
-		},
-	})
-	if err != nil {
-		t.Fatalf("SignTrialActivationToken: %v", err)
-	}
-	if _, _, err := store.StoreOrRotateActivationToken(record.ID, activationToken, now, trialSignupActivationTokenTTL); err != nil {
-		t.Fatalf("StoreOrRotateActivationToken(actual): %v", err)
-	}
-
 	reg, err := registry.NewTenantRegistry(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewTenantRegistry: %v", err)
@@ -735,6 +744,21 @@ func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
 	}, nil, store, svc)
 	h.now = func() time.Time { return now }
 	h.entitlements.SetNow(h.now)
+	activationToken, err := h.entitlements.IssueTrialActivation(entitlements.TrialActivationInput{
+		RequestID:         record.ID,
+		OrgID:             "default",
+		Email:             "owner@example.com",
+		ReturnURL:         "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:     "tsi_test",
+		InstanceHost:      "pulse.example.com",
+		CheckoutSessionID: "cs_test_redeem",
+		TrialStartedAt:    now,
+		IssuedAt:          now,
+		TTL:               trialSignupActivationTokenTTL,
+	})
+	if err != nil {
+		t.Fatalf("IssueTrialActivation: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/redeem", strings.NewReader(`{"token":"`+activationToken+`"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -820,11 +844,18 @@ func TestTrialSignupHandleRedeemRejectsHostMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignedString: %v", err)
 	}
+	reg, err := registry.NewTenantRegistry(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	svc := entitlements.NewService(reg, "https://cloud.example.com", base64.StdEncoding.EncodeToString(priv))
 
 	h := NewTrialSignupHandlers(&CPConfig{
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store, nil)
+	}, nil, store, svc)
 	h.now = func() time.Time { return now }
+	h.entitlements.SetNow(h.now)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/redeem", strings.NewReader(`{"token":"`+activationToken+`"}`))
 	req.Header.Set("Content-Type", "application/json")

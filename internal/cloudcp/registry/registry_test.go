@@ -976,6 +976,102 @@ func TestStoreOrIssueTrialHostedEntitlement(t *testing.T) {
 	}
 }
 
+func TestStoreOrRotateTrialActivation(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	now := time.Now().UTC()
+	stored, firstIssue, err := reg.StoreOrRotateTrialActivation(TrialHostedActivationInput{
+		RequestID:       "trial_request_activation",
+		OrgID:           "default",
+		Email:           "owner@example.com",
+		ReturnURL:       "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:   "tsi_test",
+		InstanceHost:    "pulse.example.com",
+		TrialStartedAt:  now,
+		IssuedAt:        now,
+		ActivationToken: "act_one",
+		RefreshToken:    "etr_hidden_one",
+	}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("StoreOrRotateTrialActivation(first): %v", err)
+	}
+	if !firstIssue {
+		t.Fatal("first activation issue should report firstIssue=true")
+	}
+	if stored != "act_one" {
+		t.Fatalf("stored activation=%q, want %q", stored, "act_one")
+	}
+
+	loaded, err := reg.GetHostedEntitlementByTrialRequestID("trial_request_activation")
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByTrialRequestID: %v", err)
+	}
+	if loaded == nil || loaded.Kind != HostedEntitlementKindTrial {
+		t.Fatalf("expected trial hosted entitlement, got %#v", loaded)
+	}
+	if loaded.RefreshToken != "etr_hidden_one" {
+		t.Fatalf("RefreshToken=%q, want %q", loaded.RefreshToken, "etr_hidden_one")
+	}
+	if loaded.ActivationToken != "act_one" {
+		t.Fatalf("ActivationToken=%q, want %q", loaded.ActivationToken, "act_one")
+	}
+
+	stored, firstIssue, err = reg.StoreOrRotateTrialActivation(TrialHostedActivationInput{
+		RequestID:       "trial_request_activation",
+		OrgID:           "default",
+		Email:           "owner@example.com",
+		ReturnURL:       "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:   "tsi_test",
+		InstanceHost:    "pulse.example.com",
+		TrialStartedAt:  now,
+		IssuedAt:        now.Add(time.Minute),
+		ActivationToken: "act_two",
+		RefreshToken:    "etr_hidden_two",
+	}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("StoreOrRotateTrialActivation(second): %v", err)
+	}
+	if firstIssue {
+		t.Fatal("second activation issue should report firstIssue=false")
+	}
+	if stored != "act_one" {
+		t.Fatalf("stored activation=%q, want %q", stored, "act_one")
+	}
+
+	stored, firstIssue, err = reg.StoreOrRotateTrialActivation(TrialHostedActivationInput{
+		RequestID:       "trial_request_activation",
+		OrgID:           "default",
+		Email:           "owner@example.com",
+		ReturnURL:       "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:   "tsi_test",
+		InstanceHost:    "pulse.example.com",
+		TrialStartedAt:  now,
+		IssuedAt:        now.Add(11 * time.Minute),
+		ActivationToken: "act_three",
+		RefreshToken:    "etr_hidden_three",
+	}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("StoreOrRotateTrialActivation(third): %v", err)
+	}
+	if !firstIssue {
+		t.Fatal("expired activation should rotate")
+	}
+	if stored != "act_three" {
+		t.Fatalf("stored activation=%q, want %q", stored, "act_three")
+	}
+
+	loaded, err = reg.GetHostedEntitlementByActivationToken("act_three")
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByActivationToken: %v", err)
+	}
+	if loaded == nil || loaded.TrialRequestID != "trial_request_activation" {
+		t.Fatalf("expected activation lookup to return hosted entitlement, got %#v", loaded)
+	}
+	if loaded.RefreshToken != "etr_hidden_one" {
+		t.Fatalf("RefreshToken=%q, want original %q", loaded.RefreshToken, "etr_hidden_one")
+	}
+}
+
 func TestCreateStripeAccount_RequiresExistingAccount(t *testing.T) {
 	reg := newTestRegistry(t)
 

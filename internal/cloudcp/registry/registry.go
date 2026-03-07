@@ -144,7 +144,9 @@ func (r *TenantRegistry) initSchema() error {
 		instance_host TEXT NOT NULL DEFAULT '',
 		trial_started_at INTEGER,
 		refresh_token TEXT NOT NULL UNIQUE,
+		activation_token TEXT NOT NULL DEFAULT '',
 		issued_at INTEGER NOT NULL,
+		activation_issued_at INTEGER,
 		last_refreshed_at INTEGER,
 		redeemed_at INTEGER,
 		revoked_at INTEGER,
@@ -199,13 +201,34 @@ func (r *TenantRegistry) initSchema() error {
 	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_hosted_entitlements_kind ON hosted_entitlements(kind)`); err != nil {
 		return fmt.Errorf("init tenant registry schema: create idx_hosted_entitlements_kind: %w", err)
 	}
+	hasHostedActivationToken, err := r.tableHasColumn("hosted_entitlements", "activation_token")
+	if err != nil {
+		return fmt.Errorf("check hosted_entitlements schema for activation_token: %w", err)
+	}
+	if !hasHostedActivationToken {
+		if _, err := r.db.Exec(`ALTER TABLE hosted_entitlements ADD COLUMN activation_token TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrate hosted_entitlements: add activation_token: %w", err)
+		}
+	}
+	hasHostedActivationIssuedAt, err := r.tableHasColumn("hosted_entitlements", "activation_issued_at")
+	if err != nil {
+		return fmt.Errorf("check hosted_entitlements schema for activation_issued_at: %w", err)
+	}
+	if !hasHostedActivationIssuedAt {
+		if _, err := r.db.Exec(`ALTER TABLE hosted_entitlements ADD COLUMN activation_issued_at INTEGER`); err != nil {
+			return fmt.Errorf("migrate hosted_entitlements: add activation_issued_at: %w", err)
+		}
+	}
+	if _, err := r.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_hosted_entitlements_activation_token ON hosted_entitlements(activation_token) WHERE activation_token <> ''`); err != nil {
+		return fmt.Errorf("init tenant registry schema: create idx_hosted_entitlements_activation_token: %w", err)
+	}
 	if hasEntitlementRefreshToken {
 		if _, err := r.db.Exec(`
 			INSERT OR IGNORE INTO hosted_entitlements (
 				id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
-				trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+				trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
 			)
-			SELECT 'paid:' || id, 'paid', id, NULL, '', '', '', '', '', NULL, entitlement_refresh_token, updated_at, NULL, NULL, NULL
+			SELECT 'paid:' || id, 'paid', id, NULL, '', '', '', '', '', NULL, entitlement_refresh_token, '', updated_at, NULL, NULL, NULL, NULL
 			FROM tenants
 			WHERE entitlement_refresh_token <> ''
 		`); err != nil {
@@ -395,7 +418,9 @@ func (r *TenantRegistry) migrateLegacyHostedEntitlementsTable() error {
 			instance_host TEXT NOT NULL DEFAULT '',
 			trial_started_at INTEGER,
 			refresh_token TEXT NOT NULL UNIQUE,
+			activation_token TEXT NOT NULL DEFAULT '',
 			issued_at INTEGER NOT NULL,
+			activation_issued_at INTEGER,
 			last_refreshed_at INTEGER,
 			redeemed_at INTEGER,
 			revoked_at INTEGER,
@@ -403,7 +428,7 @@ func (r *TenantRegistry) migrateLegacyHostedEntitlementsTable() error {
 		);
 		INSERT INTO hosted_entitlements_new (
 			id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
-			trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+			trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
 		)
 		SELECT
 			'paid:' || tenant_id,
@@ -417,7 +442,9 @@ func (r *TenantRegistry) migrateLegacyHostedEntitlementsTable() error {
 			'',
 			NULL,
 			refresh_token,
+			'',
 			issued_at,
+			NULL,
 			last_refreshed_at,
 			NULL,
 			revoked_at
@@ -427,6 +454,7 @@ func (r *TenantRegistry) migrateLegacyHostedEntitlementsTable() error {
 		CREATE UNIQUE INDEX idx_hosted_entitlements_tenant_id ON hosted_entitlements(tenant_id) WHERE tenant_id <> '';
 		CREATE UNIQUE INDEX idx_hosted_entitlements_trial_request_id ON hosted_entitlements(trial_request_id) WHERE trial_request_id <> '';
 		CREATE UNIQUE INDEX idx_hosted_entitlements_refresh_token ON hosted_entitlements(refresh_token);
+		CREATE UNIQUE INDEX idx_hosted_entitlements_activation_token ON hosted_entitlements(activation_token) WHERE activation_token <> '';
 		CREATE INDEX idx_hosted_entitlements_kind ON hosted_entitlements(kind);
 	`); err != nil {
 		return fmt.Errorf("rebuild hosted_entitlements table: %w", err)
@@ -741,7 +769,7 @@ func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, i
 
 	rec, err := loadHostedEntitlement(tx.QueryRow(`
 		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
-		       trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+		       trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
 		FROM hosted_entitlements WHERE tenant_id = ?`,
 		tenantID,
 	))
@@ -760,8 +788,8 @@ func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, i
 		if _, err := tx.Exec(`
 			INSERT INTO hosted_entitlements (
 				id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
-				trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
-			) VALUES (?, ?, ?, NULL, '', '', '', '', '', NULL, ?, ?, NULL, NULL, NULL)`,
+				trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+			) VALUES (?, ?, ?, NULL, '', '', '', '', '', NULL, ?, '', ?, NULL, NULL, NULL, NULL)`,
 			paidHostedEntitlementID(tenantID),
 			string(HostedEntitlementKindPaid),
 			tenantID,
@@ -775,7 +803,8 @@ func (r *TenantRegistry) StoreOrIssueHostedEntitlement(tenantID, token string, i
 			UPDATE hosted_entitlements
 			SET id = ?, kind = ?, tenant_id = ?, trial_request_id = NULL, org_id = '', email = '',
 			    return_url = '', instance_token = '', instance_host = '', trial_started_at = NULL,
-			    refresh_token = ?, issued_at = ?, last_refreshed_at = NULL, redeemed_at = NULL, revoked_at = NULL
+			    refresh_token = ?, activation_token = '', issued_at = ?, activation_issued_at = NULL,
+			    last_refreshed_at = NULL, redeemed_at = NULL, revoked_at = NULL
 			WHERE tenant_id = ?`,
 			paidHostedEntitlementID(tenantID),
 			string(HostedEntitlementKindPaid),
@@ -824,7 +853,7 @@ func (r *TenantRegistry) StoreOrIssueTrialHostedEntitlement(input TrialHostedEnt
 
 	rec, err := loadHostedEntitlement(tx.QueryRow(`
 		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
-		       trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+		       trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
 		FROM hosted_entitlements WHERE trial_request_id = ?`,
 		requestID,
 	))
@@ -859,8 +888,8 @@ func (r *TenantRegistry) StoreOrIssueTrialHostedEntitlement(input TrialHostedEnt
 		if _, err := tx.Exec(`
 			INSERT INTO hosted_entitlements (
 				id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
-				trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
-			) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
+				trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+			) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, NULL, NULL, ?, NULL)`,
 			trialHostedEntitlementID(requestID),
 			string(HostedEntitlementKindTrial),
 			requestID,
@@ -908,6 +937,138 @@ func (r *TenantRegistry) StoreOrIssueTrialHostedEntitlement(input TrialHostedEnt
 	return token, true, nil
 }
 
+func (r *TenantRegistry) StoreOrRotateTrialActivation(input TrialHostedActivationInput, ttl time.Duration) (string, bool, error) {
+	requestID := strings.TrimSpace(input.RequestID)
+	activationToken := strings.TrimSpace(input.ActivationToken)
+	refreshToken := strings.TrimSpace(input.RefreshToken)
+	if requestID == "" {
+		return "", false, fmt.Errorf("missing trial request id")
+	}
+	if activationToken == "" {
+		return "", false, fmt.Errorf("missing activation token")
+	}
+	if refreshToken == "" {
+		return "", false, fmt.Errorf("missing entitlement refresh token")
+	}
+	if strings.TrimSpace(input.OrgID) == "" || strings.TrimSpace(input.Email) == "" || strings.TrimSpace(input.ReturnURL) == "" || strings.TrimSpace(input.InstanceHost) == "" {
+		return "", false, fmt.Errorf("trial activation input is incomplete")
+	}
+	if ttl <= 0 {
+		return "", false, fmt.Errorf("activation ttl is required")
+	}
+
+	issuedAt := input.IssuedAt.UTC()
+	if issuedAt.IsZero() {
+		return "", false, fmt.Errorf("activation issued_at is required")
+	}
+	trialStartedAt := input.TrialStartedAt.UTC()
+	if trialStartedAt.IsZero() {
+		trialStartedAt = issuedAt
+	}
+	rotateBefore := issuedAt.Add(-ttl)
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return "", false, fmt.Errorf("begin trial activation tx: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rec, err := loadHostedEntitlement(tx.QueryRow(`
+		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+		       trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+		FROM hosted_entitlements WHERE trial_request_id = ?`,
+		requestID,
+	))
+	if err != nil {
+		return "", false, fmt.Errorf("load trial activation entitlement: %w", err)
+	}
+
+	if rec != nil && strings.TrimSpace(rec.ActivationToken) != "" && rec.ActivationIssuedAt != nil && rec.ActivationIssuedAt.After(rotateBefore) && rec.RevokedAt == nil {
+		if _, err := tx.Exec(`
+			UPDATE hosted_entitlements
+			SET org_id = ?, email = ?, return_url = ?, instance_token = ?, instance_host = ?, trial_started_at = ?
+			WHERE id = ?`,
+			strings.TrimSpace(input.OrgID),
+			strings.TrimSpace(input.Email),
+			strings.TrimSpace(input.ReturnURL),
+			strings.TrimSpace(input.InstanceToken),
+			strings.TrimSpace(input.InstanceHost),
+			trialStartedAt.Unix(),
+			rec.ID,
+		); err != nil {
+			return "", false, fmt.Errorf("update trial activation metadata: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return "", false, fmt.Errorf("commit trial activation tx: %w", err)
+		}
+		tx = nil
+		return rec.ActivationToken, false, nil
+	}
+
+	if rec == nil {
+		if _, err := tx.Exec(`
+			INSERT INTO hosted_entitlements (
+				id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+				trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+			) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`,
+			trialHostedEntitlementID(requestID),
+			string(HostedEntitlementKindTrial),
+			requestID,
+			strings.TrimSpace(input.OrgID),
+			strings.TrimSpace(input.Email),
+			strings.TrimSpace(input.ReturnURL),
+			strings.TrimSpace(input.InstanceToken),
+			strings.TrimSpace(input.InstanceHost),
+			trialStartedAt.Unix(),
+			refreshToken,
+			activationToken,
+			issuedAt.Unix(),
+			issuedAt.Unix(),
+		); err != nil {
+			return "", false, fmt.Errorf("insert trial activation entitlement: %w", err)
+		}
+	} else {
+		effectiveRefreshToken := strings.TrimSpace(rec.RefreshToken)
+		if effectiveRefreshToken == "" {
+			effectiveRefreshToken = refreshToken
+		}
+		if _, err := tx.Exec(`
+			UPDATE hosted_entitlements
+			SET id = ?, kind = ?, tenant_id = NULL, trial_request_id = ?, org_id = ?, email = ?, return_url = ?,
+			    instance_token = ?, instance_host = ?, trial_started_at = ?, refresh_token = ?, activation_token = ?,
+			    issued_at = CASE WHEN issued_at > 0 THEN issued_at ELSE ? END, activation_issued_at = ?,
+			    last_refreshed_at = NULL, revoked_at = NULL
+			WHERE trial_request_id = ?`,
+			trialHostedEntitlementID(requestID),
+			string(HostedEntitlementKindTrial),
+			requestID,
+			strings.TrimSpace(input.OrgID),
+			strings.TrimSpace(input.Email),
+			strings.TrimSpace(input.ReturnURL),
+			strings.TrimSpace(input.InstanceToken),
+			strings.TrimSpace(input.InstanceHost),
+			trialStartedAt.Unix(),
+			effectiveRefreshToken,
+			activationToken,
+			issuedAt.Unix(),
+			issuedAt.Unix(),
+			requestID,
+		); err != nil {
+			return "", false, fmt.Errorf("rotate trial activation entitlement: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", false, fmt.Errorf("commit trial activation tx: %w", err)
+	}
+	tx = nil
+	return activationToken, true, nil
+}
+
 func scanTenants(rows *sql.Rows) ([]*Tenant, error) {
 	var tenants []*Tenant
 	for rows.Next() {
@@ -924,10 +1085,32 @@ func scanTenants(rows *sql.Rows) ([]*Tenant, error) {
 func (r *TenantRegistry) GetHostedEntitlementByRefreshToken(token string) (*HostedEntitlement, error) {
 	row := r.db.QueryRow(`
 		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
-		       trial_started_at, refresh_token, issued_at, last_refreshed_at, redeemed_at, revoked_at
+		       trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
 		FROM hosted_entitlements
 		WHERE refresh_token = ?`,
 		strings.TrimSpace(token),
+	)
+	return loadHostedEntitlement(row)
+}
+
+func (r *TenantRegistry) GetHostedEntitlementByActivationToken(token string) (*HostedEntitlement, error) {
+	row := r.db.QueryRow(`
+		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+		       trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+		FROM hosted_entitlements
+		WHERE activation_token = ?`,
+		strings.TrimSpace(token),
+	)
+	return loadHostedEntitlement(row)
+}
+
+func (r *TenantRegistry) GetHostedEntitlementByTrialRequestID(requestID string) (*HostedEntitlement, error) {
+	row := r.db.QueryRow(`
+		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+		       trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+		FROM hosted_entitlements
+		WHERE trial_request_id = ?`,
+		strings.TrimSpace(requestID),
 	)
 	return loadHostedEntitlement(row)
 }
@@ -985,6 +1168,7 @@ func loadHostedEntitlement(s scanner) (*HostedEntitlement, error) {
 	var trialRequestID sql.NullString
 	var issuedAt int64
 	var trialStartedAt sql.NullInt64
+	var activationIssuedAt sql.NullInt64
 	var lastRefreshedAt sql.NullInt64
 	var redeemedAt sql.NullInt64
 	var revokedAt sql.NullInt64
@@ -1000,7 +1184,9 @@ func loadHostedEntitlement(s scanner) (*HostedEntitlement, error) {
 		&rec.InstanceHost,
 		&trialStartedAt,
 		&rec.RefreshToken,
+		&rec.ActivationToken,
 		&issuedAt,
+		&activationIssuedAt,
 		&lastRefreshedAt,
 		&redeemedAt,
 		&revokedAt,
@@ -1025,6 +1211,10 @@ func loadHostedEntitlement(s scanner) (*HostedEntitlement, error) {
 		rec.TrialStartedAt = &ts
 	}
 	rec.IssuedAt = time.Unix(issuedAt, 0).UTC()
+	if activationIssuedAt.Valid {
+		ts := time.Unix(activationIssuedAt.Int64, 0).UTC()
+		rec.ActivationIssuedAt = &ts
+	}
 	if lastRefreshedAt.Valid {
 		ts := time.Unix(lastRefreshedAt.Int64, 0).UTC()
 		rec.LastRefreshedAt = &ts

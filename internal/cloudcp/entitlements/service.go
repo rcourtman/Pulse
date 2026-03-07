@@ -21,6 +21,7 @@ var (
 	ErrHostedEntitlementNotFound       = errors.New("hosted entitlement not found")
 	ErrHostedEntitlementTargetMismatch = errors.New("hosted entitlement target mismatch")
 	ErrHostedEntitlementInactive       = errors.New("hosted entitlement inactive")
+	ErrHostedEntitlementInvalid        = errors.New("hosted entitlement is invalid")
 )
 
 type Service struct {
@@ -49,6 +50,19 @@ type TrialEntitlementInput struct {
 type TrialRedemptionResult struct {
 	EntitlementJWT          string
 	EntitlementRefreshToken string
+}
+
+type TrialActivationInput struct {
+	RequestID         string
+	OrgID             string
+	Email             string
+	ReturnURL         string
+	InstanceToken     string
+	InstanceHost      string
+	CheckoutSessionID string
+	TrialStartedAt    time.Time
+	IssuedAt          time.Time
+	TTL               time.Duration
 }
 
 func NewService(reg *registry.TenantRegistry, baseURL, trialActivationPrivateKey string) *Service {
@@ -176,6 +190,76 @@ func (s *Service) RedeemTrialEntitlement(input TrialEntitlementInput) (*TrialRed
 	}, nil
 }
 
+func (s *Service) IssueTrialActivation(input TrialActivationInput) (string, error) {
+	if s == nil || s.registry == nil {
+		return "", fmt.Errorf("hosted entitlement service is unavailable")
+	}
+	requestID := strings.TrimSpace(input.RequestID)
+	orgID := strings.TrimSpace(input.OrgID)
+	email := strings.TrimSpace(input.Email)
+	returnURL := strings.TrimSpace(input.ReturnURL)
+	instanceToken := strings.TrimSpace(input.InstanceToken)
+	instanceHost := strings.ToLower(strings.TrimSpace(input.InstanceHost))
+	checkoutSessionID := strings.TrimSpace(input.CheckoutSessionID)
+	if requestID == "" || orgID == "" || email == "" || returnURL == "" || instanceToken == "" || instanceHost == "" || checkoutSessionID == "" {
+		return "", fmt.Errorf("trial activation input is incomplete")
+	}
+
+	issuedAt := input.IssuedAt.UTC()
+	if issuedAt.IsZero() {
+		issuedAt = s.now().UTC()
+	}
+	trialStartedAt := input.TrialStartedAt.UTC()
+	if trialStartedAt.IsZero() {
+		trialStartedAt = issuedAt
+	}
+	ttl := input.TTL
+	if ttl <= 0 {
+		return "", fmt.Errorf("trial activation ttl is required")
+	}
+
+	privateKey, err := s.entitlementPrivateKey()
+	if err != nil {
+		return "", err
+	}
+	activationToken, err := pkglicensing.SignTrialActivationToken(privateKey, pkglicensing.TrialActivationClaims{
+		OrgID:         orgID,
+		Email:         email,
+		InstanceHost:  instanceHost,
+		InstanceToken: instanceToken,
+		ReturnURL:     returnURL,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(issuedAt),
+			ExpiresAt: jwt.NewNumericDate(issuedAt.Add(ttl)),
+			Subject:   checkoutSessionID,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("sign trial activation token: %w", err)
+	}
+
+	refreshToken, err := randomRefreshToken()
+	if err != nil {
+		return "", err
+	}
+	storedToken, _, err := s.registry.StoreOrRotateTrialActivation(registry.TrialHostedActivationInput{
+		RequestID:       requestID,
+		OrgID:           orgID,
+		Email:           email,
+		ReturnURL:       returnURL,
+		InstanceToken:   instanceToken,
+		InstanceHost:    instanceHost,
+		TrialStartedAt:  trialStartedAt,
+		IssuedAt:        issuedAt,
+		ActivationToken: activationToken,
+		RefreshToken:    refreshToken,
+	}, ttl)
+	if err != nil {
+		return "", err
+	}
+	return storedToken, nil
+}
+
 func (s *Service) RefreshEntitlement(refreshToken, instanceHost string) (*RefreshResult, error) {
 	if s == nil || s.registry == nil {
 		return nil, fmt.Errorf("hosted entitlement service is unavailable")
@@ -208,6 +292,41 @@ func (s *Service) RefreshEntitlement(refreshToken, instanceHost string) (*Refres
 	default:
 		return nil, ErrHostedEntitlementNotFound
 	}
+}
+
+func (s *Service) ResolveTrialActivation(token, instanceHost string) (*registry.HostedEntitlement, error) {
+	if s == nil || s.registry == nil {
+		return nil, fmt.Errorf("hosted entitlement service is unavailable")
+	}
+	token = strings.TrimSpace(token)
+	instanceHost = strings.ToLower(strings.TrimSpace(instanceHost))
+	if token == "" {
+		return nil, ErrHostedEntitlementNotFound
+	}
+	if instanceHost == "" {
+		return nil, ErrHostedEntitlementTargetMismatch
+	}
+
+	entitlement, err := s.registry.GetHostedEntitlementByActivationToken(token)
+	if err != nil {
+		return nil, err
+	}
+	if entitlement == nil || entitlement.Kind != registry.HostedEntitlementKindTrial {
+		return nil, ErrHostedEntitlementNotFound
+	}
+	if strings.TrimSpace(entitlement.TrialRequestID) == "" {
+		return nil, ErrHostedEntitlementInvalid
+	}
+	if strings.ToLower(strings.TrimSpace(entitlement.InstanceHost)) != instanceHost {
+		return nil, ErrHostedEntitlementTargetMismatch
+	}
+	if strings.TrimSpace(entitlement.ReturnURL) == "" || strings.TrimSpace(entitlement.InstanceToken) == "" {
+		return nil, ErrHostedEntitlementInvalid
+	}
+	if entitlement.ActivationIssuedAt == nil {
+		return nil, ErrHostedEntitlementInactive
+	}
+	return entitlement, nil
 }
 
 func (s *Service) RevokeTenantEntitlement(tenantID string, revokedAt time.Time) error {

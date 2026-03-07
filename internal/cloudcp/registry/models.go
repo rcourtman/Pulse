@@ -91,21 +91,23 @@ const (
 )
 
 type HostedEntitlement struct {
-	ID              string                `json:"id"`
-	Kind            HostedEntitlementKind `json:"kind"`
-	TenantID        string                `json:"tenant_id"`
-	TrialRequestID  string                `json:"trial_request_id"`
-	OrgID           string                `json:"org_id"`
-	Email           string                `json:"email"`
-	ReturnURL       string                `json:"return_url"`
-	InstanceToken   string                `json:"instance_token"`
-	InstanceHost    string                `json:"instance_host"`
-	TrialStartedAt  *time.Time            `json:"trial_started_at,omitempty"`
-	RefreshToken    string                `json:"refresh_token"`
-	IssuedAt        time.Time             `json:"issued_at"`
-	LastRefreshedAt *time.Time            `json:"last_refreshed_at,omitempty"`
-	RedeemedAt      *time.Time            `json:"redeemed_at,omitempty"`
-	RevokedAt       *time.Time            `json:"revoked_at,omitempty"`
+	ID                 string                `json:"id"`
+	Kind               HostedEntitlementKind `json:"kind"`
+	TenantID           string                `json:"tenant_id"`
+	TrialRequestID     string                `json:"trial_request_id"`
+	OrgID              string                `json:"org_id"`
+	Email              string                `json:"email"`
+	ReturnURL          string                `json:"return_url"`
+	InstanceToken      string                `json:"instance_token"`
+	InstanceHost       string                `json:"instance_host"`
+	TrialStartedAt     *time.Time            `json:"trial_started_at,omitempty"`
+	RefreshToken       string                `json:"refresh_token"`
+	ActivationToken    string                `json:"activation_token"`
+	IssuedAt           time.Time             `json:"issued_at"`
+	ActivationIssuedAt *time.Time            `json:"activation_issued_at,omitempty"`
+	LastRefreshedAt    *time.Time            `json:"last_refreshed_at,omitempty"`
+	RedeemedAt         *time.Time            `json:"redeemed_at,omitempty"`
+	RevokedAt          *time.Time            `json:"revoked_at,omitempty"`
 }
 
 type TrialHostedEntitlementInput struct {
@@ -119,6 +121,19 @@ type TrialHostedEntitlementInput struct {
 	IssuedAt       time.Time
 	RedeemedAt     time.Time
 	RefreshToken   string
+}
+
+type TrialHostedActivationInput struct {
+	RequestID       string
+	OrgID           string
+	Email           string
+	ReturnURL       string
+	InstanceToken   string
+	InstanceHost    string
+	TrialStartedAt  time.Time
+	IssuedAt        time.Time
+	ActivationToken string
+	RefreshToken    string
 }
 
 // StripeAccount maps a control-plane account to a single Stripe customer +
