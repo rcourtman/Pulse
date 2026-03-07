@@ -11,8 +11,19 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		return nil
 	}
 
+	nodeByID := make(map[string]*models.Node, len(nodes))
+	for i := range nodes {
+		nodeID := strings.TrimSpace(nodes[i].ID)
+		if nodeID == "" {
+			continue
+		}
+		nodeByID[nodeID] = &nodes[i]
+	}
+
 	keyToHostID := make(map[string]string)
 	ambiguousKeys := make(map[string]struct{})
+	nodeIDToHostID := make(map[string]string)
+	ambiguousNodeIDs := make(map[string]struct{})
 	register := func(key, hostID string) {
 		key = strings.TrimSpace(key)
 		hostID = strings.TrimSpace(hostID)
@@ -29,6 +40,22 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		}
 		keyToHostID[key] = hostID
 	}
+	registerNode := func(nodeID, hostID string) {
+		nodeID = strings.TrimSpace(nodeID)
+		hostID = strings.TrimSpace(hostID)
+		if nodeID == "" || hostID == "" {
+			return
+		}
+		if _, ambiguous := ambiguousNodeIDs[nodeID]; ambiguous {
+			return
+		}
+		if existing, ok := nodeIDToHostID[nodeID]; ok && existing != hostID {
+			delete(nodeIDToHostID, nodeID)
+			ambiguousNodeIDs[nodeID] = struct{}{}
+			return
+		}
+		nodeIDToHostID[nodeID] = hostID
+	}
 
 	for _, node := range nodes {
 		hostID := strings.TrimSpace(node.LinkedAgentID)
@@ -44,6 +71,24 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		}
 	}
 
+	for hostID, host := range hostByID {
+		if host == nil {
+			continue
+		}
+		nodeID := strings.TrimSpace(host.LinkedNodeID)
+		if nodeID == "" {
+			continue
+		}
+		node := nodeByID[nodeID]
+		if node == nil || !trustedHostProxmoxNodeLink(*host, *node) {
+			continue
+		}
+		registerNode(nodeID, hostID)
+		for _, key := range proxmoxNodeLinkKeys(*node) {
+			register(key, hostID)
+		}
+	}
+
 	out := make(map[string]*models.Host, len(nodes))
 	for _, node := range nodes {
 		nodeID := strings.TrimSpace(node.ID)
@@ -55,6 +100,15 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 			if host := hostByID[hostID]; host != nil && trustedProxmoxNodeHostLink(node, *host) {
 				out[nodeID] = host
 				continue
+			}
+		}
+
+		if _, ambiguous := ambiguousNodeIDs[nodeID]; !ambiguous {
+			if hostID := strings.TrimSpace(nodeIDToHostID[nodeID]); hostID != "" {
+				if host := hostByID[hostID]; host != nil {
+					out[nodeID] = host
+					continue
+				}
 			}
 		}
 
@@ -110,6 +164,18 @@ func proxmoxNodeLinkKeys(node models.Node) []string {
 
 func trustedProxmoxNodeHostLink(node models.Node, host models.Host) bool {
 	if strings.TrimSpace(host.LinkedNodeID) == strings.TrimSpace(node.ID) && strings.TrimSpace(node.ID) != "" {
+		return true
+	}
+	return proxmoxNodeCorroboratesHost(node, host)
+}
+
+func trustedHostProxmoxNodeLink(host models.Host, node models.Node) bool {
+	hostLinkedNodeID := strings.TrimSpace(host.LinkedNodeID)
+	nodeID := strings.TrimSpace(node.ID)
+	if hostLinkedNodeID == "" || nodeID == "" || hostLinkedNodeID != nodeID {
+		return false
+	}
+	if strings.TrimSpace(node.LinkedAgentID) == strings.TrimSpace(host.ID) && strings.TrimSpace(host.ID) != "" {
 		return true
 	}
 	return proxmoxNodeCorroboratesHost(node, host)

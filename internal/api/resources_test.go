@@ -451,6 +451,80 @@ func TestResourceListCollapsesAsymmetricLinkedClusterNodeViews(t *testing.T) {
 	}
 }
 
+func TestResourceListCollapsesHostLinkedClusterNodeViews(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:              "homelab-delly",
+				Name:            "delly",
+				Instance:        "homelab-entry",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.9:8006",
+				Status:          "online",
+				LastSeen:        now,
+			},
+			{
+				ID:              "homelab-delly-shadow",
+				Name:            "delly",
+				Instance:        "homelab-shadow",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.9:8006",
+				Status:          "online",
+				LastSeen:        now.Add(-time.Minute),
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:           "host-1",
+				Hostname:     "delly.local",
+				Status:       "online",
+				ReportIP:     "10.0.0.9",
+				MachineID:    "machine-delly",
+				LinkedNodeID: "homelab-delly",
+				Memory:       models.Memory{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
+				LastSeen:     now,
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.0.0.9/24"}},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent&q=delly", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 delly resource, got %d", len(resp.Data))
+	}
+	resource := resp.Data[0]
+	if !containsSource(resource.Sources, unified.SourceAgent) || !containsSource(resource.Sources, unified.SourceProxmox) {
+		t.Fatalf("expected merged agent+proxmox sources, got %+v", resource.Sources)
+	}
+	if resource.Proxmox == nil || resource.Proxmox.ClusterName != "homelab" {
+		t.Fatalf("expected proxmox cluster homelab, got %+v", resource.Proxmox)
+	}
+	if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.AgentID != "host-1" {
+		t.Fatalf("expected merged discovery target for host-1, got %+v", resource.DiscoveryTarget)
+	}
+}
+
 func TestResourceGetResource(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.Host{

@@ -257,6 +257,69 @@ func TestResourceRegistry_IngestSnapshotUnifiesAsymmetricLinkedProxmoxNodeViewsB
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotUnifiesHostLinkedProxmoxNodeViewsByHostIdentity(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:              "homelab-delly",
+				Name:            "delly",
+				Instance:        "homelab-entry",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.9:8006",
+				Status:          "online",
+				LastSeen:        now,
+			},
+			{
+				ID:              "homelab-delly-shadow",
+				Name:            "delly",
+				Instance:        "homelab-shadow",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.9:8006",
+				Status:          "online",
+				LastSeen:        now.Add(-time.Minute),
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:           "host-1",
+				Hostname:     "delly.local",
+				MachineID:    "machine-delly",
+				ReportIP:     "10.0.0.9",
+				Status:       "online",
+				LastSeen:     now,
+				LinkedNodeID: "homelab-delly",
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:66", Addresses: []string{"10.0.0.9/24"}},
+				},
+			},
+		},
+	})
+
+	agents := rr.ListByType(ResourceTypeAgent)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 unified agent resource, got %d", len(agents))
+	}
+	resource := agents[0]
+	if resource.Identity.MachineID != "machine-delly" {
+		t.Fatalf("MachineID = %q, want machine-delly", resource.Identity.MachineID)
+	}
+	if resource.Proxmox == nil {
+		t.Fatalf("expected proxmox metadata")
+	}
+	if got := resource.Proxmox.LinkedAgentID; got != "host-1" {
+		t.Fatalf("LinkedAgentID = %q, want host-1", got)
+	}
+	targets := rr.SourceTargets(resource.ID)
+	if len(targets) != 3 {
+		t.Fatalf("expected 3 source targets (2 proxmox + 1 agent), got %d", len(targets))
+	}
+}
+
 func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 2, 12, 1, 0, 0, 0, time.UTC)
