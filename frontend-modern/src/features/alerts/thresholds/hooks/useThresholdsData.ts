@@ -361,7 +361,7 @@ export function useThresholdsData(
         rawName: originalName,
         type: 'dockerHost' as const,
         resourceType: 'Container Runtime',
-        node: getPreferredResourceHostname(host) || host.name,
+        node: getPreferredResourceHostname(host),
         instance: (pd(host)?.platform as string) || (pd(host)?.osName as string) || '',
         status,
         hasOverride: disableConnectivity,
@@ -439,7 +439,7 @@ export function useThresholdsData(
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
-      const hostHostname = getPreferredResourceHostname(host) || host.name;
+      const hostHostname = getPreferredResourceHostname(host);
       const containers = dockerContainersByHostId().get(host.id) ?? [];
 
       containers.forEach((container) => {
@@ -582,7 +582,7 @@ export function useThresholdsData(
         status: host.status,
       };
 
-      const hostname = getPreferredResourceHostname(host) || host.name;
+      const hostname = getPreferredResourceHostname(host);
       [friendlyName, originalName, hostname, host.id]
         .filter((key: string): key is string => Boolean(key && key.trim()))
         .forEach((key: string) => {
