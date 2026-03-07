@@ -23,7 +23,7 @@ func runServer(ctx context.Context) error {
 	return server.Run(ctx, Version)
 }
 
-func newProgram(env *pulsecli.Env) *pulsecli.Program {
+func newProgram(env *pulsecli.Env, process pulsecli.Process) *pulsecli.Program {
 	if env == nil {
 		env = pulsecli.NewEnv()
 	}
@@ -39,8 +39,8 @@ func newProgram(env *pulsecli.Env) *pulsecli.Program {
 		Runtime: pulsecli.RuntimeSpec{
 			Run: runServer,
 		},
-		Deps: env.CommandDeps(),
-		Exit: env.Exit,
+		Deps: env.CommandDeps(process),
+		Exit: process.Exit,
 	}
 }
 
@@ -55,7 +55,7 @@ func printVersion(w io.Writer) {
 }
 
 func main() {
-	newProgram(pulsecli.NewEnv()).Run(context.Background(), os.Args[1:])
+	newProgram(pulsecli.NewEnv(), pulsecli.NewProcess()).Run(context.Background(), os.Args[1:])
 }
 
 // Force rebuild 1769525035

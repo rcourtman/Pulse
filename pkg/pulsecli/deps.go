@@ -25,10 +25,13 @@ type MockDeps struct {
 }
 
 type Env struct {
-	ExportFile        string
-	ImportFile        string
-	Passphrase        string
-	ForceImport       bool
+	ExportFile  string
+	ImportFile  string
+	Passphrase  string
+	ForceImport bool
+}
+
+type Process struct {
 	Exit              func(int)
 	ReadPassword      func(int) ([]byte, error)
 	MockEnvDefaultDir string
@@ -36,7 +39,11 @@ type Env struct {
 }
 
 func NewEnv() *Env {
-	return &Env{
+	return &Env{}
+}
+
+func NewProcess() Process {
+	return Process{
 		Exit:              os.Exit,
 		ReadPassword:      term.ReadPassword,
 		MockEnvDefaultDir: "/opt/pulse",
@@ -44,7 +51,39 @@ func NewEnv() *Env {
 	}
 }
 
-func (env *Env) ConfigDeps() *ConfigDeps {
+func (process Process) readPassword() func(int) ([]byte, error) {
+	if process.ReadPassword != nil {
+		return process.ReadPassword
+	}
+	return term.ReadPassword
+}
+
+func (process Process) exit() func(int) {
+	if process.Exit != nil {
+		return process.Exit
+	}
+	return os.Exit
+}
+
+func (process Process) mockDefaultEnvDir() func() string {
+	if process.MockEnvDefaultDir != "" {
+		return func() string {
+			return process.MockEnvDefaultDir
+		}
+	}
+	return func() string {
+		return "/opt/pulse"
+	}
+}
+
+func (process Process) mockStat() func(string) (os.FileInfo, error) {
+	if process.MockEnvStat != nil {
+		return process.MockEnvStat
+	}
+	return os.Stat
+}
+
+func (env *Env) ConfigDeps(process Process) *ConfigDeps {
 	if env == nil {
 		env = NewEnv()
 	}
@@ -53,40 +92,32 @@ func (env *Env) ConfigDeps() *ConfigDeps {
 		&env.ImportFile,
 		&env.Passphrase,
 		&env.ForceImport,
-		env.ReadPassword,
+		process.readPassword(),
 	)
 }
 
-func (env *Env) BootstrapDeps() *BootstrapDeps {
-	if env == nil {
-		env = NewEnv()
-	}
-	return NewBootstrapDeps(env.Exit)
+func BuildBootstrapDeps(process Process) *BootstrapDeps {
+	return NewBootstrapDeps(process.exit())
 }
 
-func (env *Env) MockDeps() *MockDeps {
-	if env == nil {
-		env = NewEnv()
-	}
+func BuildMockDeps(process Process) *MockDeps {
 	return NewMockDeps(
-		env.Exit,
-		func() string {
-			return env.MockEnvDefaultDir
-		},
-		env.MockEnvStat,
+		process.exit(),
+		process.mockDefaultEnvDir(),
+		process.mockStat(),
 	)
 }
 
-func (env *Env) CommandDeps() CommandDeps {
+func (env *Env) CommandDeps(process Process) CommandDeps {
 	return CommandDeps{
-		Config:    env.ConfigDeps(),
-		Bootstrap: env.BootstrapDeps(),
-		Mock:      env.MockDeps(),
+		Config:    env.ConfigDeps(process),
+		Bootstrap: BuildBootstrapDeps(process),
+		Mock:      BuildMockDeps(process),
 	}
 }
 
 func (env *Env) ResetFlags() {
-	ResetFlags(env.ConfigDeps())
+	ResetFlags(env.ConfigDeps(Process{}))
 }
 
 func NewConfigDeps(exportFile, importFile, passphrase *string, forceImport *bool, readPassword func(int) ([]byte, error)) *ConfigDeps {

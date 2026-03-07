@@ -12,9 +12,13 @@ import (
 )
 
 func newTestCLIEnv() *pulsecli.Env {
-	env := pulsecli.NewEnv()
-	env.Exit = func(int) {}
-	return env
+	return pulsecli.NewEnv()
+}
+
+func newTestCLIProcess() pulsecli.Process {
+	process := pulsecli.NewProcess()
+	process.Exit = func(int) {}
+	return process
 }
 
 func createTestEncryptionKey(t *testing.T, dir string) {
