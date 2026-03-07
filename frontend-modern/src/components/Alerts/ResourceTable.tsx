@@ -397,8 +397,10 @@ export function ResourceTable(props: ResourceTableProps) {
   };
 
   const renderGroupHeader = (groupKey: string, meta?: GroupHeaderMeta) => {
+    const groupLabel = meta?.displayName || meta?.rawName || groupKey;
+
     if (!meta || meta.type !== 'agent') {
-      return <span class="text-xs font-medium text-muted">{groupKey}</span>;
+      return <span class="text-xs font-medium text-muted">{groupLabel}</span>;
     }
 
     return (
@@ -406,9 +408,7 @@ export function ResourceTable(props: ResourceTableProps) {
         <Show
           when={meta.host}
           fallback={
-            <span class="text-sm font-medium text-base-content">
-              {meta.displayName || groupKey}
-            </span>
+            <span class="text-sm font-medium text-base-content">{groupLabel}</span>
           }
         >
           {(host) => (
@@ -418,9 +418,9 @@ export function ResourceTable(props: ResourceTableProps) {
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               class="text-sm font-medium text-base-content transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400"
-              title={`Open ${meta.displayName || groupKey} web interface`}
+              title={`Open ${groupLabel} web interface`}
             >
-              {meta.displayName || groupKey}
+              {groupLabel}
             </a>
           )}
         </Show>
@@ -430,6 +430,16 @@ export function ResourceTable(props: ResourceTableProps) {
           </span>
         </Show>
       </div>
+    );
+  };
+
+  const getResourceLabel = (resource: Resource): string => {
+    return (
+      resource.displayName ||
+      resource.name ||
+      resource.rawName ||
+      resource.clusterName ||
+      resource.id
     );
   };
 
@@ -697,7 +707,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         {/* Name */}
                         <div class="min-w-0 truncate">
                           <div class="font-medium text-sm truncate">
-                            {resource.displayName || resource.name}
+                            {getResourceLabel(resource)}
                           </div>
                           <Show when={resource.subtitle}>
                             <div class="text-xs text-slate-500 truncate">{resource.subtitle}</div>
@@ -719,7 +729,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               )
                             }
                             class="p-1.5 bg-blue-50 dark:bg-blue-900 text-blue-600 rounded"
-                            aria-label={`Edit thresholds for ${resource.displayName || resource.name}`}
+                            aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
                           >
                             <svg
                               class="w-4 h-4"
@@ -767,7 +777,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               setActiveMetricInput(null);
                             }}
                             class="p-1.5 bg-green-50 dark:bg-green-900 text-green-600 rounded"
-                            aria-label={`Save threshold edits for ${resource.displayName || resource.name}`}
+                            aria-label={`Save threshold edits for ${getResourceLabel(resource)}`}
                           >
                             <svg
                               class="w-4 h-4"
@@ -794,7 +804,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             type="button"
                             onClick={() => props.onRemoveOverride(resource.id)}
                             class="p-1.5 bg-surface-alt hover:text-muted rounded transition-colors"
-                            aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
+                            aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
                             title="Revert to defaults"
                           >
                             <RotateCcw class="w-4 h-4" />
@@ -847,7 +857,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       );
                                     }}
                                     class="font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                    aria-label={`Edit ${column} threshold for ${resource.displayName || resource.name}`}
+                                    aria-label={`Edit ${column} threshold for ${getResourceLabel(resource)}`}
                                   >
                                     <MetricValueWithHeat
                                       resourceId={resource.id}
@@ -1324,7 +1334,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         toggleSelection(resource.id, e.currentTarget.checked)
                                       }
                                       class="rounded border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
-                                      aria-label={`Select ${resource.displayName || resource.name}`}
+                                      aria-label={`Select ${getResourceLabel(resource)}`}
                                     />
                                   </TableCell>
                                 </Show>
@@ -1372,7 +1382,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         <span
                                           class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                         >
-                                          {resource.name}
+                                          {getResourceLabel(resource)}
                                         </span>
                                       }
                                     >
@@ -1386,9 +1396,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                             <span
                                               class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                             >
-                                              {resource.type === 'agent'
-                                                ? resource.name
-                                                : resource.displayName || resource.name}
+                                              {getResourceLabel(resource)}
                                             </span>
                                           }
                                         >
@@ -1403,11 +1411,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   ? 'text-slate-500 '
                                                   : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
                                               }`}
-                                              title={`Open ${resource.displayName || resource.name} web interface`}
+                                              title={`Open ${getResourceLabel(resource)} web interface`}
                                             >
-                                              {resource.type === 'agent'
-                                                ? resource.name
-                                                : resource.displayName || resource.name}
+                                              {getResourceLabel(resource)}
                                             </a>
                                           )}
                                         </Show>
@@ -1772,7 +1778,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           }
                                           class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                           title="Edit thresholds"
-                                          aria-label={`Edit thresholds for ${resource.displayName || resource.name}`}
+                                          aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
                                         >
                                           <svg
                                             class="w-4 h-4"
@@ -1802,7 +1808,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           onClick={() => props.onRemoveOverride(resource.id)}
                                           class="p-1 hover:text-muted transition-colors"
                                           title="Revert to defaults"
-                                          aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
+                                          aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
                                         >
                                           <RotateCcw class="w-4 h-4" />
                                         </button>
@@ -1885,7 +1891,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     toggleSelection(resource.id, e.currentTarget.checked)
                                   }
                                   class="rounded border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
-                                  aria-label={`Select ${resource.displayName || resource.name}`}
+                                  aria-label={`Select ${getResourceLabel(resource)}`}
                                 />
                               </TableCell>
                             </Show>
@@ -1932,7 +1938,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     <span
                                       class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                     >
-                                      {resource.name}
+                                      {getResourceLabel(resource)}
                                     </span>
                                     <Show
                                       when={resource.hasOverride || resource.disableConnectivity}
@@ -1954,9 +1960,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <span
                                         class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
                                       >
-                                        {resource.type === 'agent'
-                                          ? resource.name
-                                          : resource.displayName || resource.name}
+                                        {getResourceLabel(resource)}
                                       </span>
                                     }
                                   >
@@ -1971,11 +1975,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                             ? 'text-slate-500 '
                                             : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
                                         }`}
-                                        title={`Open ${resource.displayName || resource.name} web interface`}
+                                        title={`Open ${getResourceLabel(resource)} web interface`}
                                       >
-                                        {resource.type === 'agent'
-                                          ? resource.name
-                                          : resource.displayName || resource.name}
+                                        {getResourceLabel(resource)}
                                       </a>
                                     )}
                                   </Show>
@@ -2212,7 +2214,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         }
                                         class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                         title="Edit thresholds"
-                                        aria-label={`Edit thresholds for ${resource.displayName || resource.name}`}
+                                        aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
                                       >
                                         <svg
                                           class="w-4 h-4"
@@ -2239,7 +2241,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           onClick={() => props.onRemoveOverride(resource.id)}
                                           class="p-1 hover:text-base-content transition-colors"
                                           title="Revert to defaults"
-                                          aria-label={`Revert to defaults for ${resource.displayName || resource.name}`}
+                                          aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
                                         >
                                           <RotateCcw class="w-4 h-4" />
                                         </button>

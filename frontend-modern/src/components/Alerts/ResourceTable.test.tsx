@@ -906,6 +906,26 @@ describe('ResourceTable', () => {
   });
 
   describe('node type rendering', () => {
+    it('prefers displayName for agent resources and action labels', () => {
+      const props = makeProps({
+        resources: [
+          makeResource({
+            id: 'node-1',
+            name: 'pve-node-1',
+            displayName: 'PVE Node 1',
+            type: 'agent',
+            host: 'https://192.168.0.10:8006',
+          }),
+        ],
+      });
+      render(() => <ResourceTable {...props} />);
+
+      const link = screen.getByText('PVE Node 1');
+      expect(link.tagName).toBe('A');
+      expect(link).toHaveAttribute('href', 'https://192.168.0.10:8006');
+      expect(screen.getByLabelText('Edit thresholds for PVE Node 1')).toBeInTheDocument();
+    });
+
     it('renders node name as a link when host URL is provided', () => {
       const props = makeProps({
         resources: [
