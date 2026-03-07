@@ -1098,6 +1098,9 @@ func frontendResourceType(r unified.Resource) unified.ResourceType {
 		if r.Proxmox != nil {
 			return "node"
 		}
+		if r.Agent != nil {
+			return "agent"
+		}
 		if r.Docker != nil {
 			return "docker-host"
 		}

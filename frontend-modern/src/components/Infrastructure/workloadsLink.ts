@@ -64,6 +64,12 @@ const resolveHostHint = (resource: Resource): string | undefined => {
   return getPreferredWorkloadsAgentHint(resource);
 };
 
+const hasDockerCapability = (resource: Resource): boolean => {
+  const sources = Array.isArray(resource.sources) ? resource.sources : [];
+  const platformData = resource.platformData as PlatformData | undefined;
+  return resource.type === 'docker-host' || sources.includes('docker') || Boolean(platformData?.docker);
+};
+
 export const buildWorkloadsHref = (resource: Resource): string | null => {
   if (resource.type === 'k8s-cluster' || resource.type === 'k8s-node') {
     const context = resolveKubernetesContext(resource);
@@ -77,6 +83,9 @@ export const buildWorkloadsHref = (resource: Resource): string | null => {
 
   if (resource.type === 'agent') {
     const agent = resolveHostHint(resource);
+    if (hasDockerCapability(resource)) {
+      return buildWorkloadsPath({ type: 'app-container', agent });
+    }
     return buildWorkloadsPath({ agent });
   }
 

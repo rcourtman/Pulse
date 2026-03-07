@@ -29,6 +29,15 @@ func TestFrontendResourceType(t *testing.T) {
 			want: "docker-host",
 		},
 		{
+			name: "dual-mode host prefers agent over docker-host",
+			r: unified.Resource{
+				Type:   unified.ResourceTypeAgent,
+				Agent:  &unified.AgentData{Hostname: "tower"},
+				Docker: &unified.DockerData{Hostname: "tower"},
+			},
+			want: "agent",
+		},
+		{
 			name: "plain host becomes agent",
 			r:    unified.Resource{Type: unified.ResourceTypeAgent},
 			want: "agent",
@@ -98,6 +107,7 @@ func TestApplyFrontendTypes(t *testing.T) {
 	resources := []unified.Resource{
 		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
 		{Type: unified.ResourceTypeAgent, Docker: &unified.DockerData{Hostname: "dock1"}},
+		{Type: unified.ResourceTypeAgent, Agent: &unified.AgentData{Hostname: "tower"}, Docker: &unified.DockerData{Hostname: "tower"}},
 		{Type: unified.ResourceTypeAgent},
 		{Type: unified.ResourceTypeVM},
 		{Type: unified.ResourceTypeSystemContainer},
@@ -105,7 +115,7 @@ func TestApplyFrontendTypes(t *testing.T) {
 
 	applyFrontendTypes(resources)
 
-	expected := []unified.ResourceType{"node", "docker-host", "agent", "vm", "system-container"}
+	expected := []unified.ResourceType{"node", "docker-host", "agent", "agent", "vm", "system-container"}
 	for i, want := range expected {
 		if resources[i].Type != want {
 			t.Fatalf("resources[%d].Type = %q, want %q", i, resources[i].Type, want)
@@ -118,6 +128,7 @@ func TestComputeFrontendByType(t *testing.T) {
 		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
 		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve2"}},
 		{Type: unified.ResourceTypeAgent, Docker: &unified.DockerData{Hostname: "dock1"}},
+		{Type: unified.ResourceTypeAgent, Agent: &unified.AgentData{Hostname: "tower"}, Docker: &unified.DockerData{Hostname: "tower"}},
 		{Type: unified.ResourceTypeAgent},
 		{Type: unified.ResourceTypeVM},
 		{Type: unified.ResourceTypeVM},
@@ -132,8 +143,8 @@ func TestComputeFrontendByType(t *testing.T) {
 	if byType["docker-host"] != 1 {
 		t.Fatalf("byType[docker-host] = %d, want 1", byType["docker-host"])
 	}
-	if byType["agent"] != 1 {
-		t.Fatalf("byType[agent] = %d, want 1", byType["agent"])
+	if byType["agent"] != 2 {
+		t.Fatalf("byType[agent] = %d, want 2", byType["agent"])
 	}
 	if byType[unified.ResourceTypeVM] != 2 {
 		t.Fatalf("byType[vm] = %d, want 2", byType[unified.ResourceTypeVM])
@@ -145,6 +156,7 @@ func TestComputeFrontendByType(t *testing.T) {
 	// Verify the input slice was NOT mutated — check exact per-index type.
 	originalTypes := []unified.ResourceType{
 		unified.ResourceTypeAgent, unified.ResourceTypeAgent, unified.ResourceTypeAgent, unified.ResourceTypeAgent,
+		unified.ResourceTypeAgent,
 		unified.ResourceTypeVM, unified.ResourceTypeVM,
 		unified.ResourceTypeSystemContainer,
 	}

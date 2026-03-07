@@ -19,6 +19,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	canonicalUnifiedAgentReportPath = "/api/agents/agent/report"
+	legacyUnifiedAgentReportPath    = "/api/agents/host/report"
+)
+
 func (r *Router) handleDownloadUnifiedInstallScript(w http.ResponseWriter, req *http.Request) {
 	handleDownloadInstallScriptCommon(w, req, "/opt/pulse/scripts/install.sh", filepath.Join(r.projectRoot, "scripts", "install.sh"), "install.sh", "text/x-shellscript", r.proxyInstallScriptFromGitHub)
 }
@@ -129,6 +134,8 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		)
 	}
 
+	invalidCandidates := make([]string, 0, len(searchPaths))
+
 	for _, candidate := range searchPaths {
 		if candidate == "" {
 			continue
@@ -136,6 +143,12 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 
 		info, err := os.Stat(candidate)
 		if err != nil || info.IsDir() {
+			continue
+		}
+
+		if err := validateUnifiedAgentBinary(candidate); err != nil {
+			log.Warn().Err(err).Str("path", candidate).Msg("Skipping incompatible local unified agent binary")
+			invalidCandidates = append(invalidCandidates, fmt.Sprintf("%s (%v)", candidate, err))
 			continue
 		}
 
@@ -157,12 +170,21 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		return
 	}
 
+	if len(invalidCandidates) > 0 {
+		log.Warn().Strs("paths", invalidCandidates).Msg("Ignoring stale local unified agent binaries")
+	}
+
 	// In dev mode, never fall through to GitHub releases — the released binary
 	// would lack current fixes. Return a clear 404 with build instructions.
 	if r.serverVersion == "dev" {
-		http.Error(w, fmt.Sprintf("Agent binary not found for %q in dev mode. Build with:\n"+
-			"  GOOS=linux GOARCH=amd64 go build -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent",
-			normalized), http.StatusNotFound)
+		reason := fmt.Sprintf("Agent binary not found for %q in dev mode.", normalized)
+		if len(invalidCandidates) > 0 {
+			reason = fmt.Sprintf("Local agent binary for %q is stale or incompatible in dev mode:\n  %s",
+				normalized,
+				strings.Join(invalidCandidates, "\n  "),
+			)
+		}
+		http.Error(w, reason+"\nBuild with:\n  GOOS=linux GOARCH=amd64 go build -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent", http.StatusNotFound)
 		return
 	}
 
@@ -176,7 +198,25 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 	}
 
 	// No architecture specified and no local binary - can't redirect without knowing arch
+	if len(invalidCandidates) > 0 {
+		http.Error(w, "Local agent binary is stale or incompatible. Specify ?arch=linux-amd64 (or your architecture) after rebuilding the local agent artifact.", http.StatusNotFound)
+		return
+	}
 	http.Error(w, "Agent binary not found. Specify ?arch=linux-amd64 (or your architecture)", http.StatusNotFound)
+}
+
+func validateUnifiedAgentBinary(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read binary: %w", err)
+	}
+	if bytes.Contains(content, []byte(legacyUnifiedAgentReportPath)) {
+		return fmt.Errorf("references deprecated host endpoint %s", legacyUnifiedAgentReportPath)
+	}
+	if !bytes.Contains(content, []byte(canonicalUnifiedAgentReportPath)) {
+		return fmt.Errorf("missing canonical host endpoint %s", canonicalUnifiedAgentReportPath)
+	}
+	return nil
 }
 
 // proxyAgentBinaryFromGitHub downloads an agent binary from GitHub releases and serves

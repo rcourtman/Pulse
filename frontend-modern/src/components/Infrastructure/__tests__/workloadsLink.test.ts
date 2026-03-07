@@ -192,7 +192,7 @@ describe('buildWorkloadsHref', () => {
       expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=docker-name');
     });
 
-    it('falls back to displayName when name is empty for docker-host', () => {
+    it('falls back to platformId when name is empty for docker-host', () => {
       const resource = makeResource({
         type: 'docker-host',
         platformType: 'docker',
@@ -201,7 +201,7 @@ describe('buildWorkloadsHref', () => {
         platformId: 'plat-id',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=Docker+Display');
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=plat-id');
     });
 
     it('falls back to platformId when name and displayName are empty for docker-host', () => {
@@ -236,6 +236,18 @@ describe('buildWorkloadsHref', () => {
         platformData: { proxmox: { nodeName: 'pve-node-3' } },
       });
       expect(buildWorkloadsHref(resource)).toBe('/workloads?agent=pve-node-3');
+    });
+
+    it('routes dual-mode hosts to container workloads when docker capability is present', () => {
+      const resource = makeResource({
+        type: 'agent',
+        sources: ['agent', 'docker'],
+        platformData: {
+          agent: { hostname: 'tower' },
+          docker: { hostname: 'tower' },
+        },
+      });
+      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=tower');
     });
 
     it('falls back through the expected chain for node resources', () => {

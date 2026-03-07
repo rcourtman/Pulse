@@ -36,6 +36,14 @@ func setupUnifiedAgentRouter(t *testing.T) (*Router, string) {
 	return router, tempDir
 }
 
+func validTestUnifiedAgentBinary(suffix string) []byte {
+	return []byte("ELF test binary " + canonicalUnifiedAgentReportPath + " " + suffix)
+}
+
+func staleTestUnifiedAgentBinary(suffix string) []byte {
+	return []byte("ELF stale binary " + legacyUnifiedAgentReportPath + " " + suffix)
+}
+
 func TestDownloadInstallScript_Local(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 
@@ -78,9 +86,9 @@ func TestDownloadUnifiedAgent_Local_Generic(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 
 	// Create dummy binary in project root / bin
-	binContent := "ELF binary content"
+	binContent := validTestUnifiedAgentBinary("generic")
 	binPath := filepath.Join(tempDir, "bin", "pulse-agent")
-	err := os.WriteFile(binPath, []byte(binContent), 0755)
+	err := os.WriteFile(binPath, binContent, 0755)
 	require.NoError(t, err)
 
 	// Since cachedSHA256 might not be initialized or working without real file usage pattern,
@@ -103,10 +111,10 @@ func TestDownloadUnifiedAgent_Local_Generic(t *testing.T) {
 	}
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Equal(t, binContent, w.Body.String())
+	assert.Equal(t, string(binContent), w.Body.String())
 
 	// Verify Checksum Header
-	hash := sha256.Sum256([]byte(binContent))
+	hash := sha256.Sum256(binContent)
 	expectedChecksum := hex.EncodeToString(hash[:])
 	assert.Equal(t, expectedChecksum, w.Header().Get("X-Checksum-Sha256"))
 }
@@ -115,9 +123,9 @@ func TestDownloadUnifiedAgent_Local_SpecificArch(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 
 	// Create dummy binary for linux-amd64
-	binContent := "ELF AMD64 content"
+	binContent := validTestUnifiedAgentBinary("linux-amd64")
 	binPath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
-	err := os.WriteFile(binPath, []byte(binContent), 0755)
+	err := os.WriteFile(binPath, binContent, 0755)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=amd64", nil)
@@ -126,7 +134,45 @@ func TestDownloadUnifiedAgent_Local_SpecificArch(t *testing.T) {
 	router.handleDownloadUnifiedAgent(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, binContent, w.Body.String())
+	assert.Equal(t, string(binContent), w.Body.String())
+}
+
+func TestDownloadUnifiedAgent_SkipsStaleLocalBinaryAndProxies(t *testing.T) {
+	router, tempDir := setupUnifiedAgentRouter(t)
+
+	stalePath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
+	require.NoError(t, os.WriteFile(stalePath, staleTestUnifiedAgentBinary("linux-amd64"), 0755))
+
+	binaryContent := "fresh github binary"
+	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64"
+	router.installScriptClient = newTestInstallScriptClient(t, expectedURL, http.StatusOK, binaryContent, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedAgent(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, binaryContent, w.Body.String())
+	assert.Equal(t, "github-proxy", w.Header().Get("X-Served-From"))
+}
+
+func TestDownloadUnifiedAgent_DevModeRejectsStaleLocalBinary(t *testing.T) {
+	router, tempDir := setupUnifiedAgentRouter(t)
+	router.serverVersion = "dev"
+
+	stalePath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
+	require.NoError(t, os.WriteFile(stalePath, staleTestUnifiedAgentBinary("linux-amd64"), 0755))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedAgent(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "stale or incompatible")
+	assert.Contains(t, w.Body.String(), legacyUnifiedAgentReportPath)
+	assert.Contains(t, w.Body.String(), "go build -o bin/pulse-agent-linux-amd64")
 }
 
 func TestDownloadUnifiedAgent_ProxyFromGitHub(t *testing.T) {

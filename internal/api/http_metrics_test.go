@@ -343,6 +343,20 @@ func TestRecordAPIRequest_MultipleStatusCodes(t *testing.T) {
 	}
 }
 
+func TestRecordDeprecatedAPIUsage(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+
+	feature := "host_agent_api_alias"
+	route := "/api/agents/host/report"
+	before := httpCounterValue(t, deprecatedAPIUsage, feature, route)
+
+	recordDeprecatedAPIUsage(feature, route)
+
+	if delta := httpCounterValue(t, deprecatedAPIUsage, feature, route) - before; delta != 1 {
+		t.Errorf("deprecated_api_usage_total delta: want 1, got %v", delta)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Test helpers for reading Prometheus metric values (delta-safe pattern).
 // ---------------------------------------------------------------------------
