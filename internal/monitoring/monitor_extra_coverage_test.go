@@ -215,6 +215,143 @@ func TestMonitor_ConsolidateDuplicateClusters_RemovesStandaloneCoveredByClusterE
 	}
 }
 
+func TestMonitor_ConsolidateDuplicateClusters_RetiresRemovedStandaloneRuntimeState(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+					},
+				},
+				{
+					Name: "minipc-standalone",
+					Host: "10.0.0.5",
+				},
+			},
+		},
+		state:           models.NewState(),
+		pveClients:      map[string]PVEClientInterface{"homelab": nil, "minipc-standalone": nil},
+		taskQueue:       NewTaskQueue(),
+		deadLetterQueue: NewTaskQueue(),
+		circuitBreakers: map[string]*circuitBreaker{schedulerKey(InstanceTypePVE, "minipc-standalone"): newCircuitBreaker(3, time.Second, time.Minute, 30*time.Second)},
+		failureCounts:   map[string]int{schedulerKey(InstanceTypePVE, "minipc-standalone"): 2},
+		lastOutcome:     map[string]taskOutcome{schedulerKey(InstanceTypePVE, "minipc-standalone"): {recordedAt: time.Now()}},
+		instanceInfoCache: map[string]*instanceInfo{
+			schedulerKey(InstanceTypePVE, "minipc-standalone"): {
+				Key:         schedulerKey(InstanceTypePVE, "minipc-standalone"),
+				Type:        InstanceTypePVE,
+				DisplayName: "minipc-standalone",
+			},
+		},
+		pollStatusMap:            map[string]*pollStatus{schedulerKey(InstanceTypePVE, "minipc-standalone"): {}},
+		dlqInsightMap:            map[string]*dlqInsight{schedulerKey(InstanceTypePVE, "minipc-standalone"): {}},
+		lastClusterCheck:         map[string]time.Time{"minipc-standalone": time.Now()},
+		lastPhysicalDiskPoll:     map[string]time.Time{"minipc-standalone": time.Now()},
+		lastPVEBackupPoll:        map[string]time.Time{"minipc-standalone": time.Now()},
+		backupPermissionWarnings: map[string]string{"minipc-standalone": "warn"},
+		nodeLastOnline:           map[string]time.Time{"minipc-standalone-minipc": time.Now()},
+		nodePendingUpdatesCache:  map[string]pendingUpdatesCache{"minipc-standalone-minipc": {count: 1, checkedAt: time.Now()}},
+		nodeSnapshots:            map[string]NodeMemorySnapshot{"minipc-standalone|minipc": {RetrievedAt: time.Now()}},
+		guestSnapshots:           map[string]GuestMemorySnapshot{"minipc-standalone|qemu|minipc|100": {RetrievedAt: time.Now()}},
+		guestMetadataCache:       map[string]guestMetadataCacheEntry{"minipc-standalone|minipc|100": {fetchedAt: time.Now()}},
+		guestMetadataLimiter:     map[string]time.Time{"minipc-standalone|minipc|100": time.Now().Add(time.Minute)},
+	}
+	connectionHealthKey := m.connectionHealthStateKey(InstanceTypePVE, "minipc-standalone")
+	m.state.SetConnectionHealth(connectionHealthKey, true)
+	m.state.UpdateNodesForInstance("minipc-standalone", []models.Node{{ID: "minipc-standalone-minipc", Name: "minipc", Instance: "minipc-standalone"}})
+	m.state.UpdateVMsForInstance("minipc-standalone", []models.VM{{ID: "vm-1", VMID: 100, Instance: "minipc-standalone"}})
+	m.state.UpdateContainersForInstance("minipc-standalone", []models.Container{{ID: "ct-1", VMID: 101, Instance: "minipc-standalone"}})
+	m.state.UpdateStorageForInstance("minipc-standalone", []models.Storage{{ID: "st-1", Instance: "minipc-standalone"}})
+	m.state.UpdatePhysicalDisks("minipc-standalone", []models.PhysicalDisk{{ID: "pd-1", Instance: "minipc-standalone"}})
+	m.state.UpdateReplicationJobsForInstance("minipc-standalone", []models.ReplicationJob{{ID: "rep-1", Instance: "minipc-standalone"}})
+	m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "minipc-standalone", NextRun: time.Now()})
+	m.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "minipc-standalone", NextRun: time.Now()})
+
+	m.consolidateDuplicateClusters()
+
+	if len(m.config.PVEInstances) != 1 {
+		t.Fatalf("expected 1 config instance after consolidation, got %d", len(m.config.PVEInstances))
+	}
+	if _, ok := m.pveClients["minipc-standalone"]; ok {
+		t.Fatalf("expected retired standalone client to be removed")
+	}
+	if _, ok := m.state.ConnectionHealth[connectionHealthKey]; ok {
+		t.Fatalf("expected retired standalone connection health to be removed")
+	}
+	snapshot := m.state.GetSnapshot()
+	if len(snapshot.Nodes) != 0 || len(snapshot.VMs) != 0 || len(snapshot.Containers) != 0 || len(snapshot.Storage) != 0 || len(snapshot.PhysicalDisks) != 0 || len(snapshot.ReplicationJobs) != 0 {
+		t.Fatalf("expected retired standalone runtime state to be cleared, got %+v", snapshot)
+	}
+	if m.taskQueue.Size() != 0 {
+		t.Fatalf("expected standalone task to be removed from scheduler queue")
+	}
+	if m.deadLetterQueue.Size() != 0 {
+		t.Fatalf("expected standalone task to be removed from dead letter queue")
+	}
+	if _, ok := m.pollStatusMap[schedulerKey(InstanceTypePVE, "minipc-standalone")]; ok {
+		t.Fatalf("expected poll status to be removed for retired instance")
+	}
+	if _, ok := m.nodeSnapshots["minipc-standalone|minipc"]; ok {
+		t.Fatalf("expected node diagnostic snapshots to be cleared")
+	}
+}
+
+func TestDetectClusterMembership_CanonicalizesAndRetiresStandaloneOverlap(t *testing.T) {
+	originalDetect := detectMonitorPVECluster
+	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
+
+	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return true, "cluster-A", []config.ClusterEndpoint{
+			{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+		}
+	}
+
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "homelab",
+					ClusterName: "cluster-A",
+					IsCluster:   true,
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+					},
+				},
+				{
+					Name: "minipc-standalone",
+					Host: "https://10.0.0.5:8006",
+				},
+			},
+		},
+		state:            models.NewState(),
+		pveClients:       map[string]PVEClientInterface{"homelab": nil, "minipc-standalone": nil},
+		taskQueue:        NewTaskQueue(),
+		deadLetterQueue:  NewTaskQueue(),
+		lastClusterCheck: make(map[string]time.Time),
+	}
+	m.state.UpdateNodesForInstance("minipc-standalone", []models.Node{{ID: "minipc-standalone-minipc", Name: "minipc", Instance: "minipc-standalone"}})
+	instanceCfg := &m.config.PVEInstances[1]
+
+	m.detectClusterMembership(context.Background(), "minipc-standalone", instanceCfg, &stubPVEClient{})
+
+	if len(m.config.PVEInstances) != 1 {
+		t.Fatalf("expected runtime cluster canonicalization to leave 1 instance, got %d", len(m.config.PVEInstances))
+	}
+	if m.config.PVEInstances[0].Name != "homelab" {
+		t.Fatalf("expected surviving instance homelab, got %q", m.config.PVEInstances[0].Name)
+	}
+	if _, ok := m.pveClients["minipc-standalone"]; ok {
+		t.Fatalf("expected retired standalone client to be removed")
+	}
+	if len(m.state.GetSnapshot().Nodes) != 0 {
+		t.Fatalf("expected retired standalone node state to be removed")
+	}
+}
+
 func TestMonitor_ConsolidateDuplicateClusters_KeepsStandaloneWithoutExplicitEndpointOverlap(t *testing.T) {
 	m := &Monitor{
 		config: &config.Config{

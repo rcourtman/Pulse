@@ -2,6 +2,9 @@ package monitoring
 
 import (
 	"context"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -10,7 +13,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var detectMonitorPVECluster = defaultDetectMonitorPVECluster
+
 func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName string, instanceCfg *config.PVEInstance, client PVEClientInterface) {
+	_ = client
 	if instanceCfg.IsCluster {
 		return
 	}
@@ -22,34 +28,40 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 
 	m.lastClusterCheck[instanceName] = time.Now()
 
-	// Try to detect if this is actually a cluster
-	isActuallyCluster, checkErr := client.IsClusterMember(ctx)
-	if checkErr != nil || !isActuallyCluster {
+	clientConfig := config.CreateProxmoxConfig(instanceCfg)
+	isCluster, clusterName, clusterEndpoints := detectMonitorPVECluster(clientConfig, instanceCfg.ClusterEndpoints)
+	if !isCluster || strings.TrimSpace(clusterName) == "" || len(clusterEndpoints) == 0 {
 		return
 	}
 
-	// This node is actually part of a cluster!
 	log.Info().
 		Str("instance", instanceName).
+		Str("cluster", clusterName).
+		Int("endpoints", len(clusterEndpoints)).
 		Msg("Detected that standalone node is actually part of a cluster - updating configuration")
 
-	// Update the configuration
+	updated := false
 	for i := range m.config.PVEInstances {
 		if m.config.PVEInstances[i].Name == instanceName {
 			m.config.PVEInstances[i].IsCluster = true
-			// Note: We can't get the cluster name here without direct client access
-			// It will be detected on the next configuration update
+			m.config.PVEInstances[i].ClusterName = clusterName
+			m.config.PVEInstances[i].ClusterEndpoints = clusterEndpoints
+			updated = true
 			log.Info().
 				Str("instance", instanceName).
-				Msg("Marked node as cluster member - cluster name will be detected on next update")
-
-			// Save the updated configuration
-			if m.persistence != nil {
-				if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-					log.Warn().Err(err).Msg("failed to persist updated node configuration")
-				}
-			}
+				Str("cluster", clusterName).
+				Msg("Updated standalone PVE instance with full cluster metadata")
 			break
+		}
+	}
+	if !updated {
+		return
+	}
+
+	m.normalizePVEConfigState()
+	if m.persistence != nil {
+		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
+			log.Warn().Err(err).Msg("failed to persist updated node configuration")
 		}
 	}
 }
@@ -105,4 +117,126 @@ func (m *Monitor) updateClusterEndpointStatus(instanceName string, instanceCfg *
 			break
 		}
 	}
+}
+
+func defaultDetectMonitorPVECluster(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	tempClient, err := proxmox.NewClient(clientConfig)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create client for runtime cluster detection")
+		return false, "", nil
+	}
+
+	var (
+		clusterStatus []proxmox.ClusterStatus
+		lastErr       error
+	)
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+
+		detectCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		clusterStatus, lastErr = tempClient.GetClusterStatus(detectCtx)
+		cancel()
+		if lastErr == nil {
+			break
+		}
+	}
+	if lastErr != nil {
+		return false, "", nil
+	}
+
+	clusterName := ""
+	clusterNodes := make([]proxmox.ClusterStatus, 0, len(clusterStatus))
+	for _, status := range clusterStatus {
+		switch status.Type {
+		case "cluster":
+			clusterName = strings.TrimSpace(status.Name)
+		case "node":
+			clusterNodes = append(clusterNodes, status)
+		}
+	}
+	if len(clusterNodes) <= 1 || clusterName == "" {
+		return false, "", nil
+	}
+
+	scheme, port := monitorClusterEndpointDefaults(clientConfig.Host)
+	endpoints := make([]config.ClusterEndpoint, 0, len(clusterNodes))
+	for _, clusterNode := range clusterNodes {
+		endpoint := config.ClusterEndpoint{
+			NodeID:      clusterNode.ID,
+			NodeName:    clusterNode.Name,
+			Host:        monitorBuildClusterEndpointHost(scheme, clusterNode.Name, port),
+			IP:          strings.TrimSpace(clusterNode.IP),
+			GuestURL:    monitorExistingClusterGuestURL(clusterNode.Name, existingEndpoints),
+			IPOverride:  monitorExistingClusterIPOverride(clusterNode.Name, existingEndpoints),
+			Fingerprint: monitorExistingClusterFingerprint(clusterNode.Name, existingEndpoints),
+			Online:      clusterNode.Online == 1,
+			LastSeen:    time.Now(),
+		}
+		endpoints = append(endpoints, endpoint)
+	}
+
+	return true, clusterName, endpoints
+}
+
+func monitorClusterEndpointDefaults(rawHost string) (string, string) {
+	value := strings.TrimSpace(rawHost)
+	if value == "" {
+		return "https", config.DefaultPVEPort
+	}
+	if !strings.HasPrefix(strings.ToLower(value), "http://") && !strings.HasPrefix(strings.ToLower(value), "https://") {
+		value = "https://" + value
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "https", config.DefaultPVEPort
+	}
+	scheme := strings.TrimSpace(parsed.Scheme)
+	if scheme == "" {
+		scheme = "https"
+	}
+	port := strings.TrimSpace(parsed.Port())
+	if port == "" {
+		port = config.DefaultPVEPort
+	}
+	return scheme, port
+}
+
+func monitorBuildClusterEndpointHost(scheme, host, port string) string {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return ""
+	}
+	if _, _, err := net.SplitHostPort(host); err == nil {
+		return scheme + "://" + host
+	}
+	return scheme + "://" + net.JoinHostPort(host, port)
+}
+
+func monitorExistingClusterGuestURL(nodeName string, existing []config.ClusterEndpoint) string {
+	for _, endpoint := range existing {
+		if strings.EqualFold(strings.TrimSpace(endpoint.NodeName), strings.TrimSpace(nodeName)) {
+			return strings.TrimSpace(endpoint.GuestURL)
+		}
+	}
+	return ""
+}
+
+func monitorExistingClusterIPOverride(nodeName string, existing []config.ClusterEndpoint) string {
+	for _, endpoint := range existing {
+		if strings.EqualFold(strings.TrimSpace(endpoint.NodeName), strings.TrimSpace(nodeName)) {
+			return strings.TrimSpace(endpoint.IPOverride)
+		}
+	}
+	return ""
+}
+
+func monitorExistingClusterFingerprint(nodeName string, existing []config.ClusterEndpoint) string {
+	for _, endpoint := range existing {
+		if strings.EqualFold(strings.TrimSpace(endpoint.NodeName), strings.TrimSpace(nodeName)) {
+			return strings.TrimSpace(endpoint.Fingerprint)
+		}
+	}
+	return ""
 }
