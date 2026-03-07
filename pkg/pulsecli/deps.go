@@ -24,6 +24,28 @@ type MockDeps struct {
 	Stat          func(string) (os.FileInfo, error)
 }
 
+func NewConfigDeps(exportFile, importFile, passphrase *string, forceImport *bool, readPassword func(int) ([]byte, error)) *ConfigDeps {
+	return &ConfigDeps{
+		ExportFile:   exportFile,
+		ImportFile:   importFile,
+		Passphrase:   passphrase,
+		ForceImport:  forceImport,
+		ReadPassword: readPassword,
+	}
+}
+
+func NewBootstrapDeps(exit func(int)) *BootstrapDeps {
+	return &BootstrapDeps{Exit: exit}
+}
+
+func NewMockDeps(exit func(int), defaultEnvDir func() string, stat func(string) (os.FileInfo, error)) *MockDeps {
+	return &MockDeps{
+		Exit:          exit,
+		DefaultEnvDir: defaultEnvDir,
+		Stat:          stat,
+	}
+}
+
 func configReadPassword(config *ConfigDeps, fd int) ([]byte, error) {
 	if config != nil && config.ReadPassword != nil {
 		return config.ReadPassword(fd)

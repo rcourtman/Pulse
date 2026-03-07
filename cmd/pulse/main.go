@@ -31,33 +31,31 @@ var (
 	mockEnvStat       = os.Stat
 )
 
-var configDeps = &pulsecli.ConfigDeps{
-	ExportFile:  &exportFile,
-	ImportFile:  &importFile,
-	Passphrase:  &passphrase,
-	ForceImport: &forceImport,
-	ReadPassword: func(fd int) ([]byte, error) {
+var configDeps = pulsecli.NewConfigDeps(
+	&exportFile,
+	&importFile,
+	&passphrase,
+	&forceImport,
+	func(fd int) ([]byte, error) {
 		return readPassword(fd)
 	},
-}
+)
 
-var bootstrapDeps = &pulsecli.BootstrapDeps{
-	Exit: func(code int) {
+var bootstrapDeps = pulsecli.NewBootstrapDeps(func(code int) {
+	osExit(code)
+})
+
+var mockDeps = pulsecli.NewMockDeps(
+	func(code int) {
 		osExit(code)
 	},
-}
-
-var mockDeps = &pulsecli.MockDeps{
-	Exit: func(code int) {
-		osExit(code)
-	},
-	DefaultEnvDir: func() string {
+	func() string {
 		return mockEnvDefaultDir
 	},
-	Stat: func(path string) (os.FileInfo, error) {
+	func(path string) (os.FileInfo, error) {
 		return mockEnvStat(path)
 	},
-}
+)
 
 var rootCmd = newRootCmd()
 
