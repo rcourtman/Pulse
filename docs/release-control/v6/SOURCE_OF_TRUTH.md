@@ -11,6 +11,14 @@ Machine companion:
 
 Recent locked release decision:
 
+- 2026-03-07: Browser-level proof now exists for unresolved v5 commercial
+  migration states in
+  `tests/integration/tests/12-v5-commercial-migration.spec.ts`. On the
+  disposable upgraded fixture, both pending and failed paid-license migration
+  states render the expected Pro settings notice and hide the trial CTA.
+  Evidence required `PULSE_FRONTEND_DIR` on the disposable CT because the
+  shipped embedded frontend there was serving older assets; frontend embed
+  parity remains a follow-up and is not a release-control claim.
 - 2026-03-07: v5→v6 commercial migration truth table is now owned in
   `docs/release-control/v6/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md`.
   V6 persists unresolved paid-license migration state in billing/entitlements,
@@ -218,6 +226,15 @@ Evidence: `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performa
 #### L11 — v5→v6 migration safety
 
 Evidence: `internal/config/`, `internal/api/`, `tests/migration/`
+
+Supplementary evidence:
+
+- `tests/integration/tests/12-v5-commercial-migration.spec.ts` proves
+  unresolved paid-license migration states in a real browser against an
+  upgraded v5 fixture. Pending and failed states render the expected Pro panel
+  notice and suppress the trial CTA. This proof currently depends on
+  `PULSE_FRONTEND_DIR` on the disposable CT because the fixture's embedded
+  frontend was serving older assets.
 
 | Score | Criteria |
 |-------|----------|
