@@ -81,7 +81,10 @@ func TestMainActual(t *testing.T) {
 	metricsPort = 0
 	defer func() { metricsPort = oldPort }()
 
-	rootCmd.SetArgs([]string{"version"})
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	os.Args = []string{"pulse", "version"}
 	main()
 
 	oldExit := osExit
@@ -89,7 +92,7 @@ func TestMainActual(t *testing.T) {
 	exitCode := 0
 	osExit = func(code int) { exitCode = code }
 
-	rootCmd.SetArgs([]string{"--invalid-flag"})
+	os.Args = []string{"pulse", "--invalid-flag"}
 	captureOutput(func() {
 		main()
 	})
@@ -162,14 +165,15 @@ func TestMainCmd(t *testing.T) {
 	createTestEncryptionKey(t, tempDir)
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "nodes.enc"), []byte("data"), 0644))
 
-	oldRunE := rootCmd.RunE
-	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
+	cmd := newRootCmd()
+	oldRunE := cmd.RunE
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return runServer(ctx)
 	}
-	defer func() { rootCmd.RunE = oldRunE }()
+	defer func() { cmd.RunE = oldRunE }()
 
-	rootCmd.SetArgs([]string{})
-	err := rootCmd.Execute()
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
 	assert.NoError(t, err)
 }
 

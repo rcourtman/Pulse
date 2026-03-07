@@ -23,8 +23,9 @@ func TestVersionCmd(t *testing.T) {
 	GitCommit = "abcdef"
 
 	output := captureOutput(func() {
-		rootCmd.SetArgs([]string{"version"})
-		_ = rootCmd.Execute()
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"version"})
+		_ = cmd.Execute()
 	})
 
 	assert.Contains(t, output, "Pulse 1.2.3")
@@ -34,8 +35,9 @@ func TestVersionCmd(t *testing.T) {
 	BuildTime = "unknown"
 	GitCommit = "unknown"
 	output = captureOutput(func() {
-		rootCmd.SetArgs([]string{"version"})
-		_ = rootCmd.Execute()
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"version"})
+		_ = cmd.Execute()
 	})
 	assert.Contains(t, output, "Pulse 1.2.3")
 	assert.NotContains(t, output, "Built:")

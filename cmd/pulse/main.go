@@ -57,8 +57,6 @@ var mockDeps = pulsecli.NewMockDeps(
 	},
 )
 
-var rootCmd = newRootCmd()
-
 func runServer(ctx context.Context) error {
 	server.MetricsPort = metricsPort
 	return server.Run(ctx, Version)
@@ -90,7 +88,7 @@ func printVersion(w io.Writer) {
 }
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := newRootCmd().Execute(); err != nil {
 		osExit(1)
 	}
 }
