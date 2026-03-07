@@ -60,6 +60,21 @@ func issueTrialEntitlementLease(t *testing.T, priv ed25519.PrivateKey, orgID, in
 	return token
 }
 
+func hostedTrialRedemptionWithLease(lease string) *hostedTrialRedemptionResponse {
+	return &hostedTrialRedemptionResponse{
+		EntitlementJWT:          lease,
+		EntitlementRefreshToken: "refresh_test_token",
+	}
+}
+
+func issueTrialRedemptionResponse(t *testing.T, priv ed25519.PrivateKey, orgID, instanceHost, email string, now time.Time) *hostedTrialRedemptionResponse {
+	t.Helper()
+	return &hostedTrialRedemptionResponse{
+		EntitlementJWT:          issueTrialEntitlementLease(t, priv, orgID, instanceHost, email, now),
+		EntitlementRefreshToken: "etr_test_" + orgID,
+	}
+}
+
 func TestTrialStart_DefaultOrgReturnsHostedSignupRedirect(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -236,8 +251,8 @@ func TestTrialActivation_SignedTokenStartsTrial(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-	h.trialRedeemer = func(string) (string, error) {
-		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	h.trialRedeemer = func(string) (*hostedTrialRedemptionResponse, error) {
+		return issueTrialRedemptionResponse(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
 	}
 	returnURL := "https://pulse.example.com/auth/trial-activate"
 	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
@@ -291,6 +306,9 @@ func TestTrialActivation_SignedTokenStartsTrial(t *testing.T) {
 	if strings.TrimSpace(rawState.EntitlementJWT) == "" {
 		t.Fatal("expected raw entitlement_jwt to be persisted")
 	}
+	if strings.TrimSpace(rawState.EntitlementRefreshToken) == "" {
+		t.Fatal("expected raw entitlement_refresh_token to be persisted")
+	}
 	if rawState.SubscriptionState != "" {
 		t.Fatalf("raw subscription_state=%q, want empty", rawState.SubscriptionState)
 	}
@@ -320,8 +338,8 @@ func TestTrialActivation_ReplayTokenRejected(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-	h.trialRedeemer = func(string) (string, error) {
-		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	h.trialRedeemer = func(string) (*hostedTrialRedemptionResponse, error) {
+		return issueTrialRedemptionResponse(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
 	}
 	returnURL := "https://pulse.example.com/auth/trial-activate"
 	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
@@ -370,8 +388,8 @@ func TestTrialActivation_ReissuedTokenForSameSessionRejected(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-	h.trialRedeemer = func(string) (string, error) {
-		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	h.trialRedeemer = func(string) (*hostedTrialRedemptionResponse, error) {
+		return issueTrialRedemptionResponse(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
 	}
 	returnURL := "https://pulse.example.com/auth/trial-activate"
 	instanceToken := issueTrialSignupInitiationToken(t, h, "default", returnURL)
@@ -477,8 +495,8 @@ func TestTrialActivation_ConsumedInitiationTokenCannotBeReused(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-	h.trialRedeemer = func(string) (string, error) {
-		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	h.trialRedeemer = func(string) (*hostedTrialRedemptionResponse, error) {
+		return issueTrialRedemptionResponse(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
 	}
 
 	returnURL := "https://pulse.example.com/auth/trial-activate"
@@ -571,7 +589,9 @@ func TestTrialActivation_RedeemerFailureReturnsUnavailableAndAllowsRetry(t *test
 		t.Fatalf("SignTrialActivationToken: %v", err)
 	}
 
-	h.trialRedeemer = func(string) (string, error) { return "", errors.New("control plane unavailable") }
+	h.trialRedeemer = func(string) (*hostedTrialRedemptionResponse, error) {
+		return nil, errors.New("control plane unavailable")
+	}
 
 	firstReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil)
 	firstReq.Host = "pulse.example.com"
@@ -594,8 +614,8 @@ func TestTrialActivation_RedeemerFailureReturnsUnavailableAndAllowsRetry(t *test
 		t.Fatalf("trial state should not be written when redemption fails")
 	}
 
-	h.trialRedeemer = func(string) (string, error) {
-		return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+	h.trialRedeemer = func(string) (*hostedTrialRedemptionResponse, error) {
+		return issueTrialRedemptionResponse(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
 	}
 
 	secondReq := httptest.NewRequest(http.MethodGet, "/auth/trial-activate?token="+url.QueryEscape(token), nil)
@@ -608,5 +628,167 @@ func TestTrialActivation_RedeemerFailureReturnsUnavailableAndAllowsRetry(t *test
 	}
 	if got := secondRec.Header().Get("Location"); got != "/settings/system-pro?trial=activated" {
 		t.Fatalf("second redirect=%q, want %q", got, "/settings/system-pro?trial=activated")
+	}
+}
+
+func TestRefreshHostedEntitlementLeaseOnce_RenewsLeaseAndKeepsLeaseOnlyState(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	refreshServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/trial-signup/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		var req hostedTrialLeaseRefreshRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode refresh request: %v", err)
+		}
+		if req.OrgID != "default" {
+			t.Fatalf("req.OrgID=%q, want %q", req.OrgID, "default")
+		}
+		if req.InstanceHost != "pulse.example.com" {
+			t.Fatalf("req.InstanceHost=%q, want %q", req.InstanceHost, "pulse.example.com")
+		}
+		if req.EntitlementRefreshToken != "etr_test_default" {
+			t.Fatalf("req.EntitlementRefreshToken=%q, want %q", req.EntitlementRefreshToken, "etr_test_default")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(hostedTrialLeaseRefreshResponse{
+			EntitlementJWT: issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()),
+		})
+	}))
+	defer refreshServer.Close()
+
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		PublicURL:         "https://pulse.example.com",
+		ProTrialSignupURL: refreshServer.URL + "/start-pro-trial",
+	})
+
+	store := config.NewFileBillingStore(baseDir)
+	startedAt := time.Now().Add(-13 * 24 * time.Hour).Unix()
+	expiredLease := issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now().Add(-15*24*time.Hour))
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		EntitlementJWT:          expiredLease,
+		EntitlementRefreshToken: "etr_test_default",
+		TrialStartedAt:          &startedAt,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	refreshed, permanent, err := h.refreshHostedEntitlementLeaseOnce("default", nil)
+	if err != nil {
+		t.Fatalf("refreshHostedEntitlementLeaseOnce: %v", err)
+	}
+	if !refreshed || permanent {
+		t.Fatalf("refreshed=%v permanent=%v, want refreshed=true permanent=false", refreshed, permanent)
+	}
+
+	state, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if state == nil || state.SubscriptionState != entitlements.SubStateTrial {
+		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateTrial)
+	}
+
+	rawData, err := os.ReadFile(filepath.Join(baseDir, "billing.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(billing.json): %v", err)
+	}
+	var rawState entitlements.BillingState
+	if err := json.Unmarshal(rawData, &rawState); err != nil {
+		t.Fatalf("Unmarshal(raw billing.json): %v", err)
+	}
+	if strings.TrimSpace(rawState.EntitlementJWT) == "" {
+		t.Fatal("expected raw entitlement_jwt to be updated")
+	}
+	if rawState.EntitlementRefreshToken != "etr_test_default" {
+		t.Fatalf("raw entitlement_refresh_token=%q, want %q", rawState.EntitlementRefreshToken, "etr_test_default")
+	}
+	if rawState.SubscriptionState != "" {
+		t.Fatalf("raw subscription_state=%q, want empty", rawState.SubscriptionState)
+	}
+	if len(rawState.Capabilities) != 0 {
+		t.Fatalf("raw capabilities=%v, want empty", rawState.Capabilities)
+	}
+}
+
+func TestRefreshHostedEntitlementLeaseOnce_PermanentFailureClearsLocalEntitlement(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	refreshServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/trial-signup/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "invalid entitlement refresh token", http.StatusUnauthorized)
+	}))
+	defer refreshServer.Close()
+
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		PublicURL:         "https://pulse.example.com",
+		ProTrialSignupURL: refreshServer.URL + "/start-pro-trial",
+	})
+
+	store := config.NewFileBillingStore(baseDir)
+	startedAt := time.Now().Add(-2 * time.Hour).Unix()
+	activeLease := issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now())
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		EntitlementJWT:          activeLease,
+		EntitlementRefreshToken: "etr_test_default",
+		TrialStartedAt:          &startedAt,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	refreshed, permanent, err := h.refreshHostedEntitlementLeaseOnce("default", nil)
+	if err == nil {
+		t.Fatal("expected refreshHostedEntitlementLeaseOnce to return an error")
+	}
+	if refreshed || !permanent {
+		t.Fatalf("refreshed=%v permanent=%v, want refreshed=false permanent=true", refreshed, permanent)
+	}
+
+	loaded, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected billing state to remain after permanent refresh failure")
+	}
+	if loaded.SubscriptionState != entitlements.SubStateExpired {
+		t.Fatalf("subscription_state=%q, want %q", loaded.SubscriptionState, entitlements.SubStateExpired)
+	}
+
+	rawData, err := os.ReadFile(filepath.Join(baseDir, "billing.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(billing.json): %v", err)
+	}
+	var rawState entitlements.BillingState
+	if err := json.Unmarshal(rawData, &rawState); err != nil {
+		t.Fatalf("Unmarshal(raw billing.json): %v", err)
+	}
+	if rawState.EntitlementJWT != "" {
+		t.Fatalf("raw entitlement_jwt=%q, want empty", rawState.EntitlementJWT)
+	}
+	if rawState.EntitlementRefreshToken != "" {
+		t.Fatalf("raw entitlement_refresh_token=%q, want empty", rawState.EntitlementRefreshToken)
+	}
+	if rawState.TrialStartedAt == nil || *rawState.TrialStartedAt != startedAt {
+		t.Fatalf("raw trial_started_at=%v, want %d", rawState.TrialStartedAt, startedAt)
 	}
 }

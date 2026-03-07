@@ -115,16 +115,16 @@ func TestHostedLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GenerateKey: %v", err)
 		}
-		handlers.trialRedeemer = func(token string) (string, error) {
+		handlers.trialRedeemer = func(token string) (*hostedTrialRedemptionResponse, error) {
 			claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "", time.Now().UTC())
 			if err != nil {
-				return "", err
+				return nil, err
 			}
-			return issueTrialEntitlementLease(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now().UTC()), nil
+			return issueTrialRedemptionResponse(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now().UTC()), nil
 		}
 		t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-		handlers.trialRedeemer = func(string) (string, error) {
-			return issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
+		handlers.trialRedeemer = func(string) (*hostedTrialRedemptionResponse, error) {
+			return issueTrialRedemptionResponse(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now()), nil
 		}
 		returnURL := "https://pulse.example.com/auth/trial-activate"
 		instanceToken := issueHostedLifecycleTrialInitiationToken(t, handlers, "default", returnURL)
@@ -188,6 +188,9 @@ func TestHostedLifecycle(t *testing.T) {
 		if rawState.EntitlementJWT == "" {
 			t.Fatal("expected raw entitlement_jwt to be stored")
 		}
+		if rawState.EntitlementRefreshToken == "" {
+			t.Fatal("expected raw entitlement_refresh_token to be stored")
+		}
 
 		entReq1 := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
 		entRec1 := httptest.NewRecorder()
@@ -250,20 +253,20 @@ func TestHostedLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GenerateKey: %v", err)
 		}
-		handlers.trialRedeemer = func(token string) (string, error) {
+		handlers.trialRedeemer = func(token string) (*hostedTrialRedemptionResponse, error) {
 			claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "", time.Now().UTC())
 			if err != nil {
-				return "", err
+				return nil, err
 			}
-			return issueTrialEntitlementLease(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now().UTC()), nil
+			return issueTrialRedemptionResponse(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now().UTC()), nil
 		}
 		t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
-		handlers.trialRedeemer = func(token string) (string, error) {
+		handlers.trialRedeemer = func(token string) (*hostedTrialRedemptionResponse, error) {
 			claims, err := pkglicensing.VerifyTrialActivationToken(token, pub, "pulse.example.com", time.Now())
 			if err != nil {
 				t.Fatalf("VerifyTrialActivationToken(redeemer): %v", err)
 			}
-			return issueTrialEntitlementLease(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now()), nil
+			return issueTrialRedemptionResponse(t, priv, claims.OrgID, claims.InstanceHost, claims.Email, time.Now()), nil
 		}
 
 		org1 := "trial-org-1"

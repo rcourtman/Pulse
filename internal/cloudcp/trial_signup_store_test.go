@@ -362,6 +362,63 @@ func TestTrialSignupStoreStoreOrRotateActivationToken(t *testing.T) {
 	}
 }
 
+func TestTrialSignupStoreStoreOrIssueEntitlementRefreshToken(t *testing.T) {
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	rawToken, err := store.CreateVerification(&TrialSignupRecord{
+		OrgID:                 "default",
+		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
+		Name:                  "Owner",
+		Email:                 "owner@example.com",
+		Company:               "Pulse Labs",
+		CreatedAt:             now,
+		VerificationExpiresAt: now.Add(trialSignupVerificationTTL),
+	})
+	if err != nil {
+		t.Fatalf("CreateVerification: %v", err)
+	}
+	record, err := store.ConsumeVerification(rawToken, now)
+	if err != nil {
+		t.Fatalf("ConsumeVerification: %v", err)
+	}
+
+	storedToken, firstIssue, err := store.StoreOrIssueEntitlementRefreshToken(record.ID, "refresh-one", now)
+	if err != nil {
+		t.Fatalf("StoreOrIssueEntitlementRefreshToken(first): %v", err)
+	}
+	if !firstIssue {
+		t.Fatal("expected first entitlement refresh token issuance to report firstIssue=true")
+	}
+	if storedToken != "refresh-one" {
+		t.Fatalf("storedToken=%q, want %q", storedToken, "refresh-one")
+	}
+
+	storedToken, firstIssue, err = store.StoreOrIssueEntitlementRefreshToken(record.ID, "refresh-two", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("StoreOrIssueEntitlementRefreshToken(second): %v", err)
+	}
+	if firstIssue {
+		t.Fatal("expected repeat entitlement refresh token load to report firstIssue=false")
+	}
+	if storedToken != "refresh-one" {
+		t.Fatalf("storedToken=%q, want existing token %q", storedToken, "refresh-one")
+	}
+
+	loaded, err := store.GetRecordByEntitlementRefreshToken("refresh-one")
+	if err != nil {
+		t.Fatalf("GetRecordByEntitlementRefreshToken: %v", err)
+	}
+	if loaded.ID != record.ID {
+		t.Fatalf("loaded.ID=%q, want %q", loaded.ID, record.ID)
+	}
+}
+
 func TestTrialSignupStoreMarkRedemptionRecorded(t *testing.T) {
 	store, err := NewTrialSignupStore(t.TempDir())
 	if err != nil {

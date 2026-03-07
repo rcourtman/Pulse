@@ -39,6 +39,8 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	// Normalize string fields.
 	normalized.PlanVersion = strings.TrimSpace(normalized.PlanVersion)
 	normalized.SubscriptionState = SubscriptionState(strings.ToLower(strings.TrimSpace(string(normalized.SubscriptionState))))
+	normalized.EntitlementJWT = strings.TrimSpace(normalized.EntitlementJWT)
+	normalized.EntitlementRefreshToken = strings.TrimSpace(normalized.EntitlementRefreshToken)
 	normalized.StripeCustomerID = strings.TrimSpace(normalized.StripeCustomerID)
 	normalized.StripeSubscriptionID = strings.TrimSpace(normalized.StripeSubscriptionID)
 	normalized.StripePriceID = strings.TrimSpace(normalized.StripePriceID)

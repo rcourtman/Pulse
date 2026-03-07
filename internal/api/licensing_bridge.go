@@ -234,6 +234,10 @@ func verifyEntitlementLeaseTokenFromLicensing(token string, key ed25519.PublicKe
 	return pkglicensing.VerifyEntitlementLeaseToken(token, key, expectedInstanceHost, now)
 }
 
+func parseEntitlementLeaseTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string) (*entitlementLeaseClaimsModel, error) {
+	return pkglicensing.ParseEntitlementLeaseToken(token, key, expectedInstanceHost)
+}
+
 func writePaymentRequiredFromLicensing(w http.ResponseWriter, payload map[string]interface{}) {
 	pkglicensing.WritePaymentRequired(w, payload)
 }

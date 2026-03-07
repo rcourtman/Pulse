@@ -215,14 +215,16 @@ func (s *FileBillingStore) loadHMACKey() ([]byte, error) {
 // affects billing logic, add it here too. Existing on-disk signatures will
 // auto-migrate on next read (see GetBillingState migration path).
 type billingIntegrityPayload struct {
-	Capabilities      []string                       `json:"capabilities"`
-	Limits            map[string]int64               `json:"limits"`
-	PlanVersion       string                         `json:"plan_version"`
-	SubscriptionState pkglicensing.SubscriptionState `json:"subscription_state"`
-	TrialStartedAt    *int64                         `json:"trial_started_at"`
-	TrialEndsAt       *int64                         `json:"trial_ends_at"`
-	TrialExtendedAt   *int64                         `json:"trial_extended_at"`
-	OverflowGrantedAt *int64                         `json:"overflow_granted_at"`
+	Capabilities            []string                       `json:"capabilities"`
+	Limits                  map[string]int64               `json:"limits"`
+	EntitlementJWT          string                         `json:"entitlement_jwt"`
+	EntitlementRefreshToken string                         `json:"entitlement_refresh_token"`
+	PlanVersion             string                         `json:"plan_version"`
+	SubscriptionState       pkglicensing.SubscriptionState `json:"subscription_state"`
+	TrialStartedAt          *int64                         `json:"trial_started_at"`
+	TrialEndsAt             *int64                         `json:"trial_ends_at"`
+	TrialExtendedAt         *int64                         `json:"trial_extended_at"`
+	OverflowGrantedAt       *int64                         `json:"overflow_granted_at"`
 	// Quickstart credits gate free hosted Patrol runs — must be HMAC-protected.
 	QuickstartCreditsGranted   bool   `json:"quickstart_credits_granted"`
 	QuickstartCreditsUsed      int    `json:"quickstart_credits_used"`
@@ -245,6 +247,8 @@ func billingIntegrity(state *pkglicensing.BillingState, key []byte) string {
 	payload := billingIntegrityPayload{
 		Capabilities:               caps,
 		Limits:                     limits,
+		EntitlementJWT:             strings.TrimSpace(state.EntitlementJWT),
+		EntitlementRefreshToken:    strings.TrimSpace(state.EntitlementRefreshToken),
 		PlanVersion:                state.PlanVersion,
 		SubscriptionState:          state.SubscriptionState,
 		TrialStartedAt:             state.TrialStartedAt,

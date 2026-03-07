@@ -743,6 +743,9 @@ func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
 	if strings.TrimSpace(resp.EntitlementJWT) == "" {
 		t.Fatal("expected entitlement_jwt in response")
 	}
+	if strings.TrimSpace(resp.EntitlementRefreshToken) == "" {
+		t.Fatal("expected entitlement_refresh_token in response")
+	}
 	entitlementClaims, err := pkglicensing.VerifyEntitlementLeaseToken(resp.EntitlementJWT, pub, "pulse.example.com", now)
 	if err != nil {
 		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
@@ -760,6 +763,9 @@ func TestTrialSignupHandleRedeemRecordsRedemption(t *testing.T) {
 	}
 	if updatedRecord.RedemptionRecordedAt.IsZero() {
 		t.Fatalf("expected redemption_recorded_at to be set")
+	}
+	if strings.TrimSpace(updatedRecord.EntitlementRefreshToken) == "" {
+		t.Fatalf("expected entitlement_refresh_token to be persisted")
 	}
 
 	claims, err := pkglicensing.VerifyTrialActivationToken(activationToken, pub, "pulse.example.com", now)
@@ -817,6 +823,92 @@ func TestTrialSignupHandleRedeemRejectsHostMismatch(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "host mismatch") {
 		t.Fatalf("expected host mismatch error, got %q", rec.Body.String())
+	}
+}
+
+func TestTrialSignupHandleRefreshReturnsLease(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	store, err := NewTrialSignupStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	now := time.Unix(1710000000, 0).UTC()
+	record := &TrialSignupRecord{
+		OrgID:         "default",
+		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
+		InstanceToken: "tsi_test",
+		Name:          "Owner",
+		Email:         "owner@example.com",
+		Company:       "Pulse Labs",
+		CreatedAt:     now,
+	}
+	if err := store.CreateCheckoutRequest(record); err != nil {
+		t.Fatalf("CreateCheckoutRequest: %v", err)
+	}
+	if err := store.MarkCheckoutStarted(record.ID, "cs_test_refresh", now); err != nil {
+		t.Fatalf("MarkCheckoutStarted: %v", err)
+	}
+	if err := store.MarkCheckoutCompleted(record.ID, "cs_test_refresh", now); err != nil {
+		t.Fatalf("MarkCheckoutCompleted: %v", err)
+	}
+	activationToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+		OrgID:         "default",
+		Email:         "owner@example.com",
+		InstanceHost:  "pulse.example.com",
+		InstanceToken: "tsi_test",
+		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "cs_test_refresh",
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignTrialActivationToken: %v", err)
+	}
+	if _, _, err := store.StoreOrRotateActivationToken(record.ID, activationToken, now, trialSignupActivationTokenTTL); err != nil {
+		t.Fatalf("StoreOrRotateActivationToken: %v", err)
+	}
+	if _, _, err := store.StoreOrIssueEntitlementRefreshToken(record.ID, "etr_test_refresh", now); err != nil {
+		t.Fatalf("StoreOrIssueEntitlementRefreshToken: %v", err)
+	}
+	if err := store.MarkRedemptionRecorded("default", "https://pulse.example.com/auth/trial-activate", "tsi_test", "pulse.example.com", activationToken, now); err != nil {
+		t.Fatalf("MarkRedemptionRecorded: %v", err)
+	}
+
+	h := NewTrialSignupHandlers(&CPConfig{
+		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
+	}, nil, store)
+	h.now = func() time.Time { return now.Add(time.Hour) }
+
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/refresh", strings.NewReader(`{"org_id":"default","instance_host":"pulse.example.com","entitlement_refresh_token":"etr_test_refresh"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.HandleTrialSignupRefresh(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp trialSignupRefreshResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if strings.TrimSpace(resp.EntitlementJWT) == "" {
+		t.Fatal("expected entitlement_jwt in refresh response")
+	}
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(resp.EntitlementJWT, pub, "pulse.example.com", now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.OrgID != "default" {
+		t.Fatalf("claims.OrgID=%q, want %q", claims.OrgID, "default")
 	}
 }
 

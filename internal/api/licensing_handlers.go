@@ -34,11 +34,12 @@ type LicenseHandlers struct {
 	trialLimiter       *RateLimiter
 	trialReplay        *jtiReplayStore
 	trialInitiations   *trialSignupInitiationStore
-	trialRedeemer      func(token string) (string, error)
+	trialRedeemer      func(token string) (*hostedTrialRedemptionResponse, error)
 	monitor            *monitoring.Monitor
 	mtMonitor          *monitoring.MultiTenantMonitor
 	conversionRecorder *conversionRecorder
 	conversionHealth   *conversionPipelineHealth
+	hostedLeaseRefresh sync.Map // map[string]*hostedEntitlementRefreshLoop
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -128,6 +129,12 @@ func (h *LicenseHandlers) StopAllBackgroundLoops() {
 	if h == nil {
 		return
 	}
+	h.hostedLeaseRefresh.Range(func(key, value any) bool {
+		if orgID, ok := key.(string); ok {
+			h.stopHostedEntitlementRefreshLoop(orgID)
+		}
+		return true
+	})
 	h.services.Range(func(_, value any) bool {
 		if svc, ok := value.(*licenseService); ok {
 			svc.StopGrantRefresh()
@@ -218,6 +225,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
 			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
 		}
+		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		// We need persistence too, reconstruct it or cache it?
 		// Reconstructing persistence is cheap (just a struct with path).
 		// But let's recreate it to be safe and stateless here.
@@ -298,9 +306,12 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		service.StopGrantRefresh()   // stop our orphaned refresh loop if started
 		service.StopRevocationPoll() // stop our orphaned revocation poller if started
 		svc := actual.(*licenseService)
+		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		p, pErr := h.getPersistenceForOrg(orgID)
 		return svc, p, pErr
 	}
+
+	h.ensureHostedEntitlementRefreshForOrg(orgID, service)
 
 	return service, persistence, nil
 }
@@ -614,9 +625,9 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	if redeemer == nil {
 		redeemer = h.acknowledgeHostedTrialRedemption
 	}
-	entitlementJWT := ""
+	var redemption *hostedTrialRedemptionResponse
 	if redeemer != nil {
-		entitlementJWT, err = redeemer(token)
+		redemption, err = redeemer(token)
 		if err != nil {
 			clearReplay("redemption_ack_failed", err)
 			log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted trial redemption acknowledgement failed")
@@ -624,9 +635,21 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 			return
 		}
 	}
+	entitlementJWT := ""
+	entitlementRefreshToken := ""
+	if redemption != nil {
+		entitlementJWT = strings.TrimSpace(redemption.EntitlementJWT)
+		entitlementRefreshToken = strings.TrimSpace(redemption.EntitlementRefreshToken)
+	}
 	if strings.TrimSpace(entitlementJWT) == "" {
 		clearReplay("entitlement_lease_missing", nil)
 		log.Warn().Str("org_id", orgID).Msg("Hosted trial redemption returned no entitlement lease")
+		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
+		return
+	}
+	if entitlementRefreshToken == "" {
+		clearReplay("entitlement_refresh_token_missing", nil)
+		log.Warn().Str("org_id", orgID).Msg("Hosted trial redemption returned no entitlement refresh token")
 		http.Redirect(w, r, trialActivationResultURL("unavailable"), http.StatusTemporaryRedirect)
 		return
 	}
@@ -654,6 +677,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	// Keep only the signed hosted lease plus trial-used bookkeeping locally.
 	// Effective Pro capabilities and limits must resolve from the lease on read.
 	state.EntitlementJWT = entitlementJWT
+	state.EntitlementRefreshToken = entitlementRefreshToken
 	state.Capabilities = []string{}
 	state.Limits = map[string]int64{}
 	state.MetersEnabled = []string{}
@@ -672,6 +696,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		eval := newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0, expectedHost)
 		svc.SetEvaluator(eval)
 	}
+	h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 
 	isSecure, sameSite := getCookieSettings(r)
 	http.SetCookie(w, &http.Cookie{
@@ -706,44 +731,66 @@ func trialActivationResultURL(result string) string {
 	return "/settings/system-pro?trial=" + url.QueryEscape(strings.TrimSpace(result))
 }
 
+func normalizeTrialOrgID(raw string) string {
+	orgID := strings.TrimSpace(raw)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
 type hostedTrialRedemptionResponse struct {
+	EntitlementJWT          string `json:"entitlement_jwt"`
+	EntitlementRefreshToken string `json:"entitlement_refresh_token"`
+}
+
+type hostedTrialLeaseRefreshRequest struct {
+	OrgID                   string `json:"org_id"`
+	InstanceHost            string `json:"instance_host"`
+	EntitlementRefreshToken string `json:"entitlement_refresh_token"`
+}
+
+type hostedTrialLeaseRefreshResponse struct {
 	EntitlementJWT string `json:"entitlement_jwt"`
 }
 
-func (h *LicenseHandlers) acknowledgeHostedTrialRedemption(token string) (string, error) {
+func (h *LicenseHandlers) acknowledgeHostedTrialRedemption(token string) (*hostedTrialRedemptionResponse, error) {
 	if h == nil {
-		return "", nil
+		return nil, nil
 	}
 	redemptionURL := trialSignupRedemptionURLFromConfig(h.cfg)
 	if redemptionURL == "" {
-		return "", nil
+		return nil, nil
 	}
 	payload, err := json.Marshal(map[string]string{"token": strings.TrimSpace(token)})
 	if err != nil {
-		return "", fmt.Errorf("marshal trial redemption payload: %w", err)
+		return nil, fmt.Errorf("marshal trial redemption payload: %w", err)
 	}
 	req, err := http.NewRequest(http.MethodPost, redemptionURL, bytes.NewReader(payload))
 	if err != nil {
-		return "", fmt.Errorf("build trial redemption request: %w", err)
+		return nil, fmt.Errorf("build trial redemption request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("post trial redemption acknowledgement: %w", err)
+		return nil, fmt.Errorf("post trial redemption acknowledgement: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("trial redemption acknowledgement returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("trial redemption acknowledgement returned status %d", resp.StatusCode)
 	}
 	var response hostedTrialRedemptionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", fmt.Errorf("decode trial redemption acknowledgement: %w", err)
+		return nil, fmt.Errorf("decode trial redemption acknowledgement: %w", err)
 	}
 	if strings.TrimSpace(response.EntitlementJWT) == "" {
-		return "", fmt.Errorf("trial redemption acknowledgement missing entitlement_jwt")
+		return nil, fmt.Errorf("trial redemption acknowledgement missing entitlement_jwt")
 	}
-	return response.EntitlementJWT, nil
+	if strings.TrimSpace(response.EntitlementRefreshToken) == "" {
+		return nil, fmt.Errorf("trial redemption acknowledgement missing entitlement_refresh_token")
+	}
+	return &response, nil
 }
 
 func trialSignupRedemptionURLFromConfig(cfg *config.Config) string {
@@ -760,6 +807,24 @@ func trialSignupRedemptionURLFromConfig(cfg *config.Config) string {
 		return ""
 	}
 	parsed.Path = "/api/trial-signup/redeem"
+	parsed.RawQuery = ""
+	return parsed.String()
+}
+
+func trialSignupRefreshURLFromConfig(cfg *config.Config) string {
+	signupBaseURL := ""
+	if cfg != nil {
+		signupBaseURL = strings.TrimSpace(cfg.ProTrialSignupURL)
+	}
+	signupURL := strings.TrimSpace(proTrialSignupURLFromLicensing(signupBaseURL))
+	if signupURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(signupURL)
+	if err != nil || parsed == nil {
+		return ""
+	}
+	parsed.Path = "/api/trial-signup/refresh"
 	parsed.RawQuery = ""
 	return parsed.String()
 }
@@ -925,6 +990,7 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 
 	// Persist based on activation type.
 	if service.IsActivated() {
+		h.stopHostedEntitlementRefreshLoop(orgID)
 		// Activation state is already persisted by ActivateWithKey, but start the refresh loop.
 		service.StartGrantRefresh(context.Background())
 		if feedToken := revocationFeedToken(); feedToken != "" {
@@ -1001,6 +1067,7 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 	// Preserve trial_started_at and free-tier bookkeeping so the effective trial
 	// ends immediately but trial reuse remains blocked.
 	if h != nil && h.mtPersistence != nil {
+		h.stopHostedEntitlementRefreshLoop(orgID)
 		billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
 		existing, err := billingStore.GetBillingState(orgID)
 		if err != nil {
@@ -1010,6 +1077,7 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 			existing.Limits = map[string]int64{}
 			existing.MetersEnabled = []string{}
 			existing.EntitlementJWT = ""
+			existing.EntitlementRefreshToken = ""
 			existing.PlanVersion = string(subscriptionStateExpiredValue)
 			existing.SubscriptionState = subscriptionStateExpiredValue
 			existing.TrialEndsAt = nil

@@ -418,6 +418,17 @@ type trialSignupRedeemRequest struct {
 }
 
 type trialSignupRedeemResponse struct {
+	EntitlementJWT          string `json:"entitlement_jwt"`
+	EntitlementRefreshToken string `json:"entitlement_refresh_token"`
+}
+
+type trialSignupRefreshRequest struct {
+	OrgID                   string `json:"org_id"`
+	InstanceHost            string `json:"instance_host"`
+	EntitlementRefreshToken string `json:"entitlement_refresh_token"`
+}
+
+type trialSignupRefreshResponse struct {
 	EntitlementJWT string `json:"entitlement_jwt"`
 }
 
@@ -1030,6 +1041,12 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 		}
 		return
 	}
+	refreshToken, err := h.ensureEntitlementRefreshToken(record.ID, now)
+	if err != nil {
+		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to issue hosted trial entitlement refresh token")
+		http.Error(w, "failed to issue entitlement refresh token", http.StatusInternalServerError)
+		return
+	}
 
 	entitlementJWT, err := pkglicensing.SignEntitlementLeaseToken(privateKey, buildTrialEntitlementLeaseClaims(record, claims.InstanceHost, now))
 	if err != nil {
@@ -1039,9 +1056,98 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(trialSignupRedeemResponse{EntitlementJWT: entitlementJWT}); err != nil {
+	if err := json.NewEncoder(w).Encode(trialSignupRedeemResponse{
+		EntitlementJWT:          entitlementJWT,
+		EntitlementRefreshToken: refreshToken,
+	}); err != nil {
 		log.Error().Err(err).Str("org_id", claims.OrgID).Msg("failed to encode hosted trial redemption response")
 	}
+}
+
+func (h *TrialSignupHandlers) HandleTrialSignupRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.verificationStore == nil {
+		http.Error(w, "trial signup store not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var reqBody trialSignupRefreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	orgID := normalizeTrialOrgID(reqBody.OrgID)
+	instanceHost := strings.ToLower(strings.TrimSpace(reqBody.InstanceHost))
+	refreshToken := strings.TrimSpace(reqBody.EntitlementRefreshToken)
+	if instanceHost == "" || refreshToken == "" {
+		http.Error(w, "instance_host and entitlement_refresh_token are required", http.StatusBadRequest)
+		return
+	}
+
+	record, err := h.verificationStore.GetRecordByEntitlementRefreshToken(refreshToken)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrTrialSignupRecordNotFound):
+			http.Error(w, "invalid entitlement refresh token", http.StatusUnauthorized)
+		default:
+			log.Error().Err(err).Str("org_id", orgID).Msg("failed to load hosted entitlement refresh record")
+			http.Error(w, "failed to load entitlement refresh record", http.StatusInternalServerError)
+		}
+		return
+	}
+	if normalizeTrialOrgID(record.OrgID) != orgID {
+		http.Error(w, "invalid entitlement refresh token", http.StatusUnauthorized)
+		return
+	}
+	recordHost, err := trialSignupReturnURLHost(record.ReturnURL)
+	if err != nil || recordHost != instanceHost {
+		http.Error(w, "invalid entitlement refresh target", http.StatusUnauthorized)
+		return
+	}
+	if record.VerifiedAt.IsZero() || record.CheckoutCompletedAt.IsZero() || record.ActivationIssuedAt.IsZero() || record.RedemptionRecordedAt.IsZero() {
+		http.Error(w, "trial entitlement is not ready for refresh", http.StatusUnauthorized)
+		return
+	}
+
+	privateKey, err := pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(h.cfg.TrialActivationPrivateKey))
+	if err != nil {
+		log.Error().Err(err).Msg("trial activation private key invalid")
+		http.Error(w, "trial activation verifier unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	now := h.now().UTC()
+	leaseClaims := buildTrialEntitlementLeaseClaims(record, instanceHost, now)
+	if leaseClaims.TrialEndsAt == nil || now.Unix() >= *leaseClaims.TrialEndsAt {
+		http.Error(w, "trial entitlement has expired", http.StatusGone)
+		return
+	}
+	entitlementJWT, err := pkglicensing.SignEntitlementLeaseToken(privateKey, leaseClaims)
+	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("failed to sign hosted entitlement refresh lease")
+		http.Error(w, "failed to generate entitlement lease", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(trialSignupRefreshResponse{EntitlementJWT: entitlementJWT}); err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("failed to encode hosted entitlement refresh response")
+	}
+}
+
+func (h *TrialSignupHandlers) ensureEntitlementRefreshToken(requestID string, now time.Time) (string, error) {
+	if h == nil || h.verificationStore == nil {
+		return "", ErrTrialSignupRecordNotFound
+	}
+	rawToken, err := randomPrefixedToken()
+	if err != nil {
+		return "", err
+	}
+	storedToken, _, err := h.verificationStore.StoreOrIssueEntitlementRefreshToken(requestID, rawToken, now)
+	return storedToken, err
 }
 
 func (h *TrialSignupHandlers) renderTrialSignupPage(w http.ResponseWriter, r *http.Request, status int, data trialSignupPageData) {

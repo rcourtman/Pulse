@@ -43,6 +43,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	trialSignupCheckoutLimiter := NewCPRateLimiter(12, time.Hour)
 	trialSignupCompleteLimiter := NewCPRateLimiter(30, time.Minute)
 	trialSignupRedeemLimiter := NewCPRateLimiter(30, time.Minute)
+	trialSignupRefreshLimiter := NewCPRateLimiter(60, time.Hour)
 	publicSignupLimiter := NewCPRateLimiter(30, time.Minute)
 	publicMagicLinkLimiter := NewCPRateLimiter(20, time.Minute)
 
@@ -105,6 +106,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
 	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
 	mux.Handle("/api/trial-signup/redeem", trialSignupRedeemLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRedeem)))
+	mux.Handle("/api/trial-signup/refresh", trialSignupRefreshLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRefresh)))
 
 	// Pulse Cloud self-serve signup: public page + API checkout + magic-link request.
 	publicCloudSignupHandlers := NewPublicCloudSignupHandlers(deps.Config, deps.Registry, deps.MagicLinks, deps.EmailSender)
