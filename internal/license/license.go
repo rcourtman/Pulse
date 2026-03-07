@@ -270,6 +270,7 @@ type LicenseState string
 const (
 	LicenseStateNone        LicenseState = "none"
 	LicenseStateActive      LicenseState = "active"
+	LicenseStateCorrupt     LicenseState = "corrupt"
 	LicenseStateExpired     LicenseState = "expired"
 	LicenseStateGracePeriod LicenseState = "grace_period"
 )
@@ -297,6 +298,27 @@ func (s *Service) GetLicenseState() (LicenseState, *License) {
 	}
 
 	return LicenseStateActive, s.license
+}
+
+// ActivatePersisted restores a previously persisted license key.
+// Unlike Activate, it accepts licenses that are expired past grace so the
+// service can still report an explicit expired state after restart.
+func (s *Service) ActivatePersisted(licenseKey string) (*License, error) {
+	license, err := LoadPersistedLicense(licenseKey)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	s.license = license
+	cb := s.onLicenseChange
+	s.mu.Unlock()
+
+	if cb != nil {
+		cb(license)
+	}
+
+	return license, nil
 }
 
 // GetLicenseStateString returns the current license state as string and whether features are available
@@ -371,6 +393,7 @@ func (s *Service) Status() *LicenseStatus {
 // LicenseStatus is the JSON response for license status API.
 type LicenseStatus struct {
 	Valid          bool     `json:"valid"`
+	State          string   `json:"state,omitempty"`
 	Tier           Tier     `json:"tier"`
 	Email          string   `json:"email,omitempty"`
 	ExpiresAt      *string  `json:"expires_at,omitempty"`
@@ -381,10 +404,22 @@ type LicenseStatus struct {
 	MaxGuests      int      `json:"max_guests,omitempty"`
 	InGracePeriod  bool     `json:"in_grace_period,omitempty"`
 	GracePeriodEnd *string  `json:"grace_period_end,omitempty"`
+	LoadError      string   `json:"load_error,omitempty"`
 }
 
 // ValidateLicense validates a license key and returns the license if valid.
 func ValidateLicense(licenseKey string) (*License, error) {
+	return validateLicense(licenseKey, false)
+}
+
+// LoadPersistedLicense validates a persisted license key but does not reject
+// licenses that are expired past grace. This lets startup/reporting preserve an
+// explicit expired state instead of collapsing to "none" after restart.
+func LoadPersistedLicense(licenseKey string) (*License, error) {
+	return validateLicense(licenseKey, true)
+}
+
+func validateLicense(licenseKey string, allowExpired bool) (*License, error) {
 	// Trim whitespace
 	licenseKey = strings.TrimSpace(licenseKey)
 	if licenseKey == "" {
@@ -460,12 +495,12 @@ func ValidateLicense(licenseKey string) (*License, error) {
 		// Grace period: 7 days after expiration
 		gracePeriodDuration := 7 * 24 * time.Hour
 		gracePeriodEnd := expirationTime.Add(gracePeriodDuration)
+		license.GracePeriodEnd = &gracePeriodEnd
 
 		if time.Now().Before(gracePeriodEnd) {
 			// Within grace period - allow activation but mark as in grace period
-			license.GracePeriodEnd = &gracePeriodEnd
 			// License is still valid during grace period
-		} else {
+		} else if !allowExpired {
 			// Past grace period - reject
 			return nil, fmt.Errorf("%w: expired on %s (grace period ended %s)",
 				ErrExpiredLicense,

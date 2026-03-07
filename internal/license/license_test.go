@@ -311,6 +311,38 @@ func TestValidateLicense_ExpiredPastGrace(t *testing.T) {
 	}
 }
 
+func TestLoadPersistedLicense_ExpiredPastGrace(t *testing.T) {
+	os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	defer os.Unsetenv("PULSE_LICENSE_DEV_MODE")
+
+	claims := Claims{
+		LicenseID: "test-expired-persisted",
+		Email:     "persisted@pulse.test",
+		Tier:      TierPro,
+		IssuedAt:  time.Now().Add(-40 * 24 * time.Hour).Unix(),
+		ExpiresAt: time.Now().Add(-10 * 24 * time.Hour).Unix(),
+	}
+
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payloadBytes, _ := json.Marshal(claims)
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	key := header + "." + payload + ".fake-sig"
+
+	lic, err := LoadPersistedLicense(key)
+	if err != nil {
+		t.Fatalf("expected persisted expired license to load, got error: %v", err)
+	}
+	if lic.Claims.Email != claims.Email {
+		t.Fatalf("expected email %q, got %q", claims.Email, lic.Claims.Email)
+	}
+	if lic.GracePeriodEnd == nil {
+		t.Fatal("expected GracePeriodEnd to be populated for expired persisted license")
+	}
+	if time.Now().Before(*lic.GracePeriodEnd) {
+		t.Fatal("expected GracePeriodEnd to be in the past for license past grace")
+	}
+}
+
 func TestLicenseStatus(t *testing.T) {
 	service := NewService()
 

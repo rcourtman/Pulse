@@ -3,9 +3,12 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,6 +17,11 @@ import (
 )
 
 func createTestHandler(t *testing.T) *LicenseHandlers {
+	handler, _ := createTestHandlerWithDir(t)
+	return handler
+}
+
+func createTestHandlerWithDir(t *testing.T) (*LicenseHandlers, string) {
 	tempDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tempDir)
 	// Ensure default persistence exists
@@ -21,7 +29,19 @@ func createTestHandler(t *testing.T) *LicenseHandlers {
 	if err != nil {
 		t.Fatalf("Failed to initialize default persistence: %v", err)
 	}
-	return NewLicenseHandlers(mtp)
+	return NewLicenseHandlers(mtp), tempDir
+}
+
+func makeLicenseKeyForClaims(t *testing.T, claims license.Claims) string {
+	t.Helper()
+
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("failed to marshal test claims: %v", err)
+	}
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	return header + "." + payload + ".fake-sig"
 }
 
 func TestLicenseHandlers_FallbackToLegacyPersistence(t *testing.T) {
@@ -153,6 +173,39 @@ func TestHandleLicenseFeatures_WithActiveLicense(t *testing.T) {
 	}
 }
 
+func TestHandleLicenseFeatures_CorruptPersistedLicense(t *testing.T) {
+	handler, tempDir := createTestHandlerWithDir(t)
+
+	licensePath := filepath.Join(tempDir, license.LicenseFileName)
+	if err := os.WriteFile(licensePath, []byte("%%%not-base64%%%"), 0600); err != nil {
+		t.Fatalf("failed to write corrupt persisted license: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/features", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleLicenseFeatures(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp licenseFeaturesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.LicenseStatus != string(license.LicenseStateCorrupt) {
+		t.Fatalf("expected license_status %q, got %q", license.LicenseStateCorrupt, resp.LicenseStatus)
+	}
+	if resp.Features[license.FeatureAIPatrol] != true {
+		t.Fatalf("expected free-tier feature %q to remain enabled", license.FeatureAIPatrol)
+	}
+	if resp.Features[license.FeatureAIAutoFix] {
+		t.Fatalf("expected Pro-only feature %q to be disabled", license.FeatureAIAutoFix)
+	}
+}
+
 // ========================================
 // HandleLicenseStatus tests
 // ========================================
@@ -192,6 +245,9 @@ func TestHandleLicenseStatus_NoLicense(t *testing.T) {
 	if resp.Valid {
 		t.Fatalf("expected Valid=false for no license")
 	}
+	if resp.State != string(license.LicenseStateNone) {
+		t.Fatalf("expected state %q, got %q", license.LicenseStateNone, resp.State)
+	}
 	if resp.Tier != license.TierFree {
 		t.Fatalf("expected tier %q, got %q", license.TierFree, resp.Tier)
 	}
@@ -228,11 +284,104 @@ func TestHandleLicenseStatus_WithActiveLicense(t *testing.T) {
 	if !resp.Valid {
 		t.Fatalf("expected Valid=true for active license")
 	}
+	if resp.State != string(license.LicenseStateActive) {
+		t.Fatalf("expected state %q, got %q", license.LicenseStateActive, resp.State)
+	}
 	if resp.Email != "test@example.com" {
 		t.Fatalf("expected email %q, got %q", "test@example.com", resp.Email)
 	}
 	if resp.Tier != license.TierPro {
 		t.Fatalf("expected tier %q, got %q", license.TierPro, resp.Tier)
+	}
+}
+
+func TestHandleLicenseStatus_CorruptPersistedLicense(t *testing.T) {
+	handler, tempDir := createTestHandlerWithDir(t)
+
+	licensePath := filepath.Join(tempDir, license.LicenseFileName)
+	if err := os.WriteFile(licensePath, []byte("%%%not-base64%%%"), 0600); err != nil {
+		t.Fatalf("failed to write corrupt persisted license: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleLicenseStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp license.LicenseStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Valid {
+		t.Fatalf("expected Valid=false for corrupt persisted license")
+	}
+	if resp.State != string(license.LicenseStateCorrupt) {
+		t.Fatalf("expected state %q, got %q", license.LicenseStateCorrupt, resp.State)
+	}
+	if resp.LoadError == "" {
+		t.Fatalf("expected load_error to be set for corrupt persisted license")
+	}
+	if resp.Tier != license.TierFree {
+		t.Fatalf("expected tier %q, got %q", license.TierFree, resp.Tier)
+	}
+}
+
+func TestHandleLicenseStatus_ExpiredPersistedLicense(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+	handler := createTestHandler(t)
+	persistence, err := handler.getPersistenceForOrg("default")
+	if err != nil {
+		t.Fatalf("failed to get persistence: %v", err)
+	}
+
+	expiredKey := makeLicenseKeyForClaims(t, license.Claims{
+		LicenseID: "test-expired-persisted",
+		Email:     "expired@example.com",
+		Tier:      license.TierPro,
+		IssuedAt:  time.Now().Add(-40 * 24 * time.Hour).Unix(),
+		ExpiresAt: time.Now().Add(-10 * 24 * time.Hour).Unix(),
+	})
+	if err := persistence.SaveWithGracePeriod(expiredKey, nil); err != nil {
+		t.Fatalf("failed to persist expired license: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleLicenseStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp license.LicenseStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Valid {
+		t.Fatalf("expected Valid=false for expired persisted license")
+	}
+	if resp.State != string(license.LicenseStateExpired) {
+		t.Fatalf("expected state %q, got %q", license.LicenseStateExpired, resp.State)
+	}
+	if resp.Email != "expired@example.com" {
+		t.Fatalf("expected email %q, got %q", "expired@example.com", resp.Email)
+	}
+	if resp.Tier != license.TierPro {
+		t.Fatalf("expected tier %q, got %q", license.TierPro, resp.Tier)
+	}
+	if resp.ExpiresAt == nil {
+		t.Fatalf("expected expires_at to be reported")
+	}
+	if resp.LoadError != "" {
+		t.Fatalf("expected load_error to be empty, got %q", resp.LoadError)
 	}
 }
 
@@ -356,6 +505,40 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	}
 	if resp.Status.Email != "pro@example.com" {
 		t.Fatalf("expected email %q, got %q", "pro@example.com", resp.Status.Email)
+	}
+}
+
+func TestHandleActivateLicense_PersistenceUnavailableClearsRuntimeState(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+	handler := NewLicenseHandlers(nil)
+	licenseKey, err := license.GenerateLicenseForTesting("pro@example.com", license.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("failed to generate test license: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{"license_key": licenseKey})
+	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleActivateLicense(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusInternalServerError, rec.Code, rec.Body.String())
+	}
+
+	var resp ActivateLicenseResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Success {
+		t.Fatalf("expected Success=false when persistence fails")
+	}
+	if resp.Message != "License could not be persisted" {
+		t.Fatalf("expected message %q, got %q", "License could not be persisted", resp.Message)
+	}
+	if handler.Service(context.Background()).Current() != nil {
+		t.Fatalf("expected runtime license to be cleared after persistence failure")
 	}
 }
 

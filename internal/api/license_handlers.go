@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ type LicenseHandlers struct {
 	mtPersistence     *config.MultiTenantPersistence
 	legacyPersistence *config.ConfigPersistence
 	services          sync.Map // map[string]*license.Service
+	loadIssues        sync.Map // map[string]string
 	configDir         string   // Base config dir, though we use mtPersistence for tenants
 	auditOnce         sync.Once
 }
@@ -62,11 +64,15 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 	// Try to load existing license
 	if persistence != nil {
 		persisted, err := persistence.LoadWithMetadata()
-		if err == nil && persisted.LicenseKey != "" {
-			lic, err := service.Activate(persisted.LicenseKey)
+		if err != nil {
+			h.setLoadIssue(orgID, err)
+		} else if persisted.LicenseKey != "" {
+			lic, err := service.ActivatePersisted(persisted.LicenseKey)
 			if err != nil {
+				h.setLoadIssue(orgID, err)
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to load saved license")
 			} else {
+				h.clearLoadIssue(orgID)
 				if persisted.GracePeriodEnd != nil && lic != nil {
 					gracePeriodEnd := time.Unix(*persisted.GracePeriodEnd, 0)
 					lic.GracePeriodEnd = &gracePeriodEnd
@@ -78,6 +84,8 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 				// Since audit logger is global, we do this once.
 				h.initAuditLoggerIfLicensed(service, persistence)
 			}
+		} else {
+			h.clearLoadIssue(orgID)
 		}
 	}
 
@@ -146,6 +154,37 @@ func (h *LicenseHandlers) Service(ctx context.Context) *license.Service {
 	return svc
 }
 
+func (h *LicenseHandlers) setLoadIssue(orgID string, err error) {
+	if err == nil {
+		h.clearLoadIssue(orgID)
+		return
+	}
+	h.loadIssues.Store(orgID, err.Error())
+}
+
+func (h *LicenseHandlers) clearLoadIssue(orgID string) {
+	h.loadIssues.Delete(orgID)
+}
+
+func (h *LicenseHandlers) getLoadIssue(orgID string) string {
+	if v, ok := h.loadIssues.Load(orgID); ok {
+		if issue, ok := v.(string); ok {
+			return issue
+		}
+	}
+	return ""
+}
+
+func (h *LicenseHandlers) effectiveState(ctx context.Context, service *license.Service) (license.LicenseState, string) {
+	orgID := GetOrgID(ctx)
+	loadIssue := h.getLoadIssue(orgID)
+	if loadIssue != "" && service.Current() == nil {
+		return license.LicenseStateCorrupt, loadIssue
+	}
+	state, _ := service.GetLicenseState()
+	return state, ""
+}
+
 // HandleLicenseStatus handles GET /api/license/status
 // Returns the current license status.
 func (h *LicenseHandlers) HandleLicenseStatus(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +201,9 @@ func (h *LicenseHandlers) HandleLicenseStatus(w http.ResponseWriter, r *http.Req
 	}
 
 	status := service.Status()
+	state, loadIssue := h.effectiveState(r.Context(), service)
+	status.State = string(state)
+	status.LoadError = loadIssue
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
@@ -189,7 +231,7 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	state, _ := service.GetLicenseState()
+	state, _ := h.effectiveState(r.Context(), service)
 	response := LicenseFeaturesResponse{
 		LicenseStatus: string(state),
 		Features: map[string]bool{
@@ -265,6 +307,7 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
 	lic, err := service.Activate(req.LicenseKey)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to activate license")
@@ -279,16 +322,37 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 	}
 
 	// Persist the license with grace period if applicable
-	if persistence != nil {
-		var gracePeriodEnd *int64
-		if lic.GracePeriodEnd != nil {
-			ts := lic.GracePeriodEnd.Unix()
-			gracePeriodEnd = &ts
-		}
-		if err := persistence.SaveWithGracePeriod(req.LicenseKey, gracePeriodEnd); err != nil {
-			log.Warn().Err(err).Msg("Failed to persist license, it won't survive restarts")
-		}
+	if persistence == nil {
+		service.Clear()
+		persistErr := errors.New("license persistence unavailable")
+		h.setLoadIssue(orgID, persistErr)
+		log.Error().Err(persistErr).Msg("Failed to persist license activation")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(ActivateLicenseResponse{
+			Success: false,
+			Message: "License could not be persisted",
+		})
+		return
 	}
+	var gracePeriodEnd *int64
+	if lic.GracePeriodEnd != nil {
+		ts := lic.GracePeriodEnd.Unix()
+		gracePeriodEnd = &ts
+	}
+	if err := persistence.SaveWithGracePeriod(req.LicenseKey, gracePeriodEnd); err != nil {
+		service.Clear()
+		h.setLoadIssue(orgID, err)
+		log.Error().Err(err).Msg("Failed to persist license activation")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(ActivateLicenseResponse{
+			Success: false,
+			Message: "License could not be persisted",
+		})
+		return
+	}
+	h.clearLoadIssue(orgID)
 
 	log.Info().
 		Str("email", lic.Claims.Email).
@@ -324,6 +388,7 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 	}
 
 	service.Clear()
+	h.clearLoadIssue(GetOrgID(r.Context()))
 
 	// Clear from persistence
 	if persistence != nil {
