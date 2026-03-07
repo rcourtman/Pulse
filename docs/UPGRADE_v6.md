@@ -81,11 +81,11 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
 - In the v6 license panel, you can paste either:
   - a Pulse v6 activation key, or
   - a valid Pulse v5 Pro/Lifetime license key, which Pulse will try to exchange automatically
-- If the exchange service cannot complete the migration, retrieve the migrated activation key from your Pulse account or contact support.
+- If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
 
 Practical recommendation:
 
-- Before upgrading, keep console access and your original purchase email/license record available in case the exchange service is unavailable and you need the account fallback path.
+- Before upgrading, keep console access available so you can retry activation from the v6 license panel if the exchange service is temporarily unavailable.
 
 ### Multi-Tenant (Opt-In)
 

@@ -92,8 +92,8 @@ Pulse plan upgrades are activated locally with a license key.
 - Export/import note: license files are not included in exports, so you typically re-activate after migrations.
 - Pulse v6 prefers v6 activation keys, but it can migrate valid Pulse v5 Pro/Lifetime JWT-style licenses into the v6 activation model.
 - If a v5 license is already persisted on disk during upgrade and no v6 activation state exists yet, Pulse will try to auto-exchange it on startup.
-- If you are activating manually in v6, you can paste either a v6 activation key or a valid v5 Pro/Lifetime license key and Pulse will try to exchange it automatically.
-- If the exchange cannot complete, use the migrated activation key from your Pulse account or contact support.
+- If you are activating manually in v6, paste the v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email. You can also paste a valid v5 Pro/Lifetime license key and Pulse will try to exchange it automatically.
+- If the exchange cannot complete, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key.
 
 ### Feature Status API
 

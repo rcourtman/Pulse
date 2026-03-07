@@ -1,4 +1,5 @@
 import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
+import { useLocation } from '@solidjs/router';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formField, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
@@ -67,6 +68,7 @@ const formatUnixDate = (value?: number) => {
 };
 
 export const ProLicensePanel: Component = () => {
+  const location = useLocation();
   const [licenseKey, setLicenseKey] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [activating, setActivating] = createSignal(false);
@@ -232,6 +234,48 @@ export const ProLicensePanel: Component = () => {
       entitlements()?.trial_eligibility_reason === 'already_used',
   );
 
+  const trialActivationResult = createMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('trial')?.trim().toLowerCase() ?? '';
+  });
+
+  const trialActivationNotice = createMemo(() => {
+    switch (trialActivationResult()) {
+      case 'activated':
+        return {
+          tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+          title: 'Trial activated',
+          body: 'Pulse activated the Pro trial for this instance. The entitlement state below is live.',
+        };
+      case 'invalid':
+        return {
+          tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
+          title: 'Activation link invalid',
+          body: 'That activation handoff is invalid or expired. Start the hosted checkout flow again from this Pulse instance.',
+        };
+      case 'replayed':
+        return {
+          tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+          title: 'Activation link already used',
+          body: 'This checkout handoff was already redeemed. Use the current entitlement state below or start a new checkout if needed.',
+        };
+      case 'unavailable':
+        return {
+          tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+          title: 'Activation unavailable',
+          body: 'Pulse could not finish activation right now. Retry the return link from checkout or start the flow again from this instance.',
+        };
+      case 'ineligible':
+        return {
+          tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
+          title: 'Trial not available',
+          body: 'This organization is not eligible for another Pro trial. Review the current license state below or upgrade instead.',
+        };
+      default:
+        return null;
+    }
+  });
+
   const hasPaidFeatures = createMemo(() => {
     const state = subscriptionState();
     return state === 'active' || state === 'trial' || state === 'grace';
@@ -293,6 +337,14 @@ export const ProLicensePanel: Component = () => {
           </button>
         }
       >
+        <Show when={trialActivationNotice()}>
+          {(notice) => (
+            <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
+              <p class="font-medium">{notice().title}</p>
+              <p class="mt-1 text-xs opacity-90">{notice().body}</p>
+            </div>
+          )}
+        </Show>
         <div class={formField}>
           <label class={labelClass()} for="pulse-pro-license-key">
             License / Activation Key
@@ -305,10 +357,11 @@ export const ProLicensePanel: Component = () => {
             onInput={(event) => setLicenseKey(event.currentTarget.value)}
           />
           <p class={formHelpText}>
-            Paste a Pulse v6 activation key, or a legacy Pulse v5 Pro/Lifetime license key and
-            Pulse will exchange it automatically during activation. If automatic migration cannot
-            complete, retrieve the migrated activation key from your Pulse account or contact
-            support. By activating a license, you agree to the{' '}
+            Paste the Pulse v6 activation key shown on the hosted checkout success page. A backup
+            copy is also sent by email, but the hosted success page is the primary handoff. You can
+            also paste a legacy Pulse v5 Pro/Lifetime license key and Pulse will exchange it
+            automatically during activation when migration is available. By activating a license,
+            you agree to the{' '}
             <a
               href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md"
               target="_blank"
@@ -324,8 +377,8 @@ export const ProLicensePanel: Component = () => {
               <p class="font-medium">Legacy v5 license detected</p>
               <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
                 Pulse will try to exchange this key into the v6 activation model automatically. If
-                the exchange cannot complete, retrieve the migrated activation key from your Pulse
-                account or contact support.
+                the exchange cannot complete immediately, retry from this panel or use the
+                self-serve retrieval flow to get the current v6 activation key.
               </p>
             </div>
           </Show>
@@ -400,91 +453,91 @@ export const ProLicensePanel: Component = () => {
           </div>
         </Show>
         <Show when={!licenseLoadError()}>
-        <Show when={!loading()} fallback={<p class="text-sm ">Loading license status...</p>}>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
-              {statusLabel()}
-            </span>
-            <Show when={entitlements()?.in_grace_period}>
-              <span class="text-xs text-amber-700 dark:text-amber-300">
-                Grace until {formatDate(entitlements()?.grace_period_end)}
+          <Show when={!loading()} fallback={<p class="text-sm ">Loading license status...</p>}>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
+                {statusLabel()}
               </span>
-            </Show>
-          </div>
+              <Show when={entitlements()?.in_grace_period}>
+                <span class="text-xs text-amber-700 dark:text-amber-300">
+                  Grace until {formatDate(entitlements()?.grace_period_end)}
+                </span>
+              </Show>
+            </div>
 
-          <Show
-            when={hasLicenseDetails()}
-            fallback={<div class="text-sm text-muted">No Pro license is active.</div>}
-          >
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Tier</p>
-                <p class="text-sm font-medium text-base-content">{formattedTier()}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Licensed Email</p>
-                <p class="text-sm font-medium text-base-content">
-                  {entitlements()?.licensed_email || 'Not available'}
-                </p>
-              </div>
-              <Show when={formattedPlanTerms()}>
+            <Show
+              when={hasLicenseDetails()}
+              fallback={<div class="text-sm text-muted">No Pro license is active.</div>}
+            >
+              <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <p class="text-xs uppercase tracking-wide text-muted">Plan Terms</p>
-                  <p class="text-sm font-medium text-base-content">{formattedPlanTerms()}</p>
+                  <p class="text-xs uppercase tracking-wide text-muted">Tier</p>
+                  <p class="text-sm font-medium text-base-content">{formattedTier()}</p>
+                </div>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-muted">Licensed Email</p>
+                  <p class="text-sm font-medium text-base-content">
+                    {entitlements()?.licensed_email || 'Not available'}
+                  </p>
+                </div>
+                <Show when={formattedPlanTerms()}>
+                  <div>
+                    <p class="text-xs uppercase tracking-wide text-muted">Plan Terms</p>
+                    <p class="text-sm font-medium text-base-content">{formattedPlanTerms()}</p>
+                  </div>
+                </Show>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-muted">Expires</p>
+                  <p class="text-sm font-medium text-base-content">{displayedExpiry()}</p>
+                </div>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-muted">Days Remaining</p>
+                  <p class="text-sm font-medium text-base-content">{displayedDaysRemaining()}</p>
+                </div>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-muted">Max Agents</p>
+                  <p class="text-sm font-medium text-base-content">{maxLimit('max_agents')}</p>
+                </div>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-muted">Max Guests</p>
+                  <p class="text-sm font-medium text-base-content">{maxLimit('max_guests')}</p>
+                </div>
+              </div>
+
+              <Show when={formattedFeatures().length > 0}>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-muted mb-2">Features</p>
+                  <ul class="grid gap-2 sm:grid-cols-2">
+                    <For each={formattedFeatures()}>
+                      {(feature) => (
+                        <li class="text-sm text-base-content flex items-center gap-2">
+                          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          {feature}
+                        </li>
+                      )}
+                    </For>
+                  </ul>
                 </div>
               </Show>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Expires</p>
-                <p class="text-sm font-medium text-base-content">{displayedExpiry()}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Days Remaining</p>
-                <p class="text-sm font-medium text-base-content">{displayedDaysRemaining()}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Max Agents</p>
-                <p class="text-sm font-medium text-base-content">{maxLimit('max_agents')}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted">Max Guests</p>
-                <p class="text-sm font-medium text-base-content">{maxLimit('max_guests')}</p>
-              </div>
-            </div>
+            </Show>
 
-            <Show when={formattedFeatures().length > 0}>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted mb-2">Features</p>
-                <ul class="grid gap-2 sm:grid-cols-2">
-                  <For each={formattedFeatures()}>
-                    {(feature) => (
-                      <li class="text-sm text-base-content flex items-center gap-2">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                        {feature}
-                      </li>
-                    )}
-                  </For>
-                </ul>
+            <Show when={!hasPaidFeatures() && !trialEnded()}>
+              <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <p class="font-medium">Upgrade to Pro</p>
+                <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  Unlock Pulse Patrol, alert analysis, auto-fix, and more.
+                </p>
+                <a
+                  class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
+                  href={getUpgradeActionUrlOrFallback('ai_autofix')}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View Pro plans
+                </a>
               </div>
             </Show>
           </Show>
-
-          <Show when={!hasPaidFeatures() && !trialEnded()}>
-            <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
-              <p class="font-medium">Upgrade to Pro</p>
-              <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                Unlock Pulse Patrol, alert analysis, auto-fix, and more.
-              </p>
-              <a
-                class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
-                href={getUpgradeActionUrlOrFallback('ai_autofix')}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View Pro plans
-              </a>
-            </div>
-          </Show>
-        </Show>
         </Show>
       </SettingsPanel>
     </div>

@@ -12,6 +12,11 @@ const activateLicenseMock = vi.fn();
 const clearLicenseMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
+const useLocationMock = vi.fn(() => ({ search: '' }));
+
+vi.mock('@solidjs/router', () => ({
+  useLocation: () => useLocationMock(),
+}));
 
 vi.mock('@/stores/license', () => ({
   getUpgradeActionUrlOrFallback: () => '/pricing',
@@ -53,10 +58,12 @@ describe('ProLicensePanel', () => {
     clearLicenseMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
+    useLocationMock.mockReset();
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
     clearLicenseMock.mockResolvedValue({ success: true });
+    useLocationMock.mockReturnValue({ search: '' });
   });
 
   afterEach(() => {
@@ -217,6 +224,17 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Legacy v5 license detected')).toBeInTheDocument();
     expect(
       screen.getByText(/exchange this key into the v6 activation model automatically/i),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the hosted activation success banner on the Pro settings route', async () => {
+    useLocationMock.mockReturnValue({ search: '?trial=activated' });
+
+    render(() => <ProLicensePanel />);
+
+    expect(screen.getByText('Trial activated')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Pulse activated the Pro trial for this instance/i),
     ).toBeInTheDocument();
   });
 });

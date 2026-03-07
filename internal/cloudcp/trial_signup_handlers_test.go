@@ -945,19 +945,20 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 		t.Fatalf("CreateStripeAccount: %v", err)
 	}
 	tenant := &registry.Tenant{
-		ID:                      "t-PAIDREF01",
-		AccountID:               accountID,
-		Email:                   "owner@example.com",
-		State:                   registry.TenantStateActive,
-		EntitlementRefreshToken: "etr_paid_refresh",
-		StripeCustomerID:        "cus_paid_refresh",
-		PlanVersion:             "cloud_v1",
+		ID:               "t-PAIDREF01",
+		AccountID:        accountID,
+		Email:            "owner@example.com",
+		State:            registry.TenantStateActive,
+		StripeCustomerID: "cus_paid_refresh",
+		PlanVersion:      "cloud_v1",
 	}
 	if err := reg.Create(tenant); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-
 	now := time.Unix(1710000000, 0).UTC()
+	if _, _, err := reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_paid_refresh", now); err != nil {
+		t.Fatalf("StoreOrIssueHostedEntitlement: %v", err)
+	}
 	h := NewHostedEntitlementHandlers(&CPConfig{
 		BaseURL:                   "https://cloud.example.com",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
@@ -989,6 +990,13 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 	}
 	if len(claims.Capabilities) == 0 {
 		t.Fatal("expected paid capabilities in refreshed lease")
+	}
+	entitlement, err := reg.GetHostedEntitlementByRefreshToken("etr_paid_refresh")
+	if err != nil {
+		t.Fatalf("GetHostedEntitlementByRefreshToken: %v", err)
+	}
+	if entitlement.LastRefreshedAt == nil || entitlement.LastRefreshedAt.Unix() != now.Unix() {
+		t.Fatalf("last_refreshed_at=%v, want %v", entitlement.LastRefreshedAt, now)
 	}
 }
 

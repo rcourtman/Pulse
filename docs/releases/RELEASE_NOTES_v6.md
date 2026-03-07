@@ -100,7 +100,7 @@ The license system was rebuilt from simple tier checks into a full entitlement f
 
 Migration fallback:
 
-- If a valid v5 license cannot be exchanged automatically, Pulse guides the user to retrieve the migrated activation key from their Pulse account or contact support. Invalid or malformed keys are still rejected normally.
+- If a valid v5 license cannot be exchanged automatically, Pulse keeps the manual activation path available so the user can retry locally or use the self-serve retrieval flow to fetch the current v6 activation key. Invalid or malformed keys are still rejected normally.
 
 ### Organizations + Multi-Tenant (Enterprise, Opt-In)
 
