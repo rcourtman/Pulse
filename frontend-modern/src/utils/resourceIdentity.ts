@@ -1,5 +1,5 @@
 import type { Agent, Node } from '@/types/api';
-import type { Resource } from '@/types/resource';
+import type { Resource, ResourceCanonicalIdentity } from '@/types/resource';
 import type { NodeConfig } from '@/types/nodes';
 import {
   getActionableAgentIdFromResource,
@@ -35,14 +35,6 @@ type NamedEntity = {
   name?: string;
 };
 
-type CanonicalIdentityRecord = {
-  displayName?: string;
-  hostname?: string;
-  platformId?: string;
-  primaryId?: string;
-  aliases?: string[];
-};
-
 const asTrimmedString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -71,10 +63,13 @@ const formatIdentityTarget = (resourceType?: string, resourceId?: string): strin
   return type && id ? `${type}:${id}` : null;
 };
 
-const getCanonicalIdentityRecord = (resource: Resource): CanonicalIdentityRecord | undefined => {
+const getCanonicalIdentityRecord = (resource: Resource): ResourceCanonicalIdentity | undefined => {
+  if (resource.canonicalIdentity) {
+    return resource.canonicalIdentity;
+  }
   const canonical = getPlatformDataRecord(resource)?.canonicalIdentity;
   return canonical && typeof canonical === 'object'
-    ? (canonical as CanonicalIdentityRecord)
+    ? (canonical as ResourceCanonicalIdentity)
     : undefined;
 };
 

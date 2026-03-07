@@ -119,6 +119,14 @@ export interface ResourceDiscoveryTarget {
   hostname?: string;
 }
 
+export interface ResourceCanonicalIdentity {
+  displayName?: string;
+  hostname?: string;
+  platformId?: string;
+  primaryId?: string;
+  aliases?: string[];
+}
+
 export interface ResourceAgentDisk {
   device?: string;
   mountpoint?: string;
@@ -236,6 +244,9 @@ export interface Resource {
 
   // Metrics history query coordinates from backend
   metricsTarget?: { resourceType: string; resourceId: string };
+
+  // Backend-provided canonical identity contract for labels and stable aliases
+  canonicalIdentity?: ResourceCanonicalIdentity;
 
   // Common source facets (optional; not all backends/state payloads include these).
   // Prefer these over casting `platformData` when available.

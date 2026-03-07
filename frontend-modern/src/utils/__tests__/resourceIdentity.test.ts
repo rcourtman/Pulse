@@ -58,15 +58,13 @@ describe('resourceIdentity', () => {
   it('prefers backend canonical identity when present', () => {
     const resource = makeResource({
       displayName: '',
+      canonicalIdentity: {
+        primaryId: 'node:instance-pve1',
+        hostname: 'tower.local',
+        aliases: ['node:instance-pve1', 'instance-pve1', 'tower.local'],
+      },
       identity: {
         hostname: 'legacy-host.local',
-      },
-      platformData: {
-        canonicalIdentity: {
-          primaryId: 'node:instance-pve1',
-          hostname: 'tower.local',
-          aliases: ['node:instance-pve1', 'instance-pve1', 'tower.local'],
-        },
       },
     });
 

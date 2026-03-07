@@ -320,9 +320,7 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0].displayName).toBe('Tower');
     expect(result!.resources()[0].platformId).toBe('pve1');
     expect(result!.resources()[0].identity?.hostname).toBe('tower.local');
-    expect(
-      (result!.resources()[0].platformData as Record<string, unknown>).canonicalIdentity,
-    ).toMatchObject({
+    expect(result!.resources()[0].canonicalIdentity).toMatchObject({
       primaryId: 'node:instance-pve1',
       hostname: 'tower.local',
     });

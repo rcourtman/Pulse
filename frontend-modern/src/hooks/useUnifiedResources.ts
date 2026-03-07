@@ -588,6 +588,7 @@ const toResource = (v2: APIResource): Resource => {
     },
     discoveryTarget,
     metricsTarget,
+    canonicalIdentity: v2.canonicalIdentity,
     platformData: {
       sources,
       sourceStatus: v2.sourceStatus,
