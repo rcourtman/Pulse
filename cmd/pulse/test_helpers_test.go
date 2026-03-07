@@ -43,5 +43,5 @@ func captureOutput(f func()) string {
 }
 
 func resetFlags() {
-	pulsecli.ResetFlags(configDeps)
+	pulsecli.ResetFlags(currentConfigDeps())
 }
