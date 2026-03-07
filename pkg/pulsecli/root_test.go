@@ -36,11 +36,11 @@ func TestNewRootCommandVersionSkipsRunE(t *testing.T) {
 func TestNewRootCommandConfigInfoSkipsRunE(t *testing.T) {
 	runCalled := false
 	cmd := NewRootCommand(Options{
-		Use:     "pulse",
-		Short:   "Pulse",
-		Long:    "Pulse",
-		RunE:    func(context.Context) error { runCalled = true; return nil },
-		Runtime: &Runtime{},
+		Use:    "pulse",
+		Short:  "Pulse",
+		Long:   "Pulse",
+		RunE:   func(context.Context) error { runCalled = true; return nil },
+		Config: &ConfigDeps{},
 	})
 	out := bytes.NewBuffer(nil)
 	cmd.SetOut(out)

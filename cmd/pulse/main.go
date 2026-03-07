@@ -31,31 +31,31 @@ var (
 	mockEnvStat       = os.Stat
 )
 
-var cliRuntime = &pulsecli.Runtime{
-	Config: pulsecli.ConfigRuntime{
-		ExportFile:  &exportFile,
-		ImportFile:  &importFile,
-		Passphrase:  &passphrase,
-		ForceImport: &forceImport,
-		ReadPassword: func(fd int) ([]byte, error) {
-			return readPassword(fd)
-		},
+var configDeps = &pulsecli.ConfigDeps{
+	ExportFile:  &exportFile,
+	ImportFile:  &importFile,
+	Passphrase:  &passphrase,
+	ForceImport: &forceImport,
+	ReadPassword: func(fd int) ([]byte, error) {
+		return readPassword(fd)
 	},
-	Bootstrap: pulsecli.BootstrapRuntime{
-		Exit: func(code int) {
-			osExit(code)
-		},
+}
+
+var bootstrapDeps = &pulsecli.BootstrapDeps{
+	Exit: func(code int) {
+		osExit(code)
 	},
-	Mock: pulsecli.MockRuntime{
-		Exit: func(code int) {
-			osExit(code)
-		},
-		DefaultEnvDir: func() string {
-			return mockEnvDefaultDir
-		},
-		Stat: func(path string) (os.FileInfo, error) {
-			return mockEnvStat(path)
-		},
+}
+
+var mockDeps = &pulsecli.MockDeps{
+	Exit: func(code int) {
+		osExit(code)
+	},
+	DefaultEnvDir: func() string {
+		return mockEnvDefaultDir
+	},
+	Stat: func(path string) (os.FileInfo, error) {
+		return mockEnvStat(path)
 	},
 }
 
@@ -75,7 +75,9 @@ func newRootCmd() *cobra.Command {
 		VersionTemplate: "Pulse {{.Version}}\n",
 		RunE:            runServer,
 		VersionPrinter:  printVersion,
-		Runtime:         cliRuntime,
+		Config:          configDeps,
+		Bootstrap:       bootstrapDeps,
+		Mock:            mockDeps,
 	})
 }
 

@@ -74,17 +74,17 @@ func ReadBoundedHTTPBody(reader io.Reader, declaredLength, maxBytes int64, sourc
 	return data, nil
 }
 
-func GetPassphrase(runtime *Runtime, prompt string, confirm bool) string {
+func GetPassphrase(deps *ConfigDeps, prompt string, confirm bool) string {
 	if pass := os.Getenv("PULSE_PASSPHRASE"); pass != "" {
 		return pass
 	}
 
-	if runtime != nil && runtime.Config.Passphrase != nil && *runtime.Config.Passphrase != "" {
-		return *runtime.Config.Passphrase
+	if deps != nil && deps.Passphrase != nil && *deps.Passphrase != "" {
+		return *deps.Passphrase
 	}
 
 	fmt.Print(prompt)
-	bytePassword, err := configReadPassword(runtime, int(syscall.Stdin))
+	bytePassword, err := configReadPassword(deps, int(syscall.Stdin))
 	fmt.Println()
 	if err != nil {
 		return ""
@@ -96,7 +96,7 @@ func GetPassphrase(runtime *Runtime, prompt string, confirm bool) string {
 	}
 
 	fmt.Print("Confirm passphrase: ")
-	bytePassword2, err := configReadPassword(runtime, int(syscall.Stdin))
+	bytePassword2, err := configReadPassword(deps, int(syscall.Stdin))
 	fmt.Println()
 	if err != nil {
 		return ""
@@ -109,7 +109,7 @@ func GetPassphrase(runtime *Runtime, prompt string, confirm bool) string {
 	return pass
 }
 
-func newConfigCmd(runtime *Runtime) *cobra.Command {
+func newConfigCmd(deps *ConfigDeps) *cobra.Command {
 	configCmd := &cobra.Command{
 		Use:   "config",
 		Short: "Configuration management commands",
@@ -149,7 +149,7 @@ func newConfigCmd(runtime *Runtime) *cobra.Command {
   # Export with passphrase from environment variable
   PULSE_PASSPHRASE=mysecret pulse config export -o pulse-config.enc`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pass := GetPassphrase(runtime, "Enter passphrase for encryption: ", false)
+			pass := GetPassphrase(deps, "Enter passphrase for encryption: ", false)
 			if pass == "" {
 				return fmt.Errorf("passphrase is required")
 			}
@@ -165,11 +165,11 @@ func newConfigCmd(runtime *Runtime) *cobra.Command {
 				return fmt.Errorf("failed to export configuration: %w", err)
 			}
 
-			if runtime != nil && runtime.Config.ExportFile != nil && *runtime.Config.ExportFile != "" {
-				if err := os.WriteFile(*runtime.Config.ExportFile, []byte(exportedData), 0600); err != nil {
+			if deps != nil && deps.ExportFile != nil && *deps.ExportFile != "" {
+				if err := os.WriteFile(*deps.ExportFile, []byte(exportedData), 0600); err != nil {
 					return fmt.Errorf("failed to write export file: %w", err)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Configuration exported to %s\n", *runtime.Config.ExportFile)
+				fmt.Fprintf(cmd.OutOrStdout(), "Configuration exported to %s\n", *deps.ExportFile)
 				return nil
 			}
 
@@ -191,21 +191,21 @@ func newConfigCmd(runtime *Runtime) *cobra.Command {
   # Force import without confirmation
   pulse config import -i pulse-config.enc --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if runtime == nil || runtime.Config.ImportFile == nil || *runtime.Config.ImportFile == "" {
+			if deps == nil || deps.ImportFile == nil || *deps.ImportFile == "" {
 				return fmt.Errorf("import file is required (use -i flag)")
 			}
 
-			data, err := ReadBoundedRegularFile(*runtime.Config.ImportFile, maxConfigImportBytes)
+			data, err := ReadBoundedRegularFile(*deps.ImportFile, maxConfigImportBytes)
 			if err != nil {
 				return fmt.Errorf("failed to read import file: %w", err)
 			}
 
-			pass := GetPassphrase(runtime, "Enter passphrase for decryption: ", false)
+			pass := GetPassphrase(deps, "Enter passphrase for decryption: ", false)
 			if pass == "" {
 				return fmt.Errorf("passphrase is required")
 			}
 
-			forceImport := runtime != nil && runtime.Config.ForceImport != nil && *runtime.Config.ForceImport
+			forceImport := deps != nil && deps.ForceImport != nil && *deps.ForceImport
 			if !forceImport {
 				fmt.Fprintln(cmd.OutOrStdout(), "WARNING: This will overwrite all existing configuration!")
 				fmt.Fprint(cmd.OutOrStdout(), "Continue? (yes/no): ")
@@ -329,14 +329,14 @@ func newConfigCmd(runtime *Runtime) *cobra.Command {
 	configCmd.AddCommand(configImportCmd)
 	configCmd.AddCommand(configAutoImportCmd)
 
-	if runtime != nil && runtime.Config.ExportFile != nil && runtime.Config.Passphrase != nil {
-		configExportCmd.Flags().StringVarP(runtime.Config.ExportFile, "output", "o", "", "Output file for encrypted configuration")
-		configExportCmd.Flags().StringVarP(runtime.Config.Passphrase, "passphrase", "p", "", "Passphrase for encryption (or use PULSE_PASSPHRASE env var)")
+	if deps != nil && deps.ExportFile != nil && deps.Passphrase != nil {
+		configExportCmd.Flags().StringVarP(deps.ExportFile, "output", "o", "", "Output file for encrypted configuration")
+		configExportCmd.Flags().StringVarP(deps.Passphrase, "passphrase", "p", "", "Passphrase for encryption (or use PULSE_PASSPHRASE env var)")
 	}
-	if runtime != nil && runtime.Config.ImportFile != nil && runtime.Config.Passphrase != nil && runtime.Config.ForceImport != nil {
-		configImportCmd.Flags().StringVarP(runtime.Config.ImportFile, "input", "i", "", "Input file with encrypted configuration")
-		configImportCmd.Flags().StringVarP(runtime.Config.Passphrase, "passphrase", "p", "", "Passphrase for decryption (or use PULSE_PASSPHRASE env var)")
-		configImportCmd.Flags().BoolVarP(runtime.Config.ForceImport, "force", "f", false, "Force import without confirmation")
+	if deps != nil && deps.ImportFile != nil && deps.Passphrase != nil && deps.ForceImport != nil {
+		configImportCmd.Flags().StringVarP(deps.ImportFile, "input", "i", "", "Input file with encrypted configuration")
+		configImportCmd.Flags().StringVarP(deps.Passphrase, "passphrase", "p", "", "Passphrase for decryption (or use PULSE_PASSPHRASE env var)")
+		configImportCmd.Flags().BoolVarP(deps.ForceImport, "force", "f", false, "Force import without confirmation")
 	}
 
 	return configCmd

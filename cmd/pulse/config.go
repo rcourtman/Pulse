@@ -15,5 +15,5 @@ func readBoundedHTTPBody(reader io.Reader, declaredLength, maxBytes int64, sourc
 }
 
 func getPassphrase(prompt string, confirm bool) string {
-	return pulsecli.GetPassphrase(cliRuntime, prompt, confirm)
+	return pulsecli.GetPassphrase(configDeps, prompt, confirm)
 }

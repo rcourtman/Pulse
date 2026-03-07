@@ -9,23 +9,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func GetMockEnvPath(runtime *Runtime) string {
+func GetMockEnvPath(mock *MockDeps) string {
 	dataDir := os.Getenv("PULSE_DATA_DIR")
 	if dataDir == "" {
-		if info, err := mockStat(runtime, "tmp/dev-config"); err == nil && info.IsDir() {
+		if info, err := mockStat(mock, "tmp/dev-config"); err == nil && info.IsDir() {
 			dataDir = "tmp/dev-config"
 		} else {
-			probe := filepath.Join(mockDefaultEnvDir(runtime), "mock.env")
-			if _, err := mockStat(runtime, probe); err == nil {
+			probe := filepath.Join(mockDefaultEnvDir(mock), "mock.env")
+			if _, err := mockStat(mock, probe); err == nil {
 				return probe
 			}
-			dataDir = mockDefaultEnvDir(runtime)
+			dataDir = mockDefaultEnvDir(mock)
 		}
 	}
 	return filepath.Join(dataDir, "mock.env")
 }
 
-func newMockCmd(runtime *Runtime) *cobra.Command {
+func newMockCmd(mock *MockDeps) *cobra.Command {
 	mockCmd := &cobra.Command{
 		Use:   "mock",
 		Short: "Manage mock/demo mode for development and demos",
@@ -47,9 +47,9 @@ Example:
   pulse mock enable
   sudo systemctl restart pulse`,
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := setMockMode(runtime, true); err != nil {
+			if err := setMockMode(mock, true); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-				mockExit(runtime, 1)
+				mockExit(mock, 1)
 				return
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "✓ Mock mode enabled")
@@ -70,9 +70,9 @@ Example:
   pulse mock disable
   sudo systemctl restart pulse`,
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := setMockMode(runtime, false); err != nil {
+			if err := setMockMode(mock, false); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-				mockExit(runtime, 1)
+				mockExit(mock, 1)
 				return
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "✓ Mock mode disabled")
@@ -86,7 +86,7 @@ Example:
 		Use:   "status",
 		Short: "Show current mock mode status",
 		Run: func(cmd *cobra.Command, args []string) {
-			enabled, config := getMockStatus(runtime)
+			enabled, config := getMockStatus(mock)
 			if enabled {
 				fmt.Fprintln(cmd.OutOrStdout(), "Mock mode: ENABLED")
 				fmt.Fprintln(cmd.OutOrStdout())
@@ -109,8 +109,8 @@ Example:
 	return mockCmd
 }
 
-func setMockMode(runtime *Runtime, enable bool) error {
-	envPath := GetMockEnvPath(runtime)
+func setMockMode(mock *MockDeps, enable bool) error {
+	envPath := GetMockEnvPath(mock)
 	config := getDefaultMockConfig()
 
 	if data, err := os.ReadFile(envPath); err == nil {
@@ -131,8 +131,8 @@ func setMockMode(runtime *Runtime, enable bool) error {
 	return writeMockEnv(envPath, config)
 }
 
-func getMockStatus(runtime *Runtime) (bool, []string) {
-	envPath := GetMockEnvPath(runtime)
+func getMockStatus(mock *MockDeps) (bool, []string) {
+	envPath := GetMockEnvPath(mock)
 	data, err := os.ReadFile(envPath)
 	if err != nil {
 		return false, nil

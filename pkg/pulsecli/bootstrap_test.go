@@ -8,16 +8,16 @@ import (
 	"testing"
 )
 
-func TestShowBootstrapTokenUsesStateExitOnMissingToken(t *testing.T) {
+func TestShowBootstrapTokenUsesBootstrapExitOnMissingToken(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", dir)
 
 	exitCode := 0
 	exitFn := func(code int) { exitCode = code }
-	runtime := &Runtime{Bootstrap: BootstrapRuntime{Exit: exitFn}}
+	bootstrap := &BootstrapDeps{Exit: exitFn}
 
 	output := captureOutput(t, func() {
-		ShowBootstrapToken(runtime)
+		ShowBootstrapToken(bootstrap)
 	})
 
 	if exitCode != 1 {
@@ -37,7 +37,7 @@ func TestShowBootstrapTokenPrintsToken(t *testing.T) {
 	}
 
 	output := captureOutput(t, func() {
-		ShowBootstrapToken(&Runtime{})
+		ShowBootstrapToken(&BootstrapDeps{})
 	})
 
 	if !strings.Contains(output, "test-token") {

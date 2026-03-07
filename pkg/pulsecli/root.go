@@ -16,7 +16,9 @@ type Options struct {
 	VersionTemplate string
 	RunE            func(context.Context) error
 	VersionPrinter  func(io.Writer)
-	Runtime         *Runtime
+	Config          *ConfigDeps
+	Bootstrap       *BootstrapDeps
+	Mock            *MockDeps
 }
 
 func NewRootCommand(opts Options) *cobra.Command {
@@ -39,28 +41,28 @@ func NewRootCommand(opts Options) *cobra.Command {
 	}
 
 	cmd.AddCommand(newVersionCmd(opts))
-	cmd.AddCommand(newConfigCmd(opts.Runtime))
-	cmd.AddCommand(newBootstrapTokenCmd(opts.Runtime))
-	cmd.AddCommand(newMockCmd(opts.Runtime))
+	cmd.AddCommand(newConfigCmd(opts.Config))
+	cmd.AddCommand(newBootstrapTokenCmd(opts.Bootstrap))
+	cmd.AddCommand(newMockCmd(opts.Mock))
 
 	return cmd
 }
 
-func ResetFlags(runtime *Runtime) {
-	if runtime == nil {
+func ResetFlags(config *ConfigDeps) {
+	if config == nil {
 		return
 	}
-	if runtime.Config.ExportFile != nil {
-		*runtime.Config.ExportFile = ""
+	if config.ExportFile != nil {
+		*config.ExportFile = ""
 	}
-	if runtime.Config.ImportFile != nil {
-		*runtime.Config.ImportFile = ""
+	if config.ImportFile != nil {
+		*config.ImportFile = ""
 	}
-	if runtime.Config.Passphrase != nil {
-		*runtime.Config.Passphrase = ""
+	if config.Passphrase != nil {
+		*config.Passphrase = ""
 	}
-	if runtime.Config.ForceImport != nil {
-		*runtime.Config.ForceImport = false
+	if config.ForceImport != nil {
+		*config.ForceImport = false
 	}
 }
 
