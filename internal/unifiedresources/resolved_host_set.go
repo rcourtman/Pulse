@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 	"time"
@@ -315,7 +316,14 @@ func CollectHostCandidates(
 
 func pveNodeCandidate(n models.Node) HostCandidate {
 	identity := ResourceIdentity{
-		Hostnames: uniqueStrings([]string{n.Name, extractHostname(n.Host)}),
+		Hostnames: uniqueStrings([]string{n.Name}),
+	}
+	if endpointHost := extractHostname(n.Host); endpointHost != "" {
+		if parsed := net.ParseIP(endpointHost); parsed != nil {
+			identity.IPAddresses = uniqueStrings([]string{parsed.String()})
+		} else {
+			identity.Hostnames = uniqueStrings(append(identity.Hostnames, endpointHost))
+		}
 	}
 	return HostCandidate{
 		ID:       "pve:" + n.ID,

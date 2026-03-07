@@ -3,6 +3,8 @@ package models
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -1391,6 +1393,74 @@ func normalizeNodeIdentityPart(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
+func normalizeIPAddress(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if strings.Contains(value, "/") {
+		if ip, _, err := net.ParseCIDR(value); err == nil && ip != nil {
+			return ip.String()
+		}
+		value = strings.Split(value, "/")[0]
+	}
+	ip := net.ParseIP(value)
+	if ip == nil {
+		return ""
+	}
+	return ip.String()
+}
+
+func extractHostEndpoint(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err == nil && parsed.Host != "" {
+		return strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	}
+	if strings.Contains(raw, "/") {
+		raw = strings.Split(raw, "/")[0]
+	}
+	if host, port, err := net.SplitHostPort(raw); err == nil {
+		_ = port
+		return strings.ToLower(strings.TrimSpace(host))
+	}
+	return strings.ToLower(strings.Trim(strings.TrimSpace(raw), "[]"))
+}
+
+func shortHostname(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return ""
+	}
+	if idx := strings.IndexRune(value, '.'); idx > 0 {
+		return value[:idx]
+	}
+	return value
+}
+
+func nodeEndpointMergeAliases(node Node) []string {
+	name := normalizeNodeIdentityPart(node.Name)
+	if name == "" {
+		return nil
+	}
+	endpoint := extractHostEndpoint(node.Host)
+	if endpoint == "" {
+		return nil
+	}
+	if ip := normalizeIPAddress(endpoint); ip != "" {
+		return []string{"endpoint-ip:" + ip + ":" + name}
+	}
+
+	aliases := []string{"endpoint-host:" + endpoint + ":" + name}
+	if short := shortHostname(endpoint); short != "" && short != endpoint {
+		aliases = append(aliases, "endpoint-host:"+short+":"+name)
+	}
+	return aliases
+}
+
 func nodeLogicalKey(node Node) string {
 	name := normalizeNodeIdentityPart(node.Name)
 	if name == "" {
@@ -1408,6 +1478,62 @@ func nodeLogicalKey(node Node) string {
 	}
 
 	return "name:" + name
+}
+
+func registerNodeAliases(
+	aliasToKey map[string]string,
+	ambiguousAliases map[string]struct{},
+	aliases []string,
+	key string,
+) {
+	for _, alias := range aliases {
+		if alias == "" || key == "" {
+			continue
+		}
+		if _, ambiguous := ambiguousAliases[alias]; ambiguous {
+			continue
+		}
+		if existing, ok := aliasToKey[alias]; ok && existing != key {
+			delete(aliasToKey, alias)
+			ambiguousAliases[alias] = struct{}{}
+			continue
+		}
+		aliasToKey[alias] = key
+	}
+}
+
+func resolveNodeMergeKey(
+	primaryKey string,
+	node Node,
+	nodeMap map[string]Node,
+	aliasToKey map[string]string,
+	ambiguousAliases map[string]struct{},
+) string {
+	if primaryKey == "" {
+		return ""
+	}
+	if _, ok := nodeMap[primaryKey]; ok {
+		return primaryKey
+	}
+
+	resolved := ""
+	for _, alias := range nodeEndpointMergeAliases(node) {
+		if _, ambiguous := ambiguousAliases[alias]; ambiguous {
+			continue
+		}
+		key, ok := aliasToKey[alias]
+		if !ok || key == "" {
+			continue
+		}
+		if resolved != "" && resolved != key {
+			return primaryKey
+		}
+		resolved = key
+	}
+	if resolved != "" {
+		return resolved
+	}
+	return primaryKey
 }
 
 func nodeStatusRank(status string) int {
@@ -1528,6 +1654,8 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// Build map excluding nodes from this instance (they'll be replaced by the new set).
 	// Key by logical identity so nodes with different IDs but the same cluster+name merge.
 	nodeMap := make(map[string]Node)
+	nodeAliasToKey := make(map[string]string)
+	ambiguousNodeAliases := make(map[string]struct{})
 	for _, node := range s.Nodes {
 		if node.Instance == instanceName {
 			continue
@@ -1546,6 +1674,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		} else {
 			nodeMap[key] = node
 		}
+		registerNodeAliases(nodeAliasToKey, ambiguousNodeAliases, nodeEndpointMergeAliases(node), key)
 	}
 
 	// Deduplicate incoming nodes by logical identity so a single node cannot appear
@@ -1570,8 +1699,9 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 
 	// Build hostname-to-hostAgentID map for linking new nodes to existing host agents.
 	// Keep all candidates so we can avoid creating links when hostname matching is ambiguous.
-	// Also build a set of valid host agent IDs to validate existing links
+	// Also build a set of valid host agent IDs to validate existing links.
 	hostAgentByHostname := make(map[string]map[string]struct{}) // lowercase hostname -> hostAgentIDs
+	hostAgentByIP := make(map[string]map[string]struct{})       // normalized ip -> hostAgentIDs
 	validHostAgentIDs := make(map[string]bool)                  // set of existing host agent IDs
 	addHostAlias := func(name, hostID string) {
 		name = strings.TrimSpace(strings.ToLower(name))
@@ -1585,6 +1715,18 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 		bucket[hostID] = struct{}{}
 	}
+	addHostIP := func(address, hostID string) {
+		ip := normalizeIPAddress(address)
+		if ip == "" || hostID == "" {
+			return
+		}
+		bucket := hostAgentByIP[ip]
+		if bucket == nil {
+			bucket = make(map[string]struct{})
+			hostAgentByIP[ip] = bucket
+		}
+		bucket[hostID] = struct{}{}
+	}
 	for _, host := range s.Hosts {
 		if host.ID != "" {
 			validHostAgentIDs[host.ID] = true
@@ -1592,6 +1734,12 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
 				addHostAlias(host.Hostname[:idx], host.ID)
+			}
+			addHostIP(host.ReportIP, host.ID)
+			for _, iface := range host.NetworkInterfaces {
+				for _, address := range iface.Addresses {
+					addHostIP(address, host.ID)
+				}
 			}
 		}
 	}
@@ -1613,9 +1761,40 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 				}
 			}
 		}
-		// If no existing link, try to match by hostname
+		endpointCandidateCount := 0
+		endpointCandidates := make(map[string]struct{})
 		if node.LinkedAgentID == "" {
-			nodeName := strings.TrimSpace(strings.ToLower(node.Name))
+			endpoint := extractHostEndpoint(node.Host)
+			if ip := normalizeIPAddress(endpoint); ip != "" {
+				if ids, ok := hostAgentByIP[ip]; ok {
+					for hostID := range ids {
+						endpointCandidates[hostID] = struct{}{}
+					}
+				}
+			} else if endpoint != "" {
+				if ids, ok := hostAgentByHostname[strings.ToLower(endpoint)]; ok {
+					for hostID := range ids {
+						endpointCandidates[hostID] = struct{}{}
+					}
+				}
+				if short := shortHostname(endpoint); short != "" && short != strings.ToLower(endpoint) {
+					if ids, ok := hostAgentByHostname[short]; ok {
+						for hostID := range ids {
+							endpointCandidates[hostID] = struct{}{}
+						}
+					}
+				}
+			}
+			endpointCandidateCount = len(endpointCandidates)
+			if endpointCandidateCount == 1 {
+				for hostID := range endpointCandidates {
+					node.LinkedAgentID = hostID
+				}
+			}
+		}
+		// If no existing link and endpoint evidence was absent, try to match by hostname.
+		if node.LinkedAgentID == "" && endpointCandidateCount == 0 {
+			nodeName := normalizeNodeIdentityPart(node.Name)
 			candidates := make(map[string]struct{})
 			if nodeName != "" {
 				if ids, ok := hostAgentByHostname[nodeName]; ok {
@@ -1638,12 +1817,20 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			}
 		}
 
-		targetKey := nodeLogicalKey(node)
+		primaryKey := nodeLogicalKey(node)
+		targetKey := resolveNodeMergeKey(primaryKey, node, nodeMap, nodeAliasToKey, ambiguousNodeAliases)
 		if targetKey == "" {
 			targetKey = "id:" + normalizeNodeIdentityPart(node.ID)
 		}
 		if targetKey == "id:" {
 			targetKey = "instance:" + normalizeNodeIdentityPart(instanceName) + ":" + normalizeNodeIdentityPart(node.Name)
+		}
+		if node.LinkedAgentID == "" {
+			if existing, ok := nodeMap[targetKey]; ok {
+				if validHostAgentIDs[existing.LinkedAgentID] {
+					node.LinkedAgentID = existing.LinkedAgentID
+				}
+			}
 		}
 
 		if existing, ok := nodeMap[targetKey]; ok {
@@ -1651,6 +1838,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		} else {
 			nodeMap[targetKey] = node
 		}
+		registerNodeAliases(nodeAliasToKey, ambiguousNodeAliases, nodeEndpointMergeAliases(node), targetKey)
 	}
 
 	// Convert map back to slice

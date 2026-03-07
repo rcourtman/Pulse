@@ -209,6 +209,25 @@ func TestCollectHostCandidates_PVENodesFromRuntime(t *testing.T) {
 	}
 }
 
+func TestCollectHostCandidates_PVENodeEndpointIPBecomesIdentityIP(t *testing.T) {
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "n1", Name: "minipc", Host: "https://10.0.0.5:8006", Status: "online"},
+		},
+	}
+
+	candidates := CollectHostCandidates(state, nil, nil, nil, nil)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(candidates))
+	}
+	if len(candidates[0].Identity.Hostnames) != 1 || candidates[0].Identity.Hostnames[0] != "minipc" {
+		t.Fatalf("Hostnames = %v, want [minipc]", candidates[0].Identity.Hostnames)
+	}
+	if len(candidates[0].Identity.IPAddresses) != 1 || candidates[0].Identity.IPAddresses[0] != "10.0.0.5" {
+		t.Fatalf("IPAddresses = %v, want [10.0.0.5]", candidates[0].Identity.IPAddresses)
+	}
+}
+
 func TestCollectHostCandidates_PVEFallbackToConfig(t *testing.T) {
 	state := models.StateSnapshot{}
 	configPVE := []ConfigEntry{{ID: "p1", Name: "my-pve", Host: "https://pve.local:8006"}}

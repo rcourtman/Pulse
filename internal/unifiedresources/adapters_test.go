@@ -34,6 +34,22 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceFromProxmoxNodeStoresEndpointIPAsIPAddress(t *testing.T) {
+	node := models.Node{
+		ID:   "mock-cluster-minipc",
+		Name: "minipc",
+		Host: "https://10.0.0.5:8006",
+	}
+
+	_, identity := resourceFromProxmoxNode(node)
+	if len(identity.Hostnames) != 1 || identity.Hostnames[0] != "minipc" {
+		t.Fatalf("Hostnames = %v, want [minipc]", identity.Hostnames)
+	}
+	if len(identity.IPAddresses) != 1 || identity.IPAddresses[0] != "10.0.0.5" {
+		t.Fatalf("IPAddresses = %v, want [10.0.0.5]", identity.IPAddresses)
+	}
+}
+
 func TestMaxNodeTempHandlesUnavailableData(t *testing.T) {
 	if temp := maxNodeTemp(nil); temp != nil {
 		t.Fatalf("expected nil temperature for nil input, got %v", *temp)

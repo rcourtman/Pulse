@@ -243,6 +243,93 @@ func TestUpdateNodesForInstancePreservesLinkWhenNodeIDChanges(t *testing.T) {
 	}
 }
 
+func TestUpdateNodesForInstanceMergesStandaloneNodeIntoClusterNodeByEndpoint(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:                "host-1",
+				Hostname:          "minipc.local",
+				ReportIP:          "10.0.0.5",
+				LinkedNodeID:      "cluster-homelab-minipc",
+				NetworkInterfaces: []HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24"}}},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:              "cluster-homelab-minipc",
+				Name:            "minipc",
+				Instance:        "homelab-entry",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.5:8006",
+				LinkedAgentID:   "host-1",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("minipc-standalone", []Node{
+		{
+			ID:       "minipc-standalone-minipc",
+			Name:     "minipc",
+			Instance: "minipc-standalone",
+			Host:     "https://10.0.0.5:8006",
+			Status:   "online",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want exactly 1 node", state.Nodes)
+	}
+	if state.Nodes[0].ID != "cluster-homelab-minipc" {
+		t.Fatalf("node ID = %q, want cluster-homelab-minipc", state.Nodes[0].ID)
+	}
+	if state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("LinkedAgentID = %q, want host-1", state.Nodes[0].LinkedAgentID)
+	}
+	if state.Hosts[0].LinkedNodeID != "cluster-homelab-minipc" {
+		t.Fatalf("host LinkedNodeID = %q, want cluster-homelab-minipc", state.Hosts[0].LinkedNodeID)
+	}
+}
+
+func TestStateUpdateNodesForInstancePrefersUniqueEndpointIPOverAmbiguousHostname(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:       "host-a",
+				Hostname: "minipc.local",
+				ReportIP: "10.0.0.5",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.0.0.5/24"}},
+				},
+			},
+			{
+				ID:       "host-b",
+				Hostname: "minipc.lab",
+				ReportIP: "10.0.0.6",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.0.0.6/24"}},
+				},
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("cluster-a", []Node{
+		{
+			ID:       "node-1",
+			Name:     "minipc",
+			Instance: "cluster-a",
+			Host:     "https://10.0.0.5:8006",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1", state.Nodes)
+	}
+	if state.Nodes[0].LinkedAgentID != "host-a" {
+		t.Fatalf("LinkedAgentID = %q, want host-a", state.Nodes[0].LinkedAgentID)
+	}
+}
 func TestUpdateNodesForInstanceDeduplicatesLogicalNodeByClusterName(t *testing.T) {
 	state := NewState()
 	older := time.Now().Add(-2 * time.Minute)

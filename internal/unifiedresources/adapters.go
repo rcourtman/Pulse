@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -14,9 +15,17 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 		name = node.DisplayName
 	}
 
+	endpointHost := extractHostname(node.Host)
 	identity := ResourceIdentity{
-		Hostnames:   uniqueStrings([]string{node.Name, extractHostname(node.Host)}),
+		Hostnames:   uniqueStrings([]string{node.Name}),
 		ClusterName: node.ClusterName,
+	}
+	if endpointHost != "" {
+		if parsed := net.ParseIP(endpointHost); parsed != nil {
+			identity.IPAddresses = uniqueStrings([]string{parsed.String()})
+		} else {
+			identity.Hostnames = uniqueStrings(append(identity.Hostnames, endpointHost))
+		}
 	}
 
 	if node.ClusterName != "" {
