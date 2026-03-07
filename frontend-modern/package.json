@@ -15,7 +15,7 @@
   "homepage": "https://github.com/rcourtman/Pulse",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/sync-embed-dist.mjs",
     "preview": "vite preview",
     "generate-types": "cd ../scripts && go run generate-types.go",
     "test": "vitest run",

@@ -45,9 +45,8 @@ COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 COPY VERSION ./
 
-# Copy built frontend from frontend-builder stage for embedding
-# Must be at internal/api/frontend-modern for Go embed
-COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-modern/dist
+# Copy the synced embed artifact from the frontend builder stage.
+COPY --from=frontend-builder /app/internal/api/frontend-modern/dist ./internal/api/frontend-modern/dist
 
 # Build the main pulse binary for all target architectures
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \

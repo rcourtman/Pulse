@@ -11,14 +11,18 @@ Machine companion:
 
 Recent locked release decision:
 
+- 2026-03-07: Embedded frontend drift protection is now in place.
+  `npm --prefix frontend-modern run build` syncs
+  `internal/api/frontend-modern/dist`, and
+  `internal/api/frontend_embed_sync_test.go` fails if the embedded copy drifts
+  from `frontend-modern/dist`. The disposable upgraded CT now proves pending
+  and failed v5 commercial migration states against the native embedded
+  frontend with no `PULSE_FRONTEND_DIR` override.
 - 2026-03-07: Browser-level proof now exists for unresolved v5 commercial
   migration states in
   `tests/integration/tests/12-v5-commercial-migration.spec.ts`. On the
   disposable upgraded fixture, both pending and failed paid-license migration
   states render the expected Pro settings notice and hide the trial CTA.
-  Evidence required `PULSE_FRONTEND_DIR` on the disposable CT because the
-  shipped embedded frontend there was serving older assets; frontend embed
-  parity remains a follow-up and is not a release-control claim.
 - 2026-03-07: v5→v6 commercial migration truth table is now owned in
   `docs/release-control/v6/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md`.
   V6 persists unresolved paid-license migration state in billing/entitlements,
@@ -232,9 +236,11 @@ Supplementary evidence:
 - `tests/integration/tests/12-v5-commercial-migration.spec.ts` proves
   unresolved paid-license migration states in a real browser against an
   upgraded v5 fixture. Pending and failed states render the expected Pro panel
-  notice and suppress the trial CTA. This proof currently depends on
-  `PULSE_FRONTEND_DIR` on the disposable CT because the fixture's embedded
-  frontend was serving older assets.
+  notice and suppress the trial CTA.
+- `internal/api/frontend_embed_sync_test.go` enforces that the embedded
+  frontend copy matches `frontend-modern/dist`, and
+  `frontend-modern/scripts/sync-embed-dist.mjs` keeps the embed directory in
+  sync as part of `npm --prefix frontend-modern run build`.
 
 | Score | Criteria |
 |-------|----------|

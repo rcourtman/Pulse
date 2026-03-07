@@ -78,8 +78,8 @@ examples where possible.
 - Tests: `npm run test`
 - Lint: `npm run lint`
 - Format: `npm run format`
-- Production build: `npm run build` (copied into `internal/api/frontend-modern`
-  via the Makefile).
+- Production build: `npm run build` (syncs the Go embed copy in
+  `internal/api/frontend-modern/dist` automatically).
 
 Use SolidJS patterns (signals, memos, createEffect) and the shared design-system
 components in `components/shared/`. Add screenshots when introducing new

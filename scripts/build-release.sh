@@ -78,12 +78,6 @@ echo "Building frontend..."
 npm --prefix frontend-modern ci
 npm --prefix frontend-modern run build
 
-# Copy frontend dist for embedding (required for Go embed)
-echo "Copying frontend dist for embedding..."
-rm -rf internal/api/frontend-modern
-mkdir -p internal/api/frontend-modern
-cp -r frontend-modern/dist internal/api/frontend-modern/
-
 # Build unified agents for every supported platform/architecture
 echo "Building unified agents for all platforms..."
 agent_build_order=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386 darwin-amd64 darwin-arm64 freebsd-amd64 freebsd-arm64 windows-amd64 windows-arm64 windows-386)

@@ -12,14 +12,7 @@ all: frontend backend build-agents
 # Build frontend only
 frontend:
 	npm --prefix $(FRONTEND_DIR) run build
-	@echo "================================================"
-	@echo "Copying frontend to internal/api/ for Go embed"
-	@echo "This is REQUIRED - Go cannot embed external paths"
-	@echo "================================================"
-	rm -rf $(FRONTEND_EMBED_DIR)
-	mkdir -p $(FRONTEND_EMBED_DIR)
-	cp -r $(FRONTEND_DIST) $(FRONTEND_EMBED_DIR)/
-	@echo "✓ Frontend copied for embedding"
+	@echo "✓ Frontend build synced to $(FRONTEND_EMBED_DIR)"
 
 # Build backend only (includes embedded frontend)
 backend:

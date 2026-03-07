@@ -174,6 +174,8 @@
         "tests/migration/v5_full_upgrade_test.go",
         "tests/migration/v5_commercial_migration_test.go",
         "tests/integration/tests/12-v5-commercial-migration.spec.ts",
+        "internal/api/frontend_embed_sync_test.go",
+        "frontend-modern/scripts/sync-embed-dist.mjs",
         "tests/migration/v5_to_v6_test.go",
         "tests/migration/v5_session_db_test.go",
         "docs/UPGRADE_v6.md",
@@ -291,6 +293,7 @@
     "2026-03-05: host-type migration audit completed; release can proceed because remaining host references are compatibility boundaries, internal shims, or non-resource terminology.",
     "2026-03-06: v5-to-v6 license migration bridge landed; persisted v5 Pro/Lifetime licenses auto-exchange on upgrade startup, valid v5 Pro/Lifetime keys are accepted as migration input in activation, and public migration guidance is now aligned without requiring a public CHANGELOG.md.",
     "2026-03-07: v5 commercial migration truth table is now owned by v6 release-control, unresolved paid-license migration states persist in v6 billing/entitlements, and the migration suite covers startup failure classes that must block trial start while preserving downgrade safety.",
-    "2026-03-07: browser-level proof exists for unresolved v5 commercial migration states via tests/integration/tests/12-v5-commercial-migration.spec.ts against an upgraded fixture, but the disposable CT required PULSE_FRONTEND_DIR because its embedded frontend was serving older assets."
+    "2026-03-07: browser-level proof exists for unresolved v5 commercial migration states via tests/integration/tests/12-v5-commercial-migration.spec.ts against an upgraded fixture.",
+    "2026-03-07: embedded frontend drift protection landed; frontend-modern build now syncs internal/api/frontend-modern/dist, internal/api/frontend_embed_sync_test.go enforces parity, and the disposable CT now proves migration UI states on native embedded assets without PULSE_FRONTEND_DIR."
   ]
 }
