@@ -4,13 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	enableMockMode(t)
 
 	now := time.Now().UTC()
 	podStart := now.Add(-15 * time.Minute)

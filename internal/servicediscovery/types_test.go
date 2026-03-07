@@ -63,7 +63,7 @@ func TestResourceTypeClassificationAndValidation(t *testing.T) {
 
 	t.Run("legacy aliases remain non-canonical", func(t *testing.T) {
 		cases := []ResourceType{
-			legacyResourceTypeHost,
+			legacyHostAlias,
 			legacyResourceTypeLXC,
 			legacyResourceTypeDockerLXC,
 		}

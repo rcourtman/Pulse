@@ -3,7 +3,6 @@ package unifiedresources
 import (
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -34,8 +33,7 @@ func TestMetricsFromDockerHostIncludesIORates(t *testing.T) {
 }
 
 func TestMetricsFromKubernetesPod_MockModeIncludesLiveLikeValues(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	enableMockMode(t)
 
 	cluster := models.KubernetesCluster{
 		ID:   "cluster-1",
@@ -74,8 +72,7 @@ func TestMetricsFromKubernetesPod_MockModeIncludesLiveLikeValues(t *testing.T) {
 }
 
 func TestMetricsFromKubernetesNode_DoesNotSynthesizeUnsupportedUsageMetrics(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	enableMockMode(t)
 
 	cluster := models.KubernetesCluster{
 		ID:   "cluster-node-1",
@@ -103,8 +100,7 @@ func TestMetricsFromKubernetesNode_DoesNotSynthesizeUnsupportedUsageMetrics(t *t
 }
 
 func TestMetricsFromKubernetesCluster_DoesNotSynthesizeUnsupportedUsageMetrics(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	enableMockMode(t)
 
 	cluster := models.KubernetesCluster{
 		ID:   "cluster-1",
@@ -240,8 +236,7 @@ func TestMetricsFromDockerContainerIncludesContainerIORates(t *testing.T) {
 }
 
 func TestMetricsFromDockerContainerMockFallbackSynthesizesIO(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	enableMockMode(t)
 
 	container := models.DockerContainer{
 		ID:            "ctr-mock-1",

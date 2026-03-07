@@ -489,7 +489,7 @@ func TestService_DiscoverResource_RejectsNonCanonicalResourceTypes(t *testing.T)
 	}
 
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
-		ResourceType: legacyResourceTypeHost,
+		ResourceType: legacyHostAlias,
 		TargetID:     "host1",
 		ResourceID:   "host1",
 		Force:        true,

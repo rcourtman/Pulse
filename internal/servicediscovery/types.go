@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	legacyResourceTypeHost      ResourceType = "host"
+	legacyHostAlias             ResourceType = "host"
 	legacyResourceTypeLXC       ResourceType = "lxc"
 	legacyResourceTypeDockerLXC ResourceType = "docker_lxc"
 )
@@ -45,7 +45,7 @@ func classifyResourceType(rt ResourceType) resourceTypeClass {
 		return resourceTypeClassCanonical
 	case ResourceTypeDockerVM, ResourceTypeDockerSystemContainer:
 		return resourceTypeClassExecutionOnly
-	case legacyResourceTypeHost, legacyResourceTypeLXC, legacyResourceTypeDockerLXC:
+	case legacyHostAlias, legacyResourceTypeLXC, legacyResourceTypeDockerLXC:
 		return resourceTypeClassLegacyAlias
 	default:
 		return resourceTypeClassUnknown
