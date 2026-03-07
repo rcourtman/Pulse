@@ -1,0 +1,294 @@
+{
+  "version": "6.0",
+  "updated_at": "2026-03-07",
+  "scope": {
+    "active_repos": [
+      "pulse",
+      "pulse-pro",
+      "pulse-enterprise",
+      "pulse-mobile"
+    ],
+    "ignored_repos": [
+      "pulse-5.1.x",
+      "pulse-refactor-streams"
+    ]
+  },
+  "source_precedence": [
+    "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+    "docs/release-control/v6/status.json",
+    "docs/release-control/v6/CONSOLIDATION_MAP.md",
+    "docs/release-control/v6/LEGACY_HOST_CLASSIFICATION_2026-03-05.md",
+    "docs/release-control/v6/RETIREMENT_AUDIT_2026-02-27.md",
+    "docs/architecture/release-readiness-guiding-light-2026-02.md",
+    "docs/architecture/v6-pricing-and-tiering.md",
+    "docs/architecture/ENTITLEMENT_MATRIX.md",
+    "docs/architecture/v6-acceptance-tests.md"
+  ],
+  "priority_engine": {
+    "formula": "behind_score = (max(0,target-current)*4) + criticality + staleness + dependency + blocker_bonus",
+    "floor_rule": {
+      "release_critical_lanes": [
+        "L1",
+        "L2",
+        "L3",
+        "L7",
+        "L8",
+        "L9",
+        "L10",
+        "L11",
+        "L12"
+      ],
+      "minimum_score": 6
+    },
+    "weights": {
+      "gap_multiplier": 4,
+      "criticality_range": "0-5",
+      "staleness_range": "0-3",
+      "dependency_range": "0-3",
+      "blocker_bonus": 8
+    }
+  },
+  "lanes": [
+    {
+      "id": "L1",
+      "name": "Self-hosted release confidence",
+      "target_score": 9,
+      "current_score": 9,
+      "status": "partial",
+      "evidence": [
+        "docs/architecture/v6-acceptance-tests.md"
+      ]
+    },
+    {
+      "id": "L2",
+      "name": "Conversion/commercial readiness",
+      "target_score": 9,
+      "current_score": 9,
+      "status": "partial",
+      "evidence": [
+        "docs/architecture/release-readiness-guiding-light-2026-02.md",
+        "docs/architecture/conversion-operations-runbook.md",
+        "/Volumes/Development/pulse/repos/pulse-pro/V6_LAUNCH_CHECKLIST.md"
+      ]
+    },
+    {
+      "id": "L3",
+      "name": "Cloud paid readiness",
+      "target_score": 8,
+      "current_score": 7,
+      "status": "partial",
+      "evidence": [
+        "docs/architecture/v6-pricing-and-tiering.md"
+      ]
+    },
+    {
+      "id": "L4",
+      "name": "Hosted MSP readiness",
+      "target_score": 6,
+      "current_score": 6,
+      "status": "partial",
+      "evidence": [
+        "docs/architecture/release-readiness-guiding-light-2026-02.md"
+      ]
+    },
+    {
+      "id": "L5",
+      "name": "Mobile go-live readiness",
+      "target_score": 8,
+      "current_score": 7,
+      "status": "partial",
+      "evidence": [
+        "/Volumes/Development/pulse/repos/pulse-pro/V6_LAUNCH_CHECKLIST.md",
+        "/Volumes/Development/pulse/repos/pulse-mobile/store/listing.md"
+      ]
+    },
+    {
+      "id": "L6",
+      "name": "Architecture coherence",
+      "target_score": 8,
+      "current_score": 7,
+      "status": "partial",
+      "evidence": [
+        "docs/architecture/state-read-consolidation-progress-2026-02.md",
+        "/Volumes/Development/pulse/repos/pulse-enterprise/docs/V6_REPO_REALIGNMENT.md"
+      ]
+    },
+    {
+      "id": "L7",
+      "name": "Relay infrastructure readiness",
+      "target_score": 9,
+      "current_score": 9,
+      "status": "partial",
+      "evidence": [
+        "/Volumes/Development/pulse/repos/pulse-pro/relay-server/",
+        "internal/relay/",
+        "/Volumes/Development/pulse/repos/pulse-mobile/src/relay/",
+        "docs/RELAY.md"
+      ]
+    },
+    {
+      "id": "L8",
+      "name": "First-session & UX polish",
+      "target_score": 8,
+      "current_score": 8,
+      "status": "partial",
+      "evidence": [
+        "frontend/src/pages/setup/",
+        "frontend/src/pages/settings/",
+        "tests/integration/"
+      ]
+    },
+    {
+      "id": "L9",
+      "name": "Documentation readiness",
+      "target_score": 8,
+      "current_score": 8,
+      "status": "partial",
+      "evidence": [
+        "docs/",
+        "docs/releases/RELEASE_NOTES_v6.md",
+        "README.md",
+        "/Volumes/Development/pulse/repos/pulse-pro/landing-page/"
+      ]
+    },
+    {
+      "id": "L10",
+      "name": "Performance & scalability",
+      "target_score": 8,
+      "current_score": 6,
+      "status": "partial",
+      "evidence": [
+        "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+        "tests/integration/02-navigation-perf.spec.ts",
+        "internal/api/http_metrics.go",
+        "pkg/metrics/store.go"
+      ]
+    },
+    {
+      "id": "L11",
+      "name": "v5-to-v6 migration safety",
+      "target_score": 8,
+      "current_score": 8,
+      "status": "partial",
+      "evidence": [
+        "tests/migration/v5_full_upgrade_test.go",
+        "tests/migration/v5_commercial_migration_test.go",
+        "tests/migration/v5_to_v6_test.go",
+        "tests/migration/v5_session_db_test.go",
+        "docs/UPGRADE_v6.md",
+        "docs/release-control/v6/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md",
+        "docs/release-control/v6/LEGACY_HOST_CLASSIFICATION_2026-03-05.md"
+      ]
+    },
+    {
+      "id": "L12",
+      "name": "E2E journey coverage",
+      "target_score": 8,
+      "current_score": 8,
+      "status": "partial",
+      "evidence": [
+        "tests/integration/tests/journeys/"
+      ]
+    }
+  ],
+  "open_decisions": [
+    "Create Cloud/MSP Stripe prices in Stripe and record concrete price_* IDs.",
+    "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings."
+  ],
+  "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+  "automation_state": {
+    "last_cycle_at": "2026-03-06T22:46:26+00:00",
+    "last_trigger": "stop-hook",
+    "last_outcome": "finding-fix-failed",
+    "selected_lane": "L10",
+    "selected_lane_name": "Performance & scalability",
+    "selected_lane_behind_score": 14,
+    "codex_verdict": "not-run",
+    "verification_verdict": "not-run",
+    "needs_human_decision": false,
+    "human_decision_note": "",
+    "last_log": "tmp/release-control/finding-fix-20260306T224519081270Z-stop-hook.json",
+    "lane_ranking": [
+      {
+        "id": "L10",
+        "behind_score": 14,
+        "current_score": 6,
+        "target_score": 8
+      },
+      {
+        "id": "L3",
+        "behind_score": 10,
+        "current_score": 7,
+        "target_score": 8
+      },
+      {
+        "id": "L5",
+        "behind_score": 9,
+        "current_score": 7,
+        "target_score": 8
+      },
+      {
+        "id": "L6",
+        "behind_score": 9,
+        "current_score": 7,
+        "target_score": 8
+      },
+      {
+        "id": "L1",
+        "behind_score": 6,
+        "current_score": 9,
+        "target_score": 9
+      },
+      {
+        "id": "L11",
+        "behind_score": 6,
+        "current_score": 8,
+        "target_score": 8
+      },
+      {
+        "id": "L12",
+        "behind_score": 6,
+        "current_score": 8,
+        "target_score": 8
+      },
+      {
+        "id": "L2",
+        "behind_score": 6,
+        "current_score": 9,
+        "target_score": 9
+      },
+      {
+        "id": "L7",
+        "behind_score": 6,
+        "current_score": 9,
+        "target_score": 9
+      },
+      {
+        "id": "L8",
+        "behind_score": 6,
+        "current_score": 8,
+        "target_score": 8
+      },
+      {
+        "id": "L9",
+        "behind_score": 6,
+        "current_score": 8,
+        "target_score": 8
+      },
+      {
+        "id": "L4",
+        "behind_score": 5,
+        "current_score": 6,
+        "target_score": 6
+      }
+    ]
+  },
+  "resolved_decisions": [
+    "2026-02-27: staged release policy locked; L4 Hosted MSP full portal is post-GA and not a GA floor gate.",
+    "2026-02-27: MSP pricing locked at Starter/Growth/Scale = $149/$249/$399 monthly (10/25/50 workspace breakpoints).",
+    "2026-02-27: Cloud/MSP Stripe mapping contract locked; concrete price IDs are operational fill-in tasks.",
+    "2026-03-05: host-type migration audit completed; release can proceed because remaining host references are compatibility boundaries, internal shims, or non-resource terminology.",
+    "2026-03-06: v5-to-v6 license migration bridge landed; persisted v5 Pro/Lifetime licenses auto-exchange on upgrade startup, valid v5 Pro/Lifetime keys are accepted as migration input in activation, and public migration guidance is now aligned without requiring a public CHANGELOG.md.",
+    "2026-03-07: v5 commercial migration truth table is now owned by v6 release-control, unresolved paid-license migration states persist in v6 billing/entitlements, and the migration suite covers startup failure classes that must block trial start while preserving downgrade safety."
+  ]
+}
