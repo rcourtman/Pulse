@@ -602,7 +602,6 @@ const toResource = (v2: APIResource): Resource => {
       ceph: v2.ceph,
       metrics: v2.metrics,
       discoveryTarget: v2.discoveryTarget,
-      canonicalIdentity: v2.canonicalIdentity,
     },
   };
 };

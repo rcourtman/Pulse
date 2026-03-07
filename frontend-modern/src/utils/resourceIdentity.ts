@@ -64,13 +64,7 @@ const formatIdentityTarget = (resourceType?: string, resourceId?: string): strin
 };
 
 const getCanonicalIdentityRecord = (resource: Resource): ResourceCanonicalIdentity | undefined => {
-  if (resource.canonicalIdentity) {
-    return resource.canonicalIdentity;
-  }
-  const canonical = getPlatformDataRecord(resource)?.canonicalIdentity;
-  return canonical && typeof canonical === 'object'
-    ? (canonical as ResourceCanonicalIdentity)
-    : undefined;
+  return resource.canonicalIdentity;
 };
 
 export const getPrimaryResourceIdentity = (resource: Resource): string => {
