@@ -620,7 +620,7 @@ func TestValidateSetupToken(t *testing.T) {
 	t.Run("empty token returns false", func(t *testing.T) {
 		h := &ConfigHandlers{
 			setupCodes:        make(map[string]*SetupCode),
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]recentSetupToken),
 		}
 
 		if h.ValidateSetupToken("") {
@@ -639,7 +639,7 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      false,
 				},
 			},
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]recentSetupToken),
 		}
 
 		if !h.ValidateSetupToken(token) {
@@ -658,7 +658,7 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      false,
 				},
 			},
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]recentSetupToken),
 		}
 
 		if h.ValidateSetupToken(token) {
@@ -677,7 +677,7 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      true, // Already used
 				},
 			},
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]recentSetupToken),
 		}
 
 		if h.ValidateSetupToken(token) {
@@ -685,19 +685,21 @@ func TestValidateSetupToken(t *testing.T) {
 		}
 	})
 
-	t.Run("valid recent setup token", func(t *testing.T) {
+	t.Run("valid recent setup token returns false", func(t *testing.T) {
 		token := "recent-setup-token-12345"
 		tokenHash := auth.HashAPIToken(token)
 
 		h := &ConfigHandlers{
 			setupCodes: make(map[string]*SetupCode),
-			recentSetupTokens: map[string]time.Time{
-				tokenHash: time.Now().Add(1 * time.Hour), // Valid for another hour
+			recentSetupTokens: map[string]recentSetupToken{
+				tokenHash: {
+					ExpiresAt: time.Now().Add(1 * time.Hour), // Grace window is auto-register only
+				},
 			},
 		}
 
-		if !h.ValidateSetupToken(token) {
-			t.Error("expected true for valid recent setup token")
+		if h.ValidateSetupToken(token) {
+			t.Error("expected false for recent setup token outside auto-register")
 		}
 	})
 
@@ -707,8 +709,10 @@ func TestValidateSetupToken(t *testing.T) {
 
 		h := &ConfigHandlers{
 			setupCodes: make(map[string]*SetupCode),
-			recentSetupTokens: map[string]time.Time{
-				tokenHash: time.Now().Add(-1 * time.Hour), // Expired
+			recentSetupTokens: map[string]recentSetupToken{
+				tokenHash: {
+					ExpiresAt: time.Now().Add(-1 * time.Hour), // Expired
+				},
 			},
 		}
 
@@ -720,7 +724,7 @@ func TestValidateSetupToken(t *testing.T) {
 	t.Run("non-existent token returns false", func(t *testing.T) {
 		h := &ConfigHandlers{
 			setupCodes:        make(map[string]*SetupCode),
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]recentSetupToken),
 		}
 
 		if h.ValidateSetupToken("non-existent-token") {
@@ -739,8 +743,10 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      false,
 				},
 			},
-			recentSetupTokens: map[string]time.Time{
-				tokenHash: time.Now().Add(1 * time.Hour),
+			recentSetupTokens: map[string]recentSetupToken{
+				tokenHash: {
+					ExpiresAt: time.Now().Add(1 * time.Hour),
+				},
 			},
 		}
 

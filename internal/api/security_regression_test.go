@@ -1826,6 +1826,9 @@ func TestAutoRegisterRequiresAuth(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without auth, got %d", rec.Code)
 	}
+	if !strings.Contains(rec.Body.String(), autoRegisterAuthMissing) {
+		t.Fatalf("expected missing-auth error, got %q", rec.Body.String())
+	}
 }
 
 func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
@@ -1841,6 +1844,26 @@ func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for missing required scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), autoRegisterAuthMissingScope) {
+		t.Fatalf("expected scope error, got %q", rec.Body.String())
+	}
+}
+
+func TestAutoRegisterRejectsInvalidAPIToken(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.configHandlers.SetConfig(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", "invalid-token-123.12345678")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid API token, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), autoRegisterAuthInvalidAPI) {
+		t.Fatalf("expected invalid API token error, got %q", rec.Body.String())
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,6 +64,9 @@ func TestHandleAutoRegisterRejectsWithoutAuth(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d, body=%s", rec.Code, rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), autoRegisterAuthMissing) {
+		t.Fatalf("expected missing-auth error, got %q", rec.Body.String())
+	}
 }
 
 func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
@@ -110,6 +114,146 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 
 	if len(cfg.PVEInstances) != 1 {
 		t.Fatalf("expected 1 PVE instance stored, got %d", len(cfg.PVEInstances))
+	}
+}
+
+func TestHandleAutoRegisterAcceptsRecentlyUsedSetupToken(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "ABCDEF1234567890ABCDEF1234567890"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		Used:      true,
+		NodeType:  "pve",
+	}
+	handler.recentSetupTokens[tokenHash] = recentSetupToken{
+		ExpiresAt: time.Now().Add(30 * time.Second),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pam!token",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleAutoRegisterRejectsUsedSetupTokenOutsideGrace(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "1234567890ABCDEF1234567890ABCDEF"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		Used:      true,
+		NodeType:  "pve",
+	}
+	handler.recentSetupTokens[tokenHash] = recentSetupToken{
+		ExpiresAt: time.Now().Add(-30 * time.Second),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pam!token",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), autoRegisterAuthUsedSetup) {
+		t.Fatalf("expected used-setup-token error, got %q", rec.Body.String())
+	}
+}
+
+func TestValidateAutoRegisterSetupTokenAcceptsGraceReplayAfterCleanupForMatchingType(t *testing.T) {
+	const tokenValue = "ABCDEF1234567890ABCDEF1234567890"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+
+	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()})
+	handler.codeMutex.Lock()
+	handler.recentSetupTokens[tokenHash] = recentSetupToken{
+		ExpiresAt: time.Now().Add(30 * time.Second),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	ok, reason := handler.validateAutoRegisterSetupToken(tokenValue, "pve")
+	if !ok {
+		t.Fatalf("expected grace replay to succeed, got ok=%v reason=%q", ok, reason)
+	}
+}
+
+func TestValidateAutoRegisterSetupTokenRejectsGraceReplayAfterCleanupForWrongType(t *testing.T) {
+	const tokenValue = "1234567890ABCDEF1234567890ABCDEF"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+
+	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()})
+	handler.codeMutex.Lock()
+	handler.recentSetupTokens[tokenHash] = recentSetupToken{
+		ExpiresAt: time.Now().Add(30 * time.Second),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	ok, reason := handler.validateAutoRegisterSetupToken(tokenValue, "pbs")
+	if ok {
+		t.Fatalf("expected grace replay to be rejected for wrong node type")
+	}
+	if reason != autoRegisterAuthSetupNodeType {
+		t.Fatalf("expected reason %q, got %q", autoRegisterAuthSetupNodeType, reason)
 	}
 }
 

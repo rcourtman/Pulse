@@ -43,6 +43,16 @@ var (
 	pulseTokenSlugPattern = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
+const (
+	autoRegisterAuthMissing       = "Pulse requires authentication"
+	autoRegisterAuthInvalidAPI    = "Invalid API token"
+	autoRegisterAuthMissingScope  = "API token missing required scope; requires settings:write or host-agent:report"
+	autoRegisterAuthExpiredSetup  = "Expired setup token"
+	autoRegisterAuthUsedSetup     = "Setup token already used"
+	autoRegisterAuthInvalidSetup  = "Invalid setup token"
+	autoRegisterAuthSetupNodeType = "Setup token is not valid for this node type"
+)
+
 func sanitizeInstallerURL(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -151,6 +161,11 @@ type SetupCode struct {
 	OrgID     string // Organization ID creating this code
 }
 
+type recentSetupToken struct {
+	ExpiresAt time.Time
+	NodeType  string
+}
+
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
 	mtPersistence *config.MultiTenantPersistence
@@ -164,9 +179,9 @@ type ConfigHandlers struct {
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	wsHub                    *websocket.Hub
 	guestMetadataHandler     *GuestMetadataHandler
-	setupCodes               map[string]*SetupCode // Map of code hash -> setup code details
-	recentSetupTokens        map[string]time.Time  // Temporary map for recently used setup tokens (grace period)
-	codeMutex                sync.RWMutex          // Mutex for thread-safe code access
+	setupCodes               map[string]*SetupCode       // Map of code hash -> setup code details
+	recentSetupTokens        map[string]recentSetupToken // Temporary map for recently used setup tokens (grace period)
+	codeMutex                sync.RWMutex                // Mutex for thread-safe code access
 	clusterDetectMutex       sync.Mutex
 	lastClusterDetection     map[string]time.Time
 	recentAutoRegistered     map[string]time.Time
@@ -206,7 +221,7 @@ func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.Multi
 		wsHub:                    wsHub,
 		guestMetadataHandler:     guestMetadataHandler,
 		setupCodes:               make(map[string]*SetupCode),
-		recentSetupTokens:        make(map[string]time.Time),
+		recentSetupTokens:        make(map[string]recentSetupToken),
 		lastClusterDetection:     make(map[string]time.Time),
 		recentAutoRegistered:     make(map[string]time.Time),
 	}
@@ -308,8 +323,8 @@ func (h *ConfigHandlers) cleanupExpiredCodes() {
 				log.Debug().Bool("was_used", code.Used).Msg("Cleaned up setup code")
 			}
 		}
-		for tokenHash, expiresAt := range h.recentSetupTokens {
-			if now.After(expiresAt) {
+		for tokenHash, recent := range h.recentSetupTokens {
+			if now.After(recent.ExpiresAt) {
 				delete(h.recentSetupTokens, tokenHash)
 			}
 		}
@@ -335,11 +350,51 @@ func (h *ConfigHandlers) ValidateSetupToken(token string) bool {
 		}
 	}
 
-	if expiresAt, ok := h.recentSetupTokens[tokenHash]; ok && now.Before(expiresAt) {
-		return true
+	return false
+}
+
+func (h *ConfigHandlers) validateAutoRegisterSetupToken(token, nodeType string) (bool, string) {
+	if strings.TrimSpace(token) == "" {
+		return false, autoRegisterAuthInvalidSetup
 	}
 
-	return false
+	tokenHash := internalauth.HashAPIToken(token)
+	now := time.Now()
+
+	h.codeMutex.Lock()
+	defer h.codeMutex.Unlock()
+
+	if recent, ok := h.recentSetupTokens[tokenHash]; ok && now.Before(recent.ExpiresAt) {
+		if recent.NodeType != "" && recent.NodeType != nodeType {
+			return false, autoRegisterAuthSetupNodeType
+		}
+		return true, ""
+	}
+
+	setupCode, exists := h.setupCodes[tokenHash]
+	if !exists {
+		return false, autoRegisterAuthInvalidSetup
+	}
+	if !now.Before(setupCode.ExpiresAt) {
+		return false, autoRegisterAuthExpiredSetup
+	}
+	if setupCode.NodeType != "" && setupCode.NodeType != nodeType {
+		return false, autoRegisterAuthSetupNodeType
+	}
+	if setupCode.Used {
+		return false, autoRegisterAuthUsedSetup
+	}
+
+	setupCode.Used = true
+	graceExpiry := now.Add(1 * time.Minute)
+	if setupCode.ExpiresAt.Before(graceExpiry) {
+		graceExpiry = setupCode.ExpiresAt
+	}
+	h.recentSetupTokens[tokenHash] = recentSetupToken{
+		ExpiresAt: graceExpiry,
+		NodeType:  setupCode.NodeType,
+	}
+	return true, ""
 }
 
 func (h *ConfigHandlers) markAutoRegistered(nodeType, nodeName string) {
@@ -5195,6 +5250,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 	// Check authentication - require either setup code or API token if auth is enabled
 	authenticated := false
+	authFailureReason := ""
 
 	// Support both setupCode (old) and authToken (new) fields
 	authCode := req.SetupCode
@@ -5240,88 +5296,87 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return ""
 	}
 
+	setAuthFailure := func(reason string) {
+		if reason == "" || authFailureReason != "" {
+			return
+		}
+		authFailureReason = reason
+	}
+
 	// First check for setup code/auth token in the request
 	if authCode != "" {
+		authCode = strings.TrimSpace(authCode)
+		authCodeLooksLikeSetupToken := setupAuthTokenPattern.MatchString(authCode)
 		matchedAPIToken := false
 		if h.getConfig(r.Context()).HasAPITokens() {
 			if record, ok := validateAPIToken(authCode); ok {
+				matchedAPIToken = true
 				// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
 				if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
 					authenticated = true
-					matchedAPIToken = true
 					log.Info().
 						Str("type", req.Type).
 						Str("host", req.Host).
 						Msg("Auto-register authenticated via direct API token")
 				} else {
+					setAuthFailure(autoRegisterAuthMissingScope)
 					log.Warn().
 						Str("type", req.Type).
 						Str("host", req.Host).
 						Msg("Auto-register rejected: API token missing required scope")
 				}
+			} else if !authCodeLooksLikeSetupToken {
+				setAuthFailure(autoRegisterAuthInvalidAPI)
 			}
+		} else if !authCodeLooksLikeSetupToken {
+			setAuthFailure(autoRegisterAuthInvalidAPI)
 		}
 
-		if !matchedAPIToken {
-			// Not the API token, check if it's a temporary setup code
+		if !authenticated && !matchedAPIToken && (authCodeLooksLikeSetupToken || !h.getConfig(r.Context()).HasAPITokens()) {
 			codeHash := internalauth.HashAPIToken(authCode)
 			log.Debug().
 				Bool("hasAuthCode", true).
 				Str("codeHash", safePrefixForLog(codeHash, 8)+"...").
 				Msg("Checking auth token as setup code")
-			h.codeMutex.Lock()
-			setupCode, exists := h.setupCodes[codeHash]
-			log.Debug().
-				Bool("exists", exists).
-				Int("totalCodes", len(h.setupCodes)).
-				Msg("Setup code lookup result")
-			if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
-				// Validate that the code matches the node type
-				// Note: We don't validate the host anymore as it may differ between
-				// what's entered in the UI and what's provided in the setup script URL
-				if setupCode.NodeType == req.Type {
-					setupCode.Used = true // Mark as used immediately
 
-					// Allow a short grace period for follow-up actions without keeping tokens alive too long
-					graceExpiry := time.Now().Add(1 * time.Minute)
-					if setupCode.ExpiresAt.Before(graceExpiry) {
-						graceExpiry = setupCode.ExpiresAt
-					}
-					h.recentSetupTokens[codeHash] = graceExpiry
-					authenticated = true
-					log.Info().
-						Str("type", req.Type).
-						Str("host", req.Host).
-						Bool("via_authToken", req.AuthToken != "").
-						Msg("Auto-register authenticated via setup code/token")
-				} else {
-					log.Warn().
-						Str("expected_type", setupCode.NodeType).
-						Str("got_type", req.Type).
-						Msg("Setup code validation failed - type mismatch")
-				}
-			} else if exists && setupCode.Used {
-				log.Warn().Msg("Setup code already used")
-			} else if exists {
-				log.Warn().Msg("Setup code expired")
+			if ok, reason := h.validateAutoRegisterSetupToken(authCode, req.Type); ok {
+				authenticated = true
+				log.Info().
+					Str("type", req.Type).
+					Str("host", req.Host).
+					Bool("via_authToken", req.AuthToken != "").
+					Msg("Auto-register authenticated via setup code/token")
 			} else {
-				log.Warn().Msg("Invalid setup code/token - not in setup codes map")
+				setAuthFailure(reason)
+				log.Warn().
+					Str("type", req.Type).
+					Str("host", req.Host).
+					Str("reason", reason).
+					Msg("Auto-register rejected: setup token validation failed")
 			}
-			h.codeMutex.Unlock()
 		}
 	}
 
 	// If not authenticated via setup code, check API token if configured
 	if !authenticated && h.getConfig(r.Context()).HasAPITokens() {
 		apiToken := requestAPIToken()
-		if record, ok := validateAPIToken(apiToken); ok {
-			// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
-			if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
-				authenticated = true
-				log.Info().Msg("Auto-register authenticated via API token")
+		if apiToken != "" {
+			if record, ok := validateAPIToken(apiToken); ok {
+				// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
+				if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
+					authenticated = true
+					log.Info().Msg("Auto-register authenticated via API token")
+				} else {
+					setAuthFailure(autoRegisterAuthMissingScope)
+					log.Warn().Msg("Auto-register rejected: API token missing required scope")
+				}
 			} else {
-				log.Warn().Msg("Auto-register rejected: API token missing required scope")
+				setAuthFailure(autoRegisterAuthInvalidAPI)
 			}
+		}
+	} else if !authenticated {
+		if apiToken := requestAPIToken(); apiToken != "" {
+			setAuthFailure(autoRegisterAuthInvalidAPI)
 		}
 	}
 
@@ -5331,13 +5386,13 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		log.Warn().
 			Str("ip", r.RemoteAddr).
 			Bool("has_auth_code", authCode != "").
+			Str("reason", authFailureReason).
 			Msg("Unauthorized auto-register attempt rejected")
 
-		if authCode == "" && r.Header.Get("X-API-Token") == "" {
-			http.Error(w, "Pulse requires authentication", http.StatusUnauthorized)
-		} else {
-			http.Error(w, "Invalid or expired setup code", http.StatusUnauthorized)
+		if authFailureReason == "" {
+			authFailureReason = autoRegisterAuthMissing
 		}
+		http.Error(w, authFailureReason, http.StatusUnauthorized)
 		return
 	}
 
