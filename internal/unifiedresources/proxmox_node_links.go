@@ -24,6 +24,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 	ambiguousKeys := make(map[string]struct{})
 	nodeIDToHostID := make(map[string]string)
 	ambiguousNodeIDs := make(map[string]struct{})
+	trustedHostIDs := make(map[string]struct{})
 	register := func(key, hostID string) {
 		key = strings.TrimSpace(key)
 		hostID = strings.TrimSpace(hostID)
@@ -66,6 +67,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		if host == nil || !trustedProxmoxNodeHostLink(node, *host) {
 			continue
 		}
+		trustedHostIDs[hostID] = struct{}{}
 		for _, key := range proxmoxNodeLinkKeys(node) {
 			register(key, hostID)
 		}
@@ -83,6 +85,7 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		if node == nil || !trustedHostProxmoxNodeLink(*host, *node) {
 			continue
 		}
+		trustedHostIDs[hostID] = struct{}{}
 		registerNode(nodeID, hostID)
 		for _, key := range proxmoxNodeLinkKeys(*node) {
 			register(key, hostID)
@@ -128,7 +131,20 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 			inferredHostID = hostID
 		}
 		if inferredHostID == "" {
-			continue
+			for hostID := range trustedHostIDs {
+				host := hostByID[hostID]
+				if host == nil || !proxmoxNodeCorroboratesHost(node, *host) {
+					continue
+				}
+				if inferredHostID != "" && inferredHostID != hostID {
+					inferredHostID = ""
+					break
+				}
+				inferredHostID = hostID
+			}
+			if inferredHostID == "" {
+				continue
+			}
 		}
 		if host := hostByID[inferredHostID]; host != nil {
 			out[nodeID] = host
