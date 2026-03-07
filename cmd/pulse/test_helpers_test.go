@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli"
 )
 
-func newTestCLIEnv() *cliEnv {
-	env := newCLIEnv()
-	env.exit = func(int) {}
+func newTestCLIEnv() *pulsecli.Env {
+	env := pulsecli.NewEnv()
+	env.Exit = func(int) {}
 	return env
 }
 

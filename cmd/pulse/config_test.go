@@ -9,9 +9,9 @@ import (
 func TestGetPassphrase_FromEnv(t *testing.T) {
 	env := newTestCLIEnv()
 	t.Setenv("PULSE_PASSPHRASE", "from-env")
-	env.passphrase = ""
+	env.Passphrase = ""
 
-	got := pulsecli.GetPassphrase(env.configDeps(), "ignored", false)
+	got := pulsecli.GetPassphrase(env.ConfigDeps(), "ignored", false)
 	if got != "from-env" {
 		t.Fatalf("got %q", got)
 	}
@@ -20,9 +20,9 @@ func TestGetPassphrase_FromEnv(t *testing.T) {
 func TestGetPassphrase_FromFlag(t *testing.T) {
 	env := newTestCLIEnv()
 	t.Setenv("PULSE_PASSPHRASE", "")
-	env.passphrase = "from-flag"
+	env.Passphrase = "from-flag"
 
-	got := pulsecli.GetPassphrase(env.configDeps(), "ignored", false)
+	got := pulsecli.GetPassphrase(env.ConfigDeps(), "ignored", false)
 	if got != "from-flag" {
 		t.Fatalf("got %q", got)
 	}

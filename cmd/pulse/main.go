@@ -9,7 +9,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/server"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 // Version information (set at build time with -ldflags)
@@ -20,58 +19,14 @@ var (
 	metricsPort = 9091
 )
 
-type cliEnv struct {
-	exportFile        string
-	importFile        string
-	passphrase        string
-	forceImport       bool
-	exit              func(int)
-	readPassword      func(int) ([]byte, error)
-	mockEnvDefaultDir string
-	mockEnvStat       func(string) (os.FileInfo, error)
-}
-
-func newCLIEnv() *cliEnv {
-	return &cliEnv{
-		exit:              os.Exit,
-		readPassword:      term.ReadPassword,
-		mockEnvDefaultDir: "/opt/pulse",
-		mockEnvStat:       os.Stat,
-	}
-}
-
-func (env *cliEnv) configDeps() *pulsecli.ConfigDeps {
-	return pulsecli.NewConfigDeps(
-		&env.exportFile,
-		&env.importFile,
-		&env.passphrase,
-		&env.forceImport,
-		env.readPassword,
-	)
-}
-
-func (env *cliEnv) bootstrapDeps() *pulsecli.BootstrapDeps {
-	return pulsecli.NewBootstrapDeps(env.exit)
-}
-
-func (env *cliEnv) mockDeps() *pulsecli.MockDeps {
-	return pulsecli.NewMockDeps(
-		env.exit,
-		func() string {
-			return env.mockEnvDefaultDir
-		},
-		env.mockEnvStat,
-	)
-}
-
 func runServer(ctx context.Context) error {
 	server.MetricsPort = metricsPort
 	return server.Run(ctx, Version)
 }
 
-func newRootCmd(env *cliEnv) *cobra.Command {
+func newRootCmd(env *pulsecli.Env) *cobra.Command {
 	if env == nil {
-		env = newCLIEnv()
+		env = pulsecli.NewEnv()
 	}
 	return pulsecli.NewRootCommand(pulsecli.Options{
 		Use:             "pulse",
@@ -81,24 +36,24 @@ func newRootCmd(env *cliEnv) *cobra.Command {
 		VersionTemplate: "Pulse {{.Version}}\n",
 		RunE:            runServer,
 		VersionPrinter:  printVersion,
-		Config:          env.configDeps(),
-		Bootstrap:       env.bootstrapDeps(),
-		Mock:            env.mockDeps(),
+		Config:          env.ConfigDeps(),
+		Bootstrap:       env.BootstrapDeps(),
+		Mock:            env.MockDeps(),
 	})
 }
 
-func executeCLI(env *cliEnv, args []string) error {
+func executeCLI(env *pulsecli.Env, args []string) error {
 	cmd := newRootCmd(env)
 	cmd.SetArgs(args)
 	return cmd.Execute()
 }
 
-func runMain(env *cliEnv, args []string) {
+func runMain(env *pulsecli.Env, args []string) {
 	if env == nil {
-		env = newCLIEnv()
+		env = pulsecli.NewEnv()
 	}
 	if err := executeCLI(env, args); err != nil {
-		env.exit(1)
+		env.Exit(1)
 	}
 }
 
@@ -113,7 +68,7 @@ func printVersion(w io.Writer) {
 }
 
 func main() {
-	runMain(newCLIEnv(), os.Args[1:])
+	runMain(pulsecli.NewEnv(), os.Args[1:])
 }
 
 // Force rebuild 1769525035

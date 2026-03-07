@@ -24,6 +24,63 @@ type MockDeps struct {
 	Stat          func(string) (os.FileInfo, error)
 }
 
+type Env struct {
+	ExportFile        string
+	ImportFile        string
+	Passphrase        string
+	ForceImport       bool
+	Exit              func(int)
+	ReadPassword      func(int) ([]byte, error)
+	MockEnvDefaultDir string
+	MockEnvStat       func(string) (os.FileInfo, error)
+}
+
+func NewEnv() *Env {
+	return &Env{
+		Exit:              os.Exit,
+		ReadPassword:      term.ReadPassword,
+		MockEnvDefaultDir: "/opt/pulse",
+		MockEnvStat:       os.Stat,
+	}
+}
+
+func (env *Env) ConfigDeps() *ConfigDeps {
+	if env == nil {
+		env = NewEnv()
+	}
+	return NewConfigDeps(
+		&env.ExportFile,
+		&env.ImportFile,
+		&env.Passphrase,
+		&env.ForceImport,
+		env.ReadPassword,
+	)
+}
+
+func (env *Env) BootstrapDeps() *BootstrapDeps {
+	if env == nil {
+		env = NewEnv()
+	}
+	return NewBootstrapDeps(env.Exit)
+}
+
+func (env *Env) MockDeps() *MockDeps {
+	if env == nil {
+		env = NewEnv()
+	}
+	return NewMockDeps(
+		env.Exit,
+		func() string {
+			return env.MockEnvDefaultDir
+		},
+		env.MockEnvStat,
+	)
+}
+
+func (env *Env) ResetFlags() {
+	ResetFlags(env.ConfigDeps())
+}
+
 func NewConfigDeps(exportFile, importFile, passphrase *string, forceImport *bool, readPassword func(int) ([]byte, error)) *ConfigDeps {
 	return &ConfigDeps{
 		ExportFile:   exportFile,

@@ -83,7 +83,7 @@ func TestMainActual(t *testing.T) {
 
 	env := newTestCLIEnv()
 	exitCode := 0
-	env.exit = func(code int) { exitCode = code }
+	env.Exit = func(code int) { exitCode = code }
 
 	runMain(env, []string{"version"})
 	assert.Equal(t, 0, exitCode)
