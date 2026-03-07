@@ -37,6 +37,22 @@ func (p resourceUnifiedSeedProvider) UnifiedResourceSnapshot() ([]unified.Resour
 	return out, p.snapshot.LastUpdate
 }
 
+type mutableResourceUnifiedSeedProvider struct {
+	snapshot  models.StateSnapshot
+	resources []unified.Resource
+	freshness time.Time
+}
+
+func (p *mutableResourceUnifiedSeedProvider) ReadSnapshot() models.StateSnapshot {
+	return p.snapshot
+}
+
+func (p *mutableResourceUnifiedSeedProvider) UnifiedResourceSnapshot() ([]unified.Resource, time.Time) {
+	out := make([]unified.Resource, len(p.resources))
+	copy(out, p.resources)
+	return out, p.freshness
+}
+
 type mockSupplementalRecordsProvider struct {
 	records      []unified.IngestRecord
 	ownedSources []unified.DataSource
@@ -185,6 +201,78 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	}
 	if got := resp.Data[0].Name; got != "seeded-agent" {
 		t.Fatalf("resource name = %q, want seeded-agent", got)
+	}
+}
+
+func TestResourceListInvalidatesUnifiedSeedCacheOnFreshnessChange(t *testing.T) {
+	now := time.Now().UTC()
+	provider := &mutableResourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "agent-seeded-1",
+				Type:      unified.ResourceTypeAgent,
+				Name:      "seeded-agent-old",
+				Status:    unified.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceAgent},
+				Identity: unified.ResourceIdentity{
+					Hostnames: []string{"seeded-agent-old"},
+				},
+			},
+		},
+		freshness: now,
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(provider)
+
+	firstRec := httptest.NewRecorder()
+	firstReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	h.HandleListResources(firstRec, firstReq)
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body=%s", firstRec.Code, firstRec.Body.String())
+	}
+
+	var firstResp ResourcesResponse
+	if err := json.NewDecoder(firstRec.Body).Decode(&firstResp); err != nil {
+		t.Fatalf("decode first response: %v", err)
+	}
+	if len(firstResp.Data) != 1 || firstResp.Data[0].Name != "seeded-agent-old" {
+		t.Fatalf("unexpected first response: %#v", firstResp.Data)
+	}
+
+	provider.resources = []unified.Resource{
+		{
+			ID:        "agent-seeded-2",
+			Type:      unified.ResourceTypeAgent,
+			Name:      "seeded-agent-new",
+			Status:    unified.StatusOnline,
+			LastSeen:  now.Add(time.Minute),
+			UpdatedAt: now.Add(time.Minute),
+			Sources:   []unified.DataSource{unified.SourceAgent},
+			Identity: unified.ResourceIdentity{
+				Hostnames: []string{"seeded-agent-new"},
+			},
+		},
+	}
+	provider.freshness = now.Add(time.Minute)
+
+	secondRec := httptest.NewRecorder()
+	secondReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	h.HandleListResources(secondRec, secondReq)
+	if secondRec.Code != http.StatusOK {
+		t.Fatalf("second status = %d, body=%s", secondRec.Code, secondRec.Body.String())
+	}
+
+	var secondResp ResourcesResponse
+	if err := json.NewDecoder(secondRec.Body).Decode(&secondResp); err != nil {
+		t.Fatalf("decode second response: %v", err)
+	}
+	if len(secondResp.Data) != 1 || secondResp.Data[0].Name != "seeded-agent-new" {
+		t.Fatalf("expected cache invalidation after freshness change, got %#v", secondResp.Data)
 	}
 }
 
