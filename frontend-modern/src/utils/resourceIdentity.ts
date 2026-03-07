@@ -14,6 +14,20 @@ export type ResourceIdentityRow = {
   value: string;
 };
 
+type APINormalizedIdentityResource = {
+  id: string;
+  name?: string;
+  proxmox?: {
+    nodeName?: string;
+  };
+  agent?: {
+    hostname?: string;
+  };
+  docker?: {
+    hostname?: string;
+  };
+};
+
 const asTrimmedString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -162,6 +176,15 @@ export const getPreferredConfiguredNodeLabel = (
   asTrimmedString(node.name) ||
   asTrimmedString(node.host) ||
   node.id;
+
+export const getPreferredNormalizedPlatformId = (
+  resource: APINormalizedIdentityResource,
+): string =>
+  asTrimmedString(resource.proxmox?.nodeName) ||
+  asTrimmedString(resource.agent?.hostname) ||
+  asTrimmedString(resource.docker?.hostname) ||
+  asTrimmedString(resource.name) ||
+  resource.id;
 
 export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIdentityRow[] => {
   const rows: ResourceIdentityRow[] = [];

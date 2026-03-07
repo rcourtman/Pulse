@@ -5,6 +5,7 @@ import {
   getAgentLikeIdentityAliases,
   getAgentLikeMetadataIds,
   getPreferredConfiguredNodeLabel,
+  getPreferredNormalizedPlatformId,
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
   getPreferredResourceDisplayName,
@@ -233,6 +234,27 @@ describe('resourceIdentity', () => {
         host: 'pbs.local',
       } as never),
     ).toBe('pbs.local');
+  });
+
+  it('resolves normalized platform ids with source-aware precedence', () => {
+    expect(
+      getPreferredNormalizedPlatformId({
+        id: 'resource-1',
+        name: 'fallback-name',
+        proxmox: { nodeName: 'pve-node-1' },
+        agent: { hostname: 'agent-host.local' },
+        docker: { hostname: 'docker-host.local' },
+      }),
+    ).toBe('pve-node-1');
+
+    expect(
+      getPreferredNormalizedPlatformId({
+        id: 'resource-2',
+        name: 'fallback-name',
+        agent: { hostname: 'agent-host.local' },
+        docker: { hostname: 'docker-host.local' },
+      }),
+    ).toBe('agent-host.local');
   });
 
   it('resolves shared resource hostnames and display names', () => {

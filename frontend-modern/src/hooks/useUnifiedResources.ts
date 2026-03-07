@@ -15,6 +15,7 @@ import { normalizeDiskArray } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
+import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,pbs,pmg,k8s-cluster,k8s-node';
@@ -490,8 +491,7 @@ const toResource = (v2: APIResource): Resource => {
   const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
   const name = v2.name || v2.id;
-  const platformId =
-    v2.proxmox?.nodeName || v2.agent?.hostname || v2.docker?.hostname || name || v2.id;
+  const platformId = getPreferredNormalizedPlatformId(v2);
 
   const discoveryResourceType = resolveDiscoveryResourceType(v2.discoveryTarget?.resourceType);
   const discoveryAgentId = v2.discoveryTarget?.agentId;

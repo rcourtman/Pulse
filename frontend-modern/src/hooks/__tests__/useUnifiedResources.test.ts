@@ -252,6 +252,37 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('derives normalized platformId through the shared identity helper precedence', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'docker-runtime-1',
+            type: 'agent',
+            name: 'fallback-name',
+            proxmox: undefined,
+            agent: { hostname: 'agent-host.local' },
+            docker: { hostname: 'docker-host.local' },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].platformId).toBe('agent-host.local');
+
+    dispose();
+  });
+
   it('uses backend resources as canonical infrastructure state even with non-canonical websocket fields', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
