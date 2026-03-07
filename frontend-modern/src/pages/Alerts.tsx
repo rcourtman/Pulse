@@ -21,6 +21,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { notificationStore } from '@/stores/notifications';
+import { showError as showErrorToast } from '@/utils/toast';
 import { eventBus } from '@/stores/events';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
@@ -59,10 +60,7 @@ import type { Incident, PBSInstance, PMGInstance } from '@/types/api';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
-import {
-  getActionableAgentIdFromResource,
-  hasAgentFacet,
-} from '@/utils/agentResources';
+import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { filterIncidentEvents } from '@/features/alerts/types';
@@ -2447,9 +2445,9 @@ function DestinationsTab(props: DestinationsTabProps) {
       notificationStore.success('Test email sent successfully! Check your inbox.');
     } catch (err) {
       logger.error('Failed to send test email:', err);
-      notificationStore.error(
-        'Failed to send test email: ' + (err instanceof Error ? err.message : 'Unknown error'),
-      );
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const detail = (err as Error & { detail?: string })?.detail;
+      showErrorToast('Failed to send test email: ' + msg, detail);
     } finally {
       setTestingEmail(false);
     }
@@ -2479,10 +2477,9 @@ function DestinationsTab(props: DestinationsTabProps) {
       notificationStore.success('Test Apprise notification sent successfully!');
     } catch (err) {
       logger.error('Failed to send test Apprise notification:', err);
-      notificationStore.error(
-        'Failed to send test Apprise notification: ' +
-          (err instanceof Error ? err.message : 'Unknown error'),
-      );
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const detail = (err as Error & { detail?: string })?.detail;
+      showErrorToast('Failed to send test Apprise notification: ' + msg, detail);
     } finally {
       setTestingApprise(false);
     }
@@ -2500,9 +2497,9 @@ function DestinationsTab(props: DestinationsTabProps) {
       }
       notificationStore.success('Test webhook sent successfully!');
     } catch (err) {
-      notificationStore.error(
-        'Failed to send test webhook: ' + (err instanceof Error ? err.message : 'Unknown error'),
-      );
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const detail = (err as Error & { detail?: string })?.detail;
+      showErrorToast('Failed to send test webhook: ' + msg, detail);
     } finally {
       setTestingWebhook(null);
     }

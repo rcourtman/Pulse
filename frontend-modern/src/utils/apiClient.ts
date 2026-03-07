@@ -614,6 +614,7 @@ class ApiClient {
       let errorMessage = text;
 
       // First try to parse as JSON (our API returns structured errors like {error, message, feature, upgrade_url})
+      let errorDetail: string | undefined;
       try {
         const jsonError = JSON.parse(text);
         if (jsonError.message) {
@@ -621,6 +622,9 @@ class ApiClient {
         } else if (jsonError.error && typeof jsonError.error === 'string') {
           // Some APIs return {error: "message"} format
           errorMessage = jsonError.error;
+        }
+        if (typeof jsonError.detail === 'string') {
+          errorDetail = jsonError.detail;
         }
       } catch {
         // Not JSON, try other formats
@@ -640,7 +644,11 @@ class ApiClient {
         }
       }
 
-      throw new Error(errorMessage || `Request failed with status ${response.status}`);
+      const err = new Error(errorMessage || `Request failed with status ${response.status}`);
+      if (errorDetail) {
+        (err as Error & { detail?: string }).detail = errorDetail;
+      }
+      throw err;
     }
 
     const text = await response.text();

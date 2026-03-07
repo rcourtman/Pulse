@@ -82,6 +82,36 @@ func TestResolveAlias_WithAliases(t *testing.T) {
 	}
 }
 
+func TestResolveAlias_CanonicalFeatureKeysRemainStable(t *testing.T) {
+	keys := []string{
+		FeatureUpdateAlerts,
+		FeatureSSO,
+		FeatureAIPatrol,
+		FeatureRelay,
+		FeatureMobileApp,
+		FeaturePushNotifications,
+		FeatureLongTermMetrics,
+		FeatureAIAlerts,
+		FeatureAIAutoFix,
+		FeatureKubernetesAI,
+		FeatureAgentProfiles,
+		FeatureRBAC,
+		FeatureAuditLogging,
+		FeatureAdvancedSSO,
+		FeatureAdvancedReporting,
+		FeatureMultiUser,
+		FeatureWhiteLabel,
+		FeatureMultiTenant,
+		FeatureUnlimited,
+	}
+
+	for _, key := range keys {
+		if got := ResolveAlias(key); got != key {
+			t.Fatalf("ResolveAlias(%q) = %q, want canonical passthrough", key, got)
+		}
+	}
+}
+
 func TestIsDeprecated(t *testing.T) {
 	tests := []struct {
 		name              string

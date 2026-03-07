@@ -298,6 +298,58 @@ func TestDatabaseSourceLeaseOnlyStateResolvesTrialEntitlement(t *testing.T) {
 	}
 }
 
+func TestDatabaseSourceLeaseHostMismatchFailsClosed(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	embeddedBefore := EmbeddedPublicKey
+	EmbeddedPublicKey = ""
+	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
+	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	now := time.Now().UTC()
+	trialState := BuildTrialBillingState(now, []string{FeatureAIAutoFix})
+	token, err := SignEntitlementLeaseToken(priv, EntitlementLeaseClaims{
+		OrgID:             "org-1",
+		InstanceHost:      "pulse-a.example.com",
+		PlanVersion:       trialState.PlanVersion,
+		SubscriptionState: trialState.SubscriptionState,
+		Capabilities:      append([]string(nil), trialState.Capabilities...),
+		Limits:            map[string]int64{"max_agents": 25},
+		TrialStartedAt:    trialState.TrialStartedAt,
+		TrialEndsAt:       trialState.TrialEndsAt,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(time.Unix(*trialState.TrialEndsAt, 0).UTC()),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken: %v", err)
+	}
+
+	store := &mockBillingStore{
+		state: &BillingState{
+			EntitlementJWT: token,
+			TrialStartedAt: trialState.TrialStartedAt,
+		},
+	}
+	source := NewDatabaseSource(store, "org-1", time.Hour).WithExpectedInstanceHost("pulse-b.example.com")
+
+	if got := source.SubscriptionState(); got != SubStateExpired {
+		t.Fatalf("expected subscription_state %q on host mismatch, got %q", SubStateExpired, got)
+	}
+	if got := source.Capabilities(); got != nil && len(got) != 0 {
+		t.Fatalf("expected capabilities to be stripped on host mismatch, got %v", got)
+	}
+	if got := source.Limits(); got != nil && len(got) != 0 {
+		t.Fatalf("expected limits to be stripped on host mismatch, got %v", got)
+	}
+	if got := source.TrialStartedAt(); got == nil || *got != *trialState.TrialStartedAt {
+		t.Fatalf("expected trial_started_at %v to be preserved, got %v", trialState.TrialStartedAt, got)
+	}
+}
+
 func TestDatabaseSourceImplementsEntitlementSource(t *testing.T) {
 	t.Helper()
 	var _ EntitlementSource = (*DatabaseSource)(nil)

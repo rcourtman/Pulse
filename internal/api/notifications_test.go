@@ -688,6 +688,130 @@ func TestNotificationHandlers(t *testing.T) {
 	})
 }
 
+func TestClassifyNotificationError(t *testing.T) {
+	tests := []struct {
+		name           string
+		err            string
+		wantSummary    string
+		wantHasDetail  bool
+		summaryMustNot []string // substrings that must NOT appear in summary
+	}{
+		{
+			name:           "connection refused",
+			err:            "dial tcp smtp.gmail.com:587: connect: connection refused",
+			wantSummary:    "Could not connect to the server — check host, port, and firewall settings",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"dial tcp"},
+		},
+		{
+			name:           "no such host",
+			err:            "dial tcp: lookup smtp.example.com: no such host",
+			wantSummary:    "Server hostname not found — check the server address",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"dial tcp"},
+		},
+		{
+			name:           "i/o timeout",
+			err:            "dial tcp 10.0.0.1:587: i/o timeout",
+			wantSummary:    "Connection timed out — the server may be unreachable or the port may be blocked",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"dial tcp"},
+		},
+		{
+			name:           "context deadline exceeded",
+			err:            "context deadline exceeded",
+			wantSummary:    "Connection timed out — the server may be unreachable or the port may be blocked",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"context"},
+		},
+		{
+			name:           "x509 certificate error",
+			err:            "x509: certificate signed by unknown authority",
+			wantSummary:    "TLS certificate error — check certificate settings or try enabling 'Skip TLS Verify'",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"x509:"},
+		},
+		{
+			name:           "smtp auth failure",
+			err:            "535 5.7.8 Username and Password not accepted",
+			wantSummary:    "Authentication failed — check username and password",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"535"},
+		},
+		{
+			name:           "executable not found",
+			err:            `exec: "apprise": executable file not found in $PATH`,
+			wantSummary:    "Required program not found — ensure it is installed on the server",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"exec:"},
+		},
+		{
+			name:           "permission denied",
+			err:            "open /etc/ssl/certs: permission denied",
+			wantSummary:    "Permission denied — the server process lacks access to the required resource",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"open /etc"},
+		},
+		{
+			name:           "eof",
+			err:            "read tcp 192.168.1.1:587: EOF",
+			wantSummary:    "The server closed the connection unexpectedly — check if TLS/StartTLS settings are correct",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"read tcp"},
+		},
+		{
+			name:          "unknown error passes through",
+			err:           "some unknown error",
+			wantSummary:   "some unknown error",
+			wantHasDetail: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary, detail := classifyNotificationError(fmt.Errorf("%s", tt.err))
+			assert.Equal(t, tt.wantSummary, summary)
+			if tt.wantHasDetail {
+				assert.Equal(t, tt.err, detail, "detail should contain original error")
+			} else {
+				assert.Empty(t, detail, "detail should be empty for unclassified errors")
+			}
+			for _, banned := range tt.summaryMustNot {
+				assert.NotContains(t, summary, banned, "summary must not contain Go internal prefix %q", banned)
+			}
+		})
+	}
+}
+
+func TestWriteTestNotificationError(t *testing.T) {
+	t.Run("classified error returns JSON with detail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		err := fmt.Errorf("dial tcp smtp.gmail.com:587: connect: connection refused")
+		writeTestNotificationError(w, err, http.StatusBadRequest)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+
+		var resp map[string]string
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "Could not connect to the server — check host, port, and firewall settings", resp["error"])
+		assert.Equal(t, "dial tcp smtp.gmail.com:587: connect: connection refused", resp["detail"])
+	})
+
+	t.Run("unclassified error returns JSON without detail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		err := fmt.Errorf("some unknown error")
+		writeTestNotificationError(w, err, http.StatusBadRequest)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var resp map[string]string
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.Equal(t, "some unknown error", resp["error"])
+		assert.Empty(t, resp["detail"])
+	})
+}
+
 func TestNotificationHandlers_SetMonitorConcurrentAccess(t *testing.T) {
 	mockMonitor1 := new(MockNotificationMonitor)
 	mockMonitor2 := new(MockNotificationMonitor)

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -65,5 +66,17 @@ func TestSSOSnapshotSave_RollsBackOnPersistenceFailure(t *testing.T) {
 	}
 	if router.ssoConfig.Providers[0].ID != "original-provider" {
 		t.Fatalf("expected original provider to remain after rollback, got %q", router.ssoConfig.Providers[0].ID)
+	}
+}
+
+func TestNewSSOAdminRuntimeRequireFeatureFailsClosedWhenLicenseUnavailable(t *testing.T) {
+	runtimeHooks := newSSOAdminRuntime(nil)
+
+	err := runtimeHooks.RequireFeature(context.Background(), "advanced_sso")
+	if err == nil {
+		t.Fatal("expected RequireFeature to fail when license service is unavailable")
+	}
+	if got := err.Error(); got != "license service unavailable" {
+		t.Fatalf("RequireFeature error = %q, want %q", got, "license service unavailable")
 	}
 }

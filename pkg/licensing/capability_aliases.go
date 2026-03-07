@@ -4,8 +4,10 @@ import "time"
 
 // LegacyAliases maps old feature/capability names to their canonical replacements.
 // When HasCapability receives an aliased key, it checks for the canonical key.
+// Keep this empty until a real wire-level rename ships; speculative aliases
+// become part of the compatibility contract and are costly to remove.
 var LegacyAliases = map[string]string{
-	// Example aliases - these will be populated as features are renamed.
+	// Example aliases for an actual migration:
 	// "old_feature_name": "new_feature_name",
 }
 
@@ -20,8 +22,10 @@ type DeprecatedCapability struct {
 
 // DeprecatedCapabilities maps capability keys to their deprecation metadata.
 // Evaluator logs warnings when deprecated keys are checked.
+// Keep this empty until an actual deprecation window is defined in product and
+// migration plans.
 var DeprecatedCapabilities = map[string]DeprecatedCapability{
-	// Example deprecations - these will be populated as capabilities are sunset.
+	// Example deprecations for an actual migration:
 	// "old_capability": {ReplacementKey: "new_capability", SunsetAt: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)},
 }
 

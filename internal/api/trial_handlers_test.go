@@ -792,3 +792,61 @@ func TestRefreshHostedEntitlementLeaseOnce_PermanentFailureClearsLocalEntitlemen
 		t.Fatalf("raw trial_started_at=%v, want non-nil positive timestamp", rawState.TrialStartedAt)
 	}
 }
+
+func TestRefreshHostedEntitlementLeaseOnce_HostMismatchLeavesStateUnchanged(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	refreshServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/entitlements/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(hostedTrialLeaseRefreshResponse{
+			EntitlementJWT: issueTrialEntitlementLease(t, priv, "default", "pulse-b.example.com", "owner@example.com", time.Now()),
+		})
+	}))
+	defer refreshServer.Close()
+
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		PublicURL:         "https://pulse.example.com",
+		ProTrialSignupURL: refreshServer.URL + "/start-pro-trial",
+	})
+
+	store := config.NewFileBillingStore(baseDir)
+	startedAt := time.Now().Add(-13 * 24 * time.Hour).Unix()
+	originalLease := issueTrialEntitlementLease(t, priv, "default", "pulse.example.com", "owner@example.com", time.Now().Add(-15*24*time.Hour))
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		EntitlementJWT:          originalLease,
+		EntitlementRefreshToken: "etr_test_default",
+		TrialStartedAt:          &startedAt,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	refreshed, permanent, err := h.refreshHostedEntitlementLeaseOnce("default", nil)
+	if err == nil {
+		t.Fatal("expected refreshHostedEntitlementLeaseOnce to fail on host mismatch")
+	}
+	if refreshed || permanent {
+		t.Fatalf("refreshed=%v permanent=%v, want refreshed=false permanent=false", refreshed, permanent)
+	}
+
+	state, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if state == nil {
+		t.Fatal("expected billing state to remain present")
+	}
+	if state.EntitlementJWT != originalLease {
+		t.Fatal("expected original entitlement_jwt to remain unchanged after host mismatch")
+	}
+}

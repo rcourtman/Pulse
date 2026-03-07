@@ -609,6 +609,17 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 			LogAuditEventForTenant(GetOrgID(ctx), event, "", clientIP, path, success, message)
 		},
 		WriteError: writeErrorResponse,
+		RequireFeature: func(ctx context.Context, feature string) error {
+			if router == nil || router.licenseHandlers == nil {
+				return fmt.Errorf("license service unavailable")
+			}
+			svc := router.licenseHandlers.Service(ctx)
+			if svc == nil {
+				return fmt.Errorf("license service unavailable")
+			}
+			return svc.RequireFeature(feature)
+		},
+		WriteLicenseRequired: WriteLicenseRequired,
 	}
 
 	if router == nil {
@@ -644,17 +655,6 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		}
 		return router.config.PublicURL
 	}
-	runtime.RequireFeature = func(ctx context.Context, feature string) error {
-		if router == nil || router.licenseHandlers == nil {
-			return nil
-		}
-		svc := router.licenseHandlers.Service(ctx)
-		if svc == nil {
-			return nil
-		}
-		return svc.RequireFeature(feature)
-	}
-	runtime.WriteLicenseRequired = WriteLicenseRequired
 	runtime.InitializeSAMLProvider = func(ctx context.Context, id string, samlCfg *extensions.SAMLProviderConfig) error {
 		if router == nil || router.samlManager == nil || samlCfg == nil {
 			return nil

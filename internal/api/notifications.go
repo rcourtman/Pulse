@@ -497,6 +497,49 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// classifyNotificationError maps raw Go errors to user-friendly summaries.
+// Returns a user-facing message and the original error string as detail.
+func classifyNotificationError(err error) (summary, detail string) {
+	raw := err.Error()
+	detail = raw
+	lower := strings.ToLower(raw)
+
+	switch {
+	case strings.Contains(lower, "connection refused"):
+		summary = "Could not connect to the server — check host, port, and firewall settings"
+	case strings.Contains(lower, "no such host"):
+		summary = "Server hostname not found — check the server address"
+	case strings.Contains(lower, "i/o timeout") || strings.Contains(lower, "deadline exceeded"):
+		summary = "Connection timed out — the server may be unreachable or the port may be blocked"
+	case strings.Contains(lower, "x509:") || strings.Contains(lower, "certificate"):
+		summary = "TLS certificate error — check certificate settings or try enabling 'Skip TLS Verify'"
+	case strings.Contains(lower, "535") || strings.Contains(lower, "authentication"):
+		summary = "Authentication failed — check username and password"
+	case strings.Contains(lower, "executable file not found"):
+		summary = "Required program not found — ensure it is installed on the server"
+	case strings.Contains(lower, "permission denied"):
+		summary = "Permission denied — the server process lacks access to the required resource"
+	case strings.Contains(lower, "eof"):
+		summary = "The server closed the connection unexpectedly — check if TLS/StartTLS settings are correct"
+	default:
+		summary = raw
+		detail = ""
+	}
+	return summary, detail
+}
+
+// writeTestNotificationError writes a JSON error response for test notification failures.
+func writeTestNotificationError(w http.ResponseWriter, err error, statusCode int) {
+	summary, detail := classifyNotificationError(err)
+	resp := map[string]string{"error": summary}
+	if detail != "" {
+		resp["detail"] = detail
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(resp)
+}
+
 // TestNotification sends a test notification
 func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, notificationTestRequestBodyLimit)
@@ -569,7 +612,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 
 		// Send test webhook
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestWebhook(*foundWebhook); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	} else if req.Method == "email" && len(req.Config) > 0 {
@@ -595,7 +638,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			Msg("Testing email with provided config")
 
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestNotificationWithConfig(req.Method, &emailConfig, nodeInfo); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	} else if req.Method == "apprise" && len(req.Config) > 0 {
@@ -606,13 +649,13 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		}
 
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestAppriseWithConfig(appriseConfig); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	} else {
 		// Use saved config
 		if err := h.getMonitor(r.Context()).GetNotificationManager().SendTestNotification(req.Method); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeTestNotificationError(w, err, http.StatusBadRequest)
 			return
 		}
 	}
@@ -823,7 +866,11 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err != nil {
-		result["error"] = err.Error()
+		summary, detail := classifyNotificationError(err)
+		result["error"] = summary
+		if detail != "" {
+			result["detail"] = detail
+		}
 		w.WriteHeader(http.StatusBadRequest)
 	} else if status < 200 || status >= 300 {
 		// HTTP error from webhook endpoint
