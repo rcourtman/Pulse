@@ -146,6 +146,28 @@ func (s *jtiReplayStore) checkAndStore(jti string, expiresAt time.Time) (stored 
 	return true, nil
 }
 
+func (s *jtiReplayStore) delete(jti string) error {
+	s.init()
+	if s.initErr != nil {
+		return s.initErr
+	}
+	if s.db == nil {
+		return fmt.Errorf("handoff jti store not initialized")
+	}
+	jti = strings.TrimSpace(jti)
+	if jti == "" {
+		return fmt.Errorf("jti is required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, err := s.db.Exec(`DELETE FROM handoff_jti WHERE jti = ?`, jti); err != nil {
+		return fmt.Errorf("delete handoff jti: %w", err)
+	}
+	return nil
+}
+
 func isSQLiteUniqueViolation(err error) bool {
 	if err == nil {
 		return false

@@ -108,6 +108,7 @@ func TestHostedLifecycle(t *testing.T) {
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
 		handlers := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
+		handlers.trialRedeemer = func(string) error { return nil }
 
 		ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 
@@ -211,6 +212,7 @@ func TestHostedLifecycle(t *testing.T) {
 		baseDir := t.TempDir()
 		mtp := config.NewMultiTenantPersistence(baseDir)
 		handlers := NewLicenseHandlers(mtp, false, &config.Config{PublicURL: "https://pulse.example.com"})
+		handlers.trialRedeemer = func(string) error { return nil }
 
 		pub, priv, err := ed25519.GenerateKey(nil)
 		if err != nil {

@@ -150,6 +150,31 @@ func TestJTIReplayStoreCheckAndStore(t *testing.T) {
 	}
 }
 
+func TestJTIReplayStoreDelete(t *testing.T) {
+	store := &jtiReplayStore{configDir: t.TempDir()}
+	expires := time.Now().Add(time.Hour)
+
+	stored, err := store.checkAndStore("abc123", expires)
+	if err != nil {
+		t.Fatalf("checkAndStore() error = %v", err)
+	}
+	if !stored {
+		t.Fatal("checkAndStore() = false, want true")
+	}
+
+	if err := store.delete("abc123"); err != nil {
+		t.Fatalf("delete() error = %v", err)
+	}
+
+	stored, err = store.checkAndStore("abc123", expires)
+	if err != nil {
+		t.Fatalf("checkAndStore() after delete error = %v", err)
+	}
+	if !stored {
+		t.Fatal("checkAndStore() after delete = false, want true")
+	}
+}
+
 func TestJTIReplayStoreSecuresPermissionModes(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX permission bits are not enforced on Windows")

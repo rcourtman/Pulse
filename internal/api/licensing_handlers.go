@@ -547,18 +547,32 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, "/settings?trial=replayed", http.StatusTemporaryRedirect)
 		return
 	}
+	clearReplay := func(reason string, err error) {
+		if replayStore == nil {
+			return
+		}
+		if deleteErr := replayStore.delete(replayID); deleteErr != nil {
+			log.Warn().Err(deleteErr).Str("replay_id_prefix", replayID[:24]).Str("reason", reason).Msg("Trial activation replay-store cleanup failed")
+			return
+		}
+		if err != nil {
+			log.Warn().Err(err).Str("replay_id_prefix", replayID[:24]).Str("reason", reason).Msg("Cleared trial activation replay marker after transient failure")
+		}
+	}
 
 	orgID := strings.TrimSpace(claims.OrgID)
 	if orgID == "" {
 		orgID = "default"
 	}
 	if h.trialInitiations == nil {
+		clearReplay("initiation_store_unavailable", nil)
 		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
 		return
 	}
 	returnURL := strings.TrimSpace(claims.ReturnURL)
 	ok, err := h.trialInitiations.validate(orgID, returnURL, claims.InstanceToken, time.Now().UTC())
 	if err != nil {
+		clearReplay("initiation_validation_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation initiation token validation failed")
 		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
 		return
@@ -572,6 +586,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 	svc, _, err := h.getTenantComponents(ctx)
 	if err != nil {
+		clearReplay("tenant_resolution_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation tenant resolution failed")
 		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
 		return
@@ -580,6 +595,7 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
 	existing, err := billingStore.GetBillingState(orgID)
 	if err != nil {
+		clearReplay("billing_state_load_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation billing state load failed")
 		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
 		return
@@ -594,8 +610,22 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	redeemer := h.trialRedeemer
+	if redeemer == nil {
+		redeemer = h.acknowledgeHostedTrialRedemption
+	}
+	if redeemer != nil {
+		if err := redeemer(token); err != nil {
+			clearReplay("redemption_ack_failed", err)
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted trial redemption acknowledgement failed")
+			http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+			return
+		}
+	}
+
 	state := buildProTrialBillingStateFromLicensing(time.Now())
 	if err := billingStore.SaveBillingState(orgID, state); err != nil {
+		clearReplay("billing_state_save_failed", err)
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation billing state save failed")
 		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
 		return
@@ -624,16 +654,6 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 		log.Warn().Err(consumeErr).Str("org_id", orgID).Msg("Trial initiation token consume failed after activation")
 	} else if !consumed {
 		log.Warn().Str("org_id", orgID).Msg("Trial initiation token was not consumed after activation")
-	}
-
-	redeemer := h.trialRedeemer
-	if redeemer == nil {
-		redeemer = h.acknowledgeHostedTrialRedemption
-	}
-	if redeemer != nil {
-		if err := redeemer(token); err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted trial redemption acknowledgement failed")
-		}
 	}
 
 	log.Info().
