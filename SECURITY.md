@@ -626,7 +626,7 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 curl -X POST http://localhost:7655/api/security/reset-lockout \
   -H "X-API-Token: your-api-token" \
   -H "Content-Type: application/json" \
-  -d '{"identifier":"192.168.1.100"}'
+  -d '{"identifier":"198.51.100.100"}'
 ```
 
 ## Troubleshooting

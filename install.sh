@@ -914,13 +914,13 @@ create_lxc_container() {
             storage=${storage:-$DEFAULT_STORAGE}
         fi
         
-        safe_read_with_default "Static IP with CIDR (e.g. 192.168.1.100/24, leave empty for DHCP): " static_ip ""
+        safe_read_with_default "Static IP with CIDR (e.g. 198.51.100.100/24, leave empty for DHCP): " static_ip ""
         
         # If static IP is provided, we need gateway
         if [[ -n "$static_ip" ]]; then
             # Validate IP format
             if [[ ! "$static_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]]; then
-                print_error "Invalid IP format. Please use CIDR notation (e.g., 192.168.1.100/24)"
+                print_error "Invalid IP format. Please use CIDR notation (e.g., 198.51.100.100/24)"
                 print_info "Using DHCP instead"
                 static_ip=""
             else

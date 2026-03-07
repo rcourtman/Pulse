@@ -43,7 +43,7 @@ describe('WebInterfaceUrlField', () => {
       />
     ));
 
-    const input = await screen.findByPlaceholderText('https://192.168.1.100:8080');
+    const input = await screen.findByPlaceholderText('https://198.51.100.100:8080');
     fireEvent.input(input, { target: { value: 'https://pve1.local:8006' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 

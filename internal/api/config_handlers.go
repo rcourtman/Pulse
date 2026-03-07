@@ -904,7 +904,7 @@ func findExistingIPOverride(nodeName string, existingEndpoints []config.ClusterE
 }
 
 // extractIPFromHost extracts the IP address from a host URL.
-// For example, "https://10.1.1.5:8006" returns 10.1.1.5 as net.IP.
+// For example, "https://198.51.100.5:8006" returns 198.51.100.5 as net.IP.
 func extractIPFromHost(host string) net.IP {
 	// Parse the URL to get the hostname/IP
 	parsed, err := url.Parse(host)

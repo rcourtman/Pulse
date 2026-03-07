@@ -193,7 +193,7 @@ Returns a small public config payload (update channel, auto-update enabled).
 {
   "type": "pve",
   "name": "Proxmox 1",
-  "host": "https://192.168.1.10:8006",
+  "host": "https://198.51.100.10:8006",
   "user": "root@pam",
   "password": "password"
 }
@@ -467,7 +467,7 @@ Response:
       "timestamp": "2024-01-12T10:15:30Z",
       "event": "login",
       "user": "admin",
-      "ip": "10.0.0.10",
+      "ip": "198.51.100.10",
       "path": "/api/login",
       "success": true,
       "details": "Successful login",

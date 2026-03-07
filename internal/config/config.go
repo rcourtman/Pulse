@@ -83,8 +83,8 @@ type Config struct {
 	ConfigPath      string
 	DataPath        string
 	AppRoot         string `json:"-"`                                       // Root directory of the application (where binary lives)
-	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`        // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
-	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.168.1.5:7655)
+	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`        // Full URL to access Pulse (e.g., http://198.51.100.100:7655)
+	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.0.2.5:7655)
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance

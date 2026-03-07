@@ -1933,7 +1933,7 @@ func extractPathSuffix(path, prefix string) string {
 	return strings.TrimSpace(s)
 }
 
-// nodeIP extracts the hostname/IP from a node host URL (e.g. "https://10.0.0.2:8006" -> "10.0.0.2").
+// nodeIP extracts the hostname/IP from a node host URL (e.g. "https://198.51.100.2:8006" -> "198.51.100.2").
 func nodeIP(hostURL string) string {
 	raw := strings.TrimSpace(hostURL)
 	if raw == "" {

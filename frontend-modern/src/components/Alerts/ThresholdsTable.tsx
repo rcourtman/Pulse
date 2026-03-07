@@ -1245,7 +1245,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       : guests;
 
     // Group by instance (not node - node is just the hostname which may be duplicated)
-    // Instance is the disambiguated name like "px1" or "px1 (10.0.2.224)"
+    // Instance is the disambiguated name like "px1" or "px1 (198.51.100.224)"
     const grouped: Record<string, TableResource[]> = {};
     filteredGuests.forEach((guest) => {
       const groupKey = guest.instance || guest.node || 'Unknown';

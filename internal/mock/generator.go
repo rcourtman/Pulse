@@ -4385,7 +4385,7 @@ func generatePBSInstances() []models.PBSInstance {
 		{
 			ID:          "pbs-main",
 			Name:        "pbs-main",
-			Host:        "192.168.0.10:8007",
+			Host:        "198.51.100.10:8007",
 			Status:      "online",
 			Version:     "3.2.1",
 			CPU:         15.5 + rand.Float64()*10,
@@ -4421,7 +4421,7 @@ func generatePBSInstances() []models.PBSInstance {
 		pbsInstances = append(pbsInstances, models.PBSInstance{
 			ID:          "pbs-secondary",
 			Name:        "pbs-secondary",
-			Host:        "192.168.0.11:8007",
+			Host:        "198.51.100.11:8007",
 			Status:      "online",
 			Version:     "3.2.0",
 			CPU:         10.2 + rand.Float64()*8,

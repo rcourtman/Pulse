@@ -22,7 +22,7 @@ const validateCustomUrl = (value: string): string | null => {
   try {
     parsed = new URL(value);
   } catch {
-    return 'Enter a valid URL (for example: https://192.168.1.100:8080).';
+    return 'Enter a valid URL (for example: https://198.51.100.100:8080).';
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -180,7 +180,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
           <input
             type="url"
             class="flex-1 text-xs px-2.5 py-1.5 border border-border rounded-md bg-surface text-base-content focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-            placeholder="https://192.168.1.100:8080"
+            placeholder="https://198.51.100.100:8080"
             value={urlValue()}
             onInput={(e) => setUrlValue(e.currentTarget.value)}
             onKeyDown={(e) => {

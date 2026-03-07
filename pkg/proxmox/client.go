@@ -927,7 +927,7 @@ type NodeNetworkInterface struct {
 	Address  string `json:"address,omitempty"`  // IPv4 address
 	Address6 string `json:"address6,omitempty"` // IPv6 address
 	Netmask  string `json:"netmask,omitempty"`  // IPv4 netmask
-	CIDR     string `json:"cidr,omitempty"`     // CIDR notation (e.g., "10.1.1.5/24")
+	CIDR     string `json:"cidr,omitempty"`     // CIDR notation (e.g., "198.51.100.5/24")
 	Active   int    `json:"active"`             // 1 if active
 }
 

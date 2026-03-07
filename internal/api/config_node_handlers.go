@@ -85,8 +85,8 @@ func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) 
 			clusterNode := NodeResponse{
 				ID:                   generateNodeID("pve", 0),
 				Type:                 "pve",
-				Name:                 "mock-cluster",       // The cluster name
-				Host:                 "192.168.0.100:8006", // Primary entry point
+				Name:                 "mock-cluster",        // The cluster name
+				Host:                 "198.51.100.100:8006", // Primary entry point
 				User:                 "root@pam",
 				HasPassword:          true,
 				TokenName:            "pulse",

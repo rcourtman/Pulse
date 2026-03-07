@@ -1448,7 +1448,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                   </div>
                   <p class="mt-1.5 text-xs text-muted">
                     Override the address agents use to connect to this server (e.g., use IP address{' '}
-                    <code>http://192.168.1.50:7655</code> if DNS fails).
+                    <code>http://192.0.2.50:7655</code> if DNS fails).
                     <Show when={!customAgentUrl()}>
                       <span class="ml-1 opacity-75">
                         Currently using auto-detected: {agentUrl()}

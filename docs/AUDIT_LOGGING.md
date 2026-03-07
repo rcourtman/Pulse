@@ -14,7 +14,7 @@ Pulse automatically captures the following events:
 
 | Event Type | Description | Example |
 |------------|-------------|---------|
-| `login` | Successful and failed login attempts | User `admin` logged in from 10.0.0.5 |
+| `login` | Successful and failed login attempts | User `admin` logged in from 198.51.100.5 |
 | `logout` | User logouts | User `admin` logged out |
 | `password_change` | Password modifications | Password changed (Docker/systemd) |
 | `csrf_failure` | Blocked cross-site request forgery attempts | Invalid CSRF token |
