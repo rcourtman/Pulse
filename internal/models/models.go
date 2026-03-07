@@ -1656,6 +1656,24 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	nodeMap := make(map[string]Node)
 	nodeAliasToKey := make(map[string]string)
 	ambiguousNodeAliases := make(map[string]struct{})
+	linkedHostToKey := make(map[string]string)
+	ambiguousLinkedHosts := make(map[string]struct{})
+	registerLinkedHostKey := func(hostID, key string) {
+		hostID = strings.TrimSpace(hostID)
+		key = strings.TrimSpace(key)
+		if hostID == "" || key == "" {
+			return
+		}
+		if _, ambiguous := ambiguousLinkedHosts[hostID]; ambiguous {
+			return
+		}
+		if existing, ok := linkedHostToKey[hostID]; ok && existing != key {
+			delete(linkedHostToKey, hostID)
+			ambiguousLinkedHosts[hostID] = struct{}{}
+			return
+		}
+		linkedHostToKey[hostID] = key
+	}
 	for _, node := range s.Nodes {
 		if node.Instance == instanceName {
 			continue
@@ -1675,6 +1693,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			nodeMap[key] = node
 		}
 		registerNodeAliases(nodeAliasToKey, ambiguousNodeAliases, nodeEndpointMergeAliases(node), key)
+		registerLinkedHostKey(node.LinkedAgentID, key)
 	}
 
 	// Deduplicate incoming nodes by logical identity so a single node cannot appear
@@ -1819,6 +1838,13 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 
 		primaryKey := nodeLogicalKey(node)
 		targetKey := resolveNodeMergeKey(primaryKey, node, nodeMap, nodeAliasToKey, ambiguousNodeAliases)
+		if node.LinkedAgentID != "" {
+			if _, ambiguous := ambiguousLinkedHosts[node.LinkedAgentID]; !ambiguous {
+				if linkedKey := linkedHostToKey[node.LinkedAgentID]; linkedKey != "" {
+					targetKey = linkedKey
+				}
+			}
+		}
 		if targetKey == "" {
 			targetKey = "id:" + normalizeNodeIdentityPart(node.ID)
 		}
@@ -1839,6 +1865,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			nodeMap[targetKey] = node
 		}
 		registerNodeAliases(nodeAliasToKey, ambiguousNodeAliases, nodeEndpointMergeAliases(node), targetKey)
+		registerLinkedHostKey(node.LinkedAgentID, targetKey)
 	}
 
 	// Convert map back to slice

@@ -330,6 +330,56 @@ func TestStateUpdateNodesForInstancePrefersUniqueEndpointIPOverAmbiguousHostname
 		t.Fatalf("LinkedAgentID = %q, want host-a", state.Nodes[0].LinkedAgentID)
 	}
 }
+
+func TestUpdateNodesForInstanceMergesNodeViewsAcrossEndpointFormsWhenLinkedHostMatches(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:           "host-1",
+				Hostname:     "minipc.local",
+				ReportIP:     "10.0.0.5",
+				LinkedNodeID: "minipc-ip-view",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.0.0.5/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:            "minipc-ip-view",
+				Name:          "minipc",
+				Instance:      "standalone-ip",
+				Host:          "https://10.0.0.5:8006",
+				LinkedAgentID: "host-1",
+				Status:        "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("standalone-hostname", []Node{
+		{
+			ID:       "minipc-hostname-view",
+			Name:     "minipc",
+			Instance: "standalone-hostname",
+			Host:     "https://minipc.local:8006",
+			Status:   "online",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want exactly 1 node", state.Nodes)
+	}
+	if state.Nodes[0].ID != "minipc-ip-view" {
+		t.Fatalf("node ID = %q, want minipc-ip-view", state.Nodes[0].ID)
+	}
+	if state.Nodes[0].LinkedAgentID != "host-1" {
+		t.Fatalf("LinkedAgentID = %q, want host-1", state.Nodes[0].LinkedAgentID)
+	}
+	if state.Hosts[0].LinkedNodeID != "minipc-ip-view" {
+		t.Fatalf("host LinkedNodeID = %q, want minipc-ip-view", state.Hosts[0].LinkedNodeID)
+	}
+}
+
 func TestUpdateNodesForInstanceDeduplicatesLogicalNodeByClusterName(t *testing.T) {
 	state := NewState()
 	older := time.Now().Add(-2 * time.Minute)
