@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 // Resource represents a unified resource aggregated across multiple data sources.
@@ -229,18 +230,30 @@ type StorageMeta struct {
 
 // PhysicalDiskMeta contains physical disk-specific metadata.
 type PhysicalDiskMeta struct {
-	DevPath     string     `json:"devPath"`
-	Model       string     `json:"model,omitempty"`
-	Serial      string     `json:"serial,omitempty"`
-	WWN         string     `json:"wwn,omitempty"`
-	DiskType    string     `json:"diskType"` // nvme, sata, sas
-	SizeBytes   int64      `json:"sizeBytes"`
-	Health      string     `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout     int        `json:"wearout"`     // 0-100, -1 unavailable
-	Temperature int        `json:"temperature"` // Celsius
-	RPM         int        `json:"rpm"`
-	Used        string     `json:"used,omitempty"`
-	SMART       *SMARTMeta `json:"smart,omitempty"`
+	DevPath     string            `json:"devPath"`
+	Model       string            `json:"model,omitempty"`
+	Serial      string            `json:"serial,omitempty"`
+	WWN         string            `json:"wwn,omitempty"`
+	DiskType    string            `json:"diskType"` // nvme, sata, sas
+	SizeBytes   int64             `json:"sizeBytes"`
+	Health      string            `json:"health"`      // PASSED, FAILED, UNKNOWN
+	Wearout     int               `json:"wearout"`     // 0-100, -1 unavailable
+	Temperature int               `json:"temperature"` // Celsius
+	RPM         int               `json:"rpm"`
+	Used        string            `json:"used,omitempty"`
+	SMART       *SMARTMeta        `json:"smart,omitempty"`
+	Risk        *PhysicalDiskRisk `json:"risk,omitempty"`
+}
+
+type PhysicalDiskRisk struct {
+	Level   storagehealth.RiskLevel  `json:"level"`
+	Reasons []PhysicalDiskRiskReason `json:"reasons,omitempty"`
+}
+
+type PhysicalDiskRiskReason struct {
+	Code     string                  `json:"code"`
+	Severity storagehealth.RiskLevel `json:"severity"`
+	Summary  string                  `json:"summary"`
 }
 
 // CephMeta contains Ceph cluster-specific metadata.

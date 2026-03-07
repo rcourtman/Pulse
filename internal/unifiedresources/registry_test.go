@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 func TestResourceRegistry_ListByType(t *testing.T) {
@@ -427,6 +428,9 @@ func TestResourceRegistry_IngestSnapshotCreatesPhysicalDisksFromHostSMART(t *tes
 	if disk.Identity.MachineID != "SERIAL-TOWER-1" {
 		t.Fatalf("MachineID = %q, want SERIAL-TOWER-1", disk.Identity.MachineID)
 	}
+	if disk.PhysicalDisk.Risk != nil {
+		t.Fatalf("expected healthy disk to have no risk payload, got %+v", disk.PhysicalDisk.Risk)
+	}
 }
 
 func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIdentity(t *testing.T) {
@@ -480,6 +484,56 @@ func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIden
 	}
 	if disk.PhysicalDisk == nil || disk.PhysicalDisk.Temperature != 37 {
 		t.Fatalf("expected merged SMART temperature from agent disk, got %+v", disk.PhysicalDisk)
+	}
+}
+
+func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+	pending := int64(2)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-risky",
+				Hostname: "tower",
+				Status:   "online",
+				LastSeen: now,
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/sdc",
+							Model:       "Seagate IronWolf",
+							Serial:      "SERIAL-RISK-1",
+							Type:        "sata",
+							Temperature: 64,
+							Health:      "PASSED",
+							Attributes: &models.SMARTAttributes{
+								PendingSectors: &pending,
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 physical disk resource, got %d", len(disks))
+	}
+	disk := disks[0]
+	if disk.Status != StatusWarning {
+		t.Fatalf("Status = %q, want %q", disk.Status, StatusWarning)
+	}
+	if disk.PhysicalDisk == nil || disk.PhysicalDisk.Risk == nil {
+		t.Fatalf("expected disk risk payload, got %+v", disk.PhysicalDisk)
+	}
+	if disk.PhysicalDisk.Risk.Level != storagehealth.RiskCritical {
+		t.Fatalf("risk level = %q, want %q", disk.PhysicalDisk.Risk.Level, storagehealth.RiskCritical)
+	}
+	if len(disk.PhysicalDisk.Risk.Reasons) == 0 || disk.PhysicalDisk.Risk.Reasons[0].Code != "pending_sectors" {
+		t.Fatalf("expected pending sectors reason, got %+v", disk.PhysicalDisk.Risk.Reasons)
 	}
 }
 

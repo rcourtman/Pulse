@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -2921,6 +2922,26 @@ func hostDiskResourceID(host models.Host, disk models.Disk) (string, string) {
 	return hostDiskResourceIDWithPrefix(host, disk, hostResourceID(host.ID))
 }
 
+func hostSMARTDiskResourceID(host models.Host, disk models.HostDiskSMART) (string, string) {
+	label := strings.TrimSpace(strings.TrimPrefix(disk.Device, "/dev/"))
+	if label == "" {
+		label = strings.TrimSpace(disk.Serial)
+	}
+	if label == "" {
+		label = strings.TrimSpace(disk.WWN)
+	}
+	if label == "" {
+		label = strings.TrimSpace(disk.Model)
+	}
+	if label == "" {
+		label = "smart-disk"
+	}
+
+	resourceID := fmt.Sprintf("%s/disk:%s", hostResourceID(host.ID), sanitizeHostComponent(label))
+	resourceName := fmt.Sprintf("%s (%s)", hostDisplayName(host), label)
+	return resourceID, resourceName
+}
+
 // CheckHost evaluates host agent telemetry for alerts.
 func (m *Manager) CheckHost(host models.Host) {
 	if host.ID == "" {
@@ -3040,6 +3061,19 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
+	if len(host.Sensors.SMART) > 0 {
+		for _, disk := range host.Sensors.SMART {
+			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
+			if host.LinkedNodeID == "" {
+				seenDisks[diskResourceID] = struct{}{}
+				m.syncHostSMARTDiskRiskAlerts(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata)
+				continue
+			}
+			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-health", nil)
+			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-wearout", nil)
+		}
+	}
+
 	for _, disk := range host.Disks {
 		diskResourceID, diskName := hostDiskResourceID(host, disk)
 		seenDisks[diskResourceID] = struct{}{}
@@ -3514,6 +3548,111 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 		}
 		m.clearAlertNoLock(alertID)
 	}
+}
+
+func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}) {
+	assessment := storagehealth.AssessHostSMARTDisk(disk)
+	healthReasons, wearReasons := splitSMARTAlertReasons(assessment.Reasons)
+
+	m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
+	m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-wearout", wearReasons)
+}
+
+func splitSMARTAlertReasons(reasons []storagehealth.Reason) ([]storagehealth.Reason, []storagehealth.Reason) {
+	healthReasons := make([]storagehealth.Reason, 0, len(reasons))
+	wearReasons := make([]storagehealth.Reason, 0, len(reasons))
+
+	for _, reason := range reasons {
+		if reason.Severity != storagehealth.RiskWarning && reason.Severity != storagehealth.RiskCritical {
+			continue
+		}
+		switch reason.Code {
+		case "wearout_low", "nvme_available_spare_low", "nvme_percentage_used_high":
+			wearReasons = append(wearReasons, reason)
+		case "temperature_high":
+			continue
+		default:
+			healthReasons = append(healthReasons, reason)
+		}
+	}
+
+	return healthReasons, wearReasons
+}
+
+func (m *Manager) syncHostSMARTDiskAlert(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, alertType string, reasons []storagehealth.Reason) {
+	alertID := fmt.Sprintf("host-%s-%s-%s", host.ID, alertType, strings.TrimPrefix(resourceID, hostResourceID(host.ID)+"/disk:"))
+	if len(reasons) == 0 {
+		m.clearAlert(alertID)
+		return
+	}
+
+	level := AlertLevelWarning
+	for _, reason := range reasons {
+		if reason.Severity == storagehealth.RiskCritical {
+			level = AlertLevelCritical
+			break
+		}
+	}
+
+	reasonCodes := make([]string, 0, len(reasons))
+	reasonSummaries := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		reasonCodes = append(reasonCodes, reason.Code)
+		reasonSummaries = append(reasonSummaries, reason.Summary)
+	}
+
+	metadata := cloneMetadata(baseMetadata)
+	metadata["metric"] = alertType
+	metadata["device"] = disk.Device
+	metadata["model"] = disk.Model
+	metadata["serial"] = disk.Serial
+	metadata["wwn"] = disk.WWN
+	metadata["diskHealth"] = disk.Health
+	metadata["riskCodes"] = reasonCodes
+	metadata["riskSummaries"] = reasonSummaries
+	if disk.Temperature > 0 {
+		metadata["temperature"] = disk.Temperature
+	}
+
+	now := time.Now()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+		existing.LastSeen = now
+		existing.Level = level
+		existing.Message = strings.Join(reasonSummaries, "; ")
+		existing.ResourceID = resourceID
+		existing.ResourceName = resourceName
+		existing.Node = nodeName
+		existing.NodeDisplayName = m.resolveNodeDisplayName(nodeName)
+		existing.Instance = instanceName
+		existing.Metadata = metadata
+		return
+	}
+
+	alert := &Alert{
+		ID:              alertID,
+		Type:            alertType,
+		Level:           level,
+		ResourceID:      resourceID,
+		ResourceName:    resourceName,
+		Node:            nodeName,
+		NodeDisplayName: m.resolveNodeDisplayName(nodeName),
+		Instance:        instanceName,
+		Message:         strings.Join(reasonSummaries, "; "),
+		Value:           0,
+		Threshold:       0,
+		StartTime:       now,
+		LastSeen:        now,
+		Metadata:        metadata,
+	}
+
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.dispatchAlert(alert, false)
 }
 
 func (m *Manager) clearHostRAIDAlerts(hostID string) {
@@ -9729,34 +9868,6 @@ func (m *Manager) cleanupStaleMaps() {
 	}
 }
 
-// hasKnownFirmwareBug checks if a disk model is known to have firmware bugs that cause
-// false health status reports. These drives may report FAILED or other error states
-// due to firmware issues (e.g., incorrect temperature thresholds) even when the drive
-// is actually healthy. This prevents false alerts while still monitoring wearout.
-//
-// Related to GitHub issue #547: Samsung 980/990 SSDs report false health failures
-func hasKnownFirmwareBug(model string) bool {
-	normalizedModel := strings.ToUpper(strings.TrimSpace(model))
-
-	// Samsung 980/990 series drives have known firmware bugs causing false health reports
-	// These drives report incorrect health status due to temperature threshold bugs
-	// even when functioning normally. Users should update firmware to latest version.
-	knownProblematicModels := []string{
-		"SAMSUNG SSD 980",
-		"SAMSUNG 980",
-		"SAMSUNG SSD 990",
-		"SAMSUNG 990",
-	}
-
-	for _, problematic := range knownProblematicModels {
-		if strings.Contains(normalizedModel, problematic) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // CheckDiskHealth checks disk health and creates alerts if needed
 func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Create unique alert ID for this disk
@@ -9772,7 +9883,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Skip health alerts for drives with known firmware bugs that cause false reports
 	// These drives may report FAILED status due to firmware issues even when healthy
 	// We still monitor wearout below, which is more reliable for these drives
-	if healthCheckNeeded && hasKnownFirmwareBug(disk.Model) {
+	if healthCheckNeeded && storagehealth.HasKnownFirmwareBug(disk.Model) {
 		log.Debug().
 			Str("node", node).
 			Str("disk", disk.DevPath).

@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -2736,8 +2737,8 @@ func TestHasKnownFirmwareBug(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// t.Parallel()
 
-			if got := hasKnownFirmwareBug(tc.model); got != tc.want {
-				t.Fatalf("hasKnownFirmwareBug(%q) = %v, want %v", tc.model, got, tc.want)
+			if got := storagehealth.HasKnownFirmwareBug(tc.model); got != tc.want {
+				t.Fatalf("HasKnownFirmwareBug(%q) = %v, want %v", tc.model, got, tc.want)
 			}
 		})
 	}
@@ -3105,6 +3106,119 @@ func TestCheckDiskHealthEmptyOrUnknownHealthNoAlert(t *testing.T) {
 	defer m.mu.RUnlock()
 	if _, exists := m.activeAlerts[healthAlertID]; exists {
 		t.Fatalf("expected no health alert for disk with lowercase unknown health status")
+	}
+}
+
+func TestCheckHostCreatesSMARTDiskHealthAlertForAgentOnlyHost(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	pending := int64(2)
+
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{
+					Device: "/dev/sda",
+					Model:  "Seagate IronWolf",
+					Serial: "SERIAL-TOWER-1",
+					Health: "PASSED",
+					Attributes: &models.SMARTAttributes{
+						PendingSectors: &pending,
+					},
+				},
+			},
+		},
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	alert, exists := m.activeAlerts["host-tower-host-disk-health-sda"]
+	if !exists {
+		t.Fatalf("expected SMART disk-health alert")
+	}
+	if alert.Type != "disk-health" {
+		t.Fatalf("Type = %q, want disk-health", alert.Type)
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("Level = %q, want %q", alert.Level, AlertLevelCritical)
+	}
+}
+
+func TestCheckHostCreatesSMARTDiskWearoutAlertForAgentOnlyHost(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	used := 96
+
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{
+					Device: "/dev/nvme0n1",
+					Model:  "Samsung 970 EVO",
+					Serial: "SERIAL-TOWER-2",
+					Health: "PASSED",
+					Attributes: &models.SMARTAttributes{
+						PercentageUsed: &used,
+					},
+				},
+			},
+		},
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	alert, exists := m.activeAlerts["host-tower-host-disk-wearout-nvme0n1"]
+	if !exists {
+		t.Fatalf("expected SMART disk-wearout alert")
+	}
+	if alert.Type != "disk-wearout" {
+		t.Fatalf("Type = %q, want disk-wearout", alert.Type)
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("Level = %q, want %q", alert.Level, AlertLevelCritical)
+	}
+}
+
+func TestCheckHostSkipsSMARTDiskRiskAlertsWhenLinkedToProxmoxNode(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	pending := int64(2)
+
+	host := models.Host{
+		ID:           "tower-host",
+		Hostname:     "tower",
+		LinkedNodeID: "pve-node-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{
+					Device: "/dev/sda",
+					Model:  "Seagate IronWolf",
+					Serial: "SERIAL-TOWER-1",
+					Health: "PASSED",
+					Attributes: &models.SMARTAttributes{
+						PendingSectors: &pending,
+					},
+				},
+			},
+		},
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.activeAlerts["host-tower-host-disk-health-sda"]; exists {
+		t.Fatalf("expected no SMART disk-health alert for linked Proxmox host")
 	}
 }
 

@@ -970,6 +970,7 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 		smart := *incoming.SMART
 		merged.SMART = &smart
 	}
+	merged.Risk = physicalDiskRiskFromAssessment(physicalDiskAssessmentFromMeta(&merged))
 
 	return &merged
 }

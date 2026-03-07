@@ -222,6 +222,7 @@ func clonePhysicalDiskMeta(in *PhysicalDiskMeta) *PhysicalDiskMeta {
 	}
 	out := *in
 	out.SMART = cloneSMARTMeta(in.SMART)
+	out.Risk = clonePhysicalDiskRisk(in.Risk)
 	return &out
 }
 
@@ -249,6 +250,24 @@ func cloneSMARTMeta(in *SMARTMeta) *SMARTMeta {
 	}
 	out := *in
 	return &out
+}
+
+func clonePhysicalDiskRisk(in *PhysicalDiskRisk) *PhysicalDiskRisk {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Reasons = clonePhysicalDiskRiskReasonSlice(in.Reasons)
+	return &out
+}
+
+func clonePhysicalDiskRiskReasonSlice(in []PhysicalDiskRiskReason) []PhysicalDiskRiskReason {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]PhysicalDiskRiskReason, len(in))
+	copy(out, in)
+	return out
 }
 
 func cloneHostSensorMeta(in *HostSensorMeta) *HostSensorMeta {

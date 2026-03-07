@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resource, ResourceIdentity) {
@@ -355,11 +356,12 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 		sizeBytes = matchedDisk.Total
 		used = strings.TrimSpace(matchedDisk.Mountpoint)
 	}
+	assessment := storagehealth.AssessHostSMARTDisk(disk)
 
 	resource := Resource{
 		Type:      ResourceTypePhysicalDisk,
 		Name:      name,
-		Status:    statusFromPhysicalDisk(disk.Health),
+		Status:    physicalDiskStatus(disk.Model, disk.Health, assessment),
 		LastSeen:  host.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		PhysicalDisk: &PhysicalDiskMeta{
@@ -374,6 +376,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 			Temperature: disk.Temperature,
 			Used:        used,
 			SMART:       convertSMARTAttributes(disk.Attributes),
+			Risk:        physicalDiskRiskFromAssessment(assessment),
 		},
 	}
 
@@ -898,6 +901,7 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 	if name == "" {
 		name = disk.DevPath
 	}
+	assessment := storagehealth.AssessPhysicalDisk(disk)
 
 	pdMeta := &PhysicalDiskMeta{
 		DevPath:     disk.DevPath,
@@ -911,6 +915,7 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 		Temperature: disk.Temperature,
 		RPM:         disk.RPM,
 		Used:        disk.Used,
+		Risk:        physicalDiskRiskFromAssessment(assessment),
 	}
 
 	if disk.SmartAttributes != nil {
@@ -920,7 +925,7 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 	resource := Resource{
 		Type:         ResourceTypePhysicalDisk,
 		Name:         name,
-		Status:       statusFromPhysicalDisk(disk.Health),
+		Status:       physicalDiskStatus(disk.Model, disk.Health, assessment),
 		LastSeen:     disk.LastChecked,
 		UpdatedAt:    time.Now().UTC(),
 		Metrics:      metricsFromPhysicalDisk(disk),
