@@ -257,6 +257,74 @@ func TestHandleAutoRegisterRejectsHeaderAPITokenOrgMismatch(t *testing.T) {
 	}
 }
 
+func TestHandleAutoRegisterConsolidatesStandaloneOverlapIntoClusterInMemory(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	t.Cleanup(func() { detectPVECluster = originalDetectPVECluster })
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "homelab",
+				ClusterName: "cluster-A",
+				IsCluster:   true,
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.0.5:8006",
+		TokenID:    "pulse@pve!token",
+		TokenValue: "secret",
+		ServerName: "minipc",
+		AuthToken:  tokenValue,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance after consolidation, got %d", len(cfg.PVEInstances))
+	}
+	cluster := cfg.PVEInstances[0]
+	if got := cluster.TokenName; got != "pulse@pve!token" {
+		t.Fatalf("TokenName = %q, want pulse@pve!token", got)
+	}
+	if got := cluster.TokenValue; got != "secret" {
+		t.Fatalf("TokenValue = %q, want secret", got)
+	}
+}
+
 // TestDisambiguateNodeName verifies that duplicate hostnames get disambiguated
 // with their IP address appended. Issue #891.
 func TestDisambiguateNodeName(t *testing.T) {

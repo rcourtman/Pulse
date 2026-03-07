@@ -211,3 +211,52 @@ func TestHandleAddNode_NoLimitForConfigRegistration(t *testing.T) {
 		t.Fatalf("PVE config registration should not be blocked by agent limit, got 402")
 	}
 }
+
+func TestHandleAddNodeConsolidatesStandaloneOverlapIntoClusterInMemory(t *testing.T) {
+	tempDir := t.TempDir()
+
+	cfg := &config.Config{
+		DataPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "homelab",
+				ClusterName: "cluster-A",
+				IsCluster:   true,
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, _ := json.Marshal(map[string]any{
+		"name":       "test-minipc",
+		"type":       "pve",
+		"host":       "10.0.0.5",
+		"tokenName":  "pulse@pve!token",
+		"tokenValue": "secret",
+		"verifySSL":  true,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAddNode(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance after consolidation, got %d", len(cfg.PVEInstances))
+	}
+	cluster := cfg.PVEInstances[0]
+	if got := cluster.TokenName; got != "pulse@pve!token" {
+		t.Fatalf("TokenName = %q, want pulse@pve!token", got)
+	}
+	if got := cluster.TokenValue; got != "secret" {
+		t.Fatalf("TokenValue = %q, want secret", got)
+	}
+	if !cluster.VerifySSL {
+		t.Fatalf("expected VerifySSL to be promoted onto the surviving cluster")
+	}
+}

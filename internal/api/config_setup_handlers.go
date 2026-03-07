@@ -1719,6 +1719,7 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 						// Save and reload
 						if h.getPersistence(r.Context()) != nil {
+							h.normalizePVEConfigState(r.Context())
 							if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 								log.Warn().Err(err).Msg("Failed to persist cluster endpoint merge during auto-registration")
 							}
@@ -1783,6 +1784,7 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 				return
 			}
 			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, newInstance)
+			h.normalizePVEConfigState(r.Context())
 
 			if isCluster {
 				log.Info().
@@ -1853,6 +1855,7 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Save configuration
+	h.normalizePVEConfigState(r.Context())
 	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
@@ -2104,6 +2107,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 				return
 			}
 			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
+			h.normalizePVEConfigState(r.Context())
 		}
 	} else if req.Type == "pbs" {
 		pbsNode := config.PBSInstance{
@@ -2150,6 +2154,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	}
 
 	// Save configuration
+	h.normalizePVEConfigState(r.Context())
 	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)

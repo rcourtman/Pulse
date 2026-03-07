@@ -340,6 +340,16 @@ func (h *ConfigHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
 	return m
 }
 
+func (h *ConfigHandlers) normalizePVEConfigState(ctx context.Context) {
+	cfg := h.getConfig(ctx)
+	if cfg == nil {
+		return
+	}
+	if normalized, changed := config.ConsolidatePVEInstances(cfg.PVEInstances); changed {
+		cfg.PVEInstances = normalized
+	}
+}
+
 // cleanupExpiredCodes removes expired or used setup codes periodically
 func (h *ConfigHandlers) cleanupExpiredCodes() {
 	ticker := time.NewTicker(5 * time.Minute)
@@ -585,6 +595,7 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *
 		Msg("Updated cluster metadata after validation retry")
 
 	if h.getPersistence(ctx) != nil {
+		h.normalizePVEConfigState(ctx)
 		if err := h.getPersistence(ctx).SaveNodesConfig(h.getConfig(ctx).PVEInstances, h.getConfig(ctx).PBSInstances, h.getConfig(ctx).PMGInstances); err != nil {
 			log.Warn().
 				Err(err).

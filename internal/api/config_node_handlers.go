@@ -368,6 +368,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 
 					// Save the updated configuration
 					if h.getPersistence(r.Context()) != nil {
+						h.normalizePVEConfigState(r.Context())
 						if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 							log.Warn().Err(err).Msg("Failed to persist cluster endpoint merge")
 						}
@@ -456,6 +457,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pve)
+		h.normalizePVEConfigState(r.Context())
 
 		if isCluster {
 			log.Info().
@@ -670,6 +672,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save configuration to disk using our persistence instance
+	h.normalizePVEConfigState(r.Context())
 	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
@@ -1287,6 +1290,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Save configuration to disk using our persistence instance
+	h.normalizePVEConfigState(r.Context())
 	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
@@ -1572,6 +1576,7 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	pve.ClusterEndpoints = clusterEndpoints
 
 	// Save configuration
+	h.normalizePVEConfigState(r.Context())
 	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration after cluster refresh")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)

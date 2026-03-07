@@ -82,6 +82,8 @@ func mergeDuplicateClusterInstances(instances []PVEInstance) bool {
 				Str("duplicate", duplicate.Name).
 				Msg("Merging duplicate cluster instance")
 
+			mergePVEInstanceData(primary, duplicate)
+
 			for _, ep := range duplicate.ClusterEndpoints {
 				nodeKey := strings.TrimSpace(strings.ToLower(ep.NodeName))
 				if existingIdx, ok := existingEndpoints[nodeKey]; ok {
@@ -138,6 +140,67 @@ func mergeClusterEndpointData(dst *ClusterEndpoint, src ClusterEndpoint) {
 	}
 	if dst.PulseError == "" && strings.TrimSpace(src.PulseError) != "" {
 		dst.PulseError = strings.TrimSpace(src.PulseError)
+	}
+}
+
+func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {
+	if dst == nil {
+		return
+	}
+
+	if dst.Host == "" && strings.TrimSpace(src.Host) != "" {
+		dst.Host = strings.TrimSpace(src.Host)
+	}
+	if dst.GuestURL == "" && strings.TrimSpace(src.GuestURL) != "" {
+		dst.GuestURL = strings.TrimSpace(src.GuestURL)
+	}
+	if dst.Fingerprint == "" && strings.TrimSpace(src.Fingerprint) != "" {
+		dst.Fingerprint = strings.TrimSpace(src.Fingerprint)
+	}
+	if dst.Source == "" && strings.TrimSpace(src.Source) != "" {
+		dst.Source = strings.TrimSpace(src.Source)
+	}
+	if !dst.VerifySSL && src.VerifySSL {
+		dst.VerifySSL = true
+	}
+	if dst.TemperatureMonitoringEnabled == nil && src.TemperatureMonitoringEnabled != nil {
+		enabled := *src.TemperatureMonitoringEnabled
+		dst.TemperatureMonitoringEnabled = &enabled
+	}
+	if dst.MonitorPhysicalDisks == nil && src.MonitorPhysicalDisks != nil {
+		enabled := *src.MonitorPhysicalDisks
+		dst.MonitorPhysicalDisks = &enabled
+	}
+	if dst.SSHPort == 0 && src.SSHPort != 0 {
+		dst.SSHPort = src.SSHPort
+	}
+	if dst.PhysicalDiskPollingMinutes == 0 && src.PhysicalDiskPollingMinutes != 0 {
+		dst.PhysicalDiskPollingMinutes = src.PhysicalDiskPollingMinutes
+	}
+
+	switch {
+	case dst.TokenName != "" || dst.TokenValue != "":
+		if dst.TokenName == "" && strings.TrimSpace(src.TokenName) != "" {
+			dst.TokenName = strings.TrimSpace(src.TokenName)
+		}
+		if dst.TokenValue == "" && strings.TrimSpace(src.TokenValue) != "" {
+			dst.TokenValue = strings.TrimSpace(src.TokenValue)
+		}
+	case dst.User != "" || dst.Password != "":
+		if dst.User == "" && strings.TrimSpace(src.User) != "" {
+			dst.User = strings.TrimSpace(src.User)
+		}
+		if dst.Password == "" && src.Password != "" {
+			dst.Password = src.Password
+		}
+	case strings.TrimSpace(src.TokenName) != "" && strings.TrimSpace(src.TokenValue) != "":
+		dst.TokenName = strings.TrimSpace(src.TokenName)
+		dst.TokenValue = strings.TrimSpace(src.TokenValue)
+		dst.User = ""
+		dst.Password = ""
+	case strings.TrimSpace(src.User) != "" && src.Password != "":
+		dst.User = strings.TrimSpace(src.User)
+		dst.Password = src.Password
 	}
 }
 
@@ -269,6 +332,7 @@ func mergeStandalonePVEIntoClusters(instances []PVEInstance) bool {
 			GuestURL:    instances[idx].GuestURL,
 			Fingerprint: instances[idx].Fingerprint,
 		})
+		mergePVEInstanceData(&instances[ref.clusterIdx], instances[idx])
 		instances[idx].Source = "__merged_into_cluster__"
 
 		log.Warn().

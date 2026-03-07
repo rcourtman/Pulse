@@ -68,3 +68,54 @@ func TestHandleSecureAutoRegister_PVE(t *testing.T) {
 		t.Fatalf("expected stored token values")
 	}
 }
+
+func TestHandleSecureAutoRegisterConsolidatesStandaloneOverlapIntoClusterInMemory(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "homelab",
+				ClusterName: "cluster-A",
+				IsCluster:   true,
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "minipc", Host: server.URL},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:         "pve",
+		Host:         server.URL,
+		ServerName:   "minipc",
+		RequestToken: true,
+		Username:     "root@pam",
+		Password:     "secret",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register/secure", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleSecureAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if len(handler.defaultConfig.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance after consolidation, got %d", len(handler.defaultConfig.PVEInstances))
+	}
+	cluster := handler.defaultConfig.PVEInstances[0]
+	if cluster.TokenName == "" || cluster.TokenValue == "" {
+		t.Fatalf("expected token values to be promoted onto surviving cluster")
+	}
+}
