@@ -393,7 +393,7 @@ func (h *LicenseHandlers) requestHostedEntitlementLeaseRefresh(orgID, instanceHo
 	if h == nil {
 		return nil, &hostedEntitlementRefreshError{permanent: true, message: "license handlers unavailable"}
 	}
-	refreshURL := trialSignupRefreshURLFromConfig(h.cfg)
+	refreshURL := hostedEntitlementRefreshURLFromConfig(h.cfg)
 	if refreshURL == "" {
 		return nil, &hostedEntitlementRefreshError{permanent: true, message: "hosted entitlement refresh URL unavailable"}
 	}

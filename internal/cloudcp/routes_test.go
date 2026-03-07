@@ -162,6 +162,13 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 	if refreshRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET /api/trial-signup/refresh status=%d, want %d", refreshRec.Code, http.StatusMethodNotAllowed)
 	}
+
+	hostedRefreshReq := httptest.NewRequest(http.MethodGet, "/api/entitlements/refresh", nil)
+	hostedRefreshRec := httptest.NewRecorder()
+	mux.ServeHTTP(hostedRefreshRec, hostedRefreshReq)
+	if hostedRefreshRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /api/entitlements/refresh status=%d, want %d", hostedRefreshRec.Code, http.StatusMethodNotAllowed)
+	}
 }
 
 func TestRegisterRoutes_TrialSignupVerificationRateLimit(t *testing.T) {

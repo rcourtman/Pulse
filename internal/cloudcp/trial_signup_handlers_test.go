@@ -883,21 +883,21 @@ func TestTrialSignupHandleRefreshReturnsLease(t *testing.T) {
 		t.Fatalf("MarkRedemptionRecorded: %v", err)
 	}
 
-	h := NewTrialSignupHandlers(&CPConfig{
+	h := NewHostedEntitlementHandlers(&CPConfig{
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, store)
+	}, store, nil)
 	h.now = func() time.Time { return now.Add(time.Hour) }
 
-	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/refresh", strings.NewReader(`{"org_id":"default","instance_host":"pulse.example.com","entitlement_refresh_token":"etr_test_refresh"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/entitlements/refresh", strings.NewReader(`{"org_id":"default","instance_host":"pulse.example.com","entitlement_refresh_token":"etr_test_refresh"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	h.HandleTrialSignupRefresh(rec, req)
+	h.HandleRefresh(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
-	var resp trialSignupRefreshResponse
+	var resp hostedEntitlementRefreshResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -958,22 +958,22 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 	}
 
 	now := time.Unix(1710000000, 0).UTC()
-	h := NewTrialSignupHandlers(&CPConfig{
+	h := NewHostedEntitlementHandlers(&CPConfig{
 		BaseURL:                   "https://cloud.example.com",
 		TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv),
-	}, nil, nil, WithTrialSignupTenantRegistry(reg))
+	}, nil, reg)
 	h.now = func() time.Time { return now }
 
-	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/refresh", strings.NewReader(`{"org_id":"default","instance_host":"t-PAIDREF01.cloud.example.com","entitlement_refresh_token":"etr_paid_refresh"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/entitlements/refresh", strings.NewReader(`{"org_id":"default","instance_host":"t-PAIDREF01.cloud.example.com","entitlement_refresh_token":"etr_paid_refresh"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	h.HandleTrialSignupRefresh(rec, req)
+	h.HandleRefresh(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
-	var resp trialSignupRefreshResponse
+	var resp hostedEntitlementRefreshResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}

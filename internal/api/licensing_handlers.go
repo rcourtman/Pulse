@@ -811,7 +811,7 @@ func trialSignupRedemptionURLFromConfig(cfg *config.Config) string {
 	return parsed.String()
 }
 
-func trialSignupRefreshURLFromConfig(cfg *config.Config) string {
+func hostedEntitlementRefreshURLFromConfig(cfg *config.Config) string {
 	signupBaseURL := ""
 	if cfg != nil {
 		signupBaseURL = strings.TrimSpace(cfg.ProTrialSignupURL)
@@ -824,7 +824,7 @@ func trialSignupRefreshURLFromConfig(cfg *config.Config) string {
 	if err != nil || parsed == nil {
 		return ""
 	}
-	parsed.Path = "/api/trial-signup/refresh"
+	parsed.Path = "/api/entitlements/refresh"
 	parsed.RawQuery = ""
 	return parsed.String()
 }

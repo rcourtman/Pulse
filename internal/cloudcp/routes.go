@@ -43,7 +43,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	trialSignupCheckoutLimiter := NewCPRateLimiter(12, time.Hour)
 	trialSignupCompleteLimiter := NewCPRateLimiter(30, time.Minute)
 	trialSignupRedeemLimiter := NewCPRateLimiter(30, time.Minute)
-	trialSignupRefreshLimiter := NewCPRateLimiter(60, time.Hour)
+	hostedEntitlementRefreshLimiter := NewCPRateLimiter(60, time.Hour)
 	publicSignupLimiter := NewCPRateLimiter(30, time.Minute)
 	publicMagicLinkLimiter := NewCPRateLimiter(20, time.Minute)
 
@@ -109,14 +109,16 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	}
 
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
-	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, WithTrialSignupTenantRegistry(deps.Registry))
+	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore)
+	hostedEntitlementHandlers := NewHostedEntitlementHandlers(deps.Config, deps.TrialSignupStore, deps.Registry)
 	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
 	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
 	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
 	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
 	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
 	mux.Handle("/api/trial-signup/redeem", trialSignupRedeemLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRedeem)))
-	mux.Handle("/api/trial-signup/refresh", trialSignupRefreshLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRefresh)))
+	mux.Handle("/api/entitlements/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
+	mux.Handle("/api/trial-signup/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
 
 	// Pulse Cloud self-serve signup: public page + API checkout + magic-link request.
 	publicCloudSignupHandlers := NewPublicCloudSignupHandlers(deps.Config, deps.Registry, deps.MagicLinks, deps.EmailSender)

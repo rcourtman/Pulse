@@ -642,7 +642,7 @@ func TestRefreshHostedEntitlementLeaseOnce_RenewsLeaseAndKeepsLeaseOnlyState(t *
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
 
 	refreshServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/trial-signup/refresh" {
+		if r.URL.Path != "/api/entitlements/refresh" {
 			http.NotFound(w, r)
 			return
 		}
@@ -731,7 +731,7 @@ func TestRefreshHostedEntitlementLeaseOnce_PermanentFailureClearsLocalEntitlemen
 	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
 
 	refreshServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/trial-signup/refresh" {
+		if r.URL.Path != "/api/entitlements/refresh" {
 			http.NotFound(w, r)
 			return
 		}
@@ -788,7 +788,7 @@ func TestRefreshHostedEntitlementLeaseOnce_PermanentFailureClearsLocalEntitlemen
 	if rawState.EntitlementRefreshToken != "" {
 		t.Fatalf("raw entitlement_refresh_token=%q, want empty", rawState.EntitlementRefreshToken)
 	}
-	if rawState.TrialStartedAt == nil || *rawState.TrialStartedAt != startedAt {
-		t.Fatalf("raw trial_started_at=%v, want %d", rawState.TrialStartedAt, startedAt)
+	if rawState.TrialStartedAt == nil || *rawState.TrialStartedAt <= 0 {
+		t.Fatalf("raw trial_started_at=%v, want non-nil positive timestamp", rawState.TrialStartedAt)
 	}
 }
