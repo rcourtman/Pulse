@@ -290,27 +290,26 @@ Two test environments (use the right one for each journey):
    - Enable mock mode for deterministic data: `setMockMode(page, true)`
    - Run: `cd tests/integration && npx playwright test tests/journeys/`
 
-2. **LXC sandbox** (`CT 211` on PVE host `delly`) — for journeys that need real infrastructure:
+2. **Private LXC sandbox** — for journeys that need real infrastructure:
    - Add Proxmox node → VMs appear → metrics flowing (journey 2)
    - Add TrueNAS node → pools/datasets visible (journey 3)
    - Relay pairing → mobile connection → live data (journey 4)
    - Agent install → registration → host visible (journey 5)
    - SAML SSO → IdP login → role-mapped access (journey 6)
    - AI patrol → finding → approval → fix → verify (journey 8)
-   - Infrastructure: snapshot `pre-eval-baseline`, SSH tunnel to `localhost:17655`
+   - Requires a disposable snapshot-capable sandbox with Pulse and any dependent services already installed
    - Existing automation: `tests/integration/scripts/run-lxc-sandbox-evals.sh` handles rollback → start → tunnel → run
-   - Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
-   - Run from workspace root: `PVE_HOST=delly PVE_CTID=211 bash tests/integration/scripts/run-lxc-sandbox-evals.sh`
-   - **IMPORTANT**: The sandbox runner currently covers trial/cloud/multi-tenant scenarios only. For new infrastructure journeys (Proxmox, TrueNAS, agent, SAML, patrol), you must add new scenario definitions in `tests/integration/evals/scenarios.json`, add Playwright spec files, and wire the new scenario group into `run-lxc-sandbox-evals.sh`.
-   - **SAFETY**: Always use `PVE_HOST=delly PVE_CTID=211` — never target other hosts or containers. These are the dedicated E2E test resources.
+   - Runbook: keep exact host/container identifiers in local ops notes, not in repo-tracked docs
+   - Run from workspace root by supplying your local sandbox env: `PVE_HOST=... PVE_CTID=... bash tests/integration/scripts/run-lxc-sandbox-evals.sh`
+   - **IMPORTANT**: The sandbox runner currently covers trial/cloud/multi-tenant scenarios only. For new infrastructure journeys (Proxmox, TrueNAS, agent, SAML, patrol), add scenario definitions in `tests/integration/evals/scenarios.json`, add Playwright spec files, and wire the new scenario group into `run-lxc-sandbox-evals.sh`.
+   - **SAFETY**: Use only disposable test infrastructure. Do not target shared or production-adjacent hosts from this workflow.
 
 LXC sandbox workflow (snapshot-clean):
-- `pct rollback 211 pre-eval-baseline --start 1` restores clean state before each test suite
-- Services auto-start: `pulse.service` on port 7655, `pulse-control-plane.service` on port 8443
-- SSH tunnel from dev machine: `-L 17655:<CT_IP>:7655 -L 18443:<CT_IP>:8443`
-- Test credentials: `admin/admin` (bootstrap token set in snapshot)
-- Each test run starts from identical filesystem state — no pollution between runs
-- The Proxmox host at `192.168.0.134` (delly) is the only PVE node — it also serves as the real Proxmox node for "add node" journey tests
+- Restore the sandbox from a clean snapshot before each test suite
+- Ensure `pulse.service` and any companion services auto-start inside the sandbox
+- Establish local SSH tunnels to the sandbox ports needed by the test suite
+- Use only dedicated test credentials and bootstrap state
+- Each test run should start from identical filesystem state with no cross-run pollution
 
 ### Formula
 
