@@ -24,17 +24,23 @@ func runServer(ctx context.Context) error {
 }
 
 func newProgram(env *pulsecli.Env) *pulsecli.Program {
+	if env == nil {
+		env = pulsecli.NewEnv()
+	}
 	return &pulsecli.Program{
-		Root: pulsecli.Options{
+		Command: pulsecli.CommandSpec{
 			Use:             "pulse",
 			Short:           "Pulse - Proxmox VE and PBS monitoring system",
 			Long:            `Pulse is a real-time monitoring system for Proxmox Virtual Environment (PVE) and Proxmox Backup Server (PBS)`,
 			Version:         Version,
 			VersionTemplate: "Pulse {{.Version}}\n",
-			RunE:            runServer,
 			VersionPrinter:  printVersion,
 		},
-		Env: env,
+		Runtime: pulsecli.RuntimeSpec{
+			Run: runServer,
+		},
+		Deps: env.CommandDeps(),
+		Exit: env.Exit,
 	}
 }
 

@@ -9,10 +9,11 @@ import (
 func TestProgramRootCommandUsesEnvForConfigFlags(t *testing.T) {
 	env := NewEnv()
 	program := &Program{
-		Root: Options{
+		Command: CommandSpec{
 			Use: "pulse",
 		},
-		Env: env,
+		Deps: env.CommandDeps(),
+		Exit: env.Exit,
 	}
 
 	cmd := program.RootCommand()
@@ -56,13 +57,15 @@ func TestProgramRunReportsErrorAndExits(t *testing.T) {
 
 	var handled error
 	program := &Program{
-		Root: Options{
+		Command: CommandSpec{
 			Use: "pulse",
-			RunE: func(context.Context) error {
+		},
+		Runtime: RuntimeSpec{
+			Run: func(context.Context) error {
 				return errors.New("boom")
 			},
 		},
-		Env: env,
+		Exit: env.Exit,
 		HandleError: func(err error) {
 			handled = err
 		},

@@ -77,6 +77,14 @@ func (env *Env) MockDeps() *MockDeps {
 	)
 }
 
+func (env *Env) CommandDeps() CommandDeps {
+	return CommandDeps{
+		Config:    env.ConfigDeps(),
+		Bootstrap: env.BootstrapDeps(),
+		Mock:      env.MockDeps(),
+	}
+}
+
 func (env *Env) ResetFlags() {
 	ResetFlags(env.ConfigDeps())
 }

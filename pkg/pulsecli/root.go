@@ -8,42 +8,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type Options struct {
+type CommandSpec struct {
 	Use             string
 	Short           string
 	Long            string
 	Version         string
 	VersionTemplate string
-	RunE            func(context.Context) error
 	VersionPrinter  func(io.Writer)
-	Config          *ConfigDeps
-	Bootstrap       *BootstrapDeps
-	Mock            *MockDeps
 }
 
-func NewRootCommand(opts Options) *cobra.Command {
+type RuntimeSpec struct {
+	Run func(context.Context) error
+}
+
+type CommandDeps struct {
+	Config    *ConfigDeps
+	Bootstrap *BootstrapDeps
+	Mock      *MockDeps
+}
+
+func NewRootCommand(command CommandSpec, runtime RuntimeSpec, deps CommandDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          opts.Use,
-		Short:        opts.Short,
-		Long:         opts.Long,
+		Use:          command.Use,
+		Short:        command.Short,
+		Long:         command.Long,
 		SilenceUsage: true,
-		Version:      opts.Version,
+		Version:      command.Version,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if opts.RunE == nil {
+			if runtime.Run == nil {
 				return nil
 			}
-			return opts.RunE(cmd.Context())
+			return runtime.Run(cmd.Context())
 		},
 	}
 
-	if opts.VersionTemplate != "" {
-		cmd.SetVersionTemplate(opts.VersionTemplate)
+	if command.VersionTemplate != "" {
+		cmd.SetVersionTemplate(command.VersionTemplate)
 	}
 
-	cmd.AddCommand(newVersionCmd(opts))
-	cmd.AddCommand(newConfigCmd(opts.Config))
-	cmd.AddCommand(newBootstrapTokenCmd(opts.Bootstrap))
-	cmd.AddCommand(newMockCmd(opts.Mock))
+	cmd.AddCommand(newVersionCmd(command))
+	cmd.AddCommand(newConfigCmd(deps.Config))
+	cmd.AddCommand(newBootstrapTokenCmd(deps.Bootstrap))
+	cmd.AddCommand(newMockCmd(deps.Mock))
 
 	return cmd
 }
@@ -66,16 +72,16 @@ func ResetFlags(config *ConfigDeps) {
 	}
 }
 
-func newVersionCmd(opts Options) *cobra.Command {
+func newVersionCmd(command CommandSpec) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			if opts.VersionPrinter != nil {
-				opts.VersionPrinter(cmd.OutOrStdout())
+			if command.VersionPrinter != nil {
+				command.VersionPrinter(cmd.OutOrStdout())
 				return
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", opts.Version)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", command.Version)
 		},
 	}
 }

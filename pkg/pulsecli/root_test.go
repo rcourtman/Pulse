@@ -10,14 +10,15 @@ import (
 
 func TestNewRootCommandVersionSkipsRunE(t *testing.T) {
 	runCalled := false
-	cmd := NewRootCommand(Options{
+	cmd := NewRootCommand(CommandSpec{
 		Use:            "pulse",
 		Short:          "Pulse",
 		Long:           "Pulse",
 		Version:        "1.2.3",
-		RunE:           func(context.Context) error { runCalled = true; return nil },
 		VersionPrinter: func(w io.Writer) { _, _ = w.Write([]byte("Pulse 1.2.3\n")) },
-	})
+	}, RuntimeSpec{
+		Run: func(context.Context) error { runCalled = true; return nil },
+	}, CommandDeps{})
 	out := bytes.NewBuffer(nil)
 	cmd.SetOut(out)
 	cmd.SetErr(out)
@@ -35,11 +36,13 @@ func TestNewRootCommandVersionSkipsRunE(t *testing.T) {
 
 func TestNewRootCommandConfigInfoSkipsRunE(t *testing.T) {
 	runCalled := false
-	cmd := NewRootCommand(Options{
-		Use:    "pulse",
-		Short:  "Pulse",
-		Long:   "Pulse",
-		RunE:   func(context.Context) error { runCalled = true; return nil },
+	cmd := NewRootCommand(CommandSpec{
+		Use:   "pulse",
+		Short: "Pulse",
+		Long:  "Pulse",
+	}, RuntimeSpec{
+		Run: func(context.Context) error { runCalled = true; return nil },
+	}, CommandDeps{
 		Config: &ConfigDeps{},
 	})
 	out := bytes.NewBuffer(nil)

@@ -36,15 +36,20 @@ func newTestCLI(t *testing.T) *testCLI {
 func (tc *testCLI) execute(args ...string) (string, error) {
 	tc.t.Helper()
 
-	cmd := NewRootCommand(Options{
-		Use:       "pulse",
-		Short:     "Pulse",
-		Long:      "Pulse",
-		Version:   "1.2.3",
-		Config:    tc.configDeps(),
-		Bootstrap: tc.bootstrapDeps(),
-		Mock:      tc.mockDeps(),
-	})
+	cmd := NewRootCommand(
+		CommandSpec{
+			Use:     "pulse",
+			Short:   "Pulse",
+			Long:    "Pulse",
+			Version: "1.2.3",
+		},
+		RuntimeSpec{},
+		CommandDeps{
+			Config:    tc.configDeps(),
+			Bootstrap: tc.bootstrapDeps(),
+			Mock:      tc.mockDeps(),
+		},
+	)
 	cmd.SetArgs(args)
 
 	var err error
