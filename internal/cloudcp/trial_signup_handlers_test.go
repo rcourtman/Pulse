@@ -770,20 +770,22 @@ func TestTrialSignupHandleRedeemRejectsHostMismatch(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	now := time.Unix(1710000000, 0).UTC()
-	activationToken, err := pkglicensing.SignTrialActivationToken(priv, pkglicensing.TrialActivationClaims{
+	activationToken, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, pkglicensing.TrialActivationClaims{
 		OrgID:         "default",
 		Email:         "owner@example.com",
 		InstanceHost:  "wrong.example.com",
 		InstanceToken: "tsi_test",
 		ReturnURL:     "https://pulse.example.com/auth/trial-activate",
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    pkglicensing.TrialActivationIssuer,
+			Audience:  jwt.ClaimStrings{pkglicensing.TrialActivationAudience},
 			Subject:   "cs_bad_host",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),
 		},
-	})
+	}).SignedString(priv)
 	if err != nil {
-		t.Fatalf("SignTrialActivationToken: %v", err)
+		t.Fatalf("SignedString: %v", err)
 	}
 
 	h := NewTrialSignupHandlers(&CPConfig{

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
-	"net"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -792,20 +791,18 @@ func (h *TrialSignupHandlers) HandleTrialSignupRedeem(w http.ResponseWriter, r *
 	now := h.now().UTC()
 	claims, err := pkglicensing.VerifyTrialActivationToken(token, publicKey, "", now)
 	if err != nil {
-		http.Error(w, "invalid activation token", http.StatusBadRequest)
+		switch {
+		case errors.Is(err, pkglicensing.ErrTrialActivationHostMismatch):
+			http.Error(w, "activation token host mismatch", http.StatusBadRequest)
+		case errors.Is(err, pkglicensing.ErrTrialActivationReturnURLMissing), errors.Is(err, pkglicensing.ErrTrialActivationReturnURLInvalid):
+			http.Error(w, "invalid return url", http.StatusBadRequest)
+		default:
+			http.Error(w, "invalid activation token", http.StatusBadRequest)
+		}
 		return
 	}
-	if !isValidTrialReturnURL(claims.ReturnURL) {
-		http.Error(w, "invalid return url", http.StatusBadRequest)
-		return
-	}
-	instanceHost, err := trialSignupReturnURLHost(claims.ReturnURL)
-	if err != nil {
+	if _, err := trialSignupReturnURLHost(claims.ReturnURL); err != nil {
 		http.Error(w, "invalid return url host", http.StatusBadRequest)
-		return
-	}
-	if !strings.EqualFold(instanceHost, strings.TrimSpace(claims.InstanceHost)) {
-		http.Error(w, "activation token host mismatch", http.StatusBadRequest)
 		return
 	}
 	if strings.TrimSpace(claims.InstanceToken) == "" {
@@ -879,49 +876,8 @@ func isValidTrialEmail(email string) bool {
 }
 
 func isValidTrialReturnURL(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed == nil {
-		return false
-	}
-	if !parsed.IsAbs() || strings.TrimSpace(parsed.Host) == "" {
-		return false
-	}
-	if parsed.EscapedPath() != "/auth/trial-activate" {
-		return false
-	}
-	if strings.TrimSpace(parsed.RawQuery) != "" || strings.TrimSpace(parsed.Fragment) != "" {
-		return false
-	}
-	host := strings.TrimSpace(parsed.Hostname())
-	if host == "" {
-		return false
-	}
-	switch strings.ToLower(parsed.Scheme) {
-	case "https":
-		return true
-	case "http":
-		return isAllowedInsecureTrialReturnHost(host)
-	default:
-		return false
-	}
-}
-
-func isAllowedInsecureTrialReturnHost(host string) bool {
-	host = strings.ToLower(strings.TrimSpace(host))
-	if host == "" {
-		return false
-	}
-	if host == "localhost" || strings.HasSuffix(host, ".local") {
-		return true
-	}
-	if !strings.Contains(host, ".") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
-	}
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	_, err := pkglicensing.ValidateTrialActivationReturnURL(raw, "")
+	return err == nil
 }
 
 func normalizeTrialOrgID(raw string) string {

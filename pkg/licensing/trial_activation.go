@@ -35,6 +35,8 @@ var (
 	ErrTrialActivationPublicKeyInvalid  = errors.New("invalid trial activation public key")
 	ErrTrialActivationOrgIDMissing      = errors.New("trial activation org_id is required")
 	ErrTrialActivationInstanceMissing   = errors.New("trial activation instance host is required")
+	ErrTrialActivationReturnURLMissing  = errors.New("trial activation return_url is required")
+	ErrTrialActivationReturnURLInvalid  = errors.New("trial activation return_url is invalid")
 	ErrTrialActivationHostMismatch      = errors.New("trial activation token host mismatch")
 )
 
@@ -111,6 +113,12 @@ func SignTrialActivationToken(privateKey ed25519.PrivateKey, claims TrialActivat
 	if claims.InstanceHost == "" {
 		return "", ErrTrialActivationInstanceMissing
 	}
+	claims.ReturnURL = strings.TrimSpace(claims.ReturnURL)
+	returnHost, err := ValidateTrialActivationReturnURL(claims.ReturnURL, claims.InstanceHost)
+	if err != nil {
+		return "", err
+	}
+	claims.InstanceHost = returnHost
 
 	now := time.Now().UTC()
 	if claims.IssuedAt == nil {
@@ -185,12 +193,60 @@ func VerifyTrialActivationToken(token string, publicKey ed25519.PublicKey, expec
 	if claims.InstanceHost == "" {
 		return nil, ErrTrialActivationInstanceMissing
 	}
+	returnHost, err := ValidateTrialActivationReturnURL(claims.ReturnURL, claims.InstanceHost)
+	if err != nil {
+		return nil, err
+	}
+	claims.InstanceHost = returnHost
 
 	expected := normalizeHost(expectedInstanceHost)
 	if expected != "" && !strings.EqualFold(claims.InstanceHost, expected) {
 		return nil, ErrTrialActivationHostMismatch
 	}
 	return claims, nil
+}
+
+// ValidateTrialActivationReturnURL validates the hosted-trial callback target and
+// returns its normalized hostname. expectedInstanceHost, when non-empty, must
+// match the callback URL host.
+func ValidateTrialActivationReturnURL(raw, expectedInstanceHost string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", ErrTrialActivationReturnURLMissing
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil {
+		return "", ErrTrialActivationReturnURLInvalid
+	}
+	if !parsed.IsAbs() || strings.TrimSpace(parsed.Host) == "" {
+		return "", ErrTrialActivationReturnURLInvalid
+	}
+	if parsed.EscapedPath() != "/auth/trial-activate" {
+		return "", ErrTrialActivationReturnURLInvalid
+	}
+	if strings.TrimSpace(parsed.RawQuery) != "" || strings.TrimSpace(parsed.Fragment) != "" {
+		return "", ErrTrialActivationReturnURLInvalid
+	}
+
+	host := normalizeHost(parsed.Hostname())
+	if host == "" {
+		return "", ErrTrialActivationReturnURLInvalid
+	}
+	switch strings.ToLower(strings.TrimSpace(parsed.Scheme)) {
+	case "https":
+	case "http":
+		if !isAllowedInsecureTrialActivationReturnHost(host) {
+			return "", ErrTrialActivationReturnURLInvalid
+		}
+	default:
+		return "", ErrTrialActivationReturnURLInvalid
+	}
+
+	expected := normalizeHost(expectedInstanceHost)
+	if expected != "" && !strings.EqualFold(host, expected) {
+		return "", ErrTrialActivationHostMismatch
+	}
+	return host, nil
 }
 
 func randomJTI() (string, error) {
@@ -237,4 +293,22 @@ func normalizeHost(raw string) string {
 	}
 	host = strings.Trim(host, "[]")
 	return strings.ToLower(strings.TrimSpace(host))
+}
+
+func isAllowedInsecureTrialActivationReturnHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".local") {
+		return true
+	}
+	if !strings.Contains(host, ".") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
@@ -1147,13 +1148,9 @@ func isPublicTrialSignupEmailDomain(domain string) bool {
 }
 
 func trialSignupReturnURLHost(raw string) (string, error) {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed == nil {
+	host, err := pkglicensing.ValidateTrialActivationReturnURL(raw, "")
+	if err != nil {
 		return "", fmt.Errorf("invalid return url")
-	}
-	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
-	if host == "" {
-		return "", fmt.Errorf("invalid return url host")
 	}
 	return host, nil
 }
