@@ -34,6 +34,7 @@ import {
   isAgentProfileAssignableResource,
 } from '@/utils/agentResources';
 import {
+  getPreferredNamedEntityLabel,
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
@@ -186,9 +187,7 @@ export const AgentProfilesPanel: Component = () => {
         status: resource.status || 'unknown',
         lastSeen: resource.lastSeen,
       }))
-      .sort((a, b) =>
-        (a.displayName || a.hostname || a.id).localeCompare(b.displayName || b.hostname || b.id),
-      );
+      .sort((a, b) => getPreferredNamedEntityLabel(a).localeCompare(getPreferredNamedEntityLabel(b)));
   });
 
   // Get assignment for a specific agent

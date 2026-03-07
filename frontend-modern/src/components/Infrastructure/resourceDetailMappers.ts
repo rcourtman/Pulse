@@ -19,6 +19,10 @@ import {
   getActionableDockerRuntimeIdFromResource,
   getActionableKubernetesClusterIdFromResource,
 } from '@/utils/agentResources';
+import {
+  getPreferredResourceDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
 
 export type ProxmoxPlatformData = {
   nodeName?: string;
@@ -299,8 +303,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     resource.parentId ||
     resource.platformId ||
     resource.id;
-  const hostname =
-    resource.identity?.hostname || resource.displayName || resource.name || resource.id;
+  const hostname = getPreferredResourceHostname(resource) || getPreferredResourceDisplayName(resource);
 
   switch (resource.type) {
     case 'agent':
