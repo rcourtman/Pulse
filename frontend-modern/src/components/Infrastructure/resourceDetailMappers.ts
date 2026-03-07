@@ -187,6 +187,9 @@ const asString = (value: unknown): string | undefined =>
 const asNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
+const getPreferredHostLabel = (resource: Resource): string =>
+  getPreferredResourceHostname(resource) || getPreferredResourceDisplayName(resource) || resource.id;
+
 export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
   const explicitDiscoveryTarget = resource.discoveryTarget;
   const explicitDiscoveryAgentId = asString(
@@ -217,12 +220,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     })();
 
     if (resourceType) {
-      const hostname =
-        explicitDiscoveryTarget.hostname ||
-        resource.identity?.hostname ||
-        resource.displayName ||
-        resource.name ||
-        explicitDiscoveryTarget.resourceId;
+      const hostname = explicitDiscoveryTarget.hostname || getPreferredHostLabel(resource);
       const isHostDiscovery = isAgentDiscoveryResourceType(resourceType);
       const targetLabel = isHostDiscovery
         ? 'agent'
@@ -289,8 +287,8 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     proxmoxNodeName ||
     platformData?.agent?.hostname ||
     asString(dockerPlatformData?.hostname) ||
-    resource.identity?.hostname ||
-    resource.name ||
+    getPreferredResourceHostname(resource) ||
+    getPreferredResourceDisplayName(resource) ||
     resource.platformId ||
     resource.id;
   const agentLikeId = agentLookupId;
@@ -301,9 +299,10 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     actionableAgentId ||
     asString(resource.parentName) ||
     resource.parentId ||
+    getPreferredResourceHostname(resource) ||
     resource.platformId ||
     resource.id;
-  const hostname = getPreferredResourceHostname(resource) || getPreferredResourceDisplayName(resource);
+  const hostname = getPreferredHostLabel(resource);
 
   switch (resource.type) {
     case 'agent':
@@ -434,10 +433,10 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
 
   return {
     id: resource.id,
-    name: proxmox.nodeName ?? resource.name ?? resource.platformId ?? resource.id,
-    displayName: resource.displayName ?? resource.name,
+    name: proxmox.nodeName ?? getPreferredHostLabel(resource),
+    displayName: getPreferredResourceDisplayName(resource),
     instance: resource.platformId ?? resource.id,
-    host: proxmox.nodeName ?? resource.platformId ?? resource.id,
+    host: proxmox.nodeName ?? getPreferredHostLabel(resource),
     status: resource.status,
     type: resource.type,
     cpu: resource.cpu?.current ?? 0,
@@ -475,13 +474,13 @@ export const toAgentFromResource = (
     proxmoxCores,
   ].find((value) => typeof value === 'number' && value > 0);
 
-  const hostname = agent.hostname ?? resource.platformId ?? resource.name ?? resource.id;
+  const hostname = agent.hostname ?? getPreferredHostLabel(resource);
   const agentId = getActionableAgentIdFromResource(resource) || resource.id;
 
   return {
     id: agentId,
     hostname,
-    displayName: resource.displayName ?? hostname,
+    displayName: getPreferredResourceDisplayName(resource),
     platform: agent.platform,
     osName: agent.osName ?? 'Unknown',
     osVersion: agent.osVersion ?? '',

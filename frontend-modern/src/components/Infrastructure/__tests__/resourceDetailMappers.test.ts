@@ -4,6 +4,7 @@ import {
   healthToneClass,
   formatInteger,
   formatSourceType,
+  toDiscoveryConfig,
   toAgentFromResource,
   toNodeFromProxmox,
 } from '@/components/Infrastructure/resourceDetailMappers';
@@ -190,6 +191,27 @@ describe('resourceDetailMappers', () => {
 
       expect(agent?.id).toBe('agent-canonical');
       expect(agent?.id).not.toBe('resource:host:hash-1');
+    });
+  });
+
+  describe('toDiscoveryConfig', () => {
+    it('prefers the typed canonical hostname for explicit discovery targets', () => {
+      const config = toDiscoveryConfig({
+        ...createHybridHostResource(),
+        displayName: '',
+        canonicalIdentity: {
+          hostname: 'tower.canonical',
+          displayName: 'Tower',
+          primaryId: 'node:instance-pve1',
+        },
+        discoveryTarget: {
+          resourceType: 'agent',
+          agentId: 'agent-canonical',
+          resourceId: 'agent-canonical',
+        },
+      });
+
+      expect(config?.hostname).toBe('tower.canonical');
     });
   });
 });
