@@ -38,6 +38,13 @@ export interface EntitlementLegacyConnections {
   kubernetes_clusters: number;
 }
 
+export interface CommercialMigrationStatus {
+  source?: string;
+  state?: string;
+  reason?: string;
+  recommended_action?: string;
+}
+
 // Mirrors internal/api/entitlement_handlers.go:EntitlementPayload
 export interface LicenseEntitlements {
   capabilities: string[];
@@ -62,6 +69,7 @@ export interface LicenseEntitlements {
   overflow_days_remaining?: number;
   legacy_connections?: EntitlementLegacyConnections;
   has_migration_gap?: boolean;
+  commercial_migration?: CommercialMigrationStatus;
 }
 
 export interface ActivateLicenseResponse {

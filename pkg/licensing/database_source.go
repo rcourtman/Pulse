@@ -196,6 +196,7 @@ func cloneBillingState(state BillingState) BillingState {
 	cp.TrialEndsAt = cloneInt64Ptr(state.TrialEndsAt)
 	cp.TrialExtendedAt = cloneInt64Ptr(state.TrialExtendedAt)
 	cp.OverflowGrantedAt = cloneInt64Ptr(state.OverflowGrantedAt)
+	cp.CommercialMigration = CloneCommercialMigrationStatus(state.CommercialMigration)
 
 	return cp
 }

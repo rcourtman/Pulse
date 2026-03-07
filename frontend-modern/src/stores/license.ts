@@ -60,6 +60,7 @@ export async function loadLicenseStatus(force = false): Promise<void> {
         kubernetes_clusters: 0,
       },
       has_migration_gap: false,
+      commercial_migration: undefined,
     });
     setLoaded(true);
   } finally {

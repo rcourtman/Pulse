@@ -35,6 +35,7 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	normalized.TrialExtendedAt = cloneInt64Ptr(state.TrialExtendedAt)
 	normalized.OverflowGrantedAt = cloneInt64Ptr(state.OverflowGrantedAt)
 	normalized.QuickstartCreditsGrantedAt = cloneInt64Ptr(state.QuickstartCreditsGrantedAt)
+	normalized.CommercialMigration = CloneCommercialMigrationStatus(state.CommercialMigration)
 
 	// Normalize string fields.
 	normalized.PlanVersion = strings.TrimSpace(normalized.PlanVersion)
@@ -44,6 +45,7 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	normalized.StripeCustomerID = strings.TrimSpace(normalized.StripeCustomerID)
 	normalized.StripeSubscriptionID = strings.TrimSpace(normalized.StripeSubscriptionID)
 	normalized.StripePriceID = strings.TrimSpace(normalized.StripePriceID)
+	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	// Migration shim: rename legacy "max_nodes" key to "max_agents".
 	// Existing billing.json files may still use the old key name.

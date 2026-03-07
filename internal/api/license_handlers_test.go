@@ -406,6 +406,9 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 	if !resp.Success {
 		t.Fatalf("expected Success=true for legacy JWT exchange, got message %q", resp.Message)
 	}
+	if resp.Message != "Pulse v5 license migrated and activated successfully" {
+		t.Fatalf("message=%q, want %q", resp.Message, "Pulse v5 license migrated and activated successfully")
+	}
 	if svc := handler.Service(context.Background()); svc == nil || !svc.IsActivated() {
 		t.Fatalf("expected service activation state after exchange")
 	}
@@ -423,6 +426,92 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 	}
 	if legacyLeft != licenseKey {
 		t.Fatalf("expected legacy key to be preserved for downgrade, got %q", legacyLeft)
+	}
+}
+
+func TestHandleActivateLicense_ClearsCommercialMigrationStateOnNativeActivation(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID: "lic_v6_native",
+		Tier:      "pro",
+		State:     "active",
+		Features:  []string{"relay"},
+		MaxAgents: 10,
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		Email:     "native-v6@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	license.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { license.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/activate" {
+			t.Fatalf("path = %q, want /v1/activate", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"license": map[string]any{
+				"license_id": "lic_v6_native",
+				"state":      "active",
+				"tier":       "pro",
+				"features":   []string{"relay"},
+				"max_agents": 10,
+			},
+			"installation": map[string]any{
+				"installation_id":    "inst_v6_native",
+				"installation_token": "pit_live_native",
+				"status":             "active",
+			},
+			"grant": map[string]any{
+				"jwt":        grantJWT,
+				"jti":        "grant_v6_native",
+				"expires_at": time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	handler := createTestHandler(t)
+	store := config.NewFileBillingStore(handler.mtPersistence.BaseDataDir())
+	if err := store.SaveBillingState("default", &pkglicensing.BillingState{
+		Capabilities:      []string{},
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       string(entitlements.SubStateExpired),
+		SubscriptionState: entitlements.SubStateExpired,
+		CommercialMigration: &pkglicensing.CommercialMigrationStatus{
+			Source:            pkglicensing.CommercialMigrationSourceV5License,
+			State:             pkglicensing.CommercialMigrationStatePending,
+			Reason:            pkglicensing.CommercialMigrationReasonExchangeUnavailable,
+			RecommendedAction: pkglicensing.CommercialMigrationActionRetryActivation,
+		},
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{"license_key": "ppk_live_native_activation"})
+	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleActivateLicense(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	loaded, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected billing state to remain")
+	}
+	if loaded.CommercialMigration != nil {
+		t.Fatalf("commercial_migration=%+v, want nil", loaded.CommercialMigration)
 	}
 }
 

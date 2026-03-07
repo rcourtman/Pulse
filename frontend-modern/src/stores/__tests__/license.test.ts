@@ -96,6 +96,7 @@ describe('license store', () => {
         kubernetes_clusters: 0,
       },
       has_migration_gap: false,
+      commercial_migration: undefined,
     });
   });
 

@@ -382,6 +382,55 @@ func TestEntitlementHandler_TrialEligibility_AlreadyUsedDenied(t *testing.T) {
 	}
 }
 
+func TestEntitlementHandler_CommercialMigrationBlocksTrialEligibility(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	orgID := "default"
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities:      []string{},
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       string(entitlements.SubStateExpired),
+		SubscriptionState: entitlements.SubStateExpired,
+		CommercialMigration: &pkglicensing.CommercialMigrationStatus{
+			Source:            pkglicensing.CommercialMigrationSourceV5License,
+			State:             pkglicensing.CommercialMigrationStatePending,
+			Reason:            pkglicensing.CommercialMigrationReasonExchangeUnavailable,
+			RecommendedAction: pkglicensing.CommercialMigrationActionRetryActivation,
+		},
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	h := NewLicenseHandlers(mtp, false)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+	if payload.CommercialMigration == nil {
+		t.Fatal("expected commercial_migration payload")
+	}
+	if payload.CommercialMigration.State != pkglicensing.CommercialMigrationStatePending {
+		t.Fatalf("commercial_migration.state=%q, want %q", payload.CommercialMigration.State, pkglicensing.CommercialMigrationStatePending)
+	}
+	if payload.TrialEligible {
+		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
+	}
+	if payload.TrialEligibilityReason != "commercial_migration_pending" {
+		t.Fatalf("trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "commercial_migration_pending")
+	}
+}
+
 // countProMinusFreeFeatures returns the number of Pro features not included in Free.
 func countProMinusFreeFeatures() int {
 	freeSet := make(map[string]struct{}, len(license.TierFeatures[license.TierFree]))

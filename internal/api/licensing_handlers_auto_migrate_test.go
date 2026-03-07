@@ -210,6 +210,88 @@ func TestGetTenantComponents_SkipsExchange_WhenActivationStateExists(t *testing.
 	handlers.StopAllBackgroundLoops()
 }
 
+func TestGetTenantComponents_PersistsCommercialMigrationState_WhenAutoExchangeFails(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code":      "service_unavailable",
+			"message":   "exchange unavailable",
+			"retryable": true,
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+
+	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("user@example.com", pkglicensing.TierPro, 365*24*time.Hour)
+	if err != nil {
+		t.Fatalf("generate test license: %v", err)
+	}
+	cp, _ := mtp.GetPersistence("default")
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	if err := persistence.Save(legacyJWT); err != nil {
+		t.Fatalf("save legacy JWT: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, false)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if svc.IsActivated() {
+		t.Fatal("expected activation to remain unset after failed exchange")
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	state, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if state == nil || state.CommercialMigration == nil {
+		t.Fatal("expected commercial migration state to be persisted")
+	}
+	if state.CommercialMigration.State != pkglicensing.CommercialMigrationStatePending {
+		t.Fatalf("commercial_migration.state=%q, want %q", state.CommercialMigration.State, pkglicensing.CommercialMigrationStatePending)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	handlers.HandleEntitlements(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("entitlements status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode entitlements payload: %v", err)
+	}
+	if payload.CommercialMigration == nil {
+		t.Fatal("expected commercial_migration payload")
+	}
+	if payload.TrialEligible {
+		t.Fatalf("trial_eligible=%v, want false", payload.TrialEligible)
+	}
+	if payload.TrialEligibilityReason != "commercial_migration_pending" {
+		t.Fatalf("trial_eligibility_reason=%q, want %q", payload.TrialEligibilityReason, "commercial_migration_pending")
+	}
+
+	handlers.StopAllBackgroundLoops()
+}
+
 // base64RawURLEncode is a helper for tests.
 func base64RawURLEncode(data []byte) string {
 	// Use the same encoding as JWT: base64 URL-safe without padding.

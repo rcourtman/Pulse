@@ -59,6 +59,26 @@ func TestEvaluateTrialStartEligibility(t *testing.T) {
 			wantReason:       TrialStartDeniedSubscription,
 		},
 		{
+			name:             "denied when v5 migration is pending",
+			hasActiveLicense: false,
+			existing: &BillingState{CommercialMigration: &CommercialMigrationStatus{
+				Source: CommercialMigrationSourceV5License,
+				State:  CommercialMigrationStatePending,
+			}},
+			wantAllowed: false,
+			wantReason:  TrialStartDeniedMigrationPending,
+		},
+		{
+			name:             "denied when v5 migration failed",
+			hasActiveLicense: false,
+			existing: &BillingState{CommercialMigration: &CommercialMigrationStatus{
+				Source: CommercialMigrationSourceV5License,
+				State:  CommercialMigrationStateFailed,
+			}},
+			wantAllowed: false,
+			wantReason:  TrialStartDeniedMigrationFailed,
+		},
+		{
 			name:             "allowed on expired subscription",
 			hasActiveLicense: false,
 			existing:         &BillingState{SubscriptionState: SubStateExpired},
@@ -108,6 +128,20 @@ func TestTrialStartError(t *testing.T) {
 			wantCode:         "trial_not_available",
 			wantMessage:      "Trial cannot be started while a subscription is active",
 			wantIncludeOrgID: true,
+		},
+		{
+			name:             "migration pending",
+			reason:           TrialStartDeniedMigrationPending,
+			wantCode:         "trial_not_available",
+			wantMessage:      "Trial cannot be started while a paid v5 license migration is pending",
+			wantIncludeOrgID: false,
+		},
+		{
+			name:             "migration failed",
+			reason:           TrialStartDeniedMigrationFailed,
+			wantCode:         "trial_not_available",
+			wantMessage:      "Trial cannot be started until the paid v5 license migration is resolved",
+			wantIncludeOrgID: false,
 		},
 		{
 			name:             "unknown",

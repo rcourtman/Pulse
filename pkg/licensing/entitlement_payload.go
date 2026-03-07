@@ -77,6 +77,10 @@ type EntitlementPayload struct {
 	// HasMigrationGap indicates legacy/API-connected infrastructure is present and
 	// should be explained in the upgrade UI.
 	HasMigrationGap bool `json:"has_migration_gap"`
+
+	// CommercialMigration reports unresolved paid-license migration work entering
+	// from v5-era commercial state.
+	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.

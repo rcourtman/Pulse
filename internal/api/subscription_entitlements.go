@@ -58,7 +58,11 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 			payload.PlanVersion = pv
 		}
 	}
-	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(r.Context(), svc)
+	existing := h.billingStateForContext(r.Context())
+	if existing != nil {
+		payload.CommercialMigration = cloneCommercialMigrationStatusFromLicensing(existing.CommercialMigration)
+	}
+	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(r.Context(), svc, existing)
 	payload.HostedMode = h != nil && h.hostedMode
 
 	w.Header().Set("Content-Type", "application/json")
@@ -246,9 +250,9 @@ func (h *LicenseHandlers) overflowGrantedAtForContext(ctx context.Context) *int6
 	return existing.OverflowGrantedAt
 }
 
-func (h *LicenseHandlers) trialStartEligibility(ctx context.Context, svc *licenseService) (eligible bool, reason string) {
+func (h *LicenseHandlers) billingStateForContext(ctx context.Context) *billingState {
 	if h == nil || h.mtPersistence == nil {
-		return false, "unavailable"
+		return nil
 	}
 
 	orgID := GetOrgID(ctx)
@@ -259,7 +263,28 @@ func (h *LicenseHandlers) trialStartEligibility(ctx context.Context, svc *licens
 	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
 	existing, err := billingStore.GetBillingState(orgID)
 	if err != nil {
+		return nil
+	}
+	return existing
+}
+
+func (h *LicenseHandlers) trialStartEligibility(ctx context.Context, svc *licenseService, existing *billingState) (eligible bool, reason string) {
+	if h == nil || h.mtPersistence == nil {
 		return false, "unavailable"
+	}
+
+	orgID := GetOrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	if existing == nil {
+		billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+		loaded, err := billingStore.GetBillingState(orgID)
+		if err != nil {
+			return false, "unavailable"
+		}
+		existing = loaded
 	}
 
 	hasActiveLicense := svc != nil && svc.Current() != nil && svc.IsValid()

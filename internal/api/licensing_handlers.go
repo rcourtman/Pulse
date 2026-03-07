@@ -262,6 +262,9 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 			if err := service.RestoreActivation(activationState); err != nil {
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to restore activation")
 			} else {
+				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
+					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after activation restore")
+				}
 				// Start the background refresh loop for the restored grant.
 				service.StartGrantRefresh(context.Background())
 				// Start revocation polling if a feed token is configured.
@@ -283,8 +286,14 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 			}
 		} else if strings.TrimSpace(legacyJWT) != "" {
 			if _, err := service.Activate(legacyJWT); err != nil {
+				if persistErr := h.setCommercialMigrationState(orgID, classifyLegacyExchangeErrorFromLicensing(err)); persistErr != nil {
+					log.Warn().Str("org_id", orgID).Err(persistErr).Msg("Failed to persist commercial migration state")
+				}
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to auto-exchange persisted legacy license")
 			} else if service.IsActivated() {
+				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
+					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after successful auto-exchange")
+				}
 				service.StartGrantRefresh(context.Background())
 				if feedToken := revocationFeedToken(); feedToken != "" {
 					service.StartRevocationPoll(context.Background(), feedToken)
@@ -373,6 +382,39 @@ func (h *LicenseHandlers) getPersistenceForOrg(orgID string) (*licensePersistenc
 		return nil, err
 	}
 	return newLicensePersistenceFromLicensing(configPersistence.GetConfigDir())
+}
+
+func (h *LicenseHandlers) setCommercialMigrationState(orgID string, status *commercialMigrationStatusModel) error {
+	if h == nil || h.mtPersistence == nil {
+		return nil
+	}
+
+	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+	existing, err := billingStore.GetBillingState(orgID)
+	if err != nil {
+		return err
+	}
+	if existing == nil {
+		if status == nil {
+			return nil
+		}
+		existing = &billingState{
+			Capabilities:      []string{},
+			Limits:            map[string]int64{},
+			MetersEnabled:     []string{},
+			PlanVersion:       string(subscriptionStateExpiredValue),
+			SubscriptionState: subscriptionStateExpiredValue,
+		}
+	} else {
+		existing = normalizeBillingStateFromLicensing(existing)
+		if existing.SubscriptionState == "" {
+			existing.PlanVersion = string(subscriptionStateExpiredValue)
+			existing.SubscriptionState = subscriptionStateExpiredValue
+		}
+	}
+
+	existing.CommercialMigration = cloneCommercialMigrationStatusFromLicensing(status)
+	return billingStore.SaveBillingState(orgID, existing)
 }
 
 // Service returns the license service for use by other handlers.
@@ -969,6 +1011,7 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 	}
 
 	orgID := GetOrgID(r.Context())
+	migratedLegacyKey := !strings.HasPrefix(strings.TrimSpace(req.LicenseKey), activationKeyPrefixValue)
 
 	lic, err := service.Activate(req.LicenseKey)
 	if err != nil {
@@ -991,6 +1034,9 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 	// Persist based on activation type.
 	if service.IsActivated() {
 		h.stopHostedEntitlementRefreshLoop(orgID)
+		if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
+			log.Warn().Err(clearErr).Str("org_id", orgID).Msg("Failed to clear commercial migration state after activation")
+		}
 		// Activation state is already persisted by ActivateWithKey, but start the refresh loop.
 		service.StartGrantRefresh(context.Background())
 		if feedToken := revocationFeedToken(); feedToken != "" {
@@ -1022,10 +1068,15 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		Surface: "license_api",
 	})
 
+	successMessage := "License activated successfully"
+	if migratedLegacyKey && service.IsActivated() {
+		successMessage = "Pulse v5 license migrated and activated successfully"
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ActivateLicenseResponse{
 		Success: true,
-		Message: "License activated successfully",
+		Message: successMessage,
 		Status:  service.Status(),
 	})
 }
@@ -1078,6 +1129,7 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 			existing.MetersEnabled = []string{}
 			existing.EntitlementJWT = ""
 			existing.EntitlementRefreshToken = ""
+			existing.CommercialMigration = nil
 			existing.PlanVersion = string(subscriptionStateExpiredValue)
 			existing.SubscriptionState = subscriptionStateExpiredValue
 			existing.TrialEndsAt = nil

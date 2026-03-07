@@ -80,6 +80,7 @@ export const ProLicensePanel: Component = () => {
   const showTrialStart = createMemo(() => {
     const current = entitlements();
     if (!current) return false;
+    if (current.commercial_migration?.state) return false;
     if (typeof current.trial_eligible === 'boolean') {
       return current.trial_eligible;
     }
@@ -276,6 +277,25 @@ export const ProLicensePanel: Component = () => {
     }
   });
 
+  const commercialMigrationNotice = createMemo(() => {
+    const migration = entitlements()?.commercial_migration;
+    if (!migration?.state) return null;
+
+    if (migration.state === 'pending') {
+      return {
+        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        title: 'v5 license migration pending',
+        body: 'Pulse detected a paid v5 license, but the automatic v6 exchange did not complete yet. Retry activation from this instance or retrieve the current v6 activation key. A new Pro trial stays blocked until this is resolved.',
+      };
+    }
+
+    return {
+      tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
+      title: 'v5 license migration needs attention',
+      body: 'Pulse detected a paid v5 license, but it could not be migrated automatically. Activate with the current v6 activation key, or retry with a supported v5 Pro/Lifetime key from this instance.',
+    };
+  });
+
   const hasPaidFeatures = createMemo(() => {
     const state = subscriptionState();
     return state === 'active' || state === 'trial' || state === 'grace';
@@ -338,6 +358,14 @@ export const ProLicensePanel: Component = () => {
         }
       >
         <Show when={trialActivationNotice()}>
+          {(notice) => (
+            <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
+              <p class="font-medium">{notice().title}</p>
+              <p class="mt-1 text-xs opacity-90">{notice().body}</p>
+            </div>
+          )}
+        </Show>
+        <Show when={commercialMigrationNotice()}>
           {(notice) => (
             <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
               <p class="font-medium">{notice().title}</p>

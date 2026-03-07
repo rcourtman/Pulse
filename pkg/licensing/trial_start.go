@@ -10,10 +10,12 @@ const DefaultTrialDuration = 14 * 24 * time.Hour
 type TrialStartDenialReason string
 
 const (
-	TrialStartAllowed            TrialStartDenialReason = ""
-	TrialStartDeniedLicense      TrialStartDenialReason = "license_active"
-	TrialStartDeniedAlreadyUsed  TrialStartDenialReason = "already_used"
-	TrialStartDeniedSubscription TrialStartDenialReason = "subscription_active"
+	TrialStartAllowed                TrialStartDenialReason = ""
+	TrialStartDeniedLicense          TrialStartDenialReason = "license_active"
+	TrialStartDeniedAlreadyUsed      TrialStartDenialReason = "already_used"
+	TrialStartDeniedSubscription     TrialStartDenialReason = "subscription_active"
+	TrialStartDeniedMigrationPending TrialStartDenialReason = "commercial_migration_pending"
+	TrialStartDeniedMigrationFailed  TrialStartDenialReason = "commercial_migration_failed"
 )
 
 type TrialStartDecision struct {
@@ -27,6 +29,14 @@ func EvaluateTrialStartEligibility(hasActiveLicense bool, existing *BillingState
 	}
 	if existing == nil {
 		return TrialStartDecision{Allowed: true, Reason: TrialStartAllowed}
+	}
+	if existing.CommercialMigration != nil {
+		switch existing.CommercialMigration.State {
+		case CommercialMigrationStatePending:
+			return TrialStartDecision{Allowed: false, Reason: TrialStartDeniedMigrationPending}
+		case CommercialMigrationStateFailed:
+			return TrialStartDecision{Allowed: false, Reason: TrialStartDeniedMigrationFailed}
+		}
 	}
 	if existing.TrialStartedAt != nil {
 		return TrialStartDecision{Allowed: false, Reason: TrialStartDeniedAlreadyUsed}
@@ -47,6 +57,10 @@ func TrialStartError(reason TrialStartDenialReason) (code, message string, inclu
 		return "trial_already_used", "Trial has already been used for this organization", true
 	case TrialStartDeniedSubscription:
 		return "trial_not_available", "Trial cannot be started while a subscription is active", true
+	case TrialStartDeniedMigrationPending:
+		return "trial_not_available", "Trial cannot be started while a paid v5 license migration is pending", false
+	case TrialStartDeniedMigrationFailed:
+		return "trial_not_available", "Trial cannot be started until the paid v5 license migration is resolved", false
 	default:
 		return "", "", false
 	}

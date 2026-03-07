@@ -2,13 +2,14 @@ package licensing
 
 // BillingState represents the billing/entitlement state for a tenant.
 type BillingState struct {
-	Capabilities            []string          `json:"capabilities"`
-	Limits                  map[string]int64  `json:"limits"`
-	MetersEnabled           []string          `json:"meters_enabled"`
-	EntitlementJWT          string            `json:"entitlement_jwt,omitempty"`
-	EntitlementRefreshToken string            `json:"entitlement_refresh_token,omitempty"`
-	PlanVersion             string            `json:"plan_version"`
-	SubscriptionState       SubscriptionState `json:"subscription_state"`
+	Capabilities            []string                   `json:"capabilities"`
+	Limits                  map[string]int64           `json:"limits"`
+	MetersEnabled           []string                   `json:"meters_enabled"`
+	EntitlementJWT          string                     `json:"entitlement_jwt,omitempty"`
+	EntitlementRefreshToken string                     `json:"entitlement_refresh_token,omitempty"`
+	CommercialMigration     *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
+	PlanVersion             string                     `json:"plan_version"`
+	SubscriptionState       SubscriptionState          `json:"subscription_state"`
 	// TrialStartedAt is the Unix timestamp when a trial was started (one per org ever).
 	TrialStartedAt *int64 `json:"trial_started_at,omitempty"`
 	// TrialEndsAt is the Unix timestamp when a trial expires.

@@ -42,6 +42,7 @@ type limitStatusModel = pkglicensing.LimitStatus
 type upgradeReasonModel = pkglicensing.UpgradeReason
 type entitlementUsageSnapshotModel = pkglicensing.EntitlementUsageSnapshot
 type legacyConnectionCountsModel = pkglicensing.LegacyConnectionCounts
+type commercialMigrationStatusModel = pkglicensing.CommercialMigrationStatus
 type conversionRecorder = pkglicensing.Recorder
 type conversionPipelineHealth = pkglicensing.PipelineHealth
 type conversionCollectionConfig = pkglicensing.CollectionConfig
@@ -101,6 +102,14 @@ func defaultBillingStateFromLicensing() *billingState {
 
 func normalizeBillingStateFromLicensing(state *billingState) *billingState {
 	return pkglicensing.NormalizeBillingState(state)
+}
+
+func cloneCommercialMigrationStatusFromLicensing(state *commercialMigrationStatusModel) *commercialMigrationStatusModel {
+	return pkglicensing.CloneCommercialMigrationStatus(state)
+}
+
+func classifyLegacyExchangeErrorFromLicensing(err error) *commercialMigrationStatusModel {
+	return pkglicensing.ClassifyLegacyExchangeError(err)
 }
 
 func isValidBillingSubscriptionStateFromLicensing(state subscriptionState) bool {

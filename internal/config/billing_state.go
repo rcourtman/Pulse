@@ -79,6 +79,7 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 			// Try migration chain: v6-pre-quickstart → pre-v6-legacy → tampered.
 			if verifyBillingIntegrityV6PreQuickstart(&state, hmacKey) {
 				// Valid v6 signature (before quickstart fields) — re-sign with current format.
+				state.CommercialMigration = nil
 				state.Integrity = billingIntegrity(&state, hmacKey)
 				if saveErr := s.SaveBillingState(orgID, &state); saveErr != nil {
 					log.Warn().
@@ -91,6 +92,7 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 				// Strip fields that didn't exist in the legacy era to prevent
 				// injection via tampered JSON before the HMAC covered them.
 				state.OverflowGrantedAt = nil
+				state.CommercialMigration = nil
 				state.QuickstartCreditsGranted = false
 				state.QuickstartCreditsUsed = 0
 				state.QuickstartCreditsGrantedAt = nil
@@ -215,16 +217,17 @@ func (s *FileBillingStore) loadHMACKey() ([]byte, error) {
 // affects billing logic, add it here too. Existing on-disk signatures will
 // auto-migrate on next read (see GetBillingState migration path).
 type billingIntegrityPayload struct {
-	Capabilities            []string                       `json:"capabilities"`
-	Limits                  map[string]int64               `json:"limits"`
-	EntitlementJWT          string                         `json:"entitlement_jwt"`
-	EntitlementRefreshToken string                         `json:"entitlement_refresh_token"`
-	PlanVersion             string                         `json:"plan_version"`
-	SubscriptionState       pkglicensing.SubscriptionState `json:"subscription_state"`
-	TrialStartedAt          *int64                         `json:"trial_started_at"`
-	TrialEndsAt             *int64                         `json:"trial_ends_at"`
-	TrialExtendedAt         *int64                         `json:"trial_extended_at"`
-	OverflowGrantedAt       *int64                         `json:"overflow_granted_at"`
+	Capabilities            []string                                `json:"capabilities"`
+	Limits                  map[string]int64                        `json:"limits"`
+	EntitlementJWT          string                                  `json:"entitlement_jwt"`
+	EntitlementRefreshToken string                                  `json:"entitlement_refresh_token"`
+	CommercialMigration     *pkglicensing.CommercialMigrationStatus `json:"commercial_migration,omitempty"`
+	PlanVersion             string                                  `json:"plan_version"`
+	SubscriptionState       pkglicensing.SubscriptionState          `json:"subscription_state"`
+	TrialStartedAt          *int64                                  `json:"trial_started_at"`
+	TrialEndsAt             *int64                                  `json:"trial_ends_at"`
+	TrialExtendedAt         *int64                                  `json:"trial_extended_at"`
+	OverflowGrantedAt       *int64                                  `json:"overflow_granted_at"`
 	// Quickstart credits gate free hosted Patrol runs — must be HMAC-protected.
 	QuickstartCreditsGranted   bool   `json:"quickstart_credits_granted"`
 	QuickstartCreditsUsed      int    `json:"quickstart_credits_used"`
@@ -249,6 +252,7 @@ func billingIntegrity(state *pkglicensing.BillingState, key []byte) string {
 		Limits:                     limits,
 		EntitlementJWT:             strings.TrimSpace(state.EntitlementJWT),
 		EntitlementRefreshToken:    strings.TrimSpace(state.EntitlementRefreshToken),
+		CommercialMigration:        pkglicensing.CloneCommercialMigrationStatus(state.CommercialMigration),
 		PlanVersion:                state.PlanVersion,
 		SubscriptionState:          state.SubscriptionState,
 		TrialStartedAt:             state.TrialStartedAt,

@@ -237,4 +237,32 @@ describe('ProLicensePanel', () => {
       screen.getByText(/Pulse activated the Pro trial for this instance/i),
     ).toBeInTheDocument();
   });
+
+  it('shows a migration-pending notice and hides the trial CTA', async () => {
+    mockEntitlements = {
+      capabilities: [],
+      limits: [],
+      subscription_state: 'expired',
+      upgrade_reasons: [],
+      tier: 'free',
+      trial_eligible: false,
+      trial_eligibility_reason: 'commercial_migration_pending',
+      commercial_migration: {
+        source: 'v5_license',
+        state: 'pending',
+        reason: 'exchange_unavailable',
+        recommended_action: 'retry_activation',
+      },
+    };
+
+    render(() => <ProLicensePanel />);
+
+    expect(screen.getByText('v5 license migration pending')).toBeInTheDocument();
+    expect(
+      screen.getByText(/automatic v6 exchange did not complete yet/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start 14-day pro trial/i }),
+    ).not.toBeInTheDocument();
+  });
 });
