@@ -35,6 +35,14 @@ type NamedEntity = {
   name?: string;
 };
 
+type CanonicalIdentityRecord = {
+  displayName?: string;
+  hostname?: string;
+  platformId?: string;
+  primaryId?: string;
+  aliases?: string[];
+};
+
 const asTrimmedString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -63,7 +71,18 @@ const formatIdentityTarget = (resourceType?: string, resourceId?: string): strin
   return type && id ? `${type}:${id}` : null;
 };
 
+const getCanonicalIdentityRecord = (resource: Resource): CanonicalIdentityRecord | undefined => {
+  const canonical = getPlatformDataRecord(resource)?.canonicalIdentity;
+  return canonical && typeof canonical === 'object'
+    ? (canonical as CanonicalIdentityRecord)
+    : undefined;
+};
+
 export const getPrimaryResourceIdentity = (resource: Resource): string => {
+  const canonical = getCanonicalIdentityRecord(resource);
+  const canonicalPrimaryId = asTrimmedString(canonical?.primaryId);
+  if (canonicalPrimaryId) return canonicalPrimaryId;
+
   const metricsIdentity = formatIdentityTarget(
     resource.metricsTarget?.resourceType,
     resource.metricsTarget?.resourceId,
@@ -104,13 +123,18 @@ export const getPrimaryResourceIdentity = (resource: Resource): string => {
 };
 
 export const getResourceIdentityAliases = (resource: Resource): string[] => {
+  const canonical = getCanonicalIdentityRecord(resource);
   const platformData = getPlatformDataRecord(resource);
   const platformAgent = getPlatformAgentRecord(resource);
   const proxmox = platformData?.proxmox as Record<string, unknown> | undefined;
   const pbs = platformData?.pbs as Record<string, unknown> | undefined;
   const pmg = platformData?.pmg as Record<string, unknown> | undefined;
+  const canonicalAliases = Array.isArray(canonical?.aliases)
+    ? canonical.aliases.map((alias) => asTrimmedString(alias)).filter((alias): alias is string => Boolean(alias))
+    : [];
 
   const raw = [
+    ...canonicalAliases,
     resource.metricsTarget?.resourceId,
     resource.discoveryTarget?.agentId,
     resource.discoveryTarget?.resourceId,
@@ -200,9 +224,11 @@ export const getPreferredNormalizedPlatformId = (
   resource.id;
 
 export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIdentityRow[] => {
+  const canonical = getCanonicalIdentityRecord(resource);
   const rows: ResourceIdentityRow[] = [];
-  if (resource.identity?.hostname) {
-    rows.push({ label: 'Hostname', value: resource.identity.hostname });
+  const hostname = asTrimmedString(canonical?.hostname) || resource.identity?.hostname;
+  if (hostname) {
+    rows.push({ label: 'Hostname', value: hostname });
   }
   if (resource.identity?.machineId) {
     rows.push({ label: 'Machine ID', value: resource.identity.machineId });
@@ -234,6 +260,7 @@ export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIden
 };
 
 export const getPreferredResourceHostname = (resource: Resource): string | undefined => {
+  const canonical = getCanonicalIdentityRecord(resource);
   const platformData = getPlatformDataRecord(resource);
   const platformAgent = getPlatformAgentRecord(resource);
   const docker = platformData?.docker as Record<string, unknown> | undefined;
@@ -241,6 +268,7 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
   const pmg = platformData?.pmg as Record<string, unknown> | undefined;
 
   return (
+    asTrimmedString(canonical?.hostname) ||
     resource.identity?.hostname ||
     asTrimmedString(platformAgent?.hostname) ||
     asTrimmedString(docker?.hostname) ||
@@ -253,6 +281,7 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
 
 export const getPreferredResourceDisplayName = (resource: Resource): string =>
   resource.displayName ||
+  asTrimmedString(getCanonicalIdentityRecord(resource)?.displayName) ||
   getPreferredResourceHostname(resource) ||
   getPrimaryResourceIdentity(resource);
 

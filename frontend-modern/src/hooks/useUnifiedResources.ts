@@ -286,6 +286,13 @@ type APIResource = {
     resourceType?: string;
     resourceId?: string;
   };
+  canonicalIdentity?: {
+    displayName?: string;
+    hostname?: string;
+    platformId?: string;
+    primaryId?: string;
+    aliases?: string[];
+  };
 };
 
 type APIListResponse = {
@@ -391,6 +398,12 @@ const resolveStatus = (status?: string): ResourceStatus => {
   return 'unknown';
 };
 
+const asTrimmedString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
 const resolveType = (value?: string): ResourceType => {
   const normalized = (value || '').toLowerCase();
   switch (normalized) {
@@ -490,8 +503,9 @@ const toResource = (v2: APIResource): Resource => {
   );
   const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
-  const name = v2.name || v2.id;
-  const platformId = getPreferredNormalizedPlatformId(v2);
+  const canonical = v2.canonicalIdentity;
+  const name = asTrimmedString(canonical?.displayName) || v2.name || v2.id;
+  const platformId = asTrimmedString(canonical?.platformId) || getPreferredNormalizedPlatformId(v2);
 
   const discoveryResourceType = resolveDiscoveryResourceType(v2.discoveryTarget?.resourceType);
   const discoveryAgentId = v2.discoveryTarget?.agentId;
@@ -568,7 +582,7 @@ const toResource = (v2: APIResource): Resource => {
     tags: v2.tags,
     lastSeen: Number.isFinite(lastSeen) ? lastSeen : Date.now(),
     identity: {
-      hostname: v2.identity?.hostnames?.[0],
+      hostname: asTrimmedString(canonical?.hostname) || v2.identity?.hostnames?.[0],
       machineId: v2.identity?.machineId,
       ips: v2.identity?.ipAddresses,
     },
@@ -587,6 +601,7 @@ const toResource = (v2: APIResource): Resource => {
       ceph: v2.ceph,
       metrics: v2.metrics,
       discoveryTarget: v2.discoveryTarget,
+      canonicalIdentity: v2.canonicalIdentity,
     },
   };
 };

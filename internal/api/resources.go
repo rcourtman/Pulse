@@ -132,6 +132,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	paged, meta := paginate(resources, filters.page, filters.limit)
 	attachDiscoveryTargets(paged)
 	attachMetricsTargets(paged, registry)
+	attachCanonicalIdentities(paged)
 	pruneResourcesForListResponse(paged)
 
 	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
@@ -204,6 +205,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	resourceCopy := *resource
 	attachDiscoveryTarget(&resourceCopy)
 	attachMetricsTarget(&resourceCopy, registry)
+	attachCanonicalIdentity(&resourceCopy)
 	resourceCopy.Type = frontendResourceType(resourceCopy)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1072,6 +1074,19 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 		return
 	}
 	resource.MetricsTarget = buildMetricsTarget(*resource, registry)
+}
+
+func attachCanonicalIdentities(resources []unified.Resource) {
+	for i := range resources {
+		attachCanonicalIdentity(&resources[i])
+	}
+}
+
+func attachCanonicalIdentity(resource *unified.Resource) {
+	if resource == nil {
+		return
+	}
+	unified.RefreshCanonicalIdentity(resource)
 }
 
 // frontendResourceType maps backend ResourceType values to API/frontend type

@@ -37,6 +37,7 @@ func cloneResource(in *Resource) Resource {
 	out.Kubernetes = cloneK8sData(in.Kubernetes)
 	out.PhysicalDisk = clonePhysicalDiskMeta(in.PhysicalDisk)
 	out.Ceph = cloneCephMeta(in.Ceph)
+	RefreshCanonicalIdentity(&out)
 	return out
 }
 

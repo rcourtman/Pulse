@@ -283,6 +283,53 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('prefers backend canonical identity fields over frontend fallback inference', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'hybrid-host-1',
+            name: 'fallback-name',
+            identity: {
+              hostnames: ['legacy-host.local'],
+            },
+            proxmox: { nodeName: 'legacy-node' },
+            canonicalIdentity: {
+              displayName: 'Tower',
+              hostname: 'tower.local',
+              platformId: 'pve1',
+              primaryId: 'node:instance-pve1',
+              aliases: ['node:instance-pve1', 'instance-pve1', 'tower.local'],
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].name).toBe('Tower');
+    expect(result!.resources()[0].displayName).toBe('Tower');
+    expect(result!.resources()[0].platformId).toBe('pve1');
+    expect(result!.resources()[0].identity?.hostname).toBe('tower.local');
+    expect(
+      (result!.resources()[0].platformData as Record<string, unknown>).canonicalIdentity,
+    ).toMatchObject({
+      primaryId: 'node:instance-pve1',
+      hostname: 'tower.local',
+    });
+
+    dispose();
+  });
+
   it('uses backend resources as canonical infrastructure state even with non-canonical websocket fields', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

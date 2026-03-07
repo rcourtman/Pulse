@@ -55,6 +55,35 @@ describe('resourceIdentity', () => {
     ).toBe('agent:agent-1');
   });
 
+  it('prefers backend canonical identity when present', () => {
+    const resource = makeResource({
+      displayName: '',
+      identity: {
+        hostname: 'legacy-host.local',
+      },
+      platformData: {
+        canonicalIdentity: {
+          primaryId: 'node:instance-pve1',
+          hostname: 'tower.local',
+          aliases: ['node:instance-pve1', 'instance-pve1', 'tower.local'],
+        },
+      },
+    });
+
+    expect(getPrimaryResourceIdentity(resource)).toBe('node:instance-pve1');
+    expect(getResourceIdentityAliases(resource)).toEqual([
+      'node:instance-pve1',
+      'instance-pve1',
+      'tower.local',
+      'legacy-host.local',
+    ]);
+    expect(getPreferredResourceHostname(resource)).toBe('tower.local');
+    expect(getPrimaryResourceIdentityRows(resource)[0]).toEqual({
+      label: 'Hostname',
+      value: 'tower.local',
+    });
+  });
+
   it('uses actionable linked identities before falling back to unified ids', () => {
     expect(
       getPrimaryResourceIdentity(

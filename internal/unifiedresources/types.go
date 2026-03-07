@@ -17,8 +17,9 @@ type Resource struct {
 	LastSeen   time.Time      `json:"lastSeen"`
 	UpdatedAt  time.Time      `json:"updatedAt,omitempty"`
 
-	DiscoveryTarget *DiscoveryTarget `json:"discoveryTarget,omitempty"`
-	MetricsTarget   *MetricsTarget   `json:"metricsTarget,omitempty"`
+	DiscoveryTarget *DiscoveryTarget   `json:"discoveryTarget,omitempty"`
+	MetricsTarget   *MetricsTarget     `json:"metricsTarget,omitempty"`
+	Canonical       *CanonicalIdentity `json:"canonicalIdentity,omitempty"`
 
 	Sources      []DataSource                `json:"sources"`
 	SourceStatus map[DataSource]SourceStatus `json:"sourceStatus,omitempty"`
@@ -60,6 +61,17 @@ type DiscoveryTarget struct {
 type MetricsTarget struct {
 	ResourceType string `json:"resourceType"`
 	ResourceID   string `json:"resourceId"`
+}
+
+// CanonicalIdentity describes the backend-chosen identity contract for a
+// unified resource so frontend surfaces do not need to reconstruct labels and
+// host hints from source-specific facets.
+type CanonicalIdentity struct {
+	DisplayName string   `json:"displayName,omitempty"`
+	Hostname    string   `json:"hostname,omitempty"`
+	PlatformID  string   `json:"platformId,omitempty"`
+	PrimaryID   string   `json:"primaryId,omitempty"`
+	Aliases     []string `json:"aliases,omitempty"`
 }
 
 // ResourceType represents the kind of resource.

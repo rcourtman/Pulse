@@ -132,6 +132,18 @@ func TestResourceListMergesLinkedHost(t *testing.T) {
 	if resource.DiscoveryTarget.AgentID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
 		t.Fatalf("discovery target = %+v, want host-1/host-1", resource.DiscoveryTarget)
 	}
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity on merged host")
+	}
+	if got := resource.Canonical.DisplayName; got != "pve1" {
+		t.Fatalf("canonical displayName = %q, want pve1", got)
+	}
+	if got := resource.Canonical.PlatformID; got != "pve1" {
+		t.Fatalf("canonical platformId = %q, want pve1", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "node:instance-pve1" {
+		t.Fatalf("canonical primaryId = %q, want node:instance-pve1", got)
+	}
 }
 
 func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
