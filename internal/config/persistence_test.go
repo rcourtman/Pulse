@@ -2137,3 +2137,41 @@ func TestLoadNodesConfig_PVEMonitorBackupsMigration(t *testing.T) {
 		t.Errorf("expected MonitorBackups to be migrated to true, got false")
 	}
 }
+
+func TestLoadNodesConfig_PBSMonitorDatastoresMigration(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	// Save PBS instance with MonitorDatastores=false (simulating old config)
+	pbsInstances := []config.PBSInstance{
+		{
+			Name:              "pbs-no-datastores",
+			Host:              "https://pbs.local:8007",
+			User:              "admin@pbs",
+			Password:          "secret",
+			MonitorBackups:    true,
+			MonitorDatastores: false, // This should be migrated to true
+		},
+	}
+
+	if err := cp.SaveNodesConfig(nil, pbsInstances, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PBSInstances) != 1 {
+		t.Fatalf("expected 1 PBS instance, got %d", len(loaded.PBSInstances))
+	}
+
+	pbs := loaded.PBSInstances[0]
+	if !pbs.MonitorDatastores {
+		t.Errorf("expected MonitorDatastores to be migrated to true, got false")
+	}
+}

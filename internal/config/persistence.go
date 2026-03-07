@@ -1476,6 +1476,18 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			config.PBSInstances[i].MonitorBackups = true
 			migrationApplied = true
 		}
+
+		// Migration: Ensure MonitorDatastores is enabled for PBS instances
+		// Without this, PBS datastores aren't polled, which means backup data
+		// from the direct PBS connection is never fetched — and PVE-side backup
+		// polling skips PBS storages when a direct connection exists.
+		if !config.PBSInstances[i].MonitorDatastores {
+			log.Info().
+				Str("instance", config.PBSInstances[i].Name).
+				Msg("Enabling MonitorDatastores for PBS instance (was disabled)")
+			config.PBSInstances[i].MonitorDatastores = true
+			migrationApplied = true
+		}
 	}
 
 	for i := range config.PMGInstances {

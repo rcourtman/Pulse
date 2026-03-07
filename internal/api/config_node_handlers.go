@@ -536,23 +536,23 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		if req.MonitorBackups != nil {
 			monitorBackups = *req.MonitorBackups
 		}
-		monitorDatastores := false
+		monitorDatastores := true // Default to true for PBS
 		if req.MonitorDatastores != nil {
 			monitorDatastores = *req.MonitorDatastores
 		}
-		monitorSyncJobs := false
+		monitorSyncJobs := true // Default to true for PBS
 		if req.MonitorSyncJobs != nil {
 			monitorSyncJobs = *req.MonitorSyncJobs
 		}
-		monitorVerifyJobs := false
+		monitorVerifyJobs := true // Default to true for PBS
 		if req.MonitorVerifyJobs != nil {
 			monitorVerifyJobs = *req.MonitorVerifyJobs
 		}
-		monitorPruneJobs := false
+		monitorPruneJobs := true // Default to true for PBS
 		if req.MonitorPruneJobs != nil {
 			monitorPruneJobs = *req.MonitorPruneJobs
 		}
-		monitorGarbageJobs := false
+		monitorGarbageJobs := true // Default to true for PBS
 		if req.MonitorGarbageJobs != nil {
 			monitorGarbageJobs = *req.MonitorGarbageJobs
 		}
