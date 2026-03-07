@@ -8,16 +8,16 @@ import (
 	"testing"
 )
 
-func TestGetPassphraseFromEnvAndState(t *testing.T) {
+func TestGetPassphraseFromEnvAndRuntime(t *testing.T) {
 	t.Setenv("PULSE_PASSPHRASE", "from-env")
 	flagValue := "from-flag"
-	state := &State{Passphrase: &flagValue}
-	if got := GetPassphrase(state, "ignored", false); got != "from-env" {
+	runtime := &Runtime{Config: ConfigRuntime{Passphrase: &flagValue}}
+	if got := GetPassphrase(runtime, "ignored", false); got != "from-env" {
 		t.Fatalf("GetPassphrase() = %q, want from-env", got)
 	}
 
 	t.Setenv("PULSE_PASSPHRASE", "")
-	if got := GetPassphrase(state, "ignored", false); got != "from-flag" {
+	if got := GetPassphrase(runtime, "ignored", false); got != "from-flag" {
 		t.Fatalf("GetPassphrase() = %q, want from-flag", got)
 	}
 }

@@ -14,10 +14,10 @@ func TestShowBootstrapTokenUsesStateExitOnMissingToken(t *testing.T) {
 
 	exitCode := 0
 	exitFn := func(code int) { exitCode = code }
-	state := &State{ExitFunc: &exitFn}
+	runtime := &Runtime{Bootstrap: BootstrapRuntime{Exit: exitFn}}
 
 	output := captureOutput(t, func() {
-		ShowBootstrapToken(state)
+		ShowBootstrapToken(runtime)
 	})
 
 	if exitCode != 1 {
@@ -37,7 +37,7 @@ func TestShowBootstrapTokenPrintsToken(t *testing.T) {
 	}
 
 	output := captureOutput(t, func() {
-		ShowBootstrapToken(&State{})
+		ShowBootstrapToken(&Runtime{})
 	})
 
 	if !strings.Contains(output, "test-token") {

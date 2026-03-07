@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func ShowBootstrapToken(state *State) {
+func ShowBootstrapToken(runtime *Runtime) {
 	dataPath := os.Getenv("PULSE_DATA_DIR")
 	if dataPath == "" {
 		if os.Getenv("PULSE_DOCKER") == "true" {
@@ -32,18 +32,18 @@ func ShowBootstrapToken(state *State) {
 			fmt.Println("║  • Server hasn't started yet (token not generated)                    ║")
 			fmt.Printf("║  • Token file not found: %-44s║\n", tokenPath)
 			fmt.Println("╚═══════════════════════════════════════════════════════════════════════╝")
-			stateExit(state, 1)
+			bootstrapExit(runtime, 1)
 			return
 		}
 		fmt.Printf("Error reading bootstrap token: %v\n", err)
-		stateExit(state, 1)
+		bootstrapExit(runtime, 1)
 		return
 	}
 
 	token := strings.TrimSpace(string(data))
 	if token == "" {
 		fmt.Println("Error: Bootstrap token file is empty")
-		stateExit(state, 1)
+		bootstrapExit(runtime, 1)
 		return
 	}
 
@@ -63,7 +63,7 @@ func ShowBootstrapToken(state *State) {
 	fmt.Println("╚═══════════════════════════════════════════════════════════════════════╝")
 }
 
-func newBootstrapTokenCmd(state *State) *cobra.Command {
+func newBootstrapTokenCmd(runtime *Runtime) *cobra.Command {
 	return &cobra.Command{
 		Use:   "bootstrap-token",
 		Short: "Display the bootstrap setup token",
@@ -73,7 +73,7 @@ This token is generated on first boot and must be entered in the web UI
 to unlock the initial setup wizard. The token is automatically deleted
 after successful setup completion.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			ShowBootstrapToken(state)
+			ShowBootstrapToken(runtime)
 		},
 	}
 }

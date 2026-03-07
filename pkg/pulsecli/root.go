@@ -16,7 +16,7 @@ type Options struct {
 	VersionTemplate string
 	RunE            func(context.Context) error
 	VersionPrinter  func(io.Writer)
-	State           *State
+	Runtime         *Runtime
 }
 
 func NewRootCommand(opts Options) *cobra.Command {
@@ -39,28 +39,28 @@ func NewRootCommand(opts Options) *cobra.Command {
 	}
 
 	cmd.AddCommand(newVersionCmd(opts))
-	cmd.AddCommand(newConfigCmd(opts.State))
-	cmd.AddCommand(newBootstrapTokenCmd(opts.State))
-	cmd.AddCommand(newMockCmd(opts.State))
+	cmd.AddCommand(newConfigCmd(opts.Runtime))
+	cmd.AddCommand(newBootstrapTokenCmd(opts.Runtime))
+	cmd.AddCommand(newMockCmd(opts.Runtime))
 
 	return cmd
 }
 
-func ResetFlags(state *State) {
-	if state == nil {
+func ResetFlags(runtime *Runtime) {
+	if runtime == nil {
 		return
 	}
-	if state.ExportFile != nil {
-		*state.ExportFile = ""
+	if runtime.Config.ExportFile != nil {
+		*runtime.Config.ExportFile = ""
 	}
-	if state.ImportFile != nil {
-		*state.ImportFile = ""
+	if runtime.Config.ImportFile != nil {
+		*runtime.Config.ImportFile = ""
 	}
-	if state.Passphrase != nil {
-		*state.Passphrase = ""
+	if runtime.Config.Passphrase != nil {
+		*runtime.Config.Passphrase = ""
 	}
-	if state.ForceImport != nil {
-		*state.ForceImport = false
+	if runtime.Config.ForceImport != nil {
+		*runtime.Config.ForceImport = false
 	}
 }
 

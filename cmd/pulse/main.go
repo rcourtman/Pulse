@@ -31,15 +31,32 @@ var (
 	mockEnvStat       = os.Stat
 )
 
-var cliState = &pulsecli.State{
-	ExportFile:        &exportFile,
-	ImportFile:        &importFile,
-	Passphrase:        &passphrase,
-	ForceImport:       &forceImport,
-	ExitFunc:          &osExit,
-	ReadPassword:      &readPassword,
-	MockEnvDefaultDir: &mockEnvDefaultDir,
-	MockEnvStat:       &mockEnvStat,
+var cliRuntime = &pulsecli.Runtime{
+	Config: pulsecli.ConfigRuntime{
+		ExportFile:  &exportFile,
+		ImportFile:  &importFile,
+		Passphrase:  &passphrase,
+		ForceImport: &forceImport,
+		ReadPassword: func(fd int) ([]byte, error) {
+			return readPassword(fd)
+		},
+	},
+	Bootstrap: pulsecli.BootstrapRuntime{
+		Exit: func(code int) {
+			osExit(code)
+		},
+	},
+	Mock: pulsecli.MockRuntime{
+		Exit: func(code int) {
+			osExit(code)
+		},
+		DefaultEnvDir: func() string {
+			return mockEnvDefaultDir
+		},
+		Stat: func(path string) (os.FileInfo, error) {
+			return mockEnvStat(path)
+		},
+	},
 }
 
 var rootCmd = newRootCmd()
@@ -58,7 +75,7 @@ func newRootCmd() *cobra.Command {
 		VersionTemplate: "Pulse {{.Version}}\n",
 		RunE:            runServer,
 		VersionPrinter:  printVersion,
-		State:           cliState,
+		Runtime:         cliRuntime,
 	})
 }
 
