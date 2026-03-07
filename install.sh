@@ -29,6 +29,7 @@ CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
+STOPPED_PULSE_SERVICE=""
 
 # Installer version - the major version this script is bundled with
 INSTALLER_MAJOR_VERSION=5
@@ -186,6 +187,35 @@ safe_systemctl() {
         fi
     }
 }
+
+stop_pulse_service_for_update() {
+    local service_name="${1:-$(detect_service_name)}"
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 1
+    fi
+
+    if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        STOPPED_PULSE_SERVICE="$service_name"
+        print_info "Stopping existing Pulse service ($service_name)..."
+        safe_systemctl stop "$service_name" || true
+        sleep 2
+        return 0
+    fi
+
+    return 1
+}
+
+restart_stopped_pulse_service_on_failure() {
+    local exit_code=$?
+
+    if [[ "$exit_code" -ne 0 ]] && [[ -n "$STOPPED_PULSE_SERVICE" ]] && command -v systemctl >/dev/null 2>&1; then
+        print_info "Restarting Pulse service ($STOPPED_PULSE_SERVICE) after failed update"
+        safe_systemctl start "$STOPPED_PULSE_SERVICE" || true
+    fi
+}
+
+trap restart_stopped_pulse_service_on_failure EXIT
 
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
@@ -2084,12 +2114,8 @@ download_pulse() {
         
         # Detect and stop existing service BEFORE downloading (to free the binary)
         EXISTING_SERVICE=$(detect_service_name)
-        if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
-            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-            safe_systemctl stop $EXISTING_SERVICE || true
-            sleep 2  # Give the process time to fully stop and release the binary
-        fi
-        
+        stop_pulse_service_for_update "$EXISTING_SERVICE" || true
+
         cd /tmp
 
         if ! command -v sha256sum >/dev/null 2>&1; then
@@ -2696,11 +2722,7 @@ build_from_source() {
     fi
 
     service_name=$(detect_service_name)
-    if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        print_info "Stopping existing Pulse service ($service_name)..."
-        safe_systemctl stop "$service_name" || true
-        sleep 2
-    fi
+    stop_pulse_service_for_update "$service_name" || true
 
     mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/scripts"
 
@@ -3063,8 +3085,11 @@ start_pulse() {
     if ! safe_systemctl start $SERVICE_NAME; then
         print_info "Note: systemctl start failed (common in unprivileged containers)"
         print_info "The service will start automatically when the container starts"
+        STOPPED_PULSE_SERVICE=""
         return 0
     fi
+
+    STOPPED_PULSE_SERVICE=""
     
     # Wait for service to start
     sleep 3
@@ -3239,7 +3264,7 @@ main() {
             SERVICE_NAME=$(detect_service_name)
             
             backup_existing
-            systemctl stop $SERVICE_NAME || true
+            stop_pulse_service_for_update "$SERVICE_NAME" || true
             create_user
             download_pulse
             setup_update_command
@@ -3449,7 +3474,7 @@ main() {
                 fi
                 
                 backup_existing
-                systemctl stop $SERVICE_NAME || true
+                stop_pulse_service_for_update "$SERVICE_NAME" || true
                 create_user
                 download_pulse
                 setup_update_command
@@ -3504,7 +3529,7 @@ main() {
                 fi
                 
                 backup_existing
-                systemctl stop $SERVICE_NAME || true
+                stop_pulse_service_for_update "$SERVICE_NAME" || true
                 create_user
                 download_pulse
                 setup_directories

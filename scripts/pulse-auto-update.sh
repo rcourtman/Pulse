@@ -140,10 +140,25 @@ detect_service_name() {
     fi
 }
 
+restart_service_if_needed() {
+    local service_name=$1
+    local service_was_active=$2
+
+    if [[ "$service_was_active" == "true" ]]; then
+        log info "Starting Pulse service after failed update"
+        systemctl start "$service_name" || true
+    fi
+}
+
 # Perform the update
 perform_update() {
     local new_version=$1
     local service_name=$(detect_service_name)
+    local service_was_active=false
+
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        service_was_active=true
+    fi
     
     log info "Starting update to $new_version"
     
@@ -211,8 +226,7 @@ perform_update() {
                 cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
             fi
             
-            # Restart service with old version
-            systemctl restart "$service_name" || true
+            restart_service_if_needed "$service_name" "$service_was_active"
             
             # Clean up backup
             rm -rf "$backup_dir"
@@ -234,6 +248,8 @@ perform_update() {
         if [[ -f "$backup_dir/VERSION" ]]; then
             cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
         fi
+
+        restart_service_if_needed "$service_name" "$service_was_active"
         
         # Clean up backup
         rm -rf "$backup_dir"
