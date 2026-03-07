@@ -4221,6 +4221,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if alertConfig, err := m.configPersist.LoadAlertConfig(); err == nil {
 		m.alertManager.UpdateConfig(*alertConfig)
 		// Apply schedule settings to notification manager
+		m.notificationMgr.SetEnabled(alertConfig.Enabled && alertConfig.ActivationState == alerts.ActivationActive)
 		m.notificationMgr.SetCooldown(alertConfig.Schedule.Cooldown)
 		groupWindow := alertConfig.Schedule.Grouping.Window
 		if groupWindow == 0 && alertConfig.Schedule.GroupingWindow != 0 {

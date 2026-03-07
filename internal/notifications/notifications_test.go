@@ -2954,6 +2954,38 @@ func TestProcessQueuedNotification_WebhookUsesCurrentConfig(t *testing.T) {
 	}
 }
 
+func TestProcessQueuedNotification_CancelledWhenNotificationsDisabled(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.SetEnabled(false)
+
+	currentWebhook := WebhookConfig{
+		ID:      "wh-disabled",
+		Name:    "disabled",
+		URL:     "https://example.invalid/webhook",
+		Method:  http.MethodPost,
+		Enabled: true,
+	}
+	nm.AddWebhook(currentWebhook)
+
+	configJSON, err := json.Marshal(currentWebhook)
+	if err != nil {
+		t.Fatalf("marshal queued webhook: %v", err)
+	}
+
+	err = nm.ProcessQueuedNotification(&QueuedNotification{
+		ID:     "test-webhook-global-disabled",
+		Type:   "webhook",
+		Config: configJSON,
+		Alerts: []*alerts.Alert{testQueuedAlert()},
+	})
+	if !errors.Is(err, ErrNotificationCancelled) {
+		t.Fatalf("expected queued webhook to be cancelled when notifications are globally disabled, got: %v", err)
+	}
+}
+
 func TestSetEmailConfig_DisableCancelsQueuedEmailNotifications(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

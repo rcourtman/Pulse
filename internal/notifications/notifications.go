@@ -651,6 +651,51 @@ func (n *NotificationManager) GetQueue() *NotificationQueue {
 	return n.queue
 }
 
+// SetEnabled toggles notification delivery globally for this runtime instance.
+func (n *NotificationManager) SetEnabled(enabled bool) {
+	var (
+		queue   *NotificationQueue
+		changed bool
+	)
+
+	n.mu.Lock()
+	changed = n.enabled != enabled
+	n.enabled = enabled
+	if !enabled {
+		for i := range n.pendingAlerts {
+			n.pendingAlerts[i] = nil
+		}
+		n.pendingAlerts = n.pendingAlerts[:0]
+		if n.groupTimer != nil {
+			n.groupTimer.Stop()
+			n.groupTimer = nil
+		}
+		queue = n.queue
+	}
+	n.mu.Unlock()
+
+	if changed {
+		log.Info().Bool("enabled", enabled).Msg("Updated notification manager enabled state")
+	}
+
+	if !enabled && queue != nil {
+		if err := queue.CancelByTypes([]string{
+			"email", "email_resolved", "email_escalation",
+			"webhook", "webhook_resolved", "webhook_escalation",
+			"apprise", "apprise_resolved", "apprise_escalation",
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to cancel queued notifications after global disable")
+		}
+	}
+}
+
+// IsEnabled reports whether notification delivery is currently enabled.
+func (n *NotificationManager) IsEnabled() bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.enabled
+}
+
 // SendAlert sends notifications for an alert
 func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	n.mu.Lock()
@@ -3367,9 +3412,13 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 
 func (n *NotificationManager) resolveQueuedEmailConfig() (EmailConfig, error) {
 	n.mu.RLock()
+	enabled := n.enabled
 	config := copyEmailConfig(n.emailConfig)
 	n.mu.RUnlock()
 
+	if !enabled {
+		return EmailConfig{}, fmt.Errorf("%w: notifications are disabled", ErrNotificationCancelled)
+	}
 	if !config.Enabled {
 		return EmailConfig{}, fmt.Errorf("%w: email notifications are disabled", ErrNotificationCancelled)
 	}
@@ -3379,9 +3428,13 @@ func (n *NotificationManager) resolveQueuedEmailConfig() (EmailConfig, error) {
 
 func (n *NotificationManager) resolveQueuedAppriseConfig() (AppriseConfig, error) {
 	n.mu.RLock()
+	enabled := n.enabled
 	config := copyAppriseConfig(n.appriseConfig)
 	n.mu.RUnlock()
 
+	if !enabled {
+		return AppriseConfig{}, fmt.Errorf("%w: notifications are disabled", ErrNotificationCancelled)
+	}
 	if !config.Enabled {
 		return AppriseConfig{}, fmt.Errorf("%w: Apprise notifications are disabled", ErrNotificationCancelled)
 	}
@@ -3391,9 +3444,13 @@ func (n *NotificationManager) resolveQueuedAppriseConfig() (AppriseConfig, error
 
 func (n *NotificationManager) resolveQueuedWebhookConfig(queued WebhookConfig) (WebhookConfig, error) {
 	n.mu.RLock()
+	enabled := n.enabled
 	webhooks := copyWebhookConfigs(n.webhooks)
 	n.mu.RUnlock()
 
+	if !enabled {
+		return WebhookConfig{}, fmt.Errorf("%w: notifications are disabled", ErrNotificationCancelled)
+	}
 	if queued.ID != "" {
 		for _, webhook := range webhooks {
 			if webhook.ID != queued.ID {

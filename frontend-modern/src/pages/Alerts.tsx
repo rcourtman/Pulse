@@ -1822,7 +1822,7 @@ export function Alerts() {
                       alertsActivation.config()?.observationWindowHours;
 
                     const alertConfig = {
-                      enabled: true,
+                      enabled: alertsActivation.config()?.enabled ?? true,
                       activationState: existingActivationState ?? undefined,
                       activationTime: existingActivationTime,
                       observationWindowHours: existingObservationWindowHours,
