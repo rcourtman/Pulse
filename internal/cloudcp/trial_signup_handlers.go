@@ -205,6 +205,7 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
           <form method="POST" action="/api/trial-signup/request-verification">
             <input type="hidden" name="org_id" value="{{.OrgID}}">
             <input type="hidden" name="return_url" value="{{.ReturnURL}}">
+            <input type="hidden" name="instance_token" value="{{.InstanceToken}}">
 
             <div class="row">
               <div>
@@ -261,6 +262,7 @@ type TrialSignupHandlers struct {
 type trialSignupPageData struct {
 	OrgID            string
 	ReturnURL        string
+	InstanceToken    string
 	ReturnTarget     string
 	Name             string
 	Email            string
@@ -291,16 +293,20 @@ func (h *TrialSignupHandlers) HandleStartProTrial(w http.ResponseWriter, r *http
 		return
 	}
 	data := trialSignupPageData{
-		OrgID:        normalizeTrialOrgID(r.URL.Query().Get("org_id")),
-		ReturnURL:    strings.TrimSpace(r.URL.Query().Get("return_url")),
-		Name:         strings.TrimSpace(r.URL.Query().Get("name")),
-		Email:        strings.TrimSpace(r.URL.Query().Get("email")),
-		Company:      strings.TrimSpace(r.URL.Query().Get("company")),
-		Cancelled:    strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
-		ReturnTarget: summarizeTrialReturnTarget(r.URL.Query().Get("return_url")),
+		OrgID:         normalizeTrialOrgID(r.URL.Query().Get("org_id")),
+		ReturnURL:     strings.TrimSpace(r.URL.Query().Get("return_url")),
+		InstanceToken: strings.TrimSpace(r.URL.Query().Get("instance_token")),
+		Name:          strings.TrimSpace(r.URL.Query().Get("name")),
+		Email:         strings.TrimSpace(r.URL.Query().Get("email")),
+		Company:       strings.TrimSpace(r.URL.Query().Get("company")),
+		Cancelled:     strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
+		ReturnTarget:  summarizeTrialReturnTarget(r.URL.Query().Get("return_url")),
 	}
 	if data.ReturnURL == "" {
 		data.ErrorMessage = "Missing return_url. Please restart from Pulse Settings > Pro License."
+	}
+	if strings.TrimSpace(data.InstanceToken) == "" {
+		data.ErrorMessage = "Missing trial initiation token. Please restart from Pulse Settings > Pro License."
 	}
 	h.renderTrialSignupPage(w, r, http.StatusOK, data)
 }
@@ -317,12 +323,18 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 	}
 
 	data := trialSignupPageData{
-		OrgID:        normalizeTrialOrgID(r.FormValue("org_id")),
-		ReturnURL:    strings.TrimSpace(r.FormValue("return_url")),
-		Name:         strings.TrimSpace(r.FormValue("name")),
-		Email:        strings.TrimSpace(r.FormValue("email")),
-		Company:      strings.TrimSpace(r.FormValue("company")),
-		ReturnTarget: summarizeTrialReturnTarget(r.FormValue("return_url")),
+		OrgID:         normalizeTrialOrgID(r.FormValue("org_id")),
+		ReturnURL:     strings.TrimSpace(r.FormValue("return_url")),
+		InstanceToken: strings.TrimSpace(r.FormValue("instance_token")),
+		Name:          strings.TrimSpace(r.FormValue("name")),
+		Email:         strings.TrimSpace(r.FormValue("email")),
+		Company:       strings.TrimSpace(r.FormValue("company")),
+		ReturnTarget:  summarizeTrialReturnTarget(r.FormValue("return_url")),
+	}
+	if strings.TrimSpace(data.InstanceToken) == "" {
+		data.ErrorMessage = "This trial request must be started from Pulse. Return to Pulse Settings > Pro License and try again."
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
+		return
 	}
 	if !isValidTrialReturnURL(data.ReturnURL) {
 		data.ErrorMessage = "A valid Pulse return URL is required. Please restart from Pulse Settings > Pro License."
@@ -379,6 +391,7 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 	token, err := h.verificationStore.CreateVerification(&TrialSignupRecord{
 		OrgID:                 data.OrgID,
 		ReturnURL:             data.ReturnURL,
+		InstanceToken:         data.InstanceToken,
 		Name:                  data.Name,
 		Email:                 data.Email,
 		Company:               data.Company,
@@ -667,6 +680,10 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		http.Error(w, "trial request return url mismatch", http.StatusBadRequest)
 		return
 	}
+	if strings.TrimSpace(record.InstanceToken) == "" {
+		http.Error(w, "trial request initiation token missing", http.StatusBadRequest)
+		return
+	}
 	if verifiedEmail := normalizeTrialSignupEmail(record.Email); verifiedEmail == "" || normalizeTrialSignupEmail(email) != verifiedEmail {
 		http.Error(w, "trial request email mismatch", http.StatusBadRequest)
 		return
@@ -700,9 +717,10 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		return
 	}
 	token, err := pkglicensing.SignTrialActivationToken(privateKey, pkglicensing.TrialActivationClaims{
-		OrgID:        orgID,
-		Email:        email,
-		InstanceHost: instanceHost,
+		OrgID:         orgID,
+		Email:         email,
+		InstanceHost:  instanceHost,
+		InstanceToken: record.InstanceToken,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(trialSignupActivationTokenTTL)),

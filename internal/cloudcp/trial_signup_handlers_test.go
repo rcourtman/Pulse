@@ -16,7 +16,7 @@ import (
 
 func TestTrialSignupHandleStartProTrialRendersVerificationForm(t *testing.T) {
 	h := NewTrialSignupHandlers(&CPConfig{}, nil, nil)
-	req := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com:7655/auth/trial-activate", nil)
+	req := httptest.NewRequest(http.MethodGet, "/start-pro-trial?org_id=default&return_url=https://pulse.example.com:7655/auth/trial-activate&instance_token=tsi_test", nil)
 	rec := httptest.NewRecorder()
 
 	h.HandleStartProTrial(rec, req)
@@ -39,11 +39,12 @@ func TestTrialSignupHandleStartProTrialRendersVerificationForm(t *testing.T) {
 func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
 	h, _, sender := newTrialSignupTestHandler(t)
 	form := url.Values{
-		"org_id":     {"default"},
-		"return_url": {"https://pulse.example.com/auth/trial-activate"},
-		"name":       {"Test User"},
-		"email":      {"owner@example.com"},
-		"company":    {"Pulse Labs"},
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -68,11 +69,12 @@ func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
 func TestTrialSignupHandleRequestVerificationRejectsConsumerEmailDomain(t *testing.T) {
 	h, _, sender := newTrialSignupTestHandler(t)
 	form := url.Values{
-		"org_id":     {"default"},
-		"return_url": {"https://pulse.example.com/auth/trial-activate"},
-		"name":       {"Test User"},
-		"email":      {"owner@gmail.com"},
-		"company":    {"Pulse Labs"},
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@gmail.com"},
+		"company":        {"Pulse Labs"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -94,11 +96,12 @@ func TestTrialSignupHandleRequestVerificationRejectsConsumerEmailDomain(t *testi
 func TestTrialSignupHandleRequestVerificationRejectsPendingVerificationResend(t *testing.T) {
 	h, _, sender := newTrialSignupTestHandler(t)
 	form := url.Values{
-		"org_id":     {"default"},
-		"return_url": {"https://pulse.example.com/auth/trial-activate"},
-		"name":       {"Test User"},
-		"email":      {"owner@example.com"},
-		"company":    {"Pulse Labs"},
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
 	}
 
 	firstReq := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
@@ -135,11 +138,12 @@ func TestTrialSignupHandleRequestVerificationRejectsEmailThatAlreadyUsedTrial(t 
 	}
 
 	form := url.Values{
-		"org_id":     {"default"},
-		"return_url": {"https://pulse.example.com/auth/trial-activate"},
-		"name":       {"Test User"},
-		"email":      {"owner@example.com"},
-		"company":    {"Pulse Labs"},
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -159,11 +163,12 @@ func TestTrialSignupHandleRequestVerificationRejectsCorporateDomainReuse(t *test
 	h, store, sender := newTrialSignupTestHandler(t)
 
 	firstForm := url.Values{
-		"org_id":     {"default"},
-		"return_url": {"https://pulse.example.com/auth/trial-activate"},
-		"name":       {"Alice Admin"},
-		"email":      {"alice@acme.com"},
-		"company":    {"Acme Inc."},
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Alice Admin"},
+		"email":          {"alice@acme.com"},
+		"company":        {"Acme Inc."},
 	}
 	firstReq := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(firstForm.Encode()))
 	firstReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -180,11 +185,12 @@ func TestTrialSignupHandleRequestVerificationRejectsCorporateDomainReuse(t *test
 	}
 
 	secondForm := url.Values{
-		"org_id":     {"default"},
-		"return_url": {"https://pulse.example.com/auth/trial-activate"},
-		"name":       {"Bob Builder"},
-		"email":      {"bob@acme.com"},
-		"company":    {"Acme Holdings"},
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Bob Builder"},
+		"email":          {"bob@acme.com"},
+		"company":        {"Acme Holdings"},
 	}
 	secondReq := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(secondForm.Encode()))
 	secondReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -381,6 +387,7 @@ func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {
 	rawToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Test User",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -477,6 +484,7 @@ func TestTrialSignupHandleCompleteReusesStoredActivationToken(t *testing.T) {
 	rawToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Test User",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -572,6 +580,7 @@ func TestTrialSignupHandleCompleteRotatesExpiredActivationToken(t *testing.T) {
 	rawToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Test User",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -704,6 +713,7 @@ func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *
 	firstToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Alice Admin",
 		Email:                 "alice@acme.com",
 		Company:               "Acme Inc.",
@@ -724,6 +734,7 @@ func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *
 	secondToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Bob Builder",
 		Email:                 "bob@acme.com",
 		Company:               "Acme Holdings",
@@ -820,6 +831,7 @@ func TestTrialSignupHandleCompleteRejectsNonTrialCheckoutSession(t *testing.T) {
 	rawToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Test User",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -884,6 +896,7 @@ func TestTrialSignupHandleCompleteRejectsMissingVerifiedTrialMetadata(t *testing
 	rawToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Test User",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -958,11 +971,12 @@ func requestTrialVerification(t *testing.T, h *TrialSignupHandlers, sender *capt
 	t.Helper()
 
 	form := url.Values{
-		"org_id":     {"default"},
-		"return_url": {"https://pulse.example.com/auth/trial-activate"},
-		"name":       {"Test User"},
-		"email":      {"owner@example.com"},
-		"company":    {"Pulse Labs"},
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

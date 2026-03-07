@@ -41,9 +41,10 @@ var (
 // TrialActivationClaims are signed by the hosted signup service and consumed by
 // self-hosted Pulse instances to start a Pro trial after registration/checkout.
 type TrialActivationClaims struct {
-	OrgID        string `json:"org_id"`
-	Email        string `json:"email,omitempty"`
-	InstanceHost string `json:"instance_host"`
+	OrgID         string `json:"org_id"`
+	Email         string `json:"email,omitempty"`
+	InstanceHost  string `json:"instance_host"`
+	InstanceToken string `json:"instance_token,omitempty"`
 	jwt.RegisteredClaims
 }
 

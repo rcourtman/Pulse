@@ -32,6 +32,7 @@ type LicenseHandlers struct {
 	services           sync.Map // map[string]*licenseService
 	trialLimiter       *RateLimiter
 	trialReplay        *jtiReplayStore
+	trialInitiations   *trialSignupInitiationStore
 	monitor            *monitoring.Monitor
 	mtMonitor          *monitoring.MultiTenantMonitor
 	conversionRecorder *conversionRecorder
@@ -47,16 +48,19 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 	}
 
 	var trialReplay *jtiReplayStore
+	var trialInitiations *trialSignupInitiationStore
 	if mtp != nil {
 		trialReplay = &jtiReplayStore{configDir: mtp.BaseDataDir()}
+		trialInitiations = &trialSignupInitiationStore{configDir: mtp.BaseDataDir()}
 	}
 
 	return &LicenseHandlers{
-		mtPersistence: mtp,
-		hostedMode:    hostedMode,
-		cfg:           cfg,
-		trialLimiter:  NewRateLimiter(1, 24*time.Hour), // 1 trial start attempt per org per 24h
-		trialReplay:   trialReplay,
+		mtPersistence:    mtp,
+		hostedMode:       hostedMode,
+		cfg:              cfg,
+		trialLimiter:     NewRateLimiter(1, 24*time.Hour), // 1 trial start attempt per org per 24h
+		trialReplay:      trialReplay,
+		trialInitiations: trialInitiations,
 	}
 }
 
@@ -160,7 +164,7 @@ func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
 	return baseURL + "/auth/trial-activate"
 }
 
-func trialSignupActionURLForRequest(r *http.Request, cfg *config.Config, orgID string) (string, error) {
+func trialSignupActionURLForRequest(r *http.Request, cfg *config.Config, orgID, instanceToken string) (string, error) {
 	returnURL := trialCallbackURLForRequest(r, cfg)
 	if returnURL == "" {
 		return "", fmt.Errorf("trial callback URL is unavailable")
@@ -183,6 +187,7 @@ func trialSignupActionURLForRequest(r *http.Request, cfg *config.Config, orgID s
 	query := parsed.Query()
 	query.Set("org_id", strings.TrimSpace(orgID))
 	query.Set("return_url", returnURL)
+	query.Set("instance_token", strings.TrimSpace(instanceToken))
 	parsed.RawQuery = query.Encode()
 
 	return parsed.String(), nil
@@ -428,7 +433,18 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	actionURL, err := trialSignupActionURLForRequest(r, h.cfg, orgID)
+	if h.trialInitiations == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
+		return
+	}
+	instanceToken, err := h.trialInitiations.issue(orgID, time.Now().UTC().Add(trialSignupInitiationTTL))
+	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("Trial signup initiation token unavailable")
+		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
+		return
+	}
+
+	actionURL, err := trialSignupActionURLForRequest(r, h.cfg, orgID, instanceToken)
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("Trial signup redirect unavailable")
 		writeErrorResponse(w, http.StatusServiceUnavailable, "trial_signup_unavailable", "Hosted trial signup is unavailable", nil)
@@ -532,6 +548,21 @@ func (h *LicenseHandlers) HandleTrialActivation(w http.ResponseWriter, r *http.R
 	orgID := strings.TrimSpace(claims.OrgID)
 	if orgID == "" {
 		orgID = "default"
+	}
+	if h.trialInitiations == nil {
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+	ok, err := h.trialInitiations.validate(orgID, claims.InstanceToken, time.Now().UTC())
+	if err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("Trial activation initiation token validation failed")
+		http.Redirect(w, r, "/settings?trial=unavailable", http.StatusTemporaryRedirect)
+		return
+	}
+	if !ok {
+		log.Warn().Str("org_id", orgID).Msg("Trial activation missing or invalid initiation token")
+		http.Redirect(w, r, "/settings?trial=invalid", http.StatusTemporaryRedirect)
+		return
 	}
 
 	ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)

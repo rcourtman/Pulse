@@ -18,6 +18,7 @@ func TestTrialSignupStoreMarkTrialIssuedEnforcesEmailUniqueness(t *testing.T) {
 	firstToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Test User",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -35,6 +36,7 @@ func TestTrialSignupStoreMarkTrialIssuedEnforcesEmailUniqueness(t *testing.T) {
 	secondToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Test User",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -81,6 +83,7 @@ func TestTrialSignupStoreMarkTrialIssuedEnforcesBusinessDomainUniqueness(t *test
 	firstToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Alice",
 		Email:                 "alice@acme.com",
 		Company:               "Acme Inc.",
@@ -109,6 +112,7 @@ func TestTrialSignupStoreMarkTrialIssuedEnforcesBusinessDomainUniqueness(t *test
 	secondToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Bob",
 		Email:                 "bob@acme.com",
 		Company:               "Acme Holdings",
@@ -140,6 +144,7 @@ func TestTrialSignupStoreFindIssuedTrialConflictUsesCompanyForPublicEmailDomains
 	firstToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Alice",
 		Email:                 "alice@gmail.com",
 		Company:               "Pulse Labs Ltd.",
@@ -185,6 +190,7 @@ func TestTrialSignupStoreFindPendingVerificationByEmail(t *testing.T) {
 	token, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Owner",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -229,6 +235,7 @@ func TestTrialSignupStoreStoreOrRotateActivationToken(t *testing.T) {
 	rawToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Owner",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
@@ -288,6 +295,7 @@ func TestTrialSignupStoreIssueCheckoutTokenAndLookup(t *testing.T) {
 	rawToken, err := store.CreateVerification(&TrialSignupRecord{
 		OrgID:                 "default",
 		ReturnURL:             "https://pulse.example.com/auth/trial-activate",
+		InstanceToken:         "tsi_test",
 		Name:                  "Owner",
 		Email:                 "owner@example.com",
 		Company:               "Pulse Labs",
