@@ -188,7 +188,7 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	}
 }
 
-func TestResourceListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
+func TestResourceListMergesOneSidedLinkedHostWhenHostnameCorroborates(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{
 		ID:            "instance-pve1",
@@ -233,33 +233,71 @@ func TestResourceListDoesNotMergeOneSidedLinkedHost(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if len(resp.Data) != 2 {
-		t.Fatalf("expected 2 resources without reciprocal link, got %d", len(resp.Data))
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 merged resource when one-sided link is corroborated, got %d", len(resp.Data))
 	}
 
-	var agentTarget, nodeTarget *unified.DiscoveryTarget
-	for _, resource := range resp.Data {
-		if containsSource(resource.Sources, unified.SourceAgent) {
-			agentTarget = resource.DiscoveryTarget
-		}
-		if containsSource(resource.Sources, unified.SourceProxmox) {
-			nodeTarget = resource.DiscoveryTarget
-		}
+	resource := resp.Data[0]
+	if !containsSource(resource.Sources, unified.SourceAgent) || !containsSource(resource.Sources, unified.SourceProxmox) {
+		t.Fatalf("expected merged agent+proxmox sources, got %+v", resource.Sources)
 	}
-	if agentTarget == nil {
-		t.Fatalf("expected discovery target for agent host")
+	if resource.DiscoveryTarget == nil {
+		t.Fatalf("expected discovery target for merged host")
 	}
-	if agentTarget.ResourceType != "agent" {
-		t.Fatalf("agent discovery target type = %q, want agent", agentTarget.ResourceType)
+	if resource.DiscoveryTarget.ResourceType != "agent" {
+		t.Fatalf("discovery target type = %q, want agent", resource.DiscoveryTarget.ResourceType)
 	}
-	if agentTarget.AgentID != "host-1" || agentTarget.ResourceID != "host-1" {
-		t.Fatalf("agent discovery target = %+v, want host-1/host-1", agentTarget)
+	if resource.DiscoveryTarget.AgentID != "host-1" || resource.DiscoveryTarget.ResourceID != "host-1" {
+		t.Fatalf("discovery target = %+v, want host-1/host-1", resource.DiscoveryTarget)
 	}
-	if nodeTarget == nil {
-		t.Fatalf("expected discovery target for proxmox node host")
+}
+
+func TestResourceListDoesNotMergeOneSidedLinkedHostWithoutHostnameCorroboration(t *testing.T) {
+	now := time.Now().UTC()
+	node := models.Node{
+		ID:            "instance-pve1",
+		Name:          "pve1",
+		Instance:      "instance",
+		Host:          "https://pve1:8006",
+		Status:        "online",
+		CPU:           0.15,
+		Memory:        models.Memory{Total: 1024, Used: 512, Free: 512, Usage: 0.5},
+		Disk:          models.Disk{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
+		LastSeen:      now,
+		LinkedAgentID: "host-1",
 	}
-	if nodeTarget.AgentID != "pve1" || nodeTarget.ResourceID != "pve1" {
-		t.Fatalf("node discovery target = %+v, want pve1/pve1", nodeTarget)
+	host := models.Host{
+		ID:       "host-1",
+		Hostname: "minipc",
+		Status:   "online",
+		Memory:   models.Memory{Total: 2048, Used: 1024, Free: 1024, Usage: 0.5},
+		LastSeen: now,
+	}
+
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{node},
+		Hosts: []models.Host{host},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 resources without corroborating hostname, got %d", len(resp.Data))
 	}
 }
 

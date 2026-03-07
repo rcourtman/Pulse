@@ -645,10 +645,12 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 					return ""
 				}
 				linkedNodeID := strings.TrimSpace(existing.Agent.LinkedNodeID)
-				if linkedNodeID == "" || linkedNodeID != sourceID {
-					return ""
+				if linkedNodeID == sourceID {
+					return id
 				}
-				return id
+				if linkedNodeID == "" && identitiesShareHostname(existing.Identity, resource.Identity) {
+					return id
+				}
 			}
 		}
 	case SourceAgent:
@@ -665,8 +667,67 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 				return id
 			}
 		}
+		if resource.Agent != nil {
+			return rr.findCorroboratedOneSidedProxmoxLink(sourceID, resource.Identity)
+		}
 	}
 	return ""
+}
+
+func (rr *ResourceRegistry) findCorroboratedOneSidedProxmoxLink(
+	hostAgentID string,
+	identity ResourceIdentity,
+) string {
+	if strings.TrimSpace(hostAgentID) == "" {
+		return ""
+	}
+
+	matchID := ""
+	for _, resourceID := range rr.bySource[SourceProxmox] {
+		existing := rr.resources[resourceID]
+		if existing == nil || existing.Proxmox == nil {
+			continue
+		}
+		if strings.TrimSpace(existing.Proxmox.LinkedAgentID) != hostAgentID {
+			continue
+		}
+		if !identitiesShareHostname(existing.Identity, identity) {
+			continue
+		}
+		if matchID != "" && matchID != resourceID {
+			return ""
+		}
+		matchID = resourceID
+	}
+
+	return matchID
+}
+
+func identitiesShareHostname(a, b ResourceIdentity) bool {
+	if len(a.Hostnames) == 0 || len(b.Hostnames) == 0 {
+		return false
+	}
+
+	seen := make(map[string]struct{}, len(a.Hostnames))
+	for _, hostname := range a.Hostnames {
+		normalized := NormalizeHostname(hostname)
+		if normalized == "" {
+			continue
+		}
+		seen[normalized] = struct{}{}
+	}
+
+	for _, hostname := range b.Hostnames {
+		normalized := NormalizeHostname(hostname)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, source DataSource) {
