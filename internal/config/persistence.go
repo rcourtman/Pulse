@@ -1445,6 +1445,11 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 	}
 
+	if consolidated, changed := ConsolidatePVEInstances(config.PVEInstances); changed {
+		config.PVEInstances = consolidated
+		migrationApplied = true
+	}
+
 	// Fix for bug where TokenName was incorrectly set when using password auth
 	// If a PBS instance has both Password and TokenName, clear the TokenName
 	for i := range config.PBSInstances {

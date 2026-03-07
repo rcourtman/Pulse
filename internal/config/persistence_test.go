@@ -1140,6 +1140,54 @@ func TestLoadNodesConfigNormalizesPVEHostsAndClusterEndpoints(t *testing.T) {
 	}
 }
 
+func TestLoadNodesConfigConsolidatesStandalonePVEIntoClusterEndpoint(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	pveNodes := []config.PVEInstance{
+		{
+			Name:        "homelab",
+			Host:        "https://cluster-entry.local",
+			ClusterName: "homelab",
+			IsCluster:   true,
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "minipc", Host: "10.0.0.5"},
+			},
+		},
+		{
+			Name:        "minipc-standalone",
+			Host:        "https://10.0.0.5",
+			GuestURL:    "https://minipc.example",
+			Fingerprint: "fp-standalone",
+		},
+	}
+
+	if err := cp.SaveNodesConfig(pveNodes, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+
+	loaded, err := cp.LoadNodesConfig()
+	if err != nil {
+		t.Fatalf("LoadNodesConfig: %v", err)
+	}
+
+	if len(loaded.PVEInstances) != 1 {
+		t.Fatalf("expected 1 consolidated PVE instance, got %d", len(loaded.PVEInstances))
+	}
+	if len(loaded.PVEInstances[0].ClusterEndpoints) != 1 {
+		t.Fatalf("expected 1 cluster endpoint, got %d", len(loaded.PVEInstances[0].ClusterEndpoints))
+	}
+	if got := loaded.PVEInstances[0].ClusterEndpoints[0].GuestURL; got != "https://minipc.example" {
+		t.Fatalf("GuestURL = %q, want https://minipc.example", got)
+	}
+	if got := loaded.PVEInstances[0].ClusterEndpoints[0].Fingerprint; got != "fp-standalone" {
+		t.Fatalf("Fingerprint = %q, want fp-standalone", got)
+	}
+}
+
 func mustDecodeExport(t *testing.T, payload, passphrase string) config.ExportData {
 	t.Helper()
 
