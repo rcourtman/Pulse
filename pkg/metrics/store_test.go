@@ -191,6 +191,139 @@ func TestStoreRollupTier(t *testing.T) {
 	}
 }
 
+// TestStoreRollupTierMultiResource verifies that the batched rollup produces
+// correct aggregations when multiple resources and metric types exist in the
+// same time window. This exercises the GROUP BY partitioning that replaced
+// the previous per-candidate N+1 loop.
+func TestStoreRollupTierMultiResource(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-rollup-multi.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	base := time.Now().Add(-2 * time.Minute).Truncate(time.Minute)
+	ts := base.Unix()
+
+	// Insert data for 3 resources × 2 metric types, all in the same minute bucket.
+	_, err = store.db.Exec(`
+		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
+		('vm','vm-1','cpu', 10.0, ?, 'raw'),
+		('vm','vm-1','cpu', 20.0, ?, 'raw'),
+		('vm','vm-1','mem', 50.0, ?, 'raw'),
+		('vm','vm-1','mem', 70.0, ?, 'raw'),
+		('vm','vm-2','cpu', 30.0, ?, 'raw'),
+		('vm','vm-2','cpu', 40.0, ?, 'raw'),
+		('node','node-1','cpu', 80.0, ?, 'raw'),
+		('node','node-1','cpu', 90.0, ?, 'raw')
+	`, ts, ts+10, ts, ts+10, ts, ts+10, ts, ts+10)
+	if err != nil {
+		t.Fatalf("insert metrics returned error: %v", err)
+	}
+
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	// Verify each resource/metric produced correct aggregations.
+	type rollupResult struct {
+		resourceType, resourceID, metricType string
+		value, minVal, maxVal                float64
+	}
+	rows, err := store.db.Query(`
+		SELECT resource_type, resource_id, metric_type, value, min_value, max_value
+		FROM metrics WHERE tier = 'minute'
+		ORDER BY resource_type, resource_id, metric_type
+	`)
+	if err != nil {
+		t.Fatalf("query minute tier: %v", err)
+	}
+	defer rows.Close()
+
+	var results []rollupResult
+	for rows.Next() {
+		var r rollupResult
+		if err := rows.Scan(&r.resourceType, &r.resourceID, &r.metricType, &r.value, &r.minVal, &r.maxVal); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		results = append(results, r)
+	}
+
+	expected := []rollupResult{
+		{"node", "node-1", "cpu", 85.0, 80.0, 90.0},
+		{"vm", "vm-1", "cpu", 15.0, 10.0, 20.0},
+		{"vm", "vm-1", "mem", 60.0, 50.0, 70.0},
+		{"vm", "vm-2", "cpu", 35.0, 30.0, 40.0},
+	}
+
+	if len(results) != len(expected) {
+		t.Fatalf("expected %d rollup rows, got %d", len(expected), len(results))
+	}
+	for i, e := range expected {
+		r := results[i]
+		if r.resourceType != e.resourceType || r.resourceID != e.resourceID || r.metricType != e.metricType {
+			t.Fatalf("row %d: expected (%s,%s,%s), got (%s,%s,%s)", i, e.resourceType, e.resourceID, e.metricType, r.resourceType, r.resourceID, r.metricType)
+		}
+		if r.value != e.value || r.minVal != e.minVal || r.maxVal != e.maxVal {
+			t.Fatalf("row %d (%s/%s/%s): expected value=%.1f min=%.1f max=%.1f, got value=%.1f min=%.1f max=%.1f",
+				i, e.resourceType, e.resourceID, e.metricType, e.value, e.minVal, e.maxVal, r.value, r.minVal, r.maxVal)
+		}
+	}
+}
+
+// TestStoreRollupTierEmptyWindowPreservesCheckpoint verifies that rollupTier
+// does not advance the checkpoint when no source rows exist in the rollup
+// window. This ensures late or backfilled samples are still rolled up when
+// they arrive after an empty rollup cycle.
+func TestStoreRollupTierEmptyWindowPreservesCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-rollup-empty.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	// Run rollup on an empty store — checkpoint should NOT be set.
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	metaKey := "rollup:raw:minute"
+	if _, ok := store.getMetaInt(metaKey); ok {
+		t.Fatal("expected rollup checkpoint to remain unset after empty rollup")
+	}
+
+	// Now backfill a sample into the window that would have been skipped.
+	base := time.Now().Add(-2 * time.Minute).Truncate(time.Minute)
+	ts := base.Unix()
+	_, err = store.db.Exec(
+		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
+		('vm','vm-late','cpu', 42.0, ?, 'raw')`, ts,
+	)
+	if err != nil {
+		t.Fatalf("insert backfilled metric: %v", err)
+	}
+
+	// Run rollup again — should now process the backfilled sample.
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	var value float64
+	err = store.db.QueryRow(
+		`SELECT value FROM metrics WHERE tier = 'minute' AND resource_id = 'vm-late'`,
+	).Scan(&value)
+	if err != nil {
+		t.Fatalf("expected minute-tier row for backfilled sample, got error: %v", err)
+	}
+	if value != 42.0 {
+		t.Fatalf("expected rollup value 42.0, got %v", value)
+	}
+}
+
 func TestStoreRetentionPrunesOldData(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)

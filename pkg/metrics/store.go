@@ -972,7 +972,10 @@ func (s *Store) runRollup() {
 	log.Debug().Dur("duration", time.Since(start)).Msg("Metrics rollup completed")
 }
 
-// rollupTier aggregates data from one tier to another
+// rollupTier aggregates data from one tier to another.
+// Uses a single INSERT...SELECT...GROUP BY to batch-rollup all resource/metric
+// combinations at once, replacing the previous N+1 pattern (candidate discovery
+// query + per-candidate INSERT transaction).
 func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Duration) {
 	cutoff := time.Now().Add(-minAge).Unix()
 	bucketSecs := int64(bucketSize.Seconds())
@@ -997,42 +1000,61 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 		return
 	}
 
-	// Find distinct resource/metric combinations that need rollup
-	rows, err := s.db.Query(`
-		SELECT DISTINCT resource_type, resource_id, metric_type
+	// Fast check: skip rollup and preserve the checkpoint if the source tier
+	// has no data in this window. This matches the old per-candidate path's
+	// len(candidates)==0 early return, preventing the checkpoint from advancing
+	// past windows where late or backfilled data may arrive later.
+	var hasSource bool
+	if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM metrics WHERE tier = ? AND timestamp >= ? AND timestamp < ?)`,
+		string(fromTier), lastBucket, cutoffBucket).Scan(&hasSource); err != nil {
+		log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to check rollup source data")
+		return
+	}
+	if !hasSource {
+		return
+	}
+
+	// Batch rollup: aggregate ALL resource/metric combinations in a single
+	// SQL statement. The GROUP BY naturally partitions results by
+	// (resource_type, resource_id, metric_type, bucket_ts), producing the
+	// same output as the previous per-candidate loop but in one query and
+	// one transaction instead of N+1.
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Error().Err(err).Str("tier", string(fromTier)).Msg("Failed to begin rollup transaction")
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
+		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
+		SELECT
+			resource_type,
+			resource_id,
+			metric_type,
+			AVG(value) as value,
+			MIN(value) as min_value,
+			MAX(value) as max_value,
+			(timestamp / ?) * ? as bucket_ts,
+			?
 		FROM metrics
 		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
-	`, string(fromTier), lastBucket, cutoffBucket)
+		GROUP BY resource_type, resource_id, metric_type, bucket_ts
+	`, bucketSecs, bucketSecs, string(toTier), string(fromTier), lastBucket, cutoffBucket)
 	if err != nil {
-		log.Error().Err(err).Str("tier", string(fromTier)).Msg("Failed to find rollup candidates")
+		log.Warn().Err(err).
+			Str("from", string(fromTier)).
+			Str("to", string(toTier)).
+			Msg("Failed to batch rollup metrics")
 		return
 	}
 
-	var candidates []struct {
-		resourceType string
-		resourceID   string
-		metricType   string
-	}
-
-	for rows.Next() {
-		var c struct {
-			resourceType string
-			resourceID   string
-			metricType   string
-		}
-		if err := rows.Scan(&c.resourceType, &c.resourceID, &c.metricType); err == nil {
-			candidates = append(candidates, c)
-		}
-	}
-	rows.Close()
-
-	if len(candidates) == 0 {
+	if err := tx.Commit(); err != nil {
+		log.Warn().Err(err).
+			Str("from", string(fromTier)).
+			Str("to", string(toTier)).
+			Msg("Failed to commit rollup transaction")
 		return
-	}
-
-	// Process each candidate
-	for _, c := range candidates {
-		s.rollupCandidate(c.resourceType, c.resourceID, c.metricType, fromTier, toTier, bucketSecs, lastBucket, cutoffBucket)
 	}
 
 	if err := s.setMetaInt(metaKey, cutoffBucket); err != nil {

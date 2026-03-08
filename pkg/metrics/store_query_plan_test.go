@@ -40,10 +40,14 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 		// wantIndex, if non-empty, asserts this index name appears on the
 		// same plan line as a SEARCH on the metrics table.
 		wantIndex string
-		// allowCoveringIndexScan permits "SCAN metrics USING ... INDEX ..."
+		// allowCoveringIndexScan permits "SCAN metrics USING COVERING INDEX ..."
 		// for queries where the planner correctly chooses a covering-index
 		// scan over a table scan. When false, only SEARCH is accepted.
 		allowCoveringIndexScan bool
+		// allowIndexScan permits "SCAN metrics USING INDEX ..." (index-ordered
+		// scan) for queries where the planner uses an index to satisfy GROUP BY
+		// or ORDER BY without a separate sort, but still reads table rows.
+		allowIndexScan bool
 	}{
 		{
 			name: "single metric lookup",
@@ -104,7 +108,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 			wantIndex: "idx_metrics_tier_time",
 		},
 		{
-			name: "rollup candidate discovery",
+			name: "rollup candidate discovery (legacy per-candidate path)",
 			query: `SELECT DISTINCT resource_type, resource_id, metric_type
 				FROM metrics
 				WHERE tier = ? AND timestamp >= ? AND timestamp < ?`,
@@ -115,7 +119,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 			allowCoveringIndexScan: true,
 		},
 		{
-			name: "rollup aggregation insert",
+			name: "rollup aggregation insert (legacy per-candidate path)",
 			query: `INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
 				SELECT
 					resource_type, resource_id, metric_type,
@@ -130,6 +134,28 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				GROUP BY resource_type, resource_id, metric_type, bucket_ts`,
 			args:      []any{int64(60), int64(60), "minute", "vm", "vm-1", "cpu", "raw", int64(0), farFuture},
 			wantIndex: "idx_metrics_lookup",
+		},
+		{
+			name: "batched rollup aggregation insert",
+			query: `INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
+				SELECT
+					resource_type,
+					resource_id,
+					metric_type,
+					AVG(value) as value,
+					MIN(value) as min_value,
+					MAX(value) as max_value,
+					(timestamp / ?) * ? as bucket_ts,
+					?
+				FROM metrics
+				WHERE tier = ? AND timestamp >= ? AND timestamp < ?
+				GROUP BY resource_type, resource_id, metric_type, bucket_ts`,
+			args: []any{int64(60), int64(60), "minute", "raw", int64(0), farFuture},
+			// The SELECT filters on (tier, timestamp) without resource/metric
+			// columns. SQLite uses an index-ordered scan (SCAN USING INDEX)
+			// on idx_metrics_unique. A TEMP B-TREE may still be used for
+			// GROUP BY. The INSERT side uses idx_metrics_unique for ON CONFLICT.
+			allowIndexScan: true,
 		},
 		{
 			name:      "max timestamp for tier (rollup scheduling)",
@@ -158,7 +184,12 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				t.Errorf("query uses full table scan on metrics; expected indexed access\nPlan:\n%s", plan)
 			}
 
-			if tt.allowCoveringIndexScan {
+			if tt.allowIndexScan {
+				// Must use SEARCH, covering-index scan, OR index-ordered scan.
+				if !containsMetricsSearch(plan) && !containsCoveringIndexScan(plan) && !containsIndexScan(plan) {
+					t.Errorf("query plan has neither SEARCH on metrics nor index scan\nPlan:\n%s", plan)
+				}
+			} else if tt.allowCoveringIndexScan {
 				// Must use EITHER a SEARCH on metrics or a covering-index scan on metrics.
 				if !containsMetricsSearch(plan) && !containsCoveringIndexScan(plan) {
 					t.Errorf("query plan has neither SEARCH on metrics nor covering-index scan\nPlan:\n%s", plan)
@@ -248,6 +279,19 @@ func containsFullTableScan(plan string) bool {
 func containsCoveringIndexScan(plan string) bool {
 	for _, line := range strings.Split(plan, "\n") {
 		if strings.Contains(line, "SCAN") && lineRefersToMetrics(line) && strings.Contains(line, "COVERING INDEX") {
+			return true
+		}
+	}
+	return false
+}
+
+// containsIndexScan returns true if any plan line shows an index-ordered scan
+// on the metrics table (e.g., "SCAN metrics USING INDEX idx_metrics_unique").
+// This differs from a covering-index scan in that it reads table rows via the
+// index, but still avoids a full table scan.
+func containsIndexScan(plan string) bool {
+	for _, line := range strings.Split(plan, "\n") {
+		if strings.Contains(line, "SCAN") && lineRefersToMetrics(line) && strings.Contains(line, "USING") && strings.Contains(line, "INDEX") {
 			return true
 		}
 	}

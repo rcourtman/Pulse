@@ -290,6 +290,54 @@ func BenchmarkRollupCandidate(b *testing.B) {
 	}
 }
 
+// BenchmarkRollupTierBatched measures the batched rollupTier path that
+// aggregates ALL resource/metric combinations in a single INSERT...SELECT
+// statement. This is the production path — contrasts with BenchmarkRollupCandidate
+// which measures per-candidate performance. With 50 resources × 2 metrics,
+// the batched approach issues 1 SQL statement instead of 100+ individual
+// transactions. The rollup checkpoint is reset between iterations so each
+// iteration performs actual rollup work (INSERT OR IGNORE is idempotent).
+func BenchmarkRollupTierBatched(b *testing.B) {
+	suppressLogs(b)
+	store := newBenchStore(b)
+
+	const numResources = 50
+	const metricsPerResource = 2
+	const pointsPerMetric = 20
+
+	rawBase := time.Now().Add(-30 * time.Minute).Unix()
+	base := time.Unix((rawBase/60)*60, 0)
+
+	metricTypes := []string{"cpu", "mem"}
+	batch := make([]WriteMetric, 0, numResources*metricsPerResource*pointsPerMetric)
+	for r := 0; r < numResources; r++ {
+		for _, mt := range metricTypes[:metricsPerResource] {
+			for p := 0; p < pointsPerMetric; p++ {
+				batch = append(batch, WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   fmt.Sprintf("vm-%d", r),
+					MetricType:   mt,
+					Value:        float64((r + p) % 100),
+					Timestamp:    base.Add(time.Duration(p) * time.Second),
+					Tier:         TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+
+	metaKey := "rollup:raw:minute"
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		// Reset the rollup checkpoint so each iteration does real work.
+		// INSERT OR IGNORE makes re-rollup idempotent.
+		_ = store.setMetaInt(metaKey, 0)
+		store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+	}
+}
+
 // BenchmarkConcurrentReadWrite measures query latency under worst-case write
 // contention. A background goroutine continuously writes batches while the
 // benchmark loop queries historical data. Since the production Store uses
