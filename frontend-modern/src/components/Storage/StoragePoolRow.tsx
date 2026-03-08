@@ -122,153 +122,134 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     <>
       <tr
         class={`group cursor-pointer ${props.rowClass} ${props.expanded ? 'bg-surface-alt' : ''}`}
-        style={{ ...props.rowStyle, 'min-height': '44px' }}
+        style={{ ...props.rowStyle, 'height': '38px' }}
         onClick={props.onToggleExpand}
         {...props.alertDataAttrs}
       >
-        <td class="px-2 py-1.5 align-top text-base-content">
-          <div class="min-w-0 space-y-1">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <span class="truncate text-[12px] font-semibold" title={props.record.name}>
-                {props.record.name}
-              </span>
-              <Show when={zfsPool() && zfsPool()!.devices.length > 0}>
-                <span class="shrink-0">
-                  <ZFSHealthMap pool={zfsPool()!} />
-                </span>
-              </Show>
-              <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
-                <span
-                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                    zfsPool()?.state === 'DEGRADED'
-                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                      : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
-                  }`}
-                >
-                  {zfsPool()?.state}
-                </span>
-              </Show>
-              <Show
-                when={
-                  zfsPool() &&
-                  (zfsPool()!.readErrors > 0 ||
-                    zfsPool()!.writeErrors > 0 ||
-                    zfsPool()!.checksumErrors > 0)
-                }
-              >
-                <span class="inline-flex rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">
-                  ERRORS
-                </span>
-              </Show>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
-              <span
-                class={`inline-flex rounded px-1.5 py-0.5 font-semibold ${platformBadgeClass(
-                  platformLabel(),
-                )}`}
-              >
-                {platformLabel()}
-              </span>
-              <span class="inline-flex rounded bg-surface-hover px-1.5 py-0.5 font-medium text-base-content">
-                {topologyLabel()}
-              </span>
-              <span
-                class={`inline-flex rounded px-1.5 py-0.5 font-medium ${HEALTH_BADGE[props.record.health]}`}
-              >
-                {props.record.statusLabel || props.record.health}
-              </span>
-            </div>
-            <div class="truncate text-[11px] text-muted" title={`${hostLabel()} · ${platformLabel()}`}>
-              {hostLabel()} · {platformLabel()}
-            </div>
-          </div>
-        </td>
-
-        <td class="px-2 py-1.5 align-top">
-          <div class="space-y-1">
+        <td class="px-2 py-1 align-middle text-base-content">
+          <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+            <span class="truncate text-[12px] font-semibold" title={props.record.name}>
+              {props.record.name}
+            </span>
             <span
-              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${protectionBadgeClass(
-                props.record,
+              class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${platformBadgeClass(
+                platformLabel(),
               )}`}
             >
-              {protectionLabel()}
+              {platformLabel()}
             </span>
-            <div class="text-[11px] text-muted">
-              <Show
-                when={props.record.rebuildInProgress || props.record.protectionReduced}
-                fallback={
-                  <span>{props.record.health === 'healthy' ? 'Redundancy intact' : 'Monitor posture'}</span>
-                }
+            <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-base-content">
+              {topologyLabel()}
+            </span>
+            <Show when={zfsPool() && zfsPool()!.devices.length > 0}>
+              <span class="shrink-0">
+                <ZFSHealthMap pool={zfsPool()!} />
+              </span>
+            </Show>
+            <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
+              <span
+                class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                  zfsPool()?.state === 'DEGRADED'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                    : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                }`}
               >
-                <span>
-                  {props.record.rebuildInProgress ? 'Recovery activity in progress' : 'Protection reduced'}
-                </span>
-              </Show>
-            </div>
+                {zfsPool()?.state}
+              </span>
+            </Show>
+            <Show
+              when={
+                zfsPool() &&
+                (zfsPool()!.readErrors > 0 ||
+                  zfsPool()!.writeErrors > 0 ||
+                  zfsPool()!.checksumErrors > 0)
+              }
+            >
+              <span class="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                ERRORS
+              </span>
+            </Show>
+            <span
+              class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${HEALTH_BADGE[props.record.health]}`}
+            >
+              {props.record.statusLabel || props.record.health}
+            </span>
           </div>
         </td>
 
-        <td class="px-2 py-1.5 align-top md:min-w-[220px]">
+        <td class="px-2 py-1 align-middle text-[11px] text-base-content">
+          <span class="block truncate" title={`${hostLabel()} · ${platformLabel()}`}>
+            {hostLabel()} · {platformLabel()}
+          </span>
+        </td>
+
+        <td class="px-2 py-1 align-middle text-[11px]">
+          <span
+            class={`inline-flex max-w-full rounded px-1.5 py-0.5 font-semibold ${protectionBadgeClass(
+              props.record,
+            )}`}
+            title={protectionLabel()}
+          >
+            <span class="truncate">{protectionLabel()}</span>
+          </span>
+        </td>
+
+        <td class="px-2 py-1 align-middle md:min-w-[220px]">
           <Show when={totalBytes() > 0} fallback={<span class="text-[11px] text-muted">n/a</span>}>
-            <div class="space-y-1.5">
-              <div class="flex items-center justify-between gap-2 text-[11px]">
-                <span class="font-medium text-base-content">
-                  {formatPercent(usagePercent())}
-                </span>
-                <span class="truncate text-muted">
-                  {formatBytes(usedBytes())} / {formatBytes(totalBytes())}
-                </span>
+            <div class="flex items-center gap-2 whitespace-nowrap text-[11px]">
+              <span class="shrink-0 font-medium text-base-content">{formatPercent(usagePercent())}</span>
+              <div class="min-w-[120px] flex-1">
+                <EnhancedStorageBar
+                  used={usedBytes()}
+                  total={Math.max(totalBytes(), 0)}
+                  free={Math.max(freeBytes(), 0)}
+                  zfsPool={zfsPool() || undefined}
+                />
               </div>
-              <EnhancedStorageBar
-                used={usedBytes()}
-                total={Math.max(totalBytes(), 0)}
-                free={Math.max(freeBytes(), 0)}
-                zfsPool={zfsPool() || undefined}
-              />
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-[11px] text-muted">Free {formatBytes(freeBytes())}</span>
-                <Show when={sparklineData().length > 0}>
-                  <div class="hidden xl:block" style={{ width: '90px', height: '20px' }}>
-                    <InteractiveSparkline
-                      series={[{ data: sparklineData(), color: sparklineColor() }]}
-                      yMode="percent"
-                      size="sm"
-                    />
-                  </div>
-                </Show>
-              </div>
+              <span class="truncate text-muted" title={`${formatBytes(usedBytes())} / ${formatBytes(totalBytes())}`}>
+                {formatBytes(usedBytes())} / {formatBytes(totalBytes())}
+              </span>
+              <Show when={sparklineData().length > 0}>
+                <div class="hidden xl:block shrink-0" style={{ width: '70px', height: '16px' }}>
+                  <InteractiveSparkline
+                    series={[{ data: sparklineData(), color: sparklineColor() }]}
+                    yMode="percent"
+                    size="sm"
+                  />
+                </div>
+              </Show>
             </div>
           </Show>
         </td>
 
-        <td class="hidden lg:table-cell px-2 py-1.5 align-top">
-          <div class="text-[11px] leading-5 text-base-content">
+        <td class="hidden lg:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
+          <span class="block truncate" title={impactSummary()}>
             {impactSummary()}
-          </div>
+          </span>
         </td>
 
-        <td class="px-2 py-1.5 align-top">
-          <div class="space-y-1">
+        <td class="px-2 py-1 align-middle text-[11px]">
+          <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
             <span
-              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${issueBadgeClass(
+              class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${issueBadgeClass(
                 props.record,
               )}`}
             >
               {issueLabel()}
             </span>
-            <div class="text-[11px] leading-5 text-muted">
+            <span class="truncate text-muted" title={issueSummary() || 'No active issues'}>
               {issueSummary() || 'No active issues'}
-            </div>
+            </span>
           </div>
         </td>
 
-        <td class="hidden xl:table-cell px-2 py-1.5 align-top">
-          <div class="text-[11px] leading-5 text-base-content">
+        <td class="hidden xl:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
+          <span class="block truncate" title={actionSummary()}>
             {actionSummary()}
-          </div>
+          </span>
         </td>
 
-        <td class="px-1.5 py-1.5 align-top text-right">
+        <td class="px-1.5 py-1 align-middle text-right">
           <button
             type="button"
             onClick={(e) => {

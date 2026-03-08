@@ -2,21 +2,19 @@ import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
   Table,
-  TableHeader,
   TableBody,
-  TableRow,
-  TableHead,
   TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/shared/Table';
 import { formatBytes, formatPowerOnHours } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
-import { ProgressBar } from '@/components/shared/ProgressBar';
 import type { Resource } from '@/types/resource';
-import { getProxmoxData, getLinkedAgentId } from '@/utils/resourcePlatformData';
-import { getMetricColorClass } from '@/utils/metricThresholds';
-import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
+import { getLinkedAgentId, getProxmoxData } from '@/utils/resourcePlatformData';
 import { DiskDetail } from './DiskDetail';
 import { DiskLiveMetric } from './DiskLiveMetric';
+import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
 
 interface PhysicalDiskData {
   node: string;
@@ -32,6 +30,10 @@ interface PhysicalDiskData {
   temperature: number;
   rpm: number;
   used: string;
+  storageRole?: string;
+  storageGroup?: string;
+  riskLevel?: string;
+  riskReasons: string[];
   smartAttributes?: {
     powerOnHours?: number;
     powerCycles?: number;
@@ -46,11 +48,43 @@ interface PhysicalDiskData {
   };
 }
 
+interface DiskListProps {
+  disks: Resource[];
+  nodes: Resource[];
+  selectedNode: string | null;
+  searchTerm: string;
+}
+
+const titleize = (value: string | undefined | null): string =>
+  (value || '')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const platformLabel = (resource: Resource): string => {
+  switch ((resource.platformType || '').trim().toLowerCase()) {
+    case 'proxmox-pve':
+      return 'PVE';
+    case 'proxmox-pbs':
+      return 'PBS';
+    case 'truenas':
+      return 'TrueNAS';
+    case 'agent':
+      return 'Agent';
+    default:
+      return titleize(resource.platformType) || 'Unknown';
+  }
+};
+
 function extractDiskData(resource: Resource): PhysicalDiskData {
-  const platformData = (resource.platformData as any) || {};
-  const pd = platformData.physicalDisk || {};
+  const pd = resource.physicalDisk || ((resource.platformData as any)?.physicalDisk ?? {});
   const diskNode = getPhysicalDiskNodeIdentity(resource);
-  const smart = pd.smart || {};
+  const riskReasons = Array.isArray(pd.risk?.reasons)
+    ? pd.risk.reasons
+        .map((reason) => reason?.summary)
+        .filter((summary): summary is string => typeof summary === 'string' && summary.length > 0)
+    : [];
 
   return {
     node: diskNode.node,
@@ -66,47 +100,121 @@ function extractDiskData(resource: Resource): PhysicalDiskData {
     temperature: pd.temperature ?? 0,
     rpm: pd.rpm ?? 0,
     used: pd.used || '',
+    storageRole: pd.storageRole,
+    storageGroup: pd.storageGroup,
+    riskLevel: pd.risk?.level,
+    riskReasons,
     smartAttributes: pd.smart
       ? {
-          powerOnHours: smart.powerOnHours,
-          powerCycles: smart.powerCycles,
-          reallocatedSectors: smart.reallocatedSectors,
-          pendingSectors: smart.pendingSectors,
-          offlineUncorrectable: smart.offlineUncorrectable,
-          udmaCrcErrors: smart.udmaCrcErrors,
-          percentageUsed: smart.percentageUsed,
-          availableSpare: smart.availableSpare,
-          mediaErrors: smart.mediaErrors,
-          unsafeShutdowns: smart.unsafeShutdowns,
+          powerOnHours: pd.smart.powerOnHours,
+          powerCycles: pd.smart.powerCycles,
+          reallocatedSectors: pd.smart.reallocatedSectors,
+          pendingSectors: pd.smart.pendingSectors,
+          offlineUncorrectable: pd.smart.offlineUncorrectable,
+          udmaCrcErrors: pd.smart.udmaCrcErrors,
+          percentageUsed: pd.smart.percentageUsed,
+          availableSpare: pd.smart.availableSpare,
+          mediaErrors: pd.smart.mediaErrors,
+          unsafeShutdowns: pd.smart.unsafeShutdowns,
         }
       : undefined,
   };
 }
 
-/** Returns true if any critical SMART counters are non-zero. */
 function hasSmartWarning(disk: PhysicalDiskData): boolean {
   const attrs = disk.smartAttributes;
   if (!attrs) return false;
-  if (attrs.reallocatedSectors && attrs.reallocatedSectors > 0) return true;
-  if (attrs.pendingSectors && attrs.pendingSectors > 0) return true;
-  if (attrs.mediaErrors && attrs.mediaErrors > 0) return true;
-  return false;
+  return Boolean(
+    (attrs.reallocatedSectors && attrs.reallocatedSectors > 0) ||
+      (attrs.pendingSectors && attrs.pendingSectors > 0) ||
+      (attrs.mediaErrors && attrs.mediaErrors > 0),
+  );
 }
 
-interface DiskListProps {
-  disks: Resource[];
-  nodes: Resource[];
-  selectedNode: string | null;
-  searchTerm: string;
-}
+const getDiskHealthStatus = (disk: PhysicalDiskData) => {
+  const normalizedHealth = (disk.health || '').trim().toUpperCase();
+  const criticalRisk = (disk.riskLevel || '').trim().toLowerCase() === 'critical';
+  const warningRisk = (disk.riskLevel || '').trim().toLowerCase() === 'warning';
+  const smartWarning = hasSmartWarning(disk);
+  const lowLife = disk.wearout > 0 && disk.wearout < 10;
+
+  if (normalizedHealth === 'FAILED' || criticalRisk) {
+    return {
+      label: 'Replace Now',
+      summary: disk.riskReasons[0] || 'Disk health has degraded to a critical state.',
+      badge: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
+    };
+  }
+
+  if (warningRisk || smartWarning || lowLife) {
+    return {
+      label: 'Needs Attention',
+      summary:
+        disk.riskReasons[0] ||
+        (lowLife ? 'SSD life is running low.' : 'SMART counters indicate elevated risk.'),
+      badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+    };
+  }
+
+  return {
+    label: normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD' ? 'Healthy' : 'Monitor',
+    summary: 'No active disk-health issues.',
+    badge: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
+  };
+};
+
+const getDiskRoleLabel = (disk: PhysicalDiskData): string => {
+  if (disk.storageRole?.trim()) return titleize(disk.storageRole);
+  if (disk.type?.trim()) return `${disk.type.toUpperCase()} Disk`;
+  return 'Disk';
+};
+
+const getDiskParentLabel = (disk: PhysicalDiskData): string => {
+  if (disk.storageGroup?.trim()) return disk.storageGroup.trim();
+  return 'Standalone Device';
+};
+
+const getDiskAction = (disk: PhysicalDiskData): string => {
+  const riskLevel = (disk.riskLevel || '').trim().toLowerCase();
+  if (riskLevel === 'critical' || (disk.health || '').trim().toUpperCase() === 'FAILED') {
+    return 'Replace immediately';
+  }
+  if (riskLevel === 'warning') {
+    return 'Schedule replacement';
+  }
+  if (hasSmartWarning(disk)) {
+    return 'Schedule replacement';
+  }
+  if (disk.temperature >= 60) {
+    return 'Reduce heat and monitor';
+  }
+  if (disk.wearout > 0 && disk.wearout < 10) {
+    return 'Plan SSD replacement';
+  }
+  return 'Monitor';
+};
+
+const getWearSummary = (disk: PhysicalDiskData): string => {
+  if (disk.wearout > 0) return `${disk.wearout}% life left`;
+  if (disk.smartAttributes?.percentageUsed != null) {
+    return `${disk.smartAttributes.percentageUsed}% used`;
+  }
+  if (disk.smartAttributes?.powerOnHours != null) {
+    return formatPowerOnHours(disk.smartAttributes.powerOnHours, true);
+  }
+  return 'No wear data';
+};
+
+const getTemperatureTone = (temperature: number): string => {
+  if (temperature >= 70) return 'text-red-600 dark:text-red-400';
+  if (temperature >= 60) return 'text-amber-600 dark:text-amber-400';
+  return 'text-green-600 dark:text-green-400';
+};
 
 export const DiskList: Component<DiskListProps> = (props) => {
   const [selectedDisk, setSelectedDisk] = createSignal<Resource | null>(null);
 
-  // Check if there are any PVE nodes configured
-  const hasPVENodes = createMemo(() => {
-    return props.nodes.length > 0;
-  });
+  const hasPVENodes = createMemo(() => props.nodes.length > 0);
 
   const diskDataById = createMemo(() => {
     const map = new Map<string, PhysicalDiskData>();
@@ -116,15 +224,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
     return map;
   });
 
-  const getDiskData = (disk: Resource): PhysicalDiskData => {
-    return diskDataById().get(disk.id) ?? extractDiskData(disk);
-  };
+  const getDiskData = (disk: Resource): PhysicalDiskData =>
+    diskDataById().get(disk.id) ?? extractDiskData(disk);
 
-  // Filter disks based on selected node and search term
   const filteredDisks = createMemo(() => {
     let disks = props.disks || [];
 
-    // Filter by node if selected using both instance and node name
     if (props.selectedNode) {
       const node = props.nodes.find((n) => n.id === props.selectedNode);
       if (node) {
@@ -138,93 +243,47 @@ export const DiskList: Component<DiskListProps> = (props) => {
       }
     }
 
-    // Filter by search term
     if (props.searchTerm) {
       const term = props.searchTerm.toLowerCase();
-      disks = disks.filter((d) => {
-        const data = getDiskData(d);
-        return (
-          data.model.toLowerCase().includes(term) ||
-          data.devPath.toLowerCase().includes(term) ||
-          data.serial.toLowerCase().includes(term) ||
-          data.node.toLowerCase().includes(term)
-        );
+      disks = disks.filter((disk) => {
+        const data = getDiskData(disk);
+        return [
+          data.model,
+          data.devPath,
+          data.serial,
+          data.node,
+          getDiskRoleLabel(data),
+          getDiskParentLabel(data),
+          platformLabel(disk),
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(term);
       });
     }
 
-    // Sort by node and devPath - create a copy to avoid mutating store
     return [...disks].sort((a, b) => {
       const aData = getDiskData(a);
       const bData = getDiskData(b);
+      const aPriority =
+        (aData.riskLevel === 'critical' ? 300 : aData.riskLevel === 'warning' ? 200 : 0) +
+        (hasSmartWarning(aData) ? 50 : 0);
+      const bPriority =
+        (bData.riskLevel === 'critical' ? 300 : bData.riskLevel === 'warning' ? 200 : 0) +
+        (hasSmartWarning(bData) ? 50 : 0);
+      if (aPriority !== bPriority) return bPriority - aPriority;
       if (aData.node !== bData.node) return aData.node.localeCompare(bData.node);
-      return aData.devPath.localeCompare(bData.devPath);
+      return (aData.devPath || a.name).localeCompare(bData.devPath || b.name);
     });
   });
 
-  // Get health status color and badge
-  const getHealthStatus = (disk: PhysicalDiskData) => {
-    const healthValue = (disk.health || '').trim();
-    const normalizedHealth = healthValue.toUpperCase();
-    const isHealthy =
-      normalizedHealth === 'PASSED' || normalizedHealth === 'OK' || normalizedHealth === 'GOOD';
-
-    if (isHealthy) {
-      // Check wearout for SSDs
-      if (disk.wearout > 0 && disk.wearout < 10) {
-        return {
-          color: 'text-yellow-700 dark:text-yellow-400',
-          bgColor: 'bg-yellow-100 dark:bg-yellow-900',
-          text: 'LOW LIFE',
-        };
-      }
-      const label = normalizedHealth === 'PASSED' ? 'HEALTHY' : normalizedHealth;
-      return {
-        color: 'text-green-700 dark:text-green-400',
-        bgColor: 'bg-green-100 dark:bg-green-900',
-        text: label,
-      };
-    } else if (normalizedHealth === 'FAILED') {
-      return {
-        color: 'text-red-700 dark:text-red-400',
-        bgColor: 'bg-red-100 dark:bg-red-900',
-        text: 'FAILED',
-      };
-    }
-    return {
-      color: 'text-muted',
-      bgColor: 'bg-surface-hover',
-      text: 'UNKNOWN',
-    };
-  };
-
-  // Get disk type badge color
-  const getDiskTypeBadge = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'nvme':
-        return 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-300';
-      case 'sata':
-        return 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300';
-      case 'sas':
-        return 'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-300';
-      default:
-        return 'bg-surface-hover text-base-content';
-    }
-  };
-
-  // Get selected node name for display
   const selectedNodeName = createMemo(() => {
     if (!props.selectedNode) return null;
-    const node = props.nodes.find((n) => n.id === props.selectedNode);
-    return node?.name || null;
+    return props.nodes.find((n) => n.id === props.selectedNode)?.name || null;
   });
 
   const handleRowClick = (disk: Resource) => {
-    const current = selectedDisk();
-    if (current && current.id === disk.id) {
-      setSelectedDisk(null);
-    } else {
-      setSelectedDisk(disk);
-    }
+    setSelectedDisk((current) => (current?.id === disk.id ? null : disk));
   };
 
   const getNodeAgentId = (disk: Resource) => {
@@ -239,15 +298,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
   };
 
   const getMetricResourceId = (disk: Resource) => {
-    // Use the metrics target from the unified resource API
     if (disk.metricsTarget?.resourceId) {
       return disk.metricsTarget.resourceId;
     }
-    // Fallback: try to construct from platform data
     const data = getDiskData(disk);
     const agentId = getNodeAgentId(disk);
     if (!agentId) return null;
-    // Strip /dev/ if present to match agent metric key
     const deviceName = data.devPath.replace('/dev/', '');
     return `${agentId}:${deviceName}`;
   };
@@ -265,7 +321,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
             <Show
               when={hasPVENodes()}
               fallback={
-                <div class="mt-4 p-4 bg-surface-alt border border-border rounded-md text-left">
+                <div class="mt-4 rounded-md border border-border bg-surface-alt p-4 text-left">
                   <p class="text-sm text-muted">
                     No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor
                     physical disks.
@@ -273,11 +329,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 </div>
               }
             >
-              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md text-left">
-                <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+              <div class="mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-900">
+                <p class="mb-2 text-sm font-medium text-blue-900 dark:text-blue-100">
                   Physical disk monitoring requirements:
                 </p>
-                <ol class="text-xs text-blue-800 dark:text-blue-200 space-y-1.5 ml-4 list-decimal">
+                <ol class="ml-4 list-decimal space-y-1.5 text-xs text-blue-800 dark:text-blue-200">
                   <li>
                     Enable "Monitor physical disk health (SMART)" in Settings → Infrastructure
                     (Proxmox node advanced settings)
@@ -288,7 +344,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   </li>
                   <li>Wait 5 minutes for Proxmox to collect SMART data</li>
                 </ol>
-                <p class="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
+                <p class="mt-3 text-xs italic text-blue-700 dark:text-blue-300">
                   Note: Both Pulse and Proxmox must have SMART monitoring enabled.
                 </p>
               </div>
@@ -302,44 +358,32 @@ export const DiskList: Component<DiskListProps> = (props) => {
           <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
             <Table class="w-full">
               <TableHeader>
-                <TableRow class="bg-surface-alt text-muted border-b border-border">
-                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
-                    Node
+                <TableRow class="border-b border-border bg-surface-alt text-muted">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Disk
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
-                    Device
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Host / Platform
                   </TableHead>
-                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[19%]">
-                    Model
+                  <TableHead class="hidden lg:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Role
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
-                    Type
+                  <TableHead class="hidden lg:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Belongs To
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
-                    FS
-                  </TableHead>
-                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Health
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%]">
-                    SSD Life
+                  <TableHead class="hidden md:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Wear / Temp
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
-                    Power-On
+                  <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Activity
                   </TableHead>
-                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
-                    Temp
+                  <TableHead class="hidden md:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Action
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
-                    Read
-                  </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
-                    Write
-                  </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%]">
-                    Busy
-                  </TableHead>
-                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Size
                   </TableHead>
                 </TableRow>
@@ -348,23 +392,27 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 <For each={filteredDisks()}>
                   {(disk) => {
                     const data = getDiskData(disk);
-                    const health = getHealthStatus(data);
+                    const status = getDiskHealthStatus(data);
                     const isSelected = () => selectedDisk()?.id === disk.id;
-                    const warning = hasSmartWarning(data);
+                    const metricResourceId = () => getMetricResourceId(disk);
 
                     return (
                       <>
                         <TableRow
-                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-surface-hover'}`}
+                          class={`cursor-pointer transition-colors ${
+                            isSelected() ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-surface-hover'
+                          }`}
                           onClick={() => handleRowClick(disk)}
                         >
-                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
-                            <div class="flex items-center gap-1.5 min-w-0">
+                          <TableCell class="px-2 py-1 align-middle text-xs">
+                            <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
                               <div
-                                class={`cursor-pointer transition-transform duration-200 ${isSelected() ? 'rotate-90' : ''}`}
+                                class={`transition-transform duration-200 ${
+                                  isSelected() ? 'rotate-90' : ''
+                                }`}
                               >
                                 <svg
-                                  class="w-3.5 h-3.5 hover:text-base-content"
+                                  class="h-3.5 w-3.5 text-muted hover:text-base-content"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"
@@ -377,126 +425,100 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                   />
                                 </svg>
                               </div>
-                              <span class="font-medium text-base-content">{data.node}</span>
+                              <span class="truncate text-[12px] font-semibold text-base-content">
+                                {data.model || 'Unknown Disk'}
+                              </span>
+                              <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                                {data.devPath || disk.name}
+                              </span>
+                              <Show when={data.type}>
+                                <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                                  {data.type.toUpperCase()}
+                                </span>
+                              </Show>
+                              <Show when={data.serial}>
+                                <span class="truncate text-[11px] text-muted" title={data.serial}>
+                                  S/N {data.serial}
+                                </span>
+                              </Show>
                             </div>
                           </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span class="font-mono text-muted">{data.devPath}</span>
+
+                          <TableCell class="px-2 py-1 align-middle text-xs">
+                            <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+                              <span class="truncate text-[12px] font-medium text-base-content">
+                                {data.node || disk.parentName || 'Unknown Host'}
+                              </span>
+                              <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-base-content">
+                                {platformLabel(disk)}
+                              </span>
+                            </div>
                           </TableCell>
-                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span class="text-base-content">{data.model || 'Unknown'}</span>
-                          </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span
-                              class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(data.type)}`}
-                            >
-                              {data.type.toUpperCase()}
+
+                          <TableCell class="hidden lg:table-cell px-2 py-1 align-middle text-xs">
+                            <span class="block truncate text-[11px] text-base-content" title={getDiskRoleLabel(data)}>
+                              {getDiskRoleLabel(data)}
                             </span>
                           </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <Show
-                              when={data.used && data.used !== 'unknown'}
-                              fallback={<span class="">-</span>}
-                            >
-                              <span class="text-[10px] font-mono text-muted">{data.used}</span>
-                            </Show>
-                          </TableCell>
-                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
-                            <span
-                              class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}
-                            >
-                              {health.text}
+
+                          <TableCell class="hidden lg:table-cell px-2 py-1 align-middle text-xs">
+                            <span class="block truncate text-[11px] text-base-content" title={getDiskParentLabel(data)}>
+                              {getDiskParentLabel(data)}
                             </span>
-                            <Show when={warning}>
+                          </TableCell>
+
+                          <TableCell class="px-2 py-1 align-middle text-xs">
+                            <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
                               <span
-                                class="ml-1 text-yellow-500 dark:text-yellow-400"
-                                title="SMART warning: critical counters non-zero"
+                                class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${status.badge}`}
                               >
-                                &#9888;
+                                {status.label}
                               </span>
-                            </Show>
-                          </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <Show when={data.wearout > 0} fallback={<span class="">-</span>}>
-                              <ProgressBar
-                                value={data.wearout}
-                                class="h-4 w-24"
-                                fillClass={getMetricColorClass(100 - data.wearout, 'disk')}
-                                label={
-                                  <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none">
-                                    <span class="whitespace-nowrap px-0.5">{data.wearout}%</span>
-                                  </span>
-                                }
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
-                            <Show
-                              when={data.smartAttributes?.powerOnHours != null}
-                              fallback={<span class="text-slate-400">-</span>}
-                            >
-                              <span class="text-base-content">
-                                {formatPowerOnHours(data.smartAttributes!.powerOnHours!, true)}
+                              <span class="truncate text-[11px] text-muted" title={status.summary}>
+                                {status.summary}
                               </span>
-                            </Show>
+                            </div>
                           </TableCell>
-                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
-                            <Show
-                              when={typeof data.temperature === 'number'}
-                              fallback={<span class="font-medium text-slate-400">-</span>}
-                            >
-                              <span
-                                class={`font-medium ${
-                                  data.temperature > 70
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : data.temperature > 60
-                                      ? 'text-yellow-600 dark:text-yellow-400'
-                                      : 'text-green-600 dark:text-green-400'
-                                }`}
-                              >
-                                {formatTemperature(data.temperature)}
+
+                          <TableCell class="hidden md:table-cell px-2 py-1 align-middle text-xs">
+                            <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                              <span class="truncate text-[11px] text-base-content" title={getWearSummary(data)}>
+                                {getWearSummary(data)}
                               </span>
-                            </Show>
+                              <span class={`shrink-0 text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}>
+                                {data.temperature > 0 ? formatTemperature(data.temperature) : '-'}
+                              </span>
+                            </div>
                           </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
-                            <Show
-                              when={getMetricResourceId(disk)}
-                              fallback={<span class="text-slate-300">-</span>}
-                            >
+
+                          <TableCell class="hidden xl:table-cell px-2 py-1 align-middle text-xs">
+                            <Show when={metricResourceId()} fallback={<span class="text-[11px] text-muted">No live telemetry</span>}>
                               {(resourceId) => (
-                                <DiskLiveMetric resourceId={resourceId()} type="read" />
+                                <div class="flex items-center gap-2 whitespace-nowrap text-[11px]">
+                                  <span class="text-muted">R</span>
+                                  <DiskLiveMetric resourceId={resourceId()} type="read" />
+                                  <span class="text-muted">W</span>
+                                  <DiskLiveMetric resourceId={resourceId()} type="write" />
+                                </div>
                               )}
                             </Show>
                           </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
-                            <Show
-                              when={getMetricResourceId(disk)}
-                              fallback={<span class="text-slate-300">-</span>}
-                            >
-                              {(resourceId) => (
-                                <DiskLiveMetric resourceId={resourceId()} type="write" />
-                              )}
-                            </Show>
+
+                          <TableCell class="hidden md:table-cell px-2 py-1 align-middle text-xs">
+                            <span class="block truncate text-[11px] text-base-content" title={getDiskAction(data)}>
+                              {getDiskAction(data)}
+                            </span>
                           </TableCell>
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
-                            <Show
-                              when={getMetricResourceId(disk)}
-                              fallback={<span class="text-slate-300">-</span>}
-                            >
-                              {(resourceId) => (
-                                <DiskLiveMetric resourceId={resourceId()} type="ioTime" />
-                              )}
-                            </Show>
-                          </TableCell>
-                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
-                            <span class="text-base-content">{formatBytes(data.size)}</span>
+
+                          <TableCell class="px-2 py-1 align-middle text-xs whitespace-nowrap">
+                            <span class="text-[11px] text-base-content">{formatBytes(data.size)}</span>
                           </TableCell>
                         </TableRow>
                         <Show when={isSelected()}>
                           <TableRow>
                             <TableCell
-                              colSpan={13}
-                              class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
+                              colSpan={9}
+                              class="border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner"
                             >
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </TableCell>

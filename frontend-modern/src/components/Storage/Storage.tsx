@@ -615,6 +615,9 @@ const Storage: Component = () => {
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
                           Storage
                         </TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                          Host / Platform
+                        </TableHead>
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]">
                           Protection
                         </TableHead>

@@ -375,6 +375,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(screen.getByRole('columnheader', { name: 'Storage' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Host / Platform' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Protection' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Primary Issue' })).toBeInTheDocument();
