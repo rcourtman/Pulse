@@ -23,6 +23,7 @@ import {
   investigationOutcomeColors,
   formatTimestamp,
 } from '@/api/patrol';
+import { getInvestigationStatusBadgeClasses } from '@/utils/aiFindingPresentation';
 import { InvestigationMessages } from './InvestigationMessages';
 import { notificationStore } from '@/stores/notifications';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
@@ -34,18 +35,6 @@ interface InvestigationSectionProps {
   investigationOutcome?: string;
   investigationAttempts?: number;
 }
-
-const statusColors: Record<string, string> = {
-  pending: 'border-border bg-surface-hover text-muted',
-  running:
-    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  completed:
-    'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
-  failed:
-    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
-  needs_attention:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-};
 
 export const InvestigationSection: Component<InvestigationSectionProps> = (props) => {
   const [showThread, setShowThread] = createSignal(false);
@@ -120,7 +109,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             fallback={
               <Show when={investigation()?.status}>
                 <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${statusColors[investigation()!.status] || statusColors.pending}`}
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationStatusBadgeClasses(investigation()!.status)}`}
                 >
                   {investigationStatusLabels[investigation()!.status] || investigation()!.status}
                 </span>

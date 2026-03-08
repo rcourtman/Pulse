@@ -1,53 +1,8 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { ModelInfo } from '@/types/ai';
-
-// Provider display names for grouped model selection
-export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  openrouter: 'OpenRouter',
-  deepseek: 'DeepSeek',
-  gemini: 'Google Gemini',
-  ollama: 'Ollama',
-};
-
-// Parse provider from model ID (format: "provider:model-name")
-export function getProviderFromModelId(modelId: string): string {
-  const colonIndex = modelId.indexOf(':');
-  if (colonIndex > 0) {
-    return modelId.substring(0, colonIndex);
-  }
-  if (
-    /^(openai|anthropic|google|deepseek|meta-llama|mistralai|x-ai|xai|cohere|qwen)\//.test(modelId)
-  ) {
-    return 'openrouter';
-  }
-  // Default detection for models without prefix
-  if (
-    modelId.includes('claude') ||
-    modelId.includes('opus') ||
-    modelId.includes('sonnet') ||
-    modelId.includes('haiku')
-  ) {
-    return 'anthropic';
-  }
-  if (
-    modelId.includes('gpt') ||
-    modelId.includes('o1') ||
-    modelId.includes('o3') ||
-    modelId.includes('o4')
-  ) {
-    return 'openai';
-  }
-  if (modelId.includes('deepseek')) {
-    return 'deepseek';
-  }
-  if (modelId.includes('gemini')) {
-    return 'gemini';
-  }
-  return 'ollama';
-}
+export { getProviderFromModelId } from '@/utils/aiProviderPresentation';
+import { getProviderFromModelId } from '@/utils/aiProviderPresentation';
 
 // Group models by provider for grouped rendering
 export function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {

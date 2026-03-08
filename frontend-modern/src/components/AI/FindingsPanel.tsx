@@ -21,11 +21,19 @@ import {
   investigationStatusLabels,
   investigationOutcomeLabels,
   investigationOutcomeColors,
-  type InvestigationStatus,
 } from '@/api/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 import { formatRelativeTime } from '@/utils/format';
 import { logger } from '@/utils/logger';
+import {
+  formatFindingLifecycleType,
+  formatFindingLoopState,
+  getFindingLoopStateBadgeClasses,
+  getFindingSeverityBadgeClasses,
+  getFindingSourceBadgeClasses,
+  getFindingSourceLabel,
+  getInvestigationStatusBadgeClasses,
+} from '@/utils/aiFindingPresentation';
 
 // Severity priority for sorting (lower number = higher priority)
 const severityOrder: Record<string, number> = {
@@ -34,102 +42,6 @@ const severityOrder: Record<string, number> = {
   watch: 2,
   info: 3,
 };
-
-// Source display names
-const sourceLabels: Record<string, string> = {
-  threshold: 'Alert',
-  'ai-patrol': 'Pulse Patrol',
-  anomaly: 'Anomaly',
-  'ai-chat': 'Pulse Assistant',
-  correlation: 'Correlation',
-  forecast: 'Forecast',
-};
-
-// Severity badge colors
-const severityColors: Record<string, string> = {
-  critical:
-    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
-  warning:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-  info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  watch: 'border-border bg-surface-alt text-base-content',
-};
-
-// Source badge colors
-const sourceColors: Record<string, string> = {
-  threshold:
-    'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'ai-patrol':
-    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  anomaly:
-    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'ai-chat':
-    'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-900 dark:text-teal-300',
-  correlation:
-    'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
-  forecast:
-    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
-};
-
-// Investigation status badge colors
-const investigationStatusColors: Record<InvestigationStatus, string> = {
-  pending: 'border-border bg-surface-alt text-muted',
-  running:
-    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  completed:
-    'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
-  failed:
-    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
-  needs_attention:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-};
-
-// Patrol loop state badge colors (best-effort; state is optional)
-const loopStateColors: Record<string, string> = {
-  detected:
-    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  investigating:
-    'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-  remediation_planned:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-  remediating:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-  remediation_failed:
-    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
-  needs_attention:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-  timed_out: 'border-border bg-surface-alt text-base-content',
-  resolved:
-    'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
-  dismissed: 'border-border bg-surface-alt text-muted',
-  snoozed:
-    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  suppressed: 'border-border bg-surface-alt text-muted',
-};
-
-const formatLoopState = (s: string) => s.replace(/_/g, ' ');
-
-const lifecycleLabels: Record<string, string> = {
-  detected: 'Detected',
-  regressed: 'Regressed',
-  acknowledged: 'Acknowledged',
-  snoozed: 'Snoozed',
-  unsnoozed: 'Unsnoozed',
-  dismissed: 'Dismissed',
-  undismissed: 'Undismissed',
-  suppressed: 'Suppressed',
-  resolved: 'Resolved',
-  auto_resolved: 'Auto-resolved',
-  verification_passed: 'Fix verified',
-  investigation_updated: 'Investigation updated',
-  investigation_outcome: 'Investigation outcome',
-  user_note_updated: 'Note updated',
-  loop_state: 'Loop state changed',
-  seen_while_suppressed: 'Seen while suppressed',
-  loop_transition_violation: 'Invalid transition blocked',
-};
-
-const formatLifecycleType = (value: string) => lifecycleLabels[value] || value.replace(/_/g, ' ');
 
 interface FindingsPanelProps {
   resourceId?: string;
@@ -556,14 +468,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {/* Source badge - only show when requested */}
             <Show when={showSourceBadge}>
               <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${sourceColors[finding.source] || sourceColors['ai-patrol']}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingSourceBadgeClasses(finding.source)}`}
               >
-                {sourceLabels[finding.source] || finding.source}
+                {getFindingSourceLabel(finding.source)}
               </span>
             </Show>
             {/* Severity badge */}
             <span
-              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded uppercase ${severityColors[finding.severity]}`}
+              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded uppercase ${getFindingSeverityBadgeClasses(finding.severity)}`}
             >
               {finding.severity}
             </span>
@@ -592,10 +504,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               }
             >
               <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${loopStateColors[finding.loopState!] || 'border-border bg-surface-alt text-muted'}`}
-                title={`Patrol loop: ${formatLoopState(finding.loopState!)}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingLoopStateBadgeClasses(finding.loopState!)}`}
+                title={`Patrol loop: ${formatFindingLoopState(finding.loopState!)}`}
               >
-                {formatLoopState(finding.loopState!)}
+                {formatFindingLoopState(finding.loopState!)}
               </span>
             </Show>
             <Show when={isOutOfScope(finding)}>
@@ -618,7 +530,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               }
             >
               <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded flex items-center gap-1 ${investigationStatusColors[finding.investigationStatus!]}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded flex items-center gap-1 ${getInvestigationStatusBadgeClasses(finding.investigationStatus!)}`}
                 title={`Investigation: ${investigationStatusLabels[finding.investigationStatus!]}`}
               >
                 <Show
@@ -795,7 +707,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 <div class="text-xs text-muted flex items-start justify-between gap-2">
                   <span class="truncate">
                     <span class="font-medium text-base-content">
-                      {formatLifecycleType(event.type)}
+                      {formatFindingLifecycleType(event.type)}
                     </span>
                     <Show when={event.message}>
                       {' '}

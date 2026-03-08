@@ -119,16 +119,6 @@ export const DEFAULT_MODELS: Record<AIProvider, string> = {
   gemini: 'gemini-2.5-flash',
 };
 
-// Provider display names
-export const PROVIDER_NAMES: Record<AIProvider, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  openrouter: 'OpenRouter',
-  ollama: 'Ollama',
-  deepseek: 'DeepSeek',
-  gemini: 'Google Gemini',
-};
-
 // Provider descriptions
 export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   anthropic: 'Claude models from Anthropic',

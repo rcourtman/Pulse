@@ -14,7 +14,7 @@ import { formatNumber } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { notificationStore } from '@/stores/notifications';
 import type { AICostSummary, AISettings } from '@/types/ai';
-import { PROVIDER_NAMES } from '@/types/ai';
+import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
 
 const usdFormatter = new Intl.NumberFormat(undefined, {
   style: 'currency',
@@ -501,8 +501,7 @@ export const AICostDashboard: Component = () => {
                     {unpricedProviderModels()
                       .slice(0, 6)
                       .map(
-                        (pm) =>
-                          `${PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}/${pm.model}`,
+                        (pm) => `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`,
                       )
                       .join(', ')}
                     <Show when={unpricedProviderModels().length > 6}>
@@ -605,8 +604,7 @@ export const AICostDashboard: Component = () => {
                       {(pm) => (
                         <TableRow class="border-b border-border-subtle">
                           <TableCell class="py-2 pr-4 font-medium text-base-content">
-                            {PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] ||
-                              pm.provider}
+                            {getAIProviderDisplayName(pm.provider) || pm.provider}
                           </TableCell>
                           <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
                             {pm.model}
