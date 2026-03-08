@@ -104,6 +104,12 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryCapacity {
 		t.Fatalf("incidentCategory = %v", got)
 	}
+	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyToday {
+		t.Fatalf("incidentUrgency = %v", got)
+	}
+	if got := alert.Metadata["incidentAction"]; got != "Plan cleanup or capacity expansion soon" {
+		t.Fatalf("incidentAction = %v", got)
+	}
 	if got := alert.Metadata["topConsumerNames"]; got == nil {
 		t.Fatal("expected topConsumerNames metadata")
 	}
@@ -167,6 +173,12 @@ func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	}
 	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryRecoverability {
 		t.Fatalf("incidentCategory = %v", got)
+	}
+	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyNow {
+		t.Fatalf("incidentUrgency = %v", got)
+	}
+	if got := alert.Metadata["incidentAction"]; got != "Restore backup target health immediately to protect recoverability" {
+		t.Fatalf("incidentAction = %v", got)
 	}
 }
 
@@ -237,6 +249,12 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 	}
 	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryRecoverability {
 		t.Fatalf("incidentCategory = %v", got)
+	}
+	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyNow {
+		t.Fatalf("incidentUrgency = %v", got)
+	}
+	if got := alert.Metadata["incidentAction"]; got != "Restore backup target health immediately to protect recoverability" {
+		t.Fatalf("incidentAction = %v", got)
 	}
 }
 

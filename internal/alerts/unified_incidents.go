@@ -472,6 +472,12 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		"incidentNativeID": incident.NativeID,
 		"incidentSource":   incident.Source,
 	}
+	if urgency, action := unifiedresources.IncidentActionForResource(&resource, incident, unifiedresources.IncidentCategoryForResource(&resource, incident)); urgency != "" {
+		metadata["incidentUrgency"] = urgency
+		if action != "" {
+			metadata["incidentAction"] = action
+		}
+	}
 
 	if !incident.StartedAt.IsZero() {
 		metadata["incidentStartedAt"] = incident.StartedAt.UTC().Format(time.RFC3339)

@@ -886,6 +886,20 @@ func (v HostView) IncidentCategory() string {
 	return v.r.IncidentCategory
 }
 
+func (v HostView) IncidentUrgency() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentUrgency
+}
+
+func (v HostView) IncidentAction() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentAction
+}
+
 func (v HostView) Tags() []string {
 	if v.r == nil {
 		return nil
@@ -1330,6 +1344,20 @@ func (v StoragePoolView) IncidentCategory() string {
 	return v.r.IncidentCategory
 }
 
+func (v StoragePoolView) IncidentUrgency() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentUrgency
+}
+
+func (v StoragePoolView) IncidentAction() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentAction
+}
+
 func (v StoragePoolView) Node() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -1618,6 +1646,20 @@ func (v PBSInstanceView) IncidentCategory() string {
 		return ""
 	}
 	return v.r.IncidentCategory
+}
+
+func (v PBSInstanceView) IncidentUrgency() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentUrgency
+}
+
+func (v PBSInstanceView) IncidentAction() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentAction
 }
 
 func (v PBSInstanceView) Hostname() string {

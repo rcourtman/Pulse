@@ -2036,6 +2036,12 @@ func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
 	if resource.IncidentCategory != unified.IncidentCategoryRecoverability {
 		t.Fatalf("incidentCategory = %q, want %q", resource.IncidentCategory, unified.IncidentCategoryRecoverability)
 	}
+	if resource.IncidentUrgency != unified.IncidentUrgencyNow {
+		t.Fatalf("incidentUrgency = %q, want %q", resource.IncidentUrgency, unified.IncidentUrgencyNow)
+	}
+	if resource.IncidentAction != "Restore backup target health immediately to protect recoverability" {
+		t.Fatalf("incidentAction = %q", resource.IncidentAction)
+	}
 }
 
 func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {
