@@ -1,73 +1,76 @@
 {
   "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
   "version": 1,
-  "generated": "2026-03-06",
+  "generated": "2026-03-08",
   "defaultThresholdPercent": 15,
   "chunks": {
     "settings-admin": {
-      "baselineGzip": 92387
+      "baselineGzip": 98810
     },
     "Alerts": {
-      "baselineGzip": 73984
+      "baselineGzip": 73583
     },
     "ai-ui": {
-      "baselineGzip": 63973
+      "baselineGzip": 66859
     },
     "Dashboard": {
-      "baselineGzip": 51325
+      "baselineGzip": 51227
     },
     "settings-heavy": {
-      "baselineGzip": 50337
+      "baselineGzip": 50623
+    },
+    "settings-core": {
+      "baselineGzip": 48009
     },
     "Infrastructure": {
-      "baselineGzip": 41478
-    },
-    "settings-shell": {
-      "baselineGzip": 30123
+      "baselineGzip": 40221
     },
     "Storage": {
-      "baselineGzip": 27371
+      "baselineGzip": 27840
+    },
+    "settings-auth": {
+      "baselineGzip": 21283
     },
     "vendor-ai": {
       "baselineGzip": 20729
     },
-    "settings-auth": {
-      "baselineGzip": 20575
-    },
     "ScrollToTopButton": {
-      "baselineGzip": 19452
+      "baselineGzip": 19018
     },
     "RecoveryRoute": {
-      "baselineGzip": 17726
+      "baselineGzip": 18844
     },
     "vendor-solid": {
       "baselineGzip": 17262
     },
     "index": {
-      "baselineGzip": 13862
+      "baselineGzip": 13848
+    },
+    "settings-shell": {
+      "baselineGzip": 13061
     },
     "AIIntelligence": {
-      "baselineGzip": 10269
+      "baselineGzip": 10281
+    },
+    "vendor": {
+      "baselineGzip": 9853
     },
     "vendor-icons": {
-      "baselineGzip": 8457
-    },
-    "settings-core": {
-      "baselineGzip": 7641
+      "baselineGzip": 8712
     },
     "Ceph": {
-      "baselineGzip": 7207
+      "baselineGzip": 6786
     },
-    "InteractiveSparkline": {
-      "baselineGzip": 6766
+    "summaryTimeRange": {
+      "baselineGzip": 6535
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 608957
+      "baselineGzip": 647002
     },
     "css": {
-      "baselineGzip": 21936
+      "baselineGzip": 22344
     }
   }
 }
