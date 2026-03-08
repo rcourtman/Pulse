@@ -20,6 +20,15 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	}
 
 	desired := make(map[string]*Alert)
+	parentResources := make(map[string]unifiedresources.Resource, len(resources))
+	childrenByParent := make(map[string][]unifiedresources.Resource)
+	for _, resource := range resources {
+		parentResources[resource.ID] = resource
+		if resource.ParentID != nil && strings.TrimSpace(*resource.ParentID) != "" {
+			parentID := strings.TrimSpace(*resource.ParentID)
+			childrenByParent[parentID] = append(childrenByParent[parentID], resource)
+		}
+	}
 
 	m.mu.RLock()
 	enabled := m.config.Enabled
@@ -40,6 +49,9 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 				continue
 			}
 			for _, incident := range resource.Incidents {
+				if shouldSuppressUnifiedIncidentAlert(resource, incident, parentResources, childrenByParent) {
+					continue
+				}
 				level, ok := alertLevelFromIncidentSeverity(incident.Severity)
 				if !ok {
 					continue
@@ -83,6 +95,53 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		m.historyManager.AddAlert(*alert)
 		m.dispatchAlert(alert, false)
 	}
+}
+
+func shouldSuppressUnifiedIncidentAlert(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident, resourcesByID map[string]unifiedresources.Resource, childrenByParent map[string][]unifiedresources.Resource) bool {
+	key := unifiedIncidentKey(incident)
+	if key == "" {
+		return false
+	}
+
+	switch resource.Type {
+	case unifiedresources.ResourceTypeAgent:
+		for _, child := range childrenByParent[resource.ID] {
+			if child.Type != unifiedresources.ResourceTypeStorage {
+				continue
+			}
+			if resourceHasIncidentKey(child, key) {
+				return true
+			}
+		}
+	case unifiedresources.ResourceTypePhysicalDisk:
+		if resource.ParentID == nil || strings.TrimSpace(*resource.ParentID) == "" {
+			return false
+		}
+		parent, ok := resourcesByID[strings.TrimSpace(*resource.ParentID)]
+		if !ok || parent.Type != unifiedresources.ResourceTypeStorage {
+			return false
+		}
+		return resourceHasIncidentKey(parent, key)
+	}
+
+	return false
+}
+
+func resourceHasIncidentKey(resource unifiedresources.Resource, key string) bool {
+	for _, incident := range resource.Incidents {
+		if unifiedIncidentKey(incident) == key {
+			return true
+		}
+	}
+	return false
+}
+
+func unifiedIncidentKey(incident unifiedresources.ResourceIncident) string {
+	key := strings.TrimSpace(incident.Provider) + "|" + strings.TrimSpace(incident.NativeID) + "|" + strings.TrimSpace(incident.Code)
+	if key == "||" {
+		return ""
+	}
+	return key
 }
 
 func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) bool {

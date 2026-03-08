@@ -106,6 +106,123 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedResourceIncidentsSuppressesRedundantParentAndChildAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	agentID := "agent:truenas-main"
+	storageID := "storage:tank"
+	resources := []unifiedresources.Resource{
+		{
+			ID:      agentID,
+			Type:    unifiedresources.ResourceTypeAgent,
+			Name:    "truenas-main",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+			TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-main"},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "truenas",
+				NativeID: "alert-1",
+				Code:     "truenas_volume_status",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Pool tank is FAULTED",
+			}},
+		},
+		{
+			ID:       storageID,
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "tank",
+			ParentID: &agentID,
+			Storage: &unifiedresources.StorageMeta{
+				Platform: "truenas",
+				Topology: "pool",
+				IsZFS:    true,
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "truenas",
+				NativeID: "alert-1",
+				Code:     "truenas_volume_status",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Pool tank is FAULTED",
+			}},
+		},
+		{
+			ID:       "disk:sda",
+			Type:     unifiedresources.ResourceTypePhysicalDisk,
+			Name:     "sda",
+			ParentID: &storageID,
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: "/dev/sda",
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "truenas",
+				NativeID: "alert-1",
+				Code:     "truenas_volume_status",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Pool tank is FAULTED",
+			}},
+		},
+	}
+
+	m.SyncUnifiedResourceIncidents(resources)
+
+	active := m.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("expected only 1 active alert after parent/child suppression, got %d: %+v", len(active), active)
+	}
+	if active[0].Type != "zfs-pool-state" {
+		t.Fatalf("alert type = %q, want zfs-pool-state", active[0].Type)
+	}
+	if active[0].ResourceID != storageID {
+		t.Fatalf("resource id = %q, want %q", active[0].ResourceID, storageID)
+	}
+}
+
+func TestGetActiveAlertsPrioritizesHighImpactStorageIncidents(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{
+		{
+			ID:   "storage:shared",
+			Type: unifiedresources.ResourceTypeStorage,
+			Name: "shared",
+			Storage: &unifiedresources.StorageMeta{
+				ConsumerCount: 4,
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "a",
+				Code:     "capacity_runway_low",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Shared storage is nearly full",
+			}},
+		},
+		{
+			ID:   "disk:sdb",
+			Type: unifiedresources.ResourceTypePhysicalDisk,
+			Name: "sdb",
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: "/dev/sdb",
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "b",
+				Code:     "smart_failed",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Disk sdb has SMART failures",
+			}},
+		},
+	})
+
+	active := m.GetActiveAlerts()
+	if len(active) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(active))
+	}
+	if active[0].ResourceID != "storage:shared" {
+		t.Fatalf("expected storage incident first, got %q then %q", active[0].ResourceID, active[1].ResourceID)
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsRespectsDisableAllStorage(t *testing.T) {
 	m := newTestManager(t)
 	cfg := unifiedEvalBaseConfig()

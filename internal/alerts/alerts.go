@@ -7225,6 +7225,18 @@ func (m *Manager) GetActiveAlerts() []Alert {
 	}
 
 	sort.Slice(alerts, func(i, j int) bool {
+		if left, right := alertSeveritySortRank(alerts[i]), alertSeveritySortRank(alerts[j]); left != right {
+			return left > right
+		}
+		if left, right := alertImpactSortRank(alerts[i]), alertImpactSortRank(alerts[j]); left != right {
+			return left > right
+		}
+		if left, right := alertTypeSortRank(alerts[i]), alertTypeSortRank(alerts[j]); left != right {
+			return left > right
+		}
+		if !alerts[i].StartTime.Equal(alerts[j].StartTime) {
+			return alerts[i].StartTime.Before(alerts[j].StartTime)
+		}
 		if alerts[i].Node != alerts[j].Node {
 			return alerts[i].Node < alerts[j].Node
 		}
@@ -7232,6 +7244,75 @@ func (m *Manager) GetActiveAlerts() []Alert {
 	})
 
 	return alerts
+}
+
+func alertSeveritySortRank(alert Alert) int {
+	switch alert.Level {
+	case AlertLevelCritical:
+		return 2
+	case AlertLevelWarning:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func alertImpactSortRank(alert Alert) int {
+	if alert.Metadata == nil {
+		return 0
+	}
+	return metadataIntValue(alert.Metadata["consumerCount"])
+}
+
+func alertTypeSortRank(alert Alert) int {
+	switch alert.Type {
+	case "storage-incident", "zfs-pool-state", "zfs-pool-errors":
+		return 4
+	case "disk-health", "disk-wearout", "zfs-device":
+		return 3
+	case "offline", "connectivity", "powered-off", "docker-host-offline":
+		return 2
+	default:
+		return 1
+	}
+}
+
+func metadataIntValue(value interface{}) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int8:
+		return int(v)
+	case int16:
+		return int(v)
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case uint:
+		return int(v)
+	case uint8:
+		return int(v)
+	case uint16:
+		return int(v)
+	case uint32:
+		return int(v)
+	case uint64:
+		return int(v)
+	case float32:
+		return int(v)
+	case float64:
+		return int(v)
+	case json.Number:
+		if parsed, err := v.Int64(); err == nil {
+			return int(parsed)
+		}
+	case string:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return parsed
+		}
+	}
+	return 0
 }
 
 // NotifyExistingAlert re-dispatches a notification for an existing active alert
