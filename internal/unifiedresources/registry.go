@@ -466,11 +466,16 @@ func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
 		return
 	}
 
-	parentID := rr.sourceResourceID(SourceAgent, host.ID)
+	hostParentID := rr.sourceResourceID(SourceAgent, host.ID)
+	unraidStorageID := rr.sourceResourceID(SourceAgent, hostUnraidStorageSourceID(host))
 	for _, disk := range host.Sensors.SMART {
 		resource, identity := resourceFromHostSMARTDisk(host, disk)
 		if resource.PhysicalDisk == nil {
 			continue
+		}
+		parentID := hostParentID
+		if matched := matchUnraidDisk(host.Unraid, disk); matched != nil && unraidDiskGroup(matched) == "unraid-array" && unraidStorageID != "" {
+			parentID = unraidStorageID
 		}
 		if parentID != "" {
 			resource.ParentID = &parentID

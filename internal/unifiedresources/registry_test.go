@@ -582,6 +582,54 @@ func TestResourceRegistry_IngestSnapshotCreatesUnraidStorageResource(t *testing.
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotParentsUnraidArrayDisksUnderStorage(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-tower",
+				Hostname:  "tower",
+				Status:    "online",
+				LastSeen:  now,
+				MachineID: "machine-tower",
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					NumProtected: 1,
+					Disks: []models.HostUnraidDisk{
+						{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", Serial: "SERIAL-TOWER-1"},
+					},
+				},
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/sdb",
+							Model:       "Seagate IronWolf",
+							Serial:      "SERIAL-TOWER-1",
+							Type:        "sata",
+							Temperature: 37,
+							Health:      "PASSED",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	storage := rr.ListByType(ResourceTypeStorage)
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(storage) != 1 || len(disks) != 1 {
+		t.Fatalf("expected 1 storage and 1 disk resource, got storage=%d disk=%d", len(storage), len(disks))
+	}
+	if disks[0].ParentID == nil || *disks[0].ParentID != storage[0].ID {
+		t.Fatalf("expected unraid disk parent to be storage resource %q, got %+v", storage[0].ID, disks[0].ParentID)
+	}
+	if storage[0].ChildCount != 1 {
+		t.Fatalf("expected storage child count 1, got %d", storage[0].ChildCount)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
