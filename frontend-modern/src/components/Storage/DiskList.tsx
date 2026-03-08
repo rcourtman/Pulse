@@ -328,31 +328,31 @@ export const DiskList: Component<DiskListProps> = (props) => {
       <Show when={filteredDisks().length > 0}>
         <Card padding="none" tone="card" class="overflow-hidden">
           <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-            <Table class="w-full">
+            <Table class="w-full text-xs">
               <TableHeader>
                 <TableRow class="border-b border-border bg-surface-alt text-muted">
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider md:min-w-[220px]">
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[220px]">
                     Disk
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider w-[72px]">
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[72px]">
                     Source
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider md:min-w-[120px]">
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[120px]">
                     Host
                   </TableHead>
-                  <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="hidden xl:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
                     Role
                   </TableHead>
-                  <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="hidden xl:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
                     Belongs To
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider md:min-w-[160px]">
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[160px]">
                     Health
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
                     Wear / Temp
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider w-[96px]">
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[96px]">
                     Size
                   </TableHead>
                   <TableHead class="px-1.5 py-1 w-10" />
@@ -374,7 +374,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           style={{ height: '38px' }}
                           onClick={() => handleRowClick(disk)}
                         >
-                          <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[220px]">
+                          <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[220px]">
                             <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
                               <span class="truncate text-[12px] font-semibold text-base-content">
                                 {data.model || 'Unknown Disk'}
@@ -396,7 +396,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </div>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs w-[72px]">
+                          <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs w-[72px]">
                             <span
                               class={`inline-block text-[11px] font-semibold tracking-wide ${platformTextClass(disk)}`}
                             >
@@ -404,7 +404,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[120px]">
+                          <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[120px]">
                             <span
                               class="block truncate text-[11px] text-base-content"
                               title={data.node || disk.parentName || 'Unknown Host'}
@@ -413,7 +413,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
 
-                          <TableCell class="hidden xl:table-cell px-2 py-1 align-middle text-xs">
+                          <TableCell class="hidden xl:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs">
                             <span
                               class="block truncate text-[11px] text-base-content"
                               title={getDiskRoleLabel(data)}
@@ -422,7 +422,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
 
-                          <TableCell class="hidden xl:table-cell px-2 py-1 align-middle text-xs">
+                          <TableCell class="hidden xl:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs">
                             <span
                               class="block truncate text-[11px] text-base-content"
                               title={getDiskParentLabel(data)}
@@ -431,7 +431,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[160px]">
+                          <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[160px]">
                             <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
                               <span class={`shrink-0 text-[11px] font-semibold ${status.tone}`}>
                                 {status.label}
@@ -445,7 +445,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </div>
                           </TableCell>
 
-                          <TableCell class="hidden md:table-cell px-2 py-1 align-middle text-xs">
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs">
                             <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
                               <span
                                 class="hidden xl:block truncate text-[11px] text-base-content"
@@ -461,7 +461,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </div>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs whitespace-nowrap w-[96px]">
+                          <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[96px]">
                             <span class="text-[11px] text-base-content">
                               {formatBytes(data.size)}
                             </span>
