@@ -355,6 +355,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Size
                   </TableHead>
+                  <TableHead class="px-1.5 py-1 w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody class="divide-y divide-border">
@@ -374,25 +375,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         >
                           <TableCell class="px-2 py-1 align-middle text-xs">
                             <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                              <div
-                                class={`transition-transform duration-200 ${
-                                  isSelected() ? 'rotate-90' : ''
-                                }`}
-                              >
-                                <svg
-                                  class="h-3.5 w-3.5 text-muted hover:text-base-content"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M9 5l7 7-7 7"
-                                  />
-                                </svg>
-                              </div>
                               <span class="truncate text-[12px] font-semibold text-base-content">
                                 {data.model || 'Unknown Disk'}
                               </span>
@@ -481,11 +463,39 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <TableCell class="px-2 py-1 align-middle text-xs whitespace-nowrap">
                             <span class="text-[11px] text-base-content">{formatBytes(data.size)}</span>
                           </TableCell>
+
+                          <TableCell class="px-1.5 py-1 align-middle text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRowClick(disk);
+                              }}
+                              class="rounded p-1 hover:bg-surface-hover transition-colors"
+                              aria-label={`Toggle details for ${data.model || 'disk'}`}
+                            >
+                              <svg
+                                class={`h-3.5 w-3.5 text-muted transition-transform duration-150 ${
+                                  isSelected() ? 'rotate-90' : ''
+                                }`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  d="M9 5l7 7-7 7"
+                                />
+                              </svg>
+                            </button>
+                          </TableCell>
                         </TableRow>
                         <Show when={isSelected()}>
                           <TableRow>
                             <TableCell
-                              colSpan={8}
+                              colSpan={9}
                               class="border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner"
                             >
                               <DiskDetail disk={disk} nodes={props.nodes} />
