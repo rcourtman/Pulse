@@ -319,4 +319,64 @@ export class ChartsAPI {
     const url = `${this.baseUrl}/metrics-store/history?${searchParams.toString()}`;
     return apiFetchJSON(url);
   }
+
+  /**
+   * Fetch storage summary chart data (pool capacity + disk temperature).
+   */
+  static async getStorageSummaryCharts(
+    range_: TimeRange = '1h',
+    signal?: AbortSignal,
+  ): Promise<StorageSummaryChartsResponse> {
+    const rangeMinutes = timeRangeToMinutes(range_);
+    const url = `${this.baseUrl}/storage-charts?range=${rangeMinutes}`;
+    return apiFetchJSON(url, { signal });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Storage summary chart types
+// ---------------------------------------------------------------------------
+
+export interface StoragePoolChartData {
+  name: string;
+  usage: MetricPoint[];
+  used: MetricPoint[];
+  avail: MetricPoint[];
+}
+
+export interface StorageDiskChartData {
+  name: string;
+  node: string;
+  temperature: MetricPoint[];
+}
+
+export interface StorageSummaryChartsResponse {
+  pools: Record<string, StoragePoolChartData>;
+  disks: Record<string, StorageDiskChartData>;
+  stats: ChartStats;
+}
+
+function timeRangeToMinutes(range_: TimeRange): number {
+  switch (range_) {
+    case '5m':
+      return 5;
+    case '15m':
+      return 15;
+    case '30m':
+      return 30;
+    case '1h':
+      return 60;
+    case '4h':
+      return 240;
+    case '12h':
+      return 720;
+    case '24h':
+      return 1440;
+    case '7d':
+      return 10080;
+    case '30d':
+      return 43200;
+    default:
+      return 60;
+  }
 }

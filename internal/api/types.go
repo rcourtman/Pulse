@@ -1,9 +1,5 @@
 package api
 
-import (
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-)
-
 // Common response types for API endpoints
 
 // HealthResponse represents the health check response
@@ -158,15 +154,27 @@ type NodeChartData map[string][]MetricPoint
 // StorageChartData represents chart data for storage
 type StorageChartData map[string][]MetricPoint
 
-// StorageChartsResponse represents storage charts API response
-type StorageChartsResponse map[string]StorageMetrics
+// StorageChartsResponse represents storage charts API response.
+// It includes both pool-level capacity metrics and physical disk metrics.
+type StorageChartsResponse struct {
+	Pools map[string]StoragePoolChartData `json:"pools"`
+	Disks map[string]StorageDiskChartData `json:"disks"`
+	Stats ChartStats                      `json:"stats"`
+}
 
-// StorageMetrics represents storage metrics data
-type StorageMetrics struct {
-	Usage []models.MetricPoint `json:"usage"`
-	Used  []models.MetricPoint `json:"used"`
-	Total []models.MetricPoint `json:"total"`
-	Avail []models.MetricPoint `json:"avail"`
+// StoragePoolChartData holds per-pool capacity time-series.
+type StoragePoolChartData struct {
+	Name  string        `json:"name"`
+	Usage []MetricPoint `json:"usage"`
+	Used  []MetricPoint `json:"used"`
+	Avail []MetricPoint `json:"avail"`
+}
+
+// StorageDiskChartData holds per-disk temperature time-series.
+type StorageDiskChartData struct {
+	Name        string        `json:"name"`
+	Node        string        `json:"node"`
+	Temperature []MetricPoint `json:"temperature"`
 }
 
 // MetricPoint represents a single metric data point

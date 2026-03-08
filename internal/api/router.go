@@ -6893,7 +6893,8 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	}
 }
 
-// handleStorageCharts handles storage chart data requests
+// handleStorageCharts returns pool capacity and physical disk temperature
+// time-series for the storage summary sparklines.
 func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -6923,9 +6924,10 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Build storage chart data
-	storageData := make(StorageChartsResponse)
-
+	// Build pool chart data — convert monitoring MetricPoints (time.Time) to
+	// API MetricPoints (Unix milliseconds) matching the infrastructure/workloads
+	// chart endpoints.
+	pools := make(map[string]StoragePoolChartData, len(readState.StoragePools()))
 	for _, sp := range readState.StoragePools() {
 		if sp == nil {
 			continue
@@ -6935,20 +6937,48 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 		metrics := monitor.GetStorageMetricsForChart(sid, duration)
-
-		storageData[sid] = StorageMetrics{
-			Usage: metrics["usage"],
-			Used:  metrics["used"],
-			Total: metrics["total"],
-			Avail: metrics["avail"],
+		pools[sid] = StoragePoolChartData{
+			Name:  sp.Name(),
+			Usage: monitorPointsToAPI(metrics["usage"]),
+			Used:  monitorPointsToAPI(metrics["used"]),
+			Avail: monitorPointsToAPI(metrics["avail"]),
 		}
 	}
 
+	// Build disk temperature chart data
+	diskEntries := monitor.GetPhysicalDiskTemperatureCharts(duration)
+	disks := make(map[string]StorageDiskChartData, len(diskEntries))
+	for id, entry := range diskEntries {
+		disks[id] = StorageDiskChartData{
+			Name:        entry.Name,
+			Node:        entry.Node,
+			Temperature: monitorPointsToAPI(entry.Temperature),
+		}
+	}
+
+	resp := StorageChartsResponse{
+		Pools: pools,
+		Disks: disks,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(storageData); err != nil {
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Error().Err(err).Msg("Failed to encode storage chart data")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+// monitorPointsToAPI converts monitoring MetricPoints (time.Time timestamps)
+// to API MetricPoints (Unix millisecond timestamps) for JSON serialization.
+func monitorPointsToAPI(points []monitoring.MetricPoint) []MetricPoint {
+	if len(points) == 0 {
+		return nil
+	}
+	out := make([]MetricPoint, len(points))
+	for i, p := range points {
+		out[i] = MetricPoint{Timestamp: p.Timestamp.Unix() * 1000, Value: p.Value}
+	}
+	return out
 }
 
 // handleMetricsStoreStats returns statistics about the persistent metrics store

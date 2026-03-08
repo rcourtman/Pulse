@@ -17,7 +17,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead } from '@/components
 import { DiskList } from '@/components/Storage/DiskList';
 import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
 import { StorageCommandCenter } from '@/components/Storage/StorageCommandCenter';
-import { StorageHero } from '@/components/Storage/StorageHero';
+import StorageSummary from '@/components/Storage/StorageSummary';
+import type { SummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 import { getCephHealthLabel, getCephHealthStyles } from '@/features/storageBackups/storageDomain';
@@ -31,7 +32,6 @@ import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
-import { useStorageHeroTrend } from './useStorageHeroTrend';
 import {
   StorageFilter,
   type StorageGroupByFilter,
@@ -76,8 +76,7 @@ const normalizeSortKey = (value: string): StorageSortKey => {
 };
 
 const normalizeGroupKey = (value: string): StorageGroupKey => {
-  if (value === 'none' || value === 'node' || value === 'type' || value === 'status')
-    return value;
+  if (value === 'none' || value === 'node' || value === 'type' || value === 'status') return value;
   return 'none';
 };
 
@@ -114,6 +113,7 @@ const Storage: Component = () => {
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
+  const [summaryTimeRange, setSummaryTimeRange] = createSignal<SummaryTimeRange>('1h');
   const [search, setSearch] = createSignal('');
   const [sourceFilter, setSourceFilter] = createSignal('all');
   const [healthFilter, setHealthFilter] = createSignal<'all' | NormalizedHealth>('all');
@@ -134,7 +134,6 @@ const Storage: Component = () => {
   });
 
   const records = createMemo(() => buildStorageRecords({ state, resources: adapterResources() }));
-  const storageTrend = useStorageHeroTrend(records);
   const activeAlertsAccessor = () => {
     if (typeof activeAlerts === 'function') {
       return (activeAlerts as () => unknown)();
@@ -193,7 +192,7 @@ const Storage: Component = () => {
     return map;
   });
 
-  const { sourceOptions, filteredRecords, groupedRecords, summary } = useStorageModel({
+  const { sourceOptions, filteredRecords, groupedRecords } = useStorageModel({
     records,
     search,
     sourceFilter,
@@ -236,10 +235,6 @@ const Storage: Component = () => {
     records,
     cephResources,
   });
-
-  // Health breakdown is already computed from filteredRecords() inside useStorageModel (summary().byHealth).
-  // Reuse that source to avoid an extra pass and guarantee consistent counts across the page.
-  const healthBreakdown = createMemo(() => summary().byHealth);
 
   const storageFilterGroupBy = (): StorageGroupByFilter => {
     const current = groupBy();
@@ -405,11 +400,11 @@ const Storage: Component = () => {
 
   return (
     <div class="space-y-4">
-      <StorageHero
-        summary={summary()}
-        healthBreakdown={healthBreakdown()}
+      <StorageSummary
+        poolCount={filteredRecords().length}
         diskCount={physicalDisks().length}
-        trend={storageTrend.trend()}
+        timeRange={summaryTimeRange()}
+        onTimeRangeChange={setSummaryTimeRange}
       />
 
       <StorageCommandCenter

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -138,6 +139,62 @@ func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Dura
 		return inMemoryResult
 	}
 	return converted
+}
+
+// DiskChartEntry holds temperature chart data and display metadata for a
+// single physical disk.
+type DiskChartEntry struct {
+	Name        string        `json:"name"`
+	Node        string        `json:"node"`
+	Temperature []MetricPoint `json:"temperature"`
+}
+
+// GetPhysicalDiskTemperatureCharts returns temperature time-series for all
+// physical disks that have temperature data. The Monitor owns state access
+// (monitoring is exempt from the ReadState-only rule), so this keeps state
+// reads out of API handler code.
+func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[string]DiskChartEntry {
+	if m == nil {
+		return nil
+	}
+
+	state := m.GetState()
+	result := make(map[string]DiskChartEntry, len(state.PhysicalDisks))
+
+	for _, disk := range state.PhysicalDisks {
+		if disk.Temperature <= 0 {
+			continue
+		}
+
+		resourceID := unifiedresources.PhysicalDiskMetricID(disk)
+		if resourceID == "" {
+			continue
+		}
+
+		var tempPoints []MetricPoint
+		if storeResult, ok := m.queryStoreMetricMapWithGapFill("disk", resourceID, duration); ok {
+			if pts, found := storeResult["smart_temp"]; found {
+				tempPoints = pts
+			}
+		}
+
+		if len(tempPoints) == 0 {
+			continue
+		}
+
+		name := disk.Model
+		if name == "" {
+			name = disk.DevPath
+		}
+
+		result[resourceID] = DiskChartEntry{
+			Name:        name,
+			Node:        disk.Node,
+			Temperature: tempPoints,
+		}
+	}
+
+	return result
 }
 
 func chartGapFillLookbackWindow(duration time.Duration) time.Duration {
