@@ -11,9 +11,8 @@ import {
 import { formatBytes, formatPowerOnHours } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { Resource } from '@/types/resource';
-import { getLinkedAgentId, getProxmoxData } from '@/utils/resourcePlatformData';
+import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { DiskDetail } from './DiskDetail';
-import { DiskLiveMetric } from './DiskLiveMetric';
 import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
 
 interface PhysicalDiskData {
@@ -74,6 +73,21 @@ const platformLabel = (resource: Resource): string => {
       return 'Agent';
     default:
       return titleize(resource.platformType) || 'Unknown';
+  }
+};
+
+const platformTextClass = (resource: Resource): string => {
+  switch ((resource.platformType || '').trim().toLowerCase()) {
+    case 'proxmox-pve':
+      return 'text-blue-700 dark:text-blue-300';
+    case 'proxmox-pbs':
+      return 'text-emerald-700 dark:text-emerald-300';
+    case 'truenas':
+      return 'text-cyan-700 dark:text-cyan-300';
+    case 'agent':
+      return 'text-violet-700 dark:text-violet-300';
+    default:
+      return 'text-base-content';
   }
 };
 
@@ -142,7 +156,7 @@ const getDiskHealthStatus = (disk: PhysicalDiskData) => {
     return {
       label: 'Replace Now',
       summary: disk.riskReasons[0] || 'Disk health has degraded to a critical state.',
-      badge: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
+      tone: 'text-red-700 dark:text-red-300',
     };
   }
 
@@ -152,14 +166,14 @@ const getDiskHealthStatus = (disk: PhysicalDiskData) => {
       summary:
         disk.riskReasons[0] ||
         (lowLife ? 'SSD life is running low.' : 'SMART counters indicate elevated risk.'),
-      badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+      tone: 'text-amber-700 dark:text-amber-300',
     };
   }
 
   return {
     label: normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD' ? 'Healthy' : 'Monitor',
     summary: 'No active disk-health issues.',
-    badge: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
+    tone: 'text-base-content',
   };
 };
 
@@ -172,26 +186,6 @@ const getDiskRoleLabel = (disk: PhysicalDiskData): string => {
 const getDiskParentLabel = (disk: PhysicalDiskData): string => {
   if (disk.storageGroup?.trim()) return disk.storageGroup.trim();
   return 'Standalone Device';
-};
-
-const getDiskAction = (disk: PhysicalDiskData): string => {
-  const riskLevel = (disk.riskLevel || '').trim().toLowerCase();
-  if (riskLevel === 'critical' || (disk.health || '').trim().toUpperCase() === 'FAILED') {
-    return 'Replace immediately';
-  }
-  if (riskLevel === 'warning') {
-    return 'Schedule replacement';
-  }
-  if (hasSmartWarning(disk)) {
-    return 'Schedule replacement';
-  }
-  if (disk.temperature >= 60) {
-    return 'Reduce heat and monitor';
-  }
-  if (disk.wearout > 0 && disk.wearout < 10) {
-    return 'Plan SSD replacement';
-  }
-  return 'Monitor';
 };
 
 const getWearSummary = (disk: PhysicalDiskData): string => {
@@ -286,28 +280,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
     setSelectedDisk((current) => (current?.id === disk.id ? null : disk));
   };
 
-  const getNodeAgentId = (disk: Resource) => {
-    const node = props.nodes.find((n) =>
-      matchesPhysicalDiskNode(disk, {
-        id: n.id,
-        name: n.name,
-        instance: getProxmoxData(n)?.instance,
-      }),
-    );
-    return node ? getLinkedAgentId(node) : undefined;
-  };
-
-  const getMetricResourceId = (disk: Resource) => {
-    if (disk.metricsTarget?.resourceId) {
-      return disk.metricsTarget.resourceId;
-    }
-    const data = getDiskData(disk);
-    const agentId = getNodeAgentId(disk);
-    if (!agentId) return null;
-    const deviceName = data.devPath.replace('/dev/', '');
-    return `${agentId}:${deviceName}`;
-  };
-
   return (
     <div>
       <Show when={filteredDisks().length === 0}>
@@ -363,12 +335,15 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     Disk
                   </TableHead>
                   <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
-                    Host / Platform
+                    Source
                   </TableHead>
-                  <TableHead class="hidden lg:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                    Host
+                  </TableHead>
+                  <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Role
                   </TableHead>
-                  <TableHead class="hidden lg:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Belongs To
                   </TableHead>
                   <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
@@ -376,12 +351,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   </TableHead>
                   <TableHead class="hidden md:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Wear / Temp
-                  </TableHead>
-                  <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
-                    Activity
-                  </TableHead>
-                  <TableHead class="hidden md:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
-                    Action
                   </TableHead>
                   <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Size
@@ -394,7 +363,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     const data = getDiskData(disk);
                     const status = getDiskHealthStatus(data);
                     const isSelected = () => selectedDisk()?.id === disk.id;
-                    const metricResourceId = () => getMetricResourceId(disk);
 
                     return (
                       <>
@@ -428,16 +396,17 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               <span class="truncate text-[12px] font-semibold text-base-content">
                                 {data.model || 'Unknown Disk'}
                               </span>
-                              <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                              <span
+                                class="hidden lg:inline shrink-0 font-mono text-[10px] text-muted"
+                                title={data.devPath || disk.name}
+                              >
                                 {data.devPath || disk.name}
                               </span>
-                              <Show when={data.type}>
-                                <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                                  {data.type.toUpperCase()}
-                                </span>
-                              </Show>
                               <Show when={data.serial}>
-                                <span class="truncate text-[11px] text-muted" title={data.serial}>
+                                <span
+                                  class="hidden xl:block truncate text-[11px] text-muted"
+                                  title={data.serial}
+                                >
                                   S/N {data.serial}
                                 </span>
                               </Show>
@@ -445,24 +414,36 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </TableCell>
 
                           <TableCell class="px-2 py-1 align-middle text-xs">
-                            <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-                              <span class="truncate text-[12px] font-medium text-base-content">
-                                {data.node || disk.parentName || 'Unknown Host'}
-                              </span>
-                              <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-base-content">
-                                {platformLabel(disk)}
-                              </span>
-                            </div>
+                            <span
+                              class={`inline-block text-[11px] font-semibold tracking-wide ${platformTextClass(disk)}`}
+                            >
+                              {platformLabel(disk)}
+                            </span>
                           </TableCell>
 
-                          <TableCell class="hidden lg:table-cell px-2 py-1 align-middle text-xs">
-                            <span class="block truncate text-[11px] text-base-content" title={getDiskRoleLabel(data)}>
+                          <TableCell class="px-2 py-1 align-middle text-xs">
+                            <span
+                              class="block truncate text-[11px] text-base-content"
+                              title={data.node || disk.parentName || 'Unknown Host'}
+                            >
+                              {data.node || disk.parentName || 'Unknown Host'}
+                            </span>
+                          </TableCell>
+
+                          <TableCell class="hidden xl:table-cell px-2 py-1 align-middle text-xs">
+                            <span
+                              class="block truncate text-[11px] text-base-content"
+                              title={getDiskRoleLabel(data)}
+                            >
                               {getDiskRoleLabel(data)}
                             </span>
                           </TableCell>
 
-                          <TableCell class="hidden lg:table-cell px-2 py-1 align-middle text-xs">
-                            <span class="block truncate text-[11px] text-base-content" title={getDiskParentLabel(data)}>
+                          <TableCell class="hidden xl:table-cell px-2 py-1 align-middle text-xs">
+                            <span
+                              class="block truncate text-[11px] text-base-content"
+                              title={getDiskParentLabel(data)}
+                            >
                               {getDiskParentLabel(data)}
                             </span>
                           </TableCell>
@@ -470,11 +451,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <TableCell class="px-2 py-1 align-middle text-xs">
                             <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
                               <span
-                                class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${status.badge}`}
+                                class={`shrink-0 text-[11px] font-semibold ${status.tone}`}
                               >
                                 {status.label}
                               </span>
-                              <span class="truncate text-[11px] text-muted" title={status.summary}>
+                              <span
+                                class="hidden xl:block truncate text-[11px] text-muted"
+                                title={status.summary}
+                              >
                                 {status.summary}
                               </span>
                             </div>
@@ -491,25 +475,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </div>
                           </TableCell>
 
-                          <TableCell class="hidden xl:table-cell px-2 py-1 align-middle text-xs">
-                            <Show when={metricResourceId()} fallback={<span class="text-[11px] text-muted">No live telemetry</span>}>
-                              {(resourceId) => (
-                                <div class="flex items-center gap-2 whitespace-nowrap text-[11px]">
-                                  <span class="text-muted">R</span>
-                                  <DiskLiveMetric resourceId={resourceId()} type="read" />
-                                  <span class="text-muted">W</span>
-                                  <DiskLiveMetric resourceId={resourceId()} type="write" />
-                                </div>
-                              )}
-                            </Show>
-                          </TableCell>
-
-                          <TableCell class="hidden md:table-cell px-2 py-1 align-middle text-xs">
-                            <span class="block truncate text-[11px] text-base-content" title={getDiskAction(data)}>
-                              {getDiskAction(data)}
-                            </span>
-                          </TableCell>
-
                           <TableCell class="px-2 py-1 align-middle text-xs whitespace-nowrap">
                             <span class="text-[11px] text-base-content">{formatBytes(data.size)}</span>
                           </TableCell>
@@ -517,7 +482,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         <Show when={isSelected()}>
                           <TableRow>
                             <TableCell
-                              colSpan={9}
+                              colSpan={8}
                               class="border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner"
                             >
                               <DiskDetail disk={disk} nodes={props.nodes} />

@@ -7,10 +7,6 @@ vi.mock('@/components/Storage/DiskDetail', () => ({
   DiskDetail: (props: { disk: Resource }) => <div data-testid="disk-detail">{props.disk.id}</div>,
 }));
 
-vi.mock('@/components/Storage/DiskLiveMetric', () => ({
-  DiskLiveMetric: (props: { type: string }) => <span data-testid={`metric-${props.type}`}>1 MB/s</span>,
-}));
-
 const buildNode = (id: string, name: string): Resource =>
   ({
     id,
@@ -84,16 +80,15 @@ describe('DiskList', () => {
     ));
 
     expect(screen.getByRole('columnheader', { name: 'Disk' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Host / Platform' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Role' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Belongs To' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Host' })).toBeInTheDocument();
     expect(screen.getByText('Disk sda')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
     expect(screen.getByText('PVE')).toBeInTheDocument();
     expect(screen.getByText('Parity')).toBeInTheDocument();
     expect(screen.getByText('Tower Array')).toBeInTheDocument();
     expect(screen.getByText('Needs Attention')).toBeInTheDocument();
-    expect(screen.getByText('Schedule replacement')).toBeInTheDocument();
+    expect(screen.getByText('Pending sectors detected.')).toBeInTheDocument();
   });
 
   it('filters disks by search term and supports row expansion', () => {
