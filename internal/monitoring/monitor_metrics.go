@@ -178,8 +178,15 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 			}
 		}
 
-		if len(tempPoints) == 0 {
-			continue
+		// Sparklines require >= 2 points. If the store returned 0 or 1 points
+		// but the disk has a live temperature reading, pad to 2 points so the
+		// chart can render (flat line at current temperature).
+		if len(tempPoints) < 2 {
+			now := time.Now()
+			tempPoints = []MetricPoint{
+				{Timestamp: now.Add(-60 * time.Second), Value: float64(disk.Temperature)},
+				{Timestamp: now, Value: float64(disk.Temperature)},
+			}
 		}
 
 		name := disk.Model

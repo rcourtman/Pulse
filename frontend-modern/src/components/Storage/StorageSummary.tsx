@@ -16,13 +16,30 @@ import {
 } from '@/components/shared/summaryTimeRange';
 import { RESOURCE_COLORS } from '@/pages/DashboardPanels/resourceColors';
 import { formatBytes } from '@/utils/format';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 
 // ---------------------------------------------------------------------------
-// Cache
+// Cache (org-scoped to prevent cross-tenant data leakage)
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 30_000;
 const inMemoryCache = new Map<string, StorageSummaryChartsResponse>();
+
+function inMemoryCacheKey(range: TimeRange): string {
+  return `${getOrgID() || 'default'}::${range}`;
+}
+
+// Clear in-memory cache on org switch to prevent cross-org data leakage.
+const unsubscribeStorageOrgSwitch = eventBus.on('org_switched', () => {
+  inMemoryCache.clear();
+});
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    unsubscribeStorageOrgSwitch();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,58 +61,96 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   const [loaded, setLoaded] = createSignal(false);
   const [fetchFailed, setFetchFailed] = createSignal(false);
 
-  let abortController: AbortController | undefined;
+  // Track org switches so the effect re-runs when the org changes.
+  const [orgVersion, setOrgVersion] = createSignal(0);
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', () => {
+    setOrgVersion((v) => v + 1);
+  });
 
-  const cacheKey = () => props.timeRange;
+  let activeFetchController: AbortController | null = null;
+  let activeFetchRequest = 0;
+  let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
-  // Fetch data
-  const fetchData = async () => {
-    abortController?.abort();
-    abortController = new AbortController();
+  const selectedRange = createMemo<TimeRange>(() => (props.timeRange as TimeRange) || '1h');
+
+  // Fetch data with race-condition prevention via request ID
+  const fetchData = async (options?: { prioritize?: boolean }) => {
+    const prioritize = options?.prioritize === true;
+    if (activeFetchController && !prioritize) return;
+    if (activeFetchController && prioritize) {
+      activeFetchController.abort();
+    }
+
+    const requestedRange = selectedRange();
+    // Capture org scope before async gap to prevent cross-org cache writes
+    const capturedCacheKey = inMemoryCacheKey(requestedRange);
+    const controller = new AbortController();
+    const requestId = ++activeFetchRequest;
+    activeFetchController = controller;
 
     try {
-      const response = await ChartsAPI.getStorageSummaryCharts(
-        props.timeRange as TimeRange,
-        abortController.signal,
-      );
-      inMemoryCache.set(cacheKey(), response);
+      const response = await ChartsAPI.getStorageSummaryCharts(requestedRange, controller.signal);
+      if (requestId !== activeFetchRequest) return; // stale response
+      inMemoryCache.set(capturedCacheKey, response);
       setData(response);
       setFetchFailed(false);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (requestId !== activeFetchRequest) return; // stale error
       setFetchFailed(true);
       // Fall back to cache
-      const cached = inMemoryCache.get(cacheKey());
+      const cached = inMemoryCache.get(capturedCacheKey);
       if (cached) setData(cached);
     } finally {
-      setLoaded(true);
+      if (activeFetchController === controller) {
+        activeFetchController = null;
+      }
+      if (requestId === activeFetchRequest) {
+        setLoaded(true);
+      }
     }
   };
 
-  // Initial load + range change
+  // Initial load + range/org change
   createEffect(() => {
-    const _range = props.timeRange; // track dependency
-    void _range;
+    const range = selectedRange();
+    const _org = orgVersion(); // subscribe to org switches
+    void _org;
+
+    // Clear stale timer on scope change
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = undefined;
+    }
+
     // Try cache first for instant display
-    const cached = inMemoryCache.get(cacheKey());
+    const cached = inMemoryCache.get(inMemoryCacheKey(range));
     if (cached) {
       setData(cached);
       setLoaded(true);
     } else {
+      setData(null);
       setLoaded(false);
     }
-    fetchData();
+    setFetchFailed(false);
+
+    // Start polling
+    refreshTimer = setInterval(() => void fetchData(), POLL_INTERVAL_MS);
+
+    void fetchData({ prioritize: true });
+
+    onCleanup(() => {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = undefined;
+      }
+    });
   });
 
-  // Polling
-  createEffect(() => {
-    const _range = props.timeRange; // track dependency
-    void _range;
-    const timer = setInterval(fetchData, POLL_INTERVAL_MS);
-    onCleanup(() => clearInterval(timer));
+  onCleanup(() => {
+    activeFetchController?.abort();
+    unsubscribeOrgSwitch();
   });
-
-  onCleanup(() => abortController?.abort());
 
   // ---------------------------------------------------------------------------
   // Series builders
