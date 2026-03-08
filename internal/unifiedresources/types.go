@@ -32,8 +32,9 @@ type Resource struct {
 	ParentName string  `json:"parentName,omitempty"`
 	ChildCount int     `json:"childCount,omitempty"`
 
-	Tags      []string `json:"tags,omitempty"`
-	CustomURL string   `json:"customUrl,omitempty"`
+	Tags      []string           `json:"tags,omitempty"`
+	CustomURL string             `json:"customUrl,omitempty"`
+	Incidents []ResourceIncident `json:"incidents,omitempty"`
 
 	// Source-specific payloads
 	Proxmox      *ProxmoxData      `json:"proxmox,omitempty"`
@@ -249,6 +250,16 @@ type StorageConsumerMeta struct {
 	ResourceType ResourceType `json:"resourceType"`
 	Name         string       `json:"name"`
 	DiskCount    int          `json:"diskCount,omitempty"`
+}
+
+type ResourceIncident struct {
+	Provider  string                  `json:"provider,omitempty"`
+	NativeID  string                  `json:"nativeId,omitempty"`
+	Code      string                  `json:"code"`
+	Severity  storagehealth.RiskLevel `json:"severity"`
+	Source    string                  `json:"source,omitempty"`
+	Summary   string                  `json:"summary"`
+	StartedAt time.Time               `json:"startedAt,omitempty"`
 }
 
 // PhysicalDiskMeta contains physical disk-specific metadata.

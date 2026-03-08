@@ -68,6 +68,9 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	if system.TrueNAS.StorageRisk.Level != "warning" {
 		t.Fatalf("expected warning storage risk on system record, got %+v", system.TrueNAS.StorageRisk)
 	}
+	if len(system.Incidents) != 2 {
+		t.Fatalf("expected 2 native incidents on system record, got %+v", system.Incidents)
+	}
 
 	pool := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank")
 	assertSourceTracking(t, *pool, unifiedresources.SourceTrueNAS)
@@ -84,6 +87,14 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 		t.Fatalf("expected canonical storage metadata on pool, got %+v", pool.Storage)
 	}
 	assertDiskMetric(t, pool.Metrics, 30*1024*1024*1024*1024, 12*1024*1024*1024*1024)
+
+	archivePool := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "archive")
+	if len(archivePool.Incidents) != 2 {
+		t.Fatalf("expected archive pool incidents to include pool + disk alerts, got %+v", archivePool.Incidents)
+	}
+	if !hasIncidentCode(archivePool.Incidents, "truenas_volume_status") || !hasIncidentCode(archivePool.Incidents, "truenas_smart") {
+		t.Fatalf("expected archive pool incidents to include volume and smart alerts, got %+v", archivePool.Incidents)
+	}
 
 	dataset := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank/apps")
 	assertSourceTracking(t, *dataset, unifiedresources.SourceTrueNAS)
@@ -266,10 +277,22 @@ func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
 			if len(meta.Risk.Reasons) == 0 || meta.Risk.Reasons[0].Code != "truenas_disk_state" {
 				t.Fatalf("expected truenas_disk_state reason for %q, got %+v", fixture.Name, meta.Risk.Reasons)
 			}
+			if len(record.Resource.Incidents) != 1 || record.Resource.Incidents[0].Code != "truenas_smart" {
+				t.Fatalf("expected SMART incident on degraded disk %q, got %+v", fixture.Name, record.Resource.Incidents)
+			}
 		default:
 			t.Fatalf("unhandled fixture status %q for %q", fixture.Status, fixture.Name)
 		}
 	}
+}
+
+func hasIncidentCode(incidents []unifiedresources.ResourceIncident, code string) bool {
+	for _, incident := range incidents {
+		if incident.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 func requireResource(t *testing.T, resources []unifiedresources.Resource, resourceType unifiedresources.ResourceType, name string) *unifiedresources.Resource {

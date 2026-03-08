@@ -28,6 +28,7 @@ func cloneResource(in *Resource) Resource {
 	out.Metrics = cloneResourceMetrics(in.Metrics)
 	out.ParentID = cloneStringPtr(in.ParentID)
 	out.Tags = cloneStringSlice(in.Tags)
+	out.Incidents = cloneResourceIncidentSlice(in.Incidents)
 	out.Proxmox = cloneProxmoxData(in.Proxmox)
 	out.Storage = cloneStorageMeta(in.Storage)
 	out.Agent = cloneAgentData(in.Agent)
@@ -128,6 +129,15 @@ func cloneStorageConsumerMetaSlice(in []StorageConsumerMeta) []StorageConsumerMe
 		return nil
 	}
 	out := make([]StorageConsumerMeta, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneResourceIncidentSlice(in []ResourceIncident) []ResourceIncident {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]ResourceIncident, len(in))
 	copy(out, in)
 	return out
 }

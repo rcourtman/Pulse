@@ -76,13 +76,13 @@ func TestStatusFromSystemAndParseBoolBranches(t *testing.T) {
 
 func TestSystemStatusPromotesHealthySystemWhenStorageRiskExists(t *testing.T) {
 	risk := &unifiedresources.StorageRisk{Level: "warning"}
-	if got := systemStatus(SystemInfo{Healthy: true}, risk); got != unifiedresources.StatusWarning {
+	if got := systemStatus(SystemInfo{Healthy: true}, risk, nil); got != unifiedresources.StatusWarning {
 		t.Fatalf("systemStatus(healthy, warning risk) = %q, want %q", got, unifiedresources.StatusWarning)
 	}
-	if got := systemStatus(SystemInfo{Healthy: false}, risk); got != unifiedresources.StatusWarning {
+	if got := systemStatus(SystemInfo{Healthy: false}, risk, nil); got != unifiedresources.StatusWarning {
 		t.Fatalf("systemStatus(unhealthy, warning risk) = %q, want %q", got, unifiedresources.StatusWarning)
 	}
-	if got := systemStatus(SystemInfo{Healthy: true}, nil); got != unifiedresources.StatusOnline {
+	if got := systemStatus(SystemInfo{Healthy: true}, nil, nil); got != unifiedresources.StatusOnline {
 		t.Fatalf("systemStatus(healthy, nil risk) = %q, want %q", got, unifiedresources.StatusOnline)
 	}
 }

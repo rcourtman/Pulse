@@ -177,6 +177,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	systemSourceID := systemSourceID(snapshot.System.Hostname)
 	systemAssessment := assessSystemStorage(snapshot)
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
+	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
@@ -185,7 +186,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		Resource: unifiedresources.Resource{
 			Type:      unifiedresources.ResourceTypeAgent,
 			Name:      strings.TrimSpace(snapshot.System.Hostname),
-			Status:    systemStatus(snapshot.System, systemRisk),
+			Status:    systemStatus(snapshot.System, systemRisk, systemIncidents),
 			LastSeen:  collectedAt,
 			UpdatedAt: collectedAt,
 			Metrics: &unifiedresources.ResourceMetrics{
@@ -202,6 +203,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				snapshot.System.Version,
 				"zfs",
 			},
+			Incidents: systemIncidents,
 		},
 		Identity: unifiedresources.ResourceIdentity{
 			MachineID: snapshot.System.MachineID,
@@ -212,13 +214,14 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	for _, pool := range snapshot.Pools {
 		assessment := assessPool(pool)
 		risk := unifiedresources.StorageRiskFromAssessment(assessment)
+		incidents := poolIncidents[strings.TrimSpace(pool.Name)]
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:       poolSourceID(pool.Name),
 			ParentSourceID: systemSourceID,
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
 				Name:      pool.Name,
-				Status:    statusFromPool(pool),
+				Status:    unifiedresources.IncidentsStatus(statusFromPool(pool), incidents),
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				Metrics: &unifiedresources.ResourceMetrics{
@@ -239,6 +242,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					"zfs",
 					"health:" + strings.ToLower(strings.TrimSpace(pool.Status)),
 				},
+				Incidents: incidents,
 			},
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames: []string{
@@ -292,6 +296,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 
 	for _, disk := range snapshot.Disks {
 		assessment := assessDisk(disk)
+		incidents := diskIncidents[strings.TrimSpace(disk.Name)]
 		diskIdentity := unifiedresources.ResourceIdentity{
 			Hostnames: []string{snapshot.System.Hostname},
 		}
@@ -304,7 +309,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypePhysicalDisk,
 				Name:      disk.Name,
-				Status:    statusFromDisk(disk),
+				Status:    unifiedresources.IncidentsStatus(statusFromDisk(disk), incidents),
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
@@ -318,13 +323,57 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					RPM:       rpmFromDisk(disk),
 					Risk:      unifiedresources.PhysicalDiskRiskFromAssessment(assessment),
 				},
-				Tags: []string{"truenas", "disk", disk.Transport},
+				Tags:      []string{"truenas", "disk", disk.Transport},
+				Incidents: incidents,
 			},
 			Identity: diskIdentity,
 		})
 	}
 
 	return records
+}
+
+func buildIncidentAssignments(snapshot *FixtureSnapshot) ([]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident) {
+	systemIncidents := make([]unifiedresources.ResourceIncident, 0)
+	poolIncidents := make(map[string][]unifiedresources.ResourceIncident)
+	diskIncidents := make(map[string][]unifiedresources.ResourceIncident)
+	if snapshot == nil {
+		return systemIncidents, poolIncidents, diskIncidents
+	}
+
+	diskPools := make(map[string]string, len(snapshot.Disks))
+	for _, disk := range snapshot.Disks {
+		diskName := strings.TrimSpace(disk.Name)
+		poolName := strings.TrimSpace(disk.Pool)
+		if diskName == "" || poolName == "" {
+			continue
+		}
+		diskPools[diskName] = poolName
+	}
+
+	for _, alert := range snapshot.Alerts {
+		if alert.Dismissed {
+			continue
+		}
+		incident, ok := incidentFromAlert(alert)
+		if !ok {
+			continue
+		}
+		systemIncidents = append(systemIncidents, incident)
+
+		if poolName := poolNameFromAlert(alert); poolName != "" {
+			poolIncidents[poolName] = append(poolIncidents[poolName], incident)
+		}
+
+		if diskName := diskNameFromAlert(alert); diskName != "" {
+			diskIncidents[diskName] = append(diskIncidents[diskName], incident)
+			if poolName := diskPools[diskName]; poolName != "" {
+				poolIncidents[poolName] = append(poolIncidents[poolName], incident)
+			}
+		}
+	}
+
+	return systemIncidents, poolIncidents, diskIncidents
 }
 
 func assessSystemStorage(snapshot *FixtureSnapshot) storagehealth.Assessment {
@@ -340,6 +389,92 @@ func assessSystemStorage(snapshot *FixtureSnapshot) storagehealth.Assessment {
 		assessments = append(assessments, assessDisk(disk))
 	}
 	return storagehealth.SummarizeAssessments(assessments...)
+}
+
+func incidentFromAlert(alert Alert) (unifiedresources.ResourceIncident, bool) {
+	severity, ok := severityFromAlertLevel(alert.Level)
+	if !ok {
+		return unifiedresources.ResourceIncident{}, false
+	}
+	return unifiedresources.ResourceIncident{
+		Provider:  "truenas",
+		NativeID:  strings.TrimSpace(alert.ID),
+		Code:      incidentCodeFromAlert(alert),
+		Severity:  severity,
+		Source:    strings.TrimSpace(alert.Source),
+		Summary:   strings.TrimSpace(alert.Message),
+		StartedAt: alert.Datetime,
+	}, true
+}
+
+func severityFromAlertLevel(level string) (storagehealth.RiskLevel, bool) {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
+	case "CRITICAL", "ERROR", "ALERT":
+		return storagehealth.RiskCritical, true
+	case "WARNING", "WARN":
+		return storagehealth.RiskWarning, true
+	case "INFO", "NOTICE":
+		return storagehealth.RiskMonitor, true
+	default:
+		return storagehealth.RiskHealthy, false
+	}
+}
+
+func incidentCodeFromAlert(alert Alert) string {
+	source := strings.ToLower(strings.TrimSpace(alert.Source))
+	switch source {
+	case "volumestatus":
+		return "truenas_volume_status"
+	case "smart":
+		return "truenas_smart"
+	case "scrub":
+		return "truenas_scrub"
+	default:
+		if source == "" {
+			return "truenas_alert"
+		}
+		return "truenas_" + strings.ReplaceAll(source, " ", "_")
+	}
+}
+
+func poolNameFromAlert(alert Alert) string {
+	message := strings.TrimSpace(alert.Message)
+	if message == "" {
+		return ""
+	}
+	if !strings.HasPrefix(strings.ToLower(message), "pool ") {
+		return ""
+	}
+	rest := strings.TrimSpace(message[len("Pool "):])
+	if rest == "" {
+		return ""
+	}
+	end := strings.IndexAny(rest, " :")
+	if end < 0 {
+		return strings.TrimSpace(rest)
+	}
+	return strings.TrimSpace(rest[:end])
+}
+
+func diskNameFromAlert(alert Alert) string {
+	message := strings.TrimSpace(alert.Message)
+	if message == "" {
+		return ""
+	}
+	marker := "Device /dev/"
+	idx := strings.Index(message, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := message[idx+len(marker):]
+	if rest == "" {
+		return ""
+	}
+	end := strings.IndexAny(rest, " :.,")
+	if end < 0 {
+		return strings.TrimSpace(rest)
+	}
+	return strings.TrimSpace(rest[:end])
 }
 
 func assessPool(pool Pool) storagehealth.Assessment {
@@ -389,18 +524,12 @@ func statusFromSystem(system SystemInfo) unifiedresources.ResourceStatus {
 	return unifiedresources.StatusWarning
 }
 
-func systemStatus(system SystemInfo, storageRisk *unifiedresources.StorageRisk) unifiedresources.ResourceStatus {
+func systemStatus(system SystemInfo, storageRisk *unifiedresources.StorageRisk, incidents []unifiedresources.ResourceIncident) unifiedresources.ResourceStatus {
 	status := statusFromSystem(system)
 	if storageRisk == nil {
-		return status
+		return unifiedresources.IncidentsStatus(status, incidents)
 	}
-	switch storageRisk.Level {
-	case storagehealth.RiskWarning, storagehealth.RiskCritical:
-		if status == unifiedresources.StatusOnline {
-			return unifiedresources.StatusWarning
-		}
-	}
-	return status
+	return unifiedresources.IncidentsStatus(unifiedresources.StorageStatus(status, storageRisk), incidents)
 }
 
 func statusFromPool(pool Pool) unifiedresources.ResourceStatus {

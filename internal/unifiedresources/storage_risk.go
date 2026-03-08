@@ -30,7 +30,7 @@ func storageRiskFromAssessment(assessment storagehealth.Assessment) *StorageRisk
 	return StorageRiskFromAssessment(assessment)
 }
 
-func storageStatus(base ResourceStatus, risk *StorageRisk) ResourceStatus {
+func StorageStatus(base ResourceStatus, risk *StorageRisk) ResourceStatus {
 	if risk == nil {
 		return base
 	}
@@ -43,6 +43,10 @@ func storageStatus(base ResourceStatus, risk *StorageRisk) ResourceStatus {
 	default:
 		return base
 	}
+}
+
+func storageStatus(base ResourceStatus, risk *StorageRisk) ResourceStatus {
+	return StorageStatus(base, risk)
 }
 
 func isInternalHostRAIDDevice(device string) bool {

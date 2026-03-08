@@ -803,6 +803,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 
 	// Merge tags
 	existing.Tags = uniqueStrings(append(existing.Tags, incoming.Tags...))
+	existing.Incidents = mergeResourceIncidents(existing.Incidents, incoming.Incidents)
 
 	// Update source payload
 	switch source {
@@ -1050,6 +1051,7 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	}
 	primary.Identity = mergeIdentity(primary.Identity, other.Identity)
 	primary.Tags = uniqueStrings(append(primary.Tags, other.Tags...))
+	primary.Incidents = mergeResourceIncidents(primary.Incidents, other.Incidents)
 	primary.Sources = addSources(primary.Sources, other.Sources)
 	if primary.SourceStatus == nil {
 		primary.SourceStatus = make(map[DataSource]SourceStatus)
