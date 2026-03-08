@@ -1302,6 +1302,76 @@ func (v StoragePoolView) Path() string {
 	return v.r.Storage.Path
 }
 
+func (v StoragePoolView) RiskSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.RiskSummary
+}
+
+func (v StoragePoolView) ConsumerCount() int {
+	if v.r == nil || v.r.Storage == nil {
+		return 0
+	}
+	return v.r.Storage.ConsumerCount
+}
+
+func (v StoragePoolView) ConsumerTypes() []string {
+	if v.r == nil || v.r.Storage == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Storage.ConsumerTypes)
+}
+
+func (v StoragePoolView) TopConsumers() []StorageConsumerMeta {
+	if v.r == nil || v.r.Storage == nil {
+		return nil
+	}
+	return cloneStorageConsumerMetaSlice(v.r.Storage.TopConsumers)
+}
+
+func (v StoragePoolView) ConsumerImpactSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.ConsumerImpactSummary
+}
+
+func (v StoragePoolView) PostureSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.PostureSummary
+}
+
+func (v StoragePoolView) ProtectionReduced() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.ProtectionReduced
+}
+
+func (v StoragePoolView) ProtectionSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.ProtectionSummary
+}
+
+func (v StoragePoolView) RebuildInProgress() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.RebuildInProgress
+}
+
+func (v StoragePoolView) RebuildSummary() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.RebuildSummary
+}
+
 func (v StoragePoolView) DiskUsed() int64 {
 	if v.r == nil {
 		return 0

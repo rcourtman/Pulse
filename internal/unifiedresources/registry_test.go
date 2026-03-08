@@ -731,6 +731,9 @@ func TestResourceRegistry_IngestSnapshotDerivesStorageConsumers(t *testing.T) {
 	if !hasStorageConsumer(local.Storage.TopConsumers, "media01", ResourceTypeSystemContainer, 1) {
 		t.Fatalf("expected container consumer on local-lvm, got %+v", local.Storage.TopConsumers)
 	}
+	if got := local.Storage.ConsumerImpactSummary; got != "Affects 2 dependent resources: media01, app01" {
+		t.Fatalf("local-lvm consumerImpactSummary = %q", got)
+	}
 
 	ceph := findStorageResource(storageResources, "ceph", "cluster")
 	if ceph.Storage == nil || ceph.Storage.ConsumerCount != 1 {
@@ -837,6 +840,9 @@ func TestResourceRegistry_IngestSnapshotDerivesPBSDatastoreConsumers(t *testing.
 	}
 	if !hasStorageConsumer(datastore.Storage.TopConsumers, "media01", ResourceTypeSystemContainer, 1) {
 		t.Fatalf("expected container consumer on backup-store, got %+v", datastore.Storage.TopConsumers)
+	}
+	if got := datastore.Storage.ConsumerImpactSummary; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("backup-store consumerImpactSummary = %q", got)
 	}
 
 	pbsResources := rr.ListByType(ResourceTypePBS)

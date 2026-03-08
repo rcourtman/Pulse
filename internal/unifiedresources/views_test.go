@@ -680,18 +680,26 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 		ParentID: &parentID,
 		Proxmox:  &ProxmoxData{SourceID: "local-zfs", NodeName: "pve-a", Instance: "lab"},
 		Storage: &StorageMeta{
-			Type:              "zfspool",
-			Content:           "images,iso",
-			ContentTypes:      []string{"images", "iso"},
-			Shared:            false,
-			IsCeph:            false,
-			IsZFS:             true,
-			Nodes:             []string{"pve-a", "pve-b"},
-			Path:              "/mnt/pve/local-zfs",
-			ZFSPoolState:      "ONLINE",
-			ZFSReadErrors:     1,
-			ZFSWriteErrors:    2,
-			ZFSChecksumErrors: 3,
+			Type:                  "zfspool",
+			Content:               "images,iso",
+			ContentTypes:          []string{"images", "iso"},
+			Shared:                false,
+			IsCeph:                false,
+			IsZFS:                 true,
+			RiskSummary:           "ZFS pool local-zfs is DEGRADED",
+			ConsumerCount:         2,
+			ConsumerTypes:         []string{"system-container", "vm"},
+			TopConsumers:          []StorageConsumerMeta{{Name: "app01", ResourceType: ResourceTypeVM, ResourceID: "vm-101", DiskCount: 1}},
+			ConsumerImpactSummary: "Affects 2 dependent resources: app01, and 1 more",
+			PostureSummary:        "ZFS pool local-zfs is DEGRADED. Affects 2 dependent resources: app01, and 1 more",
+			ProtectionReduced:     true,
+			ProtectionSummary:     "ZFS pool local-zfs is DEGRADED",
+			Nodes:                 []string{"pve-a", "pve-b"},
+			Path:                  "/mnt/pve/local-zfs",
+			ZFSPoolState:          "ONLINE",
+			ZFSReadErrors:         1,
+			ZFSWriteErrors:        2,
+			ZFSChecksumErrors:     3,
 		},
 		Metrics: &ResourceMetrics{
 			Disk: &MetricValue{Used: ptrInt64(10), Total: ptrInt64(100), Percent: 10},
@@ -717,6 +725,28 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	assertStringSlice(t, v.AccessibleNodes(), []string{"pve-a", "pve-b"})
 	if v.Path() != "/mnt/pve/local-zfs" {
 		t.Fatalf("expected Path %q, got %q", "/mnt/pve/local-zfs", v.Path())
+	}
+	if v.RiskSummary() != "ZFS pool local-zfs is DEGRADED" {
+		t.Fatalf("expected risk summary accessor to match, got %q", v.RiskSummary())
+	}
+	if v.ConsumerCount() != 2 {
+		t.Fatalf("expected consumer count 2, got %d", v.ConsumerCount())
+	}
+	assertStringSlice(t, v.ConsumerTypes(), []string{"system-container", "vm"})
+	if len(v.TopConsumers()) != 1 || v.TopConsumers()[0].Name != "app01" {
+		t.Fatalf("expected top consumers accessor to match, got %+v", v.TopConsumers())
+	}
+	if v.ConsumerImpactSummary() != "Affects 2 dependent resources: app01, and 1 more" {
+		t.Fatalf("expected consumer impact summary accessor to match, got %q", v.ConsumerImpactSummary())
+	}
+	if v.PostureSummary() != "ZFS pool local-zfs is DEGRADED. Affects 2 dependent resources: app01, and 1 more" {
+		t.Fatalf("expected posture summary accessor to match, got %q", v.PostureSummary())
+	}
+	if !v.ProtectionReduced() || v.ProtectionSummary() != "ZFS pool local-zfs is DEGRADED" {
+		t.Fatalf("expected protection semantics to match, got reduced=%v summary=%q", v.ProtectionReduced(), v.ProtectionSummary())
+	}
+	if v.RebuildInProgress() || v.RebuildSummary() != "" {
+		t.Fatalf("expected rebuild semantics to remain empty, got inProgress=%v summary=%q", v.RebuildInProgress(), v.RebuildSummary())
 	}
 	if v.DiskUsed() != 10 || v.DiskTotal() != 100 || v.DiskPercent() != 10 {
 		t.Fatalf("expected disk metrics used/total/percent 10/100/10, got %d/%d/%v", v.DiskUsed(), v.DiskTotal(), v.DiskPercent())

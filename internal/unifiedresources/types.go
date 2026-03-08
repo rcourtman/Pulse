@@ -211,19 +211,26 @@ type ProxmoxData struct {
 
 // StorageMeta contains storage-specific metadata for storage resources.
 type StorageMeta struct {
-	Type          string                `json:"type,omitempty"`
-	Content       string                `json:"content,omitempty"`
-	ContentTypes  []string              `json:"contentTypes,omitempty"`
-	Shared        bool                  `json:"shared"`
-	IsCeph        bool                  `json:"isCeph"`
-	IsZFS         bool                  `json:"isZfs"`
-	Platform      string                `json:"platform,omitempty"`
-	Topology      string                `json:"topology,omitempty"`
-	Protection    string                `json:"protection,omitempty"`
-	Risk          *StorageRisk          `json:"risk,omitempty"`
-	ConsumerCount int                   `json:"consumerCount,omitempty"`
-	ConsumerTypes []string              `json:"consumerTypes,omitempty"`
-	TopConsumers  []StorageConsumerMeta `json:"topConsumers,omitempty"`
+	Type                  string                `json:"type,omitempty"`
+	Content               string                `json:"content,omitempty"`
+	ContentTypes          []string              `json:"contentTypes,omitempty"`
+	Shared                bool                  `json:"shared"`
+	IsCeph                bool                  `json:"isCeph"`
+	IsZFS                 bool                  `json:"isZfs"`
+	Platform              string                `json:"platform,omitempty"`
+	Topology              string                `json:"topology,omitempty"`
+	Protection            string                `json:"protection,omitempty"`
+	Risk                  *StorageRisk          `json:"risk,omitempty"`
+	RiskSummary           string                `json:"riskSummary,omitempty"`
+	ConsumerCount         int                   `json:"consumerCount,omitempty"`
+	ConsumerTypes         []string              `json:"consumerTypes,omitempty"`
+	TopConsumers          []StorageConsumerMeta `json:"topConsumers,omitempty"`
+	ConsumerImpactSummary string                `json:"consumerImpactSummary,omitempty"`
+	PostureSummary        string                `json:"postureSummary,omitempty"`
+	ProtectionReduced     bool                  `json:"protectionReduced,omitempty"`
+	ProtectionSummary     string                `json:"protectionSummary,omitempty"`
+	RebuildInProgress     bool                  `json:"rebuildInProgress,omitempty"`
+	RebuildSummary        string                `json:"rebuildSummary,omitempty"`
 
 	// Accessibility metadata.
 	Nodes []string `json:"nodes,omitempty"` // PVE nodes where this storage is accessible

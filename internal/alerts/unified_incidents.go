@@ -263,7 +263,7 @@ func unifiedIncidentAlertType(resource unifiedresources.Resource, incident unifi
 	case unifiedresources.ResourceTypePBS:
 		return "backup-posture-incident"
 	case unifiedresources.ResourceTypeStorage:
-		if isBackupStorageResource(resource.Storage) {
+		if unifiedresources.IsBackupStorageResource(resource.Storage) {
 			return "backup-storage-incident"
 		}
 		if resource.Storage != nil && resource.Storage.IsZFS {
@@ -389,12 +389,11 @@ func unifiedIncidentConsumerSummary(storage *unifiedresources.StorageMeta) strin
 	if storage == nil || storage.ConsumerCount <= 0 {
 		return ""
 	}
-
-	if isBackupStorageResource(storage) {
-		return unifiedIncidentBackupConsumerSummary(storage)
+	if summary := strings.TrimSpace(storage.ConsumerImpactSummary); summary != "" {
+		return summary
 	}
 
-	return unifiedIncidentDependentConsumerSummary(storage)
+	return unifiedresources.StorageConsumerImpactSummary(storage)
 }
 
 func unifiedIncidentDependentConsumerSummary(storage *unifiedresources.StorageMeta) string {
@@ -517,7 +516,7 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 			metadata["consumerCount"] = resource.Storage.ConsumerCount
 			metadata["consumerImpactSummary"] = unifiedIncidentConsumerSummary(resource.Storage)
 		}
-		if isBackupStorageResource(resource.Storage) {
+		if unifiedresources.IsBackupStorageResource(resource.Storage) {
 			metadata["backupTarget"] = true
 			if resource.Storage.ConsumerCount > 0 {
 				metadata["protectedWorkloadCount"] = resource.Storage.ConsumerCount
@@ -526,7 +525,7 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		}
 		if len(resource.Storage.ConsumerTypes) > 0 {
 			metadata["consumerTypes"] = append([]string(nil), resource.Storage.ConsumerTypes...)
-			if isBackupStorageResource(resource.Storage) {
+			if unifiedresources.IsBackupStorageResource(resource.Storage) {
 				metadata["protectedWorkloadTypes"] = append([]string(nil), resource.Storage.ConsumerTypes...)
 			}
 		}
@@ -546,7 +545,7 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 			}
 			if len(names) > 0 {
 				metadata["topConsumerNames"] = names
-				if isBackupStorageResource(resource.Storage) {
+				if unifiedresources.IsBackupStorageResource(resource.Storage) {
 					metadata["protectedWorkloadNames"] = append([]string(nil), names...)
 				}
 			}
@@ -657,49 +656,6 @@ func unifiedIncidentPBSProtectedWorkloadSummary(pbs *unifiedresources.PBSData) s
 	return "Puts backups for " + intLabel(pbs.ProtectedWorkloadCount) + " " + workloadLabel + " at risk: " + strings.Join(names, ", ")
 }
 
-func isBackupStorageResource(storage *unifiedresources.StorageMeta) bool {
-	if storage == nil {
-		return false
-	}
-	if strings.EqualFold(strings.TrimSpace(storage.Protection), "backup-repository") {
-		return true
-	}
-	for _, contentType := range storage.ContentTypes {
-		if strings.EqualFold(strings.TrimSpace(contentType), "backup") {
-			return true
-		}
-	}
-	return false
-}
-
 func storageRiskAlertSemantics(risk *unifiedresources.StorageRisk) ([]string, bool, bool, string, string) {
-	if risk == nil || len(risk.Reasons) == 0 {
-		return nil, false, false, "", ""
-	}
-
-	codes := make([]string, 0, len(risk.Reasons))
-	protectionReduced := false
-	rebuildInProgress := false
-	protectionSummary := ""
-	rebuildSummary := ""
-	for _, reason := range risk.Reasons {
-		code := strings.TrimSpace(reason.Code)
-		if code != "" {
-			codes = append(codes, code)
-		}
-		switch code {
-		case "raid_degraded", "raid_unavailable", "unraid_invalid_disks", "unraid_disabled_disks", "unraid_missing_disks", "unraid_parity_unavailable", "unraid_no_parity", "zfs_pool_state":
-			protectionReduced = true
-			if protectionSummary == "" {
-				protectionSummary = strings.TrimSpace(reason.Summary)
-			}
-		case "raid_rebuilding", "unraid_sync_active":
-			rebuildInProgress = true
-			if rebuildSummary == "" {
-				rebuildSummary = strings.TrimSpace(reason.Summary)
-			}
-		}
-	}
-
-	return codes, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary
+	return unifiedresources.StorageRiskSemantics(risk)
 }

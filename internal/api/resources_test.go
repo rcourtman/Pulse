@@ -1838,6 +1838,9 @@ func TestResourceListIncludesStorageConsumerImpact(t *testing.T) {
 	if consumer := local.Storage.TopConsumers[0]; consumer.Name != "app01" || consumer.ResourceType != unified.ResourceTypeVM || consumer.DiskCount != 2 {
 		t.Fatalf("unexpected local-lvm top consumer %+v", consumer)
 	}
+	if got := local.Storage.ConsumerImpactSummary; got != "Affects 1 dependent resource: app01" {
+		t.Fatalf("local-lvm consumerImpactSummary = %q", got)
+	}
 
 	media := findAPIResourceByNameAndNode(resp.Data, "media", "pve-1")
 	if media.Storage == nil {
@@ -1851,6 +1854,9 @@ func TestResourceListIncludesStorageConsumerImpact(t *testing.T) {
 	}
 	if consumer := media.Storage.TopConsumers[0]; consumer.Name != "media01" || consumer.ResourceType != unified.ResourceTypeSystemContainer || consumer.DiskCount != 1 {
 		t.Fatalf("unexpected media top consumer %+v", consumer)
+	}
+	if got := media.Storage.ConsumerImpactSummary; got != "Affects 1 dependent resource: media01" {
+		t.Fatalf("media consumerImpactSummary = %q", got)
 	}
 }
 
@@ -1948,6 +1954,9 @@ func TestResourceListIncludesPBSStorageConsumerImpact(t *testing.T) {
 	}
 	if len(datastore.Storage.TopConsumers) != 2 {
 		t.Fatalf("backup-store topConsumers length = %d, want 2", len(datastore.Storage.TopConsumers))
+	}
+	if got := datastore.Storage.ConsumerImpactSummary; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("backup-store consumerImpactSummary = %q", got)
 	}
 	if !containsSource(datastore.Sources, unified.SourcePBS) {
 		t.Fatalf("expected PBS source on datastore, got %+v", datastore.Sources)
