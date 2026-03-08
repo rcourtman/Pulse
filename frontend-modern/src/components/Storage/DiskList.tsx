@@ -376,11 +376,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         >
                           <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[220px]">
                             <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                              <span class="truncate text-[12px] font-semibold text-base-content">
+                              <span
+                                class="block min-w-0 truncate text-[12px] font-semibold text-base-content"
+                                title={data.model || 'Unknown Disk'}
+                              >
                                 {data.model || 'Unknown Disk'}
                               </span>
                               <span
-                                class="hidden lg:inline shrink-0 font-mono text-[10px] text-muted"
+                                class="hidden xl:inline shrink-0 font-mono text-[10px] text-muted"
                                 title={data.devPath || disk.name}
                               >
                                 {data.devPath || disk.name}
