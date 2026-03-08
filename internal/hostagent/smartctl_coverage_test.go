@@ -13,6 +13,14 @@ import (
 	"time"
 )
 
+// mockLsblkJSON builds a JSON response matching the format from
+// `lsblk -J -d -o NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS`.
+func mockLsblkJSON(devices ...lsblkDevice) []byte {
+	data := lsblkJSON{Blockdevices: devices}
+	out, _ := json.Marshal(data)
+	return out
+}
+
 func TestListBlockDevices(t *testing.T) {
 	origRun := smartRunCommandOutput
 	origGOOS := runtimeGOOS
@@ -23,8 +31,12 @@ func TestListBlockDevices(t *testing.T) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
 		}
-		out := "sda disk\nsda1 part\nsr0 rom\nnvme0n1 disk\n\n"
-		return []byte(out), nil
+		return mockLsblkJSON(
+			lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "sda1", Type: "part", Tran: "sata"},
+			lsblkDevice{Name: "sr0", Type: "rom"},
+			lsblkDevice{Name: "nvme0n1", Type: "disk", Tran: "nvme", Subsystems: "block:nvme:pci"},
+		), nil
 	}
 
 	devices, err := listBlockDevices(context.Background(), nil)
@@ -213,7 +225,7 @@ func TestCollectLocalNoDevices(t *testing.T) {
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
-			return []byte(""), nil
+			return mockLsblkJSON(), nil // empty device list
 		}
 		return nil, errors.New("unexpected command")
 	}
@@ -267,7 +279,10 @@ func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
-			return []byte("sda disk\nsdb disk\n"), nil
+			return mockLsblkJSON(
+				lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+				lsblkDevice{Name: "sdb", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			), nil
 		}
 		if name == "smartctl" {
 			device := args[len(args)-1]
@@ -521,8 +536,11 @@ func TestListBlockDevicesLinuxWithExcludes(t *testing.T) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
 		}
-		// Include malformed/non-disk lines to ensure they are ignored.
-		return []byte("sda disk\nsdb disk\nbadline\nsr0 rom\n"), nil
+		return mockLsblkJSON(
+			lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "sdb", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "sr0", Type: "rom"},
+		), nil
 	}
 
 	devices, err := listBlockDevicesLinux(context.Background(), []string{"sdb"})
@@ -531,6 +549,149 @@ func TestListBlockDevicesLinuxWithExcludes(t *testing.T) {
 	}
 	if len(devices) != 1 || devices[0] != "/dev/sda" {
 		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestLinuxSMARTSkipReason(t *testing.T) {
+	tests := []struct {
+		name   string
+		device lsblkDevice
+		skip   bool
+		reason string
+	}{
+		{
+			name:   "physical SATA disk passes",
+			device: lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			skip:   false,
+		},
+		{
+			name:   "physical NVMe disk passes",
+			device: lsblkDevice{Name: "nvme0n1", Type: "disk", Tran: "nvme", Subsystems: "block:nvme:pci"},
+			skip:   false,
+		},
+		{
+			name:   "ZFS zvol filtered by prefix",
+			device: lsblkDevice{Name: "zd0", Type: "disk", Subsystems: "block:zfs"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "device-mapper filtered by prefix",
+			device: lsblkDevice{Name: "dm-0", Type: "disk"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "virtio transport filtered",
+			device: lsblkDevice{Name: "vda", Type: "disk", Tran: "virtio"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "QEMU model filtered by metadata",
+			device: lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Vendor: "QEMU", Model: "HARDDISK"},
+			skip:   true,
+			reason: "virtual disk model/vendor signature",
+		},
+		{
+			name:   "VMware model filtered by metadata",
+			device: lsblkDevice{Name: "sda", Type: "disk", Model: "VMware Virtual S"},
+			skip:   true,
+			reason: "virtual disk model/vendor signature",
+		},
+		{
+			name:   "virtio subsystem filtered",
+			device: lsblkDevice{Name: "sda", Type: "disk", Subsystems: "block:virtio:pci"},
+			skip:   true,
+			reason: "virtual/logical subsystem",
+		},
+		{
+			name:   "ZFS subsystem filtered",
+			device: lsblkDevice{Name: "sda", Type: "disk", Subsystems: "block:zfs"},
+			skip:   true,
+			reason: "virtual/logical subsystem",
+		},
+		{
+			name:   "partition type filtered",
+			device: lsblkDevice{Name: "sda1", Type: "part"},
+			skip:   true,
+			reason: "not a whole disk",
+		},
+		{
+			name:   "loop device filtered by prefix",
+			device: lsblkDevice{Name: "loop0", Type: "disk"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+		{
+			name:   "md RAID filtered by prefix",
+			device: lsblkDevice{Name: "md0", Type: "disk"},
+			skip:   true,
+			reason: "virtual/logical device prefix",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason := linuxSMARTSkipReason(tt.device)
+			if tt.skip && reason == "" {
+				t.Errorf("expected device to be skipped, but got no reason")
+			}
+			if !tt.skip && reason != "" {
+				t.Errorf("expected device to pass, but got skip reason: %s", reason)
+			}
+			if tt.skip && reason != tt.reason {
+				t.Errorf("expected reason %q, got %q", tt.reason, reason)
+			}
+		})
+	}
+}
+
+func TestListBlockDevicesLinuxFiltersVirtualDevices(t *testing.T) {
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return mockLsblkJSON(
+			lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			lsblkDevice{Name: "zd0", Type: "disk", Subsystems: "block:zfs"},
+			lsblkDevice{Name: "dm-0", Type: "disk"},
+			lsblkDevice{Name: "vda", Type: "disk", Tran: "virtio"},
+			lsblkDevice{Name: "nvme0n1", Type: "disk", Tran: "nvme", Subsystems: "block:nvme:pci"},
+			lsblkDevice{Name: "sdb", Type: "disk", Vendor: "QEMU", Model: "HARDDISK"},
+		), nil
+	}
+
+	devices, err := listBlockDevicesLinux(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("listBlockDevicesLinux error: %v", err)
+	}
+	if len(devices) != 2 || devices[0] != "/dev/sda" || devices[1] != "/dev/nvme0n1" {
+		t.Fatalf("expected only physical disks, got: %#v", devices)
+	}
+}
+
+func TestCollectDeviceSMARTNoDataReturnsNil(t *testing.T) {
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		// Device that returns valid JSON but no useful SMART data
+		payload := `{"device":{"protocol":"ATA"},"model_name":"Virtual Disk"}`
+		return []byte(payload), nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if !errors.Is(err, errSMARTDataUnavailable) {
+		t.Fatalf("expected errSMARTDataUnavailable, got err=%v result=%#v", err, result)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result for device with no SMART data, got %#v", result)
 	}
 }
 

@@ -284,7 +284,7 @@ func triageDiskHealthChecksState(snap patrolRuntimeState, scopedSet map[string]b
 
 func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, temperature int) []TriageFlag {
 	flags := make([]TriageFlag, 0, 3)
-	if health != "" && !strings.EqualFold(health, "PASSED") {
+	if health != "" && !strings.EqualFold(health, "PASSED") && !strings.EqualFold(health, "UNKNOWN") && !strings.EqualFold(health, "OK") {
 		flags = append(flags, TriageFlag{
 			ResourceID:   resourceID,
 			ResourceName: resourceName,

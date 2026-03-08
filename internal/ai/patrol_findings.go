@@ -1565,7 +1565,7 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 		case "disk-high":
 			if resourceType == "physical_disk" {
 				if disk, exists := patrolLookupPhysicalDiskVerificationState(snap, rid); exists {
-					if disk.health != "" && !strings.EqualFold(disk.health, "PASSED") {
+					if disk.health != "" && !strings.EqualFold(disk.health, "PASSED") && !strings.EqualFold(disk.health, "UNKNOWN") && !strings.EqualFold(disk.health, "OK") {
 						return false, nil
 					}
 					if disk.wearout >= 0 && disk.wearout < 20 {

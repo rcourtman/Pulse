@@ -3,6 +3,7 @@ package hostagent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os/exec"
 	"strings"
@@ -26,7 +27,11 @@ func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
-			return []byte("sda disk\n"), nil
+			data := lsblkJSON{Blockdevices: []lsblkDevice{
+				{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+			}}
+			out, _ := json.Marshal(data)
+			return out, nil
 		}
 		if name == "smartctl" {
 			return nil, errors.New("read failed")
@@ -62,7 +67,11 @@ func TestListBlockDevicesLinux_LogsStructuredContextForExcludedDevice(t *testing
 	})
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return []byte("sda disk\n"), nil
+		data := lsblkJSON{Blockdevices: []lsblkDevice{
+			{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
+		}}
+		out, _ := json.Marshal(data)
+		return out, nil
 	}
 
 	logOutput := captureSmartctlLogs(t)

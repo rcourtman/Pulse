@@ -22,6 +22,7 @@ const maxCommandOutputBytes = 1 << 20 // 1 MiB
 
 var (
 	errCommandOutputTooLarge = errors.New("command output exceeds size limit")
+	errSMARTDataUnavailable  = errors.New("smart data unavailable for device")
 	execLookPath             = exec.LookPath
 	smartRunCommandOutput    = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return runCommandOutputLimited(ctx, maxCommandOutputBytes, name, args...)
@@ -82,6 +83,62 @@ type nvmeSmartHealthInformationLogJSON struct {
 }
 
 // smartctlJSON represents the JSON output from smartctl --json.
+// lsblkJSON is the JSON output from lsblk -J.
+type lsblkJSON struct {
+	Blockdevices []lsblkDevice `json:"blockdevices"`
+}
+
+type lsblkDevice struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Tran       string `json:"tran"`
+	Model      string `json:"model"`
+	Vendor     string `json:"vendor"`
+	Subsystems string `json:"subsystems"`
+}
+
+// linuxSMARTVirtualPrefixes are device name prefixes for virtual/logical
+// devices that cannot provide SMART data.
+var linuxSMARTVirtualPrefixes = []string{
+	"dm-",
+	"drbd",
+	"loop",
+	"md",
+	"nbd",
+	"pmem",
+	"ram",
+	"rbd",
+	"vd",
+	"xvd",
+	"zd",
+	"zram",
+}
+
+// linuxSMARTVirtualMetadataTokens are vendor/model substrings indicating a
+// virtual disk that cannot provide SMART data.
+var linuxSMARTVirtualMetadataTokens = []string{
+	"hyper-v",
+	"msft virtual",
+	"parallels",
+	"qemu",
+	"vbox",
+	"virtual disk",
+	"virtual hd",
+	"virtualbox",
+	"vmware",
+}
+
+// linuxSMARTVirtualSubsystemTokens are lsblk SUBSYSTEMS substrings
+// indicating virtual block devices.
+var linuxSMARTVirtualSubsystemTokens = []string{
+	"drbd",
+	"nbd",
+	"vmbus",
+	"virtio",
+	"xen",
+	"zfs",
+}
+
 type smartctlJSON struct {
 	Device struct {
 		Name     string `json:"name"`
@@ -139,12 +196,20 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 	for _, dev := range devices {
 		smart, err := collectDeviceSMART(ctx, dev)
 		if err != nil {
-			log.Debug().
-				Str("component", smartctlComponent).
-				Str("action", "collect_device_smart_failed").
-				Str("device", dev).
-				Err(err).
-				Msg("Failed to collect SMART data for device")
+			if errors.Is(err, errSMARTDataUnavailable) {
+				log.Debug().
+					Str("component", smartctlComponent).
+					Str("action", "skip_no_smart_data").
+					Str("device", dev).
+					Msg("Device returned no usable SMART data, skipping")
+			} else {
+				log.Debug().
+					Str("component", smartctlComponent).
+					Str("action", "collect_device_smart_failed").
+					Str("device", dev).
+					Err(err).
+					Msg("Failed to collect SMART data for device")
+			}
 			continue
 		}
 		if smart != nil {
@@ -179,9 +244,10 @@ func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, erro
 	return devices, nil
 }
 
-// listBlockDevicesLinux uses lsblk to find disks on Linux.
+// listBlockDevicesLinux uses lsblk JSON output to find physical disks on Linux,
+// filtering out virtual/logical devices that cannot provide SMART data.
 func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string, error) {
-	output, err := smartRunCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
+	output, err := smartRunCommandOutput(ctx, "lsblk", "-J", "-d", "-o", "NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS")
 	if err != nil {
 		// Fall back to sysfs enumeration for minimal hosts/images where lsblk is unavailable.
 		log.Debug().Err(err).Msg("lsblk device discovery failed, falling back to /sys/block")
@@ -192,33 +258,75 @@ func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string,
 		return devices, nil
 	}
 
-	return parseLSBLKDevices(output, diskExclude), nil
-}
+	var data lsblkJSON
+	if err := json.Unmarshal(output, &data); err != nil {
+		return nil, fmt.Errorf("parse lsblk JSON: %w", err)
+	}
 
-func parseLSBLKDevices(output []byte, diskExclude []string) []string {
 	var devices []string
-	for _, line := range strings.Split(string(output), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+	for _, disk := range data.Blockdevices {
+		if strings.TrimSpace(disk.Name) == "" {
 			continue
 		}
-		name, devType := fields[0], fields[1]
-		// Only include disk types (not loop, rom, partition)
-		if devType == "disk" {
-			devicePath := "/dev/" + name
-			if matchesDeviceExclude(name, devicePath, diskExclude) {
-				log.Debug().
-					Str("component", smartctlComponent).
-					Str("action", "skip_excluded_device").
-					Str("device", devicePath).
-					Msg("Skipping excluded device for SMART collection")
-				continue
-			}
-			devices = append(devices, devicePath)
+
+		devicePath := "/dev/" + disk.Name
+		if reason := linuxSMARTSkipReason(disk); reason != "" {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_virtual_device").
+				Str("device", devicePath).
+				Str("reason", reason).
+				Msg("Skipping non-physical device for SMART collection")
+			continue
+		}
+		if matchesDeviceExclude(disk.Name, devicePath, diskExclude) {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_excluded_device").
+				Str("device", devicePath).
+				Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
+	}
+
+	return devices, nil
+}
+
+// linuxSMARTSkipReason returns a human-readable reason if the device should be
+// skipped for SMART collection, or "" if the device is a real physical disk.
+func linuxSMARTSkipReason(device lsblkDevice) string {
+	if !strings.EqualFold(strings.TrimSpace(device.Type), "disk") {
+		return "not a whole disk"
+	}
+
+	name := strings.ToLower(strings.TrimSpace(device.Name))
+	for _, prefix := range linuxSMARTVirtualPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return "virtual/logical device prefix"
 		}
 	}
 
-	return devices
+	transport := strings.ToLower(strings.TrimSpace(device.Tran))
+	if transport == "virtio" {
+		return "virtio transport"
+	}
+
+	subsystems := strings.ToLower(strings.TrimSpace(device.Subsystems))
+	for _, token := range linuxSMARTVirtualSubsystemTokens {
+		if strings.Contains(subsystems, token) {
+			return "virtual/logical subsystem"
+		}
+	}
+
+	metadata := strings.ToLower(strings.TrimSpace(device.Vendor + " " + device.Model))
+	for _, token := range linuxSMARTVirtualMetadataTokens {
+		if strings.Contains(metadata, token) {
+			return "virtual disk model/vendor signature"
+		}
+	}
+
+	return ""
 }
 
 func listBlockDevicesLinuxSysfs(diskExclude []string) ([]string, error) {
@@ -251,10 +359,12 @@ func listBlockDevicesLinuxSysfs(diskExclude []string) ([]string, error) {
 }
 
 func isVirtualLinuxBlockDevice(name string) bool {
-	return strings.HasPrefix(name, "loop") ||
-		strings.HasPrefix(name, "ram") ||
-		strings.HasPrefix(name, "zram") ||
-		strings.HasPrefix(name, "fd") ||
+	for _, prefix := range linuxSMARTVirtualPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return strings.HasPrefix(name, "fd") ||
 		strings.HasPrefix(name, "sr")
 }
 
@@ -433,6 +543,12 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 
 	// Parse SMART attributes
 	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
+
+	// If the device returned no useful data at all, treat as unavailable
+	// rather than reporting a misleading UNKNOWN/FAILED entry.
+	if (result.Health == "" || result.Health == "UNKNOWN") && result.Temperature == 0 && result.Attributes == nil {
+		return nil, errSMARTDataUnavailable
+	}
 
 	log.Debug().
 		Str("component", smartctlComponent).

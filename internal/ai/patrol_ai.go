@@ -2550,7 +2550,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 				if len(diskRows) > 0 {
 					diskIssues := 0
 					for _, row := range diskRows {
-						if !strings.EqualFold(row.health, "PASSED") || row.status != "online" {
+						if (!strings.EqualFold(row.health, "PASSED") && !strings.EqualFold(row.health, "UNKNOWN") && !strings.EqualFold(row.health, "OK") && row.health != "") || row.status != "online" {
 							diskIssues++
 						}
 					}
@@ -2800,7 +2800,7 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 			diskIssues := []string{}
 			for _, row := range diskRows {
 				statusCounts[strings.ToLower(strings.TrimSpace(row.status))]++
-				if !strings.EqualFold(row.health, "PASSED") || row.status != "online" {
+				if (!strings.EqualFold(row.health, "PASSED") && !strings.EqualFold(row.health, "UNKNOWN") && !strings.EqualFold(row.health, "OK") && row.health != "") || row.status != "online" {
 					name := row.devPath
 					if name == "" {
 						name = row.name
@@ -3051,7 +3051,7 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 					continue
 				}
 				d := r.PhysicalDisk
-				if d.Health != "PASSED" || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
+				if (d.Health != "PASSED" && d.Health != "UNKNOWN" && d.Health != "OK" && d.Health != "") || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
 					hasIssues = true
 					break
 				}
