@@ -364,6 +364,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     const data = getDiskData(disk);
                     const status = getDiskHealthStatus(data);
                     const isSelected = () => selectedDisk()?.id === disk.id;
+                    const healthSummary = () => {
+                      const summary = status.summary?.trim() || '';
+                      if (!summary || summary === 'No active disk-health issues.') {
+                        return '';
+                      }
+                      return summary;
+                    };
 
                     return (
                       <>
@@ -439,12 +446,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               <span class={`shrink-0 text-[11px] font-semibold ${status.tone}`}>
                                 {status.label}
                               </span>
-                              <span
-                                class="hidden xl:block truncate text-[11px] text-muted"
-                                title={status.summary}
-                              >
-                                {status.summary}
-                              </span>
+                              <Show when={healthSummary()}>
+                                <span
+                                  class="hidden xl:block truncate text-[11px] text-muted"
+                                  title={healthSummary()}
+                                >
+                                  {healthSummary()}
+                                </span>
+                              </Show>
                             </div>
                           </TableCell>
 
