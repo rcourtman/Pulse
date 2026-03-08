@@ -185,3 +185,228 @@ func TestGetNodeMetricsForChart_UsesGapFillLookbackWhenRequestedRangeIsEmpty(t *
 		t.Fatalf("expected latest fallback node point to come from older store data window, got %s", result[len(result)-1].Timestamp)
 	}
 }
+
+// ---------- Batch method tests ----------
+
+func TestGetGuestMetricsForChartBatch_BatchesStoreQueries(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour // beyond inMemoryChartThreshold → forces store path
+
+	// Write store data for 3 guests.
+	for _, id := range []string{"vm-1", "vm-2", "vm-3"} {
+		writeRawMetricBatch(t, monitor.metricsStore, "vm", id, "cpu", []MetricPoint{
+			{Timestamp: now.Add(-3 * time.Hour), Value: 10},
+			{Timestamp: now.Add(-2 * time.Hour), Value: 20},
+			{Timestamp: now.Add(-1 * time.Hour), Value: 30},
+		})
+		writeRawMetricBatch(t, monitor.metricsStore, "vm", id, "memory", []MetricPoint{
+			{Timestamp: now.Add(-3 * time.Hour), Value: 50},
+			{Timestamp: now.Add(-1 * time.Hour), Value: 60},
+		})
+	}
+
+	requests := []GuestChartRequest{
+		{InMemoryKey: "vm-1", SQLResourceID: "vm-1"},
+		{InMemoryKey: "vm-2", SQLResourceID: "vm-2"},
+		{InMemoryKey: "vm-3", SQLResourceID: "vm-3"},
+	}
+	result := monitor.GetGuestMetricsForChartBatch("vm", requests, duration)
+
+	// Verify all 3 guests have data.
+	for _, id := range []string{"vm-1", "vm-2", "vm-3"} {
+		metrics, ok := result[id]
+		if !ok {
+			t.Fatalf("missing result for %s", id)
+		}
+		if len(metrics["cpu"]) == 0 {
+			t.Errorf("%s: expected cpu points from store, got none", id)
+		}
+		if len(metrics["memory"]) == 0 {
+			t.Errorf("%s: expected memory points from store, got none", id)
+		}
+	}
+}
+
+func TestGetGuestMetricsForChartBatch_PrefersInMemoryForShortRanges(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour // short range
+
+	// Seed sufficient in-memory coverage.
+	for _, offset := range []time.Duration{-55 * time.Minute, -30 * time.Minute, -5 * time.Minute} {
+		monitor.metricsHistory.AddGuestMetric("vm-1", "cpu", 11, now.Add(offset))
+	}
+
+	// Write different values to store to distinguish sources.
+	writeRawMetricBatch(t, monitor.metricsStore, "vm", "vm-1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-55 * time.Minute), Value: 99},
+		{Timestamp: now.Add(-30 * time.Minute), Value: 99},
+		{Timestamp: now.Add(-5 * time.Minute), Value: 99},
+	})
+
+	requests := []GuestChartRequest{{InMemoryKey: "vm-1", SQLResourceID: "vm-1"}}
+	result := monitor.GetGuestMetricsForChartBatch("vm", requests, duration)
+
+	cpuPoints := result["vm-1"]["cpu"]
+	if len(cpuPoints) == 0 {
+		t.Fatal("expected non-empty cpu series")
+	}
+	// In-memory values are 11; store values are 99. Should prefer in-memory.
+	if cpuPoints[0].Value != 11 {
+		t.Fatalf("expected in-memory value 11, got %.2f (store leak)", cpuPoints[0].Value)
+	}
+}
+
+func TestGetGuestMetricsForChartBatch_EmptyRequests(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	result := monitor.GetGuestMetricsForChartBatch("vm", nil, time.Hour)
+	if result != nil {
+		t.Fatalf("expected nil for empty requests, got %v", result)
+	}
+}
+
+func TestGetGuestMetricsForChartBatch_DifferentInMemoryAndSQLKeys(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	// Docker containers use "docker:<id>" as in-memory key but just "<id>" as SQL ID.
+	monitor.metricsHistory.AddGuestMetric("docker:dc1", "cpu", 5, now.Add(-10*time.Minute))
+
+	writeRawMetricBatch(t, monitor.metricsStore, "dockerContainer", "dc1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-3 * time.Hour), Value: 40},
+		{Timestamp: now.Add(-2 * time.Hour), Value: 45},
+		{Timestamp: now.Add(-1 * time.Hour), Value: 50},
+	})
+
+	requests := []GuestChartRequest{{InMemoryKey: "docker:dc1", SQLResourceID: "dc1"}}
+	result := monitor.GetGuestMetricsForChartBatch("dockerContainer", requests, duration)
+
+	cpuPoints := result["dc1"]["cpu"]
+	if len(cpuPoints) == 0 {
+		t.Fatal("expected store-backed cpu points for docker container")
+	}
+}
+
+func TestGetGuestMetricsForChartBatch_PicksBestAliasCandidate(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	// Write sparse data under "dockerContainer" (canonical) and better data
+	// under the legacy "docker" alias. The batch path should pick the alias
+	// with better coverage, matching single-resource alias resolution.
+	writeRawMetricBatch(t, monitor.metricsStore, "dockerContainer", "dc1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-10 * time.Minute), Value: 1},
+	})
+	writeRawMetricBatch(t, monitor.metricsStore, "docker", "dc1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-3 * time.Hour), Value: 40},
+		{Timestamp: now.Add(-2 * time.Hour), Value: 45},
+		{Timestamp: now.Add(-1 * time.Hour), Value: 50},
+	})
+
+	requests := []GuestChartRequest{{InMemoryKey: "docker:dc1", SQLResourceID: "dc1"}}
+	result := monitor.GetGuestMetricsForChartBatch("dockerContainer", requests, duration)
+
+	cpuPoints := result["dc1"]["cpu"]
+	if len(cpuPoints) < 2 {
+		t.Fatalf("expected multi-point series from best alias, got %d points", len(cpuPoints))
+	}
+	span := chartSeriesCoverageSpan(cpuPoints)
+	if span < time.Hour {
+		t.Fatalf("expected coverage span >= 1h from legacy alias, got %s", span)
+	}
+}
+
+func TestGetNodeMetricsForChartBatch_BatchesMultipleNodesAndMetricTypes(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	// Write store data for 2 nodes with multiple metric types.
+	for _, nid := range []string{"node-1", "node-2"} {
+		for _, mt := range []string{"cpu", "memory", "disk"} {
+			writeRawMetricBatch(t, monitor.metricsStore, "node", nid, mt, []MetricPoint{
+				{Timestamp: now.Add(-3 * time.Hour), Value: 10},
+				{Timestamp: now.Add(-2 * time.Hour), Value: 20},
+				{Timestamp: now.Add(-1 * time.Hour), Value: 30},
+			})
+		}
+	}
+
+	metricTypes := []string{"cpu", "memory", "disk", "netin", "netout"}
+	result := monitor.GetNodeMetricsForChartBatch([]string{"node-1", "node-2"}, metricTypes, duration)
+
+	for _, nid := range []string{"node-1", "node-2"} {
+		nodeMetrics, ok := result[nid]
+		if !ok {
+			t.Fatalf("missing result for %s", nid)
+		}
+		for _, mt := range []string{"cpu", "memory", "disk"} {
+			if len(nodeMetrics[mt]) == 0 {
+				t.Errorf("%s/%s: expected points from store, got none", nid, mt)
+			}
+		}
+	}
+}
+
+func TestGetNodeMetricsForChartBatch_EmptyNodeIDs(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	result := monitor.GetNodeMetricsForChartBatch(nil, []string{"cpu"}, time.Hour)
+	if result != nil {
+		t.Fatalf("expected nil for empty nodeIDs, got %v", result)
+	}
+}
+
+func TestGetStorageMetricsForChartBatch_BatchesMultiplePools(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	for _, sid := range []string{"storage-1", "storage-2"} {
+		writeRawMetricBatch(t, monitor.metricsStore, "storage", sid, "usage", []MetricPoint{
+			{Timestamp: now.Add(-3 * time.Hour), Value: 60},
+			{Timestamp: now.Add(-2 * time.Hour), Value: 65},
+			{Timestamp: now.Add(-1 * time.Hour), Value: 70},
+		})
+	}
+
+	result := monitor.GetStorageMetricsForChartBatch([]string{"storage-1", "storage-2"}, duration)
+
+	for _, sid := range []string{"storage-1", "storage-2"} {
+		metrics, ok := result[sid]
+		if !ok {
+			t.Fatalf("missing result for %s", sid)
+		}
+		if len(metrics["usage"]) == 0 {
+			t.Errorf("%s: expected usage points from store, got none", sid)
+		}
+	}
+}
+
+func TestGetStorageMetricsForChartBatch_EmptyStorageIDs(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	result := monitor.GetStorageMetricsForChartBatch(nil, time.Hour)
+	if result != nil {
+		t.Fatalf("expected nil for empty storageIDs, got %v", result)
+	}
+}

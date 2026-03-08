@@ -288,6 +288,193 @@ func (m *Monitor) queryStoreBatchMetricMapWithGapFill(resourceType string, resou
 	return result
 }
 
+// GuestChartRequest identifies a single guest for batch chart retrieval.
+type GuestChartRequest struct {
+	InMemoryKey   string // key in the in-memory ring buffer
+	SQLResourceID string // resource_id in the SQLite store
+}
+
+// GetGuestMetricsForChartBatch returns chart metrics for multiple guests of the
+// same SQL resource type, using batch SQL queries instead of N individual
+// queries. Results are keyed by SQLResourceID.
+func (m *Monitor) GetGuestMetricsForChartBatch(
+	sqlResourceType string,
+	requests []GuestChartRequest,
+	duration time.Duration,
+) map[string]map[string][]MetricPoint {
+	if m == nil || len(requests) == 0 {
+		return nil
+	}
+
+	result := make(map[string]map[string][]MetricPoint, len(requests))
+
+	// Phase 1: Check in-memory for all guests.
+	var needStore []string
+	for _, req := range requests {
+		inMemory := m.GetGuestMetrics(req.InMemoryKey, duration)
+		if m.metricsStore == nil {
+			result[req.SQLResourceID] = inMemory
+			continue
+		}
+		if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemory, duration) {
+			result[req.SQLResourceID] = inMemory
+			continue
+		}
+		needStore = append(needStore, req.SQLResourceID)
+		result[req.SQLResourceID] = inMemory // keep as fallback
+	}
+
+	if len(needStore) == 0 {
+		return result
+	}
+
+	// Phase 2: Batch-query store, trying all resource type candidates and
+	// keeping the best coverage per ID. Ties on span are broken by total
+	// point count, matching the single-resource alias resolution logic.
+	storeResults := make(map[string]map[string][]MetricPoint)
+	for _, candidate := range monitorStoreResourceTypeCandidates(sqlResourceType) {
+		batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needStore, duration)
+		for id, metricMap := range batch {
+			if existing, ok := storeResults[id]; ok {
+				newSpan := chartMapCoverageSpan(metricMap)
+				oldSpan := chartMapCoverageSpan(existing)
+				if newSpan < oldSpan || (newSpan == oldSpan && monitorMetricMapPointCount(metricMap) <= monitorMetricMapPointCount(existing)) {
+					continue
+				}
+			}
+			storeResults[id] = metricMap
+		}
+	}
+
+	// Phase 3: Merge — use store data when it has better coverage.
+	for _, id := range needStore {
+		storeData, ok := storeResults[id]
+		if !ok {
+			continue
+		}
+		inMemory := result[id]
+		if duration <= inMemoryChartThreshold && chartMapCoverageSpan(storeData) <= chartMapCoverageSpan(inMemory) {
+			continue
+		}
+		result[id] = storeData
+	}
+
+	return result
+}
+
+// GetNodeMetricsForChartBatch returns chart metrics for multiple nodes,
+// using batch SQL queries instead of N×M individual queries (where M is the
+// number of metric types). Results are keyed by nodeID, then by metric type.
+func (m *Monitor) GetNodeMetricsForChartBatch(
+	nodeIDs []string,
+	metricTypes []string,
+	duration time.Duration,
+) map[string]map[string][]MetricPoint {
+	if m == nil || len(nodeIDs) == 0 {
+		return nil
+	}
+
+	result := make(map[string]map[string][]MetricPoint, len(nodeIDs))
+
+	// Phase 1: Check in-memory for all nodes and identify which need store.
+	var needStore []string
+	for _, nid := range nodeIDs {
+		nodeResult := make(map[string][]MetricPoint, len(metricTypes))
+		allSufficient := true
+		for _, mt := range metricTypes {
+			points := m.metricsHistory.GetNodeMetrics(nid, mt, duration)
+			nodeResult[mt] = points
+			if m.metricsStore != nil && (duration > inMemoryChartThreshold || !hasSufficientChartSeriesCoverage(points, duration)) {
+				allSufficient = false
+			}
+		}
+		result[nid] = nodeResult
+		if !allSufficient {
+			needStore = append(needStore, nid)
+		}
+	}
+
+	if len(needStore) == 0 {
+		return result
+	}
+
+	// Phase 2: Batch-query store for all nodes that need it.
+	batchResult := m.queryStoreBatchMetricMapWithGapFill("node", needStore, duration)
+
+	// Phase 3: Merge — per metric type, use store data if better coverage.
+	for _, nid := range needStore {
+		storeData, ok := batchResult[nid]
+		if !ok {
+			continue
+		}
+		for _, mt := range metricTypes {
+			storePoints, found := storeData[mt]
+			if !found {
+				continue
+			}
+			inMemory := result[nid][mt]
+			if duration <= inMemoryChartThreshold && chartSeriesCoverageSpan(storePoints) <= chartSeriesCoverageSpan(inMemory) {
+				continue
+			}
+			result[nid][mt] = storePoints
+		}
+	}
+
+	return result
+}
+
+// GetStorageMetricsForChartBatch returns chart metrics for multiple storage
+// pools, using batch SQL queries instead of N individual queries.
+// Results are keyed by storageID.
+func (m *Monitor) GetStorageMetricsForChartBatch(
+	storageIDs []string,
+	duration time.Duration,
+) map[string]map[string][]MetricPoint {
+	if m == nil || len(storageIDs) == 0 {
+		return nil
+	}
+
+	result := make(map[string]map[string][]MetricPoint, len(storageIDs))
+
+	// Phase 1: Check in-memory for all storage pools.
+	var needStore []string
+	for _, sid := range storageIDs {
+		inMemory := m.metricsHistory.GetAllStorageMetrics(sid, duration)
+		if m.metricsStore == nil {
+			result[sid] = inMemory
+			continue
+		}
+		if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemory, duration) {
+			result[sid] = inMemory
+			continue
+		}
+		needStore = append(needStore, sid)
+		result[sid] = inMemory // keep as fallback
+	}
+
+	if len(needStore) == 0 {
+		return result
+	}
+
+	// Phase 2: Batch-query store.
+	batchResult := m.queryStoreBatchMetricMapWithGapFill("storage", needStore, duration)
+
+	// Phase 3: Merge — use store data if better coverage.
+	for _, id := range needStore {
+		storeData, ok := batchResult[id]
+		if !ok {
+			continue
+		}
+		inMemory := result[id]
+		if duration <= inMemoryChartThreshold && chartMapCoverageSpan(storeData) <= chartMapCoverageSpan(inMemory) {
+			continue
+		}
+		result[id] = storeData
+	}
+
+	return result
+}
+
 func chartGapFillLookbackWindow(duration time.Duration) time.Duration {
 	lookback := duration * chartGapFillLookbackMultiplier
 	if lookback < chartGapFillLookbackMin {
