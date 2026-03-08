@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import * as workloadTypeBadges from '@/components/shared/workloadTypeBadges';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 describe('workloadTypeBadges', () => {
+  it('keeps the badge module rendering-only', () => {
+    expect(workloadTypeBadges).toHaveProperty('getWorkloadTypeBadge');
+    expect(workloadTypeBadges).not.toHaveProperty('getWorkloadTypePresentation');
+    expect(workloadTypeBadges).not.toHaveProperty('normalizeWorkloadTypePresentationKey');
+  });
+
   describe('getWorkloadTypeBadge', () => {
     describe('VM types', () => {
       it('returns VM badge for vm', () => {

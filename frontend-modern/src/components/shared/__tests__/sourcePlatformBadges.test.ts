@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getSourcePlatformBadge,
-  getSourcePlatformLabel,
-} from '@/components/shared/sourcePlatformBadges';
+import * as sourcePlatformBadges from '@/components/shared/sourcePlatformBadges';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 
 describe('sourcePlatformBadges', () => {
+  it('keeps the badge module rendering-only', () => {
+    expect(sourcePlatformBadges).toHaveProperty('getSourcePlatformBadge');
+    expect(sourcePlatformBadges).not.toHaveProperty('getSourcePlatformLabel');
+    expect(sourcePlatformBadges).not.toHaveProperty('normalizeSourcePlatformKey');
+  });
+
   describe('getSourcePlatformBadge', () => {
     it('returns null for undefined', () => {
       expect(getSourcePlatformBadge(undefined)).toBeNull();
@@ -27,6 +31,14 @@ describe('sourcePlatformBadges', () => {
     it('returns PBS badge for proxmox-pbs', () => {
       const result = getSourcePlatformBadge('proxmox-pbs');
       expect(result?.label).toBe('PBS');
+    });
+
+    it('normalizes short and generic proxmox aliases to canonical source badges', () => {
+      expect(getSourcePlatformBadge('pve')?.label).toBe('PVE');
+      expect(getSourcePlatformBadge('proxmox')?.label).toBe('PVE');
+      expect(getSourcePlatformBadge('pbs')?.label).toBe('PBS');
+      expect(getSourcePlatformBadge('pmg')?.label).toBe('PMG');
+      expect(getSourcePlatformBadge('k8s')?.label).toBe('K8s');
     });
 
     it('returns PMG badge for proxmox-pmg', () => {
@@ -52,6 +64,7 @@ describe('sourcePlatformBadges', () => {
     it('returns Agent badge for agent', () => {
       const result = getSourcePlatformBadge('agent');
       expect(result?.label).toBe('Agent');
+      expect(result?.classes).toContain('emerald');
     });
 
     it('returns Unraid badge for unraid', () => {
@@ -115,29 +128,6 @@ describe('sourcePlatformBadges', () => {
       const result = getSourcePlatformBadge('proxmox_pve');
       // Underscores are titleized for unknown platforms
       expect(result?.label).toBe('Proxmox Pve');
-    });
-  });
-
-  describe('getSourcePlatformLabel', () => {
-    it('returns label for known platforms', () => {
-      expect(getSourcePlatformLabel('docker')).toBe('Containers');
-      expect(getSourcePlatformLabel('kubernetes')).toBe('K8s');
-    });
-
-    it('returns titleized label for unknown platforms', () => {
-      expect(getSourcePlatformLabel('custom-platform')).toBe('Custom Platform');
-    });
-
-    it('returns Unknown for empty string', () => {
-      expect(getSourcePlatformLabel('')).toBe('Unknown');
-    });
-
-    it('returns Unknown for whitespace only', () => {
-      expect(getSourcePlatformLabel('   ')).toBe('Unknown');
-    });
-
-    it('returns Unknown for undefined', () => {
-      expect(getSourcePlatformLabel(undefined)).toBe('Unknown');
     });
   });
 });

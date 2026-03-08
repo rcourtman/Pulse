@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalizeWorkloadFilterType,
   resolveWorkloadType,
   resolveWorkloadTypeFromString,
   getWorkloadMetricsKind,
@@ -100,6 +101,20 @@ describe('resolveWorkloadTypeFromString', () => {
 
   it('does not normalize removed docker_container alias', () => {
     expect(resolveWorkloadTypeFromString('docker_container')).toBeNull();
+  });
+});
+
+describe('canonicalizeWorkloadFilterType', () => {
+  it('canonicalizes supported workload filter aliases to v6 keys', () => {
+    expect(canonicalizeWorkloadFilterType('docker')).toBe('app-container');
+    expect(canonicalizeWorkloadFilterType('k8s')).toBe('pod');
+    expect(canonicalizeWorkloadFilterType('host')).toBe('agent');
+  });
+
+  it('preserves unknown and removed aliases instead of inventing compatibility', () => {
+    expect(canonicalizeWorkloadFilterType('docker-container')).toBe('docker-container');
+    expect(canonicalizeWorkloadFilterType('custom-type')).toBe('custom-type');
+    expect(canonicalizeWorkloadFilterType('')).toBe('');
   });
 });
 

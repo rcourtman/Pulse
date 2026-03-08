@@ -3,10 +3,15 @@ import resourceTypeCompatSource from '@/utils/resourceTypeCompat.ts?raw';
 import discoveryTypesSource from '@/types/discovery.ts?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import reportingResourceTypesSource from '@/components/Settings/reportingResourceTypes.ts?raw';
+import reportingResourceTypesUtilSource from '@/utils/reportingResourceTypes.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
 import investigateAlertButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
+import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
+import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
+import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
+import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 
 describe('frontend resource type boundaries', () => {
@@ -31,16 +36,22 @@ describe('frontend resource type boundaries', () => {
   });
 
   it('keeps compatibility handling centralized in shared adapters and edge translators', () => {
-    expect(resourceLinksSource).toContain('canonicalizeFrontendResourceType');
+    expect(resourceLinksSource).toContain('canonicalizeWorkloadFilterType');
+    expect(resourceLinksSource).toContain('normalizeSourcePlatformQueryValue');
     expect(resourceLinksSource).not.toContain("normalized === 'docker'");
     expect(resourceLinksSource).not.toContain("normalized === 'k8s'");
+    expect(sourcePlatformsSource).toContain('export const normalizeSourcePlatformQueryValue');
 
-    expect(reportingResourceTypesSource).toContain('export function toReportingResourceType');
-    expect(reportingResourceTypesSource).toContain("case 'k8s-cluster'");
-    expect(reportingResourceTypesSource).toContain("return 'k8s';");
+    expect(reportingResourceTypesSource).toContain('@/utils/reportingResourceTypes');
+    expect(reportingResourceTypesUtilSource).toContain('export function toReportingResourceType');
+    expect(reportingResourceTypesUtilSource).toContain("case 'k8s-cluster'");
+    expect(reportingResourceTypesUtilSource).toContain("return 'k8s';");
     expect(reportingResourceTypesSource).not.toContain("case 'host'");
 
     expect(chartsApiSource).toContain('export function toMetricsHistoryAPIResourceType');
+    expect(chartsApiSource).toContain('export function asMetricsHistoryResourceType');
+    expect(chartsApiSource).toContain('export function mapUnifiedTypeToHistoryResourceType');
+    expect(chartsApiSource).toContain('export function canonicalizeMetricsHistoryTargetType');
     expect(chartsApiSource).toContain("| 'k8s-cluster'");
     expect(chartsApiSource).toContain("| 'k8s-node'");
     expect(chartsApiSource).toContain("| 'pod'");
@@ -50,9 +61,15 @@ describe('frontend resource type boundaries', () => {
       "guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>",
     );
 
-    expect(investigateAlertButtonSource).toContain('canonicalizeFrontendResourceType');
-    expect(resourceBadgesSource).toContain('canonicalizeFrontendResourceType');
-    expect(workloadTypeBadgesSource).toContain('canonicalizeFrontendResourceType');
+    expect(investigateAlertButtonSource).toContain('resolveAlertTargetType');
+    expect(investigateAlertButtonSource).not.toContain('canonicalizeFrontendResourceType');
+    expect(alertTargetTypesSource).toContain('canonicalizeFrontendResourceType');
+    expect(resourceBadgesSource).toContain('@/utils/resourceBadgePresentation');
+    expect(resourceBadgePresentationSource).toContain('getResourceTypePresentation');
+    expect(resourceBadgesSource).not.toContain('function formatType(');
+    expect(workloadTypePresentationSource).toContain('canonicalizeFrontendResourceType');
+    expect(workloadTypeBadgesSource).not.toContain('canonicalizeFrontendResourceType');
+    expect(workloadTypeBadgesSource).toContain('getWorkloadTypePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
   });
 });

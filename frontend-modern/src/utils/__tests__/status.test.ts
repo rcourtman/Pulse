@@ -5,6 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  formatStatusLabel,
+  getCanonicalStatusLabel,
   isNodeOnline,
   isGuestRunning,
   getNodeStatusIndicator,
@@ -19,6 +21,7 @@ import {
   DEGRADED_HEALTH_STATUSES,
   STOPPED_CONTAINER_STATES,
   ERROR_CONTAINER_STATES,
+  STATUS_SORT_ORDER,
 } from '@/utils/status';
 
 describe('isNodeOnline', () => {
@@ -48,6 +51,32 @@ describe('isNodeOnline', () => {
     expect(isNodeOnline({ status: 'online', uptime: 1000, connectionHealth: 'offline' })).toBe(
       false,
     );
+  });
+});
+
+describe('status label helpers', () => {
+  it('formats arbitrary status labels predictably', () => {
+    expect(formatStatusLabel('online')).toBe('Online');
+    expect(formatStatusLabel('')).toBe('Unknown');
+    expect(formatStatusLabel(undefined, 'N/A')).toBe('N/A');
+  });
+
+  it('returns canonical labels for known statuses and formatted fallbacks for unknown ones', () => {
+    expect(getCanonicalStatusLabel('offline')).toBe('Offline');
+    expect(getCanonicalStatusLabel('running')).toBe('Running');
+    expect(getCanonicalStatusLabel('custom_state')).toBe('custom_state');
+  });
+
+  it('exports the canonical status sort order used by selectors', () => {
+    expect(Array.from(STATUS_SORT_ORDER)).toEqual([
+      'online',
+      'degraded',
+      'paused',
+      'offline',
+      'stopped',
+      'unknown',
+      'running',
+    ]);
   });
 });
 

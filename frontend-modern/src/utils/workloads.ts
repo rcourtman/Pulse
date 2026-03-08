@@ -1,5 +1,6 @@
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
 /**
  * Resolve a raw type string (from API or backend) to a semantic WorkloadType.
@@ -29,6 +30,11 @@ export const resolveWorkloadTypeFromString = (value?: string | null): WorkloadTy
     return 'pod';
   }
   return null;
+};
+
+export const canonicalizeWorkloadFilterType = (value?: string | null): string => {
+  const normalized = (value || '').trim().toLowerCase();
+  return canonicalizeFrontendResourceType(normalized) || normalized;
 };
 
 export const resolveWorkloadType = (

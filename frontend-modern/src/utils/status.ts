@@ -12,14 +12,40 @@ import type {
 
 const ONLINE_STATUS = 'online';
 const RUNNING_STATUS = 'running';
+const STATUS_LABELS: Record<string, string> = {
+  online: 'Online',
+  offline: 'Offline',
+  degraded: 'Degraded',
+  paused: 'Paused',
+  unknown: 'Unknown',
+  running: 'Running',
+  stopped: 'Stopped',
+};
+
+export const STATUS_SORT_ORDER = [
+  'online',
+  'degraded',
+  'paused',
+  'offline',
+  'stopped',
+  'unknown',
+  'running',
+] as const;
 
 const normalize = (value?: string | null): string => (value || '').trim().toLowerCase();
 
-const formatStatusLabel = (value?: string | null, fallback = 'Unknown'): string => {
+export const formatStatusLabel = (value?: string | null, fallback = 'Unknown'): string => {
   if (!value) return fallback;
   const normalized = value.trim();
   if (!normalized) return fallback;
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+export const getCanonicalStatusLabel = (value?: string | null, fallback = 'Unknown'): string => {
+  const raw = (value || '').trim();
+  const normalized = normalize(raw);
+  if (!normalized) return fallback;
+  return STATUS_LABELS[normalized] || raw;
 };
 
 export type StatusIndicatorVariant = 'success' | 'warning' | 'danger' | 'muted';
