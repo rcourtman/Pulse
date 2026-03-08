@@ -55,6 +55,57 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 }
 
+func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:         "storage:local-lvm",
+		Type:       unifiedresources.ResourceTypeStorage,
+		Name:       "local-lvm",
+		ParentName: "pve1",
+		Storage: &unifiedresources.StorageMeta{
+			Type:          "lvmthin",
+			ConsumerCount: 3,
+			ConsumerTypes: []string{"vm", "system-container"},
+			TopConsumers: []unifiedresources.StorageConsumerMeta{
+				{Name: "app01", ResourceType: unifiedresources.ResourceTypeVM, ResourceID: "vm-101", DiskCount: 1},
+				{Name: "media01", ResourceType: unifiedresources.ResourceTypeSystemContainer, ResourceID: "lxc-200", DiskCount: 1},
+			},
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "pulse",
+			NativeID: "storage-risk-1",
+			Code:     "capacity_runway_low",
+			Severity: storagehealth.RiskWarning,
+			Summary:  "Storage local-lvm is running low on free space",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := "unified-incident-storage-local-lvm-pulse-storage-risk-1-capacity-runway-low"
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+
+	wantMessage := "Storage local-lvm is running low on free space. Affects 3 dependent resources: app01, media01, and 1 more"
+	if alert.Message != wantMessage {
+		t.Fatalf("message = %q, want %q", alert.Message, wantMessage)
+	}
+	if got := alert.Metadata["consumerCount"]; got != 3 {
+		t.Fatalf("consumerCount = %v, want 3", got)
+	}
+	if got := alert.Metadata["consumerImpactSummary"]; got != "Affects 3 dependent resources: app01, media01, and 1 more" {
+		t.Fatalf("consumerImpactSummary = %v", got)
+	}
+	if got := alert.Metadata["topConsumerNames"]; got == nil {
+		t.Fatal("expected topConsumerNames metadata")
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsRespectsDisableAllStorage(t *testing.T) {
 	m := newTestManager(t)
 	cfg := unifiedEvalBaseConfig()

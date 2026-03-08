@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -112,6 +113,7 @@ func unifiedIncidentAlert(resource unifiedresources.Resource, incident unifiedre
 	instanceName := unifiedIncidentInstance(resource)
 	alertType := unifiedIncidentAlertType(resource, incident)
 	alertID := unifiedIncidentAlertID(resource, incident)
+	message := unifiedIncidentMessage(resource, incident)
 	startTime := incident.StartedAt
 	if startTime.IsZero() {
 		startTime = now
@@ -125,7 +127,7 @@ func unifiedIncidentAlert(resource unifiedresources.Resource, incident unifiedre
 		ResourceName: resourceName,
 		Node:         nodeName,
 		Instance:     instanceName,
-		Message:      incident.Summary,
+		Message:      message,
 		Value:        0,
 		Threshold:    0,
 		StartTime:    startTime,
@@ -196,6 +198,58 @@ func unifiedIncidentAlertType(resource unifiedresources.Resource, incident unifi
 	}
 }
 
+func unifiedIncidentMessage(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident) string {
+	base := strings.TrimSpace(incident.Summary)
+	if base == "" {
+		base = strings.TrimSpace(incident.Code)
+	}
+	if resource.Storage == nil || resource.Storage.ConsumerCount <= 0 {
+		return base
+	}
+
+	summary := unifiedIncidentConsumerSummary(resource.Storage)
+	if summary == "" {
+		return base
+	}
+	if base == "" {
+		return summary
+	}
+	return base + ". " + summary
+}
+
+func unifiedIncidentConsumerSummary(storage *unifiedresources.StorageMeta) string {
+	if storage == nil || storage.ConsumerCount <= 0 {
+		return ""
+	}
+
+	names := make([]string, 0, len(storage.TopConsumers))
+	for _, consumer := range storage.TopConsumers {
+		name := strings.TrimSpace(consumer.Name)
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+		if len(names) == 3 {
+			break
+		}
+	}
+
+	resourceLabel := "dependent resource"
+	if storage.ConsumerCount != 1 {
+		resourceLabel = "dependent resources"
+	}
+
+	if len(names) == 0 {
+		return "Affects " + intLabel(storage.ConsumerCount) + " " + resourceLabel
+	}
+
+	if remaining := storage.ConsumerCount - len(names); remaining > 0 {
+		return "Affects " + intLabel(storage.ConsumerCount) + " " + resourceLabel + ": " + strings.Join(names, ", ") + ", and " + intLabel(remaining) + " more"
+	}
+
+	return "Affects " + intLabel(storage.ConsumerCount) + " " + resourceLabel + ": " + strings.Join(names, ", ")
+}
+
 func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident, alertType string) map[string]interface{} {
 	metadata := map[string]interface{}{
 		"metric":           alertType,
@@ -230,6 +284,29 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		}
 		if resource.Storage.ConsumerCount > 0 {
 			metadata["consumerCount"] = resource.Storage.ConsumerCount
+			metadata["consumerImpactSummary"] = unifiedIncidentConsumerSummary(resource.Storage)
+		}
+		if len(resource.Storage.ConsumerTypes) > 0 {
+			metadata["consumerTypes"] = append([]string(nil), resource.Storage.ConsumerTypes...)
+		}
+		if len(resource.Storage.TopConsumers) > 0 {
+			names := make([]string, 0, len(resource.Storage.TopConsumers))
+			topConsumers := make([]map[string]interface{}, 0, len(resource.Storage.TopConsumers))
+			for _, consumer := range resource.Storage.TopConsumers {
+				if name := strings.TrimSpace(consumer.Name); name != "" {
+					names = append(names, name)
+				}
+				topConsumers = append(topConsumers, map[string]interface{}{
+					"resourceId":   consumer.ResourceID,
+					"resourceType": string(consumer.ResourceType),
+					"name":         consumer.Name,
+					"diskCount":    consumer.DiskCount,
+				})
+			}
+			if len(names) > 0 {
+				metadata["topConsumerNames"] = names
+			}
+			metadata["topConsumers"] = topConsumers
 		}
 	}
 
@@ -256,4 +333,8 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 	}
 
 	return metadata
+}
+
+func intLabel(value int) string {
+	return strconv.Itoa(value)
 }
