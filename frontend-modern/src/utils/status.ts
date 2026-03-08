@@ -57,6 +57,13 @@ export interface StatusIndicator {
 
 const defaultIndicator: StatusIndicator = { variant: 'muted', label: 'Unknown' };
 
+const STATUS_INDICATOR_BADGE_TONE_CLASSES: Record<StatusIndicatorVariant, string> = {
+  success: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  danger: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  muted: 'bg-surface-alt text-base-content',
+};
+
 export const OFFLINE_HEALTH_STATUSES = new Set([
   'offline',
   'error',
@@ -94,6 +101,42 @@ export const ERROR_CONTAINER_STATES = new Set([
   'oomkilled',
   'unhealthy',
 ]);
+
+export function getSimpleStatusIndicator(value?: string | null): StatusIndicator {
+  const normalized = normalize(value);
+  if (!normalized) return defaultIndicator;
+
+  if (OFFLINE_HEALTH_STATUSES.has(normalized)) {
+    return { variant: 'danger', label: formatStatusLabel(value, 'Offline') };
+  }
+
+  if (DEGRADED_HEALTH_STATUSES.has(normalized)) {
+    return { variant: 'warning', label: formatStatusLabel(value, 'Warning') };
+  }
+
+  if (normalized === ONLINE_STATUS || normalized === RUNNING_STATUS || normalized === 'healthy') {
+    return {
+      variant: 'success',
+      label:
+        normalized === 'healthy'
+          ? 'Healthy'
+          : normalized === RUNNING_STATUS
+            ? 'Running'
+            : 'Online',
+    };
+  }
+
+  return { variant: 'muted', label: formatStatusLabel(value, 'Unknown') };
+}
+
+export function getStatusIndicatorBadgeToneClasses(variant: StatusIndicatorVariant): string {
+  return STATUS_INDICATOR_BADGE_TONE_CLASSES[variant] || STATUS_INDICATOR_BADGE_TONE_CLASSES.muted;
+}
+
+export function isConnectedHealthStatus(value?: string | null): boolean {
+  const normalized = normalize(value);
+  return normalized === ONLINE_STATUS || normalized === RUNNING_STATUS || normalized === 'healthy';
+}
 
 export function isNodeOnline(node: Partial<Node> | undefined | null): boolean {
   if (!node) return false;
@@ -211,7 +254,7 @@ export function getDockerHostStatusIndicator(
     return { variant: 'warning', label: formatStatusLabel(status, 'Degraded') };
   }
 
-  if (status === ONLINE_STATUS || status === RUNNING_STATUS || status === 'healthy') {
+  if (isConnectedHealthStatus(status)) {
     return { variant: 'success', label: formatStatusLabel(status, 'Online') };
   }
 

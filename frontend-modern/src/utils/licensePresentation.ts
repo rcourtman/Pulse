@@ -39,6 +39,11 @@ const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
   multi_tenant: 'MSP',
 };
 
+export interface LicenseSubscriptionStatusPresentation {
+  label: string;
+  badgeClass: string;
+}
+
 const formatTitleCase = (value: string) =>
   value.replace(/[_-]/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
 
@@ -58,4 +63,42 @@ export const getFeatureMinTierLabel = (feature?: string | null): string => {
   const normalized = (feature || '').trim().toLowerCase();
   if (!normalized) return 'Pro';
   return FEATURE_MIN_TIER_LABELS[normalized] || 'Pro';
+};
+
+export const getLicenseSubscriptionStatusPresentation = (
+  state?: string | null,
+): LicenseSubscriptionStatusPresentation => {
+  switch ((state || '').trim().toLowerCase()) {
+    case 'trial':
+      return {
+        label: 'Trial',
+        badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+      };
+    case 'active':
+      return {
+        label: 'Active',
+        badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+      };
+    case 'grace':
+      return {
+        label: 'Grace Period',
+        badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      };
+    case 'suspended':
+      return {
+        label: 'Suspended',
+        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      };
+    case 'canceled':
+    case 'expired':
+      return {
+        label: 'Expired',
+        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      };
+    default:
+      return {
+        label: 'Unknown',
+        badgeClass: 'bg-surface-alt text-muted',
+      };
+  }
 };

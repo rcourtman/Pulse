@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getFeatureMinTierLabel,
   getLicenseFeatureLabel,
+  getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
 } from '@/utils/licensePresentation';
 
@@ -23,5 +24,24 @@ describe('licensePresentation', () => {
     expect(getFeatureMinTierLabel('relay')).toBe('Relay');
     expect(getFeatureMinTierLabel('multi_tenant')).toBe('MSP');
     expect(getFeatureMinTierLabel('unknown_feature')).toBe('Pro');
+  });
+
+  it('returns canonical subscription-state labels and tones', () => {
+    expect(getLicenseSubscriptionStatusPresentation('trial')).toMatchObject({
+      label: 'Trial',
+      badgeClass: expect.stringContaining('green'),
+    });
+    expect(getLicenseSubscriptionStatusPresentation('grace')).toMatchObject({
+      label: 'Grace Period',
+      badgeClass: expect.stringContaining('amber'),
+    });
+    expect(getLicenseSubscriptionStatusPresentation('expired')).toMatchObject({
+      label: 'Expired',
+      badgeClass: expect.stringContaining('red'),
+    });
+    expect(getLicenseSubscriptionStatusPresentation('mystery')).toMatchObject({
+      label: 'Unknown',
+      badgeClass: expect.stringContaining('bg-surface-alt'),
+    });
   });
 });

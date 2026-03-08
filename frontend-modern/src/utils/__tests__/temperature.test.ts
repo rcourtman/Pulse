@@ -4,6 +4,7 @@ import {
   formatTemperature,
   getTemperatureSymbol,
   getCpuTemperature,
+  getTemperatureTextClass,
   temperatureStore,
 } from '../temperature';
 
@@ -107,6 +108,26 @@ describe('temperature', () => {
         cores: [],
       };
       expect(getCpuTemperature(temp as any)).toBeNull();
+    });
+  });
+
+  describe('getTemperatureTextClass', () => {
+    it('returns muted tone for nullish or invalid values', () => {
+      expect(getTemperatureTextClass(null)).toBe('text-muted');
+      expect(getTemperatureTextClass(undefined)).toBe('text-muted');
+      expect(getTemperatureTextClass(NaN)).toBe('text-muted');
+    });
+
+    it('returns green for safe temperatures', () => {
+      expect(getTemperatureTextClass(45)).toContain('text-green-600');
+    });
+
+    it('returns amber for elevated temperatures', () => {
+      expect(getTemperatureTextClass(60)).toContain('text-amber-600');
+    });
+
+    it('returns red for high temperatures', () => {
+      expect(getTemperatureTextClass(70)).toContain('text-red-600');
     });
   });
 

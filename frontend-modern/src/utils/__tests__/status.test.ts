@@ -17,6 +17,9 @@ import {
   getDockerServiceStatusIndicator,
   getPBSStatusIndicator,
   getReplicationJobStatusIndicator,
+  isConnectedHealthStatus,
+  getSimpleStatusIndicator,
+  getStatusIndicatorBadgeToneClasses,
   OFFLINE_HEALTH_STATUSES,
   DEGRADED_HEALTH_STATUSES,
   STOPPED_CONTAINER_STATES,
@@ -77,6 +80,30 @@ describe('status label helpers', () => {
       'unknown',
       'running',
     ]);
+  });
+
+  it('returns a generic indicator for simple online/offline/warning states', () => {
+    expect(getSimpleStatusIndicator('online')).toEqual({ variant: 'success', label: 'Online' });
+    expect(getSimpleStatusIndicator('running')).toEqual({ variant: 'success', label: 'Running' });
+    expect(getSimpleStatusIndicator('warning')).toEqual({ variant: 'warning', label: 'Warning' });
+    expect(getSimpleStatusIndicator('offline')).toEqual({ variant: 'danger', label: 'Offline' });
+    expect(getSimpleStatusIndicator('healthy')).toEqual({ variant: 'success', label: 'Healthy' });
+    expect(getSimpleStatusIndicator('')).toEqual({ variant: 'muted', label: 'Unknown' });
+  });
+
+  it('exports badge tone classes for indicator variants', () => {
+    expect(getStatusIndicatorBadgeToneClasses('success')).toContain('green');
+    expect(getStatusIndicatorBadgeToneClasses('warning')).toContain('amber');
+    expect(getStatusIndicatorBadgeToneClasses('danger')).toContain('red');
+    expect(getStatusIndicatorBadgeToneClasses('muted')).toContain('bg-surface-alt');
+  });
+
+  it('exports a shared connected-status predicate for live monitoring state', () => {
+    expect(isConnectedHealthStatus('online')).toBe(true);
+    expect(isConnectedHealthStatus('running')).toBe(true);
+    expect(isConnectedHealthStatus('healthy')).toBe(true);
+    expect(isConnectedHealthStatus('offline')).toBe(false);
+    expect(isConnectedHealthStatus(undefined)).toBe(false);
   });
 });
 

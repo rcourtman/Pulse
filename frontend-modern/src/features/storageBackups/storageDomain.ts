@@ -9,31 +9,72 @@ const CEPH_HEALTH_CRITICAL_STYLES =
 const CEPH_HEALTH_DEFAULT_STYLES =
   'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-700';
 
+export interface CephHealthPresentation {
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+}
+
+const normalizeCephHealth = (health?: string | null): 'ok' | 'warning' | 'critical' | 'unknown' => {
+  const normalized = (health ?? '').trim().toUpperCase();
+  if (normalized === 'OK' || normalized === 'HEALTH_OK') return 'ok';
+  if (
+    normalized === 'WARN' ||
+    normalized === 'WARNING' ||
+    normalized === 'HEALTH_WARN' ||
+    normalized === 'HEALTH_WARNING'
+  ) {
+    return 'warning';
+  }
+  if (
+    normalized === 'ERR' ||
+    normalized === 'ERROR' ||
+    normalized === 'CRITICAL' ||
+    normalized === 'HEALTH_ERR' ||
+    normalized === 'HEALTH_ERROR' ||
+    normalized === 'HEALTH_CRIT'
+  ) {
+    return 'critical';
+  }
+  return 'unknown';
+};
+
 export const isCephType = (type?: string | null): boolean => {
   const normalized = (type ?? '').trim().toLowerCase();
   return CEPH_TYPE_SET.has(normalized);
 };
 
-export const getCephHealthLabel = (health?: string | null): string => {
-  if (!health) return 'CEPH';
-  const normalized = health.toUpperCase();
-  return normalized.startsWith('HEALTH_') ? normalized.replace('HEALTH_', '') : normalized;
+export const getCephHealthPresentation = (health?: string | null): CephHealthPresentation => {
+  switch (normalizeCephHealth(health)) {
+    case 'ok':
+      return {
+        label: 'OK',
+        badgeClass: CEPH_HEALTH_OK_STYLES,
+        dotClass: 'bg-green-500',
+      };
+    case 'warning':
+      return {
+        label: 'WARN',
+        badgeClass: CEPH_HEALTH_WARNING_STYLES,
+        dotClass: 'bg-yellow-500',
+      };
+    case 'critical':
+      return {
+        label: 'ERROR',
+        badgeClass: CEPH_HEALTH_CRITICAL_STYLES,
+        dotClass: 'bg-red-500',
+      };
+    default:
+      return {
+        label: 'UNKNOWN',
+        badgeClass: CEPH_HEALTH_DEFAULT_STYLES,
+        dotClass: 'bg-blue-500',
+      };
+  }
 };
 
-export const getCephHealthStyles = (health?: string | null): string => {
-  const normalized = (health ?? '').toUpperCase();
-  if (normalized === 'HEALTH_OK') {
-    return CEPH_HEALTH_OK_STYLES;
-  }
-  if (normalized === 'HEALTH_WARN' || normalized === 'HEALTH_WARNING') {
-    return CEPH_HEALTH_WARNING_STYLES;
-  }
-  if (
-    normalized === 'HEALTH_ERR' ||
-    normalized === 'HEALTH_ERROR' ||
-    normalized === 'HEALTH_CRIT'
-  ) {
-    return CEPH_HEALTH_CRITICAL_STYLES;
-  }
-  return CEPH_HEALTH_DEFAULT_STYLES;
-};
+export const getCephHealthLabel = (health?: string | null): string =>
+  getCephHealthPresentation(health).label;
+
+export const getCephHealthStyles = (health?: string | null): string =>
+  getCephHealthPresentation(health).badgeClass;

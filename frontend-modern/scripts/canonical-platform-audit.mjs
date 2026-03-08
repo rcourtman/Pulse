@@ -17,6 +17,15 @@ const ALLOWLIST = new Set([
   'src/utils/resourceTypePresentation.ts',
   'src/utils/resourceBadgePresentation.ts',
   'src/utils/workloadTypePresentation.ts',
+  'src/features/storageBackups/healthPresentation.ts',
+  'src/utils/clusterEndpointPresentation.ts',
+  'src/utils/agentCapabilityPresentation.ts',
+  'src/utils/unifiedAgentStatusPresentation.ts',
+  'src/utils/dashboardAlertPresentation.ts',
+  'src/utils/temperature.ts',
+  'src/utils/k8sStatusPresentation.ts',
+  'src/utils/raidPresentation.ts',
+  'src/utils/securityScorePresentation.ts',
 ]);
 
 const PLATFORM_TOKENS = [
@@ -138,6 +147,8 @@ const RESOURCE_TYPE_LABEL_TOKENS = [
   'Replication',
 ];
 
+const STORAGE_HEALTH_TOKENS = ['healthy', 'warning', 'critical', 'offline', 'unknown'];
+
 const findings = [];
 
 function toRelative(absPath) {
@@ -231,6 +242,19 @@ const HELPER_RULES = [
       'Do not define local storage source presentation helpers in component code. Use @/utils/storageSources instead.',
   },
   {
+    rule: 'canonical-storage/no-local-health-presentation-helper',
+    regex:
+      /\b(?:const|function)\s+(?:getStorageHealthPresentation|getHealthDotClass|getHealthCountClass|healthDotClass|healthCountClass)\b/g,
+    message:
+      'Do not define local storage health presentation helpers in component code. Use the shared storage health presentation utility instead.',
+  },
+  {
+    rule: 'canonical-storage/no-local-ceph-health-helper',
+    regex: /\b(?:const|function)\s+getHealthInfo\b/g,
+    message:
+      'Do not define local Ceph health presentation helpers in page code. Use the shared storage domain Ceph health helpers instead.',
+  },
+  {
     rule: 'canonical-type/no-nonrender-imports-from-workload-badge-component',
     regex:
       /import\s*\{([\s\S]*?(?:getWorkloadTypePresentation|normalizeWorkloadTypePresentationKey|getWorkloadTypeLabel)[\s\S]*?)\}\s*from\s*['"]@\/components\/shared\/workloadTypeBadges['"]/g,
@@ -264,6 +288,70 @@ const HELPER_RULES = [
     message:
       'Do not define local reportable resource type policy in component code. Use @/utils/reportableResourceTypes instead.',
   },
+  {
+    rule: 'canonical-settings/no-local-agent-capability-presentation',
+    regex: /\b(?:const|function)\s+(?:getCapabilityLabel|getCapabilityBadgeClass)\b/g,
+    message:
+      'Do not define local unified-agent capability presentation in component code. Use @/utils/agentCapabilityPresentation instead.',
+  },
+  {
+    rule: 'canonical-status/no-local-connected-status-helper',
+    regex: /\b(?:const|function)\s+connectedFromStatus\b/g,
+    message:
+      'Do not define local connected-status helpers in component code. Use @/utils/status instead.',
+  },
+  {
+    rule: 'canonical-settings/no-local-unified-agent-status-pill',
+    regex:
+      /MONITORING_STOPPED_STATUS_LABEL[\s\S]{0,500}\b(?:const|function)\s+statusBadgeClass\b|\b(?:const|function)\s+statusBadgeClass\b[\s\S]{0,500}MONITORING_STOPPED_STATUS_LABEL/g,
+    message:
+      'Do not define local unified-agent status pill helpers in component code. Use @/utils/unifiedAgentStatusPresentation instead.',
+  },
+  {
+    rule: 'canonical-dashboard/no-local-problem-status-variant',
+    regex:
+      /\b(?:const|function)\s+statusVariant\s*\(\s*pr\s*:\s*ProblemResource\s*\)/g,
+    message:
+      'Do not define local dashboard problem-resource status helpers in page code. Use @/utils/problemResourcePresentation instead.',
+  },
+  {
+    rule: 'canonical-dashboard/no-local-alerts-tone',
+    regex: /\b(?:const|function)\s+alertsTone\b/g,
+    message:
+      'Do not define local dashboard alert summary tone helpers in page code. Use @/utils/dashboardAlertPresentation instead.',
+  },
+  {
+    rule: 'canonical-temperature/no-local-temperature-tone',
+    regex: /\b(?:const|function)\s+getTemperatureTone\b/g,
+    message:
+      'Do not define local temperature tone helpers in component code. Use @/utils/temperature instead.',
+  },
+  {
+    rule: 'canonical-service-health/no-local-service-health-status-tone',
+    regex:
+      /\b(?:const|function)\s+statusTone\b[\s\S]{0,500}normalized\s*===\s*['"]online['"][\s\S]{0,220}normalized\s*===\s*['"]warning['"][\s\S]{0,220}normalized\s*===\s*['"]offline['"]/g,
+    message:
+      'Do not define local online/warning/offline service-health tone helpers in component code. Use shared status/service health presentation utilities instead.',
+  },
+  {
+    rule: 'canonical-service-health/no-local-health-tone-class',
+    regex: /\bexport\s+const\s+healthToneClass\b|\bexport\s+const\s+normalizeHealthLabel\b/g,
+    message:
+      'Do not define local health tone/label helpers in mapper code. Use @/utils/serviceHealthPresentation instead.',
+  },
+  {
+    rule: 'canonical-k8s/no-local-namespace-status-tone',
+    regex:
+      /\b(?:const|function)\s+statusTone\b[\s\S]{0,320}counts\.offline[\s\S]{0,220}counts\.warning[\s\S]{0,220}counts\.online/g,
+    message:
+      'Do not define local Kubernetes namespace aggregate status tone helpers in component code. Use @/utils/k8sStatusPresentation instead.',
+  },
+  {
+    rule: 'canonical-storage/no-local-raid-presentation-helpers',
+    regex: /\b(?:const|function)\s+(?:raidStateVariant|raidStateTextClass|deviceToneClass)\b/g,
+    message:
+      'Do not define local RAID state/device presentation helpers in component code. Use @/utils/raidPresentation instead.',
+  },
 ];
 
 const MAP_RULES = [
@@ -293,6 +381,15 @@ const MAP_RULES = [
       'Do not define local storage source presentation maps in component code. Use @/utils/storageSources instead.',
     validate: (snippet) =>
       containsAny(snippet, PLATFORM_TOKENS) && /tone\s*:/.test(snippet),
+  },
+  {
+    rule: 'canonical-storage/no-local-health-presentation-map',
+    regex:
+      /\b(?:const|let|var)\s+(?:HEALTH_DOT|healthDots|healthDotMap|healthPresentation|storageHealthPresentation)\s*=\s*\{([\s\S]*?)\n\};?/g,
+    message:
+      'Do not define local storage health presentation maps in component code. Use the shared storage health presentation utility instead.',
+    validate: (snippet) =>
+      containsAny(snippet, STORAGE_HEALTH_TOKENS) && /(?:bg-|text-)/.test(snippet),
   },
   {
     rule: 'canonical-source/no-local-source-option-array',
@@ -336,6 +433,110 @@ const MAP_RULES = [
     validate: () => true,
   },
   {
+    rule: 'canonical-ai/no-local-provider-health-presentation-helper',
+    regex:
+      /\b(?:const|function)\s+(?:getProviderHealthBadgeClass|getProviderHealthLabel)\b/g,
+    message:
+      'Do not define local AI provider health presentation helpers in component code. Use @/utils/aiProviderHealthPresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-ai/no-local-approval-risk-presentation-helper',
+    regex: /\b(?:const|function)\s+riskBadgeColor\b/g,
+    message:
+      'Do not define local approval risk badge helpers in component or page code. Use @/utils/approvalRiskPresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-ai/no-inline-approval-risk-badge-ternary',
+    regex:
+      /(?:riskLevel|risk_level)\s*===\s*['"]high['"][\s\S]{0,220}(?:riskLevel|risk_level)\s*===\s*['"]medium['"]/g,
+    message:
+      'Do not inline approval risk badge ternaries in component or page code. Use @/utils/approvalRiskPresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-alerts/no-local-severity-badge-helper',
+    regex: /\b(?:const|function)\s+severityBadgeClass\b/g,
+    message:
+      'Do not define local alert severity badge helpers in component or page code. Use @/utils/alertSeverityPresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-recovery/no-local-outcome-badge-helper',
+    regex: /\b(?:const|function)\s+outcomeBadgeClass\b/g,
+    message:
+      'Do not define local recovery outcome badge helpers in component or page code. Use @/utils/recoveryOutcomePresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-recovery/no-local-normalize-outcome',
+    regex: /\b(?:const|function)\s+normalizeOutcome\b/g,
+    message:
+      'Do not define local recovery outcome normalizers in component, page, or hook code. Use @/utils/recoveryOutcomePresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-recovery/no-local-outcome-badge-map',
+    regex: /\b(?:const|let|var)\s+OUTCOME_BADGE_CLASS\s*=\s*\{/g,
+    message:
+      'Do not define local recovery outcome badge maps in component or page code. Use @/utils/recoveryOutcomePresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-ai/no-inline-patrol-run-status-ternary',
+    regex:
+      /run\.status\s*===\s*['"]critical['"][\s\S]{0,260}run\.status\s*===\s*['"]issues_found['"]/g,
+    message:
+      'Do not inline patrol run status badge ternaries in component code. Use @/utils/patrolRunPresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-ai/no-inline-tool-call-result-badge-ternary',
+    regex: /call\.success\s*\?[\s\S]{0,180}bg-green-100[\s\S]{0,180}bg-red-100/g,
+    message:
+      'Do not inline tool call result badge color ternaries in component code. Use @/utils/patrolRunPresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-ai/no-local-tool-execution-status-helper',
+    regex: /\b(?:const|function)\s+statusColor\b/g,
+    message:
+      'Do not define local tool execution status color helpers in AI components. Use @/utils/patrolRunPresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-status/no-inline-offline-degraded-badge-ternary',
+    regex:
+      /problem\s*===\s*['"]Offline['"][\s\S]{0,220}problem\s*===\s*['"]Degraded['"]/g,
+    message:
+      'Do not inline Offline/Degraded badge ternaries in component or page code. Use the shared status presentation helpers instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-ai/no-inline-finding-severity-count-badge-ternary',
+    regex:
+      /criticalFindings\s*>\s*0[\s\S]{0,200}bg-red-100[\s\S]{0,200}bg-amber-100/g,
+    message:
+      'Do not inline finding severity count badge ternaries in page code. Use shared AI finding severity presentation helpers instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-status/no-local-semantic-tone-maps',
+    regex: /\b(?:const|let|var)\s+(?:statusColors|iconColors)\s*=\s*\{/g,
+    message:
+      'Do not define local semantic tone maps in component code. Use @/utils/semanticTonePresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-settings/no-inline-cluster-endpoint-status-color',
+    regex:
+      /endpoint\.online\s*&&\s*pulseStatus\s*===\s*['"]reachable['"][\s\S]{0,260}pulseStatus\s*===\s*['"]unreachable['"]/g,
+    message:
+      'Do not inline cluster endpoint status-color logic in settings UI. Use @/utils/clusterEndpointPresentation instead.',
+    validate: () => true,
+  },
+  {
     rule: 'canonical-license/no-local-tier-or-feature-label-map',
     regex:
       /\b(?:const|let|var)\s+(?:TIER_LABELS|FEATURE_LABELS|tierLabel|featureMinTier)\s*=\s*\{([\s\S]*?)\n\};?/g,
@@ -343,6 +544,22 @@ const MAP_RULES = [
       'Do not define local license tier or feature label maps in component code. Use @/utils/licensePresentation instead.',
     validate: (snippet) =>
       containsAny(snippet, LICENSE_TIER_TOKENS) || containsAny(snippet, LICENSE_FEATURE_TOKENS),
+  },
+  {
+    rule: 'canonical-license/no-local-subscription-status-presentation',
+    regex:
+      /\b(?:const|function)\s+(?:statusLabel|statusTone)\b[\s\S]{0,900}subscriptionState\(\)/g,
+    message:
+      'Do not define local subscription status label/tone helpers in component code. Use @/utils/licensePresentation instead.',
+    validate: () => true,
+  },
+  {
+    rule: 'canonical-security/no-local-security-score-presentation',
+    regex:
+      /\b(?:const|function)\s+(?:scoreTone|scoreLabel)\b[\s\S]{0,1200}securityScore\(\)/g,
+    message:
+      'Do not define local security score tone/label helpers in component code. Use @/utils/securityScorePresentation instead.',
+    validate: () => true,
   },
   {
     rule: 'canonical-type/no-local-type-label-map',

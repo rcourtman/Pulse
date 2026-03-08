@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getCephHealthPresentation,
   getCephHealthLabel,
   getCephHealthStyles,
   isCephType,
@@ -41,14 +42,17 @@ describe('storageDomain', () => {
   describe('getCephHealthLabel', () => {
     it('maps health values to labels', () => {
       const cases: Array<[string | null | undefined, string]> = [
-        [undefined, 'CEPH'],
-        [null, 'CEPH'],
+        [undefined, 'UNKNOWN'],
+        [null, 'UNKNOWN'],
+        ['OK', 'OK'],
         ['HEALTH_OK', 'OK'],
+        ['WARN', 'WARN'],
         ['HEALTH_WARN', 'WARN'],
-        ['HEALTH_WARNING', 'WARNING'],
-        ['HEALTH_ERR', 'ERR'],
+        ['HEALTH_WARNING', 'WARN'],
+        ['HEALTH_ERR', 'ERROR'],
         ['HEALTH_ERROR', 'ERROR'],
-        ['HEALTH_CRIT', 'CRIT'],
+        ['HEALTH_CRIT', 'ERROR'],
+        ['CRITICAL', 'ERROR'],
         ['HEALTH_UNKNOWN', 'UNKNOWN'],
       ];
 
@@ -61,12 +65,16 @@ describe('storageDomain', () => {
   describe('getCephHealthStyles', () => {
     it('maps health values to style classes', () => {
       const cases: Array<[string | null | undefined, string]> = [
+        ['OK', CEPH_HEALTH_OK_STYLES],
         ['HEALTH_OK', CEPH_HEALTH_OK_STYLES],
+        ['WARN', CEPH_HEALTH_WARNING_STYLES],
         ['HEALTH_WARN', CEPH_HEALTH_WARNING_STYLES],
         ['HEALTH_WARNING', CEPH_HEALTH_WARNING_STYLES],
+        ['ERROR', CEPH_HEALTH_CRITICAL_STYLES],
         ['HEALTH_ERR', CEPH_HEALTH_CRITICAL_STYLES],
         ['HEALTH_ERROR', CEPH_HEALTH_CRITICAL_STYLES],
         ['HEALTH_CRIT', CEPH_HEALTH_CRITICAL_STYLES],
+        ['CRITICAL', CEPH_HEALTH_CRITICAL_STYLES],
         ['HEALTH_UNKNOWN', CEPH_HEALTH_DEFAULT_STYLES],
         [undefined, CEPH_HEALTH_DEFAULT_STYLES],
         [null, CEPH_HEALTH_DEFAULT_STYLES],
@@ -74,6 +82,31 @@ describe('storageDomain', () => {
 
       cases.forEach(([health, expected]) => {
         expect(getCephHealthStyles(health)).toBe(expected);
+      });
+    });
+  });
+
+  describe('getCephHealthPresentation', () => {
+    it('returns a complete canonical Ceph health presentation contract', () => {
+      expect(getCephHealthPresentation('HEALTH_OK')).toEqual({
+        label: 'OK',
+        badgeClass: CEPH_HEALTH_OK_STYLES,
+        dotClass: 'bg-green-500',
+      });
+      expect(getCephHealthPresentation('HEALTH_WARN')).toEqual({
+        label: 'WARN',
+        badgeClass: CEPH_HEALTH_WARNING_STYLES,
+        dotClass: 'bg-yellow-500',
+      });
+      expect(getCephHealthPresentation('CRITICAL')).toEqual({
+        label: 'ERROR',
+        badgeClass: CEPH_HEALTH_CRITICAL_STYLES,
+        dotClass: 'bg-red-500',
+      });
+      expect(getCephHealthPresentation(undefined)).toEqual({
+        label: 'UNKNOWN',
+        badgeClass: CEPH_HEALTH_DEFAULT_STYLES,
+        dotClass: 'bg-blue-500',
       });
     });
   });

@@ -37,6 +37,13 @@ const FINDING_SEVERITY_CLASSES: Record<string, string> = {
   watch: 'border-border bg-surface-alt text-base-content',
 };
 
+const FINDING_SEVERITY_TONE_CLASSES: Record<string, string> = {
+  critical: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  info: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+  watch: 'bg-surface-alt text-base-content',
+};
+
 const INVESTIGATION_STATUS_CLASSES: Record<InvestigationStatus, string> = {
   pending: 'border-border bg-surface-alt text-muted',
   running:
@@ -100,6 +107,10 @@ export const getFindingSourceBadgeClasses = (source: UnifiedFinding['source'] | 
 export const getFindingSeverityBadgeClasses = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_CLASSES[severity] || DEFAULT_BADGE_CLASSES;
+
+export const getFindingSeverityToneClasses = (
+  severity: UnifiedFinding['severity'] | string,
+): string => FINDING_SEVERITY_TONE_CLASSES[severity] || 'bg-surface-alt text-muted';
 
 export const getInvestigationStatusBadgeClasses = (status: InvestigationStatus): string =>
   INVESTIGATION_STATUS_CLASSES[status] || DEFAULT_BADGE_CLASSES;
