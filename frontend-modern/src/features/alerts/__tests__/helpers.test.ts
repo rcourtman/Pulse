@@ -9,6 +9,7 @@ import {
   createDefaultResolveNotifications,
   createDefaultAppriseConfig,
   createDefaultEmailConfig,
+  alertTypeDisplayLabel,
 } from '@/features/alerts/helpers';
 
 describe('alerts helpers', () => {
@@ -159,6 +160,60 @@ describe('alerts helpers', () => {
       expect(result.enabled).toBe(false);
       expect(result.from).toBe('');
       expect(result.to).toEqual([]);
+    });
+  });
+
+  describe('alertTypeDisplayLabel', () => {
+    it('maps standard metric types to uppercase', () => {
+      expect(alertTypeDisplayLabel('cpu')).toBe('CPU');
+      expect(alertTypeDisplayLabel('memory')).toBe('Memory');
+      expect(alertTypeDisplayLabel('disk')).toBe('Disk');
+      expect(alertTypeDisplayLabel('io')).toBe('I/O');
+      expect(alertTypeDisplayLabel('swap')).toBe('Swap');
+    });
+
+    it('maps camelCase metric types', () => {
+      expect(alertTypeDisplayLabel('diskRead')).toBe('Disk Read');
+      expect(alertTypeDisplayLabel('diskWrite')).toBe('Disk Write');
+      expect(alertTypeDisplayLabel('networkIn')).toBe('Network In');
+      expect(alertTypeDisplayLabel('networkOut')).toBe('Network Out');
+    });
+
+    it('maps compound docker alert types', () => {
+      expect(alertTypeDisplayLabel('docker-container-oom-kill')).toBe('OOM Kill');
+      expect(alertTypeDisplayLabel('docker-container-restart-loop')).toBe('Restart Loop');
+      expect(alertTypeDisplayLabel('docker-container-health')).toBe('Container Health');
+      expect(alertTypeDisplayLabel('docker-container-state')).toBe('Container State');
+      expect(alertTypeDisplayLabel('docker-container-memory-limit')).toBe('Memory Limit');
+      expect(alertTypeDisplayLabel('docker-service-health')).toBe('Service Health');
+    });
+
+    it('maps storage/backup alert types', () => {
+      expect(alertTypeDisplayLabel('snapshot-age')).toBe('Snapshot Age');
+      expect(alertTypeDisplayLabel('backup-age')).toBe('Backup Age');
+      expect(alertTypeDisplayLabel('zfs-pool-state')).toBe('Pool State');
+      expect(alertTypeDisplayLabel('zfs-pool-errors')).toBe('Pool Errors');
+      expect(alertTypeDisplayLabel('disk-health')).toBe('Disk Health');
+      expect(alertTypeDisplayLabel('disk-wearout')).toBe('Disk Wearout');
+    });
+
+    it('maps infrastructure alert types', () => {
+      expect(alertTypeDisplayLabel('host-offline')).toBe('Host Offline');
+      expect(alertTypeDisplayLabel('offline')).toBe('Offline');
+      expect(alertTypeDisplayLabel('powered-off')).toBe('Powered Off');
+      expect(alertTypeDisplayLabel('connectivity')).toBe('Connectivity');
+    });
+
+    it('title-cases unknown kebab-case types', () => {
+      expect(alertTypeDisplayLabel('some-new-type')).toBe('Some New Type');
+    });
+
+    it('title-cases unknown underscore types', () => {
+      expect(alertTypeDisplayLabel('some_new_type')).toBe('Some New Type');
+    });
+
+    it('handles single-word unknown types', () => {
+      expect(alertTypeDisplayLabel('unknown')).toBe('Unknown');
     });
   });
 });

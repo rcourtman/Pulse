@@ -243,6 +243,109 @@ export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
   }
 }
 
+/**
+ * Maps raw backend alert type strings to human-readable display labels.
+ * Falls back to title-casing with hyphens replaced by spaces for unknown types.
+ */
+export function alertTypeDisplayLabel(type: string): string {
+  switch (type) {
+    // Standard metric types
+    case 'cpu':
+      return 'CPU';
+    case 'memory':
+      return 'Memory';
+    case 'disk':
+    case 'disk-usage':
+      return 'Disk';
+    case 'usage':
+      return 'Usage';
+    case 'diskRead':
+      return 'Disk Read';
+    case 'diskWrite':
+      return 'Disk Write';
+    case 'networkIn':
+      return 'Network In';
+    case 'networkOut':
+      return 'Network Out';
+    case 'network':
+      return 'Network';
+    case 'io':
+      return 'I/O';
+    case 'swap':
+      return 'Swap';
+    case 'load':
+      return 'Load';
+    case 'temperature':
+    case 'disk_temperature':
+    case 'diskTemperature':
+      return 'Temperature';
+
+    // Container/Docker alert types
+    case 'docker-container-oom-kill':
+      return 'OOM Kill';
+    case 'docker-container-restart-loop':
+      return 'Restart Loop';
+    case 'docker-container-health':
+      return 'Container Health';
+    case 'docker-container-state':
+      return 'Container State';
+    case 'docker-container-memory-limit':
+      return 'Memory Limit';
+    case 'docker-container-cpu':
+      return 'Container CPU';
+    case 'docker-container-disk':
+      return 'Container Disk';
+    case 'docker-container-update':
+      return 'Update Available';
+    case 'docker-service-health':
+      return 'Service Health';
+    case 'docker-host-offline':
+      return 'Host Offline';
+
+    // Infrastructure alert types
+    case 'host-offline':
+      return 'Host Offline';
+    case 'offline':
+      return 'Offline';
+    case 'powered-off':
+      return 'Powered Off';
+    case 'connectivity':
+      return 'Connectivity';
+    case 'node':
+      return 'Node';
+
+    // Storage/backup alert types
+    case 'snapshot-age':
+      return 'Snapshot Age';
+    case 'backup-age':
+      return 'Backup Age';
+    case 'zfs-pool-state':
+      return 'Pool State';
+    case 'zfs-pool-errors':
+      return 'Pool Errors';
+    case 'zfs-device':
+      return 'ZFS Device';
+    case 'disk-health':
+      return 'Disk Health';
+    case 'disk-wearout':
+      return 'Disk Wearout';
+    case 'raid':
+      return 'RAID';
+
+    // Other
+    case 'pbs':
+      return 'PBS';
+    case 'message-age':
+      return 'Message Age';
+
+    default:
+      // Title-case with hyphens/underscores replaced by spaces
+      return type
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
 // Shared adapters for guest resource details used by ThresholdsTable.
 export const platformData = (r: Resource): Record<string, unknown> | undefined =>
   r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;

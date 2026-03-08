@@ -7,6 +7,7 @@ import type { Incident } from '@/types/api';
 import { AlertsAPI } from '@/api/alerts';
 import type { Alert, IncidentEvent } from '@/types/api';
 import type { Override } from './types';
+import { alertTypeDisplayLabel } from './helpers';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { notificationStore } from '@/stores/notifications';
@@ -545,7 +546,7 @@ export function OverviewTab(props: {
                           >
                             {alert.resourceName}
                           </span>
-                          <span class="text-xs text-muted">({alert.type})</span>
+                          <span class="text-xs text-muted">({alertTypeDisplayLabel(alert.type)})</span>
                           <Show when={alert.node}>
                             <span class="text-xs text-muted">
                               on {alert.nodeDisplayName || alert.node}
