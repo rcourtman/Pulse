@@ -95,6 +95,7 @@ jobs:
             ./pkg/metrics/ \
             ./pkg/auth/ \
             ./internal/api/ \
+            ./internal/monitoring/ \
             ./internal/unifiedresources/ \
             ./internal/dockeragent/ \
             ./cmd/pulse-agent/ \
