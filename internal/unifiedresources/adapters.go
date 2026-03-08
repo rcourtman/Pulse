@@ -771,10 +771,11 @@ func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIde
 
 func resourceFromPBSDatastore(instance models.PBSInstance, datastore models.PBSDatastore) (Resource, ResourceIdentity) {
 	name := strings.TrimSpace(datastore.Name)
-	status := statusFromString(datastore.Status)
-	if strings.TrimSpace(datastore.Error) != "" && status == StatusOnline {
-		status = StatusWarning
-	}
+	assessment := storagehealth.AssessPBSDatastore(datastore)
+	risk := storageRiskFromAssessment(assessment)
+	status := storageStatus(statusFromString(datastore.Status), risk)
+	incidents := incidentsFromAssessment("pulse", string(SourcePBS), "pbs-datastore:"+name, assessment, instance.LastSeen)
+	status = incidentsStatus(status, incidents)
 
 	resource := Resource{
 		Type:      ResourceTypeStorage,
@@ -790,7 +791,9 @@ func resourceFromPBSDatastore(instance models.PBSInstance, datastore models.PBSD
 			Protection:   "backup-repository",
 			Content:      "backup",
 			ContentTypes: []string{"backup"},
+			Risk:         risk,
 		},
+		Incidents: incidents,
 		Tags: []string{
 			"pbs",
 			"datastore",

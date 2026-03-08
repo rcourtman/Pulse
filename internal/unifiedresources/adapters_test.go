@@ -257,6 +257,42 @@ func TestResourceFromStorageDerivesZFSTopologyRisk(t *testing.T) {
 	}
 }
 
+func TestResourceFromPBSDatastoreDerivesRiskAndIncidents(t *testing.T) {
+	now := time.Now().UTC()
+	instance := models.PBSInstance{
+		ID:       "pbs-1",
+		Name:     "pbs-main",
+		Host:     "https://pbs-main.local:8007",
+		LastSeen: now,
+	}
+	datastore := models.PBSDatastore{
+		Name:   "backup-store",
+		Status: "online",
+		Total:  100,
+		Used:   96,
+	}
+
+	resource, _ := resourceFromPBSDatastore(instance, datastore)
+	if resource.Status != StatusWarning {
+		t.Fatalf("Status = %q, want %q", resource.Status, StatusWarning)
+	}
+	if resource.Storage == nil || resource.Storage.Risk == nil {
+		t.Fatalf("expected PBS datastore risk payload, got %+v", resource.Storage)
+	}
+	if resource.Storage.Risk.Level != storagehealth.RiskCritical {
+		t.Fatalf("risk level = %q, want %q", resource.Storage.Risk.Level, storagehealth.RiskCritical)
+	}
+	if len(resource.Incidents) != 1 {
+		t.Fatalf("expected 1 datastore incident, got %+v", resource.Incidents)
+	}
+	if resource.Incidents[0].Code != "capacity_runway_low" {
+		t.Fatalf("incident code = %q, want capacity_runway_low", resource.Incidents[0].Code)
+	}
+	if resource.Incidents[0].Source != "pbs" {
+		t.Fatalf("incident source = %q, want pbs", resource.Incidents[0].Source)
+	}
+}
+
 func TestResourceFromHostUnraidStorageIncludesTopologyMetadata(t *testing.T) {
 	host := models.Host{
 		ID:          "tower-host",

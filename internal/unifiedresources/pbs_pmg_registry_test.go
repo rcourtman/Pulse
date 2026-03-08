@@ -12,17 +12,22 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	snapshot := models.StateSnapshot{
 		PBSInstances: []models.PBSInstance{
 			{
-				ID:               "pbs-1",
-				Name:             "pbs-main",
-				Host:             "https://pbs.example.com:8007",
-				Status:           "online",
-				Version:          "3.2.1",
-				CPU:              22.5,
-				Memory:           48.0,
-				MemoryUsed:       8 * 1024 * 1024 * 1024,
-				MemoryTotal:      16 * 1024 * 1024 * 1024,
-				Uptime:           86400,
-				Datastores:       []models.PBSDatastore{{Name: "fast"}},
+				ID:          "pbs-1",
+				Name:        "pbs-main",
+				Host:        "https://pbs.example.com:8007",
+				Status:      "online",
+				Version:     "3.2.1",
+				CPU:         22.5,
+				Memory:      48.0,
+				MemoryUsed:  8 * 1024 * 1024 * 1024,
+				MemoryTotal: 16 * 1024 * 1024 * 1024,
+				Uptime:      86400,
+				Datastores: []models.PBSDatastore{{
+					Name:   "fast",
+					Status: "online",
+					Total:  100,
+					Used:   96,
+				}},
 				BackupJobs:       []models.PBSBackupJob{{ID: "job-1"}},
 				ConnectionHealth: "online",
 				LastSeen:         now,
@@ -109,6 +114,15 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	}
 	if datastoreResource.Storage.Platform != "pbs" || datastoreResource.Storage.Topology != "datastore" {
 		t.Fatalf("expected PBS datastore platform/topology, got %+v", datastoreResource.Storage)
+	}
+	if datastoreResource.Status != StatusWarning {
+		t.Fatalf("expected PBS datastore warning status from derived risk, got %q", datastoreResource.Status)
+	}
+	if datastoreResource.Storage.Risk == nil || len(datastoreResource.Storage.Risk.Reasons) == 0 {
+		t.Fatalf("expected PBS datastore risk payload, got %+v", datastoreResource.Storage)
+	}
+	if len(datastoreResource.Incidents) == 0 || datastoreResource.Incidents[0].Code != "capacity_runway_low" {
+		t.Fatalf("expected PBS datastore incidents, got %+v", datastoreResource.Incidents)
 	}
 	if datastoreResource.ParentID == nil || *datastoreResource.ParentID != pbsResource.ID {
 		t.Fatalf("expected PBS datastore to be parented under PBS instance, got %+v", datastoreResource.ParentID)

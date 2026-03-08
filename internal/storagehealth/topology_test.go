@@ -93,3 +93,37 @@ func TestAssessUnraidStorageSyncInProgress(t *testing.T) {
 		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
 	}
 }
+
+func TestAssessPBSDatastoreUnavailable(t *testing.T) {
+	assessment := AssessPBSDatastore(models.PBSDatastore{
+		Name:   "backup-store",
+		Status: "offline",
+		Error:  "I/O error",
+	})
+
+	if assessment.Level != RiskCritical {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskCritical)
+	}
+	if len(assessment.Reasons) < 2 {
+		t.Fatalf("expected multiple reasons, got %+v", assessment.Reasons)
+	}
+	if assessment.Reasons[0].Code != "pbs_datastore_error" && assessment.Reasons[0].Code != "pbs_datastore_state" {
+		t.Fatalf("unexpected first reason %+v", assessment.Reasons[0])
+	}
+}
+
+func TestAssessPBSDatastoreHighUsage(t *testing.T) {
+	assessment := AssessPBSDatastore(models.PBSDatastore{
+		Name:   "backup-store",
+		Status: "online",
+		Total:  100,
+		Used:   93,
+	})
+
+	if assessment.Level != RiskWarning {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
+	}
+	if len(assessment.Reasons) == 0 || assessment.Reasons[0].Code != "capacity_runway_low" {
+		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
+	}
+}

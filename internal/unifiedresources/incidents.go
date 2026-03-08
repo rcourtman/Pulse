@@ -1,6 +1,11 @@
 package unifiedresources
 
-import "github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+import (
+	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+)
 
 func mergeResourceIncidents(existing, incoming []ResourceIncident) []ResourceIncident {
 	if len(existing) == 0 {
@@ -69,4 +74,40 @@ func incidentSeverityRank(level storagehealth.RiskLevel) int {
 	default:
 		return 0
 	}
+}
+
+func incidentsFromAssessment(provider, source, nativeIDPrefix string, assessment storagehealth.Assessment, startedAt time.Time) []ResourceIncident {
+	if len(assessment.Reasons) == 0 {
+		return nil
+	}
+
+	provider = strings.TrimSpace(provider)
+	source = strings.TrimSpace(source)
+	nativeIDPrefix = strings.TrimSpace(nativeIDPrefix)
+
+	incidents := make([]ResourceIncident, 0, len(assessment.Reasons))
+	for _, reason := range assessment.Reasons {
+		code := strings.TrimSpace(reason.Code)
+		summary := strings.TrimSpace(reason.Summary)
+		if code == "" || summary == "" {
+			continue
+		}
+		nativeID := code
+		if nativeIDPrefix != "" {
+			nativeID = nativeIDPrefix + ":" + code
+		}
+		incidents = append(incidents, ResourceIncident{
+			Provider:  provider,
+			NativeID:  nativeID,
+			Code:      code,
+			Severity:  reason.Severity,
+			Source:    source,
+			Summary:   summary,
+			StartedAt: startedAt,
+		})
+	}
+	if len(incidents) == 0 {
+		return nil
+	}
+	return incidents
 }

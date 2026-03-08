@@ -156,6 +156,55 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 	return assessment
 }
 
+func AssessPBSDatastore(datastore models.PBSDatastore) Assessment {
+	assessment := Assessment{Level: RiskHealthy}
+	addReason := func(code string, severity RiskLevel, summary string) {
+		assessment.Reasons = append(assessment.Reasons, Reason{
+			Code:     code,
+			Severity: severity,
+			Summary:  summary,
+		})
+		if severityRank(severity) > severityRank(assessment.Level) {
+			assessment.Level = severity
+		}
+	}
+
+	name := strings.TrimSpace(datastore.Name)
+	if name == "" {
+		name = "datastore"
+	}
+
+	status := strings.ToUpper(strings.TrimSpace(datastore.Status))
+	switch status {
+	case "OFFLINE", "UNAVAILABLE", "ERROR", "FAILED":
+		addReason("pbs_datastore_state", RiskCritical, fmt.Sprintf("PBS datastore %s is %s", name, status))
+	case "DEGRADED", "WARN", "WARNING", "READ_ONLY":
+		addReason("pbs_datastore_state", RiskWarning, fmt.Sprintf("PBS datastore %s is %s", name, status))
+	}
+
+	if errText := strings.TrimSpace(datastore.Error); errText != "" {
+		severity := RiskWarning
+		if assessment.Level == RiskCritical {
+			severity = RiskCritical
+		}
+		addReason("pbs_datastore_error", severity, fmt.Sprintf("PBS datastore %s reports %s", name, errText))
+	}
+
+	usage := datastore.Usage
+	if usage <= 0 && datastore.Total > 0 {
+		usage = (float64(datastore.Used) / float64(datastore.Total)) * 100
+	}
+	switch {
+	case usage >= 95:
+		addReason("capacity_runway_low", RiskCritical, fmt.Sprintf("PBS datastore %s is %.0f%% full", name, usage))
+	case usage >= 90:
+		addReason("capacity_runway_low", RiskWarning, fmt.Sprintf("PBS datastore %s is %.0f%% full", name, usage))
+	}
+
+	sortReasons(&assessment)
+	return assessment
+}
+
 func SummarizeAssessments(assessments ...Assessment) Assessment {
 	summary := Assessment{Level: RiskHealthy}
 	for _, assessment := range assessments {
