@@ -480,6 +480,7 @@ func TestView_HostViewAccessors(t *testing.T) {
 		IncidentCode:     "truenas_volume_status",
 		IncidentSeverity: storagehealth.RiskCritical,
 		IncidentSummary:  "Pool tank is FAULTED",
+		IncidentCategory: IncidentCategoryHealth,
 		LastSeen:         now,
 		Tags:             []string{"linux", "site:1"},
 		Agent: &AgentData{
@@ -586,8 +587,8 @@ func TestView_HostViewAccessors(t *testing.T) {
 	if v.Status() != StatusOnline {
 		t.Fatalf("expected Status %q, got %q", StatusOnline, v.Status())
 	}
-	if v.IncidentCount() != 1 || v.IncidentCode() != "truenas_volume_status" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "Pool tank is FAULTED" {
-		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary())
+	if v.IncidentCount() != 1 || v.IncidentCode() != "truenas_volume_status" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "Pool tank is FAULTED" || v.IncidentCategory() != IncidentCategoryHealth {
+		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory())
 	}
 	assertStringSlice(t, v.Tags(), []string{"linux", "site:1"})
 	if !v.LastSeen().Equal(now) {
@@ -727,6 +728,7 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 		IncidentCode:     "zfs_pool_state",
 		IncidentSeverity: storagehealth.RiskWarning,
 		IncidentSummary:  "ZFS pool local-zfs is DEGRADED",
+		IncidentCategory: IncidentCategoryProtection,
 		LastSeen:         now,
 		Tags:             []string{"fast"},
 		ParentID:         &parentID,
@@ -762,8 +764,8 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	if v.ID() != "storage-1" || v.Name() != "local-zfs" || v.Status() != StatusOnline {
 		t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
 	}
-	if v.IncidentCount() != 1 || v.IncidentCode() != "zfs_pool_state" || v.IncidentSeverity() != storagehealth.RiskWarning || v.IncidentSummary() != "ZFS pool local-zfs is DEGRADED" {
-		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary())
+	if v.IncidentCount() != 1 || v.IncidentCode() != "zfs_pool_state" || v.IncidentSeverity() != storagehealth.RiskWarning || v.IncidentSummary() != "ZFS pool local-zfs is DEGRADED" || v.IncidentCategory() != IncidentCategoryProtection {
+		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory())
 	}
 	if v.Node() != "pve-a" || v.Instance() != "lab" || v.SourceID() != "local-zfs" {
 		t.Fatalf("expected node/instance/sourceID %q/%q/%q, got %q/%q/%q", "pve-a", "lab", "local-zfs", v.Node(), v.Instance(), v.SourceID())
@@ -828,6 +830,7 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			IncidentCode:     "capacity_runway_low",
 			IncidentSeverity: storagehealth.RiskCritical,
 			IncidentSummary:  "PBS datastore fast is 96% full",
+			IncidentCategory: IncidentCategoryRecoverability,
 			LastSeen:         now,
 			Tags:             []string{"backup"},
 			CustomURL:        "https://pbs.example/ui",
@@ -861,8 +864,8 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		if v.ID() != "pbs-1" || v.Name() != "pbs-a" || v.Status() != StatusOnline {
 			t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
 		}
-		if v.IncidentCount() != 1 || v.IncidentCode() != "capacity_runway_low" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "PBS datastore fast is 96% full" {
-			t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary())
+		if v.IncidentCount() != 1 || v.IncidentCode() != "capacity_runway_low" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "PBS datastore fast is 96% full" || v.IncidentCategory() != IncidentCategoryRecoverability {
+			t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory())
 		}
 		if v.Hostname() != "pbs.example" || v.Version() != "3.2" || v.UptimeSeconds() != 100 {
 			t.Fatalf("expected hostname/version/uptime to match, got %q/%q/%d", v.Hostname(), v.Version(), v.UptimeSeconds())

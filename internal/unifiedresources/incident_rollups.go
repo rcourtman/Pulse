@@ -48,6 +48,7 @@ func refreshResourceIncidentRollup(resource *Resource) {
 	resource.IncidentCode = strings.TrimSpace(best.Code)
 	resource.IncidentSeverity = best.Severity
 	resource.IncidentSummary = strings.TrimSpace(best.Summary)
+	resource.IncidentCategory = IncidentCategoryForResource(resource, best)
 }
 
 func incidentSummaryPreference(resource *Resource, incident ResourceIncident) int {

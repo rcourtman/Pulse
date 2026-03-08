@@ -2033,6 +2033,9 @@ func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
 	if resource.IncidentSummary != "PBS datastore fast is 96% full" {
 		t.Fatalf("incidentSummary = %q", resource.IncidentSummary)
 	}
+	if resource.IncidentCategory != unified.IncidentCategoryRecoverability {
+		t.Fatalf("incidentCategory = %q, want %q", resource.IncidentCategory, unified.IncidentCategoryRecoverability)
+	}
 }
 
 func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {

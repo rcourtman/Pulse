@@ -879,6 +879,13 @@ func (v HostView) IncidentSummary() string {
 	return v.r.IncidentSummary
 }
 
+func (v HostView) IncidentCategory() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCategory
+}
+
 func (v HostView) Tags() []string {
 	if v.r == nil {
 		return nil
@@ -1316,6 +1323,13 @@ func (v StoragePoolView) IncidentSummary() string {
 	return v.r.IncidentSummary
 }
 
+func (v StoragePoolView) IncidentCategory() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCategory
+}
+
 func (v StoragePoolView) Node() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -1597,6 +1611,13 @@ func (v PBSInstanceView) IncidentSummary() string {
 		return ""
 	}
 	return v.r.IncidentSummary
+}
+
+func (v PBSInstanceView) IncidentCategory() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCategory
 }
 
 func (v PBSInstanceView) Hostname() string {

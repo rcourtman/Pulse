@@ -101,6 +101,9 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	if got := alert.Metadata["consumerImpactSummary"]; got != "Affects 3 dependent resources: app01, media01, and 1 more" {
 		t.Fatalf("consumerImpactSummary = %v", got)
 	}
+	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryCapacity {
+		t.Fatalf("incidentCategory = %v", got)
+	}
 	if got := alert.Metadata["topConsumerNames"]; got == nil {
 		t.Fatal("expected topConsumerNames metadata")
 	}
@@ -161,6 +164,9 @@ func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	}
 	if got := alert.Metadata["protectedWorkloadSummary"]; got != "Puts backups for 2 protected workloads at risk: app01, media01" {
 		t.Fatalf("protectedWorkloadSummary = %v", got)
+	}
+	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryRecoverability {
+		t.Fatalf("incidentCategory = %v", got)
 	}
 }
 
@@ -228,6 +234,9 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 	}
 	if got := alert.Metadata["protectedWorkloadSummary"]; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
 		t.Fatalf("protectedWorkloadSummary = %v", got)
+	}
+	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryRecoverability {
+		t.Fatalf("incidentCategory = %v", got)
 	}
 }
 

@@ -39,6 +39,7 @@ type Resource struct {
 	IncidentCode     string                  `json:"incidentCode,omitempty"`
 	IncidentSeverity storagehealth.RiskLevel `json:"incidentSeverity,omitempty"`
 	IncidentSummary  string                  `json:"incidentSummary,omitempty"`
+	IncidentCategory string                  `json:"incidentCategory,omitempty"`
 
 	// Source-specific payloads
 	Proxmox      *ProxmoxData      `json:"proxmox,omitempty"`

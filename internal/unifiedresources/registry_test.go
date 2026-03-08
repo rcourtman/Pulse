@@ -926,7 +926,7 @@ func TestResourceRegistry_IngestResourcesDerivesPrimaryIncidentRollups(t *testin
 	if !ok {
 		t.Fatal("expected storage resource")
 	}
-	if storage.IncidentCount != 2 || storage.IncidentCode != "zfs_pool_state" || storage.IncidentSeverity != storagehealth.RiskWarning || storage.IncidentSummary != "ZFS pool tank is DEGRADED" {
+	if storage.IncidentCount != 2 || storage.IncidentCode != "zfs_pool_state" || storage.IncidentSeverity != storagehealth.RiskWarning || storage.IncidentSummary != "ZFS pool tank is DEGRADED" || storage.IncidentCategory != IncidentCategoryProtection {
 		t.Fatalf("unexpected storage incident rollup %+v", storage)
 	}
 
@@ -934,7 +934,7 @@ func TestResourceRegistry_IngestResourcesDerivesPrimaryIncidentRollups(t *testin
 	if !ok {
 		t.Fatal("expected pbs resource")
 	}
-	if pbs.IncidentCount != 2 || pbs.IncidentCode != "pbs_datastore_state" || pbs.IncidentSeverity != storagehealth.RiskWarning || pbs.IncidentSummary != "PBS datastore archive is READ_ONLY" {
+	if pbs.IncidentCount != 2 || pbs.IncidentCode != "pbs_datastore_state" || pbs.IncidentSeverity != storagehealth.RiskWarning || pbs.IncidentSummary != "PBS datastore archive is READ_ONLY" || pbs.IncidentCategory != IncidentCategoryRecoverability {
 		t.Fatalf("unexpected pbs incident rollup %+v", pbs)
 	}
 }
