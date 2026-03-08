@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 func ptrInt64(v int64) *int64 { return &v }
@@ -513,9 +514,31 @@ func TestView_HostViewAccessors(t *testing.T) {
 					},
 				},
 			},
+			StorageRisk:           &StorageRisk{Level: storagehealth.RiskCritical, Reasons: []StorageRiskReason{{Code: "unraid_parity_unavailable", Severity: storagehealth.RiskCritical, Summary: "Unraid parity protection is unavailable"}}},
+			StorageRiskSummary:    "Unraid parity protection is unavailable",
+			StoragePostureSummary: "Unraid parity protection is unavailable",
+			ProtectionReduced:     true,
+			ProtectionSummary:     "Unraid parity protection is unavailable",
+			Unraid: &HostUnraidMeta{
+				ArrayStarted:      true,
+				ArrayState:        "STARTED",
+				Risk:              &StorageRisk{Level: storagehealth.RiskCritical, Reasons: []StorageRiskReason{{Code: "unraid_parity_unavailable", Severity: storagehealth.RiskCritical, Summary: "Unraid parity protection is unavailable"}}},
+				RiskSummary:       "Unraid parity protection is unavailable",
+				PostureSummary:    "Unraid parity protection is unavailable",
+				ProtectionReduced: true,
+				ProtectionSummary: "Unraid parity protection is unavailable",
+			},
 			LinkedNodeID:      "node-99",
 			LinkedVMID:        "vm-99",
 			LinkedContainerID: "ct-99",
+		},
+		TrueNAS: &TrueNASData{
+			Hostname:              "agent-host-1",
+			StorageRisk:           &StorageRisk{Level: storagehealth.RiskWarning, Reasons: []StorageRiskReason{{Code: "zfs_pool_state", Severity: storagehealth.RiskWarning, Summary: "Pool tank is DEGRADED"}}},
+			StorageRiskSummary:    "Pool tank is DEGRADED",
+			StoragePostureSummary: "Pool tank is DEGRADED",
+			ProtectionReduced:     true,
+			ProtectionSummary:     "Pool tank is DEGRADED",
 		},
 		Metrics: &ResourceMetrics{
 			CPU:    &MetricValue{Percent: 7.7},
@@ -566,6 +589,24 @@ func TestView_HostViewAccessors(t *testing.T) {
 	if v.CPUPercent() != 7.7 || v.MemoryUsed() != 1 || v.MemoryTotal() != 4 || v.MemoryPercent() != 25 || v.DiskPercent() != 66 {
 		t.Fatalf("expected metric accessors to match, got cpu=%v memUsed=%d memTotal=%d memPct=%v diskPct=%v",
 			v.CPUPercent(), v.MemoryUsed(), v.MemoryTotal(), v.MemoryPercent(), v.DiskPercent())
+	}
+	if risk := v.StorageRisk(); risk == nil || risk.Level != storagehealth.RiskCritical {
+		t.Fatalf("expected host storage risk accessor, got %+v", risk)
+	}
+	if v.StorageRiskSummary() != "Unraid parity protection is unavailable" || v.StoragePostureSummary() != "Unraid parity protection is unavailable" {
+		t.Fatalf("expected host storage summaries, got risk=%q posture=%q", v.StorageRiskSummary(), v.StoragePostureSummary())
+	}
+	if !v.ProtectionReduced() || v.ProtectionSummary() != "Unraid parity protection is unavailable" {
+		t.Fatalf("expected host protection semantics, got reduced=%v summary=%q", v.ProtectionReduced(), v.ProtectionSummary())
+	}
+	if v.RebuildInProgress() || v.RebuildSummary() != "" {
+		t.Fatalf("expected host rebuild semantics empty, got progress=%v summary=%q", v.RebuildInProgress(), v.RebuildSummary())
+	}
+	if unraid := v.Unraid(); unraid == nil || unraid.PostureSummary != "Unraid parity protection is unavailable" {
+		t.Fatalf("expected unraid accessor to preserve posture summary, got %+v", unraid)
+	}
+	if truenas := v.TrueNAS(); truenas == nil || truenas.StoragePostureSummary != "Pool tank is DEGRADED" {
+		t.Fatalf("expected truenas accessor to preserve posture summary, got %+v", truenas)
 	}
 }
 

@@ -417,17 +417,23 @@ type HostUnraidDiskMeta struct {
 
 // HostUnraidMeta describes Unraid array topology from a host agent.
 type HostUnraidMeta struct {
-	ArrayStarted bool                 `json:"arrayStarted"`
-	ArrayState   string               `json:"arrayState,omitempty"`
-	SyncAction   string               `json:"syncAction,omitempty"`
-	SyncProgress float64              `json:"syncProgress,omitempty"`
-	SyncErrors   int64                `json:"syncErrors,omitempty"`
-	NumProtected int                  `json:"numProtected,omitempty"`
-	NumDisabled  int                  `json:"numDisabled,omitempty"`
-	NumInvalid   int                  `json:"numInvalid,omitempty"`
-	NumMissing   int                  `json:"numMissing,omitempty"`
-	Disks        []HostUnraidDiskMeta `json:"disks,omitempty"`
-	Risk         *StorageRisk         `json:"risk,omitempty"`
+	ArrayStarted      bool                 `json:"arrayStarted"`
+	ArrayState        string               `json:"arrayState,omitempty"`
+	SyncAction        string               `json:"syncAction,omitempty"`
+	SyncProgress      float64              `json:"syncProgress,omitempty"`
+	SyncErrors        int64                `json:"syncErrors,omitempty"`
+	NumProtected      int                  `json:"numProtected,omitempty"`
+	NumDisabled       int                  `json:"numDisabled,omitempty"`
+	NumInvalid        int                  `json:"numInvalid,omitempty"`
+	NumMissing        int                  `json:"numMissing,omitempty"`
+	Disks             []HostUnraidDiskMeta `json:"disks,omitempty"`
+	Risk              *StorageRisk         `json:"risk,omitempty"`
+	RiskSummary       string               `json:"riskSummary,omitempty"`
+	PostureSummary    string               `json:"postureSummary,omitempty"`
+	ProtectionReduced bool                 `json:"protectionReduced,omitempty"`
+	ProtectionSummary string               `json:"protectionSummary,omitempty"`
+	RebuildInProgress bool                 `json:"rebuildInProgress,omitempty"`
+	RebuildSummary    string               `json:"rebuildSummary,omitempty"`
 }
 
 // HostDiskIOMeta describes disk I/O counters.
@@ -557,29 +563,35 @@ type AgentMemoryMeta struct {
 
 // AgentData contains host agent-specific data.
 type AgentData struct {
-	AgentID           string             `json:"agentId,omitempty"`
-	AgentVersion      string             `json:"agentVersion,omitempty"`
-	Hostname          string             `json:"hostname,omitempty"`
-	TokenID           string             `json:"tokenId,omitempty"`
-	TokenName         string             `json:"tokenName,omitempty"`
-	TokenHint         string             `json:"tokenHint,omitempty"`
-	TokenLastUsedAt   *time.Time         `json:"tokenLastUsedAt,omitempty"`
-	Platform          string             `json:"platform,omitempty"`
-	OSName            string             `json:"osName,omitempty"`
-	OSVersion         string             `json:"osVersion,omitempty"`
-	KernelVersion     string             `json:"kernelVersion,omitempty"`
-	Architecture      string             `json:"architecture,omitempty"`
-	UptimeSeconds     int64              `json:"uptimeSeconds,omitempty"`
-	Temperature       *float64           `json:"temperature,omitempty"` // Max CPU temp in Celsius
-	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
-	Disks             []DiskInfo         `json:"disks,omitempty"`
-	Memory            *AgentMemoryMeta   `json:"memory,omitempty"`
-	Sensors           *HostSensorMeta    `json:"sensors,omitempty"`
-	RAID              []HostRAIDMeta     `json:"raid,omitempty"`
-	Unraid            *HostUnraidMeta    `json:"unraid,omitempty"`
-	DiskIO            []HostDiskIOMeta   `json:"diskIo,omitempty"`
-	Ceph              *HostCephMeta      `json:"ceph,omitempty"`
-	StorageRisk       *StorageRisk       `json:"storageRisk,omitempty"`
+	AgentID               string             `json:"agentId,omitempty"`
+	AgentVersion          string             `json:"agentVersion,omitempty"`
+	Hostname              string             `json:"hostname,omitempty"`
+	TokenID               string             `json:"tokenId,omitempty"`
+	TokenName             string             `json:"tokenName,omitempty"`
+	TokenHint             string             `json:"tokenHint,omitempty"`
+	TokenLastUsedAt       *time.Time         `json:"tokenLastUsedAt,omitempty"`
+	Platform              string             `json:"platform,omitempty"`
+	OSName                string             `json:"osName,omitempty"`
+	OSVersion             string             `json:"osVersion,omitempty"`
+	KernelVersion         string             `json:"kernelVersion,omitempty"`
+	Architecture          string             `json:"architecture,omitempty"`
+	UptimeSeconds         int64              `json:"uptimeSeconds,omitempty"`
+	Temperature           *float64           `json:"temperature,omitempty"` // Max CPU temp in Celsius
+	NetworkInterfaces     []NetworkInterface `json:"networkInterfaces,omitempty"`
+	Disks                 []DiskInfo         `json:"disks,omitempty"`
+	Memory                *AgentMemoryMeta   `json:"memory,omitempty"`
+	Sensors               *HostSensorMeta    `json:"sensors,omitempty"`
+	RAID                  []HostRAIDMeta     `json:"raid,omitempty"`
+	Unraid                *HostUnraidMeta    `json:"unraid,omitempty"`
+	DiskIO                []HostDiskIOMeta   `json:"diskIo,omitempty"`
+	Ceph                  *HostCephMeta      `json:"ceph,omitempty"`
+	StorageRisk           *StorageRisk       `json:"storageRisk,omitempty"`
+	StorageRiskSummary    string             `json:"storageRiskSummary,omitempty"`
+	StoragePostureSummary string             `json:"storagePostureSummary,omitempty"`
+	ProtectionReduced     bool               `json:"protectionReduced,omitempty"`
+	ProtectionSummary     string             `json:"protectionSummary,omitempty"`
+	RebuildInProgress     bool               `json:"rebuildInProgress,omitempty"`
+	RebuildSummary        string             `json:"rebuildSummary,omitempty"`
 	// Internal link hints to proxmox resources.
 	LinkedNodeID      string `json:"-"`
 	LinkedVMID        string `json:"-"`
@@ -831,10 +843,16 @@ type PMGData struct {
 
 // TrueNASData contains TrueNAS-specific metadata for system host resources.
 type TrueNASData struct {
-	Hostname      string       `json:"hostname,omitempty"`
-	Version       string       `json:"version,omitempty"`
-	UptimeSeconds int64        `json:"uptimeSeconds,omitempty"`
-	StorageRisk   *StorageRisk `json:"storageRisk,omitempty"`
+	Hostname              string       `json:"hostname,omitempty"`
+	Version               string       `json:"version,omitempty"`
+	UptimeSeconds         int64        `json:"uptimeSeconds,omitempty"`
+	StorageRisk           *StorageRisk `json:"storageRisk,omitempty"`
+	StorageRiskSummary    string       `json:"storageRiskSummary,omitempty"`
+	StoragePostureSummary string       `json:"storagePostureSummary,omitempty"`
+	ProtectionReduced     bool         `json:"protectionReduced,omitempty"`
+	ProtectionSummary     string       `json:"protectionSummary,omitempty"`
+	RebuildInProgress     bool         `json:"rebuildInProgress,omitempty"`
+	RebuildSummary        string       `json:"rebuildSummary,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

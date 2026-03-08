@@ -177,6 +177,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	systemSourceID := systemSourceID(snapshot.System.Hostname)
 	systemAssessment := assessSystemStorage(snapshot)
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
+	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
 	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Disks))
 
@@ -193,10 +194,16 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Disk: diskMetric(totalCapacity, totalUsed),
 			},
 			TrueNAS: &unifiedresources.TrueNASData{
-				Hostname:      strings.TrimSpace(snapshot.System.Hostname),
-				Version:       snapshot.System.Version,
-				UptimeSeconds: snapshot.System.UptimeSeconds,
-				StorageRisk:   systemRisk,
+				Hostname:              strings.TrimSpace(snapshot.System.Hostname),
+				Version:               snapshot.System.Version,
+				UptimeSeconds:         snapshot.System.UptimeSeconds,
+				StorageRisk:           systemRisk,
+				StorageRiskSummary:    unifiedresources.StorageRiskSummary(systemRisk),
+				StoragePostureSummary: unifiedresources.StorageRiskSummary(systemRisk),
+				ProtectionReduced:     protectionReduced,
+				ProtectionSummary:     protectionSummary,
+				RebuildInProgress:     rebuildInProgress,
+				RebuildSummary:        rebuildSummary,
 			},
 			Tags: []string{
 				"truenas",

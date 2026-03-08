@@ -400,8 +400,20 @@ func TestResourceFromHostDerivesStorageTopologyRisk(t *testing.T) {
 	if resource.Agent.StorageRisk.Level != storagehealth.RiskCritical {
 		t.Fatalf("risk level = %q, want %q", resource.Agent.StorageRisk.Level, storagehealth.RiskCritical)
 	}
+	if resource.Agent.StorageRiskSummary != "Unraid parity disk parity is DISABLED" {
+		t.Fatalf("storage risk summary = %q", resource.Agent.StorageRiskSummary)
+	}
+	if resource.Agent.StoragePostureSummary != "Unraid parity disk parity is DISABLED" {
+		t.Fatalf("storage posture summary = %q", resource.Agent.StoragePostureSummary)
+	}
+	if !resource.Agent.ProtectionReduced || resource.Agent.ProtectionSummary != "Unraid parity disk parity is DISABLED" {
+		t.Fatalf("protection semantics = reduced:%v summary:%q", resource.Agent.ProtectionReduced, resource.Agent.ProtectionSummary)
+	}
 	if resource.Agent.Unraid == nil || resource.Agent.Unraid.Risk == nil {
 		t.Fatalf("expected unraid risk payload, got %+v", resource.Agent.Unraid)
+	}
+	if resource.Agent.Unraid.RiskSummary != "Unraid parity disk parity is DISABLED" || resource.Agent.Unraid.PostureSummary != "Unraid parity disk parity is DISABLED" {
+		t.Fatalf("unexpected unraid summaries %+v", resource.Agent.Unraid)
 	}
 }
 

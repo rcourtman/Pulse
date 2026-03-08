@@ -899,6 +899,69 @@ func (v HostView) DiskPercent() float64 {
 	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
 }
 
+func (v HostView) StorageRisk() *StorageRisk {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneStorageRisk(v.r.Agent.StorageRisk)
+}
+
+func (v HostView) StorageRiskSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.StorageRiskSummary
+}
+
+func (v HostView) StoragePostureSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.StoragePostureSummary
+}
+
+func (v HostView) ProtectionReduced() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.ProtectionReduced
+}
+
+func (v HostView) ProtectionSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.ProtectionSummary
+}
+
+func (v HostView) RebuildInProgress() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.RebuildInProgress
+}
+
+func (v HostView) RebuildSummary() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.RebuildSummary
+}
+
+func (v HostView) Unraid() *HostUnraidMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneHostUnraidMeta(v.r.Agent.Unraid)
+}
+
+func (v HostView) TrueNAS() *TrueNASData {
+	if v.r == nil {
+		return nil
+	}
+	return cloneTrueNASData(v.r.TrueNAS)
+}
+
 func (v HostView) Sensors() *HostSensorMeta {
 	if v.r == nil || v.r.Agent == nil {
 		return nil

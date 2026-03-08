@@ -68,6 +68,18 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	if system.TrueNAS.StorageRisk.Level != "warning" {
 		t.Fatalf("expected warning storage risk on system record, got %+v", system.TrueNAS.StorageRisk)
 	}
+	if system.TrueNAS.StorageRiskSummary == "" {
+		t.Fatal("expected non-empty storage risk summary on system record")
+	}
+	if system.TrueNAS.StoragePostureSummary != system.TrueNAS.StorageRiskSummary {
+		t.Fatalf("expected posture summary to match risk summary, got risk=%q posture=%q", system.TrueNAS.StorageRiskSummary, system.TrueNAS.StoragePostureSummary)
+	}
+	if !system.TrueNAS.ProtectionReduced || system.TrueNAS.ProtectionSummary == "" {
+		t.Fatalf("expected protection semantics on system record, got %+v", system.TrueNAS)
+	}
+	if system.TrueNAS.StorageRiskSummary != system.TrueNAS.ProtectionSummary {
+		t.Fatalf("expected risk summary to prefer protection summary, got risk=%q protection=%q", system.TrueNAS.StorageRiskSummary, system.TrueNAS.ProtectionSummary)
+	}
 	if len(system.Incidents) != 2 {
 		t.Fatalf("expected 2 native incidents on system record, got %+v", system.Incidents)
 	}

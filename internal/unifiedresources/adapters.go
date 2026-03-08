@@ -219,24 +219,35 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			}
 		}
 		assessment := storagehealth.AssessUnraidStorage(*host.Unraid)
+		unraidRisk := storageRiskFromAssessment(assessment)
+		_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := StorageRiskSemantics(unraidRisk)
 		agent.Unraid = &HostUnraidMeta{
-			ArrayStarted: host.Unraid.ArrayStarted,
-			ArrayState:   host.Unraid.ArrayState,
-			SyncAction:   host.Unraid.SyncAction,
-			SyncProgress: host.Unraid.SyncProgress,
-			SyncErrors:   host.Unraid.SyncErrors,
-			NumProtected: host.Unraid.NumProtected,
-			NumDisabled:  host.Unraid.NumDisabled,
-			NumInvalid:   host.Unraid.NumInvalid,
-			NumMissing:   host.Unraid.NumMissing,
-			Disks:        disks,
-			Risk:         storageRiskFromAssessment(assessment),
+			ArrayStarted:      host.Unraid.ArrayStarted,
+			ArrayState:        host.Unraid.ArrayState,
+			SyncAction:        host.Unraid.SyncAction,
+			SyncProgress:      host.Unraid.SyncProgress,
+			SyncErrors:        host.Unraid.SyncErrors,
+			NumProtected:      host.Unraid.NumProtected,
+			NumDisabled:       host.Unraid.NumDisabled,
+			NumInvalid:        host.Unraid.NumInvalid,
+			NumMissing:        host.Unraid.NumMissing,
+			Disks:             disks,
+			Risk:              unraidRisk,
+			RiskSummary:       StorageRiskSummary(unraidRisk),
+			PostureSummary:    StorageRiskSummary(unraidRisk),
+			ProtectionReduced: protectionReduced,
+			ProtectionSummary: protectionSummary,
+			RebuildInProgress: rebuildInProgress,
+			RebuildSummary:    rebuildSummary,
 		}
 		storageAssessments = append(storageAssessments, assessment)
 	}
 
 	if len(storageAssessments) > 0 {
 		agent.StorageRisk = storageRiskFromAssessment(storagehealth.SummarizeAssessments(storageAssessments...))
+		agent.StorageRiskSummary = StorageRiskSummary(agent.StorageRisk)
+		agent.StoragePostureSummary = agent.StorageRiskSummary
+		_, agent.ProtectionReduced, agent.RebuildInProgress, agent.ProtectionSummary, agent.RebuildSummary = StorageRiskSemantics(agent.StorageRisk)
 	}
 
 	// Populate DiskIO

@@ -24,6 +24,13 @@ func StorageRiskSummary(risk *StorageRisk) string {
 	if risk == nil {
 		return ""
 	}
+	_, _, _, protectionSummary, rebuildSummary := StorageRiskSemantics(risk)
+	if protectionSummary != "" {
+		return protectionSummary
+	}
+	if rebuildSummary != "" {
+		return rebuildSummary
+	}
 	for _, reason := range risk.Reasons {
 		summary := strings.TrimSpace(reason.Summary)
 		if summary != "" {
