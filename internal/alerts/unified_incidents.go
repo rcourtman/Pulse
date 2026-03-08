@@ -248,6 +248,9 @@ func unifiedIncidentAlertType(resource unifiedresources.Resource, incident unifi
 		}
 		return "disk-health"
 	case unifiedresources.ResourceTypeStorage:
+		if isBackupStorageResource(resource.Storage) {
+			return "backup-storage-incident"
+		}
 		if resource.Storage != nil && resource.Storage.IsZFS {
 			return "zfs-pool-state"
 		}
@@ -281,6 +284,18 @@ func unifiedIncidentConsumerSummary(storage *unifiedresources.StorageMeta) strin
 		return ""
 	}
 
+	if isBackupStorageResource(storage) {
+		return unifiedIncidentBackupConsumerSummary(storage)
+	}
+
+	return unifiedIncidentDependentConsumerSummary(storage)
+}
+
+func unifiedIncidentDependentConsumerSummary(storage *unifiedresources.StorageMeta) string {
+	if storage == nil || storage.ConsumerCount <= 0 {
+		return ""
+	}
+
 	names := make([]string, 0, len(storage.TopConsumers))
 	for _, consumer := range storage.TopConsumers {
 		name := strings.TrimSpace(consumer.Name)
@@ -307,6 +322,39 @@ func unifiedIncidentConsumerSummary(storage *unifiedresources.StorageMeta) strin
 	}
 
 	return "Affects " + intLabel(storage.ConsumerCount) + " " + resourceLabel + ": " + strings.Join(names, ", ")
+}
+
+func unifiedIncidentBackupConsumerSummary(storage *unifiedresources.StorageMeta) string {
+	if storage == nil || storage.ConsumerCount <= 0 {
+		return ""
+	}
+
+	names := make([]string, 0, len(storage.TopConsumers))
+	for _, consumer := range storage.TopConsumers {
+		name := strings.TrimSpace(consumer.Name)
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+		if len(names) == 3 {
+			break
+		}
+	}
+
+	workloadLabel := "protected workload"
+	if storage.ConsumerCount != 1 {
+		workloadLabel = "protected workloads"
+	}
+
+	if len(names) == 0 {
+		return "Puts backups for " + intLabel(storage.ConsumerCount) + " " + workloadLabel + " at risk"
+	}
+
+	if remaining := storage.ConsumerCount - len(names); remaining > 0 {
+		return "Puts backups for " + intLabel(storage.ConsumerCount) + " " + workloadLabel + " at risk: " + strings.Join(names, ", ") + ", and " + intLabel(remaining) + " more"
+	}
+
+	return "Puts backups for " + intLabel(storage.ConsumerCount) + " " + workloadLabel + " at risk: " + strings.Join(names, ", ")
 }
 
 func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident, alertType string) map[string]interface{} {
@@ -363,8 +411,18 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 			metadata["consumerCount"] = resource.Storage.ConsumerCount
 			metadata["consumerImpactSummary"] = unifiedIncidentConsumerSummary(resource.Storage)
 		}
+		if isBackupStorageResource(resource.Storage) {
+			metadata["backupTarget"] = true
+			if resource.Storage.ConsumerCount > 0 {
+				metadata["protectedWorkloadCount"] = resource.Storage.ConsumerCount
+				metadata["protectedWorkloadSummary"] = unifiedIncidentBackupConsumerSummary(resource.Storage)
+			}
+		}
 		if len(resource.Storage.ConsumerTypes) > 0 {
 			metadata["consumerTypes"] = append([]string(nil), resource.Storage.ConsumerTypes...)
+			if isBackupStorageResource(resource.Storage) {
+				metadata["protectedWorkloadTypes"] = append([]string(nil), resource.Storage.ConsumerTypes...)
+			}
 		}
 		if len(resource.Storage.TopConsumers) > 0 {
 			names := make([]string, 0, len(resource.Storage.TopConsumers))
@@ -382,6 +440,9 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 			}
 			if len(names) > 0 {
 				metadata["topConsumerNames"] = names
+				if isBackupStorageResource(resource.Storage) {
+					metadata["protectedWorkloadNames"] = append([]string(nil), names...)
+				}
 			}
 			metadata["topConsumers"] = topConsumers
 		}
@@ -414,6 +475,21 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 
 func intLabel(value int) string {
 	return strconv.Itoa(value)
+}
+
+func isBackupStorageResource(storage *unifiedresources.StorageMeta) bool {
+	if storage == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(storage.Protection), "backup-repository") {
+		return true
+	}
+	for _, contentType := range storage.ContentTypes {
+		if strings.EqualFold(strings.TrimSpace(contentType), "backup") {
+			return true
+		}
+	}
+	return false
 }
 
 func storageRiskAlertSemantics(risk *unifiedresources.StorageRisk) ([]string, bool, bool, string, string) {

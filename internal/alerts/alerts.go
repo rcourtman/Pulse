@@ -2269,7 +2269,7 @@ func quietHoursCategoryForAlert(alert *Alert) string {
 		"docker-container-health", "docker-container-restart-loop",
 		"docker-container-oom-kill", "docker-container-memory-limit":
 		return "performance"
-	case "usage", "disk-health", "disk-wearout", "zfs-pool-state", "zfs-pool-errors", "zfs-device", "storage-incident":
+	case "usage", "disk-health", "disk-wearout", "zfs-pool-state", "zfs-pool-errors", "zfs-device", "storage-incident", "backup-storage-incident":
 		return "storage"
 	case "connectivity", "offline", "powered-off", "docker-host-offline":
 		return "offline"
@@ -7231,6 +7231,9 @@ func (m *Manager) GetActiveAlerts() []Alert {
 		if left, right := alertProtectionSortRank(alerts[i]), alertProtectionSortRank(alerts[j]); left != right {
 			return left > right
 		}
+		if left, right := alertRecoverabilitySortRank(alerts[i]), alertRecoverabilitySortRank(alerts[j]); left != right {
+			return left > right
+		}
 		if left, right := alertImpactSortRank(alerts[i]), alertImpactSortRank(alerts[j]); left != right {
 			return left > right
 		}
@@ -7278,8 +7281,21 @@ func alertImpactSortRank(alert Alert) int {
 	return metadataIntValue(alert.Metadata["consumerCount"])
 }
 
+func alertRecoverabilitySortRank(alert Alert) int {
+	switch {
+	case metadataBoolValue(alert.Metadata, "backupTarget") && metadataIntValue(alert.Metadata["protectedWorkloadCount"]) > 0:
+		return 2
+	case metadataBoolValue(alert.Metadata, "backupTarget"):
+		return 1
+	default:
+		return 0
+	}
+}
+
 func alertTypeSortRank(alert Alert) int {
 	switch alert.Type {
+	case "backup-storage-incident":
+		return 5
 	case "storage-incident", "zfs-pool-state", "zfs-pool-errors":
 		return 4
 	case "disk-health", "disk-wearout", "zfs-device":

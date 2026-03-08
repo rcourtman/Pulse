@@ -106,6 +106,64 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:         "storage:backup-store",
+		Type:       unifiedresources.ResourceTypeStorage,
+		Name:       "backup-store",
+		ParentName: "pbs-main",
+		Storage: &unifiedresources.StorageMeta{
+			Type:          "pbs-datastore",
+			Platform:      "pbs",
+			Topology:      "datastore",
+			Protection:    "backup-repository",
+			ContentTypes:  []string{"backup"},
+			ConsumerCount: 2,
+			ConsumerTypes: []string{"vm", "system-container"},
+			TopConsumers: []unifiedresources.StorageConsumerMeta{
+				{Name: "app01", ResourceType: unifiedresources.ResourceTypeVM, ResourceID: "vm-101", DiskCount: 1},
+				{Name: "media01", ResourceType: unifiedresources.ResourceTypeSystemContainer, ResourceID: "lxc-200", DiskCount: 1},
+			},
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "pulse",
+			NativeID: "backup-risk-1",
+			Code:     "backup_target_degraded",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Backup datastore backup-store is degraded",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := "unified-incident-storage-backup-store-pulse-backup-risk-1-backup-target-degraded"
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+
+	if alert.Type != "backup-storage-incident" {
+		t.Fatalf("alert type = %q, want backup-storage-incident", alert.Type)
+	}
+	wantMessage := "Backup datastore backup-store is degraded. Puts backups for 2 protected workloads at risk: app01, media01"
+	if alert.Message != wantMessage {
+		t.Fatalf("message = %q, want %q", alert.Message, wantMessage)
+	}
+	if got := alert.Metadata["backupTarget"]; got != true {
+		t.Fatalf("backupTarget = %v, want true", got)
+	}
+	if got := alert.Metadata["protectedWorkloadCount"]; got != 2 {
+		t.Fatalf("protectedWorkloadCount = %v, want 2", got)
+	}
+	if got := alert.Metadata["protectedWorkloadSummary"]; got != "Puts backups for 2 protected workloads at risk: app01, media01" {
+		t.Fatalf("protectedWorkloadSummary = %v", got)
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsSuppressesRedundantParentAndChildAlerts(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
@@ -328,6 +386,60 @@ func TestGetActiveAlertsPrioritizesProtectionLossAboveRebuildOnly(t *testing.T) 
 	}
 	if active[0].ResourceID != "storage:protection-loss" {
 		t.Fatalf("expected protection-loss alert first, got %q then %q", active[0].ResourceID, active[1].ResourceID)
+	}
+}
+
+func TestGetActiveAlertsPrioritizesBackupTargetExposure(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{
+		{
+			ID:   "storage:backup-store",
+			Type: unifiedresources.ResourceTypeStorage,
+			Name: "backup-store",
+			Storage: &unifiedresources.StorageMeta{
+				Type:          "pbs-datastore",
+				Platform:      "pbs",
+				Topology:      "datastore",
+				Protection:    "backup-repository",
+				ContentTypes:  []string{"backup"},
+				ConsumerCount: 2,
+				TopConsumers: []unifiedresources.StorageConsumerMeta{
+					{Name: "app01", ResourceType: unifiedresources.ResourceTypeVM, ResourceID: "vm-101", DiskCount: 1},
+				},
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "backup",
+				Code:     "backup_target_degraded",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Backup target is degraded",
+			}},
+		},
+		{
+			ID:   "storage:shared",
+			Type: unifiedresources.ResourceTypeStorage,
+			Name: "shared",
+			Storage: &unifiedresources.StorageMeta{
+				ConsumerCount: 4,
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "shared",
+				Code:     "capacity_runway_low",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Shared storage is nearly full",
+			}},
+		},
+	})
+
+	active := m.GetActiveAlerts()
+	if len(active) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(active))
+	}
+	if active[0].ResourceID != "storage:backup-store" {
+		t.Fatalf("expected backup target incident first, got %q then %q", active[0].ResourceID, active[1].ResourceID)
 	}
 }
 
