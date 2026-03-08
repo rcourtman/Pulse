@@ -145,14 +145,16 @@ func TestUpdateAlertConfig(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
 	mockPersist := new(MockConfigPersistence)
+	notificationMgr := notifications.NewNotificationManagerWithDataDir("", t.TempDir())
+	defer notificationMgr.Stop()
 
 	mockMonitor.On("GetAlertManager").Return(mockManager)
 	mockMonitor.On("GetConfigPersistence").Return(mockPersist)
-	mockMonitor.On("GetNotificationManager").Return(&notifications.NotificationManager{})
+	mockMonitor.On("GetNotificationManager").Return(notificationMgr)
 
 	h := NewAlertHandlers(nil, mockMonitor, nil)
 
-	cfg := alerts.AlertConfig{Enabled: true}
+	cfg := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationPending}
 	mockManager.On("UpdateConfig", testifymock.Anything).Return()
 	mockManager.On("GetConfig").Return(cfg)
 	mockPersist.On("SaveAlertConfig", testifymock.Anything).Return(nil)
@@ -164,6 +166,42 @@ func TestUpdateAlertConfig(t *testing.T) {
 	h.UpdateAlertConfig(w, req)
 
 	assert.Equal(t, 200, w.Code)
+	assert.False(t, notificationMgr.IsEnabled())
+}
+
+func TestActivateAlerts_EnablesNotificationManager(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockPersist := new(MockConfigPersistence)
+	notificationMgr := notifications.NewNotificationManagerWithDataDir("", t.TempDir())
+	defer notificationMgr.Stop()
+
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("GetConfigPersistence").Return(mockPersist)
+	mockMonitor.On("GetNotificationManager").Return(notificationMgr)
+
+	initialConfig := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationPending}
+	updatedConfig := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive}
+	mockManager.On("GetConfig").Return(initialConfig).Once()
+	mockManager.On("UpdateConfig", testifymock.AnythingOfType("alerts.AlertConfig")).Run(func(args testifymock.Arguments) {
+		cfg := args.Get(0).(alerts.AlertConfig)
+		if cfg.ActivationState != alerts.ActivationActive {
+			t.Fatalf("expected activation state to be active, got %q", cfg.ActivationState)
+		}
+	}).Return()
+	mockPersist.On("SaveAlertConfig", testifymock.Anything).Return(nil)
+	mockManager.On("GetActiveAlerts").Return([]alerts.Alert{}).Maybe()
+	mockManager.On("GetConfig").Return(updatedConfig)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	req := httptest.NewRequest("POST", "/api/alerts/activate", nil)
+	w := httptest.NewRecorder()
+
+	h.ActivateAlerts(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	assert.True(t, notificationMgr.IsEnabled())
 }
 
 func TestGetActiveAlerts(t *testing.T) {

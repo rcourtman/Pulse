@@ -2838,6 +2838,35 @@ func TestProcessQueuedNotification_InvalidEmailConfig(t *testing.T) {
 	}
 }
 
+func TestProcessQueuedNotification_SkipsDisabledEmailDelivery(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer nm.Stop()
+
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	configJSON, err := json.Marshal(EmailConfig{
+		Enabled:  true,
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 587,
+		From:     "alerts@example.com",
+		To:       []string{"admin@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal email config: %v", err)
+	}
+
+	notif := &QueuedNotification{
+		ID:     "test-email-disabled",
+		Type:   "email",
+		Config: configJSON,
+		Alerts: []*alerts.Alert{{ID: "alert-1"}},
+	}
+
+	if err := nm.ProcessQueuedNotification(notif); err != nil {
+		t.Fatalf("expected queued email notification to be skipped without error, got %v", err)
+	}
+}
+
 func TestProcessQueuedNotification_InvalidWebhookConfig(t *testing.T) {
 	nm := &NotificationManager{}
 	notif := &QueuedNotification{
@@ -2853,6 +2882,35 @@ func TestProcessQueuedNotification_InvalidWebhookConfig(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to unmarshal webhook config") {
 		t.Errorf("expected 'failed to unmarshal webhook config' error, got: %v", err)
+	}
+}
+
+func TestProcessQueuedNotification_SkipsWhenNotificationsDisabled(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer nm.Stop()
+
+	nm.SetEnabled(false)
+
+	configJSON, err := json.Marshal(WebhookConfig{
+		ID:      "webhook-1",
+		Name:    "ops",
+		URL:     "https://example.com/webhook",
+		Method:  http.MethodPost,
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal webhook config: %v", err)
+	}
+
+	notif := &QueuedNotification{
+		ID:     "test-webhook-disabled",
+		Type:   "webhook",
+		Config: configJSON,
+		Alerts: []*alerts.Alert{{ID: "alert-1"}},
+	}
+
+	if err := nm.ProcessQueuedNotification(notif); err != nil {
+		t.Fatalf("expected queued webhook notification to be skipped without error, got %v", err)
 	}
 }
 
@@ -2914,6 +2972,92 @@ func TestGetQueue_WithQueue(t *testing.T) {
 	got := nm.GetQueue()
 	if got != queue {
 		t.Error("GetQueue should return the assigned queue")
+	}
+}
+
+func TestSetEnabled_CancelsQueuedNotifications(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer nm.Stop()
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Fatal("expected notification queue to be initialized")
+	}
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	for _, notifType := range []string{"email", "webhook", "apprise"} {
+		err := queue.Enqueue(&QueuedNotification{
+			ID:          "queued-" + notifType,
+			Type:        notifType,
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-" + notifType}},
+		})
+		if err != nil {
+			t.Fatalf("failed to enqueue %s notification: %v", notifType, err)
+		}
+	}
+
+	nm.SetEnabled(false)
+
+	stats, err := queue.GetQueueStats()
+	if err != nil {
+		t.Fatalf("failed to get queue stats: %v", err)
+	}
+	if stats["cancelled"] != 3 {
+		t.Fatalf("expected 3 cancelled notifications, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+	if stats["pending"] != 0 {
+		t.Fatalf("expected 0 pending notifications after disable, got %d", stats["pending"])
+	}
+}
+
+func TestSetEmailConfig_CancelsQueuedEmailNotifications(t *testing.T) {
+	nm := NewNotificationManagerWithDataDir("", t.TempDir())
+	defer nm.Stop()
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Fatal("expected notification queue to be initialized")
+	}
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	if err := queue.Enqueue(&QueuedNotification{
+		ID:          "queued-email",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-email"}},
+	}); err != nil {
+		t.Fatalf("failed to enqueue email notification: %v", err)
+	}
+	if err := queue.Enqueue(&QueuedNotification{
+		ID:          "queued-webhook",
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-webhook"}},
+	}); err != nil {
+		t.Fatalf("failed to enqueue webhook notification: %v", err)
+	}
+
+	nm.SetEmailConfig(EmailConfig{Enabled: false})
+
+	stats, err := queue.GetQueueStats()
+	if err != nil {
+		t.Fatalf("failed to get queue stats: %v", err)
+	}
+	if stats["cancelled"] != 1 {
+		t.Fatalf("expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+	if stats["pending"] != 1 {
+		t.Fatalf("expected 1 pending webhook notification to remain, got %d (stats: %v)", stats["pending"], stats)
 	}
 }
 

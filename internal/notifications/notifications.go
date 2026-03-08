@@ -560,7 +560,6 @@ func (n *NotificationManager) GetPublicURL() string {
 // SetEmailConfig updates email configuration
 func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	config = normalizeEmailConfig(copyEmailConfig(config))
 	n.emailConfig = config
 
@@ -577,13 +576,30 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 		AuthRequired:  config.Username != "" && config.Password != "",
 	}
 	n.emailManager = NewEnhancedEmailManager(providerConfig)
+	queue := n.queue
+	disabled := !config.Enabled
+	n.mu.Unlock()
+
+	if disabled && queue != nil {
+		if err := queue.CancelByTypes([]string{"email", "email" + queueTypeSuffixResolved}, "Email notifications disabled"); err != nil {
+			log.Error().Err(err).Msg("failed to cancel queued email notifications after disabling email delivery")
+		}
+	}
 }
 
 // SetAppriseConfig updates Apprise configuration.
 func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	n.appriseConfig = NormalizeAppriseConfig(config)
+	queue := n.queue
+	disabled := !n.appriseConfig.Enabled
+	n.mu.Unlock()
+
+	if disabled && queue != nil {
+		if err := queue.CancelByTypes([]string{"apprise", "apprise" + queueTypeSuffixResolved}, "Apprise notifications disabled"); err != nil {
+			log.Error().Err(err).Msg("failed to cancel queued Apprise notifications after disabling delivery")
+		}
+	}
 }
 
 // GetAppriseConfig returns a copy of the Apprise configuration.
@@ -702,6 +718,52 @@ func (n *NotificationManager) GetQueue() *NotificationQueue {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return n.queue
+}
+
+// SetEnabled toggles notification delivery globally for this runtime instance.
+func (n *NotificationManager) SetEnabled(enabled bool) {
+	var (
+		queue   *NotificationQueue
+		changed bool
+	)
+
+	n.mu.Lock()
+	changed = n.enabled != enabled
+	n.enabled = enabled
+	if !enabled {
+		for i := range n.pendingAlerts {
+			n.pendingAlerts[i] = nil
+		}
+		n.pendingAlerts = n.pendingAlerts[:0]
+		if n.groupTimer != nil {
+			n.groupTimer.Stop()
+			n.groupTimer = nil
+		}
+		queue = n.queue
+	}
+	n.mu.Unlock()
+
+	if changed {
+		log.Info().Bool("enabled", enabled).Msg("updated notification manager enabled state")
+	}
+
+	if !enabled && queue != nil {
+		types := []string{
+			"email", "email" + queueTypeSuffixResolved,
+			"webhook", "webhook" + queueTypeSuffixResolved,
+			"apprise", "apprise" + queueTypeSuffixResolved,
+		}
+		if err := queue.CancelByTypes(types, "Notifications disabled"); err != nil {
+			log.Error().Err(err).Msg("failed to cancel queued notifications after disabling notification manager")
+		}
+	}
+}
+
+// IsEnabled reports whether notification delivery is currently enabled.
+func (n *NotificationManager) IsEnabled() bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.enabled
 }
 
 // SendAlert sends notifications for an alert
@@ -3291,6 +3353,15 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		if err = json.Unmarshal(notif.Config, &emailConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal email config: %w", err)
 		}
+		currentEmailConfig := n.GetEmailConfig()
+		if !n.IsEnabled() || !currentEmailConfig.Enabled {
+			log.Info().
+				Str("notificationID", notif.ID).
+				Str("type", baseType).
+				Str("event", string(event)).
+				Msg("skipping queued email notification because email delivery is disabled")
+			return nil
+		}
 		if event == eventResolved {
 			err = n.sendResolvedEmail(emailConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
 		} else {
@@ -3302,6 +3373,15 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		if err = json.Unmarshal(notif.Config, &webhookConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal webhook config: %w", err)
 		}
+		if !n.IsEnabled() || !n.isQueuedWebhookStillEnabled(webhookConfig) {
+			log.Info().
+				Str("notificationID", notif.ID).
+				Str("type", baseType).
+				Str("event", string(event)).
+				Str("webhookID", webhookConfig.ID).
+				Msg("skipping queued webhook notification because delivery is disabled")
+			return nil
+		}
 		if event == eventResolved {
 			err = n.sendResolvedWebhook(webhookConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
 		} else {
@@ -3312,6 +3392,15 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		var appriseConfig AppriseConfig
 		if err = json.Unmarshal(notif.Config, &appriseConfig); err != nil {
 			return fmt.Errorf("failed to unmarshal apprise config: %w", err)
+		}
+		currentAppriseConfig := n.GetAppriseConfig()
+		if !n.IsEnabled() || !currentAppriseConfig.Enabled {
+			log.Info().
+				Str("notificationID", notif.ID).
+				Str("type", baseType).
+				Str("event", string(event)).
+				Msg("skipping queued Apprise notification because delivery is disabled")
+			return nil
 		}
 		if event == eventResolved {
 			err = n.sendResolvedApprise(appriseConfig, notif.Alerts, resolvedTimeFromAlerts(notif.Alerts))
@@ -3332,6 +3421,35 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		return fmt.Errorf("process queued %s notification %q (%s): %w", baseType, notif.ID, event, err)
 	}
 	return nil
+}
+
+func (n *NotificationManager) isQueuedWebhookStillEnabled(queuedWebhook WebhookConfig) bool {
+	if !queuedWebhook.Enabled {
+		return false
+	}
+
+	currentWebhooks := n.GetWebhooks()
+	if len(currentWebhooks) == 0 {
+		return false
+	}
+
+	for _, current := range currentWebhooks {
+		if queuedWebhook.ID != "" && current.ID == queuedWebhook.ID {
+			return current.Enabled
+		}
+	}
+
+	if queuedWebhook.URL == "" {
+		return false
+	}
+
+	for _, current := range currentWebhooks {
+		if current.URL == queuedWebhook.URL {
+			return current.Enabled
+		}
+	}
+
+	return false
 }
 
 // cleanupOldNotificationRecords periodically cleans up old entries from lastNotified map

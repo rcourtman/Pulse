@@ -181,14 +181,15 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	updatedConfig := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
 
 	// Update notification manager with schedule settings
-	h.getMonitor(r.Context()).GetNotificationManager().SetCooldown(updatedConfig.Schedule.Cooldown)
-
-	h.getMonitor(r.Context()).GetNotificationManager().SetGroupingWindow(updatedConfig.Schedule.Grouping.Window)
-	h.getMonitor(r.Context()).GetNotificationManager().SetGroupingOptions(
+	notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
+	notificationMgr.SetEnabled(updatedConfig.Enabled && updatedConfig.ActivationState == alerts.ActivationActive)
+	notificationMgr.SetCooldown(updatedConfig.Schedule.Cooldown)
+	notificationMgr.SetGroupingWindow(updatedConfig.Schedule.Grouping.Window)
+	notificationMgr.SetGroupingOptions(
 		updatedConfig.Schedule.Grouping.ByNode,
 		updatedConfig.Schedule.Grouping.ByGuest,
 	)
-	h.getMonitor(r.Context()).GetNotificationManager().SetNotifyOnResolve(updatedConfig.Schedule.NotifyOnResolve)
+	notificationMgr.SetNotifyOnResolve(updatedConfig.Schedule.NotifyOnResolve)
 
 	// Save to persistent storage
 	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAlertConfig(updatedConfig); err != nil {
@@ -229,6 +230,9 @@ func (h *AlertHandlers) ActivateAlerts(w http.ResponseWriter, r *http.Request) {
 
 	// Update config
 	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
+	h.getMonitor(r.Context()).GetNotificationManager().SetEnabled(
+		config.Enabled && config.ActivationState == alerts.ActivationActive,
+	)
 
 	// Save to persistent storage
 	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAlertConfig(config); err != nil {

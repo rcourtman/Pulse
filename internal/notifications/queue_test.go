@@ -542,6 +542,65 @@ func TestCancelByAlertIDs_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
 	}
 }
 
+func TestCancelByTypes_CancelsOnlyMatchingNotificationTypes(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	for _, notif := range []*QueuedNotification{
+		{
+			ID:          "notif-email",
+			Type:        "email",
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-email"}},
+		},
+		{
+			ID:          "notif-email-resolved",
+			Type:        "email_resolved",
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-email-resolved"}},
+		},
+		{
+			ID:          "notif-webhook",
+			Type:        "webhook",
+			Status:      QueueStatusPending,
+			MaxAttempts: 3,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry,
+			Alerts:      []*alerts.Alert{{ID: "alert-webhook"}},
+		},
+	} {
+		if err := nq.Enqueue(notif); err != nil {
+			t.Fatalf("Failed to enqueue %s: %v", notif.ID, err)
+		}
+	}
+
+	if err := nq.CancelByTypes([]string{"email", "email_resolved"}, "Email notifications disabled"); err != nil {
+		t.Fatalf("CancelByTypes returned error: %v", err)
+	}
+
+	stats, err := nq.GetQueueStats()
+	if err != nil {
+		t.Fatalf("GetQueueStats failed: %v", err)
+	}
+	if stats["cancelled"] != 2 {
+		t.Fatalf("expected 2 cancelled notifications, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+	if stats["pending"] != 1 {
+		t.Fatalf("expected 1 pending notification remaining, got %d (stats: %v)", stats["pending"], stats)
+	}
+}
+
 func TestProcessNotification_CancelledNotification(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)

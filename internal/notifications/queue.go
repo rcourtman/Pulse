@@ -1010,3 +1010,53 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 
 	return nil
 }
+
+// CancelByTypes marks queued notifications of the given types as cancelled.
+func (nq *NotificationQueue) CancelByTypes(types []string, reason string) error {
+	if len(types) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(reason) == "" {
+		reason = "Notification destination disabled"
+	}
+
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+
+	placeholders := make([]string, len(types))
+	args := make([]any, 0, len(types))
+	for i, notifType := range types {
+		placeholders[i] = "?"
+		args = append(args, notifType)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE notification_queue
+		SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?, next_retry_at = NULL
+		WHERE status IN ('pending', 'sending')
+		  AND type IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	now := time.Now().Unix()
+	updateArgs := make([]any, 0, 4+len(args))
+	updateArgs = append(updateArgs, QueueStatusCancelled, now, reason, now)
+	updateArgs = append(updateArgs, args...)
+
+	result, err := nq.db.Exec(query, updateArgs...)
+	if err != nil {
+		return fmt.Errorf("failed to cancel notifications by type: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows > 0 {
+		log.Info().
+			Str("component", "notification_queue").
+			Str("action", "cancel_types").
+			Int64("count", rows).
+			Strs("types", types).
+			Str("reason", reason).
+			Msg("cancelled queued notifications by type")
+	}
+
+	return nil
+}
