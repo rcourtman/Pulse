@@ -241,6 +241,16 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 	a.mu.Unlock()
 }
 
+// MetricsTargetForResource resolves the history/metrics target for a canonical
+// resource currently held by the adapter.
+func (a *MonitorAdapter) MetricsTargetForResource(resourceID string) *MetricsTarget {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return nil
+	}
+	return registry.MetricsTarget(resourceID)
+}
+
 // UnifiedResourceFreshness returns the most recent point at which the adapter
 // replaced or mutated its canonical registry contents.
 func (a *MonitorAdapter) UnifiedResourceFreshness() time.Time {

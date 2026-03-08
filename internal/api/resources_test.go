@@ -2225,6 +2225,105 @@ func TestResourceListIncludesHostUnraidStorage(t *testing.T) {
 	if resource.Metrics == nil || resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent != 40 {
 		t.Fatalf("expected unraid storage capacity metric, got %+v", resource.Metrics)
 	}
+	if resource.MetricsTarget == nil || resource.MetricsTarget.ResourceType != "storage" || resource.MetricsTarget.ResourceID != "host-tower/storage:unraid-array" {
+		t.Fatalf("expected unraid storage metrics target host-tower/storage:unraid-array, got %+v", resource.MetricsTarget)
+	}
+}
+
+func TestResourceListReturnsCanonicalStorageMetricsTargets(t *testing.T) {
+	t.Run("pbs datastore", func(t *testing.T) {
+		now := time.Now().UTC()
+		snapshot := models.StateSnapshot{
+			PBSInstances: []models.PBSInstance{
+				{
+					ID:       "pbs-1",
+					Name:     "pbs-main",
+					Host:     "https://pbs.example.com:8007",
+					Status:   "online",
+					LastSeen: now,
+					Datastores: []models.PBSDatastore{
+						{Name: "archive", Status: "online", Total: 100, Used: 45, Free: 55, Usage: 45},
+					},
+				},
+			},
+		}
+
+		cfg := &config.Config{DataPath: t.TempDir()}
+		h := NewResourceHandlers(cfg)
+		h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources?type=storage", nil)
+		h.HandleListResources(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		resource := findAPIStorageResourceByPlatform(resp.Data, "archive", "pbs", "datastore")
+		if resource.ID == "" {
+			t.Fatalf("expected PBS datastore resource in %#v", resp.Data)
+		}
+		if resource.MetricsTarget == nil || resource.MetricsTarget.ResourceType != "storage" || resource.MetricsTarget.ResourceID != "pbs-1/archive" {
+			t.Fatalf("expected PBS storage metrics target pbs-1/archive, got %+v", resource.MetricsTarget)
+		}
+	})
+
+	t.Run("truenas pool", func(t *testing.T) {
+		now := time.Now().UTC()
+		cfg := &config.Config{DataPath: t.TempDir()}
+		h := NewResourceHandlers(cfg)
+		h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
+		h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
+			records: []unified.IngestRecord{
+				{
+					SourceID: "pool:tank",
+					Resource: unified.Resource{
+						ID:        "storage:tank",
+						Type:      unified.ResourceTypeStorage,
+						Name:      "tank",
+						Status:    unified.StatusOnline,
+						LastSeen:  now,
+						UpdatedAt: now,
+						Sources:   []unified.DataSource{unified.SourceTrueNAS},
+						Metrics: &unified.ResourceMetrics{
+							Disk: &unified.MetricValue{Percent: 62},
+						},
+						Storage: &unified.StorageMeta{
+							Platform:   "truenas",
+							Topology:   "pool",
+							Protection: "zfs",
+						},
+					},
+				},
+			},
+			ownedSources: []unified.DataSource{unified.SourceTrueNAS},
+		})
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources?type=storage&source=truenas", nil)
+		h.HandleListResources(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		resource := findAPIStorageResourceByPlatform(resp.Data, "tank", "truenas", "pool")
+		if resource.ID == "" {
+			t.Fatalf("expected TrueNAS pool resource in %#v", resp.Data)
+		}
+		if resource.MetricsTarget == nil || resource.MetricsTarget.ResourceType != "storage" || resource.MetricsTarget.ResourceID != "pool:tank" {
+			t.Fatalf("expected TrueNAS storage metrics target pool:tank, got %+v", resource.MetricsTarget)
+		}
+	})
 }
 
 func findAPIResourceByNameAndNode(resources []unified.Resource, name, node string) unified.Resource {

@@ -383,6 +383,45 @@ func (rr *ResourceRegistry) SourceTargets(resourceID string) []SourceTarget {
 	return out
 }
 
+// MetricsTarget resolves the query target used by the metrics/history APIs for
+// the canonical resource.
+func (rr *ResourceRegistry) MetricsTarget(resourceID string) *MetricsTarget {
+	return BuildMetricsTargetForRegistry(rr, resourceID)
+}
+
+// BuildMetricsTargetForRegistry resolves the metrics target for a registry
+// resource ID without exposing registry internals to callers.
+func BuildMetricsTargetForRegistry(rr *ResourceRegistry, resourceID string) *MetricsTarget {
+	if rr == nil {
+		return nil
+	}
+
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+
+	resourceID = CanonicalResourceID(resourceID)
+	resource := rr.resources[resourceID]
+	if resource == nil {
+		return nil
+	}
+
+	sourceTargets := make([]SourceTarget, 0)
+	for source, mapping := range rr.bySource {
+		for sourceID, mappedID := range mapping {
+			if mappedID != resourceID {
+				continue
+			}
+			sourceTargets = append(sourceTargets, SourceTarget{
+				Source:      source,
+				SourceID:    sourceID,
+				CandidateID: rr.sourceSpecificID(resource.Type, source, sourceID),
+			})
+		}
+	}
+
+	return BuildMetricsTarget(*resource, sourceTargets)
+}
+
 // GetChildren returns child resources for a parent.
 func (rr *ResourceRegistry) GetChildren(parentID string) []Resource {
 	rr.mu.RLock()

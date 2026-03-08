@@ -1073,7 +1073,7 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 	if resource == nil || registry == nil {
 		return
 	}
-	resource.MetricsTarget = buildMetricsTarget(*resource, registry)
+	resource.MetricsTarget = registry.MetricsTarget(resource.ID)
 }
 
 func attachCanonicalIdentities(resources []unified.Resource) {
@@ -1133,89 +1133,6 @@ func computeFrontendByType(resources []unified.Resource) map[unified.ResourceTyp
 		m[frontendResourceType(r)]++
 	}
 	return m
-}
-
-func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceRegistry) *unified.MetricsTarget {
-	sourceTargets := registry.SourceTargets(resource.ID)
-	if len(sourceTargets) == 0 {
-		return nil
-	}
-
-	// Build a map from source to source target for quick lookup.
-	bySource := make(map[unified.DataSource]unified.SourceTarget, len(sourceTargets))
-	for _, st := range sourceTargets {
-		bySource[st.Source] = st
-	}
-
-	switch unified.CanonicalResourceType(resource.Type) {
-	case unified.ResourceTypeAgent:
-		// Infrastructure agents: prefer Proxmox > Agent > Docker source.
-		if st, ok := bySource[unified.SourceProxmox]; ok {
-			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
-		}
-		if st, ok := bySource[unified.SourceAgent]; ok {
-			return &unified.MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
-		}
-		if st, ok := bySource[unified.SourceDocker]; ok {
-			return &unified.MetricsTarget{ResourceType: "docker-host", ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypeVM:
-		if st, ok := bySource[unified.SourceProxmox]; ok {
-			return &unified.MetricsTarget{ResourceType: "vm", ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypeSystemContainer:
-		if st, ok := bySource[unified.SourceProxmox]; ok {
-			return &unified.MetricsTarget{ResourceType: "system-container", ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypeAppContainer:
-		if st, ok := bySource[unified.SourceDocker]; ok {
-			return &unified.MetricsTarget{ResourceType: "app-container", ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypeStorage, unified.ResourceTypeCeph:
-		if st, ok := bySource[unified.SourceProxmox]; ok {
-			return &unified.MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
-		}
-		if st, ok := bySource[unified.SourceTrueNAS]; ok {
-			return &unified.MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypePhysicalDisk:
-		if st, ok := bySource[unified.SourceProxmox]; ok {
-			if resourceID := unified.PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
-				return &unified.MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
-			}
-		}
-		if st, ok := bySource[unified.SourceAgent]; ok {
-			if resourceID := unified.PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
-				return &unified.MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
-			}
-		}
-	case unified.ResourceTypePod:
-		if st, ok := bySource[unified.SourceK8s]; ok {
-			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypePod), ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypeK8sCluster:
-		if st, ok := bySource[unified.SourceK8s]; ok {
-			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypeK8sCluster), ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypeK8sNode:
-		if st, ok := bySource[unified.SourceK8s]; ok {
-			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypeK8sNode), ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypeK8sDeployment:
-		if st, ok := bySource[unified.SourceK8s]; ok {
-			return &unified.MetricsTarget{ResourceType: string(unified.ResourceTypeK8sDeployment), ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypePBS:
-		if st, ok := bySource[unified.SourcePBS]; ok {
-			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
-		}
-	case unified.ResourceTypePMG:
-		if st, ok := bySource[unified.SourcePMG]; ok {
-			return &unified.MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
-		}
-	}
-
-	return nil
 }
 
 func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {

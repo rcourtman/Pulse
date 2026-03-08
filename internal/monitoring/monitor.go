@@ -124,6 +124,12 @@ type AtomicSnapshotResourceStore interface {
 	PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord)
 }
 
+// MetricsTargetResourceStore optionally resolves the history/metrics target for
+// a canonical resource in the live unified store.
+type MetricsTargetResourceStore interface {
+	MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget
+}
+
 // UnifiedResourceFreshnessStore is an optional extension for stores that track
 // their own canonical-resource freshness independent of state.LastUpdate.
 type UnifiedResourceFreshnessStore interface {
@@ -3093,6 +3099,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	recordsBySource := m.collectSupplementalRecordsBySource()
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
+		m.syncUnifiedStorageMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
 				continue
@@ -3107,6 +3114,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	store.PopulateFromSnapshot(snapshotForStore)
+	m.syncUnifiedStorageMetrics(store)
 
 	supplementalStore, ok := store.(SupplementalRecordStore)
 	if !ok {
@@ -3126,6 +3134,84 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
+}
+
+func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
+	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
+		return
+	}
+
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return
+	}
+
+	now := time.Now()
+	seenTargets := make(map[string]struct{})
+	for _, resource := range store.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Metrics == nil || resource.Metrics.Disk == nil {
+			continue
+		}
+
+		// Native Proxmox storage already writes to history during the storage poller.
+		if resource.Storage != nil && resource.Storage.Platform == "" {
+			hasProxmoxSource := false
+			for _, source := range resource.Sources {
+				if source == unifiedresources.SourceProxmox {
+					hasProxmoxSource = true
+					break
+				}
+			}
+			if hasProxmoxSource {
+				continue
+			}
+		}
+
+		target := resolver.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "storage" || strings.TrimSpace(target.ResourceID) == "" {
+			continue
+		}
+		targetID := strings.TrimSpace(target.ResourceID)
+		if _, ok := seenTargets[targetID]; ok {
+			continue
+		}
+		seenTargets[targetID] = struct{}{}
+
+		disk := resource.Metrics.Disk
+		usage := disk.Percent
+		used := int64(0)
+		total := int64(0)
+		free := int64(0)
+		if disk.Used != nil {
+			used = *disk.Used
+		}
+		if disk.Total != nil {
+			total = *disk.Total
+		}
+		if total > 0 {
+			free = total - used
+			if usage == 0 && used > 0 {
+				usage = (float64(used) / float64(total)) * 100
+			}
+		}
+
+		if m.metricsHistory != nil {
+			m.metricsHistory.AddStorageMetric(targetID, "usage", usage, now)
+			if total > 0 {
+				m.metricsHistory.AddStorageMetric(targetID, "used", float64(used), now)
+				m.metricsHistory.AddStorageMetric(targetID, "total", float64(total), now)
+				m.metricsHistory.AddStorageMetric(targetID, "avail", float64(free), now)
+			}
+		}
+		if m.metricsStore != nil {
+			m.metricsStore.Write("storage", targetID, "usage", usage, now)
+			if total > 0 {
+				m.metricsStore.Write("storage", targetID, "used", float64(used), now)
+				m.metricsStore.Write("storage", targetID, "total", float64(total), now)
+				m.metricsStore.Write("storage", targetID, "avail", float64(free), now)
+			}
+		}
+	}
 }
 
 // getResourcesForBroadcast retrieves all resources from the store and converts them to frontend format.

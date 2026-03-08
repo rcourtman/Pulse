@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 type metricsHistoryResponse struct {
@@ -199,5 +200,64 @@ func TestMetricsHistoryStorageDiskAliasUsesMemory(t *testing.T) {
 	}
 	if len(resp.Points) < 2 {
 		t.Fatalf("expected at least 2 points, got %d", len(resp.Points))
+	}
+}
+
+func TestMetricsHistoryCanonicalUnraidStorageUsesSyncedUnifiedMetrics(t *testing.T) {
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	state := models.NewState()
+	state.UpsertHost(models.Host{
+		ID:        "host-tower",
+		Hostname:  "tower",
+		Status:    "online",
+		LastSeen:  time.Now().UTC(),
+		MachineID: "machine-tower",
+		Disks: []models.Disk{
+			{Mountpoint: "/mnt/user", Total: 1000, Used: 400, Free: 600, Usage: 40},
+		},
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			NumProtected: 1,
+		},
+	})
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(1024, 24*time.Hour))
+	setUnexportedField(t, monitor, "metricsStore", store)
+	monitor.SetResourceStore(resourceStore)
+
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=storage&resourceId=host-tower/storage:unraid-array&metric=disk&range=7d",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if len(resp.Points) == 0 {
+		t.Fatalf("expected canonical unraid storage history points, got none")
+	}
+	if math.Abs(resp.Points[len(resp.Points)-1].Value-40.0) > 0.001 {
+		t.Fatalf("expected last point 40.0, got %f", resp.Points[len(resp.Points)-1].Value)
 	}
 }

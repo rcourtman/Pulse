@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 )
@@ -311,6 +312,128 @@ func TestUpdateResourceStoreSyncsUnifiedIncidentAlerts(t *testing.T) {
 	if len(snapshot.ActiveAlerts) != 1 {
 		t.Fatalf("expected state snapshot to contain 1 active alert, got %d", len(snapshot.ActiveAlerts))
 	}
+}
+
+func TestUpdateResourceStoreSyncsCanonicalStorageMetrics(t *testing.T) {
+	t.Run("supplemental truenas storage", func(t *testing.T) {
+		cfg := metrics.DefaultConfig(t.TempDir())
+		store, err := metrics.NewStore(cfg)
+		if err != nil {
+			t.Fatalf("metrics.NewStore() error = %v", err)
+		}
+		defer func() { _ = store.Close() }()
+
+		resourceStore := unifiedresources.NewMonitorAdapter(nil)
+		used := int64(620)
+		total := int64(1000)
+		monitor := &Monitor{
+			resourceStore:  resourceStore,
+			metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+			metricsStore:   store,
+			orgID:          "default",
+			supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+				unifiedresources.SourceTrueNAS: &testMonitorSupplementalProvider{
+					recordsByOrg: map[string][]unifiedresources.IngestRecord{
+						"default": {{
+							SourceID: "pool:tank",
+							Resource: unifiedresources.Resource{
+								ID:        "storage:tank",
+								Type:      unifiedresources.ResourceTypeStorage,
+								Name:      "tank",
+								Status:    unifiedresources.StatusOnline,
+								LastSeen:  time.Now().UTC(),
+								UpdatedAt: time.Now().UTC(),
+								Sources:   []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+								Metrics: &unifiedresources.ResourceMetrics{
+									Disk: &unifiedresources.MetricValue{Used: &used, Total: &total, Percent: 62},
+								},
+								Storage: &unifiedresources.StorageMeta{
+									Platform:   "truenas",
+									Topology:   "pool",
+									Protection: "zfs",
+								},
+							},
+						}},
+					},
+				},
+			},
+		}
+
+		monitor.updateResourceStore(models.StateSnapshot{})
+
+		memory := monitor.GetStorageMetrics("pool:tank", time.Hour)
+		if got := len(memory["usage"]); got == 0 {
+			t.Fatalf("expected in-memory usage history for pool:tank")
+		}
+
+		storeBacked := monitor.GetStorageMetricsForChart("pool:tank", 7*24*time.Hour)
+		if got := len(storeBacked["usage"]); got == 0 {
+			t.Fatalf("expected persisted usage history for pool:tank")
+		}
+	})
+
+	t.Run("agent unraid storage", func(t *testing.T) {
+		cfg := metrics.DefaultConfig(t.TempDir())
+		store, err := metrics.NewStore(cfg)
+		if err != nil {
+			t.Fatalf("metrics.NewStore() error = %v", err)
+		}
+		defer func() { _ = store.Close() }()
+
+		resourceStore := unifiedresources.NewMonitorAdapter(nil)
+		snapshot := models.StateSnapshot{
+			Hosts: []models.Host{
+				{
+					ID:        "host-tower",
+					Hostname:  "tower",
+					Status:    "online",
+					LastSeen:  time.Now().UTC(),
+					MachineID: "machine-tower",
+					Disks: []models.Disk{
+						{Mountpoint: "/mnt/user", Total: 1000, Used: 400, Free: 600, Usage: 40},
+					},
+					Unraid: &models.HostUnraidStorage{
+						ArrayStarted: true,
+						ArrayState:   "STARTED",
+						NumProtected: 1,
+					},
+				},
+			},
+		}
+		monitor := &Monitor{
+			resourceStore:  resourceStore,
+			metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+			metricsStore:   store,
+		}
+
+		monitor.updateResourceStore(snapshot)
+
+		var storageResourceID string
+		for _, resource := range resourceStore.GetAll() {
+			if resource.Type == unifiedresources.ResourceTypeStorage && resource.Storage != nil && resource.Storage.Platform == "unraid" {
+				storageResourceID = resource.ID
+				break
+			}
+		}
+		if storageResourceID == "" {
+			t.Fatal("expected unraid storage resource in unified store")
+		}
+
+		target := resourceStore.MetricsTargetForResource(storageResourceID)
+		if target == nil || target.ResourceType != "storage" || target.ResourceID != "host-tower/storage:unraid-array" {
+			t.Fatalf("unexpected unraid storage metrics target %+v", target)
+		}
+
+		memory := monitor.GetStorageMetrics(target.ResourceID, time.Hour)
+		if got := len(memory["usage"]); got == 0 {
+			t.Fatalf("expected in-memory usage history for %s", target.ResourceID)
+		}
+
+		storeBacked := monitor.GetStorageMetricsForChart(target.ResourceID, 7*24*time.Hour)
+		if got := len(storeBacked["usage"]); got == 0 {
+			t.Fatalf("expected persisted usage history for %s", target.ResourceID)
+		}
+	})
 }
 
 func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) {
