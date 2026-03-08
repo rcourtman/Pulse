@@ -3,6 +3,8 @@ import { For, Show, createMemo, createResource, createSignal, createEffect } fro
 import { useNavigate } from '@solidjs/router';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
+import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
+import { SearchField } from '@/components/shared/SearchField';
 import {
   Table,
   TableHeader,
@@ -182,31 +184,25 @@ export const K8sDeploymentsDrawer: Component<{
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <input
+            <SearchField
               value={search()}
-              onInput={(e) => setSearch(e.currentTarget.value)}
+              onChange={setSearch}
               placeholder="Search deployments..."
-              class="w-[12rem] rounded-md border border-border px-2 py-1 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="w-[12rem]"
+              inputClass="py-1 text-xs font-medium shadow-sm"
             />
 
             <Show when={namespaceOptions().length > 0}>
-              <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
-                <label
-                  for="k8s-deployments-namespace"
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                >
-                  Namespace
-                </label>
-                <select
+              <LabeledFilterSelect
                   id="k8s-deployments-namespace"
+                  label="Namespace"
                   value={namespace()}
                   onChange={(e) => setNamespace(e.currentTarget.value)}
-                  class="min-w-[10rem] rounded-md border border-border px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  selectClass="min-w-[10rem]"
                 >
                   <option value="">All namespaces</option>
                   <For each={namespaceOptions()}>{(ns) => <option value={ns}>{ns}</option>}</For>
-                </select>
-              </div>
+              </LabeledFilterSelect>
             </Show>
 
             <button

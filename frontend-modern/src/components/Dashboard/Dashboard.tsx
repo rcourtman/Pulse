@@ -39,6 +39,7 @@ import { logger } from '@/utils/logger';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { blurFocusedTypeToSearch } from '@/hooks/useTypeToSearch';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getOrgID } from '@/utils/apiClient';
@@ -1012,9 +1013,6 @@ export function Dashboard(props: DashboardProps) {
     createWorkloadSortComparator(sortKey() || '', sortDirection()),
   );
 
-  // Handle keyboard shortcuts
-  let searchInputRef: HTMLInputElement | undefined;
-
   createEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Escape key behavior
@@ -1046,10 +1044,7 @@ export function Dashboard(props: DashboardProps) {
           setViewMode('all');
           setStatusMode('all');
 
-          // Blur the search input if it's focused
-          if (searchInputRef && document.activeElement === searchInputRef) {
-            searchInputRef.blur();
-          }
+          blurFocusedTypeToSearch();
         } else {
           // No active filters, toggle the filters section visibility
           setShowFilters(!showFilters());
@@ -1512,7 +1507,6 @@ export function Dashboard(props: DashboardProps) {
           setGroupingMode={setGroupingMode}
           setSortKey={setSortKey}
           setSortDirection={setSortDirection}
-          searchInputRef={(el) => (searchInputRef = el)}
           onBeforeAutoFocus={() => {
             if (aiChatStore.focusInput()) return true;
             if (!showFilters()) setShowFilters(true);

@@ -1,13 +1,18 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import {
+  FilterActionButton,
+  FilterHeader,
+  FilterMobileToggleButton,
+  FilterSegmentedControl,
+  LabeledFilterSelect,
+} from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { ViewMode } from '@/types/workloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import ListFilterIcon from 'lucide-solid/icons/list-filter';
-import { segmentedButtonClass } from '@/utils/segmentedButton';
 
 interface DashboardFilterProps {
   search: () => string;
@@ -21,7 +26,6 @@ interface DashboardFilterProps {
   setGroupingMode: (value: 'grouped' | 'flat') => void;
   setSortKey: (value: string) => void;
   setSortDirection: (value: string) => void;
-  searchInputRef?: (el: HTMLInputElement) => void;
   onBeforeAutoFocus?: () => boolean;
   // Column visibility
   availableColumns?: ColumnDef[];
@@ -69,211 +73,129 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
   return (
     <Card class="dashboard-filter mb-4" padding="sm">
-      <div class="flex flex-col gap-2">
-        <SearchInput
-          value={props.search}
-          onChange={props.setSearch}
-          placeholder="Search or filter..."
-          class="w-full"
-          inputRef={props.searchInputRef}
-          onBeforeAutoFocus={props.onBeforeAutoFocus}
-          autoFocus
-          history={{ storageKey: STORAGE_KEYS.DASHBOARD_SEARCH_HISTORY }}
-        />
-
-        <Show when={isMobile()}>
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((o) => !o)}
-            class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
-          >
-            <ListFilterIcon class="w-3.5 h-3.5" />
-            Filters
-            <Show when={activeFilterCount() > 0}>
-              <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                {activeFilterCount()}
-              </span>
-            </Show>
-          </button>
+      <FilterHeader
+        search={
+          <SearchInput
+            value={props.search}
+            onChange={props.setSearch}
+            placeholder="Search or filter..."
+            class="w-full"
+            onBeforeAutoFocus={props.onBeforeAutoFocus}
+            typeToSearch
+            history={{ storageKey: STORAGE_KEYS.DASHBOARD_SEARCH_HISTORY }}
+          />
+        }
+        searchAccessory={
+          <Show when={isMobile()}>
+            <FilterMobileToggleButton
+              onClick={() => setFiltersOpen((o) => !o)}
+              count={activeFilterCount()}
+            />
+          </Show>
+        }
+        showFilters={!isMobile() || filtersOpen()}
+        toolbarClass="lg:flex-nowrap"
+      >
+        <Show when={props.hostFilter}>
+          {(hostFilter) => (
+            <LabeledFilterSelect
+              id={hostFilter().id ?? 'dashboard-host-filter'}
+              label={hostFilter().label ?? 'Agent'}
+              value={hostFilter().value}
+              onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
+              selectClass="min-w-[8rem]"
+            >
+              <For each={hostFilter().options}>
+                {(option) => <option value={option.value}>{option.label}</option>}
+              </For>
+            </LabeledFilterSelect>
+          )}
         </Show>
 
-        <Show when={!isMobile() || filtersOpen()}>
-          <div class="flex flex-wrap items-center gap-2 text-xs text-muted lg:flex-nowrap">
-            <Show when={props.hostFilter}>
-              {(hostFilter) => (
-                <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
-                  <label
-                    for={hostFilter().id ?? 'dashboard-host-filter'}
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                  >
-                    {hostFilter().label ?? 'Agent'}
-                  </label>
-                  <select
-                    id={hostFilter().id ?? 'dashboard-host-filter'}
-                    value={hostFilter().value}
-                    onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
-                    class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <For each={hostFilter().options}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                </div>
-              )}
-            </Show>
-
-            <Show when={props.namespaceFilter}>
-              {(namespaceFilter) => (
-                <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
-                  <label
-                    for={namespaceFilter().id ?? 'dashboard-namespace-filter'}
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                  >
-                    {namespaceFilter().label ?? 'Namespace'}
-                  </label>
-                  <select
-                    id={namespaceFilter().id ?? 'dashboard-namespace-filter'}
-                    value={namespaceFilter().value}
-                    onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
-                    class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <For each={namespaceFilter().options}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                </div>
-              )}
-            </Show>
-
-            <Show
-              when={props.viewMode() === 'app-container' ? props.containerRuntimeFilter : undefined}
+        <Show when={props.namespaceFilter}>
+          {(namespaceFilter) => (
+            <LabeledFilterSelect
+              id={namespaceFilter().id ?? 'dashboard-namespace-filter'}
+              label={namespaceFilter().label ?? 'Namespace'}
+              value={namespaceFilter().value}
+              onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
+              selectClass="min-w-[8rem]"
             >
-              {(runtimeFilter) => (
-                <div class="inline-flex items-center rounded-md bg-surface-hover p-0.5">
-                  <label
-                    for={runtimeFilter().id ?? 'dashboard-runtime-filter'}
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                  >
-                    {runtimeFilter().label ?? 'Runtime'}
-                  </label>
-                  <select
-                    id={runtimeFilter().id ?? 'dashboard-runtime-filter'}
-                    value={runtimeFilter().value}
-                    onChange={(e) => runtimeFilter().onChange(e.currentTarget.value)}
-                    class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <For each={runtimeFilter().options}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                </div>
-              )}
-            </Show>
+              <For each={namespaceFilter().options}>
+                {(option) => <option value={option.value}>{option.label}</option>}
+              </For>
+            </LabeledFilterSelect>
+          )}
+        </Show>
 
-            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-              <label
-                for="dashboard-type-filter"
-                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-              >
-                Type
-              </label>
-              <select
-                id="dashboard-type-filter"
-                value={props.viewMode()}
-                onChange={(event) =>
-                  props.setViewMode(
-                    event.currentTarget.value as
-                      | 'all'
-                      | 'vm'
-                      | 'system-container'
-                      | 'app-container'
-                      | 'pod',
-                  )
-                }
-                class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All</option>
-                <option value="vm">VMs</option>
-                <option value="system-container">System Containers</option>
-                <option value="app-container">App Containers</option>
-                <option value="pod">Pods</option>
-              </select>
-            </div>
+        <Show
+          when={props.viewMode() === 'app-container' ? props.containerRuntimeFilter : undefined}
+        >
+          {(runtimeFilter) => (
+            <LabeledFilterSelect
+              id={runtimeFilter().id ?? 'dashboard-runtime-filter'}
+              label={runtimeFilter().label ?? 'Runtime'}
+              value={runtimeFilter().value}
+              onChange={(e) => runtimeFilter().onChange(e.currentTarget.value)}
+              selectClass="min-w-[7rem]"
+            >
+              <For each={runtimeFilter().options}>
+                {(option) => <option value={option.value}>{option.label}</option>}
+              </For>
+            </LabeledFilterSelect>
+          )}
+        </Show>
 
-            <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-              <label
-                for="dashboard-status-filter"
-                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-              >
-                Status
-              </label>
-              <select
-                id="dashboard-status-filter"
-                value={props.statusMode()}
-                onChange={(event) =>
-                  props.setStatusMode(
-                    event.currentTarget.value as 'all' | 'running' | 'degraded' | 'stopped',
-                  )
-                }
-                class="min-w-[8rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All</option>
-                <option value="running">Running</option>
-                <option value="degraded">Degraded</option>
-                <option value="stopped">Stopped</option>
-              </select>
-            </div>
+        <LabeledFilterSelect
+          id="dashboard-type-filter"
+          label="Type"
+          value={props.viewMode()}
+          onChange={(event) =>
+            props.setViewMode(
+              event.currentTarget.value as
+                | 'all'
+                | 'vm'
+                | 'system-container'
+                | 'app-container'
+                | 'pod',
+            )
+          }
+          selectClass="min-w-[7rem]"
+        >
+          <option value="all">All</option>
+          <option value="vm">VMs</option>
+          <option value="system-container">System Containers</option>
+          <option value="app-container">App Containers</option>
+          <option value="pod">Pods</option>
+        </LabeledFilterSelect>
 
-            <div class="inline-flex rounded-md bg-surface-hover p-0.5">
-              <button
-                type="button"
-                onClick={() => props.setGroupingMode('grouped')}
-                class={segmentedButtonClass(props.groupingMode() === 'grouped')}
-                title="Group by node"
-              >
-                <svg
-                  class="w-3 h-3"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-                </svg>
-                Grouped
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setGroupingMode('flat')}
-                class={segmentedButtonClass(props.groupingMode() === 'flat')}
-                title="Flat list view"
-              >
-                <svg
-                  class="w-3 h-3"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="8" y1="6" x2="21" y2="6" />
-                  <line x1="8" y1="12" x2="21" y2="12" />
-                  <line x1="8" y1="18" x2="21" y2="18" />
-                  <line x1="3" y1="6" x2="3.01" y2="6" />
-                  <line x1="3" y1="12" x2="3.01" y2="12" />
-                  <line x1="3" y1="18" x2="3.01" y2="18" />
-                </svg>
-                List
-              </button>
-            </div>
+        <LabeledFilterSelect
+          id="dashboard-status-filter"
+          label="Status"
+          value={props.statusMode()}
+          onChange={(event) =>
+            props.setStatusMode(
+              event.currentTarget.value as 'all' | 'running' | 'degraded' | 'stopped',
+            )
+          }
+          selectClass="min-w-[8rem]"
+        >
+          <option value="all">All</option>
+          <option value="running">Running</option>
+          <option value="degraded">Degraded</option>
+          <option value="stopped">Stopped</option>
+        </LabeledFilterSelect>
 
-            <Show when={props.onChartsToggle}>
-              <div class="hidden lg:inline-flex rounded-md bg-surface-hover p-0.5">
-                <button
-                  type="button"
-                  onClick={props.onChartsToggle}
-                  class={segmentedButtonClass(!props.chartsCollapsed?.())}
-                  title={props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts'}
-                >
+        <FilterSegmentedControl
+          value={props.groupingMode()}
+          onChange={(value) => props.setGroupingMode(value as 'grouped' | 'flat')}
+          aria-label="Group By"
+          options={[
+            {
+              value: 'grouped',
+              title: 'Group by node',
+              label: (
+                <>
                   <svg
                     class="w-3 h-3"
                     viewBox="0 0 24 24"
@@ -281,69 +203,121 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     stroke="currentColor"
                     stroke-width="2"
                   >
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
                   </svg>
-                  Charts
-                </button>
-              </div>
-            </Show>
+                  Grouped
+                </>
+              ),
+            },
+            {
+              value: 'flat',
+              title: 'Flat list view',
+              label: (
+                <>
+                  <svg
+                    class="w-3 h-3"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="8" y1="6" x2="21" y2="6" />
+                    <line x1="8" y1="12" x2="21" y2="12" />
+                    <line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                  List
+                </>
+              ),
+            },
+          ]}
+        />
 
-            <Show when={props.availableColumns && props.isColumnHidden && props.onColumnToggle}>
-              <ColumnPicker
-                columns={props.availableColumns!}
-                isHidden={props.isColumnHidden!}
-                onToggle={props.onColumnToggle!}
-                onReset={props.onColumnReset}
-              />
-            </Show>
-
-            <Show
-              when={
-                props.search().trim() !== '' ||
-                props.viewMode() !== 'all' ||
-                props.statusMode() !== 'all' ||
-                props.groupingMode() !== 'grouped' ||
-                (props.hostFilter ? props.hostFilter.value !== '' : false) ||
-                (props.namespaceFilter ? props.namespaceFilter.value !== '' : false)
-              }
-            >
-              <button
-                onClick={() => {
-                  props.setSearch('');
-                  props.setSortKey('name');
-                  props.setSortDirection('asc');
-                  props.setViewMode('all');
-                  props.setStatusMode('all');
-                  props.setGroupingMode('grouped');
-                  if (props.hostFilter) {
-                    props.hostFilter.onChange('');
-                  }
-                  if (props.namespaceFilter) {
-                    props.namespaceFilter.onChange('');
-                  }
-                }}
-                title="Reset all filters"
-                class="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-900"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                  <path d="M21 3v5h-5" />
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                  <path d="M8 16H3v5" />
-                </svg>
-                Reset
-              </button>
-            </Show>
-          </div>
+        <Show when={props.onChartsToggle}>
+          <FilterSegmentedControl
+            class="hidden lg:inline-flex"
+            value={props.chartsCollapsed?.() ? 'hidden' : 'shown'}
+            onChange={() => props.onChartsToggle?.()}
+            aria-label="Charts"
+            options={[
+              {
+                value: 'shown',
+                title: props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts',
+                label: (
+                  <>
+                    <svg
+                      class="w-3 h-3"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                    Charts
+                  </>
+                ),
+              },
+            ]}
+          />
         </Show>
-      </div>
+
+        <Show when={props.availableColumns && props.isColumnHidden && props.onColumnToggle}>
+          <ColumnPicker
+            columns={props.availableColumns!}
+            isHidden={props.isColumnHidden!}
+            onToggle={props.onColumnToggle!}
+            onReset={props.onColumnReset}
+          />
+        </Show>
+
+        <Show
+          when={
+            props.search().trim() !== '' ||
+            props.viewMode() !== 'all' ||
+            props.statusMode() !== 'all' ||
+            props.groupingMode() !== 'grouped' ||
+            (props.hostFilter ? props.hostFilter.value !== '' : false) ||
+            (props.namespaceFilter ? props.namespaceFilter.value !== '' : false)
+          }
+        >
+          <FilterActionButton
+            onClick={() => {
+              props.setSearch('');
+              props.setSortKey('name');
+              props.setSortDirection('asc');
+              props.setViewMode('all');
+              props.setStatusMode('all');
+              props.setGroupingMode('grouped');
+              if (props.hostFilter) {
+                props.hostFilter.onChange('');
+              }
+              if (props.namespaceFilter) {
+                props.namespaceFilter.onChange('');
+              }
+            }}
+            title="Reset all filters"
+            class="ml-auto text-base-content"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M8 16H3v5" />
+            </svg>
+            Reset
+          </FilterActionButton>
+        </Show>
+      </FilterHeader>
     </Card>
   );
 };

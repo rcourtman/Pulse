@@ -17,16 +17,20 @@ import {
 import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
+import {
+  FilterHeader,
+  FilterMobileToggleButton,
+  LabeledFilterSelect,
+} from '@/components/shared/FilterToolbar';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { notificationStore } from '@/stores/notifications';
-import { showError as showErrorToast } from '@/utils/toast';
+import { showErrorWithDetail } from '@/utils/toast';
 import { eventBus } from '@/stores/events';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import Calendar from 'lucide-solid/icons/calendar';
-import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
@@ -107,6 +111,7 @@ import {
   getTriggerValue,
   extractTriggerValues,
   unifiedTypeToAlertDisplayType,
+  alertTypeDisplayLabel,
   platformData,
   guessNumericId,
   DEFAULT_DELAY_SECONDS,
@@ -1586,7 +1591,7 @@ export function Alerts() {
                       alertsActivation.config()?.observationWindowHours;
 
                     const alertConfig = {
-                      enabled: true,
+                      enabled: alertsActivation.config()?.enabled ?? true,
                       activationState: existingActivationState ?? undefined,
                       activationTime: existingActivationTime,
                       observationWindowHours: existingObservationWindowHours,
@@ -2445,9 +2450,9 @@ function DestinationsTab(props: DestinationsTabProps) {
       notificationStore.success('Test email sent successfully! Check your inbox.');
     } catch (err) {
       logger.error('Failed to send test email:', err);
-      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const msg = err instanceof Error ? err.message : 'Failed to send test email';
       const detail = (err as Error & { detail?: string })?.detail;
-      showErrorToast('Failed to send test email: ' + msg, detail);
+      showErrorWithDetail(msg, detail);
     } finally {
       setTestingEmail(false);
     }
@@ -2477,9 +2482,9 @@ function DestinationsTab(props: DestinationsTabProps) {
       notificationStore.success('Test Apprise notification sent successfully!');
     } catch (err) {
       logger.error('Failed to send test Apprise notification:', err);
-      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const msg = err instanceof Error ? err.message : 'Failed to send test notification';
       const detail = (err as Error & { detail?: string })?.detail;
-      showErrorToast('Failed to send test Apprise notification: ' + msg, detail);
+      showErrorWithDetail(msg, detail);
     } finally {
       setTestingApprise(false);
     }
@@ -2497,9 +2502,9 @@ function DestinationsTab(props: DestinationsTabProps) {
       }
       notificationStore.success('Test webhook sent successfully!');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const msg = err instanceof Error ? err.message : 'Failed to send test webhook';
       const detail = (err as Error & { detail?: string })?.detail;
-      showErrorToast('Failed to send test webhook: ' + msg, detail);
+      showErrorWithDetail(msg, detail);
     } finally {
       setTestingWebhook(null);
     }
@@ -3870,9 +3875,6 @@ function HistoryTab(props: {
     }
   };
 
-  // Ref for search input
-  let searchInputRef: HTMLInputElement | undefined;
-
   // Persist filter changes to localStorage
 
   // Clear chart selection when high-level filters change
@@ -3914,35 +3916,8 @@ function HistoryTab(props: {
       void fetchHistory(timeFilter());
     });
 
-    // Add keyboard event listeners
-    const handleKeydown = (e: KeyboardEvent) => {
-      // If already focused on an input, select, or textarea, don't interfere
-      const activeElement = document.activeElement;
-      if (
-        activeElement &&
-        (activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          activeElement.tagName === 'SELECT')
-      ) {
-        // Handle Escape to clear and unfocus
-        if (e.key === 'Escape' && activeElement === searchInputRef) {
-          setSearchTerm('');
-          searchInputRef.blur();
-        }
-        return;
-      }
-
-      // If typing a letter, number, or space, focus the search input
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        searchInputRef?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeydown);
-
     onCleanup(() => {
       unsubscribeOrgSwitched();
-      document.removeEventListener('keydown', handleKeydown);
       // Prevent pending requests from updating state after unmount
       fetchRequestId++;
     });
@@ -4130,7 +4105,7 @@ function HistoryTab(props: {
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
-        title: alert.type,
+        title: alertTypeDisplayLabel(alert.type),
         description: alert.message,
         acknowledged: false,
       });
@@ -4156,7 +4131,7 @@ function HistoryTab(props: {
         node: alert.node,
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
-        title: alert.type,
+        title: alertTypeDisplayLabel(alert.type),
         description: alert.message,
         acknowledged: alert.acknowledged,
       });
@@ -4768,78 +4743,53 @@ function HistoryTab(props: {
 
       {/* Filters */}
       <Card padding="sm" class="mb-4">
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center gap-2">
+        <FilterHeader
+          search={
             <SearchInput
               value={searchTerm}
               onChange={setSearchTerm}
               placeholder="Search alerts..."
               class="w-full"
-              inputRef={(el) => (searchInputRef = el)}
+              clearOnEscape
               history={{ storageKey: STORAGE_KEYS.ALERTS_SEARCH_HISTORY }}
             />
+          }
+          searchAccessory={
             <Show when={isMobile()}>
-              <button
-                type="button"
+              <FilterMobileToggleButton
                 onClick={() => setFiltersOpen((o) => !o)}
-                class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
-              >
-                <ListFilterIcon class="w-3.5 h-3.5" />
-                Filters
-                <Show when={activeFilterCount() > 0}>
-                  <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                    {activeFilterCount()}
-                  </span>
-                </Show>
-              </button>
+                count={activeFilterCount()}
+              />
             </Show>
-          </div>
-          <Show when={!isMobile() || filtersOpen()}>
-            <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-              <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                <label
-                  for="alert-time-filter"
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                >
-                  Period
-                </label>
-                <select
-                  id="alert-time-filter"
-                  value={timeFilter()}
-                  onChange={(e) =>
-                    setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')
-                  }
-                  class="rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="24h">Last 24h</option>
-                  <option value="7d">Last 7d</option>
-                  <option value="30d">Last 30d</option>
-                  <option value="all">All Time</option>
-                </select>
-              </div>
-              <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                <label
-                  for="alert-severity-filter"
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                >
-                  Severity
-                </label>
-                <select
-                  id="alert-severity-filter"
-                  value={severityFilter()}
-                  onChange={(e) =>
-                    setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')
-                  }
-                  class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">All</option>
-                  <option value="critical">Critical</option>
-                  <option value="warning">Warning</option>
-                </select>
-              </div>
-            </div>
-          </Show>
-        </div>
+          }
+          showFilters={!isMobile() || filtersOpen()}
+        >
+          <LabeledFilterSelect
+            id="alert-time-filter"
+            label="Period"
+            value={timeFilter()}
+            onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
+            selectClass="min-w-[7rem]"
+          >
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7d</option>
+            <option value="30d">Last 30d</option>
+            <option value="all">All Time</option>
+          </LabeledFilterSelect>
+          <LabeledFilterSelect
+            id="alert-severity-filter"
+            label="Severity"
+            value={severityFilter()}
+            onChange={(e) =>
+              setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')
+            }
+            selectClass="min-w-[7rem]"
+          >
+            <option value="all">All</option>
+            <option value="critical">Critical</option>
+            <option value="warning">Warning</option>
+          </LabeledFilterSelect>
+        </FilterHeader>
       </Card>
 
       <Show when={resourceIncidentPanel()}>

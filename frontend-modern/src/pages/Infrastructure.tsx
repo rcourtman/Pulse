@@ -2,6 +2,13 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack }
 import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
+import {
+  FilterActionButton,
+  FilterHeader,
+  FilterMobileToggleButton,
+  FilterSegmentedControl,
+  LabeledFilterSelect,
+} from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -10,12 +17,10 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { TimeRange } from '@/api/charts';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
-import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { AgentDeployModal } from '@/components/Infrastructure/AgentDeployModal';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
@@ -369,151 +374,139 @@ export function Infrastructure() {
 
               <Show when={!kioskMode()}>
                 <Card padding="sm" class="mb-4">
-                  <div class="flex flex-col gap-2">
-                    <SearchInput
-                      value={searchQuery}
-                      onChange={setSearchQuery}
-                      placeholder="Search resources, IDs, IPs, or tags..."
-                      class="w-full"
-                      autoFocus
-                      history={{
-                        storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
-                        emptyMessage: 'Recent infrastructure searches appear here.',
-                      }}
+                  <FilterHeader
+                    search={
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search resources, IDs, IPs, or tags..."
+                        class="w-full"
+                        typeToSearch
+                        history={{
+                          storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
+                          emptyMessage: 'Recent infrastructure searches appear here.',
+                        }}
+                      />
+                    }
+                    searchAccessory={
+                      <Show when={isMobile()}>
+                        <FilterMobileToggleButton
+                          onClick={() => setFiltersOpen((o) => !o)}
+                          count={activeFilterCount()}
+                        />
+                      </Show>
+                    }
+                    showFilters={!isMobile() || filtersOpen()}
+                    toolbarClass="lg:flex-nowrap"
+                  >
+                    <LabeledFilterSelect
+                      id="infra-source-filter"
+                      label="Source"
+                      value={selectedSource()}
+                      onChange={(e) => setSelectedSource(e.currentTarget.value)}
+                      selectClass="min-w-[8rem]"
+                    >
+                      <option value="">All</option>
+                      <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
+                        {(source) => <option value={source.key}>{source.label}</option>}
+                      </For>
+                    </LabeledFilterSelect>
+
+                    <LabeledFilterSelect
+                      id="infra-status-filter"
+                      label="Status"
+                      value={selectedStatus()}
+                      onChange={(e) => setSelectedStatus(e.currentTarget.value)}
+                      selectClass="min-w-[7rem]"
+                    >
+                      <option value="">All</option>
+                      <For each={statusOptions()}>
+                        {(status) => <option value={status.key}>{status.label}</option>}
+                      </For>
+                    </LabeledFilterSelect>
+
+                    <FilterSegmentedControl
+                      value={groupingMode()}
+                      onChange={(value) => setGroupingMode(value as GroupingMode)}
+                      aria-label="Group By"
+                      options={[
+                        {
+                          value: 'grouped',
+                          title: 'Group by cluster',
+                          label: (
+                            <>
+                              <svg
+                                class="w-3 h-3"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                              >
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
+                              </svg>
+                              Grouped
+                            </>
+                          ),
+                        },
+                        {
+                          value: 'flat',
+                          title: 'Flat list view',
+                          label: (
+                            <>
+                              <svg
+                                class="w-3 h-3"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                              >
+                                <line x1="8" y1="6" x2="21" y2="6" />
+                                <line x1="8" y1="12" x2="21" y2="12" />
+                                <line x1="8" y1="18" x2="21" y2="18" />
+                                <line x1="3" y1="6" x2="3.01" y2="6" />
+                                <line x1="3" y1="12" x2="3.01" y2="12" />
+                                <line x1="3" y1="18" x2="3.01" y2="18" />
+                              </svg>
+                              List
+                            </>
+                          ),
+                        },
+                      ]}
                     />
 
-                    <Show when={isMobile()}>
-                      <button
-                        type="button"
-                        onClick={() => setFiltersOpen((o) => !o)}
-                        class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
-                      >
-                        <ListFilterIcon class="w-3.5 h-3.5" />
-                        Filters
-                        <Show when={activeFilterCount() > 0}>
-                          <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                            {activeFilterCount()}
-                          </span>
-                        </Show>
-                      </button>
+                    <FilterSegmentedControl
+                      class="hidden lg:inline-flex"
+                      value={summaryCollapsed() ? 'hidden' : 'shown'}
+                      onChange={() => setSummaryCollapsed((c) => !c)}
+                      aria-label="Charts"
+                      options={[
+                        {
+                          value: 'shown',
+                          title: summaryCollapsed() ? 'Show charts' : 'Hide charts',
+                          label: (
+                            <>
+                              <svg
+                                class="w-3 h-3"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                              >
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                              </svg>
+                              Charts
+                            </>
+                          ),
+                        },
+                      ]}
+                    />
+
+                    <Show when={hasActiveFilters()}>
+                      <FilterActionButton onClick={clearFilters} class="ml-auto text-base-content">
+                        Clear
+                      </FilterActionButton>
                     </Show>
-
-                    <Show when={!isMobile() || filtersOpen()}>
-                      <div class="flex flex-wrap items-center gap-2 text-xs text-muted lg:flex-nowrap">
-                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                          <label
-                            for="infra-source-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                          >
-                            Source
-                          </label>
-                          <select
-                            id="infra-source-filter"
-                            value={selectedSource()}
-                            onChange={(e) => setSelectedSource(e.currentTarget.value)}
-                            class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="">All</option>
-                            <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
-                              {(source) => <option value={source.key}>{source.label}</option>}
-                            </For>
-                          </select>
-                        </div>
-
-                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                          <label
-                            for="infra-status-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                          >
-                            Status
-                          </label>
-                          <select
-                            id="infra-status-filter"
-                            value={selectedStatus()}
-                            onChange={(e) => setSelectedStatus(e.currentTarget.value)}
-                            class="min-w-[7rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="">All</option>
-                            <For each={statusOptions()}>
-                              {(status) => <option value={status.key}>{status.label}</option>}
-                            </For>
-                          </select>
-                        </div>
-
-                        <div class="inline-flex rounded-md bg-surface-hover p-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setGroupingMode('grouped')}
-                            class={segmentedButtonClass(groupingMode() === 'grouped')}
-                            title="Group by cluster"
-                          >
-                            <svg
-                              class="w-3 h-3"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            >
-                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-                            </svg>
-                            Grouped
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setGroupingMode('flat')}
-                            class={segmentedButtonClass(groupingMode() === 'flat')}
-                            title="Flat list view"
-                          >
-                            <svg
-                              class="w-3 h-3"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            >
-                              <line x1="8" y1="6" x2="21" y2="6" />
-                              <line x1="8" y1="12" x2="21" y2="12" />
-                              <line x1="8" y1="18" x2="21" y2="18" />
-                              <line x1="3" y1="6" x2="3.01" y2="6" />
-                              <line x1="3" y1="12" x2="3.01" y2="12" />
-                              <line x1="3" y1="18" x2="3.01" y2="18" />
-                            </svg>
-                            List
-                          </button>
-                        </div>
-
-                        <div class="hidden lg:inline-flex rounded-md bg-surface-hover p-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setSummaryCollapsed((c) => !c)}
-                            class={segmentedButtonClass(!summaryCollapsed())}
-                            title={summaryCollapsed() ? 'Show charts' : 'Hide charts'}
-                          >
-                            <svg
-                              class="w-3 h-3"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            >
-                              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                            </svg>
-                            Charts
-                          </button>
-                        </div>
-
-                        <Show when={hasActiveFilters()}>
-                          <button
-                            type="button"
-                            onClick={clearFilters}
-                            class="ml-auto rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-900"
-                          >
-                            Clear
-                          </button>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
+                  </FilterHeader>
                 </Card>
               </Show>
 

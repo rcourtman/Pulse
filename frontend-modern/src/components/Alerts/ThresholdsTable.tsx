@@ -1,7 +1,8 @@
-import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect } from 'solid-js';
+import { createSignal, createMemo, Show, For, createEffect } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import Toggle from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { useCollapsedSections } from './Thresholds/hooks/useCollapsedSections';
 import { TagInput } from '@/components/shared/TagInput';
@@ -161,7 +162,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'agents' | 'docker'>(
     'proxmox',
   );
-  let searchInputRef: HTMLInputElement | undefined;
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
     props.dockerIgnoredPrefixes().join('\n'),
   );
@@ -241,62 +241,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     setDockerIgnoredInput('');
     props.setHasUnsavedChanges(true);
   };
-
-  // Set up keyboard shortcuts
-  onMount(() => {
-    const isEditableElement = (el: HTMLElement | null | undefined): boolean => {
-      if (!el) return false;
-      const tag = el.tagName;
-      return (
-        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.contentEditable === 'true'
-      );
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const activeElement = (document.activeElement as HTMLElement) ?? null;
-      const inEditable = isEditableElement(target);
-
-      // Ctrl/Cmd+F to focus search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        if (searchInputRef) {
-          searchInputRef.focus();
-          searchInputRef.select();
-        }
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        if (searchTerm()) {
-          e.preventDefault();
-          setSearchTerm('');
-        }
-        if (searchInputRef && document.activeElement === searchInputRef) {
-          searchInputRef.blur();
-        }
-        return;
-      }
-
-      if (e.defaultPrevented || inEditable || isEditableElement(activeElement) || editingId()) {
-        return;
-      }
-
-      if (e.key.length === 1 && e.key.match(/[a-z0-9]/i)) {
-        e.preventDefault();
-        if (searchInputRef) {
-          searchInputRef.focus();
-          setSearchTerm(e.key);
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-
-    onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyDown);
-    });
-  });
 
   // Check if there's an active alert for a resource/metric
   const hasActiveAlert = (resourceId: string, metric: string): boolean => {
@@ -2505,46 +2449,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     <div class="space-y-4">
       {/* Search Bar */}
       <div class="relative">
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search resources... (Ctrl+F)"
-          value={searchTerm()}
-          onInput={(e) => setSearchTerm(e.currentTarget.value)}
-          class="w-full pl-10 pr-20 py-2 text-sm border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Search resources..."
+          class="w-full"
+          onBeforeAutoFocus={() => Boolean(editingId())}
+          focusOnShortcut
+          clearOnEscape
+          shortcutHint="Ctrl+F"
         />
-        <kbd class="absolute right-10 top-2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted bg-surface-hover rounded border border-border">
-          ⌘F
-        </kbd>
-        <svg
-          class="absolute left-3 top-2.5 w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-        <Show when={searchTerm()}>
-          <button
-            type="button"
-            onClick={() => setSearchTerm('')}
-            class="absolute right-3 top-2.5 text-slate-400 hover:text-muted"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </Show>
       </div>
 
       {/* Help Banner - Dismissible */}

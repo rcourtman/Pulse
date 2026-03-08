@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
+import { SearchField } from '@/components/shared/SearchField';
 import {
   Table,
   TableHeader,
@@ -189,11 +190,12 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <input
+            <SearchField
               value={search()}
-              onInput={(e) => setSearch(e.currentTarget.value)}
+              onChange={setSearch}
               placeholder="Search services..."
-              class="w-[12rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="w-[12rem]"
+              inputClass="py-1 text-xs font-medium shadow-sm"
             />
           </div>
         </div>

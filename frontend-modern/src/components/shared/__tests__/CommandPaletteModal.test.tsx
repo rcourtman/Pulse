@@ -36,4 +36,16 @@ describe('CommandPaletteModal', () => {
     expect(navigateMock).toHaveBeenCalledWith('/workloads?type=pod');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('uses the shared search input and keeps Enter selection behavior', async () => {
+    const onClose = vi.fn();
+    render(() => <CommandPaletteModal isOpen={true} onClose={onClose} />);
+
+    const input = screen.getByPlaceholderText('Type a command or search...');
+    await fireEvent.input(input, { target: { value: 'type=pod' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(navigateMock).toHaveBeenCalledWith('/workloads?type=pod');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

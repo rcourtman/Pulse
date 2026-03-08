@@ -1,6 +1,7 @@
 import { createSignal, Show, onCleanup, createEffect } from 'solid-js';
 import { UpdatesAPI, type UpdateStatus } from '@/api/updates';
 import { Dialog } from '@/components/shared/Dialog';
+import { ProgressBar } from '@/components/shared/ProgressBar';
 import { apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
@@ -387,164 +388,163 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       ariaLabel="Updating Pulse"
     >
       <div class="w-full">
-          {/* Header */}
-          <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center justify-between">
-              <h2 class="text-xl font-semibold text-base-content">Updating Pulse</h2>
-              <Show when={isComplete()}>
-                <button onClick={handleClose} class=" hover:text-base-content" type="button">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Header */}
+        <div class="px-6 py-4 border-b border-border">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-semibold text-base-content">Updating Pulse</h2>
+            <Show when={isComplete()}>
+              <button onClick={handleClose} class=" hover:text-base-content" type="button">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </Show>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div class="px-6 py-8">
+          {/* Icon and Status */}
+          <div class="flex flex-col items-center text-center space-y-4">
+            {getStageIcon()}
+            <div>
+              <div class="text-lg font-medium text-base-content">{getStatusText()}</div>
+              <Show when={status()?.status && !isComplete()}>
+                <div class="text-sm text-muted mt-1 capitalize">
+                  {status()!.status.replace('-', ' ')}
+                </div>
+              </Show>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <Show when={!isComplete() && status()?.progress !== undefined}>
+            <div class="mt-6">
+              <div class="flex items-center justify-between text-sm text-muted mb-2">
+                <span>Progress</span>
+                <span>{status()!.progress}%</span>
+              </div>
+              <ProgressBar
+                value={status()!.progress}
+                class="h-2 rounded-full"
+                fillClass="bg-blue-600"
+              />
+            </div>
+          </Show>
+
+          {/* Error Message */}
+          <Show when={hasError() && status()?.error}>
+            <div class="mt-6 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md p-4">
+              <div class="text-sm text-red-800 dark:text-red-200">
+                <div class="font-medium mb-1">Error Details:</div>
+                <div class="text-red-700 dark:text-red-300">{status()!.error}</div>
+              </div>
+            </div>
+          </Show>
+
+          {/* Warning / Info */}
+          <Show when={!isComplete()}>
+            <Show when={isRestarting()}>
+              <div class="mt-6 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                <div class="flex items-start gap-2">
+                  <svg
+                    class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M6 18L18 6M6 6l12 12"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                </button>
-              </Show>
-            </div>
-          </div>
-
-          {/* Body */}
-          <div class="px-6 py-8">
-            {/* Icon and Status */}
-            <div class="flex flex-col items-center text-center space-y-4">
-              {getStageIcon()}
-              <div>
-                <div class="text-lg font-medium text-base-content">{getStatusText()}</div>
-                <Show when={status()?.status && !isComplete()}>
-                  <div class="text-sm text-muted mt-1 capitalize">
-                    {status()!.status.replace('-', ' ')}
-                  </div>
-                </Show>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <Show when={!isComplete() && status()?.progress !== undefined}>
-              <div class="mt-6">
-                <div class="flex items-center justify-between text-sm text-muted mb-2">
-                  <span>Progress</span>
-                  <span>{status()!.progress}%</span>
-                </div>
-                <div class="w-full bg-surface-hover rounded-full h-2">
-                  <div
-                    class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${status()!.progress}%` }}
-                  />
-                </div>
-              </div>
-            </Show>
-
-            {/* Error Message */}
-            <Show when={hasError() && status()?.error}>
-              <div class="mt-6 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md p-4">
-                <div class="text-sm text-red-800 dark:text-red-200">
-                  <div class="font-medium mb-1">Error Details:</div>
-                  <div class="text-red-700 dark:text-red-300">{status()!.error}</div>
-                </div>
-              </div>
-            </Show>
-
-            {/* Warning / Info */}
-            <Show when={!isComplete()}>
-              <Show when={isRestarting()}>
-                <div class="mt-6 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-                  <div class="flex items-start gap-2">
-                    <svg
-                      class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div class="flex-1">
-                      <div class="text-sm text-blue-800 dark:text-blue-200">
-                        <Show
-                          when={wsDisconnected()}
-                          fallback={<span>Pulse is restarting with the new version...</span>}
-                        >
-                          <span>
-                            Waiting for Pulse to complete restart. This page will reload
-                            automatically.
-                          </span>
-                        </Show>
-                      </div>
-                      <Show when={wsDisconnected() && healthCheckAttempts() > 5}>
-                        <button
-                          onClick={() => window.location.reload()}
-                          class="mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-                          type="button"
-                        >
-                          Reload Now
-                        </button>
+                  <div class="flex-1">
+                    <div class="text-sm text-blue-800 dark:text-blue-200">
+                      <Show
+                        when={wsDisconnected()}
+                        fallback={<span>Pulse is restarting with the new version...</span>}
+                      >
+                        <span>
+                          Waiting for Pulse to complete restart. This page will reload
+                          automatically.
+                        </span>
                       </Show>
                     </div>
+                    <Show when={wsDisconnected() && healthCheckAttempts() > 5}>
+                      <button
+                        onClick={() => window.location.reload()}
+                        class="mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                        type="button"
+                      >
+                        Reload Now
+                      </button>
+                    </Show>
                   </div>
                 </div>
-              </Show>
-              <Show when={!isRestarting()}>
-                <div class="mt-6 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
-                  <div class="flex items-start gap-2">
-                    <svg
-                      class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      />
-                    </svg>
-                    <div class="text-sm text-yellow-800 dark:text-yellow-200">
-                      Please do not close this window or refresh the page during the update.
-                    </div>
-                  </div>
-                </div>
-              </Show>
+              </div>
             </Show>
-          </div>
+            <Show when={!isRestarting()}>
+              <div class="mt-6 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                <div class="flex items-start gap-2">
+                  <svg
+                    class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                  <div class="text-sm text-yellow-800 dark:text-yellow-200">
+                    Please do not close this window or refresh the page during the update.
+                  </div>
+                </div>
+              </div>
+            </Show>
+          </Show>
+        </div>
 
-          {/* Footer */}
-          <Show when={isComplete()}>
-            <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">
-              <Show when={!hasError()}>
-                <button
-                  onClick={props.onViewHistory}
-                  class="px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors"
-                  type="button"
-                >
-                  View History
-                </button>
-              </Show>
-              <Show when={hasError()}>
-                <button
-                  onClick={() => window.location.reload()}
-                  class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-                  type="button"
-                >
-                  Retry
-                </button>
-              </Show>
+        {/* Footer */}
+        <Show when={isComplete()}>
+          <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">
+            <Show when={!hasError()}>
               <button
-                onClick={handleClose}
+                onClick={props.onViewHistory}
+                class="px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors"
+                type="button"
+              >
+                View History
+              </button>
+            </Show>
+            <Show when={hasError()}>
+              <button
+                onClick={() => window.location.reload()}
                 class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
                 type="button"
               >
-                Close
+                Retry
               </button>
-            </div>
-          </Show>
+            </Show>
+            <button
+              onClick={handleClose}
+              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+              type="button"
+            >
+              Close
+            </button>
+          </div>
+        </Show>
       </div>
     </Dialog>
   );

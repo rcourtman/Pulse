@@ -12,6 +12,7 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
 import { pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 
@@ -225,33 +226,6 @@ const MailGateway: Component = () => {
   const { state, connected, reconnecting, reconnect, initialDataReceived } = useWebSocket();
 
   const [searchTerm, setSearchTerm] = createSignal('');
-  let searchInputRef: HTMLInputElement | undefined;
-
-  // Keyboard handler for type-
-  createEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInputField =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.contentEditable === 'true';
-
-      if (e.key === 'Escape') {
-        if (searchTerm().trim()) {
-          setSearchTerm('');
-          searchInputRef?.blur();
-        }
-      } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (searchInputRef) {
-          searchInputRef.focus();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
-  });
 
   const instances = createMemo(() =>
     (state.resources || [])
@@ -613,49 +587,13 @@ const MailGateway: Component = () => {
           {/* Search Bar (only show if multiple instances) */}
           <Show when={instances().length > 1}>
             <Card padding="sm" tone="card">
-              <div class="relative max-w-md">
-                <input
-                  ref={(el) => (searchInputRef = el)}
-                  type="text"
-                  placeholder="Search gateways..."
-                  value={searchTerm()}
-                  onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                  class="w-full pl-9 pr-8 py-1.5 text-sm border border-border rounded-md bg-surface text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
-                />
-                <svg
-                  class="absolute left-3 top-2 h-4 w-4 text-slate-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <Show when={searchTerm()}>
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    class="absolute right-2.5 top-2 hover:text-base-content"
-                  >
-                    <svg
-                      class="w-4 h-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </Show>
-              </div>
+              <SearchInput
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder="Search gateways..."
+                class="max-w-md"
+                clearOnEscape
+              />
             </Card>
           </Show>
 

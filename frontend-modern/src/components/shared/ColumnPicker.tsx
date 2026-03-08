@@ -1,5 +1,10 @@
 import { Component, Show, For, createSignal, onCleanup, createEffect } from 'solid-js';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import {
+  FilterActionButton,
+  FilterToolbarPanel,
+  filterUtilityBadgeClass,
+} from '@/components/shared/FilterToolbar';
 
 interface ColumnPickerProps {
   /** Columns that can be toggled */
@@ -10,6 +15,8 @@ interface ColumnPickerProps {
   onToggle: (id: string) => void;
   /** Reset all columns to visible */
   onReset?: () => void;
+  /** Optional button label override */
+  label?: string;
 }
 
 export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
@@ -37,18 +44,14 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
 
   // Count how many are hidden
   const hiddenCount = () => props.columns.filter((c) => props.isHidden(c.id)).length;
+  const buttonLabel = () => props.label?.trim() || 'Columns';
 
   return (
     <div ref={containerRef} class="relative shrink-0">
-      <button
-        type="button"
+      <FilterActionButton
         onClick={() => setIsOpen(!isOpen())}
-        class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all
- ${
-   isOpen()
-     ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-     : 'bg-surface-hover text-muted hover:bg-surface-hover'
- }`}
+        active={isOpen()}
+        class="whitespace-nowrap"
         title="Choose which columns to display"
       >
         {/* Columns icon */}
@@ -61,16 +64,14 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 4v16M15 4v16M4 9h16M4 15h16" />
         </svg>
-        <span>Columns</span>
+        <span>{buttonLabel()}</span>
         <Show when={hiddenCount() > 0}>
-          <span class="ml-0.5 inline-flex items-center whitespace-nowrap rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-base-content">
-            {hiddenCount()} hidden
-          </span>
+          <span class={filterUtilityBadgeClass}>{hiddenCount()}</span>
         </Show>
-      </button>
+      </FilterActionButton>
 
       <Show when={isOpen()}>
-        <div class="absolute right-0 mt-1 w-56 rounded-md border border-border bg-surface shadow-sm z-50">
+        <FilterToolbarPanel class="top-[calc(100%+0.25rem)] z-50 w-56 p-0">
           <div class="px-3 py-2 border-b border-border-subtle">
             <div class="flex items-center justify-between">
               <span class="text-xs font-medium text-base-content">Show Columns</span>
@@ -112,7 +113,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
               No columns available to toggle
             </div>
           </Show>
-        </div>
+        </FilterToolbarPanel>
       </Show>
     </div>
   );

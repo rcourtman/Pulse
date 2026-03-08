@@ -4,6 +4,7 @@ import {
   getProviderFromModelId,
   groupModelsByProvider,
 } from '../aiChatUtils';
+import { SearchField } from '@/components/shared/SearchField';
 import type { ModelInfo } from './types';
 
 export interface ModelSelectorProps {
@@ -188,13 +189,13 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
         >
           {/* Search bar */}
           <div class="flex items-center gap-2 px-3 py-2 border-b border-border">
-            <input
-              type="text"
+            <SearchField
               value={searchQuery()}
-              onInput={(e) => setSearchQuery(e.currentTarget.value)}
+              onChange={setSearchQuery}
               onKeyDown={handleKeyDown}
               placeholder="Search or enter model ID"
-              class="flex-1 text-xs px-2 py-1.5 rounded-md border border-border bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-purple-400"
+              class="flex-1"
+              inputClass="py-1.5 text-xs focus:ring-purple-400"
             />
             <Show when={props.onRefresh}>
               <button

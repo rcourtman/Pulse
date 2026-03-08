@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
+import { SearchField } from '@/components/shared/SearchField';
 import {
   Table,
   TableHeader,
@@ -339,11 +340,12 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 <Card padding="lg">
                   <div class="flex items-center justify-between gap-3">
                     <div class="text-xs font-semibold text-base-content">Relay Domains</div>
-                    <input
+                    <SearchField
                       value={searchRelay()}
-                      onInput={(e) => setSearchRelay(e.currentTarget.value)}
+                      onChange={setSearchRelay}
                       placeholder="Search domains..."
-                      class="w-56 rounded border border-border bg-surface px-2 py-1 text-xs placeholder:"
+                      class="w-56"
+                      inputClass="py-1 text-xs"
                     />
                   </div>
                   <div class="mt-2 overflow-x-auto">
@@ -384,11 +386,12 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                         </div>
                       </Show>
                     </div>
-                    <input
+                    <SearchField
                       value={searchDomain()}
-                      onInput={(e) => setSearchDomain(e.currentTarget.value)}
+                      onChange={setSearchDomain}
                       placeholder="Search domains..."
-                      class="w-56 rounded border border-border bg-surface px-2 py-1 text-xs placeholder:"
+                      class="w-56"
+                      inputClass="py-1 text-xs"
                     />
                   </div>
                   <div class="mt-2 overflow-x-auto">

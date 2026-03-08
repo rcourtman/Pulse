@@ -407,9 +407,7 @@ export function ResourceTable(props: ResourceTableProps) {
       <div class="flex flex-wrap items-center gap-3">
         <Show
           when={meta.host}
-          fallback={
-            <span class="text-sm font-medium text-base-content">{groupLabel}</span>
-          }
+          fallback={<span class="text-sm font-medium text-base-content">{groupLabel}</span>}
         >
           {(host) => (
             <a
@@ -2233,7 +2231,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <Show
                                         when={
                                           resource.hasOverride ||
-                                          (resource.type === 'agent' && resource.disableConnectivity)
+                                          (resource.type === 'agent' &&
+                                            resource.disableConnectivity)
                                         }
                                       >
                                         <button

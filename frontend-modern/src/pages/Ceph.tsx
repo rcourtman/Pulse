@@ -13,6 +13,7 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { SearchInput } from '@/components/shared/SearchInput';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 import { useKioskMode } from '@/hooks/useKioskMode';
@@ -327,33 +328,6 @@ const Ceph: Component = () => {
   const kioskMode = useKioskMode();
 
   const [searchTerm, setSearchTerm] = createSignal('');
-  let searchInputRef: HTMLInputElement | undefined;
-
-  // Keyboard handler for type-
-  createEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInputField =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.contentEditable === 'true';
-
-      if (e.key === 'Escape') {
-        if (searchTerm().trim()) {
-          setSearchTerm('');
-          searchInputRef?.blur();
-        }
-      } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (searchInputRef) {
-          searchInputRef.focus();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
-  });
 
   const cephResources = createMemo(() => byType('ceph'));
 
@@ -790,52 +764,14 @@ const Ceph: Component = () => {
                 </h3>
                 {/* Search Input */}
                 <Show when={!kioskMode()}>
-                  <div class="relative w-full sm:max-w-xs flex-1 sm:flex-none">
-                    <input
-                      ref={(el) => (searchInputRef = el)}
-                      type="text"
-                      placeholder="Search pools..."
-                      aria-label="Search storage pools"
-                      value={searchTerm()}
-                      onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                      class="w-full pl-8 pr-3 py-1.5 text-sm border border-border rounded-md bg-surface text-base-content placeholder-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
-                    />
-                    <svg
-                      class="absolute left-2.5 top-2 h-4 w-4 text-muted"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
-                    <Show when={searchTerm()}>
-                      <button
-                        type="button"
-                        aria-label="Clear pool search"
-                        onClick={() => setSearchTerm('')}
-                        class="absolute right-2.5 top-2 text-slate-400 hover:text-muted"
-                      >
-                        <svg
-                          class="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </Show>
-                  </div>
+                  <SearchInput
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder="Search pools..."
+                    title="Search storage pools"
+                    class="w-full sm:max-w-xs flex-1 sm:flex-none"
+                    clearOnEscape
+                  />
                 </Show>
               </div>
 

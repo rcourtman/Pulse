@@ -1,6 +1,7 @@
 import { Show, For, createMemo, createSignal, createEffect } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
+import { SearchField } from '@/components/shared/SearchField';
 import {
   buildRecoveryPath,
   buildInfrastructurePath,
@@ -48,7 +49,15 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         label: 'Go to Workloads',
         description: workloadsPath,
         shortcut: 'g w',
-        keywords: ['vm', 'system-container', 'app-container', 'docker', 'k8s', 'kubernetes', 'pods'],
+        keywords: [
+          'vm',
+          'system-container',
+          'app-container',
+          'docker',
+          'k8s',
+          'kubernetes',
+          'pods',
+        ],
         action: () => navigate(workloadsPath),
       },
       {
@@ -135,34 +144,25 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
       ariaLabel="Command palette"
     >
       <div class="border-b border-border px-5 py-4">
-        <div class="flex items-center gap-2 rounded-md border border-border bg-base px-3 py-2 text-sm text-base-content focus-within:border-blue-500">
-          <svg class="h-4 w-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            ref={(el) => (inputRef = el)}
-            type="text"
-            value={query()}
-            onInput={(e) => setQuery(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const first = filteredCommands()[0];
-                if (first) {
-                  e.preventDefault();
-                  handleSelect(first);
-                }
+        <SearchField
+          value={query()}
+          onChange={setQuery}
+          inputRef={(el) => (inputRef = el)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const first = filteredCommands()[0];
+              if (first) {
+                e.preventDefault();
+                handleSelect(first);
               }
-            }}
-            placeholder="Type a command or search..."
-            class="w-full bg-transparent text-sm text-base-content placeholder-muted focus:outline-none"
-          />
-          <span class="text-[11px] text-muted">Cmd+K</span>
-        </div>
+            }
+          }}
+          placeholder="Type a command or search..."
+          class="w-full"
+          inputClass="bg-base"
+          clearOnFocusedEscape={false}
+          shortcutHint="Cmd+K"
+        />
       </div>
 
       <div class="max-h-[320px] overflow-y-auto px-3 py-3">

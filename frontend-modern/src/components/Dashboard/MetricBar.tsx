@@ -1,4 +1,5 @@
 import { Show, createMemo, createSignal, onMount, onCleanup } from 'solid-js';
+import { ProgressBar } from '@/components/shared/ProgressBar';
 import { estimateTextWidth } from '@/utils/format';
 import { getMetricColorClass } from '@/utils/metricThresholds';
 import type { MetricType } from '@/utils/metricThresholds';
@@ -58,24 +59,23 @@ export function MetricBar(props: MetricBarProps) {
 
   return (
     <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center min-w-0">
-      <div
-        class={`relative w-full h-full overflow-hidden bg-surface-hover rounded ${props.class || ''}`}
-      >
-        <div
-          class={`absolute top-0 left-0 h-full ${progressColorClass()}`}
-          style={{ width: `${width()}%` }}
-        />
-        <Show when={showLabel()}>
-          <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
-            <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-              <span>{props.label}</span>
-              <Show when={showSublabel()}>
-                <span class="metric-sublabel font-normal text-muted"> ({props.sublabel})</span>
-              </Show>
+      <ProgressBar
+        value={width()}
+        class={`h-full ${props.class || ''}`}
+        fillClass={progressColorClass()}
+        label={
+          <Show when={showLabel()}>
+            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none min-w-0 overflow-hidden">
+              <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+                <span>{props.label}</span>
+                <Show when={showSublabel()}>
+                  <span class="metric-sublabel font-normal text-muted"> ({props.sublabel})</span>
+                </Show>
+              </span>
             </span>
-          </span>
-        </Show>
-      </div>
+          </Show>
+        }
+      />
     </div>
   );
 }
