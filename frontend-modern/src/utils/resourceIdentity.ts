@@ -119,7 +119,9 @@ export const getResourceIdentityAliases = (resource: Resource): string[] => {
   const pbs = platformData?.pbs as Record<string, unknown> | undefined;
   const pmg = platformData?.pmg as Record<string, unknown> | undefined;
   const canonicalAliases = Array.isArray(canonical?.aliases)
-    ? canonical.aliases.map((alias) => asTrimmedString(alias)).filter((alias): alias is string => Boolean(alias))
+    ? canonical.aliases
+        .map((alias) => asTrimmedString(alias))
+        .filter((alias): alias is string => Boolean(alias))
     : [];
 
   const raw = [
@@ -179,7 +181,10 @@ export const getAgentLikeMetadataIds = (agent: Agent): string[] => {
   ]);
 };
 
-export const getInfrastructureMetadataId = (node: Pick<Node, 'id' | 'name' | 'linkedAgentId'>, agent?: Agent): string => {
+export const getInfrastructureMetadataId = (
+  node: Pick<Node, 'id' | 'name' | 'linkedAgentId'>,
+  agent?: Agent,
+): string => {
   const agentMetadataId = agent ? getAgentLikeMetadataIds(agent)[0] : undefined;
   return agentMetadataId || asTrimmedString(node.linkedAgentId) || node.id || node.name;
 };
@@ -203,9 +208,7 @@ export const getPreferredNamedEntityLabel = (entity: NamedEntity): string =>
   asTrimmedString(entity.name) ||
   entity.id;
 
-export const getPreferredNormalizedPlatformId = (
-  resource: APINormalizedIdentityResource,
-): string =>
+export const getPreferredNormalizedPlatformId = (resource: APINormalizedIdentityResource): string =>
   asTrimmedString(resource.proxmox?.nodeName) ||
   asTrimmedString(resource.agent?.hostname) ||
   asTrimmedString(resource.docker?.hostname) ||
@@ -281,17 +284,13 @@ export const getPreferredWorkloadsAgentHint = (resource: Resource): string | und
 
   if (resource.type === 'docker-host') {
     return (
-      asTrimmedString(docker?.hostname) ||
-      getPreferredResourceHostname(resource) ||
-      resource.id
+      asTrimmedString(docker?.hostname) || getPreferredResourceHostname(resource) || resource.id
     );
   }
 
   if (resource.type === 'agent') {
     return (
-      asTrimmedString(proxmox?.nodeName) ||
-      getPreferredResourceHostname(resource) ||
-      resource.id
+      asTrimmedString(proxmox?.nodeName) || getPreferredResourceHostname(resource) || resource.id
     );
   }
 

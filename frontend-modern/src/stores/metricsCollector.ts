@@ -2,6 +2,7 @@ import { getGlobalWebSocketStore } from './websocket-global';
 import { logger } from '@/utils/logger';
 import { recordDiskMetric } from './diskMetricsHistory';
 import { eventBus } from '@/stores/events';
+import { getCachedUnifiedResources } from '@/hooks/useUnifiedResources';
 
 const SAMPLE_INTERVAL_MS = 2000;
 
@@ -51,8 +52,11 @@ const getResourceDiskCounters = (resource: unknown): DiskCounterSample[] => {
   const platformAgent = asRecord(platformData?.agent);
 
   const diskIoCandidates = [
+    platformData?.diskIo,
     platformData?.diskIO,
+    platformAgent?.diskIo,
     platformAgent?.diskIO,
+    agent?.diskIo,
     agent?.diskIO,
   ] as unknown[];
   const diskIoRaw = diskIoCandidates.find((value) => Array.isArray(value));
@@ -80,11 +84,16 @@ const getResourceDiskCounters = (resource: unknown): DiskCounterSample[] => {
 
 function sampleMetrics(): void {
   const wsStore = getGlobalWebSocketStore();
-  const state = wsStore.state;
+  const wsResources = wsStore.state.resources || [];
+  const cachedUnifiedResources = getCachedUnifiedResources({ cacheKey: 'all-resources' });
+  const sourceResources =
+    wsResources.some((resource) => getResourceDiskCounters(resource).length > 0)
+      ? wsResources
+      : cachedUnifiedResources;
   const now = Date.now();
   const observedKeys = new Set<string>();
 
-  for (const resource of state.resources || []) {
+  for (const resource of sourceResources) {
     const diskCounters = getResourceDiskCounters(resource);
     if (diskCounters.length === 0) continue;
 

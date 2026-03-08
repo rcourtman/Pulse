@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { nodeFromResource, pbsInstanceFromResource, pmgInstanceFromResource } from '../resourceStateAdapters';
+import {
+  nodeFromResource,
+  pbsInstanceFromResource,
+  pmgInstanceFromResource,
+} from '../resourceStateAdapters';
 import type { Resource } from '@/types/resource';
 
 const createNodeResource = (platformData: Record<string, unknown>): Resource =>
@@ -66,21 +70,19 @@ describe('resourceStateAdapters nodeFromResource', () => {
   });
 
   it('uses typed canonical identity for node labels when proxmox nodeName is absent', () => {
-    const node = nodeFromResource(
-      ({
-        ...createNodeResource({
-          proxmox: {},
-        } as Record<string, unknown>),
-        name: '',
-        displayName: '',
-        platformId: '',
-        canonicalIdentity: {
-          displayName: 'Tower',
-          hostname: 'tower.local',
-          platformId: 'pve-canonical',
-        },
-      }) as Resource,
-    );
+    const node = nodeFromResource({
+      ...createNodeResource({
+        proxmox: {},
+      } as Record<string, unknown>),
+      name: '',
+      displayName: '',
+      platformId: '',
+      canonicalIdentity: {
+        displayName: 'Tower',
+        hostname: 'tower.local',
+        platformId: 'pve-canonical',
+      },
+    } as Resource);
 
     expect(node?.name).toBe('tower.local');
     expect(node?.displayName).toBe('Tower');

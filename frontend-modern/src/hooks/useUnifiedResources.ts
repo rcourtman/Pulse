@@ -116,6 +116,7 @@ type APIResource = {
   name?: string;
   status?: string;
   lastSeen?: string;
+  parentName?: string;
   sources?: string[];
   sourceStatus?: Record<string, { status: string; lastSeen: string; error?: string }>;
   identity?: {
@@ -533,6 +534,7 @@ const toResource = (v2: APIResource): Resource => {
     platformType: resolvePlatformType(sourceFlags),
     sourceType: resolveSourceType(sourceFlags),
     parentId: v2.parentId,
+    parentName: v2.parentName,
     clusterId: v2.identity?.clusterName || v2.proxmox?.clusterName,
     status: resolveStatus(v2.status),
     agent: v2.agent,
@@ -736,6 +738,20 @@ const shouldThrottleWsRefetch = (entry: UnifiedResourcesCacheEntry) =>
 
 export const __resetUnifiedResourcesCacheForTests = () => {
   unifiedResourcesCaches.clear();
+};
+
+export const getCachedUnifiedResources = (
+  options?: {
+    cacheKey?: string;
+    orgID?: string | null;
+  },
+): Resource[] => {
+  const cacheKey = (options?.cacheKey || 'all-resources').trim();
+  const scopedCacheKey = buildScopedUnifiedResourcesCacheKey(
+    cacheKey,
+    normalizeOrgScope(options?.orgID ?? getOrgID()),
+  );
+  return getUnifiedResourcesCacheEntry(scopedCacheKey).resources;
 };
 
 type UseUnifiedResourcesOptions = {

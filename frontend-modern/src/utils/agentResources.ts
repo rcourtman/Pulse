@@ -5,12 +5,7 @@ import {
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
 
-const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>([
-  'agent',
-  'pbs',
-  'pmg',
-  'truenas',
-]);
+const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>(['agent', 'pbs', 'pmg', 'truenas']);
 const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([
   'docker-host',
   'agent',
@@ -114,10 +109,10 @@ export const getMetricsChartKeyCandidatesFromResource = (resource: Resource): st
 export const hasAgentFacet = (resource: Resource): boolean =>
   Boolean(
     resource.agent ||
-      getPlatformAgentRecord(resource) ||
-      getExplicitAgentIdFromResource(resource) ||
-      (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
-        resource.discoveryTarget.agentId),
+    getPlatformAgentRecord(resource) ||
+    getExplicitAgentIdFromResource(resource) ||
+    (isAgentDiscoveryResourceType(resource.discoveryTarget?.resourceType) &&
+      resource.discoveryTarget.agentId),
   );
 
 export const isAgentFacetInfrastructureResource = (resource: Resource): boolean =>

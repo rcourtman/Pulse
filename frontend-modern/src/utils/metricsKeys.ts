@@ -34,7 +34,9 @@ export function getMetricKeyPrefix(kind: MetricResourceKind): string {
   return `${kind}:`;
 }
 
-function toMetricResourceKind(resource: Pick<Resource, 'type' | 'metricsTarget'>): MetricResourceKind {
+function toMetricResourceKind(
+  resource: Pick<Resource, 'type' | 'metricsTarget'>,
+): MetricResourceKind {
   const targetType = resource.metricsTarget?.resourceType;
   switch (targetType) {
     case 'node':

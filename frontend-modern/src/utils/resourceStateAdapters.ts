@@ -52,7 +52,9 @@ const toISOTime = (value: unknown, fallbackMs?: number): string => {
 
 const getCanonicalPlatformId = (resource: Resource): string | undefined => {
   const platformId = resource.canonicalIdentity?.platformId;
-  return typeof platformId === 'string' && platformId.trim().length > 0 ? platformId.trim() : undefined;
+  return typeof platformId === 'string' && platformId.trim().length > 0
+    ? platformId.trim()
+    : undefined;
 };
 
 export const resourcePlatformData = (resource: Resource): Record<string, unknown> | undefined =>
@@ -182,11 +184,17 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     (resource.proxmox as unknown as Record<string, unknown> | undefined);
   const cpuInfo = asRecord(proxmox?.cpuInfo);
   const preferredHostLabel =
-    getPreferredResourceHostname(resource) || getPreferredResourceDisplayName(resource) || resource.id;
+    getPreferredResourceHostname(resource) ||
+    getPreferredResourceDisplayName(resource) ||
+    resource.id;
   const instance =
-    asString(proxmox?.instance) || resource.platformId || getCanonicalPlatformId(resource) || preferredHostLabel;
+    asString(proxmox?.instance) ||
+    resource.platformId ||
+    getCanonicalPlatformId(resource) ||
+    preferredHostLabel;
   const name = asString(proxmox?.nodeName) || preferredHostLabel;
-  const linkedAgentId = asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);
+  const linkedAgentId =
+    asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);
 
   return {
     id: resource.id,

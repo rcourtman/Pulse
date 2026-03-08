@@ -1,18 +1,8 @@
 // Discovery types for AI-powered infrastructure discovery
 
-export type ResourceType =
-  | 'vm'
-  | 'system-container'
-  | 'app-container'
-  | 'pod'
-  | 'agent';
+export type ResourceType = 'vm' | 'system-container' | 'app-container' | 'pod' | 'agent';
 
-export type APIResourceType =
-  | 'vm'
-  | 'system-container'
-  | 'app-container'
-  | 'k8s'
-  | 'agent';
+export type APIResourceType = 'vm' | 'system-container' | 'app-container' | 'k8s' | 'agent';
 
 export type ServiceCategory =
   | 'database'

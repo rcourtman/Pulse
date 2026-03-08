@@ -338,6 +338,37 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('preserves parentName from backend resources', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'storage-1',
+            type: 'storage',
+            name: 'local-zfs',
+            parentId: 'agent-123',
+            parentName: 'pve1',
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=storage' });
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].parentId).toBe('agent-123');
+    expect(result!.resources()[0].parentName).toBe('pve1');
+
+    dispose();
+  });
+
   it('uses backend resources as canonical infrastructure state even with non-canonical websocket fields', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

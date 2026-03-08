@@ -106,14 +106,7 @@ export interface ResourceIdentity {
 }
 
 export interface ResourceDiscoveryTarget {
-  resourceType:
-    | 'agent'
-    | 'vm'
-    | 'system-container'
-    | 'app-container'
-    | 'pod'
-    | 'disk'
-    | 'ceph';
+  resourceType: 'agent' | 'vm' | 'system-container' | 'app-container' | 'pod' | 'disk' | 'ceph';
   agentId: string;
   resourceId: string;
   hostname?: string;
@@ -270,14 +263,9 @@ export function isInfrastructure(r: Resource): boolean {
 }
 
 export function isWorkload(r: Resource): boolean {
-  return [
-    'vm',
-    'system-container',
-    'app-container',
-    'oci-container',
-    'pod',
-    'jail',
-  ].includes(r.type);
+  return ['vm', 'system-container', 'app-container', 'oci-container', 'pod', 'jail'].includes(
+    r.type,
+  );
 }
 
 export function isStorage(r: Resource): boolean {

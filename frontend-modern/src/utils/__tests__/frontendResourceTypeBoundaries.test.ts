@@ -24,9 +24,9 @@ describe('frontend resource type boundaries', () => {
 
   it('keeps canonical frontend discovery types separate from backend API aliases', () => {
     expect(discoveryTypesSource).toContain(
-      "export type ResourceType =\n  | 'vm'\n  | 'system-container'\n  | 'app-container'\n  | 'pod'\n  | 'agent';",
+      "export type ResourceType = 'vm' | 'system-container' | 'app-container' | 'pod' | 'agent';",
     );
-    expect(discoveryTypesSource).toContain("export type APIResourceType =");
+    expect(discoveryTypesSource).toContain('export type APIResourceType =');
     expect(discoveryTypesSource).toContain("| 'k8s'");
   });
 
@@ -46,7 +46,9 @@ describe('frontend resource type boundaries', () => {
     expect(chartsApiSource).toContain("| 'pod'");
     expect(chartsApiSource).toContain("case 'k8s-cluster'");
     expect(chartsApiSource).toContain("return 'k8s';");
-    expect(chartsApiSource).toContain("guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>");
+    expect(chartsApiSource).toContain(
+      "guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>",
+    );
 
     expect(investigateAlertButtonSource).toContain('canonicalizeFrontendResourceType');
     expect(resourceBadgesSource).toContain('canonicalizeFrontendResourceType');

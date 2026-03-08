@@ -45,8 +45,5 @@ export const getAgentDiscoveryResourceId = (
   if (!discoveryTarget || !isAgentDiscoveryResourceType(discoveryTarget.resourceType)) {
     return undefined;
   }
-  return (
-    asTrimmedString(discoveryTarget.resourceId) ||
-    asTrimmedString(discoveryTarget.agentId)
-  );
+  return asTrimmedString(discoveryTarget.resourceId) || asTrimmedString(discoveryTarget.agentId);
 };
