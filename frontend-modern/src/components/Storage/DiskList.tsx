@@ -140,8 +140,8 @@ function hasSmartWarning(disk: PhysicalDiskData): boolean {
   if (!attrs) return false;
   return Boolean(
     (attrs.reallocatedSectors && attrs.reallocatedSectors > 0) ||
-      (attrs.pendingSectors && attrs.pendingSectors > 0) ||
-      (attrs.mediaErrors && attrs.mediaErrors > 0),
+    (attrs.pendingSectors && attrs.pendingSectors > 0) ||
+    (attrs.mediaErrors && attrs.mediaErrors > 0),
   );
 }
 
@@ -371,6 +371,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           class={`cursor-pointer transition-colors ${
                             isSelected() ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-surface-hover'
                           }`}
+                          style={{ height: '38px' }}
                           onClick={() => handleRowClick(disk)}
                         >
                           <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[220px]">
@@ -432,9 +433,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                           <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[160px]">
                             <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-                              <span
-                                class={`shrink-0 text-[11px] font-semibold ${status.tone}`}
-                              >
+                              <span class={`shrink-0 text-[11px] font-semibold ${status.tone}`}>
                                 {status.label}
                               </span>
                               <span
@@ -454,14 +453,18 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               >
                                 {getWearSummary(data)}
                               </span>
-                              <span class={`shrink-0 text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}>
+                              <span
+                                class={`shrink-0 text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}
+                              >
                                 {data.temperature > 0 ? formatTemperature(data.temperature) : '-'}
                               </span>
                             </div>
                           </TableCell>
 
                           <TableCell class="px-2 py-1 align-middle text-xs whitespace-nowrap w-[96px]">
-                            <span class="text-[11px] text-base-content">{formatBytes(data.size)}</span>
+                            <span class="text-[11px] text-base-content">
+                              {formatBytes(data.size)}
+                            </span>
                           </TableCell>
 
                           <TableCell class="px-1.5 py-1 align-middle text-right">
