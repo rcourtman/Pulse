@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
@@ -220,5 +221,67 @@ func TestResourceFromStorageDetectsZFSMetadata(t *testing.T) {
 	}
 	if resource.Storage.Shared {
 		t.Fatalf("expected shared=false")
+	}
+}
+
+func TestResourceFromStorageDerivesZFSTopologyRisk(t *testing.T) {
+	storage := models.Storage{
+		ID:       "storage-zfs-risk",
+		Name:     "tank",
+		Node:     "pve-2",
+		Instance: "cluster-a",
+		Type:     "zfspool",
+		Content:  "images",
+		Shared:   false,
+		Status:   "available",
+		Enabled:  true,
+		Active:   true,
+		ZFSPool: &models.ZFSPool{
+			Name:           "tank",
+			State:          "ONLINE",
+			ChecksumErrors: 2,
+		},
+	}
+
+	resource, _ := resourceFromStorage(storage)
+	if resource.Status != StatusWarning {
+		t.Fatalf("Status = %q, want %q", resource.Status, StatusWarning)
+	}
+	if resource.Storage == nil || resource.Storage.Risk == nil {
+		t.Fatalf("expected zfs topology risk payload, got %+v", resource.Storage)
+	}
+	if resource.Storage.Risk.Level != storagehealth.RiskWarning {
+		t.Fatalf("risk level = %q, want %q", resource.Storage.Risk.Level, storagehealth.RiskWarning)
+	}
+}
+
+func TestResourceFromHostDerivesStorageTopologyRisk(t *testing.T) {
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Status:   "online",
+		RAID: []models.HostRAIDArray{
+			{
+				Device:        "/dev/md2",
+				State:         "degraded",
+				TotalDevices:  2,
+				ActiveDevices: 1,
+				FailedDevices: 1,
+			},
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Status != StatusWarning {
+		t.Fatalf("Status = %q, want %q", resource.Status, StatusWarning)
+	}
+	if resource.Agent == nil || resource.Agent.StorageRisk == nil {
+		t.Fatalf("expected host storage risk payload, got %+v", resource.Agent)
+	}
+	if resource.Agent.StorageRisk.Level != storagehealth.RiskCritical {
+		t.Fatalf("risk level = %q, want %q", resource.Agent.StorageRisk.Level, storagehealth.RiskCritical)
+	}
+	if len(resource.Agent.RAID) != 1 || resource.Agent.RAID[0].Risk == nil {
+		t.Fatalf("expected raid risk payload, got %+v", resource.Agent.RAID)
 	}
 }

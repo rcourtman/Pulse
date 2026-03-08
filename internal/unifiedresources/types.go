@@ -210,12 +210,13 @@ type ProxmoxData struct {
 
 // StorageMeta contains storage-specific metadata for storage resources.
 type StorageMeta struct {
-	Type         string   `json:"type,omitempty"`
-	Content      string   `json:"content,omitempty"`
-	ContentTypes []string `json:"contentTypes,omitempty"`
-	Shared       bool     `json:"shared"`
-	IsCeph       bool     `json:"isCeph"`
-	IsZFS        bool     `json:"isZfs"`
+	Type         string       `json:"type,omitempty"`
+	Content      string       `json:"content,omitempty"`
+	ContentTypes []string     `json:"contentTypes,omitempty"`
+	Shared       bool         `json:"shared"`
+	IsCeph       bool         `json:"isCeph"`
+	IsZFS        bool         `json:"isZfs"`
+	Risk         *StorageRisk `json:"risk,omitempty"`
 
 	// Accessibility metadata.
 	Nodes []string `json:"nodes,omitempty"` // PVE nodes where this storage is accessible
@@ -243,6 +244,17 @@ type PhysicalDiskMeta struct {
 	Used        string            `json:"used,omitempty"`
 	SMART       *SMARTMeta        `json:"smart,omitempty"`
 	Risk        *PhysicalDiskRisk `json:"risk,omitempty"`
+}
+
+type StorageRisk struct {
+	Level   storagehealth.RiskLevel `json:"level"`
+	Reasons []StorageRiskReason     `json:"reasons,omitempty"`
+}
+
+type StorageRiskReason struct {
+	Code     string                  `json:"code"`
+	Severity storagehealth.RiskLevel `json:"severity"`
+	Summary  string                  `json:"summary"`
 }
 
 type PhysicalDiskRisk struct {
@@ -344,6 +356,7 @@ type HostRAIDMeta struct {
 	Devices        []HostRAIDDeviceMeta `json:"devices,omitempty"`
 	RebuildPercent float64              `json:"rebuildPercent,omitempty"`
 	RebuildSpeed   string               `json:"rebuildSpeed,omitempty"`
+	Risk           *StorageRisk         `json:"risk,omitempty"`
 }
 
 // HostDiskIOMeta describes disk I/O counters.
@@ -494,6 +507,7 @@ type AgentData struct {
 	RAID              []HostRAIDMeta     `json:"raid,omitempty"`
 	DiskIO            []HostDiskIOMeta   `json:"diskIo,omitempty"`
 	Ceph              *HostCephMeta      `json:"ceph,omitempty"`
+	StorageRisk       *StorageRisk       `json:"storageRisk,omitempty"`
 	// Internal link hints to proxmox resources.
 	LinkedNodeID      string `json:"-"`
 	LinkedVMID        string `json:"-"`

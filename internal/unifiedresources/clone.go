@@ -116,6 +116,7 @@ func cloneStorageMeta(in *StorageMeta) *StorageMeta {
 	out := *in
 	out.ContentTypes = cloneStringSlice(in.ContentTypes)
 	out.Nodes = cloneStringSlice(in.Nodes)
+	out.Risk = cloneStorageRisk(in.Risk)
 	return &out
 }
 
@@ -131,6 +132,7 @@ func cloneAgentData(in *AgentData) *AgentData {
 	out.RAID = cloneHostRAIDMetaSlice(in.RAID)
 	out.DiskIO = cloneHostDiskIOMetaSlice(in.DiskIO)
 	out.Ceph = cloneHostCephMeta(in.Ceph)
+	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
 	return &out
 }
 
@@ -384,7 +386,26 @@ func cloneHostRAIDMetaSlice(in []HostRAIDMeta) []HostRAIDMeta {
 	for i := range in {
 		out[i] = in[i]
 		out[i].Devices = cloneHostRAIDDeviceMetaSlice(in[i].Devices)
+		out[i].Risk = cloneStorageRisk(in[i].Risk)
 	}
+	return out
+}
+
+func cloneStorageRisk(in *StorageRisk) *StorageRisk {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Reasons = cloneStorageRiskReasonSlice(in.Reasons)
+	return &out
+}
+
+func cloneStorageRiskReasonSlice(in []StorageRiskReason) []StorageRiskReason {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]StorageRiskReason, len(in))
+	copy(out, in)
 	return out
 }
 

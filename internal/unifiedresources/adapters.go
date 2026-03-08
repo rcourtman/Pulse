@@ -169,6 +169,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	// Populate RAID
 	if len(host.RAID) > 0 {
 		raid := make([]HostRAIDMeta, len(host.RAID))
+		assessments := make([]storagehealth.Assessment, 0, len(host.RAID))
 		for i, r := range host.RAID {
 			devices := make([]HostRAIDDeviceMeta, len(r.Devices))
 			for j, device := range r.Devices {
@@ -178,6 +179,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 					Slot:   device.Slot,
 				}
 			}
+			assessment := storagehealth.AssessHostRAIDArray(r)
 			raid[i] = HostRAIDMeta{
 				Device:         r.Device,
 				Name:           r.Name,
@@ -192,9 +194,14 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 				Devices:        devices,
 				RebuildPercent: r.RebuildPercent,
 				RebuildSpeed:   r.RebuildSpeed,
+				Risk:           storageRiskFromAssessment(assessment),
+			}
+			if !isInternalHostRAIDDevice(r.Device) {
+				assessments = append(assessments, assessment)
 			}
 		}
 		agent.RAID = raid
+		agent.StorageRisk = storageRiskFromAssessment(storagehealth.SummarizeAssessments(assessments...))
 	}
 
 	// Populate DiskIO
@@ -317,7 +324,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		Type:       ResourceTypeAgent,
 		Technology: strings.TrimSpace(host.Platform),
 		Name:       name,
-		Status:     statusFromString(host.Status),
+		Status:     storageStatus(statusFromString(host.Status), agent.StorageRisk),
 		LastSeen:   host.LastSeen,
 		UpdatedAt:  time.Now().UTC(),
 		Metrics:    metrics,
@@ -798,6 +805,11 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 			ZFSWriteErrors:    zfsWriteErrors,
 			ZFSChecksumErrors: zfsChecksumErrors,
 		},
+	}
+	if storage.ZFSPool != nil {
+		assessment := storagehealth.AssessZFSPool(*storage.ZFSPool)
+		resource.Storage.Risk = storageRiskFromAssessment(assessment)
+		resource.Status = storageStatus(resource.Status, resource.Storage.Risk)
 	}
 
 	identity := ResourceIdentity{
