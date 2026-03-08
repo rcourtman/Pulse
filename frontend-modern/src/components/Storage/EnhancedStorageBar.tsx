@@ -1,6 +1,7 @@
 import { Show, createMemo } from 'solid-js';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { useTooltip } from '@/hooks/useTooltip';
+import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { getMetricColorClass } from '@/utils/metricThresholds';
 import type { ZFSPool } from '@/types/api';
@@ -41,34 +42,31 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
 
   return (
     <div class="metric-text w-full h-5 flex items-center min-w-0">
-      <div
-        class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
+      <ProgressBar
+        value={usagePercent()}
+        class="h-full"
+        fillClass={barColor()}
         onMouseEnter={tip.onMouseEnter}
         onMouseLeave={tip.onMouseLeave}
-      >
-        {/* Usage Bar */}
-        <div
-          class={`absolute top-0 left-0 h-full transition-all duration-300 ${barColor()}`}
-          style={{ width: `${Math.min(usagePercent(), 100)}%` }}
-        />
+        overlays={
+          <>
+            <Show when={isScrubbing() || isResilvering()}>
+              <div class="absolute inset-0 w-full h-full animate-pulse" />
+            </Show>
 
-        {/* Scrubbing/Resilvering Animation Overlay */}
-        <Show when={isScrubbing() || isResilvering()}>
-          <div class="absolute inset-0 w-full h-full animate-pulse" />
-        </Show>
-
-        {/* Error Indicator (Red border/glow) */}
-        <Show when={hasErrors()}>
-          <div class="absolute inset-0 border-2 border-red-500 animate-pulse rounded" />
-        </Show>
-
-        {/* Label */}
-        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
-          <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-            {formatPercent(usagePercent())} ({formatBytes(props.used)}/{formatBytes(props.total)})
+            <Show when={hasErrors()}>
+              <div class="absolute inset-0 rounded border-2 border-red-500 animate-pulse" />
+            </Show>
+          </>
+        }
+        label={
+          <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
+            <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
+              {formatPercent(usagePercent())} ({formatBytes(props.used)}/{formatBytes(props.total)})
+            </span>
           </span>
-        </span>
-      </div>
+        }
+      />
 
       {/* Tooltip */}
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>

@@ -21,6 +21,11 @@ const dedupe = <T>(values: T[]): T[] => Array.from(new Set(values));
 const normalizeIdentityPart = (value: string | undefined | null): string =>
   (value || '').trim().toLowerCase();
 
+const getStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+
 type ResourceStorageMeta = {
   type?: string;
   content?: string;
@@ -267,12 +272,30 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       : typeof platformData.shared === 'boolean'
         ? platformData.shared
         : undefined;
+  const proxmoxNode =
+    resource.proxmox?.node ||
+    ((platformData.proxmox as Record<string, unknown> | undefined)?.nodeName as string | undefined);
+  const storageNodes = getStringArray((resource.storage as Record<string, unknown> | undefined)?.nodes);
+  const nodeHints = dedupe(
+    [
+      resource.parentName,
+      proxmoxNode,
+      platformData.node as string | undefined,
+      ...storageNodes,
+      resource.parentId,
+      resource.platformId,
+    ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
+  );
   const locationLabel = isDatastore
-    ? (platformData.pbsInstanceName as string | undefined) ||
+    ? resource.parentName ||
+      (platformData.pbsInstanceName as string | undefined) ||
       resource.parentId ||
       resource.platformId ||
       'Unknown'
-    : (platformData.node as string | undefined) ||
+    : resource.parentName ||
+      proxmoxNode ||
+      (platformData.node as string | undefined) ||
+      storageNodes[0] ||
       resource.parentId ||
       resource.platformId ||
       'Unknown';
@@ -311,7 +334,9 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       type: storageType,
       status: resource.status,
       parentId: resource.parentId,
-      node: platformData.node,
+      parentName: resource.parentName,
+      node: proxmoxNode || (platformData.node as string | undefined) || storageNodes[0],
+      nodeHints,
       content,
       contentTypes: storageMeta?.contentTypes,
       shared,

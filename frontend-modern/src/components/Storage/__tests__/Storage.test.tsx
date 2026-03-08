@@ -85,6 +85,9 @@ type StorageResourceOptions = {
   storageType?: string;
   content?: string;
   shared?: boolean;
+  parentId?: string;
+  parentName?: string;
+  includePlatformNode?: boolean;
   platformData?: Record<string, unknown>;
 };
 
@@ -101,6 +104,8 @@ const buildStorageResource = (
   platformId: options.platformId || 'cluster-main',
   platformType: (options.platformType || 'proxmox-pve') as Resource['platformType'],
   sourceType: 'api',
+  parentId: options.parentId,
+  parentName: options.parentName,
   status: (options.status || 'online') as Resource['status'],
   disk: {
     current: options.current ?? 50,
@@ -110,11 +115,39 @@ const buildStorageResource = (
   },
   lastSeen: Date.now(),
   platformData: {
-    node,
+    ...(options.includePlatformNode === false ? {} : { node }),
     type: options.storageType || 'lvm',
     content: options.content || 'images,rootdir',
     shared: options.shared ?? false,
     ...(options.platformData || {}),
+  },
+});
+
+const buildPhysicalDiskResource = (
+  id: string,
+  parentId: string | null,
+  nodeName: string,
+  instance = 'cluster-main',
+): Resource => ({
+  id,
+  type: 'physical_disk',
+  name: `/dev/${id}`,
+  displayName: `/dev/${id}`,
+  platformId: instance,
+  platformType: 'proxmox-pve',
+  sourceType: 'api',
+  parentId: parentId ?? undefined,
+  status: 'online',
+  lastSeen: Date.now(),
+  identity: { hostname: nodeName },
+  canonicalIdentity: { hostname: nodeName },
+  platformData: {
+    ...(parentId ? { proxmox: { nodeName, instance } } : {}),
+    physicalDisk: {
+      devPath: `/dev/${id}`,
+      model: 'Test Disk',
+      health: 'PASSED',
+    },
   },
 });
 
@@ -262,8 +295,16 @@ describe('Storage', () => {
 
   it('renders pools from v2 resources and filters by selected node', () => {
     hookResources = [
-      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1'),
-      buildStorageResource('storage-2', 'Local-LVM-PVE2', 'pve2'),
+      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1', {
+        parentId: 'node-1',
+        parentName: 'pve1',
+        includePlatformNode: false,
+      }),
+      buildStorageResource('storage-2', 'Local-LVM-PVE2', 'pve2', {
+        parentId: 'node-2',
+        parentName: 'pve2',
+        includePlatformNode: false,
+      }),
     ];
 
     render(() => <Storage />);
@@ -330,6 +371,7 @@ describe('Storage', () => {
     hookResources = [
       buildStorageResource('storage-1', 'Ceph-Store', 'pve1', { storageType: 'cephfs' }),
     ];
+    nodeResources = [...nodeResources, buildPhysicalDiskResource('sdb', 'node-2', 'pve2')];
     mockLocationSearch =
       '?tab=disks&q=ceph&group=status&source=proxmox-pve&status=warning&node=node-2&sort=usage&order=desc&from=proxmox-overview';
 
@@ -355,8 +397,8 @@ describe('Storage', () => {
     expect(initialParams.get('from')).toBe('proxmox-overview');
     expect(initialParams.get('search')).toBeNull();
     expect(initialOptions?.replace).toBe(true);
-    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute(
-      'aria-pressed',
+    expect(screen.getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-selected',
       'true',
     );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
@@ -365,7 +407,7 @@ describe('Storage', () => {
     expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('warning');
 
     // Grouping controls are only shown on the Pools view.
-    fireEvent.click(screen.getByRole('button', { name: 'Pools' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Pools' }));
     expect(screen.getByRole('button', { name: 'By Status' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -382,13 +424,14 @@ describe('Storage', () => {
 
   it('restores view and filters from URL params', () => {
     hookResources = [buildStorageResource('storage-1', 'Node-Store', 'pve1')];
+    nodeResources = [...nodeResources, buildPhysicalDiskResource('sdb', 'node-2', 'pve2')];
     mockLocationSearch = '?tab=disks&node=node-2&q=ceph&source=proxmox-pve';
 
     render(() => <Storage />);
 
     expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:node-2:ceph');
-    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute(
-      'aria-pressed',
+    expect(screen.getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-selected',
       'true',
     );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
@@ -601,9 +644,104 @@ describe('Storage', () => {
   it('switches to physical disks view', () => {
     render(() => <Storage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Physical Disks' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Physical Disks' }));
 
     expect(screen.getByTestId('disk-list')).toBeInTheDocument();
+  });
+
+  it('limits physical disk node filter options to hosts with disk resources', () => {
+    nodeResources = [
+      {
+        id: 'node-1',
+        type: 'agent',
+        name: 'pve1',
+        displayName: 'pve1',
+        platformId: 'cluster-main',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        platformData: { proxmox: { instance: 'cluster-main' } },
+      },
+      {
+        id: 'agent-standalone',
+        type: 'agent',
+        name: 'mini',
+        displayName: 'mini',
+        platformId: 'agent-mini',
+        platformType: 'agent',
+        sourceType: 'agent',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        platformData: { agent: { agentId: 'agent-mini', hostname: 'mini' } },
+      },
+      buildPhysicalDiskResource('sda', null, 'pve1'),
+    ];
+
+    render(() => <Storage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Physical Disks' }));
+
+    const options = screen
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+      .filter(Boolean);
+    expect(options).toContain('All Disk Hosts');
+    expect(options).toContain('pve1');
+    expect(options).not.toContain('mini');
+  });
+
+  it('resets stale disk node selections that do not map to a physical disk parent', async () => {
+    mockLocationSearch = '?tab=disks&node=agent-standalone';
+    nodeResources = [
+      {
+        id: 'node-1',
+        type: 'agent',
+        name: 'pve1',
+        displayName: 'pve1',
+        platformId: 'cluster-main',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        platformData: { proxmox: { instance: 'cluster-main' } },
+      },
+      {
+        id: 'agent-standalone',
+        type: 'agent',
+        name: 'mini',
+        displayName: 'mini',
+        platformId: 'agent-mini',
+        platformType: 'agent',
+        sourceType: 'agent',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        platformData: { agent: { agentId: 'agent-mini', hostname: 'mini' } },
+      },
+      buildPhysicalDiskResource('sda', 'node-1', 'pve1'),
+    ];
+
+    render(() => <Storage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
+    });
+    expect(screen.getByLabelText('Node')).toHaveValue('all');
+  });
+
+  it('renders the storage view as canonical subtabs', () => {
+    render(() => <Storage />);
+
+    expect(screen.getByRole('tablist', { name: 'Storage view' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Pools' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
   });
 
   it('shows loading placeholder when pool resources are loading', () => {

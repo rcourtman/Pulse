@@ -12,9 +12,11 @@ import {
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { Table, TableHeader, TableBody, TableRow, TableHead } from '@/components/shared/Table';
 import { DiskList } from '@/components/Storage/DiskList';
 import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
+import { StorageCommandCenter } from '@/components/Storage/StorageCommandCenter';
 import { StorageHero } from '@/components/Storage/StorageHero';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
@@ -23,9 +25,9 @@ import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
 import { buildStoragePath, parseStorageLinkSearch } from '@/routing/resourceLinks';
 import { formatBytes, formatPercent } from '@/utils/format';
-import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
@@ -35,6 +37,7 @@ import {
   type StorageGroupByFilter,
   type StorageStatusFilter,
 } from './StorageFilter';
+import { matchesPhysicalDiskNode } from './diskResourceUtils';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
 import {
@@ -135,6 +138,12 @@ const Storage: Component = () => {
     }
     return activeAlerts;
   };
+  const websocketState = () => {
+    if (typeof state === 'function') {
+      return state();
+    }
+    return state;
+  };
   const { getRecordAlertState } = useStorageAlertState({
     records,
     activeAlerts: activeAlertsAccessor,
@@ -146,8 +155,25 @@ const Storage: Component = () => {
       id: node.id,
       label: node.name,
       instance: getProxmoxData(node)?.instance,
+      aliases: getResourceIdentityAliases(node),
     }));
   });
+
+  const diskNodeOptions = createMemo(() => {
+    return nodeOptions().filter((node) =>
+      physicalDisks().some((disk) =>
+        matchesPhysicalDiskNode(disk, {
+          id: node.id,
+          name: node.label,
+          instance: node.instance,
+        }),
+      ),
+    );
+  });
+
+  const activeNodeOptions = createMemo(() =>
+    view() === 'disks' ? diskNodeOptions() : nodeOptions(),
+  );
 
   const nodeOnlineByLabel = createMemo(() => {
     const map = new Map<string, boolean>();
@@ -164,7 +190,7 @@ const Storage: Component = () => {
     return map;
   });
 
-  const { sourceOptions, selectedNode, filteredRecords, groupedRecords, summary } = useStorageModel(
+  const { sourceOptions, filteredRecords, groupedRecords, summary } = useStorageModel(
     {
       records,
       search,
@@ -366,6 +392,12 @@ const Storage: Component = () => {
     }
   });
 
+  createEffect(() => {
+    if (selectedNodeId() === 'all') return;
+    if (activeNodeOptions().some((node) => node.id === selectedNodeId())) return;
+    setSelectedNodeId('all');
+  });
+
   onCleanup(() => {
     if (highlightTimer) window.clearTimeout(highlightTimer);
   });
@@ -377,6 +409,13 @@ const Storage: Component = () => {
         healthBreakdown={healthBreakdown()}
         diskCount={physicalDisks().length}
         trend={storageTrend.trend()}
+      />
+
+      <StorageCommandCenter
+        lastUpdateToken={() => String(websocketState()?.lastUpdate || '')}
+        search={search}
+        selectedNodeId={selectedNodeId}
+        sourceFilter={sourceFilter}
       />
 
       <Show
@@ -447,6 +486,16 @@ const Storage: Component = () => {
       </Show>
 
       <Show when={!kioskMode()}>
+        <Subtabs
+          value={view()}
+          onChange={(value) => setView(value as StorageView)}
+          ariaLabel="Storage view"
+          tabs={[
+            { value: 'pools', label: 'Pools' },
+            { value: 'disks', label: 'Physical Disks' },
+          ]}
+        />
+
         <StorageFilter
           search={search}
           setSearch={setSearch}
@@ -465,37 +514,14 @@ const Storage: Component = () => {
           sourceOptions={sourceFilterOptions()}
           leadingFilters={
             <>
-              <div
-                class="inline-flex rounded-md bg-surface-hover p-0.5"
-                role="group"
-                aria-label="View"
-              >
-                <button
-                  type="button"
-                  onClick={() => setView('pools')}
-                  aria-pressed={view() === 'pools'}
-                  class={segmentedButtonClass(view() === 'pools')}
-                >
-                  Pools
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView('disks')}
-                  aria-pressed={view() === 'disks'}
-                  class={segmentedButtonClass(view() === 'disks')}
-                >
-                  Physical Disks
-                </button>
-              </div>
-              <div class="h-5 w-px bg-surface-hover hidden sm:block"></div>
               <select
                 value={selectedNodeId()}
                 onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
                 class="px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 aria-label="Node"
               >
-                <option value="all">All Nodes</option>
-                <For each={nodeOptions()}>
+                <option value="all">{view() === 'disks' ? 'All Disk Hosts' : 'All Nodes'}</option>
+                <For each={activeNodeOptions()}>
                   {(node) => <option value={node.id}>{node.label}</option>}
                 </For>
               </select>
@@ -564,7 +590,7 @@ const Storage: Component = () => {
             <DiskList
               disks={physicalDisks()}
               nodes={nodes()}
-              selectedNode={selectedNode()?.id || null}
+              selectedNode={selectedNodeId() === 'all' ? null : selectedNodeId()}
               searchTerm={search()}
             />
           </div>

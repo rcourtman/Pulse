@@ -9,6 +9,7 @@ export type StorageNodeOption = {
   id: string;
   label: string;
   instance?: string;
+  aliases?: string[];
 };
 
 export interface StorageGroupStats {
@@ -52,6 +53,13 @@ const getRecordStringDetail = (record: StorageRecord, key: string): string => {
   return typeof value === 'string' ? value : '';
 };
 
+const getRecordStringArrayDetail = (record: StorageRecord, key: string): string[] => {
+  const value = getRecordDetails(record)[key];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+};
+
 export const sourceLabel = (value: string): string =>
   value
     .split('-')
@@ -63,8 +71,17 @@ export const getRecordNodeHints = (record: StorageRecord): string[] => {
   const details = getRecordDetails(record);
   const detailNode = typeof details.node === 'string' ? details.node : '';
   const detailParent = typeof details.parentId === 'string' ? details.parentId : '';
+  const detailParentName = typeof details.parentName === 'string' ? details.parentName : '';
   const locationRoot = record.location.label.split('/')[0]?.trim() || '';
-  return [detailNode, detailParent, locationRoot, record.location.label]
+  return [
+    detailNode,
+    detailParent,
+    detailParentName,
+    ...getRecordStringArrayDetail(record, 'nodeHints'),
+    locationRoot,
+    record.location.label,
+    record.refs?.platformEntityId,
+  ]
     .map((value) => value.toLowerCase().trim())
     .filter((value) => value.length > 0);
 };
@@ -91,6 +108,8 @@ export const getRecordShared = (record: StorageRecord): boolean | null => {
 };
 
 export const getRecordNodeLabel = (record: StorageRecord): string => {
+  const parentName = getRecordStringDetail(record, 'parentName');
+  if (parentName.trim()) return parentName;
   const node = getRecordStringDetail(record, 'node');
   if (node.trim()) return node;
   return record.location.label || 'unassigned';
@@ -164,12 +183,15 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
   const matchesSelectedNode = (record: StorageRecord): boolean => {
     const node = selectedNode();
     if (!node) return true;
-    const nodeName = node.label.toLowerCase().trim();
-    const nodeInstance = (node.instance || '').toLowerCase().trim();
-    const hints = getRecordNodeHints(record);
-    return hints.some(
-      (hint) => hint.includes(nodeName) || (nodeInstance && hint.includes(nodeInstance)),
+    const aliases = Array.from(
+      new Set(
+        [node.id, node.label, ...(node.aliases || [])]
+          .map((value) => (value || '').toLowerCase().trim())
+          .filter(Boolean),
+      ),
     );
+    const hints = getRecordNodeHints(record);
+    return hints.some((hint) => aliases.some((alias) => hint.includes(alias)));
   };
 
   const sourceOptions = createMemo(() => {

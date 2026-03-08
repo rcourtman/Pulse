@@ -10,8 +10,11 @@ import {
 } from '@/components/shared/Table';
 import { formatBytes, formatPowerOnHours } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
+import { ProgressBar } from '@/components/shared/ProgressBar';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData, getLinkedAgentId } from '@/utils/resourcePlatformData';
+import { getMetricColorClass } from '@/utils/metricThresholds';
+import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
 import { DiskDetail } from './DiskDetail';
 import { DiskLiveMetric } from './DiskLiveMetric';
 
@@ -46,12 +49,12 @@ interface PhysicalDiskData {
 function extractDiskData(resource: Resource): PhysicalDiskData {
   const platformData = (resource.platformData as any) || {};
   const pd = platformData.physicalDisk || {};
-  const proxmox = platformData.proxmox || {};
+  const diskNode = getPhysicalDiskNodeIdentity(resource);
   const smart = pd.smart || {};
 
   return {
-    node: proxmox.nodeName || resource.platformId || '',
-    instance: proxmox.instance || '',
+    node: diskNode.node,
+    instance: diskNode.instance,
     devPath: pd.devPath || '',
     model: pd.model || resource.name || '',
     serial: pd.serial || '',
@@ -125,11 +128,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
     if (props.selectedNode) {
       const node = props.nodes.find((n) => n.id === props.selectedNode);
       if (node) {
-        const instance = getProxmoxData(node)?.instance;
-        disks = disks.filter(
-          (d) =>
-            d.parentId === node.id ||
-            (getDiskData(d).instance === instance && getDiskData(d).node === node.name),
+        disks = disks.filter((d) =>
+          matchesPhysicalDiskNode(d, {
+            id: node.id,
+            name: node.name,
+            instance: getProxmoxData(node)?.instance,
+          }),
         );
       }
     }
@@ -223,9 +227,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
     }
   };
 
-  const getNodeAgentId = (nodeName: string, instance: string) => {
-    const node = props.nodes.find(
-      (n) => n.name === nodeName && getProxmoxData(n)?.instance === instance,
+  const getNodeAgentId = (disk: Resource) => {
+    const node = props.nodes.find((n) =>
+      matchesPhysicalDiskNode(disk, {
+        id: n.id,
+        name: n.name,
+        instance: getProxmoxData(n)?.instance,
+      }),
     );
     return node ? getLinkedAgentId(node) : undefined;
   };
@@ -237,7 +245,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
     }
     // Fallback: try to construct from platform data
     const data = getDiskData(disk);
-    const agentId = getNodeAgentId(data.node, data.instance);
+    const agentId = getNodeAgentId(disk);
     if (!agentId) return null;
     // Strip /dev/ if present to match agent metric key
     const deviceName = data.devPath.replace('/dev/', '');
@@ -410,23 +418,16 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </TableCell>
                           <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
                             <Show when={data.wearout > 0} fallback={<span class="">-</span>}>
-                              <div class="relative w-24 h-3.5 rounded overflow-hidden bg-surface-hover">
-                                <div
-                                  class={`absolute top-0 left-0 h-full ${
-                                    data.wearout >= 50
-                                      ? 'bg-green-500 dark:bg-green-500'
-                                      : data.wearout >= 20
-                                        ? 'bg-yellow-500 dark:bg-yellow-500'
-                                        : data.wearout >= 10
-                                          ? 'bg-orange-500 dark:bg-orange-500'
-                                          : 'bg-red-500 dark:bg-red-500'
-                                  }`}
-                                  style={{ width: `${data.wearout}%` }}
-                                />
-                                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content leading-none">
-                                  <span class="whitespace-nowrap px-0.5">{data.wearout}%</span>
-                                </span>
-                              </div>
+                              <ProgressBar
+                                value={data.wearout}
+                                class="h-4 w-24"
+                                fillClass={getMetricColorClass(100 - data.wearout, 'disk')}
+                                label={
+                                  <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none">
+                                    <span class="whitespace-nowrap px-0.5">{data.wearout}%</span>
+                                  </span>
+                                }
+                              />
                             </Show>
                           </TableCell>
                           <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">

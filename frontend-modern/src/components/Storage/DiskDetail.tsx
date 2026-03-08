@@ -6,6 +6,7 @@ import { formatTemperature } from '@/utils/temperature';
 import { formatPowerOnHours } from '@/utils/format';
 import { getProxmoxData, getLinkedAgentId } from '@/utils/resourcePlatformData';
 import { getDiskMetricHistory, getDiskMetricsVersion } from '@/stores/diskMetricsHistory';
+import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
 
 interface PhysicalDiskData {
   node: string;
@@ -33,12 +34,12 @@ interface PhysicalDiskData {
 function extractDiskData(resource: Resource): PhysicalDiskData {
   const platformData = (resource.platformData as any) || {};
   const pd = platformData.physicalDisk || {};
-  const proxmox = platformData.proxmox || {};
+  const diskNode = getPhysicalDiskNodeIdentity(resource);
   const smart = pd.smart || {};
 
   return {
-    node: proxmox.nodeName || resource.platformId || '',
-    instance: proxmox.instance || '',
+    node: diskNode.node,
+    instance: diskNode.instance,
     devPath: pd.devPath || '',
     model: pd.model || resource.name || '',
     serial: pd.serial || '',
@@ -86,12 +87,13 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     }
 
     const data = diskData();
-    const nodeName = data.node;
-    const instance = data.instance;
     const node = props.nodes.find(
       (n) =>
-        n.id === props.disk.parentId ||
-        (n.name === nodeName && getProxmoxData(n)?.instance === instance),
+        matchesPhysicalDiskNode(props.disk, {
+          id: n.id,
+          name: n.name,
+          instance: getProxmoxData(n)?.instance,
+        }),
     );
     const agentId = node ? getLinkedAgentId(node) : undefined;
 

@@ -86,6 +86,31 @@ describe('storageAdapters', () => {
     expect(records[0].capabilities).toContain('replication');
   });
 
+  it('preserves parent node labels and node hints for storage resources', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'resource-storage-parent-name',
+          parentId: 'agent-123',
+          parentName: 'pve1',
+          platformData: {
+            type: 'dir',
+            proxmox: { nodeName: 'pve1' },
+          },
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].location.label).toBe('pve1');
+    expect(records[0].details?.node).toBe('pve1');
+    expect(records[0].details?.parentName).toBe('pve1');
+    expect(records[0].details?.nodeHints).toEqual(
+      expect.arrayContaining(['pve1', 'agent-123', 'cluster-a']),
+    );
+  });
+
   it('collapses duplicate resource records by canonical identity and merges capabilities/details', () => {
     const resources: Resource[] = [
       makeResourceStorage({
