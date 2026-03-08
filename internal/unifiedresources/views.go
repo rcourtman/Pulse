@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 // Metric helpers (nil-safe).
@@ -850,6 +851,34 @@ func (v HostView) Status() ResourceStatus {
 	return v.r.Status
 }
 
+func (v HostView) IncidentCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentCount
+}
+
+func (v HostView) IncidentCode() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCode
+}
+
+func (v HostView) IncidentSeverity() storagehealth.RiskLevel {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSeverity
+}
+
+func (v HostView) IncidentSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSummary
+}
+
 func (v HostView) Tags() []string {
 	if v.r == nil {
 		return nil
@@ -1259,6 +1288,34 @@ func (v StoragePoolView) Status() ResourceStatus {
 	return v.r.Status
 }
 
+func (v StoragePoolView) IncidentCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentCount
+}
+
+func (v StoragePoolView) IncidentCode() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCode
+}
+
+func (v StoragePoolView) IncidentSeverity() storagehealth.RiskLevel {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSeverity
+}
+
+func (v StoragePoolView) IncidentSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSummary
+}
+
 func (v StoragePoolView) Node() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -1512,6 +1569,34 @@ func (v PBSInstanceView) Status() ResourceStatus {
 		return ""
 	}
 	return v.r.Status
+}
+
+func (v PBSInstanceView) IncidentCount() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentCount
+}
+
+func (v PBSInstanceView) IncidentCode() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentCode
+}
+
+func (v PBSInstanceView) IncidentSeverity() storagehealth.RiskLevel {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSeverity
+}
+
+func (v PBSInstanceView) IncidentSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentSummary
 }
 
 func (v PBSInstanceView) Hostname() string {

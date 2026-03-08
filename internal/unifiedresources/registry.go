@@ -235,6 +235,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
+	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.markStaleLocked(time.Now().UTC(), nil)
 	rr.viewsDirty = true
@@ -261,6 +262,7 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
+	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.viewsDirty = true
 	rr.mu.Unlock()
@@ -302,6 +304,7 @@ func (rr *ResourceRegistry) IngestResources(resources []Resource) {
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
+	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.markStaleLocked(time.Now().UTC(), nil)
 	rr.viewsDirty = true

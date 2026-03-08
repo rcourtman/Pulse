@@ -873,6 +873,72 @@ func TestResourceRegistry_IngestSnapshotDerivesPBSDatastoreConsumers(t *testing.
 	}
 }
 
+func TestResourceRegistry_IngestResourcesDerivesPrimaryIncidentRollups(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{
+		{
+			ID:     "storage:tank",
+			Type:   ResourceTypeStorage,
+			Name:   "tank",
+			Status: StatusWarning,
+			Storage: &StorageMeta{
+				Platform:   "truenas",
+				Topology:   "pool",
+				Protection: "zfs",
+				Risk: &StorageRisk{
+					Level: storagehealth.RiskWarning,
+					Reasons: []StorageRiskReason{
+						{Code: "capacity_runway_low", Severity: storagehealth.RiskWarning, Summary: "Storage tank is 92% full"},
+						{Code: "zfs_pool_state", Severity: storagehealth.RiskWarning, Summary: "ZFS pool tank is DEGRADED"},
+					},
+				},
+			},
+			Incidents: []ResourceIncident{
+				{Code: "capacity_runway_low", Severity: storagehealth.RiskWarning, Summary: "Storage tank is 92% full"},
+				{Code: "zfs_pool_state", Severity: storagehealth.RiskWarning, Summary: "ZFS pool tank is DEGRADED"},
+			},
+		},
+		{
+			ID:     "pbs:main",
+			Type:   ResourceTypePBS,
+			Name:   "pbs-main",
+			Status: StatusWarning,
+			PBS: &PBSData{
+				StorageRisk: &StorageRisk{
+					Level: storagehealth.RiskWarning,
+					Reasons: []StorageRiskReason{
+						{Code: "pbs_datastore_state", Severity: storagehealth.RiskWarning, Summary: "PBS datastore archive is READ_ONLY"},
+						{Code: "capacity_runway_low", Severity: storagehealth.RiskWarning, Summary: "PBS datastore fast is 96% full"},
+					},
+				},
+				AffectedDatastoreSummary: "Affects 1 backup datastore: fast",
+				ProtectedWorkloadSummary: "Puts backups for 2 protected workloads at risk: media01, app01",
+				PostureSummary:           "Affects 1 backup datastore: fast. Puts backups for 2 protected workloads at risk: media01, app01",
+			},
+			Incidents: []ResourceIncident{
+				{Code: "pbs_datastore_state", Severity: storagehealth.RiskWarning, Summary: "PBS datastore archive is READ_ONLY"},
+				{Code: "capacity_runway_low", Severity: storagehealth.RiskWarning, Summary: "PBS datastore fast is 96% full"},
+			},
+		},
+	})
+
+	storage, ok := rr.Get("storage:tank")
+	if !ok {
+		t.Fatal("expected storage resource")
+	}
+	if storage.IncidentCount != 2 || storage.IncidentCode != "zfs_pool_state" || storage.IncidentSeverity != storagehealth.RiskWarning || storage.IncidentSummary != "ZFS pool tank is DEGRADED" {
+		t.Fatalf("unexpected storage incident rollup %+v", storage)
+	}
+
+	pbs, ok := rr.Get("pbs:main")
+	if !ok {
+		t.Fatal("expected pbs resource")
+	}
+	if pbs.IncidentCount != 2 || pbs.IncidentCode != "pbs_datastore_state" || pbs.IncidentSeverity != storagehealth.RiskWarning || pbs.IncidentSummary != "PBS datastore archive is READ_ONLY" {
+		t.Fatalf("unexpected pbs incident rollup %+v", pbs)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

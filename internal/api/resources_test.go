@@ -11,6 +11,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -1969,6 +1970,68 @@ func TestResourceListIncludesPBSStorageConsumerImpact(t *testing.T) {
 	}
 	if !hasAPIStorageConsumer(datastore.Storage.TopConsumers, "media01", unified.ResourceTypeSystemContainer, 1) {
 		t.Fatalf("expected container consumer on backup-store, got %+v", datastore.Storage.TopConsumers)
+	}
+}
+
+func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:       "pbs-1",
+				Name:     "pbs-main",
+				Host:     "https://pbs-main.local:8007",
+				Status:   "online",
+				LastSeen: now,
+				Datastores: []models.PBSDatastore{
+					{
+						Name:   "fast",
+						Status: "online",
+						Total:  100,
+						Used:   96,
+						Usage:  96,
+					},
+					{
+						Name:   "archive",
+						Status: "read_only",
+					},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=pbs", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 pbs resource, got %d", len(resp.Data))
+	}
+
+	resource := resp.Data[0]
+	if resource.IncidentCount != 2 {
+		t.Fatalf("incidentCount = %d, want 2", resource.IncidentCount)
+	}
+	if resource.IncidentCode != "capacity_runway_low" {
+		t.Fatalf("incidentCode = %q, want capacity_runway_low", resource.IncidentCode)
+	}
+	if resource.IncidentSeverity != storagehealth.RiskCritical {
+		t.Fatalf("incidentSeverity = %q, want %q", resource.IncidentSeverity, storagehealth.RiskCritical)
+	}
+	if resource.IncidentSummary != "PBS datastore fast is 96% full" {
+		t.Fatalf("incidentSummary = %q", resource.IncidentSummary)
 	}
 }
 

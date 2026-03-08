@@ -472,12 +472,16 @@ func TestView_HostViewAccessors(t *testing.T) {
 	temp := 55.5
 	speed := int64(1000)
 	r := &Resource{
-		ID:       "host-1",
-		Type:     ResourceTypeAgent,
-		Name:     "agent-host-1",
-		Status:   StatusOnline,
-		LastSeen: now,
-		Tags:     []string{"linux", "site:1"},
+		ID:               "host-1",
+		Type:             ResourceTypeAgent,
+		Name:             "agent-host-1",
+		Status:           StatusOnline,
+		IncidentCount:    1,
+		IncidentCode:     "truenas_volume_status",
+		IncidentSeverity: storagehealth.RiskCritical,
+		IncidentSummary:  "Pool tank is FAULTED",
+		LastSeen:         now,
+		Tags:             []string{"linux", "site:1"},
 		Agent: &AgentData{
 			AgentID:       "agent-1",
 			AgentVersion:  "1.2.3",
@@ -581,6 +585,9 @@ func TestView_HostViewAccessors(t *testing.T) {
 	}
 	if v.Status() != StatusOnline {
 		t.Fatalf("expected Status %q, got %q", StatusOnline, v.Status())
+	}
+	if v.IncidentCount() != 1 || v.IncidentCode() != "truenas_volume_status" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "Pool tank is FAULTED" {
+		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary())
 	}
 	assertStringSlice(t, v.Tags(), []string{"linux", "site:1"})
 	if !v.LastSeen().Equal(now) {
@@ -712,14 +719,18 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 5, 0, 0, time.UTC)
 	parentID := "node-parent-1"
 	r := &Resource{
-		ID:       "storage-1",
-		Type:     ResourceTypeStorage,
-		Name:     "local-zfs",
-		Status:   StatusOnline,
-		LastSeen: now,
-		Tags:     []string{"fast"},
-		ParentID: &parentID,
-		Proxmox:  &ProxmoxData{SourceID: "local-zfs", NodeName: "pve-a", Instance: "lab"},
+		ID:               "storage-1",
+		Type:             ResourceTypeStorage,
+		Name:             "local-zfs",
+		Status:           StatusOnline,
+		IncidentCount:    1,
+		IncidentCode:     "zfs_pool_state",
+		IncidentSeverity: storagehealth.RiskWarning,
+		IncidentSummary:  "ZFS pool local-zfs is DEGRADED",
+		LastSeen:         now,
+		Tags:             []string{"fast"},
+		ParentID:         &parentID,
+		Proxmox:          &ProxmoxData{SourceID: "local-zfs", NodeName: "pve-a", Instance: "lab"},
 		Storage: &StorageMeta{
 			Type:                  "zfspool",
 			Content:               "images,iso",
@@ -750,6 +761,9 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	v := NewStoragePoolView(r)
 	if v.ID() != "storage-1" || v.Name() != "local-zfs" || v.Status() != StatusOnline {
 		t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
+	}
+	if v.IncidentCount() != 1 || v.IncidentCode() != "zfs_pool_state" || v.IncidentSeverity() != storagehealth.RiskWarning || v.IncidentSummary() != "ZFS pool local-zfs is DEGRADED" {
+		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary())
 	}
 	if v.Node() != "pve-a" || v.Instance() != "lab" || v.SourceID() != "local-zfs" {
 		t.Fatalf("expected node/instance/sourceID %q/%q/%q, got %q/%q/%q", "pve-a", "lab", "local-zfs", v.Node(), v.Instance(), v.SourceID())
@@ -806,13 +820,17 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 
 	t.Run("PBSInstanceView", func(t *testing.T) {
 		r := &Resource{
-			ID:        "pbs-1",
-			Type:      ResourceTypePBS,
-			Name:      "pbs-a",
-			Status:    StatusOnline,
-			LastSeen:  now,
-			Tags:      []string{"backup"},
-			CustomURL: "https://pbs.example/ui",
+			ID:               "pbs-1",
+			Type:             ResourceTypePBS,
+			Name:             "pbs-a",
+			Status:           StatusOnline,
+			IncidentCount:    1,
+			IncidentCode:     "capacity_runway_low",
+			IncidentSeverity: storagehealth.RiskCritical,
+			IncidentSummary:  "PBS datastore fast is 96% full",
+			LastSeen:         now,
+			Tags:             []string{"backup"},
+			CustomURL:        "https://pbs.example/ui",
 			PBS: &PBSData{
 				Hostname:                 "pbs.example",
 				Version:                  "3.2",
@@ -842,6 +860,9 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		v := NewPBSInstanceView(r)
 		if v.ID() != "pbs-1" || v.Name() != "pbs-a" || v.Status() != StatusOnline {
 			t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
+		}
+		if v.IncidentCount() != 1 || v.IncidentCode() != "capacity_runway_low" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "PBS datastore fast is 96% full" {
+			t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary())
 		}
 		if v.Hostname() != "pbs.example" || v.Version() != "3.2" || v.UptimeSeconds() != 100 {
 			t.Fatalf("expected hostname/version/uptime to match, got %q/%q/%d", v.Hostname(), v.Version(), v.UptimeSeconds())

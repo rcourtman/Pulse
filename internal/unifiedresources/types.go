@@ -32,9 +32,13 @@ type Resource struct {
 	ParentName string  `json:"parentName,omitempty"`
 	ChildCount int     `json:"childCount,omitempty"`
 
-	Tags      []string           `json:"tags,omitempty"`
-	CustomURL string             `json:"customUrl,omitempty"`
-	Incidents []ResourceIncident `json:"incidents,omitempty"`
+	Tags             []string                `json:"tags,omitempty"`
+	CustomURL        string                  `json:"customUrl,omitempty"`
+	Incidents        []ResourceIncident      `json:"incidents,omitempty"`
+	IncidentCount    int                     `json:"incidentCount,omitempty"`
+	IncidentCode     string                  `json:"incidentCode,omitempty"`
+	IncidentSeverity storagehealth.RiskLevel `json:"incidentSeverity,omitempty"`
+	IncidentSummary  string                  `json:"incidentSummary,omitempty"`
 
 	// Source-specific payloads
 	Proxmox      *ProxmoxData      `json:"proxmox,omitempty"`
