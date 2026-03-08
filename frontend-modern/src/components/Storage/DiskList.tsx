@@ -466,7 +466,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                           <TableCell class="hidden md:table-cell px-2 py-1 align-middle text-xs">
                             <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                              <span class="truncate text-[11px] text-base-content" title={getWearSummary(data)}>
+                              <span
+                                class="hidden xl:block truncate text-[11px] text-base-content"
+                                title={getWearSummary(data)}
+                              >
                                 {getWearSummary(data)}
                               </span>
                               <span class={`shrink-0 text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}>
