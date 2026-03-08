@@ -1321,6 +1321,11 @@ func TestQuietHoursCategoryForAlert(t *testing.T) {
 			alert: &Alert{Type: "backup-storage-incident"},
 			want:  "storage",
 		},
+		{
+			name:  "backup-posture-incident returns storage",
+			alert: &Alert{Type: "backup-posture-incident"},
+			want:  "storage",
+		},
 
 		// Offline metrics
 		{

@@ -122,6 +122,15 @@ func shouldSuppressUnifiedIncidentAlert(resource unifiedresources.Resource, inci
 			return false
 		}
 		return resourceHasIncidentKey(parent, key)
+	case unifiedresources.ResourceTypeStorage:
+		if resource.ParentID == nil || strings.TrimSpace(*resource.ParentID) == "" {
+			return false
+		}
+		parent, ok := resourcesByID[strings.TrimSpace(*resource.ParentID)]
+		if !ok || parent.Type != unifiedresources.ResourceTypePBS {
+			return false
+		}
+		return resourceHasIncidentKey(parent, key)
 	}
 
 	return false
@@ -149,6 +158,8 @@ func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) b
 	case unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
 		return true
 	case unifiedresources.ResourceTypeAgent:
+		return len(resource.Incidents) > 0
+	case unifiedresources.ResourceTypePBS:
 		return len(resource.Incidents) > 0
 	default:
 		return false
@@ -227,6 +238,8 @@ func unifiedIncidentInstance(resource unifiedresources.Resource) string {
 	switch {
 	case resource.TrueNAS != nil:
 		return "TrueNAS"
+	case resource.PBS != nil:
+		return "PBS"
 	case resource.Storage != nil && strings.TrimSpace(resource.Storage.Platform) != "":
 		platform := strings.TrimSpace(resource.Storage.Platform)
 		if platform == "" {
@@ -247,6 +260,8 @@ func unifiedIncidentAlertType(resource unifiedresources.Resource, incident unifi
 			return "disk-wearout"
 		}
 		return "disk-health"
+	case unifiedresources.ResourceTypePBS:
+		return "backup-posture-incident"
 	case unifiedresources.ResourceTypeStorage:
 		if isBackupStorageResource(resource.Storage) {
 			return "backup-storage-incident"
@@ -261,6 +276,10 @@ func unifiedIncidentAlertType(resource unifiedresources.Resource, incident unifi
 }
 
 func unifiedIncidentMessage(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident) string {
+	if resource.Type == unifiedresources.ResourceTypePBS {
+		return unifiedIncidentPBSMessage(resource, incident)
+	}
+
 	base := strings.TrimSpace(incident.Summary)
 	if base == "" {
 		base = strings.TrimSpace(incident.Code)
@@ -277,6 +296,90 @@ func unifiedIncidentMessage(resource unifiedresources.Resource, incident unified
 		return summary
 	}
 	return base + ". " + summary
+}
+
+func unifiedIncidentPBSMessage(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident) string {
+	base := unifiedIncidentPBSBaseMessage(resource, incident)
+	summary := unifiedIncidentPBSDatastoreSummary(resource, incident.Code)
+	if summary == "" {
+		return base
+	}
+	if base == "" {
+		return summary
+	}
+	return base + ". " + summary
+}
+
+func unifiedIncidentPBSBaseMessage(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident) string {
+	name := unifiedIncidentResourceName(resource)
+	switch strings.TrimSpace(incident.Code) {
+	case "capacity_runway_low":
+		return "Backup server " + name + " has datastore capacity risk"
+	case "pbs_datastore_error":
+		return "Backup server " + name + " has datastore errors"
+	case "pbs_datastore_state":
+		return "Backup server " + name + " has degraded datastore availability"
+	default:
+		base := strings.TrimSpace(incident.Summary)
+		if base != "" {
+			return base
+		}
+		return "Backup server " + name + " has degraded storage posture"
+	}
+}
+
+func unifiedIncidentPBSDatastoreSummary(resource unifiedresources.Resource, incidentCode string) string {
+	if resource.PBS == nil || len(resource.PBS.Datastores) == 0 {
+		return ""
+	}
+
+	names := affectedPBSDatastoreNames(resource.PBS.Datastores, incidentCode)
+	if len(names) == 0 {
+		return ""
+	}
+
+	label := "backup datastore"
+	if len(names) != 1 {
+		label = "backup datastores"
+	}
+	return "Affects " + intLabel(len(names)) + " " + label + ": " + strings.Join(names, ", ")
+}
+
+func affectedPBSDatastoreNames(datastores []unifiedresources.PBSDatastoreMeta, incidentCode string) []string {
+	names := make([]string, 0, len(datastores))
+	for _, datastore := range datastores {
+		if !pbsDatastoreMatchesIncident(datastore, incidentCode) {
+			continue
+		}
+		name := strings.TrimSpace(datastore.Name)
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func pbsDatastoreMatchesIncident(datastore unifiedresources.PBSDatastoreMeta, incidentCode string) bool {
+	switch strings.TrimSpace(incidentCode) {
+	case "capacity_runway_low":
+		usage := datastore.UsagePercent
+		if usage <= 0 && datastore.Total > 0 {
+			usage = (float64(datastore.Used) / float64(datastore.Total)) * 100
+		}
+		return usage >= 90
+	case "pbs_datastore_error":
+		return strings.TrimSpace(datastore.Error) != ""
+	case "pbs_datastore_state":
+		switch strings.ToUpper(strings.TrimSpace(datastore.Status)) {
+		case "OFFLINE", "UNAVAILABLE", "ERROR", "FAILED", "DEGRADED", "WARN", "WARNING", "READ_ONLY":
+			return true
+		default:
+			return false
+		}
+	default:
+		return strings.TrimSpace(datastore.Error) != "" || pbsDatastoreMatchesIncident(datastore, "pbs_datastore_state") || pbsDatastoreMatchesIncident(datastore, "capacity_runway_low")
+	}
 }
 
 func unifiedIncidentConsumerSummary(storage *unifiedresources.StorageMeta) string {
@@ -467,6 +570,41 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		metadata["storagePlatform"] = "truenas"
 		if hostname := strings.TrimSpace(resource.TrueNAS.Hostname); hostname != "" {
 			metadata["hostname"] = hostname
+		}
+	}
+
+	if resource.PBS != nil {
+		metadata["storagePlatform"] = "pbs"
+		metadata["backupServer"] = true
+		metadata["datastoreCount"] = resource.PBS.DatastoreCount
+		if hostname := strings.TrimSpace(resource.PBS.Hostname); hostname != "" {
+			metadata["hostname"] = hostname
+		}
+		if resource.PBS.StorageRisk != nil {
+			riskCodes, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := storageRiskAlertSemantics(resource.PBS.StorageRisk)
+			if len(riskCodes) > 0 {
+				metadata["storageRiskCodes"] = riskCodes
+			}
+			if protectionReduced {
+				metadata["protectionReduced"] = true
+			}
+			if rebuildInProgress {
+				metadata["rebuildInProgress"] = true
+			}
+			if protectionSummary != "" {
+				metadata["protectionSummary"] = protectionSummary
+			}
+			if rebuildSummary != "" {
+				metadata["rebuildSummary"] = rebuildSummary
+			}
+		}
+		if names := affectedPBSDatastoreNames(resource.PBS.Datastores, incident.Code); len(names) > 0 {
+			metadata["affectedDatastoreCount"] = len(names)
+			metadata["affectedDatastores"] = append([]string(nil), names...)
+			metadata["backupServerPostureSummary"] = "Affects " + intLabel(len(names)) + " backup datastore"
+			if len(names) != 1 {
+				metadata["backupServerPostureSummary"] = "Affects " + intLabel(len(names)) + " backup datastores"
+			}
 		}
 	}
 

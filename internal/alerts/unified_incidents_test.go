@@ -164,6 +164,61 @@ func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:   "pbs:main",
+		Type: unifiedresources.ResourceTypePBS,
+		Name: "pbs-main",
+		PBS: &unifiedresources.PBSData{
+			Hostname:       "pbs-main.local",
+			DatastoreCount: 2,
+			Datastores: []unifiedresources.PBSDatastoreMeta{
+				{Name: "fast", Status: "online", Total: 100, Used: 96},
+				{Name: "archive", Status: "online", Total: 100, Used: 40},
+			},
+			StorageRisk: &unifiedresources.StorageRisk{
+				Level: storagehealth.RiskCritical,
+				Reasons: []unifiedresources.StorageRiskReason{
+					{Code: "capacity_runway_low", Severity: storagehealth.RiskCritical, Summary: "PBS datastore fast is 96% full"},
+				},
+			},
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "pulse",
+			NativeID: "pbs-instance:pbs-main:capacity_runway_low",
+			Code:     "capacity_runway_low",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "PBS datastore fast is 96% full",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := "unified-incident-pbs-main-pulse-pbs-instance-pbs-main-capacity-runway-low-capacity-runway-low"
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+
+	if alert.Type != "backup-posture-incident" {
+		t.Fatalf("alert type = %q, want backup-posture-incident", alert.Type)
+	}
+	wantMessage := "Backup server pbs-main has datastore capacity risk. Affects 1 backup datastore: fast"
+	if alert.Message != wantMessage {
+		t.Fatalf("message = %q, want %q", alert.Message, wantMessage)
+	}
+	if got := alert.Metadata["backupServer"]; got != true {
+		t.Fatalf("backupServer = %v, want true", got)
+	}
+	if got := alert.Metadata["affectedDatastoreCount"]; got != 1 {
+		t.Fatalf("affectedDatastoreCount = %v, want 1", got)
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsSuppressesRedundantParentAndChildAlerts(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
@@ -232,6 +287,67 @@ func TestSyncUnifiedResourceIncidentsSuppressesRedundantParentAndChildAlerts(t *
 	}
 	if active[0].ResourceID != storageID {
 		t.Fatalf("resource id = %q, want %q", active[0].ResourceID, storageID)
+	}
+}
+
+func TestSyncUnifiedResourceIncidentsSuppressesPBSDatastoreChildWhenParentRollsUp(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	parentID := "pbs:main"
+	childID := "storage:fast"
+	resources := []unifiedresources.Resource{
+		{
+			ID:   parentID,
+			Type: unifiedresources.ResourceTypePBS,
+			Name: "pbs-main",
+			PBS: &unifiedresources.PBSData{
+				DatastoreCount: 1,
+				Datastores: []unifiedresources.PBSDatastoreMeta{
+					{Name: "fast", Status: "online", Total: 100, Used: 96},
+				},
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "pbs-instance:pbs-main:capacity_runway_low",
+				Code:     "capacity_runway_low",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "PBS datastore fast is 96% full",
+			}},
+		},
+		{
+			ID:       childID,
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "fast",
+			ParentID: &parentID,
+			Storage: &unifiedresources.StorageMeta{
+				Type:         "pbs-datastore",
+				Platform:     "pbs",
+				Topology:     "datastore",
+				Protection:   "backup-repository",
+				ContentTypes: []string{"backup"},
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "pbs-instance:pbs-main:capacity_runway_low",
+				Code:     "capacity_runway_low",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "PBS datastore fast is 96% full",
+			}},
+		},
+	}
+
+	m.SyncUnifiedResourceIncidents(resources)
+
+	active := m.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("expected 1 active alert after PBS parent roll-up suppression, got %d: %+v", len(active), active)
+	}
+	if active[0].ResourceID != parentID {
+		t.Fatalf("expected PBS parent alert to remain, got %q", active[0].ResourceID)
+	}
+	if active[0].Type != "backup-posture-incident" {
+		t.Fatalf("alert type = %q, want backup-posture-incident", active[0].Type)
 	}
 }
 
@@ -440,6 +556,55 @@ func TestGetActiveAlertsPrioritizesBackupTargetExposure(t *testing.T) {
 	}
 	if active[0].ResourceID != "storage:backup-store" {
 		t.Fatalf("expected backup target incident first, got %q then %q", active[0].ResourceID, active[1].ResourceID)
+	}
+}
+
+func TestGetActiveAlertsPrioritizesBackupPostureExposure(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{
+		{
+			ID:   "pbs:main",
+			Type: unifiedresources.ResourceTypePBS,
+			Name: "pbs-main",
+			PBS: &unifiedresources.PBSData{
+				DatastoreCount: 1,
+				Datastores: []unifiedresources.PBSDatastoreMeta{
+					{Name: "fast", Status: "online", Total: 100, Used: 96},
+				},
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "pbs-instance:pbs-main:capacity_runway_low",
+				Code:     "capacity_runway_low",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "PBS datastore fast is 96% full",
+			}},
+		},
+		{
+			ID:   "storage:shared",
+			Type: unifiedresources.ResourceTypeStorage,
+			Name: "shared",
+			Storage: &unifiedresources.StorageMeta{
+				ConsumerCount: 4,
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "shared",
+				Code:     "capacity_runway_low",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Shared storage is nearly full",
+			}},
+		},
+	})
+
+	active := m.GetActiveAlerts()
+	if len(active) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(active))
+	}
+	if active[0].ResourceID != "pbs:main" {
+		t.Fatalf("expected backup posture alert first, got %q then %q", active[0].ResourceID, active[1].ResourceID)
 	}
 }
 
