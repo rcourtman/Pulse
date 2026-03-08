@@ -200,9 +200,9 @@
   ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
   "automation_state": {
-    "last_cycle_at": "2026-03-06T22:46:26+00:00",
+    "last_cycle_at": "2026-03-07T22:38:32+00:00",
     "last_trigger": "stop-hook",
-    "last_outcome": "finding-fix-failed",
+    "last_outcome": "finding-fix-claude-failed",
     "selected_lane": "L10",
     "selected_lane_name": "Performance & scalability",
     "selected_lane_behind_score": 14,
@@ -210,7 +210,7 @@
     "verification_verdict": "not-run",
     "needs_human_decision": false,
     "human_decision_note": "",
-    "last_log": "tmp/release-control/finding-fix-20260306T224519081270Z-stop-hook.json",
+    "last_log": "tmp/release-control/finding-fix-20260307T222832695313Z-stop-hook.json",
     "lane_ranking": [
       {
         "id": "L10",
