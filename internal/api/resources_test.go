@@ -2042,6 +2042,9 @@ func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
 	if resource.IncidentPriority != 4502 {
 		t.Fatalf("incidentPriority = %d", resource.IncidentPriority)
 	}
+	if resource.IncidentImpactSummary != "Affects 2 backup datastores: archive, fast" {
+		t.Fatalf("incidentImpactSummary = %q", resource.IncidentImpactSummary)
+	}
 	if resource.IncidentUrgency != unified.IncidentUrgencyNow {
 		t.Fatalf("incidentUrgency = %q, want %q", resource.IncidentUrgency, unified.IncidentUrgencyNow)
 	}

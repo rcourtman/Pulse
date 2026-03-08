@@ -480,6 +480,9 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 			metadata["incidentAction"] = action
 		}
 	}
+	if impact := unifiedresources.IncidentImpactSummaryForResource(&resource); impact != "" {
+		metadata["incidentImpactSummary"] = impact
+	}
 
 	if !incident.StartedAt.IsZero() {
 		metadata["incidentStartedAt"] = incident.StartedAt.UTC().Format(time.RFC3339)

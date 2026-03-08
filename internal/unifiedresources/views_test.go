@@ -472,21 +472,22 @@ func TestView_HostViewAccessors(t *testing.T) {
 	temp := 55.5
 	speed := int64(1000)
 	r := &Resource{
-		ID:               "host-1",
-		Type:             ResourceTypeAgent,
-		Name:             "agent-host-1",
-		Status:           StatusOnline,
-		IncidentCount:    1,
-		IncidentCode:     "truenas_volume_status",
-		IncidentSeverity: storagehealth.RiskCritical,
-		IncidentSummary:  "Pool tank is FAULTED",
-		IncidentCategory: IncidentCategoryHealth,
-		IncidentLabel:    "Storage Health Issue",
-		IncidentPriority: 4050,
-		IncidentUrgency:  IncidentUrgencyToday,
-		IncidentAction:   "Investigate storage health immediately",
-		LastSeen:         now,
-		Tags:             []string{"linux", "site:1"},
+		ID:                    "host-1",
+		Type:                  ResourceTypeAgent,
+		Name:                  "agent-host-1",
+		Status:                StatusOnline,
+		IncidentCount:         1,
+		IncidentCode:          "truenas_volume_status",
+		IncidentSeverity:      storagehealth.RiskCritical,
+		IncidentSummary:       "Pool tank is FAULTED",
+		IncidentCategory:      IncidentCategoryHealth,
+		IncidentLabel:         "Storage Health Issue",
+		IncidentPriority:      4050,
+		IncidentImpactSummary: "",
+		IncidentUrgency:       IncidentUrgencyToday,
+		IncidentAction:        "Investigate storage health immediately",
+		LastSeen:              now,
+		Tags:                  []string{"linux", "site:1"},
 		Agent: &AgentData{
 			AgentID:       "agent-1",
 			AgentVersion:  "1.2.3",
@@ -591,8 +592,8 @@ func TestView_HostViewAccessors(t *testing.T) {
 	if v.Status() != StatusOnline {
 		t.Fatalf("expected Status %q, got %q", StatusOnline, v.Status())
 	}
-	if v.IncidentCount() != 1 || v.IncidentCode() != "truenas_volume_status" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "Pool tank is FAULTED" || v.IncidentCategory() != IncidentCategoryHealth || v.IncidentLabel() != "Storage Health Issue" || v.IncidentPriority() != 4050 || v.IncidentUrgency() != IncidentUrgencyToday || v.IncidentAction() != "Investigate storage health immediately" {
-		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q label=%q priority=%d urgency=%q action=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory(), v.IncidentLabel(), v.IncidentPriority(), v.IncidentUrgency(), v.IncidentAction())
+	if v.IncidentCount() != 1 || v.IncidentCode() != "truenas_volume_status" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "Pool tank is FAULTED" || v.IncidentCategory() != IncidentCategoryHealth || v.IncidentLabel() != "Storage Health Issue" || v.IncidentPriority() != 4050 || v.IncidentImpactSummary() != "" || v.IncidentUrgency() != IncidentUrgencyToday || v.IncidentAction() != "Investigate storage health immediately" {
+		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q label=%q priority=%d impact=%q urgency=%q action=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory(), v.IncidentLabel(), v.IncidentPriority(), v.IncidentImpactSummary(), v.IncidentUrgency(), v.IncidentAction())
 	}
 	assertStringSlice(t, v.Tags(), []string{"linux", "site:1"})
 	if !v.LastSeen().Equal(now) {
@@ -724,23 +725,24 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 5, 0, 0, time.UTC)
 	parentID := "node-parent-1"
 	r := &Resource{
-		ID:               "storage-1",
-		Type:             ResourceTypeStorage,
-		Name:             "local-zfs",
-		Status:           StatusOnline,
-		IncidentCount:    1,
-		IncidentCode:     "zfs_pool_state",
-		IncidentSeverity: storagehealth.RiskWarning,
-		IncidentSummary:  "ZFS pool local-zfs is DEGRADED",
-		IncidentCategory: IncidentCategoryProtection,
-		IncidentLabel:    "Protection Reduced",
-		IncidentPriority: 3402,
-		IncidentUrgency:  IncidentUrgencyToday,
-		IncidentAction:   "Investigate degraded protection and schedule maintenance to restore redundancy",
-		LastSeen:         now,
-		Tags:             []string{"fast"},
-		ParentID:         &parentID,
-		Proxmox:          &ProxmoxData{SourceID: "local-zfs", NodeName: "pve-a", Instance: "lab"},
+		ID:                    "storage-1",
+		Type:                  ResourceTypeStorage,
+		Name:                  "local-zfs",
+		Status:                StatusOnline,
+		IncidentCount:         1,
+		IncidentCode:          "zfs_pool_state",
+		IncidentSeverity:      storagehealth.RiskWarning,
+		IncidentSummary:       "ZFS pool local-zfs is DEGRADED",
+		IncidentCategory:      IncidentCategoryProtection,
+		IncidentLabel:         "Protection Reduced",
+		IncidentPriority:      3402,
+		IncidentImpactSummary: "Affects 2 dependent resources: app01, and 1 more",
+		IncidentUrgency:       IncidentUrgencyToday,
+		IncidentAction:        "Investigate degraded protection and schedule maintenance to restore redundancy",
+		LastSeen:              now,
+		Tags:                  []string{"fast"},
+		ParentID:              &parentID,
+		Proxmox:               &ProxmoxData{SourceID: "local-zfs", NodeName: "pve-a", Instance: "lab"},
 		Storage: &StorageMeta{
 			Type:                  "zfspool",
 			Content:               "images,iso",
@@ -772,8 +774,8 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	if v.ID() != "storage-1" || v.Name() != "local-zfs" || v.Status() != StatusOnline {
 		t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
 	}
-	if v.IncidentCount() != 1 || v.IncidentCode() != "zfs_pool_state" || v.IncidentSeverity() != storagehealth.RiskWarning || v.IncidentSummary() != "ZFS pool local-zfs is DEGRADED" || v.IncidentCategory() != IncidentCategoryProtection || v.IncidentLabel() != "Protection Reduced" || v.IncidentPriority() != 3402 || v.IncidentUrgency() != IncidentUrgencyToday || v.IncidentAction() != "Investigate degraded protection and schedule maintenance to restore redundancy" {
-		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q label=%q priority=%d urgency=%q action=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory(), v.IncidentLabel(), v.IncidentPriority(), v.IncidentUrgency(), v.IncidentAction())
+	if v.IncidentCount() != 1 || v.IncidentCode() != "zfs_pool_state" || v.IncidentSeverity() != storagehealth.RiskWarning || v.IncidentSummary() != "ZFS pool local-zfs is DEGRADED" || v.IncidentCategory() != IncidentCategoryProtection || v.IncidentLabel() != "Protection Reduced" || v.IncidentPriority() != 3402 || v.IncidentImpactSummary() != "Affects 2 dependent resources: app01, and 1 more" || v.IncidentUrgency() != IncidentUrgencyToday || v.IncidentAction() != "Investigate degraded protection and schedule maintenance to restore redundancy" {
+		t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q label=%q priority=%d impact=%q urgency=%q action=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory(), v.IncidentLabel(), v.IncidentPriority(), v.IncidentImpactSummary(), v.IncidentUrgency(), v.IncidentAction())
 	}
 	if v.Node() != "pve-a" || v.Instance() != "lab" || v.SourceID() != "local-zfs" {
 		t.Fatalf("expected node/instance/sourceID %q/%q/%q, got %q/%q/%q", "pve-a", "lab", "local-zfs", v.Node(), v.Instance(), v.SourceID())
@@ -830,22 +832,23 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 
 	t.Run("PBSInstanceView", func(t *testing.T) {
 		r := &Resource{
-			ID:               "pbs-1",
-			Type:             ResourceTypePBS,
-			Name:             "pbs-a",
-			Status:           StatusOnline,
-			IncidentCount:    1,
-			IncidentCode:     "capacity_runway_low",
-			IncidentSeverity: storagehealth.RiskCritical,
-			IncidentSummary:  "PBS datastore fast is 96% full",
-			IncidentCategory: IncidentCategoryRecoverability,
-			IncidentLabel:    "Backup Coverage At Risk",
-			IncidentPriority: 4502,
-			IncidentUrgency:  IncidentUrgencyNow,
-			IncidentAction:   "Restore backup target health immediately to protect recoverability",
-			LastSeen:         now,
-			Tags:             []string{"backup"},
-			CustomURL:        "https://pbs.example/ui",
+			ID:                    "pbs-1",
+			Type:                  ResourceTypePBS,
+			Name:                  "pbs-a",
+			Status:                StatusOnline,
+			IncidentCount:         1,
+			IncidentCode:          "capacity_runway_low",
+			IncidentSeverity:      storagehealth.RiskCritical,
+			IncidentSummary:       "PBS datastore fast is 96% full",
+			IncidentCategory:      IncidentCategoryRecoverability,
+			IncidentLabel:         "Backup Coverage At Risk",
+			IncidentPriority:      4502,
+			IncidentImpactSummary: "Puts backups for 2 protected workloads at risk: app01, media01",
+			IncidentUrgency:       IncidentUrgencyNow,
+			IncidentAction:        "Restore backup target health immediately to protect recoverability",
+			LastSeen:              now,
+			Tags:                  []string{"backup"},
+			CustomURL:             "https://pbs.example/ui",
 			PBS: &PBSData{
 				Hostname:                 "pbs.example",
 				Version:                  "3.2",
@@ -876,8 +879,8 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		if v.ID() != "pbs-1" || v.Name() != "pbs-a" || v.Status() != StatusOnline {
 			t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
 		}
-		if v.IncidentCount() != 1 || v.IncidentCode() != "capacity_runway_low" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "PBS datastore fast is 96% full" || v.IncidentCategory() != IncidentCategoryRecoverability || v.IncidentLabel() != "Backup Coverage At Risk" || v.IncidentPriority() != 4502 || v.IncidentUrgency() != IncidentUrgencyNow || v.IncidentAction() != "Restore backup target health immediately to protect recoverability" {
-			t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q label=%q priority=%d urgency=%q action=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory(), v.IncidentLabel(), v.IncidentPriority(), v.IncidentUrgency(), v.IncidentAction())
+		if v.IncidentCount() != 1 || v.IncidentCode() != "capacity_runway_low" || v.IncidentSeverity() != storagehealth.RiskCritical || v.IncidentSummary() != "PBS datastore fast is 96% full" || v.IncidentCategory() != IncidentCategoryRecoverability || v.IncidentLabel() != "Backup Coverage At Risk" || v.IncidentPriority() != 4502 || v.IncidentImpactSummary() != "Puts backups for 2 protected workloads at risk: app01, media01" || v.IncidentUrgency() != IncidentUrgencyNow || v.IncidentAction() != "Restore backup target health immediately to protect recoverability" {
+			t.Fatalf("expected incident accessors to match, got count=%d code=%q severity=%q summary=%q category=%q label=%q priority=%d impact=%q urgency=%q action=%q", v.IncidentCount(), v.IncidentCode(), v.IncidentSeverity(), v.IncidentSummary(), v.IncidentCategory(), v.IncidentLabel(), v.IncidentPriority(), v.IncidentImpactSummary(), v.IncidentUrgency(), v.IncidentAction())
 		}
 		if v.Hostname() != "pbs.example" || v.Version() != "3.2" || v.UptimeSeconds() != 100 {
 			t.Fatalf("expected hostname/version/uptime to match, got %q/%q/%d", v.Hostname(), v.Version(), v.UptimeSeconds())

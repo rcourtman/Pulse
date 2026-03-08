@@ -900,6 +900,13 @@ func (v HostView) IncidentPriority() int {
 	return v.r.IncidentPriority
 }
 
+func (v HostView) IncidentImpactSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentImpactSummary
+}
+
 func (v HostView) IncidentUrgency() string {
 	if v.r == nil {
 		return ""
@@ -1372,6 +1379,13 @@ func (v StoragePoolView) IncidentPriority() int {
 	return v.r.IncidentPriority
 }
 
+func (v StoragePoolView) IncidentImpactSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentImpactSummary
+}
+
 func (v StoragePoolView) IncidentUrgency() string {
 	if v.r == nil {
 		return ""
@@ -1688,6 +1702,13 @@ func (v PBSInstanceView) IncidentPriority() int {
 		return 0
 	}
 	return v.r.IncidentPriority
+}
+
+func (v PBSInstanceView) IncidentImpactSummary() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentImpactSummary
 }
 
 func (v PBSInstanceView) IncidentUrgency() string {

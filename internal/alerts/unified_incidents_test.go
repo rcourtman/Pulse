@@ -110,6 +110,9 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	if got := alert.Metadata["incidentPriority"]; got != 3203 {
 		t.Fatalf("incidentPriority = %v", got)
 	}
+	if got := alert.Metadata["incidentImpactSummary"]; got != "Affects 3 dependent resources: app01, media01, and 1 more" {
+		t.Fatalf("incidentImpactSummary = %v", got)
+	}
 	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyToday {
 		t.Fatalf("incidentUrgency = %v", got)
 	}
@@ -185,6 +188,9 @@ func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	}
 	if got := alert.Metadata["incidentPriority"]; got != 4502 {
 		t.Fatalf("incidentPriority = %v", got)
+	}
+	if got := alert.Metadata["incidentImpactSummary"]; got != "Puts backups for 2 protected workloads at risk: app01, media01" {
+		t.Fatalf("incidentImpactSummary = %v", got)
 	}
 	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyNow {
 		t.Fatalf("incidentUrgency = %v", got)
@@ -267,6 +273,9 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 	}
 	if got := alert.Metadata["incidentPriority"]; got != 4502 {
 		t.Fatalf("incidentPriority = %v", got)
+	}
+	if got := alert.Metadata["incidentImpactSummary"]; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("incidentImpactSummary = %v", got)
 	}
 	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyNow {
 		t.Fatalf("incidentUrgency = %v", got)

@@ -51,6 +51,7 @@ func refreshResourceIncidentRollup(resource *Resource) {
 	resource.IncidentCategory = IncidentCategoryForResource(resource, best)
 	resource.IncidentLabel = IncidentLabelForResource(resource, best, resource.IncidentCategory)
 	resource.IncidentPriority = IncidentPriorityForResource(resource, best, resource.IncidentCategory)
+	resource.IncidentImpactSummary = IncidentImpactSummaryForResource(resource)
 	resource.IncidentUrgency, resource.IncidentAction = IncidentActionForResource(resource, best, resource.IncidentCategory)
 }
 
