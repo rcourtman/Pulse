@@ -636,9 +636,6 @@ const Storage: Component = () => {
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
                           Primary Issue
                         </TableHead>
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden xl:table-cell">
-                          Action
-                        </TableHead>
                         <TableHead class="px-1.5 sm:px-2 py-0.5 w-10" />
                       </TableRow>
                     </TableHeader>

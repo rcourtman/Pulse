@@ -1,14 +1,10 @@
 import { Component, Show, createMemo } from 'solid-js';
-import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { formatBytes, formatPercent } from '@/utils/format';
-import { getMetricColorHex } from '@/utils/metricThresholds';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import type { Resource } from '@/types/resource';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
-import { useStorageSparkline } from './useStorageSparklines';
 import {
-  getRecordActionSummary,
   getRecordHostLabel,
   getRecordImpactSummary,
   getRecordIssueLabel,
@@ -89,7 +85,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const issueLabel = createMemo(() => getRecordIssueLabel(props.record));
   const issueSummary = createMemo(() => getRecordIssueSummary(props.record));
   const impactSummary = createMemo(() => getRecordImpactSummary(props.record));
-  const actionSummary = createMemo(() => getRecordActionSummary(props.record));
   const normalizedStatus = createMemo(() => (props.record.statusLabel || '').trim().toLowerCase());
 
   const compactProtection = createMemo(() => {
@@ -144,27 +139,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     if ((pool.writeErrors || 0) > 0) errorParts.push(`${pool.writeErrors} write`);
     if ((pool.checksumErrors || 0) > 0) errorParts.push(`${pool.checksumErrors} checksum`);
     return errorParts.length > 0 ? `${errorParts.join(', ')} errors` : '';
-  });
-
-  const compactAction = createMemo(() => {
-    if (compactIssue() === '—') return '—';
-    const action = actionSummary().trim();
-    if (action && action.toLowerCase() !== 'monitor') {
-      return action;
-    }
-    return 'Investigate';
-  });
-
-  const sparklineResourceId = createMemo(() => props.record.refs?.resourceId || props.record.id);
-  const { data: sparklineData } = useStorageSparkline(
-    sparklineResourceId,
-    () => props.groupExpanded,
-  );
-
-  const sparklineColor = createMemo(() => {
-    const data = sparklineData();
-    const latestValue = data.length > 0 ? data[data.length - 1].value : usagePercent();
-    return getMetricColorHex(latestValue, 'disk');
   });
 
   return (
@@ -228,15 +202,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               >
                 {formatBytes(usedBytes())} / {formatBytes(totalBytes())}
               </span>
-              <Show when={sparklineData().length > 0}>
-                <div class="hidden xl:block shrink-0" style={{ width: '70px', height: '16px' }}>
-                  <InteractiveSparkline
-                    series={[{ data: sparklineData(), color: sparklineColor() }]}
-                    yMode="percent"
-                    size="sm"
-                  />
-                </div>
-              </Show>
             </div>
           </Show>
         </td>
@@ -262,12 +227,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               </Show>
             </div>
           </Show>
-        </td>
-
-        <td class="hidden xl:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
-          <span class={`block truncate ${compactAction() === '—' ? 'text-muted' : ''}`} title={compactAction()}>
-            {compactAction()}
-          </span>
         </td>
 
         <td class="px-1.5 py-1 align-middle text-right">

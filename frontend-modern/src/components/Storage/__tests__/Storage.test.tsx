@@ -381,12 +381,10 @@ describe('Storage', () => {
     expect(screen.getByRole('columnheader', { name: 'Host' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Primary Issue' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Action' })).toBeInTheDocument();
     expect(screen.getAllByText('PVE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('pve1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Protection Reduced').length).toBeGreaterThan(0);
     expect(screen.getByText('Pool redundancy is reduced.')).toBeInTheDocument();
-    expect(screen.getByText('Replace affected member disk')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Sort By'), {
       target: { value: 'usage' },
