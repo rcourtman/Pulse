@@ -804,9 +804,10 @@ type PMGData struct {
 
 // TrueNASData contains TrueNAS-specific metadata for system host resources.
 type TrueNASData struct {
-	Hostname      string `json:"hostname,omitempty"`
-	Version       string `json:"version,omitempty"`
-	UptimeSeconds int64  `json:"uptimeSeconds,omitempty"`
+	Hostname      string       `json:"hostname,omitempty"`
+	Version       string       `json:"version,omitempty"`
+	UptimeSeconds int64        `json:"uptimeSeconds,omitempty"`
+	StorageRisk   *StorageRisk `json:"storageRisk,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

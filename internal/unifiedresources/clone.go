@@ -37,6 +37,7 @@ func cloneResource(in *Resource) Resource {
 	out.Kubernetes = cloneK8sData(in.Kubernetes)
 	out.PhysicalDisk = clonePhysicalDiskMeta(in.PhysicalDisk)
 	out.Ceph = cloneCephMeta(in.Ceph)
+	out.TrueNAS = cloneTrueNASData(in.TrueNAS)
 	RefreshCanonicalIdentity(&out)
 	return out
 }
@@ -260,6 +261,15 @@ func cloneCephMeta(in *CephMeta) *CephMeta {
 	out := *in
 	out.Pools = cloneCephPoolMetaSlice(in.Pools)
 	out.Services = cloneCephServiceMetaSlice(in.Services)
+	return &out
+}
+
+func cloneTrueNASData(in *TrueNASData) *TrueNASData {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
 	return &out
 }
 

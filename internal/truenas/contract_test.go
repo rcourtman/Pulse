@@ -59,6 +59,15 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	if system.TrueNAS.Version != fixtures.System.Version {
 		t.Fatalf("expected version %q, got %q", fixtures.System.Version, system.TrueNAS.Version)
 	}
+	if system.Status != unifiedresources.StatusWarning {
+		t.Fatalf("expected system status warning due to degraded storage, got %q", system.Status)
+	}
+	if system.TrueNAS.StorageRisk == nil {
+		t.Fatal("expected rolled-up TrueNAS storage risk on system record")
+	}
+	if system.TrueNAS.StorageRisk.Level != "warning" {
+		t.Fatalf("expected warning storage risk on system record, got %+v", system.TrueNAS.StorageRisk)
+	}
 
 	pool := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank")
 	assertSourceTracking(t, *pool, unifiedresources.SourceTrueNAS)

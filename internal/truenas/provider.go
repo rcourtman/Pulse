@@ -175,6 +175,8 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		collectedAt = p.now()
 	}
 	systemSourceID := systemSourceID(snapshot.System.Hostname)
+	systemAssessment := assessSystemStorage(snapshot)
+	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
@@ -183,7 +185,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		Resource: unifiedresources.Resource{
 			Type:      unifiedresources.ResourceTypeAgent,
 			Name:      strings.TrimSpace(snapshot.System.Hostname),
-			Status:    statusFromSystem(snapshot.System),
+			Status:    systemStatus(snapshot.System, systemRisk),
 			LastSeen:  collectedAt,
 			UpdatedAt: collectedAt,
 			Metrics: &unifiedresources.ResourceMetrics{
@@ -193,6 +195,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Hostname:      strings.TrimSpace(snapshot.System.Hostname),
 				Version:       snapshot.System.Version,
 				UptimeSeconds: snapshot.System.UptimeSeconds,
+				StorageRisk:   systemRisk,
 			},
 			Tags: []string{
 				"truenas",
@@ -324,6 +327,21 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	return records
 }
 
+func assessSystemStorage(snapshot *FixtureSnapshot) storagehealth.Assessment {
+	if snapshot == nil {
+		return storagehealth.Assessment{Level: storagehealth.RiskHealthy}
+	}
+
+	assessments := make([]storagehealth.Assessment, 0, len(snapshot.Pools)+len(snapshot.Disks))
+	for _, pool := range snapshot.Pools {
+		assessments = append(assessments, assessPool(pool))
+	}
+	for _, disk := range snapshot.Disks {
+		assessments = append(assessments, assessDisk(disk))
+	}
+	return storagehealth.SummarizeAssessments(assessments...)
+}
+
 func assessPool(pool Pool) storagehealth.Assessment {
 	return storagehealth.AssessZFSPool(models.ZFSPool{
 		Name:  strings.TrimSpace(pool.Name),
@@ -369,6 +387,20 @@ func statusFromSystem(system SystemInfo) unifiedresources.ResourceStatus {
 		return unifiedresources.StatusOnline
 	}
 	return unifiedresources.StatusWarning
+}
+
+func systemStatus(system SystemInfo, storageRisk *unifiedresources.StorageRisk) unifiedresources.ResourceStatus {
+	status := statusFromSystem(system)
+	if storageRisk == nil {
+		return status
+	}
+	switch storageRisk.Level {
+	case storagehealth.RiskWarning, storagehealth.RiskCritical:
+		if status == unifiedresources.StatusOnline {
+			return unifiedresources.StatusWarning
+		}
+	}
+	return status
 }
 
 func statusFromPool(pool Pool) unifiedresources.ResourceStatus {
