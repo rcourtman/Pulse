@@ -12,7 +12,10 @@ import { formatBytes } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
-import { getSourcePlatformBadge, getSourcePlatformLabel } from '@/components/shared/sourcePlatformBadges';
+import {
+  getSourcePlatformBadge,
+  getSourcePlatformLabel,
+} from '@/components/shared/sourcePlatformBadges';
 import { DiskDetail } from './DiskDetail';
 import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
 
@@ -361,7 +364,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             <span
                               class={`${getSourcePlatformBadge(disk.platformType)?.classes || 'text-base-content'} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
                             >
-                              {getSourcePlatformBadge(disk.platformType)?.label || platformLabel(disk)}
+                              {getSourcePlatformBadge(disk.platformType)?.label ||
+                                platformLabel(disk)}
                             </span>
                           </TableCell>
 
