@@ -196,7 +196,7 @@ const getWearSummary = (disk: PhysicalDiskData): string => {
   if (disk.smartAttributes?.powerOnHours != null) {
     return formatPowerOnHours(disk.smartAttributes.powerOnHours, true);
   }
-  return 'No wear data';
+  return '';
 };
 
 const getTemperatureTone = (temperature: number): string => {
@@ -371,6 +371,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                       }
                       return summary;
                     };
+                    const wearSummary = () => {
+                      const summary = getWearSummary(data).trim();
+                      return summary || '';
+                    };
 
                     return (
                       <>
@@ -459,12 +463,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                           <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs">
                             <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                              <span
-                                class="hidden xl:block truncate text-[11px] text-base-content"
-                                title={getWearSummary(data)}
-                              >
-                                {getWearSummary(data)}
-                              </span>
+                              <Show when={wearSummary()}>
+                                <span
+                                  class="hidden xl:block truncate text-[11px] text-base-content"
+                                  title={wearSummary()}
+                                >
+                                  {wearSummary()}
+                                </span>
+                              </Show>
                               <span
                                 class={`shrink-0 text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}
                               >
