@@ -140,13 +140,13 @@ describe('useStorageRouteState', () => {
     batch(() => {
       ctx.setSource('agent');
       ctx.setTab('disks');
-      ctx.setSource('pbs');
+      ctx.setSource('proxmox-pbs');
     });
 
     vi.runAllTimers();
 
     expect(ctx.navigate).toHaveBeenCalledTimes(1);
-    expect(ctx.navigate).toHaveBeenCalledWith('/storage?tab=disks&source=pbs', {
+    expect(ctx.navigate).toHaveBeenCalledWith('/storage?tab=disks&source=proxmox-pbs', {
       replace: true,
     });
 

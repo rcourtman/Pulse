@@ -340,6 +340,48 @@ describe('storageAdapters', () => {
     expect(records[0].details?.protectionReduced).toBe(true);
   });
 
+  it('normalizes storage source and platform keys to canonical v6 platform types', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'pbs-datastore-1',
+          type: 'datastore',
+          name: 'archive',
+          platformId: 'pbs-1',
+          platformType: 'proxmox-pbs',
+          storage: {
+            type: 'pbs',
+            platform: 'pbs',
+            topology: 'datastore',
+          },
+        }),
+        makeResourceStorage({
+          id: 'pve-storage-1',
+          name: 'local-zfs',
+          platformId: 'cluster-a',
+          platformType: 'proxmox-pve',
+          storage: {
+            type: 'zfspool',
+            platform: 'proxmox',
+            topology: 'pool',
+          } as any,
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(2);
+
+    const byName = new Map(records.map((record) => [record.name, record]));
+    expect(byName.get('archive')?.source.platform).toBe('proxmox-pbs');
+    expect(byName.get('archive')?.platformKey).toBe('proxmox-pbs');
+    expect(byName.get('archive')?.platformLabel).toBe('PBS');
+
+    expect(byName.get('local-zfs')?.source.platform).toBe('proxmox-pve');
+    expect(byName.get('local-zfs')?.platformKey).toBe('proxmox-pve');
+    expect(byName.get('local-zfs')?.platformLabel).toBe('PVE');
+  });
+
   it('preserves canonical storage metrics targets across merged duplicate records', () => {
     const records = buildStorageRecords({
       state: baseState(),

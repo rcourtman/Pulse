@@ -13,7 +13,7 @@ import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import type { StorageSourceOption } from './storageSourceOptions';
+import { DEFAULT_STORAGE_SOURCE_OPTIONS, type StorageSourceOption } from '@/utils/storageSources';
 
 export type StorageStatusFilter =
   | 'all'
@@ -81,12 +81,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
     (props.sourceFilter && props.sourceFilter() !== 'all');
 
   const sourceOptions = (): StorageSourceOption[] =>
-    props.sourceOptions ?? [
-      { key: 'all', label: 'All Sources', tone: 'slate' },
-      { key: 'proxmox', label: 'PVE', tone: 'blue' },
-      { key: 'pbs', label: 'PBS', tone: 'emerald' },
-      { key: 'ceph', label: 'Ceph', tone: 'violet' },
-    ];
+    props.sourceOptions ?? DEFAULT_STORAGE_SOURCE_OPTIONS;
 
   return (
     <Card class="storage-filter mb-3" padding="sm">

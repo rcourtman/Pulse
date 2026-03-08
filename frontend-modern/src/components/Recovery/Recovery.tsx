@@ -24,10 +24,9 @@ import {
 } from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { Subtabs } from '@/components/shared/Subtabs';
-import {
-  getSourcePlatformBadge,
-  getSourcePlatformLabel,
-} from '@/components/shared/sourcePlatformBadges';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
+import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
 import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -62,14 +61,6 @@ type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
 
 const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
-
-const sourceLabel = (value: string): string => getSourcePlatformLabel(value);
-
-const normalizeProviderFromQuery = (value: string): string => {
-  const v = (value || '').trim().toLowerCase();
-  if (!v || v === 'all') return 'all';
-  return v;
-};
 
 const groupHeaderRowClass = () => 'bg-surface-alt hover:bg-surface-alt';
 const groupHeaderTextClass = () =>
@@ -532,7 +523,7 @@ const Recovery: Component = () => {
     const nextView: RecoveryView = rawView === 'events' ? 'events' : 'protected';
     const nextRollup = (parsed.rollupId || '').trim();
     const nextQuery = (parsed.query || '').trim();
-    const nextProvider = normalizeProviderFromQuery(parsed.provider || '');
+    const nextProvider = normalizeSourcePlatformQueryValue(parsed.provider || '');
     const nextCluster = (parsed.cluster || 'all').trim() || 'all';
     const nextMode = normalizeModeFromQuery(parsed.mode);
     const rawScope = (parsed.scope || '').trim().toLowerCase();
@@ -658,18 +649,15 @@ const Recovery: Component = () => {
     const providers = new Set<string>();
     for (const r of rollups()) {
       for (const p of r.providers || []) {
-        const v = String(p || '').trim();
+        const v = normalizeSourcePlatformQueryValue(String(p || '').trim());
         if (v) providers.add(v);
       }
     }
     for (const p of recoveryPoints.points() || []) {
-      const v = String(p?.provider || '').trim();
+      const v = normalizeSourcePlatformQueryValue(String(p?.provider || '').trim());
       if (v) providers.add(v);
     }
-    const values = Array.from(providers).sort((a, b) =>
-      sourceLabel(a).localeCompare(sourceLabel(b)),
-    );
-    return ['all', ...values];
+    return ['all', ...buildSourcePlatformOptions(providers).map((option) => option.key)];
   });
 
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
@@ -678,7 +666,9 @@ const Recovery: Component = () => {
     const resIndex = resourcesById();
 
     const out = rollups().filter((r) => {
-      const providers = (r.providers || []).map((p) => String(p || '').trim()).filter(Boolean);
+      const providers = (r.providers || [])
+        .map((p) => normalizeSourcePlatformQueryValue(String(p || '').trim()))
+        .filter(Boolean);
       if (provider && !providers.includes(provider)) return false;
 
       if (!q) return true;
@@ -775,11 +765,11 @@ const Recovery: Component = () => {
         }
         case 'source': {
           const sa = (a.providers || [])
-            .map((p) => sourceLabel(String(p)))
+            .map((p) => getSourcePlatformLabel(String(p)))
             .sort()
             .join(',');
           const sb = (b.providers || [])
-            .map((p) => sourceLabel(String(p)))
+            .map((p) => getSourcePlatformLabel(String(p)))
             .sort()
             .join(',');
           return mul * sa.localeCompare(sb);
@@ -1163,7 +1153,9 @@ const Recovery: Component = () => {
               >
                 <For each={providerOptions()}>
                   {(p) => (
-                    <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>
+                    <option value={p}>
+                      {p === 'all' ? 'All Providers' : getSourcePlatformLabel(p)}
+                    </option>
                   )}
                 </For>
               </LabeledFilterSelect>
@@ -1293,7 +1285,9 @@ const Recovery: Component = () => {
                         .slice()
                         .map((p) => String(p || '').trim())
                         .filter(Boolean)
-                        .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
+                        .sort((a, b) =>
+                          getSourcePlatformLabel(a).localeCompare(getSourcePlatformLabel(b)),
+                        );
                       const nowMs = Date.now();
                       const issueTone = deriveRollupIssueTone(r, nowMs);
                       const issueRailClass =
@@ -1341,7 +1335,7 @@ const Recovery: Component = () => {
                                   const badge = getSourcePlatformBadge(String(p));
                                   return (
                                     <span class={badge?.classes || ''}>
-                                      {badge?.label || sourceLabel(String(p))}
+                                      {badge?.label || getSourcePlatformLabel(String(p))}
                                     </span>
                                   );
                                 }}
@@ -1805,14 +1799,16 @@ const Recovery: Component = () => {
                   label="Provider"
                   value={providerFilter()}
                   onChange={(event) => {
-                    setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
+                    setProviderFilter(normalizeSourcePlatformQueryValue(event.currentTarget.value));
                     setCurrentPage(1);
                   }}
                   selectClass="min-w-[10rem] max-w-[14rem]"
                 >
                   <For each={providerOptions()}>
                     {(p) => (
-                      <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>
+                      <option value={p}>
+                        {p === 'all' ? 'All Providers' : getSourcePlatformLabel(p)}
+                      </option>
                     )}
                   </For>
                 </LabeledFilterSelect>
@@ -2217,7 +2213,7 @@ const Recovery: Component = () => {
                                                 <span
                                                   class={`${badge?.classes || ''} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
                                                 >
-                                                  {badge?.label || sourceLabel(provider)}
+                                                  {badge?.label || getSourcePlatformLabel(provider)}
                                                 </span>
                                               </TableCell>
                                             );

@@ -175,6 +175,20 @@ describe('Recovery', () => {
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
   });
 
+  it('normalizes legacy provider aliases from the URL into canonical provider filters', async () => {
+    mockLocationSearch = '?view=protected&provider=proxmox';
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('VM 123')).toBeInTheDocument();
+    expect(screen.queryByText('tank/apps')).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?provider=proxmox-pve', {
+        replace: true,
+      });
+    });
+  });
+
   it('adds cluster to the URL and API queries when the cluster filter changes', async () => {
     mockLocationSearch = '?view=events';
     facetsPayload.clusters = ['dev-cluster', 'prod-cluster'];

@@ -28,6 +28,7 @@ import { formatBytes, formatPercent } from '@/utils/format';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
+import { buildStorageSourceOptionsFromKeys } from '@/utils/storageSources';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
@@ -43,7 +44,6 @@ import {
   type StorageGroupKey,
   type StorageSortKey,
   getRecordNodeLabel,
-  sourceLabel,
   useStorageModel,
 } from './useStorageModel';
 
@@ -253,32 +253,7 @@ const Storage: Component = () => {
     setHealthFilter(value);
   };
 
-  const sourceFilterOptions = createMemo(() => {
-    const toneForKey = (key: string) => {
-      switch (key) {
-        case 'proxmox':
-        case 'proxmox-pve':
-          return { label: 'PVE', tone: 'blue' as const };
-        case 'pbs':
-        case 'proxmox-pbs':
-          return { label: 'PBS', tone: 'emerald' as const };
-        case 'ceph':
-          return { label: 'Ceph', tone: 'violet' as const };
-        case 'kubernetes':
-          return { label: 'K8s', tone: 'cyan' as const };
-        case 'pmg':
-          return { label: 'PMG', tone: 'blue' as const };
-        default:
-          return { label: sourceLabel(key), tone: 'slate' as const };
-      }
-    };
-
-    return sourceOptions().map((key) => {
-      if (key === 'all') return { key: 'all', label: 'All Sources', tone: 'slate' as const };
-      const preset = toneForKey(key);
-      return { key, ...preset };
-    });
-  });
+  const sourceFilterOptions = createMemo(() => buildStorageSourceOptionsFromKeys(sourceOptions()));
 
   const isWaitingForData = createMemo(
     () =>

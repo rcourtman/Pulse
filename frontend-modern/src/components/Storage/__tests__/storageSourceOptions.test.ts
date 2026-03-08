@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Storage } from '@/types/api';
 import {
   buildStorageSourceOptions,
+  buildStorageSourceOptionsFromKeys,
+  getStorageSourceOption,
   normalizeStorageSourceKey,
   resolveStorageSourceKey,
-} from '@/components/Storage/storageSourceOptions';
+} from '@/utils/storageSources';
 
 const makeStorage = (partial: Partial<Storage>): Storage => ({
   id: partial.id || 'storage-1',
@@ -30,16 +32,16 @@ const makeStorage = (partial: Partial<Storage>): Storage => ({
 
 describe('storageSourceOptions', () => {
   it('normalizes known source aliases', () => {
-    expect(normalizeStorageSourceKey('PVE')).toBe('proxmox');
-    expect(normalizeStorageSourceKey('proxmox-pbs')).toBe('pbs');
+    expect(normalizeStorageSourceKey('PVE')).toBe('proxmox-pve');
+    expect(normalizeStorageSourceKey('proxmox-pbs')).toBe('proxmox-pbs');
     expect(normalizeStorageSourceKey('rbd')).toBe('ceph');
     expect(normalizeStorageSourceKey('k8s')).toBe('kubernetes');
   });
 
   it('resolves storage source from storage type', () => {
-    expect(resolveStorageSourceKey(makeStorage({ type: 'pbs' }))).toBe('pbs');
+    expect(resolveStorageSourceKey(makeStorage({ type: 'pbs' }))).toBe('proxmox-pbs');
     expect(resolveStorageSourceKey(makeStorage({ type: 'cephfs' }))).toBe('ceph');
-    expect(resolveStorageSourceKey(makeStorage({ type: 'lvmthin' }))).toBe('proxmox');
+    expect(resolveStorageSourceKey(makeStorage({ type: 'lvmthin' }))).toBe('proxmox-pve');
   });
 
   it('builds data-driven source options with stable ordering and all option', () => {
@@ -53,10 +55,26 @@ describe('storageSourceOptions', () => {
     expect(options[0]).toMatchObject({ key: 'all', label: 'All Sources' });
     expect(options.map((option) => option.key)).toEqual([
       'all',
-      'proxmox',
-      'pbs',
+      'proxmox-pve',
+      'proxmox-pbs',
       'ceph',
       'custom-backend',
     ]);
+  });
+
+  it('derives canonical storage source presentation from shared source contracts', () => {
+    expect(getStorageSourceOption('pve')).toMatchObject({
+      key: 'proxmox-pve',
+      label: 'PVE',
+      tone: 'orange',
+    });
+    expect(getStorageSourceOption('pbs')).toMatchObject({
+      key: 'proxmox-pbs',
+      label: 'PBS',
+      tone: 'indigo',
+    });
+    expect(
+      buildStorageSourceOptionsFromKeys(['all', 'pbs', 'ceph']).map((option) => option.key),
+    ).toEqual(['all', 'proxmox-pbs', 'ceph']);
   });
 });

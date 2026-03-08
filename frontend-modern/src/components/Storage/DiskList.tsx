@@ -12,10 +12,8 @@ import { formatBytes } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
-import {
-  getSourcePlatformBadge,
-  getSourcePlatformLabel,
-} from '@/components/shared/sourcePlatformBadges';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { DiskDetail } from './DiskDetail';
 import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
 

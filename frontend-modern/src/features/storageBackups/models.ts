@@ -84,7 +84,7 @@ export interface StorageRecord {
   statusLabel?: string;
   hostLabel?: string;
   platformLabel?: string;
-  platformKey?: string;
+  platformKey?: StorageBackupPlatform;
   topologyLabel?: string;
   protectionLabel?: string;
   protectionReduced?: boolean;

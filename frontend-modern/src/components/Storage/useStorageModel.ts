@@ -1,6 +1,8 @@
 import { Accessor, createMemo } from 'solid-js';
 import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
 import type { ZFSPool } from '@/types/api';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
+import { normalizeStorageSourceKey } from '@/utils/storageSources';
 
 export type StorageSortKey = 'priority' | 'name' | 'usage' | 'type';
 export type StorageGroupKey = 'node' | 'type' | 'status' | 'none';
@@ -60,13 +62,6 @@ const getRecordStringArrayDetail = (record: StorageRecord, key: string): string[
     : [];
 };
 
-export const sourceLabel = (value: string): string =>
-  value
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
 export const getRecordNodeHints = (record: StorageRecord): string[] => {
   const details = getRecordDetails(record);
   const detailNode = typeof details.node === 'string' ? details.node : '';
@@ -103,7 +98,7 @@ export const getRecordStatus = (record: StorageRecord): string => {
 };
 
 export const getRecordPlatformLabel = (record: StorageRecord): string =>
-  record.platformLabel?.trim() || sourceLabel(record.source.platform);
+  record.platformLabel?.trim() || getSourcePlatformLabel(record.source.platform);
 
 export const getRecordHostLabel = (record: StorageRecord): string =>
   record.hostLabel?.trim() || getRecordNodeLabel(record);
@@ -220,17 +215,20 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
 
   const sourceOptions = createMemo(() => {
     const values = Array.from(
-      new Set(options.records().map((record) => record.source.platform)),
-    ).sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
+      new Set(options.records().map((record) => normalizeStorageSourceKey(record.source.platform))),
+    ).sort((a, b) => getSourcePlatformLabel(a).localeCompare(getSourcePlatformLabel(b)));
     return ['all', ...values];
   });
 
   const filteredRecords = createMemo(() => {
     const query = options.search().trim().toLowerCase();
+    const selectedSource = normalizeStorageSourceKey(options.sourceFilter());
     return options
       .records()
       .filter((record) =>
-        options.sourceFilter() === 'all' ? true : record.source.platform === options.sourceFilter(),
+        selectedSource === 'all'
+          ? true
+          : normalizeStorageSourceKey(record.source.platform) === selectedSource,
       )
       .filter((record) =>
         options.healthFilter() === 'all' ? true : record.health === options.healthFilter(),

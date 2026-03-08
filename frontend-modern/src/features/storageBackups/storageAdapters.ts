@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import type {
   CapacitySnapshot,
   NormalizedHealth,
@@ -201,30 +202,19 @@ const normalizeResourceHealth = (
   normalizeHealthValue(status) ||
   'unknown';
 
-const platformLabelForResource = (resource: Resource, storagePlatform?: string): string => {
-  const normalizedPlatform = (storagePlatform || '').trim().toLowerCase();
-  switch (normalizedPlatform || resource.platformType) {
-    case 'proxmox':
-    case 'proxmox-pve':
-      return 'PVE';
-    case 'pbs':
-    case 'proxmox-pbs':
-      return 'PBS';
-    case 'pmg':
-    case 'proxmox-pmg':
-      return 'PMG';
-    case 'truenas':
-      return 'TrueNAS';
-    case 'unraid':
-      return 'Unraid';
-    case 'agent':
-      return 'Agent';
-    case 'kubernetes':
-      return 'Kubernetes';
-    default:
-      return titleize(storagePlatform) || titleize(resource.platformType) || 'Unknown';
-  }
+const canonicalPlatformKeyForResource = (
+  resource: Resource,
+  storagePlatform?: string,
+): StorageBackupPlatform => {
+  return (normalizeSourcePlatformKey(storagePlatform) ||
+    normalizeSourcePlatformKey(resource.platformType) ||
+    resource.platformType ||
+    (storagePlatform || '').trim().toLowerCase() ||
+    'generic') as StorageBackupPlatform;
 };
+
+const platformLabelForResource = (platform: StorageBackupPlatform): string =>
+  getSourcePlatformLabel(platform);
 
 const topologyLabelForResource = (
   resource: Resource,
@@ -440,8 +430,9 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const totalBytes = asNumberOrNull(resource.disk?.total);
   const usedBytes = asNumberOrNull(resource.disk?.used);
   const freeBytes = asNumberOrNull(resource.disk?.free);
+  const canonicalPlatform = canonicalPlatformKeyForResource(resource, resource.storage?.platform);
   const hostLabel = locationLabel;
-  const platformLabel = platformLabelForResource(resource, resource.storage?.platform);
+  const platformLabel = platformLabelForResource(canonicalPlatform);
   const issueLabel = issueLabelForResource(resource);
   const issueSummary = issueSummaryForResource(resource);
   const impactSummary = impactSummaryForResource(resource);
@@ -462,7 +453,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     statusLabel: resource.status,
     hostLabel,
     platformLabel,
-    platformKey: resource.storage?.platform || resource.platformType,
+    platformKey: canonicalPlatform,
     topologyLabel,
     protectionLabel,
     protectionReduced: resource.storage?.protectionReduced,
@@ -485,7 +476,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     capabilities: isDatastore
       ? dedupe(['capacity', 'health', 'backup-repository', 'deduplication', 'namespaces'])
       : capabilitiesForStorage(storageType, storageMeta),
-    source: fromSource(platform, adapterId),
+    source: fromSource(canonicalPlatform, adapterId),
     observedAt:
       typeof resource.lastSeen === 'number' && Number.isFinite(resource.lastSeen)
         ? resource.lastSeen

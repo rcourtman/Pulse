@@ -65,7 +65,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const usagePercent = createMemo(() => getRecordUsagePercent(props.record));
   const platformLabel = createMemo(() => getRecordPlatformLabel(props.record));
   const platformBadge = createMemo(
-    () => getSourcePlatformBadge(props.record.platformKey || props.record.source.platform) || null,
+    () => getSourcePlatformBadge(props.record.source.platform) || null,
   );
   const hostLabel = createMemo(() => getRecordHostLabel(props.record));
   const topologyLabel = createMemo(() => getRecordTopologyLabel(props.record));
