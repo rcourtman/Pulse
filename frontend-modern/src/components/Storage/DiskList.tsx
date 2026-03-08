@@ -180,12 +180,12 @@ const getDiskHealthStatus = (disk: PhysicalDiskData) => {
 const getDiskRoleLabel = (disk: PhysicalDiskData): string => {
   if (disk.storageRole?.trim()) return titleize(disk.storageRole);
   if (disk.type?.trim()) return `${disk.type.toUpperCase()} Disk`;
-  return 'Disk';
+  return '';
 };
 
 const getDiskParentLabel = (disk: PhysicalDiskData): string => {
   if (disk.storageGroup?.trim()) return disk.storageGroup.trim();
-  return 'Standalone Device';
+  return '';
 };
 
 const getWearSummary = (disk: PhysicalDiskData): string => {
@@ -375,6 +375,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                       const summary = getWearSummary(data).trim();
                       return summary || '';
                     };
+                    const hostLabel = () => (data.node || disk.parentName || '').trim();
 
                     return (
                       <>
@@ -411,30 +412,45 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </TableCell>
 
                           <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[120px]">
-                            <span
-                              class="block truncate text-[11px] text-base-content"
-                              title={data.node || disk.parentName || 'Unknown Host'}
+                            <Show
+                              when={hostLabel()}
+                              fallback={<span class="text-[11px] text-muted">—</span>}
                             >
-                              {data.node || disk.parentName || 'Unknown Host'}
-                            </span>
+                              <span
+                                class="block truncate text-[11px] text-base-content"
+                                title={hostLabel()}
+                              >
+                                {hostLabel()}
+                              </span>
+                            </Show>
                           </TableCell>
 
                           <TableCell class="hidden xl:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs">
-                            <span
-                              class="block truncate text-[11px] text-base-content"
-                              title={getDiskRoleLabel(data)}
+                            <Show
+                              when={getDiskRoleLabel(data)}
+                              fallback={<span class="text-[11px] text-muted">—</span>}
                             >
-                              {getDiskRoleLabel(data)}
-                            </span>
+                              <span
+                                class="block truncate text-[11px] text-base-content"
+                                title={getDiskRoleLabel(data)}
+                              >
+                                {getDiskRoleLabel(data)}
+                              </span>
+                            </Show>
                           </TableCell>
 
                           <TableCell class="hidden xl:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs">
-                            <span
-                              class="block truncate text-[11px] text-base-content"
-                              title={getDiskParentLabel(data)}
+                            <Show
+                              when={getDiskParentLabel(data)}
+                              fallback={<span class="text-[11px] text-muted">—</span>}
                             >
-                              {getDiskParentLabel(data)}
-                            </span>
+                              <span
+                                class="block truncate text-[11px] text-base-content"
+                                title={getDiskParentLabel(data)}
+                              >
+                                {getDiskParentLabel(data)}
+                              </span>
+                            </Show>
                           </TableCell>
 
                           <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[160px]">
@@ -466,7 +482,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               <span
                                 class={`shrink-0 text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}
                               >
-                                {data.temperature > 0 ? formatTemperature(data.temperature) : '-'}
+                                {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
                               </span>
                             </div>
                           </TableCell>
