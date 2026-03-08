@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { formatBytes, formatPowerOnHours } from '@/utils/format';
+import { formatBytes } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
@@ -188,17 +188,6 @@ const getDiskParentLabel = (disk: PhysicalDiskData): string => {
   return '';
 };
 
-const getWearSummary = (disk: PhysicalDiskData): string => {
-  if (disk.wearout > 0) return `${disk.wearout}% life left`;
-  if (disk.smartAttributes?.percentageUsed != null) {
-    return `${disk.smartAttributes.percentageUsed}% used`;
-  }
-  if (disk.smartAttributes?.powerOnHours != null) {
-    return formatPowerOnHours(disk.smartAttributes.powerOnHours, true);
-  }
-  return '';
-};
-
 const getTemperatureTone = (temperature: number): string => {
   if (temperature >= 70) return 'text-red-600 dark:text-red-400';
   if (temperature >= 60) return 'text-amber-600 dark:text-amber-400';
@@ -349,8 +338,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[160px]">
                     Health
                   </TableHead>
-                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                    Wear / Temp
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[72px]">
+                    Temp
                   </TableHead>
                   <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[96px]">
                     Size
@@ -371,10 +360,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                       }
                       return summary;
                     };
-                    const wearSummary = () => {
-                      const summary = getWearSummary(data).trim();
-                      return summary || '';
-                    };
                     const hostLabel = () => (data.node || disk.parentName || '').trim();
 
                     return (
@@ -387,18 +372,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           onClick={() => handleRowClick(disk)}
                         >
                           <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[220px]">
-                            <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                            <div class="flex min-w-0 items-center whitespace-nowrap">
                               <span
                                 class="block min-w-0 truncate text-[12px] font-semibold text-base-content"
-                                title={data.model || 'Unknown Disk'}
+                                title={data.devPath || data.model || disk.name || 'Unknown Disk'}
                               >
                                 {data.model || 'Unknown Disk'}
-                              </span>
-                              <span
-                                class="hidden xl:inline shrink-0 font-mono text-[10px] text-muted"
-                                title={data.devPath || disk.name}
-                              >
-                                {data.devPath || disk.name}
                               </span>
                             </div>
                           </TableCell>
@@ -469,22 +448,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </div>
                           </TableCell>
 
-                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs">
-                            <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                              <Show when={wearSummary()}>
-                                <span
-                                  class="hidden xl:block truncate text-[11px] text-base-content"
-                                  title={wearSummary()}
-                                >
-                                  {wearSummary()}
-                                </span>
-                              </Show>
-                              <span
-                                class={`shrink-0 text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}
-                              >
-                                {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
-                              </span>
-                            </div>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[72px]">
+                            <span
+                              class={`text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}
+                            >
+                              {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
+                            </span>
                           </TableCell>
 
                           <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[96px]">

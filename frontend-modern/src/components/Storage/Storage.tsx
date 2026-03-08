@@ -16,7 +16,6 @@ import { Subtabs } from '@/components/shared/Subtabs';
 import { Table, TableHeader, TableBody, TableRow, TableHead } from '@/components/shared/Table';
 import { DiskList } from '@/components/Storage/DiskList';
 import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
-import { StorageCommandCenter } from '@/components/Storage/StorageCommandCenter';
 import StorageSummary from '@/components/Storage/StorageSummary';
 import type { SummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -139,12 +138,6 @@ const Storage: Component = () => {
       return (activeAlerts as () => unknown)();
     }
     return activeAlerts;
-  };
-  const websocketState = () => {
-    if (typeof state === 'function') {
-      return state();
-    }
-    return state;
   };
   const { getRecordAlertState } = useStorageAlertState({
     records,
@@ -405,13 +398,6 @@ const Storage: Component = () => {
         diskCount={physicalDisks().length}
         timeRange={summaryTimeRange()}
         onTimeRangeChange={setSummaryTimeRange}
-      />
-
-      <StorageCommandCenter
-        lastUpdateToken={() => String(websocketState()?.lastUpdate || '')}
-        search={search}
-        selectedNodeId={selectedNodeId}
-        sourceFilter={sourceFilter}
       />
 
       <Show
