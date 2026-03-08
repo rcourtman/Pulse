@@ -15,13 +15,11 @@ export interface PhysicalDiskNodeIdentity {
 const normalize = (value: string | null | undefined): string => value?.trim().toLowerCase() || '';
 
 export const getPhysicalDiskNodeIdentity = (resource: Resource): PhysicalDiskNodeIdentity => {
-  const platformData = ((resource.platformData as DiskPlatformData | undefined) || {}) as DiskPlatformData;
+  const platformData = ((resource.platformData as DiskPlatformData | undefined) ||
+    {}) as DiskPlatformData;
   const proxmox = platformData.proxmox || {};
   const node =
-    proxmox.nodeName ||
-    resource.identity?.hostname ||
-    resource.canonicalIdentity?.hostname ||
-    '';
+    proxmox.nodeName || resource.identity?.hostname || resource.canonicalIdentity?.hostname || '';
 
   return {
     node: node.trim(),

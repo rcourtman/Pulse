@@ -275,7 +275,9 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const proxmoxNode =
     resource.proxmox?.node ||
     ((platformData.proxmox as Record<string, unknown> | undefined)?.nodeName as string | undefined);
-  const storageNodes = getStringArray((resource.storage as Record<string, unknown> | undefined)?.nodes);
+  const storageNodes = getStringArray(
+    (resource.storage as Record<string, unknown> | undefined)?.nodes,
+  );
   const nodeHints = dedupe(
     [
       resource.parentName,

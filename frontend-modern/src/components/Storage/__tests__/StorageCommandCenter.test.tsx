@@ -65,7 +65,8 @@ describe('StorageCommandCenter', () => {
                 incidentSummary: 'PBS datastore archive is READ_ONLY',
                 incidentImpactSummary: 'Puts backups for 3 protected workloads at risk',
                 incidentUrgency: 'now',
-                incidentAction: 'Restore backup target health immediately to protect recoverability',
+                incidentAction:
+                  'Restore backup target health immediately to protect recoverability',
                 protectedWorkloads: 3,
               },
             ],
@@ -118,7 +119,9 @@ describe('StorageCommandCenter', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Storage Command Center')).toBeInTheDocument();
-      expect(screen.getByText(/active storage incidents across 9 tracked resources/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/active storage incidents across 9 tracked resources/i),
+      ).toBeInTheDocument();
     });
 
     expect(screen.getByText('Critical')).toBeInTheDocument();

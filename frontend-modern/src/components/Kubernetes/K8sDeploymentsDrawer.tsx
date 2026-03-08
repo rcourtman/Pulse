@@ -194,14 +194,14 @@ export const K8sDeploymentsDrawer: Component<{
 
             <Show when={namespaceOptions().length > 0}>
               <LabeledFilterSelect
-                  id="k8s-deployments-namespace"
-                  label="Namespace"
-                  value={namespace()}
-                  onChange={(e) => setNamespace(e.currentTarget.value)}
-                  selectClass="min-w-[10rem]"
-                >
-                  <option value="">All namespaces</option>
-                  <For each={namespaceOptions()}>{(ns) => <option value={ns}>{ns}</option>}</For>
+                id="k8s-deployments-namespace"
+                label="Namespace"
+                value={namespace()}
+                onChange={(e) => setNamespace(e.currentTarget.value)}
+                selectClass="min-w-[10rem]"
+              >
+                <option value="">All namespaces</option>
+                <For each={namespaceOptions()}>{(ns) => <option value={ns}>{ns}</option>}</For>
               </LabeledFilterSelect>
             </Show>
 

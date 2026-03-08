@@ -209,31 +209,34 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
     sourceFilter: props.sourceFilter(),
   }));
 
-  const [payload] = createResource(requestKey, async (key): Promise<StorageCommandCenterPayload> => {
-    const query = buildStorageCommandCenterQuery(
-      key.search,
-      key.selectedNodeId,
-      key.sourceFilter,
-    );
-    try {
-      const [summary, incidents] = await Promise.all([
-        apiFetchJSON<StorageSummaryResponse>(`/api/resources/storage-summary${query}`, {
-          cache: 'no-store',
-        }),
-        apiFetchJSON<StorageIncidentsResponse>(`/api/resources/storage-incidents${query}`, {
-          cache: 'no-store',
-        }),
-      ]);
-      setLoadError(null);
-      return { summary, incidents };
-    } catch (error) {
-      setLoadError(error);
-      return {
-        summary: emptyStorageSummaryResponse(),
-        incidents: emptyStorageIncidentsResponse(),
-      };
-    }
-  });
+  const [payload] = createResource(
+    requestKey,
+    async (key): Promise<StorageCommandCenterPayload> => {
+      const query = buildStorageCommandCenterQuery(
+        key.search,
+        key.selectedNodeId,
+        key.sourceFilter,
+      );
+      try {
+        const [summary, incidents] = await Promise.all([
+          apiFetchJSON<StorageSummaryResponse>(`/api/resources/storage-summary${query}`, {
+            cache: 'no-store',
+          }),
+          apiFetchJSON<StorageIncidentsResponse>(`/api/resources/storage-incidents${query}`, {
+            cache: 'no-store',
+          }),
+        ]);
+        setLoadError(null);
+        return { summary, incidents };
+      } catch (error) {
+        setLoadError(error);
+        return {
+          summary: emptyStorageSummaryResponse(),
+          incidents: emptyStorageIncidentsResponse(),
+        };
+      }
+    },
+  );
 
   const summary = createMemo(() => payload()?.summary ?? null);
   const incidents = createMemo(() => payload()?.incidents ?? null);
@@ -286,11 +289,10 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
               }
             >
               <div class="text-lg font-semibold text-base-content">
-                <Show
-                  when={hasActiveIncidents()}
-                  fallback="Storage posture looks stable"
-                >
-                  {(active) => `${active()} active storage incidents across ${summary()?.totalResources || 0} tracked resources`}
+                <Show when={hasActiveIncidents()} fallback="Storage posture looks stable">
+                  {(active) =>
+                    `${active()} active storage incidents across ${summary()?.totalResources || 0} tracked resources`
+                  }
                 </Show>
               </div>
               <div class="text-sm text-muted">
@@ -318,7 +320,15 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
           </div>
         </div>
 
-        <Show when={!loadError()} fallback={<div class="text-sm text-muted">Storage posture is temporarily unavailable. Pool and disk details are still shown below.</div>}>
+        <Show
+          when={!loadError()}
+          fallback={
+            <div class="text-sm text-muted">
+              Storage posture is temporarily unavailable. Pool and disk details are still shown
+              below.
+            </div>
+          }
+        >
           <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <For each={statCards()}>
               {(card) => (
@@ -326,7 +336,9 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
                   <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
                     {card.label}
                   </div>
-                  <div class={`mt-2 text-2xl font-semibold ${card.tone}`}>{compactNumber(card.value)}</div>
+                  <div class={`mt-2 text-2xl font-semibold ${card.tone}`}>
+                    {compactNumber(card.value)}
+                  </div>
                   <div class="mt-1 text-xs text-muted">{card.helper}</div>
                 </div>
               )}
@@ -337,19 +349,24 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
             when={hasActiveIncidents()}
             fallback={
               <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
-                No active storage incidents. Pulse is tracking {compactNumber(summary()?.totalResources || 0)} storage resources with no current protection, recoverability, rebuild, or disk-health incidents.
+                No active storage incidents. Pulse is tracking{' '}
+                {compactNumber(summary()?.totalResources || 0)} storage resources with no current
+                protection, recoverability, rebuild, or disk-health incidents.
               </div>
             }
           >
             <div class="grid gap-4 xl:grid-cols-2">
               <For each={visibleSections()}>
                 {(section) => (
-                  <div class={`rounded-xl border border-border bg-surface-alt p-4 ${sectionAccentClass(section.category)}`}>
+                  <div
+                    class={`rounded-xl border border-border bg-surface-alt p-4 ${sectionAccentClass(section.category)}`}
+                  >
                     <div class="flex flex-wrap items-start justify-between gap-3">
                       <div class="space-y-1">
                         <div class="text-sm font-semibold text-base-content">{section.label}</div>
                         <div class="text-xs text-muted">
-                          {section.resourceCount} resource{section.resourceCount === 1 ? '' : 's'} in this lane
+                          {section.resourceCount} resource{section.resourceCount === 1 ? '' : 's'}{' '}
+                          in this lane
                         </div>
                       </div>
                       <div class="flex items-center gap-2">
@@ -359,7 +376,9 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
                           </span>
                         </Show>
                         <Show when={section.PrimaryUrgency}>
-                          <span class={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${urgencyPillClass(section.PrimaryUrgency)}`}>
+                          <span
+                            class={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${urgencyPillClass(section.PrimaryUrgency)}`}
+                          >
                             {section.PrimaryUrgency}
                           </span>
                         </Show>
@@ -393,12 +412,16 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
 
                               <div class="flex flex-wrap items-center gap-2">
                                 <Show when={incident.incidentSeverity}>
-                                  <span class={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${severityPillClass(incident.incidentSeverity)}`}>
+                                  <span
+                                    class={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${severityPillClass(incident.incidentSeverity)}`}
+                                  >
                                     {incident.incidentSeverity}
                                   </span>
                                 </Show>
                                 <Show when={incident.incidentUrgency}>
-                                  <span class={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${urgencyPillClass(incident.incidentUrgency)}`}>
+                                  <span
+                                    class={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${urgencyPillClass(incident.incidentUrgency)}`}
+                                  >
                                     {incident.incidentUrgency}
                                   </span>
                                 </Show>
@@ -411,10 +434,14 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
                               </div>
                             </Show>
                             <Show when={incident.incidentSummary}>
-                              <div class="mt-1 text-sm text-base-content">{incident.incidentSummary}</div>
+                              <div class="mt-1 text-sm text-base-content">
+                                {incident.incidentSummary}
+                              </div>
                             </Show>
                             <Show when={incident.incidentImpactSummary}>
-                              <div class="mt-2 text-xs text-muted">{incident.incidentImpactSummary}</div>
+                              <div class="mt-2 text-xs text-muted">
+                                {incident.incidentImpactSummary}
+                              </div>
                             </Show>
 
                             <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -442,7 +469,8 @@ export const StorageCommandCenter: Component<StorageCommandCenterProps> = (props
 
                             <Show when={incident.incidentAction}>
                               <div class="mt-3 rounded-md bg-base px-3 py-2 text-xs text-base-content">
-                                <span class="font-semibold">Recommended action:</span> {incident.incidentAction}
+                                <span class="font-semibold">Recommended action:</span>{' '}
+                                {incident.incidentAction}
                               </div>
                             </Show>
                           </div>

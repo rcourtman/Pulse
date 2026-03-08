@@ -212,7 +212,10 @@ describe('Recovery', () => {
     facetsPayload.clusters = ['dev-cluster'];
 
     let resolveDelayedPoints:
-      | ((value: { data: any[]; meta: { page: number; limit: number; total: number; totalPages: number } }) => void)
+      | ((value: {
+          data: any[];
+          meta: { page: number; limit: number; total: number; totalPages: number };
+        }) => void)
       | null = null;
 
     apiFetchMock.mockImplementation(async (url: string) => {

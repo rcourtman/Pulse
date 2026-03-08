@@ -546,7 +546,9 @@ export function OverviewTab(props: {
                           >
                             {alert.resourceName}
                           </span>
-                          <span class="text-xs text-muted">({alertTypeDisplayLabel(alert.type)})</span>
+                          <span class="text-xs text-muted">
+                            ({alertTypeDisplayLabel(alert.type)})
+                          </span>
                           <Show when={alert.node}>
                             <span class="text-xs text-muted">
                               on {alert.nodeDisplayName || alert.node}

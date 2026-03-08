@@ -15,7 +15,7 @@ const isPrintableSearchKey = (event: KeyboardEvent): boolean =>
   event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
 
 const readEnabled = (value: boolean | Accessor<boolean> | undefined): boolean =>
-  typeof value === 'function' ? value() : value ?? true;
+  typeof value === 'function' ? value() : (value ?? true);
 
 const insertCharacter = (input: HTMLInputElement, key: string) => {
   const start = input.selectionStart ?? input.value.length;

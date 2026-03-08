@@ -740,12 +740,10 @@ export const __resetUnifiedResourcesCacheForTests = () => {
   unifiedResourcesCaches.clear();
 };
 
-export const getCachedUnifiedResources = (
-  options?: {
-    cacheKey?: string;
-    orgID?: string | null;
-  },
-): Resource[] => {
+export const getCachedUnifiedResources = (options?: {
+  cacheKey?: string;
+  orgID?: string | null;
+}): Resource[] => {
   const cacheKey = (options?.cacheKey || 'all-resources').trim();
   const scopedCacheKey = buildScopedUnifiedResourcesCacheKey(
     cacheKey,

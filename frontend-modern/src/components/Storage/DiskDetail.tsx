@@ -87,13 +87,12 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     }
 
     const data = diskData();
-    const node = props.nodes.find(
-      (n) =>
-        matchesPhysicalDiskNode(props.disk, {
-          id: n.id,
-          name: n.name,
-          instance: getProxmoxData(n)?.instance,
-        }),
+    const node = props.nodes.find((n) =>
+      matchesPhysicalDiskNode(props.disk, {
+        id: n.id,
+        name: n.name,
+        instance: getProxmoxData(n)?.instance,
+      }),
     );
     const agentId = node ? getLinkedAgentId(node) : undefined;
 

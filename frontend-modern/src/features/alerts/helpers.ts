@@ -340,9 +340,7 @@ export function alertTypeDisplayLabel(type: string): string {
 
     default:
       // Title-case with hyphens/underscores replaced by spaces
-      return type
-        .replace(/[-_]/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+      return type.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }
 

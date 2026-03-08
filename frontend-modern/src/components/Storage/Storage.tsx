@@ -190,19 +190,17 @@ const Storage: Component = () => {
     return map;
   });
 
-  const { sourceOptions, filteredRecords, groupedRecords, summary } = useStorageModel(
-    {
-      records,
-      search,
-      sourceFilter,
-      healthFilter,
-      selectedNodeId,
-      nodeOptions,
-      sortKey,
-      sortDirection,
-      groupBy,
-    },
-  );
+  const { sourceOptions, filteredRecords, groupedRecords, summary } = useStorageModel({
+    records,
+    search,
+    sourceFilter,
+    healthFilter,
+    selectedNodeId,
+    nodeOptions,
+    sortKey,
+    sortDirection,
+    groupBy,
+  });
 
   // Default all groups to expanded on first load; new groups auto-expand
   createEffect(() => {

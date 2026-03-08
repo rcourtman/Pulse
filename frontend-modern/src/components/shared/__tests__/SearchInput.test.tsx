@@ -219,11 +219,7 @@ describe('SearchInput', () => {
       return (
         <div>
           <button type="button">Outside</button>
-          <CollapsibleSearchInput
-            value={value}
-            onChange={setValue}
-            placeholder="Helper search"
-          />
+          <CollapsibleSearchInput value={value} onChange={setValue} placeholder="Helper search" />
         </div>
       );
     };

@@ -30,13 +30,7 @@ export const SearchInputTrailingControls: Component<SearchInputTrailingControlsP
           props.state.searchHistory().length > 0 ? 'Show recent searches' : 'No recent searches yet'
         }
       >
-        <svg
-          class="h-4 w-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
-        >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
         <span class="sr-only">Show search history</span>
@@ -70,7 +64,9 @@ export const SearchInputHistoryDropdown: Component<SearchInputHistoryDropdownPro
     >
       <Show
         when={props.state.searchHistory().length > 0}
-        fallback={<div class="px-3 py-2 text-xs text-muted">{props.state.emptyHistoryMessage()}</div>}
+        fallback={
+          <div class="px-3 py-2 text-xs text-muted">{props.state.emptyHistoryMessage()}</div>
+        }
       >
         <div class="max-h-52 overflow-y-auto py-1">
           <For each={props.state.searchHistory()}>
@@ -91,12 +87,7 @@ export const SearchInputHistoryDropdown: Component<SearchInputHistoryDropdownPro
                   onClick={() => props.state.deleteHistoryEntry(entry)}
                   onMouseDown={props.state.onClearMouseDown}
                 >
-                  <svg
-                    class="h-3.5 w-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"

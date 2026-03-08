@@ -86,10 +86,11 @@ function sampleMetrics(): void {
   const wsStore = getGlobalWebSocketStore();
   const wsResources = wsStore.state.resources || [];
   const cachedUnifiedResources = getCachedUnifiedResources({ cacheKey: 'all-resources' });
-  const sourceResources =
-    wsResources.some((resource) => getResourceDiskCounters(resource).length > 0)
-      ? wsResources
-      : cachedUnifiedResources;
+  const sourceResources = wsResources.some(
+    (resource) => getResourceDiskCounters(resource).length > 0,
+  )
+    ? wsResources
+    : cachedUnifiedResources;
   const now = Date.now();
   const observedKeys = new Set<string>();
 

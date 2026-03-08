@@ -4082,6 +4082,7 @@ function HistoryTab(props: {
     nodeDisplayName?: string;
     severity: string; // warning, critical for alerts; severity for findings
     title: string;
+    rawAlertType?: string; // original backend alert type for InvestigateAlertButton
     description?: string;
     acknowledged?: boolean;
     autoResolved?: boolean;
@@ -4106,6 +4107,7 @@ function HistoryTab(props: {
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
         title: alertTypeDisplayLabel(alert.type),
+        rawAlertType: alert.type,
         description: alert.message,
         acknowledged: false,
       });
@@ -4132,6 +4134,7 @@ function HistoryTab(props: {
         nodeDisplayName: alert.nodeDisplayName,
         severity: alert.level,
         title: alertTypeDisplayLabel(alert.type),
+        rawAlertType: alert.type,
         description: alert.message,
         acknowledged: alert.acknowledged,
       });
@@ -5247,7 +5250,7 @@ function HistoryTab(props: {
                                           <InvestigateAlertButton
                                             alert={{
                                               id: alert.id,
-                                              type: alert.title,
+                                              type: alert.rawAlertType || alert.title,
                                               level: alert.severity as 'warning' | 'critical',
                                               resourceId: alert.resourceId || '',
                                               resourceName: alert.resourceName,
