@@ -399,14 +399,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               >
                                 {data.devPath || disk.name}
                               </span>
-                              <Show when={data.serial}>
-                                <span
-                                  class="hidden xl:block truncate text-[11px] text-muted"
-                                  title={data.serial}
-                                >
-                                  S/N {data.serial}
-                                </span>
-                              </Show>
                             </div>
                           </TableCell>
 
