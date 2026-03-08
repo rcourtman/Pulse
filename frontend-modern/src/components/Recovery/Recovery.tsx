@@ -44,7 +44,7 @@ import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLi
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
-import { ProtectionHero } from './ProtectionHero';
+import { RecoverySummary } from './RecoverySummary';
 import {
   Table,
   TableHeader,
@@ -439,6 +439,24 @@ const Recovery: Component = () => {
   const rollups = createMemo<ProtectionRollup[]>(() => recoveryRollups.rollups() || []);
   const tzOffsetMinutes = createMemo(() => -new Date().getTimezoneOffset());
 
+  // Summary panel time range and dedicated series hook
+  type SummaryTimeRangeValue = '7d' | '30d' | '90d';
+  const [summaryTimeRange, setSummaryTimeRange] = createSignal<SummaryTimeRangeValue>('30d');
+  const summarySeriesWindow = createMemo(() => {
+    const daysMap: Record<SummaryTimeRangeValue, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const days = daysMap[summaryTimeRange()];
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - (days - 1));
+    from.setHours(0, 0, 0, 0);
+    return { from: from.toISOString(), to: now.toISOString() };
+  });
+  const summarySeries = useRecoveryPointsSeries(() => ({
+    from: summarySeriesWindow().from,
+    to: summarySeriesWindow().to,
+    tzOffsetMinutes: tzOffsetMinutes(),
+  }));
+
   const chartWindow = createMemo(() => {
     const days = chartRangeDays();
     const end = new Date();
@@ -744,6 +762,34 @@ const Recovery: Component = () => {
       }
     }
 
+    return { total: items.length, counts, stale, neverSucceeded };
+  });
+
+  // Unfiltered summary for the RecoverySummary panel (sits above filters).
+  const unfilteredSummary = createMemo(() => {
+    const items = rollups();
+    const nowMs = Date.now();
+    const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
+    const counts: Record<KnownOutcome, number> = {
+      success: 0,
+      warning: 0,
+      failed: 0,
+      running: 0,
+      unknown: 0,
+    };
+    let stale = 0;
+    let neverSucceeded = 0;
+    for (const r of items) {
+      counts[normalizeOutcome(r.lastOutcome)] += 1;
+      const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
+      const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
+      if (successMs > 0) {
+        if (successMs < staleThreshold) stale += 1;
+      } else if (attemptMs > 0) {
+        neverSucceeded += 1;
+        if (attemptMs < staleThreshold) stale += 1;
+      }
+    }
     return { total: items.length, counts, stale, neverSucceeded };
   });
 
@@ -1127,9 +1173,15 @@ const Recovery: Component = () => {
       </Show>
 
       <Show when={view() === 'protected'}>
-        <Show when={rollupsSummary().total > 0}>
-          <ProtectionHero summary={rollupsSummary()} />
-        </Show>
+        <RecoverySummary
+          rollups={rollups}
+          series={summarySeries.series}
+          seriesLoaded={() => !summarySeries.response.loading}
+          seriesFailed={() => !!summarySeries.response.error}
+          summary={unfilteredSummary}
+          timeRange={summaryTimeRange}
+          onTimeRangeChange={setSummaryTimeRange}
+        />
 
         <Show when={!kioskMode()}>
           <Card padding="sm">

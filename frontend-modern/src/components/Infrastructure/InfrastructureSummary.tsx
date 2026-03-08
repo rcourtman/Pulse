@@ -1,8 +1,9 @@
-import { Component, For, Show, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Component, Show, createMemo, createEffect, createSignal, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
-import { SparklineSkeleton } from '@/components/shared/SparklineSkeleton';
+import { SummaryPanel } from '@/components/shared/SummaryPanel';
+import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import type { Resource } from '@/types/resource';
 import { getDiskPercent } from '@/types/resource';
 import type { MetricPoint, ChartData, TimeRange } from '@/api/charts';
@@ -23,10 +24,6 @@ import {
   getPreferredResourceHostname,
   getResourceIdentityAliases,
 } from '@/utils/resourceIdentity';
-import {
-  SUMMARY_TIME_RANGES,
-  SUMMARY_TIME_RANGE_LABEL,
-} from '@/components/shared/summaryTimeRange';
 import { RESOURCE_COLORS } from '@/pages/DashboardPanels/resourceColors';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
@@ -576,12 +573,21 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     return { total, online, offline };
   });
 
+  const emptyMsg = () => (fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel());
+
+  const focusedLabel = () => {
+    const name = focusedResourceName();
+    if (!name) return undefined;
+    return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
+  };
+
   return (
     <Show when={props.resources.length > 0}>
-      <div data-testid="infrastructure-summary" class="space-y-2">
-        <div class="rounded-md border border-border bg-surface p-2 shadow-sm sm:p-3">
-          <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px] text-slate-500">
-            <div class="flex items-center gap-3">
+      <div class="space-y-2">
+        <SummaryPanel
+          testId="infrastructure-summary"
+          headerLeft={
+            <>
               <span class="font-medium text-base-content">
                 {resourceCounts().total} {resourceCounts().total === 1 ? 'resource' : 'resources'}
               </span>
@@ -593,237 +599,139 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               <Show when={resourceCounts().offline > 0}>
                 <span class="text-muted">{resourceCounts().offline} offline</span>
               </Show>
-            </div>
-            <Show when={props.onTimeRangeChange}>
-              <div class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5 text-xs">
-                <For each={SUMMARY_TIME_RANGES}>
-                  {(range) => (
-                    <button
-                      type="button"
-                      onClick={() => props.onTimeRangeChange?.(range)}
-                      class={`rounded px-2 py-1 ${
-                        selectedRange() === range
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                          : 'text-muted hover:bg-surface-hover'
-                      }`}
-                    >
-                      {SUMMARY_TIME_RANGE_LABEL[range]}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </div>
-          <div class="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
-            {/* CPU Card */}
-            <Card padding="sm" class="h-full">
-              <div class="flex flex-col h-full">
-                <div class="flex items-center mb-1.5 min-w-0">
-                  <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    CPU
-                  </span>
-                  <Show when={focusedResourceName()}>
-                    <span class="text-xs text-muted ml-1.5 truncate">
-                      &mdash; {focusedResourceName()}
-                    </span>
-                  </Show>
-                </div>
-                <Show
-                  when={hasData('cpu')}
-                  fallback={
-                    isCurrentRangeLoaded() ? (
-                      <div class="text-sm text-muted py-2">
-                        {fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()}
-                      </div>
-                    ) : (
-                      <SparklineSkeleton />
-                    )
-                  }
-                >
-                  <div class="flex-1 min-h-0">
-                    <InteractiveSparkline
-                      series={seriesFor('cpu')}
-                      rangeLabel={rangeLabel()}
-                      timeRange={props.timeRange}
-                      yMode="percent"
-                      highlightNearestSeriesOnHover
-                      highlightSeriesId={props.hoveredResourceId}
-                    />
-                  </div>
-                </Show>
-              </div>
-            </Card>
+            </>
+          }
+          timeRange={selectedRange()}
+          onTimeRangeChange={props.onTimeRangeChange}
+        >
+          {/* CPU Card */}
+          <SummaryMetricCard
+            label="CPU"
+            secondaryLabel={focusedLabel()}
+            loaded={isCurrentRangeLoaded()}
+            hasData={hasData('cpu')}
+            emptyMessage={emptyMsg()}
+          >
+            <InteractiveSparkline
+              series={seriesFor('cpu')}
+              rangeLabel={rangeLabel()}
+              timeRange={props.timeRange}
+              yMode="percent"
+              highlightNearestSeriesOnHover
+              highlightSeriesId={props.hoveredResourceId}
+            />
+          </SummaryMetricCard>
 
-            {/* Memory Card */}
-            <Card padding="sm" class="h-full">
-              <div class="flex flex-col h-full">
-                <div class="flex items-center mb-1.5 min-w-0">
-                  <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    Memory
-                  </span>
-                  <Show when={focusedResourceName()}>
-                    <span class="text-xs text-muted ml-1.5 truncate">
-                      &mdash; {focusedResourceName()}
-                    </span>
-                  </Show>
-                </div>
-                <Show
-                  when={hasData('memory')}
-                  fallback={
-                    isCurrentRangeLoaded() ? (
-                      <div class="text-sm text-muted py-2">
-                        {fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()}
-                      </div>
-                    ) : (
-                      <SparklineSkeleton />
-                    )
-                  }
-                >
-                  <div class="flex-1 min-h-0">
-                    <InteractiveSparkline
-                      series={seriesFor('memory')}
-                      rangeLabel={rangeLabel()}
-                      timeRange={props.timeRange}
-                      yMode="percent"
-                      highlightNearestSeriesOnHover
-                      highlightSeriesId={props.hoveredResourceId}
-                    />
-                  </div>
-                </Show>
-              </div>
-            </Card>
+          {/* Memory Card */}
+          <SummaryMetricCard
+            label="Memory"
+            secondaryLabel={focusedLabel()}
+            loaded={isCurrentRangeLoaded()}
+            hasData={hasData('memory')}
+            emptyMessage={emptyMsg()}
+          >
+            <InteractiveSparkline
+              series={seriesFor('memory')}
+              rangeLabel={rangeLabel()}
+              timeRange={props.timeRange}
+              yMode="percent"
+              highlightNearestSeriesOnHover
+              highlightSeriesId={props.hoveredResourceId}
+            />
+          </SummaryMetricCard>
 
-            {/* Disk I/O Card */}
-            <Card padding="sm" class="h-full">
-              <div class="flex flex-col h-full">
-                <div class="flex items-center mb-1.5 min-w-0">
-                  <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    Disk I/O
+          {/* Disk I/O Card */}
+          <SummaryMetricCard
+            label="Disk I/O"
+            secondaryLabel={
+              <>
+                {focusedLabel()}
+                <Show when={!focusedResourceName() && avgDiskCapacity() !== null}>
+                  <span class="text-[10px] text-muted ml-auto shrink-0">
+                    Capacity: {avgDiskCapacity()}%
                   </span>
-                  <Show when={focusedResourceName()}>
-                    <span class="text-xs text-muted ml-1.5 truncate">
-                      &mdash; {focusedResourceName()}
-                    </span>
-                  </Show>
-                  <Show when={!focusedResourceName() && avgDiskCapacity() !== null}>
-                    <span class="text-[10px] text-muted ml-auto shrink-0">
-                      Capacity: {avgDiskCapacity()}%
-                    </span>
-                  </Show>
-                </div>
-                <Show
-                  when={hasDiskIOData()}
-                  fallback={
-                    isCurrentRangeLoaded() ? (
-                      <div class="text-sm text-muted py-2">
-                        {fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()}
-                      </div>
-                    ) : (
-                      <SparklineSkeleton />
-                    )
-                  }
-                >
-                  <div class="flex-1 min-h-0">
-                    <DensityMap
-                      series={diskioSeries()}
-                      rangeLabel={rangeLabel()}
-                      timeRange={props.timeRange}
-                      formatValue={formatRate}
-                    />
-                  </div>
                 </Show>
-              </div>
-            </Card>
+              </>
+            }
+            loaded={isCurrentRangeLoaded()}
+            hasData={hasDiskIOData()}
+            emptyMessage={emptyMsg()}
+          >
+            <DensityMap
+              series={diskioSeries()}
+              rangeLabel={rangeLabel()}
+              timeRange={props.timeRange}
+              formatValue={formatRate}
+            />
+          </SummaryMetricCard>
 
-            <Show
-              when={shouldShowNetworkCard()}
-              fallback={
-                <Card padding="sm" class="h-full">
-                  <div class="flex flex-col h-full">
-                    <div class="flex items-center justify-between mb-1.5">
-                      <span class="text-xs font-medium text-muted uppercase tracking-wide">
-                        Workloads
-                      </span>
-                      <svg
-                        class="w-4 h-4 text-green-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"
-                        />
-                      </svg>
-                    </div>
-                    <div class="text-xl sm:text-2xl font-bold text-base-content">
-                      {workloadStats().running}
-                      <span class="text-sm font-normal text-muted ml-1">running</span>
-                    </div>
-                    <Show
-                      when={workloadStats().total > 0}
-                      fallback={
-                        <div class="text-[10px] text-muted mt-1">No workloads detected</div>
-                      }
-                    >
-                      <div class="text-[10px] text-muted mt-1">
-                        <Show when={workloadStats().vms > 0}>
-                          <span>{workloadStats().vms} VMs</span>
-                        </Show>
-                        <Show when={workloadStats().vms > 0 && workloadStats().containers > 0}>
-                          <span class="mx-0.5">&middot;</span>
-                        </Show>
-                        <Show when={workloadStats().containers > 0}>
-                          <span>{workloadStats().containers} containers</span>
-                        </Show>
-                      </div>
-                      <Show when={workloadStats().stopped > 0}>
-                        <div class="text-[10px] text-muted">{workloadStats().stopped} stopped</div>
-                      </Show>
-                    </Show>
-                  </div>
-                </Card>
-              }
-            >
-              {/* 4th Card: Network */}
+          {/* 4th Card: Network or Workloads fallback */}
+          <Show
+            when={shouldShowNetworkCard()}
+            fallback={
               <Card padding="sm" class="h-full">
                 <div class="flex flex-col h-full">
-                  <div class="flex items-center mb-1.5 min-w-0">
-                    <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                      Network
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-medium text-muted uppercase tracking-wide">
+                      Workloads
                     </span>
-                    <Show when={focusedResourceName()}>
-                      <span class="text-xs text-muted ml-1.5 truncate">
-                        &mdash; {focusedResourceName()}
-                      </span>
-                    </Show>
+                    <svg
+                      class="w-4 h-4 text-green-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"
+                      />
+                    </svg>
+                  </div>
+                  <div class="text-xl sm:text-2xl font-bold text-base-content">
+                    {workloadStats().running}
+                    <span class="text-sm font-normal text-muted ml-1">running</span>
                   </div>
                   <Show
-                    when={hasNetData()}
-                    fallback={
-                      isCurrentRangeLoaded() ? (
-                        <div class="text-sm text-muted py-2">{emptyHistoryLabel()}</div>
-                      ) : (
-                        <SparklineSkeleton />
-                      )
-                    }
+                    when={workloadStats().total > 0}
+                    fallback={<div class="text-[10px] text-muted mt-1">No workloads detected</div>}
                   >
-                    <div class="flex-1 min-h-0">
-                      <DensityMap
-                        series={networkSeries()}
-                        rangeLabel={rangeLabel()}
-                        timeRange={props.timeRange}
-                        formatValue={formatRate}
-                      />
+                    <div class="text-[10px] text-muted mt-1">
+                      <Show when={workloadStats().vms > 0}>
+                        <span>{workloadStats().vms} VMs</span>
+                      </Show>
+                      <Show when={workloadStats().vms > 0 && workloadStats().containers > 0}>
+                        <span class="mx-0.5">&middot;</span>
+                      </Show>
+                      <Show when={workloadStats().containers > 0}>
+                        <span>{workloadStats().containers} containers</span>
+                      </Show>
                     </div>
+                    <Show when={workloadStats().stopped > 0}>
+                      <div class="text-[10px] text-muted">{workloadStats().stopped} stopped</div>
+                    </Show>
                   </Show>
                 </div>
               </Card>
-            </Show>
-          </div>
-        </div>
+            }
+          >
+            <SummaryMetricCard
+              label="Network"
+              secondaryLabel={focusedLabel()}
+              loaded={isCurrentRangeLoaded()}
+              hasData={hasNetData()}
+              emptyMessage={emptyHistoryLabel()}
+            >
+              <DensityMap
+                series={networkSeries()}
+                rangeLabel={rangeLabel()}
+                timeRange={props.timeRange}
+                formatValue={formatRate}
+              />
+            </SummaryMetricCard>
+          </Show>
+        </SummaryPanel>
       </div>
     </Show>
   );

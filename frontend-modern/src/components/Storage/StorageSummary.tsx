@@ -1,8 +1,8 @@
-import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import { Card } from '@/components/shared/Card';
+import { Component, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { InteractiveSparklineSeries } from '@/components/shared/InteractiveSparkline';
-import { SparklineSkeleton } from '@/components/shared/SparklineSkeleton';
+import { SummaryPanel } from '@/components/shared/SummaryPanel';
+import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import {
   ChartsAPI,
   type MetricPoint,
@@ -10,7 +10,6 @@ import {
   type StorageSummaryChartsResponse,
 } from '@/api/charts';
 import {
-  SUMMARY_TIME_RANGES,
   SUMMARY_TIME_RANGE_LABEL,
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
@@ -236,11 +235,11 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
 
   return (
     <Show when={showComponent()}>
-      <div data-testid="storage-summary" class="space-y-2">
-        <div class="rounded-md border border-border bg-surface p-2 shadow-sm sm:p-3">
-          {/* Header */}
-          <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px] text-slate-500">
-            <div class="flex items-center gap-3">
+      <div class="space-y-2">
+        <SummaryPanel
+          testId="storage-summary"
+          headerLeft={
+            <>
               <span class="font-medium text-base-content">
                 {props.poolCount} {props.poolCount === 1 ? 'pool' : 'pools'}
               </span>
@@ -249,161 +248,77 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
                   {props.diskCount} {props.diskCount === 1 ? 'disk' : 'disks'}
                 </span>
               </Show>
-            </div>
-            <Show when={props.onTimeRangeChange}>
-              <div class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5 text-xs">
-                <For each={SUMMARY_TIME_RANGES as unknown as SummaryTimeRange[]}>
-                  {(range) => (
-                    <button
-                      type="button"
-                      onClick={() => props.onTimeRangeChange?.(range)}
-                      class={`rounded px-2 py-1 ${
-                        props.timeRange === range
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                          : 'text-muted hover:bg-surface-hover'
-                      }`}
-                    >
-                      {SUMMARY_TIME_RANGE_LABEL[range]}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </div>
+            </>
+          }
+          timeRange={props.timeRange}
+          onTimeRangeChange={props.onTimeRangeChange}
+        >
+          <SummaryMetricCard
+            label="Pool Usage"
+            loaded={loaded()}
+            hasData={hasPoolUsage()}
+            emptyMessage={emptyLabel()}
+          >
+            <InteractiveSparkline
+              series={poolUsageSeries()}
+              rangeLabel={rangeLabel()}
+              timeRange={props.timeRange as TimeRange}
+              yMode="percent"
+              highlightNearestSeriesOnHover
+            />
+          </SummaryMetricCard>
 
-          {/* Chart cards */}
-          <div class="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
-            {/* Pool Usage % */}
-            <Card padding="sm" class="h-full">
-              <div class="flex flex-col h-full">
-                <div class="flex items-center mb-1.5 min-w-0">
-                  <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    Pool Usage
-                  </span>
-                </div>
-                <Show
-                  when={hasPoolUsage()}
-                  fallback={
-                    loaded() ? (
-                      <div class="text-sm text-muted py-2">{emptyLabel()}</div>
-                    ) : (
-                      <SparklineSkeleton />
-                    )
-                  }
-                >
-                  <div class="flex-1 min-h-0">
-                    <InteractiveSparkline
-                      series={poolUsageSeries()}
-                      rangeLabel={rangeLabel()}
-                      timeRange={props.timeRange as TimeRange}
-                      yMode="percent"
-                      highlightNearestSeriesOnHover
-                    />
-                  </div>
-                </Show>
-              </div>
-            </Card>
+          <SummaryMetricCard
+            label="Disk Temperature"
+            loaded={loaded()}
+            hasData={hasDiskTemp()}
+            emptyMessage={emptyLabel()}
+          >
+            <InteractiveSparkline
+              series={diskTempSeries()}
+              rangeLabel={rangeLabel()}
+              timeRange={props.timeRange as TimeRange}
+              yMode="auto"
+              formatValue={formatTemp}
+              formatTopLabel={(max) => `${max.toFixed(0)}°C`}
+              highlightNearestSeriesOnHover
+            />
+          </SummaryMetricCard>
 
-            {/* Disk Temperature */}
-            <Card padding="sm" class="h-full">
-              <div class="flex flex-col h-full">
-                <div class="flex items-center mb-1.5 min-w-0">
-                  <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    Disk Temperature
-                  </span>
-                </div>
-                <Show
-                  when={hasDiskTemp()}
-                  fallback={
-                    loaded() ? (
-                      <div class="text-sm text-muted py-2">{emptyLabel()}</div>
-                    ) : (
-                      <SparklineSkeleton />
-                    )
-                  }
-                >
-                  <div class="flex-1 min-h-0">
-                    <InteractiveSparkline
-                      series={diskTempSeries()}
-                      rangeLabel={rangeLabel()}
-                      timeRange={props.timeRange as TimeRange}
-                      yMode="auto"
-                      formatValue={formatTemp}
-                      formatTopLabel={(max) => `${max.toFixed(0)}°C`}
-                      highlightNearestSeriesOnHover
-                    />
-                  </div>
-                </Show>
-              </div>
-            </Card>
+          <SummaryMetricCard
+            label="Used Capacity"
+            loaded={loaded()}
+            hasData={hasPoolUsed()}
+            emptyMessage={emptyLabel()}
+          >
+            <InteractiveSparkline
+              series={poolUsedSeries()}
+              rangeLabel={rangeLabel()}
+              timeRange={props.timeRange as TimeRange}
+              yMode="auto"
+              formatValue={(v) => formatBytes(v)}
+              formatTopLabel={(max) => formatBytes(max)}
+              highlightNearestSeriesOnHover
+            />
+          </SummaryMetricCard>
 
-            {/* Used Capacity */}
-            <Card padding="sm" class="h-full">
-              <div class="flex flex-col h-full">
-                <div class="flex items-center mb-1.5 min-w-0">
-                  <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    Used Capacity
-                  </span>
-                </div>
-                <Show
-                  when={hasPoolUsed()}
-                  fallback={
-                    loaded() ? (
-                      <div class="text-sm text-muted py-2">{emptyLabel()}</div>
-                    ) : (
-                      <SparklineSkeleton />
-                    )
-                  }
-                >
-                  <div class="flex-1 min-h-0">
-                    <InteractiveSparkline
-                      series={poolUsedSeries()}
-                      rangeLabel={rangeLabel()}
-                      timeRange={props.timeRange as TimeRange}
-                      yMode="auto"
-                      formatValue={(v) => formatBytes(v)}
-                      formatTopLabel={(max) => formatBytes(max)}
-                      highlightNearestSeriesOnHover
-                    />
-                  </div>
-                </Show>
-              </div>
-            </Card>
-
-            {/* Available Space */}
-            <Card padding="sm" class="h-full">
-              <div class="flex flex-col h-full">
-                <div class="flex items-center mb-1.5 min-w-0">
-                  <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
-                    Available Space
-                  </span>
-                </div>
-                <Show
-                  when={hasPoolAvail()}
-                  fallback={
-                    loaded() ? (
-                      <div class="text-sm text-muted py-2">{emptyLabel()}</div>
-                    ) : (
-                      <SparklineSkeleton />
-                    )
-                  }
-                >
-                  <div class="flex-1 min-h-0">
-                    <InteractiveSparkline
-                      series={poolAvailSeries()}
-                      rangeLabel={rangeLabel()}
-                      timeRange={props.timeRange as TimeRange}
-                      yMode="auto"
-                      formatValue={(v) => formatBytes(v)}
-                      formatTopLabel={(max) => formatBytes(max)}
-                      highlightNearestSeriesOnHover
-                    />
-                  </div>
-                </Show>
-              </div>
-            </Card>
-          </div>
-        </div>
+          <SummaryMetricCard
+            label="Available Space"
+            loaded={loaded()}
+            hasData={hasPoolAvail()}
+            emptyMessage={emptyLabel()}
+          >
+            <InteractiveSparkline
+              series={poolAvailSeries()}
+              rangeLabel={rangeLabel()}
+              timeRange={props.timeRange as TimeRange}
+              yMode="auto"
+              formatValue={(v) => formatBytes(v)}
+              formatTopLabel={(max) => formatBytes(max)}
+              highlightNearestSeriesOnHover
+            />
+          </SummaryMetricCard>
+        </SummaryPanel>
       </div>
     </Show>
   );
