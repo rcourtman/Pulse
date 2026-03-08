@@ -383,7 +383,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     <circle cx="12" cy="16" r="0.5" />
                   </svg>
                   <span class="leading-relaxed">
-                    Managed via environment variable <strong>ENV_PVE_POLLING_INTERVAL</strong>.
+                    Managed via environment variable <strong>PVE_POLLING_INTERVAL</strong>.
                   </span>
                 </div>
               </Show>
