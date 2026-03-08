@@ -1,9 +1,30 @@
-import { Component, For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { EmptyState } from '@/components/shared/EmptyState';
+import {
+  FilterActionButton,
+  FilterHeader,
+  FilterMobileToggleButton,
+  FilterToolbarPanel,
+  LabeledFilterSelect,
+  filterPanelDescriptionClass,
+  filterPanelTitleClass,
+  filterUtilityBadgeClass,
+} from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { Subtabs } from '@/components/shared/Subtabs';
+import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 import {
   getSourcePlatformBadge,
   getSourcePlatformLabel,
@@ -12,7 +33,7 @@ import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatAbsoluteTime, formatBytes, formatRelativeTime } from '@/utils/format';
-import { STORAGE_KEYS, createLocalStorageBooleanSignal } from '@/utils/localStorage';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
@@ -33,8 +54,6 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import ListFilterIcon from 'lucide-solid/icons/list-filter';
-import { segmentedButtonClass } from '@/utils/segmentedButton';
 
 type RecoveryView = 'protected' | 'events';
 
@@ -52,9 +71,9 @@ const normalizeProviderFromQuery = (value: string): string => {
   return v;
 };
 
-const groupHeaderRowClass = () => 'bg-surface-alt';
+const groupHeaderRowClass = () => 'bg-surface-alt hover:bg-surface-alt';
 const groupHeaderTextClass = () =>
-  'py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content';
+  'py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-base-content';
 
 type KnownOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown';
 
@@ -136,6 +155,15 @@ const formatTimeOnly = (timestamp: number | null): string => {
     minute: '2-digit',
     hour12: false,
   });
+};
+
+const eventTimeTextClass = (timestamp: number): string => {
+  if (!timestamp) return 'text-muted';
+  const ageMs = Date.now() - timestamp;
+  if (ageMs <= 24 * 60 * 60 * 1000) return 'text-emerald-600 dark:text-emerald-400 font-medium';
+  if (ageMs <= 7 * 24 * 60 * 60 * 1000) return 'text-amber-600 dark:text-amber-400 font-medium';
+  if (ageMs <= 30 * 24 * 60 * 60 * 1000) return 'text-orange-600 dark:text-orange-400';
+  return 'text-muted';
 };
 
 const niceAxisMax = (value: number): number => {
@@ -220,6 +248,102 @@ const buildRepositoryLabelForPoint = (p: RecoveryPoint): string => {
   return '';
 };
 
+const buildDetailsSummaryForPoint = (p: RecoveryPoint): string =>
+  String(p.display?.detailsSummary || '').trim();
+
+const SUBJECT_TYPE_LABELS: Record<string, string> = {
+  'proxmox-vm': 'VM',
+  'proxmox-vm-backup': 'VM',
+  'proxmox-lxc': 'LXC',
+  'proxmox-guest': 'Guest',
+  'k8s-pvc': 'PVC',
+  'k8s-pod': 'Pod',
+  'k8s-cluster': 'Cluster',
+  'velero-backup': 'Velero',
+  'docker-container': 'Container',
+  'truenas-dataset': 'Dataset',
+  'truenas-replication-task': 'Replication',
+};
+
+const buildSubjectTypeLabelForPoint = (p: RecoveryPoint): string => {
+  const raw = String(p.display?.subjectType || p.subjectRef?.type || '')
+    .trim()
+    .toLowerCase();
+  if (!raw) return '';
+  if (SUBJECT_TYPE_LABELS[raw]) return SUBJECT_TYPE_LABELS[raw];
+  return titleize(
+    raw
+      .replace(/^k8s-/, '')
+      .replace(/^proxmox-/, '')
+      .replace(/^truenas-/, ''),
+  );
+};
+
+const subjectTypeBadgeClass = (p: RecoveryPoint): string => {
+  const raw = String(p.display?.subjectType || p.subjectRef?.type || '')
+    .trim()
+    .toLowerCase();
+  if (raw === 'proxmox-vm' || raw === 'proxmox-vm-backup') {
+    return getWorkloadTypeBadge('vm').className;
+  }
+  if (raw === 'proxmox-lxc') {
+    return getWorkloadTypeBadge('system-container', { label: 'LXC' }).className;
+  }
+  if (raw === 'docker-container') {
+    return getWorkloadTypeBadge('app-container').className;
+  }
+  if (raw === 'k8s-pod') {
+    return getWorkloadTypeBadge('pod').className;
+  }
+  if (raw === 'k8s-cluster') {
+    return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300';
+  }
+  return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+};
+
+const artifactColumnHeaderClass = (id: string): string => {
+  switch (id) {
+    case 'time':
+      return 'w-[76px] text-right';
+    case 'subject':
+      return 'w-[320px]';
+    case 'entityId':
+      return 'w-[84px]';
+    case 'cluster':
+      return 'w-[120px]';
+    case 'nodeAgent':
+      return 'w-[120px]';
+    case 'namespace':
+      return 'w-[120px]';
+    case 'source':
+      return 'w-[78px] text-center';
+    case 'verified':
+      return 'w-[56px] text-center';
+    case 'size':
+      return 'w-[92px] text-right';
+    case 'method':
+      return 'w-[84px] text-center';
+    case 'repository':
+      return 'w-[160px]';
+    case 'details':
+      return 'w-[220px]';
+    case 'outcome':
+      return 'w-[88px] text-center';
+    default:
+      return '';
+  }
+};
+
+const artifactRowClass = (selected: boolean): string =>
+  selected
+    ? 'bg-blue-50/40 dark:bg-blue-900/20 outline outline-1 -outline-offset-1 outline-blue-200/80 dark:outline-blue-800/80'
+    : 'hover:bg-surface-hover';
+
+const subjectMetaSlotClass = 'inline-flex shrink-0 items-center justify-end gap-1 min-w-[4.5rem]';
+const advancedFilterLabelClass = 'text-[11px] font-medium text-muted';
+const advancedFilterFieldClass =
+  'min-h-[2.25rem] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content outline-none focus:border-blue-500';
+
 const normalizeModeFromQuery = (value: string | null | undefined): 'all' | ArtifactMode => {
   const v = (value || '').trim().toLowerCase();
   if (v === 'snapshot' || v === 'local' || v === 'remote') return v;
@@ -276,7 +400,7 @@ const Recovery: Component = () => {
   const storageRecoveryResources = useStorageRecoveryResources();
   const recoveryRollups = useRecoveryRollups();
 
-  const [view, setView] = createSignal<RecoveryView>('events');
+  const [view, setView] = createSignal<RecoveryView>('protected');
   const [rollupId, setRollupId] = createSignal('');
   const [query, setQuery] = createSignal('');
   const [providerFilter, setProviderFilter] = createSignal('all');
@@ -292,18 +416,17 @@ const Recovery: Component = () => {
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [currentPage, setCurrentPage] = createSignal(1);
   const [selectedPoint, setSelectedPoint] = createSignal<RecoveryPoint | null>(null);
-  const [moreFiltersOpen, setMoreFiltersOpen] = createLocalStorageBooleanSignal(
-    STORAGE_KEYS.RECOVERY_SHOW_FILTERS,
-    false,
-  );
+  const [moreFiltersOpen, setMoreFiltersOpen] = createSignal(false);
   const { isMobile } = useBreakpoint();
   const [protectedFiltersOpen, setProtectedFiltersOpen] = createSignal(false);
   const [eventsFiltersOpen, setEventsFiltersOpen] = createSignal(false);
+  let advancedFiltersPanelRef: HTMLDivElement | undefined;
+  let advancedFiltersButtonRef: HTMLButtonElement | undefined;
 
   type ProtectedSortCol = 'subject' | 'source' | 'lastBackup' | 'outcome';
   type SortDir = 'asc' | 'desc';
   const [protectedSortCol, setProtectedSortCol] = createSignal<ProtectedSortCol>('lastBackup');
-  const [protectedSortDir, setProtectedSortDir] = createSignal<SortDir>('asc');
+  const [protectedSortDir, setProtectedSortDir] = createSignal<SortDir>('desc');
   const toggleProtectedSort = (col: ProtectedSortCol) => {
     if (protectedSortCol() === col) {
       setProtectedSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -414,7 +537,7 @@ const Recovery: Component = () => {
     const parsed = parseRecoveryLinkSearch(location.search);
 
     const rawView = (parsed.view || '').trim().toLowerCase();
-    const nextView: RecoveryView = rawView === 'protected' ? 'protected' : 'events';
+    const nextView: RecoveryView = rawView === 'events' ? 'events' : 'protected';
     const nextRollup = (parsed.rollupId || '').trim();
     const nextQuery = (parsed.query || '').trim();
     const nextProvider = normalizeProviderFromQuery(parsed.provider || '');
@@ -473,6 +596,26 @@ const Recovery: Component = () => {
     if (view() !== 'events' && untrack(moreFiltersOpen)) setMoreFiltersOpen(false);
   });
 
+  const handleAdvancedFiltersClickOutside = (event: MouseEvent) => {
+    const target = event.target as Node;
+    if (advancedFiltersPanelRef?.contains(target) || advancedFiltersButtonRef?.contains(target)) {
+      return;
+    }
+    setMoreFiltersOpen(false);
+  };
+
+  createEffect(() => {
+    if (moreFiltersOpen()) {
+      document.addEventListener('mousedown', handleAdvancedFiltersClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleAdvancedFiltersClickOutside);
+    }
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('mousedown', handleAdvancedFiltersClickOutside);
+  });
+
   createEffect(() => {
     // Keep paging stable: any filter change resets to the first page.
     if (view() !== 'events') return;
@@ -500,7 +643,7 @@ const Recovery: Component = () => {
       v === 'events' && verificationFilter() !== 'all' ? verificationFilter() : null;
 
     const nextPath = buildRecoveryPath({
-      view: v,
+      view: v === 'events' ? 'events' : null,
       rollupId: v === 'events' && rid ? rid : null,
       query: query().trim() || null,
       provider: providerFilter() !== 'all' ? providerFilter() : null,
@@ -721,6 +864,7 @@ const Recovery: Component = () => {
   );
   const activeAdvancedFilterCount = createMemo(() => {
     let count = 0;
+    if (scopeFilter() !== 'all') count += 1;
     if (modeFilter() !== 'all') count += 1;
     if (verificationFilter() !== 'all') count += 1;
     if (clusterFilter() !== 'all') count += 1;
@@ -737,10 +881,17 @@ const Recovery: Component = () => {
   });
   const eventsActiveFilterCount = createMemo(() => {
     let count = 0;
+    if (query().trim() !== '') count++;
     if (providerFilter() !== 'all') count++;
     if (outcomeFilter() !== 'all') count++;
     if (scopeFilter() !== 'all') count++;
-    if (activeAdvancedFilterCount() > 0) count++;
+    if (modeFilter() !== 'all') count++;
+    if (verificationFilter() !== 'all') count++;
+    if (clusterFilter() !== 'all') count++;
+    if (nodeFilter() !== 'all') count++;
+    if (namespaceFilter() !== 'all') count++;
+    if (selectedDateKey()) count++;
+    if (chartRangeDays() !== 30) count++;
     return count;
   });
 
@@ -832,12 +983,21 @@ const Recovery: Component = () => {
     { id: 'verified', label: 'Verified', toggleable: true },
     { id: 'size', label: 'Size', toggleable: true },
     { id: 'method', label: 'Method' },
-    { id: 'repository', label: 'Repository/Target' },
+    { id: 'repository', label: 'Target' },
+    { id: 'details', label: 'Details', toggleable: true },
     { id: 'outcome', label: 'Outcome' },
   ];
 
   const relevantArtifactColumnIDs = createMemo(() => {
-    const ids = new Set<string>(['time', 'subject', 'source', 'method', 'repository', 'outcome']);
+    const ids = new Set<string>([
+      'time',
+      'subject',
+      'source',
+      'method',
+      'repository',
+      'details',
+      'outcome',
+    ]);
     if (hasVerificationData()) ids.add('verified');
     if (hasSizeData()) ids.add('size');
     if (hasClusterData()) ids.add('cluster');
@@ -924,6 +1084,16 @@ const Recovery: Component = () => {
       selectedDateKey() !== null,
   );
 
+  const resetAdvancedArtifactFilters = () => {
+    setScopeFilter('all');
+    setModeFilter('all');
+    setVerificationFilter('all');
+    setClusterFilter('all');
+    setNodeFilter('all');
+    setNamespaceFilter('all');
+    setCurrentPage(1);
+  };
+
   const resetAllArtifactFilters = () => {
     setQuery('');
     setProviderFilter('all');
@@ -941,6 +1111,21 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
+      <Show when={!kioskMode()}>
+        <Subtabs
+          value={view()}
+          onChange={(value) => {
+            setView(value as RecoveryView);
+            if (value === 'protected') setRollupId('');
+          }}
+          ariaLabel="Recovery view"
+          tabs={[
+            { value: 'protected', label: 'Recovery' },
+            { value: 'events', label: 'Events' },
+          ]}
+        />
+      </Show>
+
       <Show when={view() === 'protected'}>
         <Show when={rollupsSummary().total > 0}>
           <ProtectionHero summary={rollupsSummary()} />
@@ -948,164 +1133,83 @@ const Recovery: Component = () => {
 
         <Show when={!kioskMode()}>
           <Card padding="sm">
-            <div class="flex flex-col gap-2">
-              <SearchInput
-                value={query}
-                onChange={(value) => setQuery(value)}
-                placeholder="Search protected items..."
-                class="w-full"
-                history={{
-                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                  emptyMessage: 'Recent searches appear here.',
-                }}
-              />
-              {/* Mobile-only: toggle + Filters button */}
-              <div class="flex items-center justify-between gap-2 sm:hidden">
-                <div
-                  class="inline-flex rounded-md bg-surface-hover p-0.5"
-                  role="group"
-                  aria-label="View"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setView('protected');
-                      setRollupId('');
-                    }}
-                    aria-pressed={view() === 'protected'}
-                    class={segmentedButtonClass(view() === 'protected')}
-                  >
-                    Protected
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setView('events')}
-                    aria-pressed={view() === 'events'}
-                    class={segmentedButtonClass(view() === 'events')}
-                  >
-                    Events
-                  </button>
-                </div>
+            <FilterHeader
+              search={
+                <SearchInput
+                  value={query}
+                  onChange={(value) => setQuery(value)}
+                  placeholder="Search protected items..."
+                  class="w-full"
+                  clearOnEscape
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: 'Recent searches appear here.',
+                  }}
+                />
+              }
+              searchAccessory={
                 <Show when={isMobile()}>
-                  <button
-                    type="button"
+                  <FilterMobileToggleButton
                     onClick={() => setProtectedFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
-                  >
-                    <ListFilterIcon class="w-3.5 h-3.5" />
-                    Filters
-                    <Show when={protectedActiveFilterCount() > 0}>
-                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                        {protectedActiveFilterCount()}
-                      </span>
-                    </Show>
-                  </button>
+                    count={protectedActiveFilterCount()}
+                  />
                 </Show>
-              </div>
+              }
+              showFilters={!isMobile() || protectedFiltersOpen()}
+            >
+              <LabeledFilterSelect
+                id="recovery-provider-filter"
+                label="Provider"
+                value={providerFilter()}
+                onChange={(event) => setProviderFilter(event.currentTarget.value)}
+                selectClass="min-w-[10rem] max-w-[14rem]"
+              >
+                <For each={providerOptions()}>
+                  {(p) => (
+                    <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
 
-              <Show when={!isMobile() || protectedFiltersOpen()}>
-                <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                  {/* Toggle — desktop only, first in filter row */}
-                  <div
-                    class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5"
-                    role="group"
-                    aria-label="View"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setView('protected');
-                        setRollupId('');
-                      }}
-                      aria-pressed={view() === 'protected'}
-                      class={segmentedButtonClass(view() === 'protected')}
-                    >
-                      Protected
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setView('events')}
-                      aria-pressed={view() === 'events'}
-                      class={segmentedButtonClass(view() === 'events')}
-                    >
-                      Events
-                    </button>
-                  </div>
-                  <div class="h-5 w-px bg-surface-hover hidden sm:block" />
+              <LabeledFilterSelect
+                id="recovery-protected-status-filter"
+                label="Status"
+                value={outcomeFilter()}
+                onChange={(event) => {
+                  const value = event.currentTarget.value as 'all' | KnownOutcome;
+                  setOutcomeFilter(value);
+                  if (value !== 'all') setVerificationFilter('all');
+                }}
+                selectClass="min-w-[7rem]"
+              >
+                <For each={availableOutcomes}>
+                  {(outcome) => (
+                    <option value={outcome}>{outcome === 'all' ? 'Any' : titleize(outcome)}</option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
 
-                  <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                    <label
-                      for="recovery-provider-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                    >
-                      Provider
-                    </label>
-                    <select
-                      id="recovery-provider-filter"
-                      value={providerFilter()}
-                      onChange={(event) => setProviderFilter(event.currentTarget.value)}
-                      class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                    >
-                      <For each={providerOptions()}>
-                        {(p) => (
-                          <option value={p}>
-                            {p === 'all' ? 'All Providers' : sourceLabel(p)}
-                          </option>
-                        )}
-                      </For>
-                    </select>
-                  </div>
+              <button
+                type="button"
+                aria-pressed={protectedStaleOnly()}
+                onClick={() => setProtectedStaleOnly((v) => !v)}
+                class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly() ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content hover:bg-surface-hover'}`}
+              >
+                Stale only
+              </button>
 
-                  <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                    <label
-                      for="recovery-protected-status-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                    >
-                      Status
-                    </label>
-                    <select
-                      id="recovery-protected-status-filter"
-                      value={outcomeFilter()}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value as 'all' | KnownOutcome;
-                        setOutcomeFilter(value);
-                        if (value !== 'all') setVerificationFilter('all');
-                      }}
-                      class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                    >
-                      <For each={availableOutcomes}>
-                        {(outcome) => (
-                          <option value={outcome}>
-                            {outcome === 'all' ? 'Any' : titleize(outcome)}
-                          </option>
-                        )}
-                      </For>
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    aria-pressed={protectedStaleOnly()}
-                    onClick={() => setProtectedStaleOnly((v) => !v)}
-                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly() ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content hover:bg-surface-hover'}`}
-                  >
-                    Stale only
-                  </button>
-
-                  <Show when={rollupsSummary().stale > 0}>
-                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">
-                      {rollupsSummary().stale} stale
-                    </span>
-                  </Show>
-
-                  <Show when={rollupsSummary().neverSucceeded > 0}>
-                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900 dark:text-rose-200">
-                      {rollupsSummary().neverSucceeded} never succeeded
-                    </span>
-                  </Show>
-                </div>
+              <Show when={rollupsSummary().stale > 0}>
+                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">
+                  {rollupsSummary().stale} stale
+                </span>
               </Show>
-            </div>
+
+              <Show when={rollupsSummary().neverSucceeded > 0}>
+                <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900 dark:text-rose-200">
+                  {rollupsSummary().neverSucceeded} never succeeded
+                </span>
+              </Show>
+            </FilterHeader>
           </Card>
         </Show>
 
@@ -1284,12 +1388,6 @@ const Recovery: Component = () => {
       </Show>
 
       <Show when={view() === 'events'}>
-        <Show when={recoveryPoints.response.loading && (sortedPoints()?.length ?? 0) === 0}>
-          <Card padding="sm">
-            <div class="px-3 py-6 text-sm text-muted">Loading recovery points...</div>
-          </Card>
-        </Show>
-
         <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
           <Card padding="sm">
             <EmptyState
@@ -1301,7 +1399,7 @@ const Recovery: Component = () => {
           </Card>
         </Show>
 
-        <Show when={!recoveryPoints.response.loading && !recoveryPoints.response.error}>
+        <Show when={!recoveryPoints.response.error}>
           <Card padding="sm" class="h-full">
             <Show
               when={
@@ -1635,389 +1733,286 @@ const Recovery: Component = () => {
 
           <Show when={!kioskMode()}>
             <Card padding="sm">
-              <div class="flex flex-col gap-2">
-                <SearchInput
-                  value={query}
-                  onChange={(value) => {
-                    setQuery(value);
+              <FilterHeader
+                search={
+                  <SearchInput
+                    value={query}
+                    onChange={(value) => {
+                      setQuery(value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="Search recovery events..."
+                    class="w-full shrink-0 sm:w-[20rem] md:w-[22rem] lg:w-[24rem] xl:w-[28rem]"
+                    clearOnEscape
+                    history={{
+                      storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                      emptyMessage: 'Recent searches appear here.',
+                    }}
+                  />
+                }
+                searchAccessory={
+                  <Show when={isMobile()}>
+                    <FilterMobileToggleButton
+                      onClick={() => setEventsFiltersOpen((o) => !o)}
+                      count={eventsActiveFilterCount()}
+                    />
+                  </Show>
+                }
+                mobileLeading={
+                  <Show when={rollupId().trim()}>
+                    <div class="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRollupId('');
+                          setView('protected');
+                        }}
+                        class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                      >
+                        Recovery
+                      </button>
+                      <span class="text-muted text-sm">›</span>
+                      <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
+                        <Show when={selectedRollup()}>
+                          {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                        </Show>
+                      </span>
+                    </div>
+                  </Show>
+                }
+                showFilters={!isMobile() || eventsFiltersOpen()}
+              >
+                <Show when={rollupId().trim()}>
+                  <div class="hidden sm:flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRollupId('');
+                        setView('protected');
+                      }}
+                      class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    >
+                      Recovery
+                    </button>
+                    <span class="text-muted text-sm">›</span>
+                    <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
+                      <Show when={selectedRollup()}>
+                        {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                      </Show>
+                    </span>
+                  </div>
+                </Show>
+
+                <LabeledFilterSelect
+                  id="recovery-provider-filter-events"
+                  label="Provider"
+                  value={providerFilter()}
+                  onChange={(event) => {
+                    setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
                     setCurrentPage(1);
                   }}
-                  placeholder="Search recovery events..."
-                  class="w-full"
-                  history={{
-                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                    emptyMessage: 'Recent searches appear here.',
+                  selectClass="min-w-[10rem] max-w-[14rem]"
+                >
+                  <For each={providerOptions()}>
+                    {(p) => (
+                      <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>
+                    )}
+                  </For>
+                </LabeledFilterSelect>
+
+                <LabeledFilterSelect
+                  id="recovery-status-filter"
+                  label="Status"
+                  value={outcomeFilter()}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value as 'all' | KnownOutcome;
+                    setOutcomeFilter(value);
+                    if (value !== 'all') setVerificationFilter('all');
+                    setCurrentPage(1);
                   }}
-                />
-                {/* Mobile-only: toggle/breadcrumb + Filters button */}
-                <div class="flex items-center justify-between gap-2 sm:hidden">
-                  <Show
-                    when={!rollupId().trim()}
-                    fallback={
-                      <div class="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRollupId('');
-                            setView('protected');
-                          }}
-                          class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                        >
-                          Protected
-                        </button>
-                        <span class="text-muted text-sm">›</span>
-                        <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
-                          <Show when={selectedRollup()}>
-                            {rollupSubjectLabel(selectedRollup()!, resourcesById())}
-                          </Show>
-                        </span>
-                      </div>
-                    }
-                  >
-                    <div
-                      class="inline-flex rounded-md bg-surface-hover p-0.5"
-                      role="group"
-                      aria-label="View"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setView('protected');
-                          setRollupId('');
-                        }}
-                        aria-pressed={view() === 'protected'}
-                        class={segmentedButtonClass(view() === 'protected')}
-                      >
-                        Protected
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setView('events')}
-                        aria-pressed={view() === 'events'}
-                        class={segmentedButtonClass(view() === 'events')}
-                      >
-                        Events
-                      </button>
-                    </div>
-                  </Show>
-                  <Show when={isMobile()}>
-                    <button
-                      type="button"
-                      onClick={() => setEventsFiltersOpen((o) => !o)}
-                      class="flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted"
-                    >
-                      <ListFilterIcon class="w-3.5 h-3.5" />
-                      Filters
-                      <Show when={eventsActiveFilterCount() > 0}>
-                        <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                          {eventsActiveFilterCount()}
-                        </span>
-                      </Show>
-                    </button>
-                  </Show>
-                </div>
+                  selectClass="min-w-[7rem]"
+                >
+                  <For each={availableOutcomes}>
+                    {(outcome) => (
+                      <option value={outcome}>
+                        {outcome === 'all' ? 'Any status' : titleize(outcome)}
+                      </option>
+                    )}
+                  </For>
+                </LabeledFilterSelect>
 
-                <Show when={!isMobile() || eventsFiltersOpen()}>
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                    {/* Toggle/breadcrumb — desktop only, first in filter row */}
-                    <Show
-                      when={!rollupId().trim()}
-                      fallback={
-                        <div class="hidden sm:flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRollupId('');
-                              setView('protected');
-                            }}
-                            class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                          >
-                            Protected
-                          </button>
-                          <span class="text-muted text-sm">›</span>
-                          <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
-                            <Show when={selectedRollup()}>
-                              {rollupSubjectLabel(selectedRollup()!, resourcesById())}
-                            </Show>
-                          </span>
-                        </div>
-                      }
-                    >
-                      <div
-                        class="hidden sm:inline-flex rounded-md bg-surface-hover p-0.5"
-                        role="group"
-                        aria-label="View"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setView('protected');
-                            setRollupId('');
-                          }}
-                          aria-pressed={view() === 'protected'}
-                          class={segmentedButtonClass(view() === 'protected')}
-                        >
-                          Protected
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setView('events')}
-                          aria-pressed={view() === 'events'}
-                          class={segmentedButtonClass(view() === 'events')}
-                        >
-                          Events
-                        </button>
-                      </div>
-                    </Show>
-                    <div class="h-5 w-px bg-surface-hover hidden sm:block" />
-
-                    <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                      <label
-                        for="recovery-provider-filter-events"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                      >
-                        Provider
-                      </label>
-                      <select
-                        id="recovery-provider-filter-events"
-                        value={providerFilter()}
-                        onChange={(event) => {
-                          setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                      >
-                        <For each={providerOptions()}>
-                          {(p) => (
-                            <option value={p}>
-                              {p === 'all' ? 'All Providers' : sourceLabel(p)}
-                            </option>
-                          )}
-                        </For>
-                      </select>
-                    </div>
-
-                    <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                      <label
-                        for="recovery-status-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                      >
-                        Status
-                      </label>
-                      <select
-                        id="recovery-status-filter"
-                        value={outcomeFilter()}
-                        onChange={(event) => {
-                          const value = event.currentTarget.value as 'all' | KnownOutcome;
-                          setOutcomeFilter(value);
-                          if (value !== 'all') setVerificationFilter('all');
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[7rem] rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                      >
-                        <For each={availableOutcomes}>
-                          {(outcome) => (
-                            <option value={outcome}>
-                              {outcome === 'all' ? 'All' : titleize(outcome)}
-                            </option>
-                          )}
-                        </For>
-                      </select>
-                    </div>
-
-                    <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">
-                        Scope
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScopeFilter('all');
-                          setCurrentPage(1);
-                        }}
-                        class={segmentedButtonClass(scopeFilter() === 'all')}
-                      >
-                        All
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScopeFilter('workload');
-                          setCurrentPage(1);
-                        }}
-                        class={segmentedButtonClass(scopeFilter() === 'workload')}
-                      >
-                        Workloads
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
+                <div class="ml-auto flex items-center gap-2">
+                  <div class="relative">
+                    <FilterActionButton
+                      ref={advancedFiltersButtonRef}
+                      aria-label="Filter"
                       aria-expanded={moreFiltersOpen()}
-                      aria-controls="recovery-more-filters"
+                      aria-controls="recovery-filter-panel"
+                      aria-haspopup="dialog"
                       onClick={() => setMoreFiltersOpen((v) => !v)}
-                      class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover"
+                      active={moreFiltersOpen() || activeAdvancedFilterCount() > 0}
                     >
-                      <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
+                      <span>Filter</span>
                       <Show when={activeAdvancedFilterCount() > 0}>
-                        <span class="rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content">
-                          {activeAdvancedFilterCount()}
-                        </span>
+                        <span class={filterUtilityBadgeClass}>{activeAdvancedFilterCount()}</span>
                       </Show>
-                    </button>
+                    </FilterActionButton>
 
-                    <Show when={artifactColumnVisibility.availableToggles().length > 0}>
-                      <ColumnPicker
-                        columns={artifactColumnVisibility.availableToggles()}
-                        isHidden={artifactColumnVisibility.isHiddenByUser}
-                        onToggle={artifactColumnVisibility.toggle}
-                        onReset={artifactColumnVisibility.resetToDefaults}
-                      />
-                    </Show>
+                    <Show when={moreFiltersOpen()}>
+                      <FilterToolbarPanel ref={advancedFiltersPanelRef} id="recovery-filter-panel">
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <div class={filterPanelTitleClass}>Filter results</div>
+                            <div class={filterPanelDescriptionClass}>
+                              Narrow by scope, method, verification, or location.
+                            </div>
+                          </div>
+                          <Show when={activeAdvancedFilterCount() > 0}>
+                            <button
+                              type="button"
+                              onClick={resetAdvancedArtifactFilters}
+                              class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                            >
+                              Clear filters
+                            </button>
+                          </Show>
+                        </div>
 
-                    <Show when={hasActiveArtifactFilters()}>
-                      <button
-                        type="button"
-                        onClick={resetAllArtifactFilters}
-                        class="shrink-0 rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-900"
-                      >
-                        Clear
-                      </button>
+                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          <label class="flex min-w-0 flex-col gap-1">
+                            <span class={advancedFilterLabelClass}>Scope</span>
+                            <select
+                              value={scopeFilter()}
+                              onChange={(event) => {
+                                const value =
+                                  event.currentTarget.value === 'workload' ? 'workload' : 'all';
+                                setScopeFilter(value);
+                                setCurrentPage(1);
+                              }}
+                              class={advancedFilterFieldClass}
+                            >
+                              <option value="all">All events</option>
+                              <option value="workload">Workloads only</option>
+                            </select>
+                          </label>
+
+                          <label class="flex min-w-0 flex-col gap-1">
+                            <span class={advancedFilterLabelClass}>Method</span>
+                            <select
+                              value={modeFilter()}
+                              onChange={(event) => {
+                                setModeFilter(normalizeModeFromQuery(event.currentTarget.value));
+                                setCurrentPage(1);
+                              }}
+                              class={advancedFilterFieldClass}
+                            >
+                              <option value="all">Any method</option>
+                              <option value="snapshot">{MODE_LABELS.snapshot}</option>
+                              <option value="local">{MODE_LABELS.local}</option>
+                              <option value="remote">{MODE_LABELS.remote}</option>
+                            </select>
+                          </label>
+
+                          <Show when={showVerificationFilter()}>
+                            <label class="flex min-w-0 flex-col gap-1">
+                              <span class={advancedFilterLabelClass}>Verification</span>
+                              <select
+                                value={verificationFilter()}
+                                onChange={(event) => {
+                                  setVerificationFilter(
+                                    event.currentTarget.value as VerificationFilter,
+                                  );
+                                  if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
+                                  setCurrentPage(1);
+                                }}
+                                class={advancedFilterFieldClass}
+                              >
+                                <option value="all">Any verification</option>
+                                <option value="verified">Verified</option>
+                                <option value="unverified">Unverified</option>
+                                <option value="unknown">Unknown</option>
+                              </select>
+                            </label>
+                          </Show>
+
+                          <Show when={showClusterFilter()}>
+                            <label class="flex min-w-0 flex-col gap-1">
+                              <span class={advancedFilterLabelClass}>Cluster</span>
+                              <select
+                                value={clusterFilter()}
+                                onChange={(event) => {
+                                  setClusterFilter(event.currentTarget.value);
+                                  setCurrentPage(1);
+                                }}
+                                class={advancedFilterFieldClass}
+                              >
+                                <option value="all">Any cluster</option>
+                                <For each={clusterOptions().filter((value) => value !== 'all')}>
+                                  {(cluster) => <option value={cluster}>{cluster}</option>}
+                                </For>
+                              </select>
+                            </label>
+                          </Show>
+
+                          <Show when={showNodeFilter()}>
+                            <label class="flex min-w-0 flex-col gap-1">
+                              <span class={advancedFilterLabelClass}>Node or agent</span>
+                              <select
+                                value={nodeFilter()}
+                                onChange={(event) => {
+                                  setNodeFilter(event.currentTarget.value);
+                                  setCurrentPage(1);
+                                }}
+                                class={advancedFilterFieldClass}
+                              >
+                                <option value="all">Any node or agent</option>
+                                <For each={nodeOptions().filter((value) => value !== 'all')}>
+                                  {(node) => <option value={node}>{node}</option>}
+                                </For>
+                              </select>
+                            </label>
+                          </Show>
+
+                          <Show when={showNamespaceFilter()}>
+                            <label class="flex min-w-0 flex-col gap-1">
+                              <span class={advancedFilterLabelClass}>Namespace</span>
+                              <select
+                                value={namespaceFilter()}
+                                onChange={(event) => {
+                                  setNamespaceFilter(event.currentTarget.value);
+                                  setCurrentPage(1);
+                                }}
+                                class={advancedFilterFieldClass}
+                              >
+                                <option value="all">Any namespace</option>
+                                <For each={namespaceOptions().filter((value) => value !== 'all')}>
+                                  {(namespace) => <option value={namespace}>{namespace}</option>}
+                                </For>
+                              </select>
+                            </label>
+                          </Show>
+                        </div>
+                      </FilterToolbarPanel>
                     </Show>
                   </div>
 
-                  <Show when={moreFiltersOpen()}>
-                    <div
-                      id="recovery-more-filters"
-                      class="flex flex-wrap items-center gap-2 pt-2 border-t border-border"
-                    >
-                      <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">
-                          Method
-                        </span>
-                        <For each={['all', 'snapshot', 'local', 'remote'] as const}>
-                          {(mode) => (
-                            <button
-                              type="button"
-                              aria-pressed={modeFilter() === mode}
-                              onClick={() => {
-                                setModeFilter(mode === 'all' ? 'all' : mode);
-                                setCurrentPage(1);
-                              }}
-                              class={segmentedButtonClass(modeFilter() === mode)}
-                            >
-                              {mode === 'all' ? 'All' : MODE_LABELS[mode]}
-                            </button>
-                          )}
-                        </For>
-                      </div>
-
-                      <Show when={showVerificationFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                          <label
-                            for="recovery-verification-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                          >
-                            Verification
-                          </label>
-                          <select
-                            id="recovery-verification-filter"
-                            value={verificationFilter()}
-                            onChange={(event) => {
-                              setVerificationFilter(
-                                event.currentTarget.value as VerificationFilter,
-                              );
-                              if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[6.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                          >
-                            <option value="all">Any</option>
-                            <option value="verified">Verified</option>
-                            <option value="unverified">Unverified</option>
-                            <option value="unknown">Unknown</option>
-                          </select>
-                        </div>
-                      </Show>
-
-                      <Show when={showClusterFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                          <label
-                            for="recovery-cluster-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                          >
-                            Cluster
-                          </label>
-                          <select
-                            id="recovery-cluster-filter"
-                            value={clusterFilter()}
-                            onChange={(event) => {
-                              setClusterFilter(event.currentTarget.value);
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                          >
-                            <option value="all">All</option>
-                            <For each={clusterOptions().filter((value) => value !== 'all')}>
-                              {(cluster) => <option value={cluster}>{cluster}</option>}
-                            </For>
-                          </select>
-                        </div>
-                      </Show>
-
-                      <Show when={showNodeFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                          <label
-                            for="recovery-node-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                          >
-                            Node/Agent
-                          </label>
-                          <select
-                            id="recovery-node-filter"
-                            value={nodeFilter()}
-                            onChange={(event) => {
-                              setNodeFilter(event.currentTarget.value);
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[7.5rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                          >
-                            <option value="all">All</option>
-                            <For each={nodeOptions().filter((value) => value !== 'all')}>
-                              {(node) => <option value={node}>{node}</option>}
-                            </For>
-                          </select>
-                        </div>
-                      </Show>
-
-                      <Show when={showNamespaceFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5">
-                          <label
-                            for="recovery-namespace-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted"
-                          >
-                            Namespace
-                          </label>
-                          <select
-                            id="recovery-namespace-filter"
-                            value={namespaceFilter()}
-                            onChange={(event) => {
-                              setNamespaceFilter(event.currentTarget.value);
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[8rem] rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500"
-                          >
-                            <option value="all">All</option>
-                            <For each={namespaceOptions().filter((value) => value !== 'all')}>
-                              {(namespace) => <option value={namespace}>{namespace}</option>}
-                            </For>
-                          </select>
-                        </div>
-                      </Show>
-                    </div>
+                  <Show when={artifactColumnVisibility.availableToggles().length > 0}>
+                    <ColumnPicker
+                      label="Display"
+                      columns={artifactColumnVisibility.availableToggles()}
+                      isHidden={artifactColumnVisibility.isHiddenByUser}
+                      onToggle={artifactColumnVisibility.toggle}
+                      onReset={artifactColumnVisibility.resetToDefaults}
+                    />
                   </Show>
-                </Show>
-              </div>
+
+                  <Show when={hasActiveArtifactFilters()}>
+                    <FilterActionButton onClick={resetAllArtifactFilters}>
+                      Reset all
+                    </FilterActionButton>
+                  </Show>
+                </div>
+              </FilterHeader>
             </Card>
           </Show>
 
@@ -2029,34 +2024,45 @@ const Recovery: Component = () => {
               when={groupedByDay().length > 0}
               fallback={
                 <div class="p-6">
-                  <EmptyState
-                    title="No recovery events match your filters"
-                    description="Adjust your search, provider, method, status, or verification filters."
-                    actions={
-                      <Show when={hasActiveArtifactFilters()}>
-                        <button
-                          type="button"
-                          onClick={resetAllArtifactFilters}
-                          class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:"
-                        >
-                          Clear filters
-                        </button>
-                      </Show>
+                  <Show
+                    when={recoveryPoints.response.loading}
+                    fallback={
+                      <EmptyState
+                        title="No recovery events match your filters"
+                        description="Adjust your search, provider, method, status, or verification filters."
+                        actions={
+                          <Show when={hasActiveArtifactFilters()}>
+                            <button
+                              type="button"
+                              onClick={resetAllArtifactFilters}
+                              class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover"
+                            >
+                              Clear filters
+                            </button>
+                          </Show>
+                        }
+                      />
                     }
-                  />
+                  >
+                    <div class="text-sm text-muted">Loading recovery points...</div>
+                  </Show>
                 </div>
               }
             >
               <div class="overflow-x-auto">
                 <Table
                   class="w-full border-collapse text-xs whitespace-nowrap"
-                  style={{ 'min-width': tableMinWidth() }}
+                  style={{ 'min-width': tableMinWidth(), 'table-layout': 'fixed' }}
                 >
                   <TableHeader>
                     <TableRow class="bg-surface-alt text-muted border-b border-border">
                       <For each={mobileVisibleArtifactColumns()}>
                         {(col) => (
-                          <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">
+                          <TableHead
+                            class={`py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap ${artifactColumnHeaderClass(
+                              col.id,
+                            )}`}
+                          >
                             {col.label}
                           </TableHead>
                         )}
@@ -2069,13 +2075,20 @@ const Recovery: Component = () => {
                         <>
                           <TableRow class={groupHeaderRowClass()}>
                             <TableCell colSpan={tableColumnCount()} class={groupHeaderTextClass()}>
-                              <div class="flex items-center gap-2">
-                                <span>{group.label}</span>
-                                <Show when={group.tone === 'recent'}>
-                                  <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                                    recent
+                              <div class="flex items-center justify-between gap-3">
+                                <div class="flex min-w-0 items-center gap-2">
+                                  <span class="truncate" title={group.label}>
+                                    {group.label}
                                   </span>
-                                </Show>
+                                  <Show when={group.tone === 'recent'}>
+                                    <span class="rounded-full bg-blue-100/80 px-1.5 py-px text-[9px] font-medium text-blue-700 dark:bg-blue-900/70 dark:text-blue-200">
+                                      recent
+                                    </span>
+                                  </Show>
+                                </div>
+                                <span class="shrink-0 font-mono text-[10px] tabular-nums text-muted">
+                                  {group.items.length}
+                                </span>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -2084,6 +2097,8 @@ const Recovery: Component = () => {
                             {(p) => {
                               const resIndex = resourcesById();
                               const subject = buildSubjectLabelForPoint(p, resIndex);
+                              const subjectType = buildSubjectTypeLabelForPoint(p);
+                              const detailsSummary = buildDetailsSummaryForPoint(p);
                               const mode =
                                 (String(p.mode || '')
                                   .trim()
@@ -2104,7 +2119,7 @@ const Recovery: Component = () => {
                               return (
                                 <>
                                   <TableRow
-                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'border-border hover:bg-surface-hover'}`}
+                                    class={`cursor-pointer ${artifactRowClass(selectedPoint()?.id === p.id)}`}
                                     onClick={() =>
                                       setSelectedPoint(selectedPoint()?.id === p.id ? null : p)
                                     }
@@ -2114,7 +2129,9 @@ const Recovery: Component = () => {
                                         switch (col.id) {
                                           case 'time':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">
+                                              <TableCell
+                                                class={`whitespace-nowrap px-3 py-0.5 text-right font-mono text-[11px] tabular-nums ${eventTimeTextClass(tsMs)}`}
+                                              >
                                                 {timeOnly}
                                               </TableCell>
                                             );
@@ -2124,56 +2141,85 @@ const Recovery: Component = () => {
                                                 class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-base-content"
                                                 title={subject}
                                               >
-                                                <span class="inline-flex min-w-0 max-w-full items-center gap-1">
-                                                  <span class="truncate">{subject}</span>
-                                                  <Show when={p.immutable === true}>
-                                                    <svg
-                                                      class="h-3 w-3 shrink-0 text-emerald-500 dark:text-emerald-400"
-                                                      fill="none"
-                                                      stroke="currentColor"
-                                                      viewBox="0 0 24 24"
-                                                      aria-hidden="true"
-                                                    >
-                                                      <path
-                                                        stroke-linecap="round"
-                                                        stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z"
-                                                      />
-                                                    </svg>
-                                                  </Show>
+                                                <span class="inline-flex min-w-0 max-w-full items-center gap-1.5">
+                                                  <span class="min-w-0 flex-1 truncate font-medium">
+                                                    {subject}
+                                                  </span>
+                                                  <span class={subjectMetaSlotClass}>
+                                                    <Show when={subjectType}>
+                                                      <span
+                                                        class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${subjectTypeBadgeClass(
+                                                          p,
+                                                        )}`}
+                                                      >
+                                                        {subjectType}
+                                                      </span>
+                                                    </Show>
+                                                    <Show when={p.immutable === true}>
+                                                      <svg
+                                                        class="h-3 w-3 text-emerald-500 dark:text-emerald-400"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                        aria-hidden="true"
+                                                      >
+                                                        <path
+                                                          stroke-linecap="round"
+                                                          stroke-linejoin="round"
+                                                          stroke-width="2"
+                                                          d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z"
+                                                        />
+                                                      </svg>
+                                                    </Show>
+                                                    <Show when={p.encrypted === true}>
+                                                      <svg
+                                                        class="h-3 w-3 text-amber-500 dark:text-amber-400"
+                                                        fill="currentColor"
+                                                        viewBox="0 0 20 20"
+                                                        aria-hidden="true"
+                                                      >
+                                                        <path
+                                                          fill-rule="evenodd"
+                                                          d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                                                          clip-rule="evenodd"
+                                                        />
+                                                      </svg>
+                                                    </Show>
+                                                  </span>
                                                 </span>
                                               </TableCell>
                                             );
                                           case 'entityId':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono tabular-nums">
                                                 {entityId || '—'}
                                               </TableCell>
                                             );
                                           case 'cluster':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono">
                                                 {cluster || '—'}
                                               </TableCell>
                                             );
                                           case 'nodeAgent':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono">
                                                 {nodeAgent || '—'}
                                               </TableCell>
                                             );
                                           case 'namespace':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono">
                                                 {namespace || '—'}
                                               </TableCell>
                                             );
                                           case 'source': {
                                             const badge = getSourcePlatformBadge(provider);
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
-                                                <span class={badge?.classes || ''}>
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
+                                                <span
+                                                  class={`${badge?.classes || ''} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
+                                                >
                                                   {badge?.label || sourceLabel(provider)}
                                                 </span>
                                               </TableCell>
@@ -2181,11 +2227,11 @@ const Recovery: Component = () => {
                                           }
                                           case 'verified':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
                                                 {typeof p.verified === 'boolean' ? (
                                                   p.verified ? (
                                                     <span
-                                                      class="inline-flex items-center gap-1 text-green-600 dark:text-green-400"
+                                                      class="inline-flex min-w-[1.25rem] items-center justify-center text-green-600 dark:text-green-400"
                                                       title="Verified"
                                                     >
                                                       <svg
@@ -2204,7 +2250,7 @@ const Recovery: Component = () => {
                                                     </span>
                                                   ) : (
                                                     <span
-                                                      class="inline-flex items-center gap-1 text-amber-500 dark:text-amber-400"
+                                                      class="inline-flex min-w-[1.25rem] items-center justify-center text-amber-500 dark:text-amber-400"
                                                       title="Unverified"
                                                     >
                                                       <svg
@@ -2229,7 +2275,7 @@ const Recovery: Component = () => {
                                             );
                                           case 'size':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-right font-mono text-[11px] tabular-nums text-muted">
                                                 {p.sizeBytes && p.sizeBytes > 0
                                                   ? formatBytes(p.sizeBytes)
                                                   : '—'}
@@ -2237,9 +2283,9 @@ const Recovery: Component = () => {
                                             );
                                           case 'method':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
                                                 <span
-                                                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${MODE_BADGE_CLASS[mode]}`}
+                                                  class={`inline-flex min-w-[3.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${MODE_BADGE_CLASS[mode]}`}
                                                 >
                                                   {MODE_LABELS[mode]}
                                                 </span>
@@ -2248,17 +2294,26 @@ const Recovery: Component = () => {
                                           case 'repository':
                                             return (
                                               <TableCell
-                                                class="max-w-[220px] truncate whitespace-nowrap px-3 py-0.5 text-[11px] leading-4 text-muted"
+                                                class="max-w-[220px] truncate whitespace-nowrap px-3 py-0.5 text-[11px] leading-4 text-base-content"
                                                 title={repoLabel}
                                               >
                                                 {repoLabel || '—'}
                                               </TableCell>
                                             );
+                                          case 'details':
+                                            return (
+                                              <TableCell
+                                                class="max-w-[280px] truncate whitespace-nowrap px-3 py-0.5 text-[10px] leading-4 text-muted"
+                                                title={detailsSummary}
+                                              >
+                                                {detailsSummary || '—'}
+                                              </TableCell>
+                                            );
                                           case 'outcome':
                                             return (
-                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
                                                 <span
-                                                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                                  class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${
                                                     OUTCOME_BADGE_CLASS[outcome]
                                                   }`}
                                                 >
@@ -2280,7 +2335,7 @@ const Recovery: Component = () => {
                                     <TableRow>
                                       <TableCell
                                         colSpan={tableColumnCount()}
-                                        class="bg-surface-alt px-0 sm:px-4 py-4 border-b border-border relative"
+                                        class="bg-surface-alt px-0 sm:px-4 py-4 relative"
                                       >
                                         <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-border">
                                           <h2 class="text-sm font-semibold text-base-content">

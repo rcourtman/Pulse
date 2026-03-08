@@ -181,7 +181,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /more filters/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
     const clusterSelect = await screen.findByLabelText('Cluster');
     fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
@@ -204,6 +204,93 @@ describe('Recovery', () => {
         (url) => url.includes('/api/recovery/facets') && url.includes('cluster=dev-cluster'),
       );
       expect(hasPoints && hasSeries && hasFacets).toBe(true);
+    });
+  });
+
+  it('keeps the events card mounted while filter refetches are in flight', async () => {
+    mockLocationSearch = '?view=events&rollupId=res%3Avm-123';
+    facetsPayload.clusters = ['dev-cluster'];
+
+    let resolveDelayedPoints:
+      | ((value: { data: any[]; meta: { page: number; limit: number; total: number; totalPages: number } }) => void)
+      | null = null;
+
+    apiFetchMock.mockImplementation(async (url: string) => {
+      const u = new URL(url, 'http://localhost');
+      if (u.pathname === '/api/recovery/rollups') {
+        return {
+          data: rollupsPayload,
+          meta: { page: 1, limit: 500, total: rollupsPayload.length, totalPages: 1 },
+        };
+      }
+      if (u.pathname === '/api/recovery/points') {
+        const rid = u.searchParams.get('rollupId') || '';
+        const data = pointsByRollupId[rid] || [];
+        if (u.searchParams.get('cluster') === 'dev-cluster') {
+          return await new Promise((resolve) => {
+            resolveDelayedPoints = resolve as typeof resolveDelayedPoints;
+          });
+        }
+        return {
+          data,
+          meta: { page: 1, limit: 500, total: data.length, totalPages: 1 },
+        };
+      }
+      if (u.pathname === '/api/recovery/facets') {
+        return {
+          data: facetsPayload,
+        };
+      }
+      if (u.pathname === '/api/recovery/series') {
+        return {
+          data: [
+            { day: '2026-02-13', total: 1, snapshot: 1, local: 0, remote: 0 },
+            { day: '2026-02-14', total: 1, snapshot: 0, local: 1, remote: 0 },
+          ],
+        };
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    render(() => <Recovery />);
+
+    await screen.findByText(/Showing 1 - 1 of 1 events/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+    fireEvent.change(await screen.findByLabelText('Cluster'), {
+      target: { value: 'dev-cluster' },
+    });
+
+    await waitFor(() => {
+      const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
+      expect(
+        urls.some(
+          (url) => url.includes('/api/recovery/points') && url.includes('cluster=dev-cluster'),
+        ),
+      ).toBe(true);
+    });
+
+    expect(screen.getByText('Recovery Events')).toBeInTheDocument();
+    expect(screen.getByText(/Showing 1 - 1 of 1 events/i)).toBeInTheDocument();
+
+    resolveDelayedPoints?.({
+      data: pointsByRollupId['res:vm-123'],
+      meta: { page: 1, limit: 500, total: 1, totalPages: 1 },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Showing 1 - 1 of 1 events/i)).toBeInTheDocument();
+    });
+  });
+
+  it('clears the events search query on Escape', async () => {
+    mockLocationSearch = '?view=events&q=gdfdgd';
+    render(() => <Recovery />);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', { replace: true });
     });
   });
 });
