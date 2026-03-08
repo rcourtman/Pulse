@@ -287,7 +287,9 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
         resetKey={props.modalResetKey()}
         onClose={closeNodeModal}
         nodeType={type}
-        editingNode={props.editingNode()?.type === type ? (props.editingNode() ?? undefined) : undefined}
+        editingNode={
+          props.editingNode()?.type === type ? (props.editingNode() ?? undefined) : undefined
+        }
         prefillNode={prefillNode()?.type === type ? (prefillNode() ?? undefined) : undefined}
         securityStatus={props.securityStatus() ?? undefined}
         temperatureMonitoringEnabled={props.resolveTemperatureMonitoringEnabled(
@@ -308,7 +310,11 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
 
   return (
     <>
-      <SettingsSectionNav current={props.selectedAgent()} onSelect={props.onSelectAgent} class="mb-6" />
+      <SettingsSectionNav
+        current={props.selectedAgent()}
+        onSelect={props.onSelectAgent}
+        class="mb-6"
+      />
 
       <Show when={!props.embedded}>
         <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900">
@@ -360,7 +366,9 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
               <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div class="space-y-2">
-                    <h4 class="text-base font-semibold text-base-content">{activeConfig().title}</h4>
+                    <h4 class="text-base font-semibold text-base-content">
+                      {activeConfig().title}
+                    </h4>
                     <div class="flex flex-wrap items-center gap-2 text-xs">
                       <span class="inline-flex items-center rounded-full bg-surface-alt px-2.5 py-1 font-medium text-base-content">
                         {activeConfiguredNodes().length} configured
@@ -570,7 +578,13 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
                                 </div>
                               </div>
                             </div>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="mt-1">
+                            <svg
+                              width="20"
+                              height="20"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              class="mt-1"
+                            >
                               <path
                                 d="M12 5v14m-7-7h14"
                                 stroke="currentColor"
@@ -599,12 +613,16 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
           ariaLabel={`Remove ${props.nodePendingDeleteLabel()}`}
         >
           <Card padding="lg" class="w-full max-w-lg space-y-5">
-            <SectionHeader title={`Remove ${props.nodePendingDeleteLabel()}`} size="md" class="mb-1" />
+            <SectionHeader
+              title={`Remove ${props.nodePendingDeleteLabel()}`}
+              size="md"
+              class="mb-1"
+            />
             <div class="space-y-3 text-sm text-gray-600">
               <p>
                 Removing this {props.nodePendingDeleteTypeLabel().toLowerCase()} also scrubs the
-                Pulse footprint on the host — the proxy service, SSH key, API token, and bind
-                mount are all cleaned up automatically.
+                Pulse footprint on the host — the proxy service, SSH key, API token, and bind mount
+                are all cleaned up automatically.
               </p>
               <div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
                 <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>

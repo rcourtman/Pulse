@@ -1,9 +1,9 @@
 import { createSignal, createMemo, For, Show, type Accessor } from 'solid-js';
-import Search from 'lucide-solid/icons/search';
 import X from 'lucide-solid/icons/x';
 import CheckSquare from 'lucide-solid/icons/check-square';
 import XSquare from 'lucide-solid/icons/x-square';
 import { formControl } from '@/components/shared/Form';
+import { SearchField } from '@/components/shared/SearchField';
 import { useResources, getDisplayName } from '@/hooks/useResources';
 import type { Resource, ResourceType } from '@/types/resource';
 import { showWarning } from '@/utils/toast';
@@ -258,16 +258,13 @@ export function ResourcePicker(props: ResourcePickerProps) {
       <div class="flex flex-col gap-3">
         <div class="flex gap-2 flex-wrap">
           {/* Search input */}
-          <div class="relative flex-1 min-w-[200px]">
-            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              class={`${formControl} pl-9`}
-              placeholder="Search by name or ID..."
-              value={search()}
-              onInput={(e) => setSearch(e.currentTarget.value)}
-            />
-          </div>
+          <SearchField
+            class="flex-1 min-w-[200px]"
+            inputClass={formControl}
+            value={search()}
+            onChange={setSearch}
+            placeholder="Search by name or ID..."
+          />
 
           {/* Tag filter */}
           <input

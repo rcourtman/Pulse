@@ -1,6 +1,7 @@
 import { Component, createEffect, createSignal, Match, Switch } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ProxmoxSettingsPanel, type ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
 import { UnifiedAgents } from './UnifiedAgents';
@@ -39,43 +40,16 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
   return (
     <div class="space-y-6">
       <div class="space-y-3">
-        <div class="border-b border-border">
-          <div class="flex flex-wrap items-center gap-6">
-            <button
-              type="button"
-              onClick={() => openView('install')}
-              class={`inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
-                activeView() === 'install'
-                  ? 'border-blue-600 text-base-content'
-                  : 'border-transparent text-muted hover:text-base-content'
-              }`}
-            >
-              Install on a host
-            </button>
-            <button
-              type="button"
-              onClick={() => openView('direct')}
-              class={`inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
-                activeView() === 'direct'
-                  ? 'border-blue-600 text-base-content'
-                  : 'border-transparent text-muted hover:text-base-content'
-              }`}
-            >
-              Direct Proxmox
-            </button>
-            <button
-              type="button"
-              onClick={() => openView('inventory')}
-              class={`inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
-                activeView() === 'inventory'
-                  ? 'border-blue-600 text-base-content'
-                  : 'border-transparent text-muted hover:text-base-content'
-              }`}
-            >
-              Connected infrastructure
-            </button>
-          </div>
-        </div>
+        <Subtabs
+          value={activeView()}
+          onChange={(value) => openView(value as InfrastructureWorkspaceView)}
+          ariaLabel="Infrastructure workspace"
+          tabs={[
+            { value: 'install', label: 'Install on a host' },
+            { value: 'direct', label: 'Direct Proxmox' },
+            { value: 'inventory', label: 'Connected infrastructure' },
+          ]}
+        />
       </div>
 
       <Switch>

@@ -178,12 +178,7 @@ describe('OrganizationSharingPanel', () => {
     const quickPick = screen.getByLabelText('Quick Pick Resource') as HTMLSelectElement;
     const labels = Array.from(quickPick.options).map((option) => option.textContent?.trim());
 
-    expect(labels).toEqual([
-      'Select resource',
-      'Alpha VM (vm)',
-      'host-1 (agent)',
-      'Zulu VM (vm)',
-    ]);
+    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'host-1 (agent)', 'Zulu VM (vm)']);
     expect(labels).not.toContain('Hidden (vm)');
   });
 

@@ -254,12 +254,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
   };
 
   return (
-    <Dialog
-      isOpen={true}
-      onClose={props.onClose}
-      panelClass="max-w-2xl"
-      ariaLabel="Profile ideas"
-    >
+    <Dialog isOpen={true} onClose={props.onClose} panelClass="max-w-2xl" ariaLabel="Profile ideas">
       <div class="w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">

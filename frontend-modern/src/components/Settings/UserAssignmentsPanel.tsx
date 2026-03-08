@@ -19,7 +19,7 @@ import Shield from 'lucide-solid/icons/shield';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import X from 'lucide-solid/icons/x';
 import Pencil from 'lucide-solid/icons/pencil';
-import Search from 'lucide-solid/icons/search';
+import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 export const UserAssignmentsPanel: Component = () => {
@@ -185,17 +185,14 @@ export const UserAssignmentsPanel: Component = () => {
         description="Assign roles to users and review effective permissions."
         icon={<Users class="w-5 h-5" />}
         action={
-          <div class="relative">
-            <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchQuery()}
-              onInput={(e) => setSearchQuery(e.currentTarget.value)}
-              disabled={!rbacEnabled()}
-              class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-border bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
-            />
-          </div>
+          <SearchField
+            placeholder="Search users..."
+            value={searchQuery()}
+            onChange={setSearchQuery}
+            disabled={!rbacEnabled()}
+            class="min-w-[15rem]"
+            inputClass="min-h-10 sm:min-h-9 py-2.5"
+          />
         }
         noPadding
         bodyClass="divide-y divide-border"

@@ -4,6 +4,7 @@ import { unwrap } from 'solid-js/store';
 import { useWebSocket } from '@/App';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { SearchField } from '@/components/shared/SearchField';
 import Server from 'lucide-solid/icons/server';
 import Users from 'lucide-solid/icons/users';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
@@ -101,7 +102,8 @@ type UnifiedAgentRow = {
   };
 };
 
-const getInventorySubjectLabel = (name?: string, fallback?: string) => name || fallback || 'this host';
+const getInventorySubjectLabel = (name?: string, fallback?: string) =>
+  name || fallback || 'this host';
 const MONITORING_STOPPED_STATUS_LABEL = 'Monitoring stopped';
 const ALLOW_RECONNECT_LABEL = 'Allow reconnect';
 
@@ -694,7 +696,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     return resources()
       .filter((r) => r.agent != null || r.type === 'docker-host')
       .sort((a, b) =>
-        (getPreferredResourceHostname(a) || '').localeCompare(getPreferredResourceHostname(b) || ''),
+        (getPreferredResourceHostname(a) || '').localeCompare(
+          getPreferredResourceHostname(b) || '',
+        ),
       );
   });
 
@@ -1069,9 +1073,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
 
   const hasFilters = createMemo(() => {
     return (
-      filterCapability() !== 'all' ||
-      filterScope() !== 'all' ||
-      filterSearch().trim().length > 0
+      filterCapability() !== 'all' || filterScope() !== 'all' || filterSearch().trim().length > 0
     );
   });
 
@@ -1171,7 +1173,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     const subject = getInventorySubjectLabel(name, clusterId);
     try {
       await MonitoringAPI.allowKubernetesClusterReenroll(clusterId);
-      notificationStore.success(`Reconnect allowed for ${subject}. Pulse will accept reports from it again.`);
+      notificationStore.success(
+        `Reconnect allowed for ${subject}. Pulse will accept reports from it again.`,
+      );
     } catch (err) {
       logger.error('Failed to allow reconnect for kubernetes cluster', err);
       notificationStore.error(`Failed to allow reconnect for ${subject}.`);
@@ -1263,13 +1267,13 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
           icon={<Server class="w-5 h-5" strokeWidth={2} />}
           bodyClass="space-y-5"
         >
-        <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
-          <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
-          <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-            Install it on each system you want Pulse to monitor. The installer auto-detects
-            available platforms on that machine and enables the right integrations.
-          </p>
-        </div>
+          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
+            <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
+            <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
+              Install it on each system you want Pulse to monitor. The installer auto-detects
+              available platforms on that machine and enables the right integrations.
+            </p>
+          </div>
 
           <Show when={!props.embedded}>
             <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
@@ -1294,1306 +1298,1351 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
           </Show>
 
           <div class="space-y-5">
-          <Show when={requiresToken()}>
-            <div class="space-y-3">
-              <div class="space-y-1">
-                <p class="text-sm font-semibold text-base-content">
-                  <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-blue-600 text-white text-xs font-bold">
-                    1
-                  </span>
-                  Generate API token
-                </p>
-                <p class="text-sm text-muted ml-6">
-                  Create a fresh token scoped for Agent, Docker, and Kubernetes monitoring.
-                </p>
-              </div>
-
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  value={tokenName()}
-                  onInput={(event) => setTokenName(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !isGeneratingToken()) {
-                      handleGenerateToken();
-                    }
-                  }}
-                  placeholder="Token name (optional)"
-                  class="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
-                />
-                <button
-                  type="button"
-                  onClick={handleGenerateToken}
-                  disabled={isGeneratingToken()}
-                  class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isGeneratingToken()
-                    ? 'Generating…'
-                    : hasToken()
-                      ? 'Generate another'
-                      : 'Generate token'}
-                </button>
-              </div>
-
-              <Show when={latestRecord()}>
-                <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                  <svg
-                    class="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>
-                    Token <strong>{latestRecord()?.name}</strong> created. Commands below now
-                    include this credential.
-                  </span>
-                </div>
-              </Show>
-            </div>
-          </Show>
-
-          <Show when={!requiresToken()}>
-            <div class="space-y-3">
-              <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                Tokens are optional on this Pulse instance. Confirm to generate commands without
-                embedding a token.
-              </div>
-              <button
-                type="button"
-                onClick={acknowledgeNoToken}
-                disabled={confirmedNoToken()}
-                class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                  confirmedNoToken()
-                    ? 'bg-green-600 text-white cursor-default'
-                    : 'bg-surface text-base-content border border-border hover:bg-surface-hover'
-                }`}
-              >
-                {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
-              </button>
-            </div>
-          </Show>
-
-          {/* Show locked step 2 preview when token required but not yet generated */}
-          <Show when={requiresToken() && !commandsUnlocked()}>
-            <div class="space-y-3 opacity-60 pointer-events-none select-none">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h4 class="text-sm font-semibold text-base-content">
-                    <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-slate-400 text-white text-xs font-bold">
-                      2
+            <Show when={requiresToken()}>
+              <div class="space-y-3">
+                <div class="space-y-1">
+                  <p class="text-sm font-semibold text-base-content">
+                    <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-blue-600 text-white text-xs font-bold">
+                      1
                     </span>
-                    Installation commands
-                  </h4>
-                  <p class="text-xs text-muted mt-0.5 ml-6">
-                    Generate a token above to unlock installation commands.
+                    Generate API token
+                  </p>
+                  <p class="text-sm text-muted ml-6">
+                    Create a fresh token scoped for Agent, Docker, and Kubernetes monitoring.
                   </p>
                 </div>
-              </div>
-              <div class="rounded-md border border-border bg-surface-hover px-4 py-6 text-center">
-                <svg
-                  class="w-8 h-8 mx-auto text-muted mb-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-                  />
-                </svg>
-                <p class="text-sm text-muted">
-                  Click "Generate token" above to see installation commands
-                </p>
-              </div>
-            </div>
-          </Show>
 
-          <Show when={commandsUnlocked()}>
-            <div class="space-y-3">
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    value={tokenName()}
+                    onInput={(event) => setTokenName(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !isGeneratingToken()) {
+                        handleGenerateToken();
+                      }
+                    }}
+                    placeholder="Token name (optional)"
+                    class="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGenerateToken}
+                    disabled={isGeneratingToken()}
+                    class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isGeneratingToken()
+                      ? 'Generating…'
+                      : hasToken()
+                        ? 'Generate another'
+                        : 'Generate token'}
+                  </button>
+                </div>
+
+                <Show when={latestRecord()}>
+                  <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    <svg
+                      class="w-4 h-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>
+                      Token <strong>{latestRecord()?.name}</strong> created. Commands below now
+                      include this credential.
+                    </span>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
+            <Show when={!requiresToken()}>
               <div class="space-y-3">
+                <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                  Tokens are optional on this Pulse instance. Confirm to generate commands without
+                  embedding a token.
+                </div>
+                <button
+                  type="button"
+                  onClick={acknowledgeNoToken}
+                  disabled={confirmedNoToken()}
+                  class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                    confirmedNoToken()
+                      ? 'bg-green-600 text-white cursor-default'
+                      : 'bg-surface text-base-content border border-border hover:bg-surface-hover'
+                  }`}
+                >
+                  {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
+                </button>
+              </div>
+            </Show>
+
+            {/* Show locked step 2 preview when token required but not yet generated */}
+            <Show when={requiresToken() && !commandsUnlocked()}>
+              <div class="space-y-3 opacity-60 pointer-events-none select-none">
                 <div class="flex items-center justify-between">
                   <div>
                     <h4 class="text-sm font-semibold text-base-content">
-                      <Show when={requiresToken()}>
-                        <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-green-600 text-white text-xs font-bold">
-                          2
-                        </span>
-                      </Show>
+                      <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-slate-400 text-white text-xs font-bold">
+                        2
+                      </span>
                       Installation commands
                     </h4>
-                    <p class={`text-xs text-muted mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>
-                      The installer auto-detects Docker, Kubernetes, and Proxmox on the target
-                      machine.
+                    <p class="text-xs text-muted mt-0.5 ml-6">
+                      Generate a token above to unlock installation commands.
                     </p>
                   </div>
                 </div>
-
-                <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-                  <label class="block text-xs font-medium text-base-content mb-1.5">
-                    Connection URL (Agent → Pulse)
-                  </label>
-                  <div class="flex gap-2">
-                    <input
-                      type="text"
-                      value={customAgentUrl()}
-                      onInput={(e) => setCustomAgentUrl(e.currentTarget.value)}
-                      placeholder={agentUrl()}
-                      class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                <div class="rounded-md border border-border bg-surface-hover px-4 py-6 text-center">
+                  <svg
+                    class="w-8 h-8 mx-auto text-muted mb-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
                     />
-                  </div>
-                  <p class="mt-1.5 text-xs text-muted">
-                    Override the address agents use to connect to this server (e.g., use IP address{' '}
-                    <code>http://192.0.2.50:7655</code> if DNS fails).
-                    <Show when={!customAgentUrl()}>
-                      <span class="ml-1 opacity-75">
-                        Currently using auto-detected: {agentUrl()}
-                      </span>
-                    </Show>
+                  </svg>
+                  <p class="text-sm text-muted">
+                    Click "Generate token" above to see installation commands
                   </p>
                 </div>
-                <Show when={insecureMode()}>
-                  <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                    <span class="font-medium">TLS verification disabled</span> — skip cert checks
-                    for self-signed setups. Not recommended for production.
+              </div>
+            </Show>
+
+            <Show when={commandsUnlocked()}>
+              <div class="space-y-3">
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h4 class="text-sm font-semibold text-base-content">
+                        <Show when={requiresToken()}>
+                          <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-green-600 text-white text-xs font-bold">
+                            2
+                          </span>
+                        </Show>
+                        Installation commands
+                      </h4>
+                      <p class={`text-xs text-muted mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>
+                        The installer auto-detects Docker, Kubernetes, and Proxmox on the target
+                        machine.
+                      </p>
+                    </div>
                   </div>
-                </Show>
-                <label
-                  class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer"
-                  title="Skip TLS certificate verification (for self-signed certificates)"
-                >
-                  <input
-                    type="checkbox"
-                    checked={insecureMode()}
-                    onChange={(e) => setInsecureMode(e.currentTarget.checked)}
-                    class="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  Skip TLS certificate verification (self-signed certs; not recommended)
-                </label>
-                <label
-                  class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer"
-                  title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)"
-                >
-                  <input
-                    type="checkbox"
-                    checked={enableCommands()}
-                    onChange={(e) => setEnableCommands(e.currentTarget.checked)}
-                    class="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  Enable Pulse command execution (for Patrol auto-fix)
-                </label>
-                <Show when={enableCommands()}>
-                  <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                    <span class="font-medium">Pulse commands enabled</span> — The agent will accept
-                    diagnostic and fix commands from Pulse Patrol features.
-                  </div>
-                </Show>
-                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
-                  <span class="font-medium">Config signing (optional)</span> — Require signed remote
-                  config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>.
-                  Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
-                  <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
-                </div>
-                <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-                  <label
-                    for="install-profile-select"
-                    class="block text-xs font-medium text-base-content mb-1.5"
-                  >
-                    Target profile (optional)
-                  </label>
-                  <select
-                    id="install-profile-select"
-                    value={installProfile()}
-                    onChange={(event) =>
-                      handleInstallProfileChange(event.currentTarget.value as InstallProfile)
-                    }
-                    class="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                  >
-                    <For each={INSTALL_PROFILE_OPTIONS}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                  <p class="mt-1.5 text-xs text-muted">{getSelectedInstallProfile().description}</p>
-                  <Show when={getInstallProfileFlags().length > 0}>
+
+                  <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
+                    <label class="block text-xs font-medium text-base-content mb-1.5">
+                      Connection URL (Agent → Pulse)
+                    </label>
+                    <div class="flex gap-2">
+                      <input
+                        type="text"
+                        value={customAgentUrl()}
+                        onInput={(e) => setCustomAgentUrl(e.currentTarget.value)}
+                        placeholder={agentUrl()}
+                        class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                      />
+                    </div>
                     <p class="mt-1.5 text-xs text-muted">
-                      Adds flags to shell-based install commands:{' '}
-                      <code>{getInstallProfileFlags().join(' ')}</code>
+                      Override the address agents use to connect to this server (e.g., use IP
+                      address <code>http://192.0.2.50:7655</code> if DNS fails).
+                      <Show when={!customAgentUrl()}>
+                        <span class="ml-1 opacity-75">
+                          Currently using auto-detected: {agentUrl()}
+                        </span>
+                      </Show>
+                    </p>
+                  </div>
+                  <Show when={insecureMode()}>
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                      <span class="font-medium">TLS verification disabled</span> — skip cert checks
+                      for self-signed setups. Not recommended for production.
+                    </div>
+                  </Show>
+                  <label
+                    class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer"
+                    title="Skip TLS certificate verification (for self-signed certificates)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={insecureMode()}
+                      onChange={(e) => setInsecureMode(e.currentTarget.checked)}
+                      class="rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    Skip TLS certificate verification (self-signed certs; not recommended)
+                  </label>
+                  <label
+                    class="inline-flex items-center gap-2 text-sm text-base-content cursor-pointer"
+                    title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={enableCommands()}
+                      onChange={(e) => setEnableCommands(e.currentTarget.checked)}
+                      class="rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    Enable Pulse command execution (for Patrol auto-fix)
+                  </label>
+                  <Show when={enableCommands()}>
+                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                      <span class="font-medium">Pulse commands enabled</span> — The agent will
+                      accept diagnostic and fix commands from Pulse Patrol features.
+                    </div>
+                  </Show>
+                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
+                    <span class="font-medium">Config signing (optional)</span> — Require signed
+                    remote config payloads with{' '}
+                    <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via{' '}
+                    <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
+                    <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
+                  </div>
+                  <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
+                    <label
+                      for="install-profile-select"
+                      class="block text-xs font-medium text-base-content mb-1.5"
+                    >
+                      Target profile (optional)
+                    </label>
+                    <select
+                      id="install-profile-select"
+                      value={installProfile()}
+                      onChange={(event) =>
+                        handleInstallProfileChange(event.currentTarget.value as InstallProfile)
+                      }
+                      class="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                    >
+                      <For each={INSTALL_PROFILE_OPTIONS}>
+                        {(option) => <option value={option.value}>{option.label}</option>}
+                      </For>
+                    </select>
+                    <p class="mt-1.5 text-xs text-muted">
+                      {getSelectedInstallProfile().description}
+                    </p>
+                    <Show when={getInstallProfileFlags().length > 0}>
+                      <p class="mt-1.5 text-xs text-muted">
+                        Adds flags to shell-based install commands:{' '}
+                        <code>{getInstallProfileFlags().join(' ')}</code>
+                      </p>
+                    </Show>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <For each={commandSections()}>
+                    {(section) => (
+                      <div class="space-y-3 rounded-md border border-border p-4">
+                        <div class="space-y-1">
+                          <h5 class="text-sm font-semibold text-base-content">{section.title}</h5>
+                          <p class="text-xs text-muted">{section.description}</p>
+                        </div>
+                        <div class="space-y-3">
+                          <For each={section.snippets}>
+                            {(snippet) => {
+                              const copyCommand = () => {
+                                let cmd = snippet.command.replace(
+                                  TOKEN_PLACEHOLDER,
+                                  resolvedToken(),
+                                );
+                                // Insert -k flag for curl if insecure mode enabled (issue #806)
+                                if (insecureMode() && cmd.includes('curl -fsSL')) {
+                                  cmd = cmd.replace('curl -fsSL', 'curl -kfsSL');
+                                }
+                                // For bash scripts (not PowerShell), append insecure flag
+                                const isBashScript = !cmd.includes('$env:') && !cmd.includes('irm');
+                                if (isBashScript) {
+                                  const profileFlags = getInstallProfileFlags();
+                                  if (profileFlags.length > 0) {
+                                    cmd += ` ${profileFlags.join(' ')}`;
+                                  }
+                                  if (insecureMode()) {
+                                    cmd += getInsecureFlag();
+                                  }
+                                  // Add --enable-commands flag if enabled (issue #903)
+                                  if (enableCommands()) {
+                                    cmd += getEnableCommandsFlag();
+                                  }
+                                  cmd = withPrivilegeEscalation(cmd);
+                                }
+                                return cmd;
+                              };
+                              const commandTelemetryCapability = () => {
+                                const label = normalizeTelemetryPart(snippet.label) || 'install';
+                                return `${section.platform}:${installProfile()}:${label}`;
+                              };
+
+                              return (
+                                <div class="space-y-2">
+                                  <h6 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                                    {snippet.label}
+                                  </h6>
+                                  <div class="relative">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const success = await copyToClipboard(copyCommand());
+                                        if (success) {
+                                          trackAgentInstallCommandCopied(
+                                            UNIFIED_AGENT_TELEMETRY_SURFACE,
+                                            commandTelemetryCapability(),
+                                          );
+                                          notificationStore.success('Copied to clipboard');
+                                        } else {
+                                          notificationStore.error('Failed to copy');
+                                        }
+                                      }}
+                                      class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 transition-colors hover:text-slate-200"
+                                      title="Copy command"
+                                    >
+                                      <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                      >
+                                        <rect
+                                          x="9"
+                                          y="9"
+                                          width="13"
+                                          height="13"
+                                          rx="2"
+                                          ry="2"
+                                        ></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                      </svg>
+                                    </button>
+                                    <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                      <code>{copyCommand()}</code>
+                                    </pre>
+                                  </div>
+                                  <Show when={snippet.note}>
+                                    <p class="text-xs text-muted">{snippet.note}</p>
+                                  </Show>
+                                </div>
+                              );
+                            }}
+                          </For>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+
+                <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                  <div class="flex items-center justify-between gap-3">
+                    <h5 class="text-sm font-semibold">Check installation status</h5>
+                    <button
+                      type="button"
+                      onClick={handleLookup}
+                      disabled={lookupLoading()}
+                      class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {lookupLoading() ? 'Checking…' : 'Check status'}
+                    </button>
+                  </div>
+                  <p class="text-xs text-blue-800 dark:text-blue-200">
+                    Enter the hostname (or agent ID) from the machine you just installed. Pulse
+                    returns the latest status instantly.
+                  </p>
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <input
+                      type="text"
+                      value={lookupValue()}
+                      onInput={(event) => {
+                        setLookupValue(event.currentTarget.value);
+                        setLookupError(null);
+                        setLookupResult(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleLookup();
+                        }
+                      }}
+                      placeholder="Hostname or agent ID"
+                      class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
+                    />
+                  </div>
+                  <Show when={lookupError()}>
+                    <p class="text-xs font-medium text-red-600 dark:text-red-300">
+                      {lookupError()}
                     </p>
                   </Show>
+                  <Show when={lookupResult()}>
+                    {(result) => {
+                      const agent = () => result().agent!;
+                      const statusBadgeClasses = () =>
+                        agent().connected
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+                      return (
+                        <div class="space-y-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
+                          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-sm font-semibold">
+                              {agent().displayName || agent().hostname}
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <span
+                                class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}
+                              >
+                                {agent().connected ? 'Connected' : 'Not reporting yet'}
+                              </span>
+                              <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                                {agent().status || 'unknown'}
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            Last seen {formatRelativeTime(agent().lastSeen)} (
+                            {formatAbsoluteTime(agent().lastSeen)})
+                          </div>
+                          <Show when={agent().agentVersion}>
+                            <div class="text-xs text-blue-700 dark:text-blue-200">
+                              Agent version {agent().agentVersion}
+                            </div>
+                          </Show>
+                        </div>
+                      );
+                    }}
+                  </Show>
                 </div>
-              </div>
-
-              <div class="space-y-4">
-                <For each={commandSections()}>
-                  {(section) => (
-                    <div class="space-y-3 rounded-md border border-border p-4">
-                      <div class="space-y-1">
-                        <h5 class="text-sm font-semibold text-base-content">{section.title}</h5>
-                        <p class="text-xs text-muted">{section.description}</p>
-                      </div>
-                      <div class="space-y-3">
-                        <For each={section.snippets}>
-                          {(snippet) => {
-                            const copyCommand = () => {
-                              let cmd = snippet.command.replace(TOKEN_PLACEHOLDER, resolvedToken());
-                              // Insert -k flag for curl if insecure mode enabled (issue #806)
-                              if (insecureMode() && cmd.includes('curl -fsSL')) {
-                                cmd = cmd.replace('curl -fsSL', 'curl -kfsSL');
-                              }
-                              // For bash scripts (not PowerShell), append insecure flag
-                              const isBashScript = !cmd.includes('$env:') && !cmd.includes('irm');
-                              if (isBashScript) {
-                                const profileFlags = getInstallProfileFlags();
-                                if (profileFlags.length > 0) {
-                                  cmd += ` ${profileFlags.join(' ')}`;
-                                }
-                                if (insecureMode()) {
-                                  cmd += getInsecureFlag();
-                                }
-                                // Add --enable-commands flag if enabled (issue #903)
-                                if (enableCommands()) {
-                                  cmd += getEnableCommandsFlag();
-                                }
-                                cmd = withPrivilegeEscalation(cmd);
-                              }
-                              return cmd;
-                            };
-                            const commandTelemetryCapability = () => {
-                              const label = normalizeTelemetryPart(snippet.label) || 'install';
-                              return `${section.platform}:${installProfile()}:${label}`;
-                            };
-
-                            return (
-                              <div class="space-y-2">
-                                <h6 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                                  {snippet.label}
-                                </h6>
-                                <div class="relative">
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const success = await copyToClipboard(copyCommand());
-                                      if (success) {
-                                        trackAgentInstallCommandCopied(
-                                          UNIFIED_AGENT_TELEMETRY_SURFACE,
-                                          commandTelemetryCapability(),
-                                        );
-                                        notificationStore.success('Copied to clipboard');
-                                      } else {
-                                        notificationStore.error('Failed to copy');
-                                      }
-                                    }}
-                                    class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 transition-colors hover:text-slate-200"
-                                    title="Copy command"
-                                  >
-                                    <svg
-                                      width="16"
-                                      height="16"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      stroke-width="2"
-                                    >
-                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                    </svg>
-                                  </button>
-                                  <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
-                                    <code>{copyCommand()}</code>
-                                  </pre>
-                                </div>
-                                <Show when={snippet.note}>
-                                  <p class="text-xs text-muted">{snippet.note}</p>
-                                </Show>
-                              </div>
-                            );
-                          }}
-                        </For>
-                      </div>
+                <details class="rounded-md border border-border bg-surface-hover px-4 py-3 text-sm">
+                  <summary class="cursor-pointer text-sm font-medium text-base-content">
+                    Troubleshooting
+                  </summary>
+                  <div class="mt-3 space-y-4">
+                    <div>
+                      <p class="text-xs uppercase tracking-wide text-muted">
+                        Auto-detection not working?
+                      </p>
+                      <p class="mt-1 text-xs text-muted">
+                        If Docker, Kubernetes, or Proxmox isn't detected automatically, add these
+                        flags to the install command:
+                      </p>
+                      <ul class="mt-2 text-xs text-muted list-disc list-inside space-y-1">
+                        <li>
+                          <code class="bg-surface-hover px-1 rounded">--enable-docker</code> — Force
+                          enable Docker/Podman monitoring
+                        </li>
+                        <li>
+                          <code class="bg-surface-hover px-1 rounded">--enable-kubernetes</code> —
+                          Force enable Kubernetes monitoring
+                        </li>
+                        <li>
+                          <code class="bg-surface-hover px-1 rounded">--enable-proxmox</code> —
+                          Force enable Proxmox integration (creates API token)
+                        </li>
+                        <li>
+                          <code class="bg-surface-hover px-1 rounded">--proxmox-type pve|pbs</code>{' '}
+                          — Set Proxmox node mode explicitly
+                        </li>
+                        <li>
+                          <code class="bg-surface-hover px-1 rounded">--disable-docker</code> — Skip
+                          Docker even if detected
+                        </li>
+                      </ul>
                     </div>
-                  )}
-                </For>
+                  </div>
+                </details>
               </div>
+            </Show>
 
-              <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
-                <div class="flex items-center justify-between gap-3">
-                  <h5 class="text-sm font-semibold">Check installation status</h5>
-                  <button
-                    type="button"
-                    onClick={handleLookup}
-                    disabled={lookupLoading()}
-                    class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {lookupLoading() ? 'Checking…' : 'Check status'}
-                  </button>
-                </div>
-                <p class="text-xs text-blue-800 dark:text-blue-200">
-                  Enter the hostname (or agent ID) from the machine you just installed. Pulse
-                  returns the latest status instantly.
+            {/* Uninstall section - always visible */}
+            <div class="border-t border-border pt-4 mt-4">
+              <div class="space-y-3">
+                <h4 class="text-sm font-semibold text-base-content">Uninstall agent</h4>
+                <p class="text-xs text-muted">
+                  Run the appropriate command on your machine to remove the Pulse agent:
                 </p>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <input
-                    type="text"
-                    value={lookupValue()}
-                    onInput={(event) => {
-                      setLookupValue(event.currentTarget.value);
-                      setLookupError(null);
-                      setLookupResult(null);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void handleLookup();
-                      }
-                    }}
-                    placeholder="Hostname or agent ID"
-                    class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
-                  />
-                </div>
-                <Show when={lookupError()}>
-                  <p class="text-xs font-medium text-red-600 dark:text-red-300">{lookupError()}</p>
-                </Show>
-                <Show when={lookupResult()}>
-                  {(result) => {
-                    const agent = () => result().agent!;
-                    const statusBadgeClasses = () =>
-                      agent().connected
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
-                    return (
-                      <div class="space-y-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
-                        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                          <div class="text-sm font-semibold">
-                            {agent().displayName || agent().hostname}
-                          </div>
-                          <div class="flex items-center gap-2">
-                            <span
-                              class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}
-                            >
-                              {agent().connected ? 'Connected' : 'Not reporting yet'}
-                            </span>
-                            <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                              {agent().status || 'unknown'}
-                            </span>
-                          </div>
-                        </div>
-                        <div>
-                          Last seen {formatRelativeTime(agent().lastSeen)} (
-                          {formatAbsoluteTime(agent().lastSeen)})
-                        </div>
-                        <Show when={agent().agentVersion}>
-                          <div class="text-xs text-blue-700 dark:text-blue-200">
-                            Agent version {agent().agentVersion}
-                          </div>
-                        </Show>
-                      </div>
-                    );
-                  }}
-                </Show>
-              </div>
-              <details class="rounded-md border border-border bg-surface-hover px-4 py-3 text-sm">
-                <summary class="cursor-pointer text-sm font-medium text-base-content">
-                  Troubleshooting
-                </summary>
-                <div class="mt-3 space-y-4">
-                  <div>
-                    <p class="text-xs uppercase tracking-wide text-muted">
-                      Auto-detection not working?
-                    </p>
-                    <p class="mt-1 text-xs text-muted">
-                      If Docker, Kubernetes, or Proxmox isn't detected automatically, add these
-                      flags to the install command:
-                    </p>
-                    <ul class="mt-2 text-xs text-muted list-disc list-inside space-y-1">
-                      <li>
-                        <code class="bg-surface-hover px-1 rounded">--enable-docker</code> — Force
-                        enable Docker/Podman monitoring
-                      </li>
-                      <li>
-                        <code class="bg-surface-hover px-1 rounded">--enable-kubernetes</code> —
-                        Force enable Kubernetes monitoring
-                      </li>
-                      <li>
-                        <code class="bg-surface-hover px-1 rounded">--enable-proxmox</code> — Force
-                        enable Proxmox integration (creates API token)
-                      </li>
-                      <li>
-                        <code class="bg-surface-hover px-1 rounded">--proxmox-type pve|pbs</code> —
-                        Set Proxmox node mode explicitly
-                      </li>
-                      <li>
-                        <code class="bg-surface-hover px-1 rounded">--disable-docker</code> — Skip
-                        Docker even if detected
-                      </li>
-                    </ul>
+                {/* Linux/macOS uninstall */}
+                <div class="space-y-1">
+                  <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
+                  <div class="relative">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const success = await copyToClipboard(getUninstallCommand());
+                        if (success) {
+                          notificationStore.success('Copied to clipboard');
+                        } else {
+                          notificationStore.error('Failed to copy');
+                        }
+                      }}
+                      class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                      title="Copy command"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                      </svg>
+                    </button>
+                    <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
+                      <code>{getUninstallCommand()}</code>
+                    </pre>
                   </div>
                 </div>
-              </details>
-            </div>
-          </Show>
-
-          {/* Uninstall section - always visible */}
-          <div class="border-t border-border pt-4 mt-4">
-            <div class="space-y-3">
-              <h4 class="text-sm font-semibold text-base-content">Uninstall agent</h4>
-              <p class="text-xs text-muted">
-                Run the appropriate command on your machine to remove the Pulse agent:
-              </p>
-              {/* Linux/macOS uninstall */}
-              <div class="space-y-1">
-                <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
-                <div class="relative">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const success = await copyToClipboard(getUninstallCommand());
-                      if (success) {
-                        notificationStore.success('Copied to clipboard');
-                      } else {
-                        notificationStore.error('Failed to copy');
-                      }
-                    }}
-                    class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
-                    title="Copy command"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
+                <p class="text-xs text-muted italic">
+                  If the agent can't reach this server, run directly on the machine:{' '}
+                  <code class="bg-surface-hover px-1 rounded not-italic">
+                    sudo bash /var/lib/pulse-agent/install.sh --uninstall
+                  </code>{' '}
+                  (TrueNAS:{' '}
+                  <code class="bg-surface-hover px-1 rounded not-italic">
+                    /data/pulse-agent/install.sh
+                  </code>
+                  , Unraid:{' '}
+                  <code class="bg-surface-hover px-1 rounded not-italic">
+                    /boot/config/plugins/pulse-agent/install.sh
+                  </code>
+                  )
+                </p>
+                {/* Windows uninstall */}
+                <div class="space-y-1">
+                  <span class="text-xs font-medium text-muted">
+                    Windows (PowerShell as Administrator)
+                  </span>
+                  <div class="relative">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const success = await copyToClipboard(getWindowsUninstallCommand());
+                        if (success) {
+                          notificationStore.success('Copied to clipboard');
+                        } else {
+                          notificationStore.error('Failed to copy');
+                        }
+                      }}
+                      class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                      title="Copy command"
                     >
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                    </svg>
-                  </button>
-                  <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
-                    <code>{getUninstallCommand()}</code>
-                  </pre>
-                </div>
-              </div>
-              <p class="text-xs text-muted italic">
-                If the agent can't reach this server, run directly on the machine:{' '}
-                <code class="bg-surface-hover px-1 rounded not-italic">
-                  sudo bash /var/lib/pulse-agent/install.sh --uninstall
-                </code>{' '}
-                (TrueNAS:{' '}
-                <code class="bg-surface-hover px-1 rounded not-italic">
-                  /data/pulse-agent/install.sh
-                </code>
-                , Unraid:{' '}
-                <code class="bg-surface-hover px-1 rounded not-italic">
-                  /boot/config/plugins/pulse-agent/install.sh
-                </code>
-                )
-              </p>
-              {/* Windows uninstall */}
-              <div class="space-y-1">
-                <span class="text-xs font-medium text-muted">
-                  Windows (PowerShell as Administrator)
-                </span>
-                <div class="relative">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const success = await copyToClipboard(getWindowsUninstallCommand());
-                      if (success) {
-                        notificationStore.success('Copied to clipboard');
-                      } else {
-                        notificationStore.error('Failed to copy');
-                      }
-                    }}
-                    class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
-                    title="Copy command"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                    </svg>
-                  </button>
-                  <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
-                    <code>{getWindowsUninstallCommand()}</code>
-                  </pre>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                      </svg>
+                    </button>
+                    <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
+                      <code>{getWindowsUninstallCommand()}</code>
+                    </pre>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
           </div>
         </SettingsPanel>
       </Show>
 
       <Show when={showInventory()}>
         <div class="space-y-6">
-        <div class="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface-alt px-4 py-3 text-sm">
-          <span class="inline-flex items-center rounded-full bg-surface px-3 py-1 text-xs font-medium text-base-content">
-            {filteredActiveRows().length} active
-          </span>
-          <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-            {filteredMonitoringStoppedRows().length} monitoring stopped
-          </span>
-          <span class="text-muted">
-            Stopping monitoring in Pulse does not uninstall software on the remote system.
-          </span>
-        </div>
-
-        <SettingsPanel
-          title="Connected infrastructure"
-          description="Review infrastructure currently reporting to Pulse, including Docker and Kubernetes coverage."
-          icon={<Users class="w-5 h-5" strokeWidth={2} />}
-          bodyClass="space-y-4"
-        >
-        <Show when={hasLinkedAgents()}>
-          <div class="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900">
-            <svg
-              class="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500 dark:text-blue-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <p class="text-xs text-blue-700 dark:text-blue-300">
-              <span class="font-medium">{linkedAgents().length}</span> agent
-              {linkedAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node
-              {linkedAgents().length > 1 ? 's' : ''} and flagged with a{' '}
-              <span class="font-medium text-blue-700 dark:text-blue-300">Linked</span> badge.
-            </p>
-          </div>
-        </Show>
-
-        <Show when={hasOutdatedAgents()}>
-          <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900">
-            <div class="flex items-start gap-3">
-              <svg
-                class="h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400 mt-0.5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              <div class="flex-1 space-y-1">
-                <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  {outdatedAgents().length} outdated agent binary
-                  {outdatedAgents().length > 1 ? 'ies' : ''} detected
-                </p>
-                <p class="text-sm text-amber-700 dark:text-amber-300">
-                  Older standalone agent binaries are deprecated. Expand a row to copy the upgrade
-                  command.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Show>
-
-        <div class="space-y-3">
-          <div class="min-w-[220px] space-y-1">
-            <label for="agent-filter-search" class="text-xs font-medium text-muted">
-              Search connected infrastructure
-            </label>
-            <input
-              id="agent-filter-search"
-              type="text"
-              value={filterSearch()}
-              onInput={(event) => setFilterSearch(event.currentTarget.value)}
-              placeholder="Search name, hostname, or ID"
-              class="w-full min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-3 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-            />
+          <div class="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface-alt px-4 py-3 text-sm">
+            <span class="inline-flex items-center rounded-full bg-surface px-3 py-1 text-xs font-medium text-base-content">
+              {filteredActiveRows().length} active
+            </span>
+            <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+              {filteredMonitoringStoppedRows().length} monitoring stopped
+            </span>
+            <span class="text-muted">
+              Stopping monitoring in Pulse does not uninstall software on the remote system.
+            </span>
           </div>
 
-          <div class="flex flex-wrap items-end gap-3">
-            <div class="pb-2 text-xs font-medium uppercase tracking-wide text-muted">
-              Refine results
-            </div>
-            <div class="space-y-1">
-              <label for="agent-filter-capability" class="text-xs font-medium text-muted">
-                Capability
-              </label>
-              <select
-                id="agent-filter-capability"
-                value={filterCapability()}
-                onChange={(event) =>
-                  setFilterCapability(event.currentTarget.value as 'all' | AgentCapability)
-                }
-                class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-              >
-                <option value="all">All capabilities</option>
-                <option value="agent">Agent</option>
-                <option value="docker">Docker</option>
-                <option value="kubernetes">Kubernetes</option>
-                <option value="proxmox">Proxmox</option>
-              </select>
-            </div>
-            <div class="space-y-1">
-              <label for="agent-filter-scope" class="text-xs font-medium text-muted">
-                Scope
-              </label>
-              <select
-                id="agent-filter-scope"
-                value={filterScope()}
-                onChange={(event) =>
-                  setFilterScope(event.currentTarget.value as 'all' | Exclude<ScopeCategory, 'na'>)
-                }
-                class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-              >
-                <option value="all">All scopes</option>
-                <option value="default">Default</option>
-                <option value="profile">Profile assigned</option>
-                <option value="ai-managed">Patrol-managed</option>
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={resetFilters}
-              disabled={!hasFilters()}
-              class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters() ? ' text-base-content hover:bg-surface-alt' : ' text-slate-400 cursor-not-allowed '}`}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-          <span>
-            Showing {filteredActiveRows().length} of {activeRows().length} active records.
-          </span>
-          <Show when={filteredMonitoringStoppedRows().length > 0}>
-            <span>{filteredMonitoringStoppedRows().length} item(s) are in the recovery queue.</span>
-          </Show>
-        </div>
-
-        <div>
-
-          <PulseDataGrid
-            data={filteredActiveRows()}
-            emptyState={
-              hasFilters()
-                ? 'No connected infrastructure matches the current filters.'
-                : 'No infrastructure connected yet.'
-            }
-            desktopMinWidth="960px"
-            columns={[
-            {
-              key: 'name',
-              label: 'Name',
-              render: (row: UnifiedAgentRow) => {
-                const expanded = () => expandedRowKey() === row.rowKey;
-                const agentName = row.displayName || row.hostname || row.name;
-                return (
-                  <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                    <div class="min-w-0 text-left">
-                      <div class="truncate text-sm font-medium text-base-content">{row.name}</div>
-                      <Show
-                        when={row.displayName && row.hostname && row.displayName !== row.hostname}
-                      >
-                        <div class="truncate text-xs text-muted">{row.hostname}</div>
-                      </Show>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleAgentDetails(row.rowKey);
-                      }}
-                      class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-md p-2 hover:text-base-content"
-                      aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${agentName}`}
-                      aria-expanded={expanded()}
-                      aria-controls={`agent-details-${row.rowKey}`}
-                    >
-                      <svg
-                        class={`h-4 w-4 transition-transform ${expanded() ? 'rotate-180' : ''}`}
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.7a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
-                          clip-rule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                );
-              },
-            },
-            {
-              key: 'capabilities',
-              label: 'Capabilities',
-              render: (row: UnifiedAgentRow) => (
-                <div class="flex flex-wrap items-center gap-2 text-xs">
-                  <For each={row.capabilities}>
-                    {(cap) => (
-                      <span
-                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
-                      >
-                        {getCapabilityLabel(cap)}
-                      </span>
-                    )}
-                  </For>
-                </div>
-              ),
-            },
-            {
-              key: 'status',
-              label: 'Status',
-              render: (row: UnifiedAgentRow) => {
-                const isRemoved = () => row.status === 'removed';
-                const statusBadgeClass = () => {
-                  if (isRemoved()) {
-                    return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
-                  }
-                  if (connectedFromStatus(row.healthStatus)) {
-                    return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-                  }
-                  return 'bg-surface-alt text-base-content';
-                };
-                return (
-                  <span
-                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}
-                  >
-                    {isRemoved() ? MONITORING_STOPPED_STATUS_LABEL : row.healthStatus || 'unknown'}
-                  </span>
-                );
-              },
-            },
-            {
-              key: 'scope',
-              label: 'Scope',
-              render: (row: UnifiedAgentRow) => {
-                const isActive = () => row.status === 'active';
-                const isKubernetes = () =>
-                  row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
-                const resolvedAgentId = row.agentId || '';
-                const assignment = () =>
-                  resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
-                const isScopeUpdating = () =>
-                  resolvedAgentId ? Boolean(pendingScopeUpdates()[resolvedAgentId]) : false;
-                const agentName = row.displayName || row.hostname || row.name;
-
-                return (
-                  <Show
-                    when={isActive() && resolvedAgentId}
-                    fallback={<span class="text-xs text-muted">N/A</span>}
-                  >
-                    <Show
-                      when={isKubernetes()}
-                      fallback={
-                        <Show
-                          when={profiles().length > 0}
-                          fallback={
-                            <span class="text-base-content" title={row.scope.detail}>
-                              {row.scope.label}
-                            </span>
-                          }
-                        >
-                          <div class="flex items-center gap-2">
-                            <select
-                              value={assignment()?.profile_id || ''}
-                              onChange={(event) => {
-                                const nextValue = event.currentTarget.value;
-                                const currentValue = assignment()?.profile_id || '';
-                                if (nextValue === currentValue) {
-                                  return;
-                                }
-                                void updateScopeAssignment(
-                                  resolvedAgentId,
-                                  nextValue || null,
-                                  agentName,
-                                );
-                              }}
-                              disabled={isScopeUpdating()}
-                              class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                            >
-                              <option value="">Default (Auto-detect)</option>
-                              <For each={profiles()}>
-                                {(profile) => (
-                                  <option value={profile.id}>{profile.name || profile.id}</option>
-                                )}
-                              </For>
-                            </select>
-                            <Show when={isScopeUpdating()}>
-                              <span class="text-[10px] text-muted">Updating…</span>
-                            </Show>
-                          </div>
-                        </Show>
-                      }
-                    >
-                      <span class="text-base-content" title={row.scope.detail}>
-                        {row.scope.label}
-                      </span>
-                    </Show>
-                  </Show>
-                );
-              },
-            },
-            {
-              key: 'commandsEnabled',
-              label: 'Pulse Cmds',
-              render: (row: UnifiedAgentRow) => {
-                const isActive = () => row.status === 'active';
-                const configAgentId = row.agentActionId;
-
-                return (
-                  <Show
-                    when={isActive() && row.capabilities.includes('agent') && configAgentId}
-                    fallback={<span class="text-xs text-muted">N/A</span>}
-                  >
-                    {(() => {
-                      const pending = pendingCommandConfig();
-                      const isPending = Boolean(configAgentId && configAgentId in pending);
-                      const effectiveEnabled =
-                        configAgentId && isPending
-                          ? pending[configAgentId].enabled
-                          : Boolean(row.commandsEnabled);
-
-                      return (
-                        <div class="flex items-center gap-2">
-                          <button
-                            onClick={() => handleToggleCommands(configAgentId, !effectiveEnabled)}
-                            disabled={isPending}
-                            class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                              isPending ? 'opacity-60 cursor-wait' : ''
-                            } ${effectiveEnabled ? 'bg-blue-600' : 'bg-surface-hover'}`}
-                            title={
-                              isPending
-                                ? 'Syncing with agent...'
-                                : effectiveEnabled
-                                  ? 'Pulse command execution enabled'
-                                  : 'Pulse command execution disabled'
-                            }
-                          >
-                            <span
-                              class={`pointer-events-none inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                effectiveEnabled
-                                  ? 'translate-x-4 sm:translate-x-5'
-                                  : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                          <Show when={isPending}>
-                            <svg
-                              class="animate-spin h-4 w-4 text-blue-500"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                class="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                stroke-width="4"
-                              ></circle>
-                              <path
-                                class="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              ></path>
-                            </svg>
-                          </Show>
-                        </div>
-                      );
-                    })()}
-                  </Show>
-                );
-              },
-            },
-            {
-              key: 'lastSeen',
-              label: 'Last Seen',
-              render: (row: UnifiedAgentRow) => {
-                const isRemoved = () => row.status === 'removed';
-                const lastSeenLabel = () => {
-                  if (isRemoved()) {
-                    return row.removedAt
-                      ? `Monitoring stopped ${formatRelativeTime(row.removedAt)}`
-                      : MONITORING_STOPPED_STATUS_LABEL;
-                  }
-                  return row.lastSeen ? formatRelativeTime(row.lastSeen) : '—';
-                };
-                return <span class="text-xs text-muted">{lastSeenLabel()}</span>;
-              },
-            },
-            {
-              key: 'version',
-              label: 'Version',
-              render: (row: UnifiedAgentRow) => (
-                <span class="text-xs text-muted">{row.version || '—'}</span>
-              ),
-            },
-            {
-              key: 'actions',
-              label: 'Actions',
-              align: 'right',
-              render: (row: UnifiedAgentRow) => {
-                const isRemoved = () => row.status === 'removed';
-                const isKubernetes = () =>
-                  row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
-                const canRemove = () => {
-                  const needsAgent = row.capabilities.includes('agent') && !row.agentActionId;
-                  const needsDocker =
-                    row.capabilities.includes('docker') &&
-                    !row.dockerActionId &&
-                    !row.agentActionId;
-                  return !needsAgent && !needsDocker;
-                };
-                return (
-                  <Show
-                    when={isRemoved()}
-                    fallback={
-                      <Show
-                        when={isKubernetes()}
-                        fallback={
-                          <button
-                            onClick={() =>
-                              handleRemoveAgent(
-                                { agentId: row.agentActionId, dockerId: row.dockerActionId },
-                                row.capabilities,
-                                row.name,
-                              )
-                            }
-                            disabled={!canRemove()}
-                            title={!canRemove() ? 'Agent ID unavailable for removal' : undefined}
-                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
-                          >
-                            Stop monitoring
-                          </button>
-                        }
-                      >
-                        <button
-                          onClick={() =>
-                            handleRemoveKubernetesCluster(row.kubernetesActionId || row.id, row.name)
-                          }
-                          class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
-                        >
-                          Stop monitoring
-                        </button>
-                      </Show>
-                    }
-                  >
-                    <Show
-                      when={row.capabilities.includes('docker')}
-                      fallback={
-                        <button
-                          onClick={() =>
-                            handleAllowKubernetesReconnect(
-                              row.kubernetesActionId || row.id,
-                              row.name,
-                            )
-                          }
-                          class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
-                        >
-                          {ALLOW_RECONNECT_LABEL}
-                        </button>
-                      }
-                    >
-                      <button
-                        onClick={() =>
-                          handleAllowReconnect(
-                            row.dockerActionId || row.id,
-                            row.displayName || row.hostname || row.name,
-                          )
-                        }
-                        class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
-                      >
-                        {ALLOW_RECONNECT_LABEL}
-                      </button>
-                    </Show>
-                  </Show>
-                );
-              },
-            },
-            ]}
-            keyExtractor={(row) => row.rowKey}
-            onRowClick={(row) => toggleAgentDetails(row.rowKey)}
-            isRowExpanded={(row) => expandedRowKey() === row.rowKey}
-            expandedRender={(row: UnifiedAgentRow) => {
-            const isKubernetes = () =>
-              row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
-            const resolvedAgentId = row.agentId || '';
-            const assignment = () =>
-              resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
-            const agentName = row.displayName || row.hostname || row.name;
-
-            return (
-              <div id={`agent-details-${row.rowKey}`} class="px-4 py-4 text-sm text-muted">
-                <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
-                  <div class="space-y-3">
-                    <div class="flex flex-wrap items-center gap-2 text-xs">
-                      <For each={row.capabilities}>
-                        {(cap) => (
-                          <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
-                          >
-                            {getCapabilityLabel(cap)}
-                          </span>
-                        )}
-                      </For>
-                      <Show when={row.isOutdatedBinary}>
-                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                          Outdated
-                        </span>
-                      </Show>
-                      <Show when={row.linkedNodeId}>
-                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                          Linked
-                        </span>
-                      </Show>
-                    </div>
-                    <div class="text-xs text-muted">
-                      ID: <span class="font-mono text-base-content">{row.id}</span>
-                    </div>
-                    <Show when={row.agentActionId && row.agentActionId !== row.id}>
-                      <div class="text-xs text-muted">
-                        Agent ID:{' '}
-                        <span class="font-mono text-base-content">{row.agentActionId}</span>
-                      </div>
-                    </Show>
-                    <Show when={row.dockerActionId && row.dockerActionId !== row.id}>
-                      <div class="text-xs text-muted">
-                        Container Agent ID:{' '}
-                        <span class="font-mono text-base-content">{row.dockerActionId}</span>
-                      </div>
-                    </Show>
-                    <Show when={row.kubernetesActionId && row.kubernetesActionId !== row.id}>
-                      <div class="text-xs text-muted">
-                        Cluster ID:{' '}
-                        <span class="font-mono text-base-content">{row.kubernetesActionId}</span>
-                      </div>
-                    </Show>
-                    <Show when={row.agentId && row.agentId !== row.id}>
-                      <div class="text-xs text-muted">
-                        Agent ID: <span class="font-mono text-base-content">{row.agentId}</span>
-                      </div>
-                    </Show>
-                    <Show when={row.linkedNodeId}>
-                      <div class="text-xs text-muted">
-                        Linked node ID:{' '}
-                        <span class="font-mono text-base-content">{row.linkedNodeId}</span>
-                      </div>
-                    </Show>
-                    <Show when={row.status === 'active' && row.lastSeen}>
-                      <div class="text-xs text-muted">
-                        Last seen {formatRelativeTime(row.lastSeen)} (
-                        {formatAbsoluteTime(row.lastSeen)})
-                      </div>
-                    </Show>
-                    <Show when={row.status === 'removed' && row.removedAt}>
-                      <div class="text-xs text-muted">
-                        Monitoring stopped {formatRelativeTime(row.removedAt)} (
-                        {formatAbsoluteTime(row.removedAt)})
-                      </div>
-                    </Show>
-                    <Show when={row.status === 'removed'}>
-                      <div class="text-xs text-muted">
-                        Pulse is ignoring new reports from this item until reconnect is allowed.
-                      </div>
-                    </Show>
-                    <Show
-                      when={
-                        row.kubernetesInfo &&
-                        (row.kubernetesInfo.server ||
-                          row.kubernetesInfo.context ||
-                          row.kubernetesInfo.tokenName)
-                      }
-                    >
-                      <div class="space-y-1 text-xs text-muted">
-                        <Show when={row.kubernetesInfo?.server}>
-                          <div>
-                            Server:{' '}
-                            <span class="text-base-content">{row.kubernetesInfo?.server}</span>
-                          </div>
-                        </Show>
-                        <Show when={row.kubernetesInfo?.context}>
-                          <div>
-                            Context:{' '}
-                            <span class="text-base-content">{row.kubernetesInfo?.context}</span>
-                          </div>
-                        </Show>
-                        <Show when={row.kubernetesInfo?.tokenName}>
-                          <div>
-                            Token:{' '}
-                            <span class="text-base-content">{row.kubernetesInfo?.tokenName}</span>
-                          </div>
-                        </Show>
-                      </div>
-                    </Show>
-                    <Show when={row.scope.category !== 'na'}>
-                      <div class="text-xs text-muted">
-                        Scope profile: <span class="text-base-content">{row.scope.label}</span>
-                        <Show when={row.scope.detail}>
-                          <span class="ml-1 text-muted">{row.scope.detail}</span>
-                        </Show>
-                      </div>
-                      <Show when={assignment()}>
-                        <div class="text-[11px] text-amber-600 dark:text-amber-400">
-                          Restart required to apply scope changes.
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleResetScope(resolvedAgentId, agentName || resolvedAgentId)
-                          }
-                          class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-left"
-                        >
-                          Reset to default
-                        </button>
-                      </Show>
-                    </Show>
-                  </div>
-                  <div class="space-y-2 md:justify-self-end">
-                    <div class="text-xs uppercase tracking-wide text-muted">Utilities</div>
-                    <div class="flex flex-col gap-2">
-                      <Show when={row.status === 'active' && !isKubernetes()}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const cmd = getUninstallCommand();
-                            const success = await copyToClipboard(cmd);
-                            if (success) {
-                              notificationStore.success('Uninstall command copied');
-                            } else {
-                              notificationStore.error('Failed to copy');
-                            }
-                          }}
-                          class="text-xs text-slate-600 hover:text-base-content text-left"
-                        >
-                          Copy uninstall command
-                        </button>
-                      </Show>
-                      <Show when={row.isOutdatedBinary}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const success = await copyToClipboard(
-                              getUpgradeCommand(row.hostname || ''),
-                            );
-                            if (success) {
-                              notificationStore.success('Upgrade command copied');
-                            } else {
-                              notificationStore.error('Failed to copy');
-                            }
-                          }}
-                          class="text-xs text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 text-left"
-                        >
-                          Copy upgrade command
-                        </button>
-                      </Show>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }}
-        />
-        </div>
-        </SettingsPanel>
-
-        <Show when={showMonitoringStoppedSection()}>
           <SettingsPanel
-            title="Recovery queue"
-            description="Infrastructure with monitoring stopped stays out of active inventory until reconnect is allowed."
+            title="Connected infrastructure"
+            description="Review infrastructure currently reporting to Pulse, including Docker and Kubernetes coverage."
             icon={<Users class="w-5 h-5" strokeWidth={2} />}
             bodyClass="space-y-4"
           >
-            <Show
-              when={filteredMonitoringStoppedRows().length > 0}
-              fallback={
-                <div class="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted">
-                  {hasFilters()
-                    ? 'No monitoring-stopped items match the current filters.'
-                    : 'No infrastructure currently has monitoring stopped.'}
-                </div>
-              }
-            >
-              <div class="rounded-lg border border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30">
-                <div class="border-b border-amber-200 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:text-amber-100">
-                  Pulse is intentionally ignoring reports from these items. This does not
-                  uninstall software on the remote system.
-                </div>
-                <div class="divide-y divide-amber-200/80 dark:divide-amber-800/80">
-                  <For each={filteredMonitoringStoppedRows()}>
-                    {(row) => (
-                      <div class="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div class="min-w-0 space-y-1">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <h4 class="truncate text-sm font-semibold text-base-content">
-                              {row.name}
-                            </h4>
-                            <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
-                              {getRemovedItemLabel(row)}
-                            </span>
-                          </div>
-                          <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                            <span>{row.capabilities.map(getCapabilityLabel).join(', ')}</span>
-                            <Show
-                              when={
-                                row.displayName &&
-                                row.hostname &&
-                                row.displayName !== row.hostname
-                              }
-                            >
-                              <span>Hostname: {row.hostname}</span>
-                            </Show>
-                            <span>
-                              Stopped{' '}
-                              {row.removedAt
-                                ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
-                                : 'at an unknown time'}
-                            </span>
-                          </div>
-                        </div>
+            <Show when={hasLinkedAgents()}>
+              <div class="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900">
+                <svg
+                  class="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500 dark:text-blue-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <p class="text-xs text-blue-700 dark:text-blue-300">
+                  <span class="font-medium">{linkedAgents().length}</span> agent
+                  {linkedAgents().length > 1 ? 's are' : ' is'} linked to Proxmox node
+                  {linkedAgents().length > 1 ? 's' : ''} and flagged with a{' '}
+                  <span class="font-medium text-blue-700 dark:text-blue-300">Linked</span> badge.
+                </p>
+              </div>
+            </Show>
 
-                        <div class="flex items-center gap-3 lg:flex-shrink-0">
-                          <button
-                            onClick={() =>
-                              row.capabilities.includes('docker')
-                                ? handleAllowReconnect(
-                                    row.dockerActionId || row.id,
-                                    row.displayName || row.hostname || row.name,
-                                  )
-                                : handleAllowKubernetesReconnect(
-                                    row.kubernetesActionId || row.id,
-                                    row.name,
-                                  )
-                            }
-                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-border hover:bg-blue-50 hover:text-blue-900 dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-700 dark:hover:bg-blue-900 dark:hover:text-blue-300"
-                          >
-                            {ALLOW_RECONNECT_LABEL}
-                          </button>
-                          <span class="text-xs text-muted">
-                            Ready to return to active monitoring
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </For>
+            <Show when={hasOutdatedAgents()}>
+              <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900">
+                <div class="flex items-start gap-3">
+                  <svg
+                    class="h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400 mt-0.5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <div class="flex-1 space-y-1">
+                    <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                      {outdatedAgents().length} outdated agent binary
+                      {outdatedAgents().length > 1 ? 'ies' : ''} detected
+                    </p>
+                    <p class="text-sm text-amber-700 dark:text-amber-300">
+                      Older standalone agent binaries are deprecated. Expand a row to copy the
+                      upgrade command.
+                    </p>
+                  </div>
                 </div>
               </div>
             </Show>
+
+            <div class="space-y-3">
+              <div class="min-w-[220px] space-y-1">
+                <label for="agent-filter-search" class="text-xs font-medium text-muted">
+                  Search connected infrastructure
+                </label>
+                <SearchField
+                  placeholder="Search name, hostname, or ID"
+                  value={filterSearch()}
+                  onChange={setFilterSearch}
+                  class="w-full"
+                  inputClass="min-h-10 sm:min-h-9 px-3 py-2 sm:py-1.5 shadow-sm focus:ring-1"
+                />
+              </div>
+
+              <div class="flex flex-wrap items-end gap-3">
+                <div class="pb-2 text-xs font-medium uppercase tracking-wide text-muted">
+                  Refine results
+                </div>
+                <div class="space-y-1">
+                  <label for="agent-filter-capability" class="text-xs font-medium text-muted">
+                    Capability
+                  </label>
+                  <select
+                    id="agent-filter-capability"
+                    value={filterCapability()}
+                    onChange={(event) =>
+                      setFilterCapability(event.currentTarget.value as 'all' | AgentCapability)
+                    }
+                    class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                  >
+                    <option value="all">All capabilities</option>
+                    <option value="agent">Agent</option>
+                    <option value="docker">Docker</option>
+                    <option value="kubernetes">Kubernetes</option>
+                    <option value="proxmox">Proxmox</option>
+                  </select>
+                </div>
+                <div class="space-y-1">
+                  <label for="agent-filter-scope" class="text-xs font-medium text-muted">
+                    Scope
+                  </label>
+                  <select
+                    id="agent-filter-scope"
+                    value={filterScope()}
+                    onChange={(event) =>
+                      setFilterScope(
+                        event.currentTarget.value as 'all' | Exclude<ScopeCategory, 'na'>,
+                      )
+                    }
+                    class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-2 sm:py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                  >
+                    <option value="all">All scopes</option>
+                    <option value="default">Default</option>
+                    <option value="profile">Profile assigned</option>
+                    <option value="ai-managed">Patrol-managed</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  disabled={!hasFilters()}
+                  class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters() ? ' text-base-content hover:bg-surface-alt' : ' text-slate-400 cursor-not-allowed '}`}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+              <span>
+                Showing {filteredActiveRows().length} of {activeRows().length} active records.
+              </span>
+              <Show when={filteredMonitoringStoppedRows().length > 0}>
+                <span>
+                  {filteredMonitoringStoppedRows().length} item(s) are in the recovery queue.
+                </span>
+              </Show>
+            </div>
+
+            <div>
+              <PulseDataGrid
+                data={filteredActiveRows()}
+                emptyState={
+                  hasFilters()
+                    ? 'No connected infrastructure matches the current filters.'
+                    : 'No infrastructure connected yet.'
+                }
+                desktopMinWidth="960px"
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Name',
+                    render: (row: UnifiedAgentRow) => {
+                      const expanded = () => expandedRowKey() === row.rowKey;
+                      const agentName = row.displayName || row.hostname || row.name;
+                      return (
+                        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                          <div class="min-w-0 text-left">
+                            <div class="truncate text-sm font-medium text-base-content">
+                              {row.name}
+                            </div>
+                            <Show
+                              when={
+                                row.displayName && row.hostname && row.displayName !== row.hostname
+                              }
+                            >
+                              <div class="truncate text-xs text-muted">{row.hostname}</div>
+                            </Show>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleAgentDetails(row.rowKey);
+                            }}
+                            class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-md p-2 hover:text-base-content"
+                            aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${agentName}`}
+                            aria-expanded={expanded()}
+                            aria-controls={`agent-details-${row.rowKey}`}
+                          >
+                            <svg
+                              class={`h-4 w-4 transition-transform ${expanded() ? 'rotate-180' : ''}`}
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fill-rule="evenodd"
+                                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.7a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                                clip-rule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    key: 'capabilities',
+                    label: 'Capabilities',
+                    render: (row: UnifiedAgentRow) => (
+                      <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <For each={row.capabilities}>
+                          {(cap) => (
+                            <span
+                              class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
+                            >
+                              {getCapabilityLabel(cap)}
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    render: (row: UnifiedAgentRow) => {
+                      const isRemoved = () => row.status === 'removed';
+                      const statusBadgeClass = () => {
+                        if (isRemoved()) {
+                          return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+                        }
+                        if (connectedFromStatus(row.healthStatus)) {
+                          return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+                        }
+                        return 'bg-surface-alt text-base-content';
+                      };
+                      return (
+                        <span
+                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}
+                        >
+                          {isRemoved()
+                            ? MONITORING_STOPPED_STATUS_LABEL
+                            : row.healthStatus || 'unknown'}
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    key: 'scope',
+                    label: 'Scope',
+                    render: (row: UnifiedAgentRow) => {
+                      const isActive = () => row.status === 'active';
+                      const isKubernetes = () =>
+                        row.capabilities.includes('kubernetes') &&
+                        !row.capabilities.includes('agent');
+                      const resolvedAgentId = row.agentId || '';
+                      const assignment = () =>
+                        resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
+                      const isScopeUpdating = () =>
+                        resolvedAgentId ? Boolean(pendingScopeUpdates()[resolvedAgentId]) : false;
+                      const agentName = row.displayName || row.hostname || row.name;
+
+                      return (
+                        <Show
+                          when={isActive() && resolvedAgentId}
+                          fallback={<span class="text-xs text-muted">N/A</span>}
+                        >
+                          <Show
+                            when={isKubernetes()}
+                            fallback={
+                              <Show
+                                when={profiles().length > 0}
+                                fallback={
+                                  <span class="text-base-content" title={row.scope.detail}>
+                                    {row.scope.label}
+                                  </span>
+                                }
+                              >
+                                <div class="flex items-center gap-2">
+                                  <select
+                                    value={assignment()?.profile_id || ''}
+                                    onChange={(event) => {
+                                      const nextValue = event.currentTarget.value;
+                                      const currentValue = assignment()?.profile_id || '';
+                                      if (nextValue === currentValue) {
+                                        return;
+                                      }
+                                      void updateScopeAssignment(
+                                        resolvedAgentId,
+                                        nextValue || null,
+                                        agentName,
+                                      );
+                                    }}
+                                    disabled={isScopeUpdating()}
+                                    class="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                  >
+                                    <option value="">Default (Auto-detect)</option>
+                                    <For each={profiles()}>
+                                      {(profile) => (
+                                        <option value={profile.id}>
+                                          {profile.name || profile.id}
+                                        </option>
+                                      )}
+                                    </For>
+                                  </select>
+                                  <Show when={isScopeUpdating()}>
+                                    <span class="text-[10px] text-muted">Updating…</span>
+                                  </Show>
+                                </div>
+                              </Show>
+                            }
+                          >
+                            <span class="text-base-content" title={row.scope.detail}>
+                              {row.scope.label}
+                            </span>
+                          </Show>
+                        </Show>
+                      );
+                    },
+                  },
+                  {
+                    key: 'commandsEnabled',
+                    label: 'Pulse Cmds',
+                    render: (row: UnifiedAgentRow) => {
+                      const isActive = () => row.status === 'active';
+                      const configAgentId = row.agentActionId;
+
+                      return (
+                        <Show
+                          when={isActive() && row.capabilities.includes('agent') && configAgentId}
+                          fallback={<span class="text-xs text-muted">N/A</span>}
+                        >
+                          {(() => {
+                            const pending = pendingCommandConfig();
+                            const isPending = Boolean(configAgentId && configAgentId in pending);
+                            const effectiveEnabled =
+                              configAgentId && isPending
+                                ? pending[configAgentId].enabled
+                                : Boolean(row.commandsEnabled);
+
+                            return (
+                              <div class="flex items-center gap-2">
+                                <button
+                                  onClick={() =>
+                                    handleToggleCommands(configAgentId, !effectiveEnabled)
+                                  }
+                                  disabled={isPending}
+                                  class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                    isPending ? 'opacity-60 cursor-wait' : ''
+                                  } ${effectiveEnabled ? 'bg-blue-600' : 'bg-surface-hover'}`}
+                                  title={
+                                    isPending
+                                      ? 'Syncing with agent...'
+                                      : effectiveEnabled
+                                        ? 'Pulse command execution enabled'
+                                        : 'Pulse command execution disabled'
+                                  }
+                                >
+                                  <span
+                                    class={`pointer-events-none inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                      effectiveEnabled
+                                        ? 'translate-x-4 sm:translate-x-5'
+                                        : 'translate-x-0'
+                                    }`}
+                                  />
+                                </button>
+                                <Show when={isPending}>
+                                  <svg
+                                    class="animate-spin h-4 w-4 text-blue-500"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      class="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      stroke-width="4"
+                                    ></circle>
+                                    <path
+                                      class="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                  </svg>
+                                </Show>
+                              </div>
+                            );
+                          })()}
+                        </Show>
+                      );
+                    },
+                  },
+                  {
+                    key: 'lastSeen',
+                    label: 'Last Seen',
+                    render: (row: UnifiedAgentRow) => {
+                      const isRemoved = () => row.status === 'removed';
+                      const lastSeenLabel = () => {
+                        if (isRemoved()) {
+                          return row.removedAt
+                            ? `Monitoring stopped ${formatRelativeTime(row.removedAt)}`
+                            : MONITORING_STOPPED_STATUS_LABEL;
+                        }
+                        return row.lastSeen ? formatRelativeTime(row.lastSeen) : '—';
+                      };
+                      return <span class="text-xs text-muted">{lastSeenLabel()}</span>;
+                    },
+                  },
+                  {
+                    key: 'version',
+                    label: 'Version',
+                    render: (row: UnifiedAgentRow) => (
+                      <span class="text-xs text-muted">{row.version || '—'}</span>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    align: 'right',
+                    render: (row: UnifiedAgentRow) => {
+                      const isRemoved = () => row.status === 'removed';
+                      const isKubernetes = () =>
+                        row.capabilities.includes('kubernetes') &&
+                        !row.capabilities.includes('agent');
+                      const canRemove = () => {
+                        const needsAgent = row.capabilities.includes('agent') && !row.agentActionId;
+                        const needsDocker =
+                          row.capabilities.includes('docker') &&
+                          !row.dockerActionId &&
+                          !row.agentActionId;
+                        return !needsAgent && !needsDocker;
+                      };
+                      return (
+                        <Show
+                          when={isRemoved()}
+                          fallback={
+                            <Show
+                              when={isKubernetes()}
+                              fallback={
+                                <button
+                                  onClick={() =>
+                                    handleRemoveAgent(
+                                      { agentId: row.agentActionId, dockerId: row.dockerActionId },
+                                      row.capabilities,
+                                      row.name,
+                                    )
+                                  }
+                                  disabled={!canRemove()}
+                                  title={
+                                    !canRemove() ? 'Agent ID unavailable for removal' : undefined
+                                  }
+                                  class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+                                >
+                                  Stop monitoring
+                                </button>
+                              }
+                            >
+                              <button
+                                onClick={() =>
+                                  handleRemoveKubernetesCluster(
+                                    row.kubernetesActionId || row.id,
+                                    row.name,
+                                  )
+                                }
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+                              >
+                                Stop monitoring
+                              </button>
+                            </Show>
+                          }
+                        >
+                          <Show
+                            when={row.capabilities.includes('docker')}
+                            fallback={
+                              <button
+                                onClick={() =>
+                                  handleAllowKubernetesReconnect(
+                                    row.kubernetesActionId || row.id,
+                                    row.name,
+                                  )
+                                }
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                              >
+                                {ALLOW_RECONNECT_LABEL}
+                              </button>
+                            }
+                          >
+                            <button
+                              onClick={() =>
+                                handleAllowReconnect(
+                                  row.dockerActionId || row.id,
+                                  row.displayName || row.hostname || row.name,
+                                )
+                              }
+                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                            >
+                              {ALLOW_RECONNECT_LABEL}
+                            </button>
+                          </Show>
+                        </Show>
+                      );
+                    },
+                  },
+                ]}
+                keyExtractor={(row) => row.rowKey}
+                onRowClick={(row) => toggleAgentDetails(row.rowKey)}
+                isRowExpanded={(row) => expandedRowKey() === row.rowKey}
+                expandedRender={(row: UnifiedAgentRow) => {
+                  const isKubernetes = () =>
+                    row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent');
+                  const resolvedAgentId = row.agentId || '';
+                  const assignment = () =>
+                    resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
+                  const agentName = row.displayName || row.hostname || row.name;
+
+                  return (
+                    <div id={`agent-details-${row.rowKey}`} class="px-4 py-4 text-sm text-muted">
+                      <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+                        <div class="space-y-3">
+                          <div class="flex flex-wrap items-center gap-2 text-xs">
+                            <For each={row.capabilities}>
+                              {(cap) => (
+                                <span
+                                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
+                                >
+                                  {getCapabilityLabel(cap)}
+                                </span>
+                              )}
+                            </For>
+                            <Show when={row.isOutdatedBinary}>
+                              <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                Outdated
+                              </span>
+                            </Show>
+                            <Show when={row.linkedNodeId}>
+                              <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                Linked
+                              </span>
+                            </Show>
+                          </div>
+                          <div class="text-xs text-muted">
+                            ID: <span class="font-mono text-base-content">{row.id}</span>
+                          </div>
+                          <Show when={row.agentActionId && row.agentActionId !== row.id}>
+                            <div class="text-xs text-muted">
+                              Agent ID:{' '}
+                              <span class="font-mono text-base-content">{row.agentActionId}</span>
+                            </div>
+                          </Show>
+                          <Show when={row.dockerActionId && row.dockerActionId !== row.id}>
+                            <div class="text-xs text-muted">
+                              Container Agent ID:{' '}
+                              <span class="font-mono text-base-content">{row.dockerActionId}</span>
+                            </div>
+                          </Show>
+                          <Show when={row.kubernetesActionId && row.kubernetesActionId !== row.id}>
+                            <div class="text-xs text-muted">
+                              Cluster ID:{' '}
+                              <span class="font-mono text-base-content">
+                                {row.kubernetesActionId}
+                              </span>
+                            </div>
+                          </Show>
+                          <Show when={row.agentId && row.agentId !== row.id}>
+                            <div class="text-xs text-muted">
+                              Agent ID:{' '}
+                              <span class="font-mono text-base-content">{row.agentId}</span>
+                            </div>
+                          </Show>
+                          <Show when={row.linkedNodeId}>
+                            <div class="text-xs text-muted">
+                              Linked node ID:{' '}
+                              <span class="font-mono text-base-content">{row.linkedNodeId}</span>
+                            </div>
+                          </Show>
+                          <Show when={row.status === 'active' && row.lastSeen}>
+                            <div class="text-xs text-muted">
+                              Last seen {formatRelativeTime(row.lastSeen)} (
+                              {formatAbsoluteTime(row.lastSeen)})
+                            </div>
+                          </Show>
+                          <Show when={row.status === 'removed' && row.removedAt}>
+                            <div class="text-xs text-muted">
+                              Monitoring stopped {formatRelativeTime(row.removedAt)} (
+                              {formatAbsoluteTime(row.removedAt)})
+                            </div>
+                          </Show>
+                          <Show when={row.status === 'removed'}>
+                            <div class="text-xs text-muted">
+                              Pulse is ignoring new reports from this item until reconnect is
+                              allowed.
+                            </div>
+                          </Show>
+                          <Show
+                            when={
+                              row.kubernetesInfo &&
+                              (row.kubernetesInfo.server ||
+                                row.kubernetesInfo.context ||
+                                row.kubernetesInfo.tokenName)
+                            }
+                          >
+                            <div class="space-y-1 text-xs text-muted">
+                              <Show when={row.kubernetesInfo?.server}>
+                                <div>
+                                  Server:{' '}
+                                  <span class="text-base-content">
+                                    {row.kubernetesInfo?.server}
+                                  </span>
+                                </div>
+                              </Show>
+                              <Show when={row.kubernetesInfo?.context}>
+                                <div>
+                                  Context:{' '}
+                                  <span class="text-base-content">
+                                    {row.kubernetesInfo?.context}
+                                  </span>
+                                </div>
+                              </Show>
+                              <Show when={row.kubernetesInfo?.tokenName}>
+                                <div>
+                                  Token:{' '}
+                                  <span class="text-base-content">
+                                    {row.kubernetesInfo?.tokenName}
+                                  </span>
+                                </div>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show when={row.scope.category !== 'na'}>
+                            <div class="text-xs text-muted">
+                              Scope profile:{' '}
+                              <span class="text-base-content">{row.scope.label}</span>
+                              <Show when={row.scope.detail}>
+                                <span class="ml-1 text-muted">{row.scope.detail}</span>
+                              </Show>
+                            </div>
+                            <Show when={assignment()}>
+                              <div class="text-[11px] text-amber-600 dark:text-amber-400">
+                                Restart required to apply scope changes.
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleResetScope(resolvedAgentId, agentName || resolvedAgentId)
+                                }
+                                class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-left"
+                              >
+                                Reset to default
+                              </button>
+                            </Show>
+                          </Show>
+                        </div>
+                        <div class="space-y-2 md:justify-self-end">
+                          <div class="text-xs uppercase tracking-wide text-muted">Utilities</div>
+                          <div class="flex flex-col gap-2">
+                            <Show when={row.status === 'active' && !isKubernetes()}>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const cmd = getUninstallCommand();
+                                  const success = await copyToClipboard(cmd);
+                                  if (success) {
+                                    notificationStore.success('Uninstall command copied');
+                                  } else {
+                                    notificationStore.error('Failed to copy');
+                                  }
+                                }}
+                                class="text-xs text-slate-600 hover:text-base-content text-left"
+                              >
+                                Copy uninstall command
+                              </button>
+                            </Show>
+                            <Show when={row.isOutdatedBinary}>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const success = await copyToClipboard(
+                                    getUpgradeCommand(row.hostname || ''),
+                                  );
+                                  if (success) {
+                                    notificationStore.success('Upgrade command copied');
+                                  } else {
+                                    notificationStore.error('Failed to copy');
+                                  }
+                                }}
+                                class="text-xs text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 text-left"
+                              >
+                                Copy upgrade command
+                              </button>
+                            </Show>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+            </div>
           </SettingsPanel>
-        </Show>
+
+          <Show when={showMonitoringStoppedSection()}>
+            <SettingsPanel
+              title="Recovery queue"
+              description="Infrastructure with monitoring stopped stays out of active inventory until reconnect is allowed."
+              icon={<Users class="w-5 h-5" strokeWidth={2} />}
+              bodyClass="space-y-4"
+            >
+              <Show
+                when={filteredMonitoringStoppedRows().length > 0}
+                fallback={
+                  <div class="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted">
+                    {hasFilters()
+                      ? 'No monitoring-stopped items match the current filters.'
+                      : 'No infrastructure currently has monitoring stopped.'}
+                  </div>
+                }
+              >
+                <div class="rounded-lg border border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30">
+                  <div class="border-b border-amber-200 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:text-amber-100">
+                    Pulse is intentionally ignoring reports from these items. This does not
+                    uninstall software on the remote system.
+                  </div>
+                  <div class="divide-y divide-amber-200/80 dark:divide-amber-800/80">
+                    <For each={filteredMonitoringStoppedRows()}>
+                      {(row) => (
+                        <div class="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div class="min-w-0 space-y-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <h4 class="truncate text-sm font-semibold text-base-content">
+                                {row.name}
+                              </h4>
+                              <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                                {getRemovedItemLabel(row)}
+                              </span>
+                            </div>
+                            <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                              <span>{row.capabilities.map(getCapabilityLabel).join(', ')}</span>
+                              <Show
+                                when={
+                                  row.displayName &&
+                                  row.hostname &&
+                                  row.displayName !== row.hostname
+                                }
+                              >
+                                <span>Hostname: {row.hostname}</span>
+                              </Show>
+                              <span>
+                                Stopped{' '}
+                                {row.removedAt
+                                  ? `${formatRelativeTime(row.removedAt)} (${formatAbsoluteTime(row.removedAt)})`
+                                  : 'at an unknown time'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div class="flex items-center gap-3 lg:flex-shrink-0">
+                            <button
+                              onClick={() =>
+                                row.capabilities.includes('docker')
+                                  ? handleAllowReconnect(
+                                      row.dockerActionId || row.id,
+                                      row.displayName || row.hostname || row.name,
+                                    )
+                                  : handleAllowKubernetesReconnect(
+                                      row.kubernetesActionId || row.id,
+                                      row.name,
+                                    )
+                              }
+                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-border hover:bg-blue-50 hover:text-blue-900 dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-700 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                            >
+                              {ALLOW_RECONNECT_LABEL}
+                            </button>
+                            <span class="text-xs text-muted">
+                              Ready to return to active monitoring
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+            </SettingsPanel>
+          </Show>
         </div>
       </Show>
     </div>

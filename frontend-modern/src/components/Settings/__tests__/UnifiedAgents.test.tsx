@@ -627,7 +627,10 @@ describe('UnifiedAgents managed agents table', () => {
   });
 
   it('removes an agent row immediately after successful deletion', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
     deleteAgentMock.mockResolvedValue(undefined);
 
     const host = createAgent({ displayName: 'Tower' });
@@ -650,7 +653,10 @@ describe('UnifiedAgents managed agents table', () => {
   });
 
   it('force-removes docker runtimes from Pulse inventory', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
     deleteDockerRuntimeMock.mockResolvedValue({});
 
     const dockerHost = createDockerHost({ displayName: 'Tower', status: 'online' });

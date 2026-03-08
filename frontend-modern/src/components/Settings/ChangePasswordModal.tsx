@@ -106,97 +106,97 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
       ariaLabel="Change password"
     >
       <div class="w-full">
-            <div class="flex items-center justify-between p-6 border-b border-border">
-              <SectionHeader title="Change password" size="lg" class="flex-1" />
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={loading()}
-                class="text-slate-400 hover:text-muted disabled:opacity-50"
-              >
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+        <div class="flex items-center justify-between p-6 border-b border-border">
+          <SectionHeader title="Change password" size="lg" class="flex-1" />
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={loading()}
+            class="text-slate-400 hover:text-muted disabled:opacity-50"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} class="p-6 space-y-4">
+          <div class={formField}>
+            <label for="current-password" class={labelClass()}>
+              Current Password
+            </label>
+            <input
+              id="current-password"
+              type="password"
+              value={currentPassword()}
+              onInput={(e) => setCurrentPassword(e.currentTarget.value)}
+              class={controlClass('shadow-sm')}
+              required
+              disabled={loading()}
+            />
+          </div>
+
+          <div class={formField}>
+            <label for="new-password" class={labelClass()}>
+              New Password
+            </label>
+            <input
+              id="new-password"
+              type="password"
+              value={newPassword()}
+              onInput={(e) => setNewPassword(e.currentTarget.value)}
+              class={controlClass('shadow-sm')}
+              required
+              disabled={loading()}
+              minLength={12}
+            />
+            <p class={`${formHelpText} mt-1`}>Minimum 12 characters</p>
+          </div>
+
+          <div class={formField}>
+            <label for="confirm-password" class={labelClass()}>
+              Confirm New Password
+            </label>
+            <input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword()}
+              onInput={(e) => setConfirmPassword(e.currentTarget.value)}
+              class={controlClass('shadow-sm')}
+              required
+              disabled={loading()}
+            />
+          </div>
+
+          <Show when={error()}>
+            <div class="p-3 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md">
+              <p class="text-sm text-red-600 dark:text-red-400">{error()}</p>
             </div>
+          </Show>
 
-            <form onSubmit={handleSubmit} class="p-6 space-y-4">
-              <div class={formField}>
-                <label for="current-password" class={labelClass()}>
-                  Current Password
-                </label>
-                <input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword()}
-                  onInput={(e) => setCurrentPassword(e.currentTarget.value)}
-                  class={controlClass('shadow-sm')}
-                  required
-                  disabled={loading()}
-                />
-              </div>
-
-              <div class={formField}>
-                <label for="new-password" class={labelClass()}>
-                  New Password
-                </label>
-                <input
-                  id="new-password"
-                  type="password"
-                  value={newPassword()}
-                  onInput={(e) => setNewPassword(e.currentTarget.value)}
-                  class={controlClass('shadow-sm')}
-                  required
-                  disabled={loading()}
-                  minLength={12}
-                />
-                <p class={`${formHelpText} mt-1`}>Minimum 12 characters</p>
-              </div>
-
-              <div class={formField}>
-                <label for="confirm-password" class={labelClass()}>
-                  Confirm New Password
-                </label>
-                <input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword()}
-                  onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                  class={controlClass('shadow-sm')}
-                  required
-                  disabled={loading()}
-                />
-              </div>
-
-              <Show when={error()}>
-                <div class="p-3 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md">
-                  <p class="text-sm text-red-600 dark:text-red-400">{error()}</p>
-                </div>
-              </Show>
-
-              <div class="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={loading()}
-                  class="px-4 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading()}
-                  class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-                >
-                  {loading() ? 'Changing...' : 'Change Password'}
-                </button>
-              </div>
-            </form>
+          <div class="flex justify-end space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={loading()}
+              class="px-4 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading()}
+              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+            >
+              {loading() ? 'Changing...' : 'Change Password'}
+            </button>
+          </div>
+        </form>
       </div>
     </Dialog>
   );

@@ -12,9 +12,7 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
     <div class="space-y-4">
       <div class="space-y-1">
         <h3 class="text-base font-semibold text-base-content">Container Updates</h3>
-        <p class="text-sm text-muted">
-          Control how container update actions appear across Pulse.
-        </p>
+        <p class="text-sm text-muted">Control how container update actions appear across Pulse.</p>
       </div>
 
       <div class="flex items-start justify-between gap-4 rounded-md border border-border bg-surface-hover p-4">
@@ -44,8 +42,8 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
             </Show>
           </div>
           <p class="text-xs text-muted">
-            When enabled, container "Update" actions are hidden across Pulse. Update detection
-            still runs, so available updates remain visible.
+            When enabled, container "Update" actions are hidden across Pulse. Update detection still
+            runs, so available updates remain visible.
           </p>
           <p class="text-xs text-muted mt-1">
             Can also be set via environment variable:{' '}
@@ -67,7 +65,9 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
             role="switch"
             aria-checked={props.disableDockerUpdateActions()}
             title={
-              props.disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined
+              props.disableDockerUpdateActionsLocked()
+                ? 'Locked by environment variable'
+                : undefined
             }
           >
             <span

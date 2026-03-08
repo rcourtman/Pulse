@@ -1,8 +1,8 @@
 import { Accessor, Component, For, JSX, Setter, Show } from 'solid-js';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
-import Search from 'lucide-solid/icons/search';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { SearchInput } from '@/components/shared/SearchInput';
 import type { SettingsHeaderMeta, SettingsNavGroup, SettingsTab } from './settingsTypes';
 
 interface SettingsPageShellProps {
@@ -17,7 +17,6 @@ interface SettingsPageShellProps {
   setSidebarCollapsed: Setter<boolean>;
   searchQuery: Accessor<string>;
   setSearchQuery: Setter<string>;
-  assignSearchInputRef?: (el: HTMLInputElement) => void;
   filteredTabGroups: Accessor<SettingsNavGroup[]>;
   flatTabs: Accessor<SettingsNavGroup['items']>;
   activeTab: Accessor<SettingsTab>;
@@ -30,10 +29,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
   return (
     <div class="space-y-6">
       <div class="px-1">
-        <PageHeader
-          title={props.headerMeta().title}
-          description={props.headerMeta().description}
-        />
+        <PageHeader title={props.headerMeta().title} description={props.headerMeta().description} />
       </div>
 
       <Show when={props.hasUnsavedChanges() && props.activeTabSaveBehavior() === 'system'}>
@@ -116,12 +112,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
                 aria-label="Expand sidebar"
               >
-                <svg
-                  class="w-5 h-5 mx-auto"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
+                <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -134,24 +125,15 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
             <div id="settings-sidebar-menu" class="space-y-4">
               <Show when={!props.sidebarCollapsed()}>
                 <div class="px-2 pb-2">
-                  <div class="relative group">
-                    <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 group-focus-within:text-blue-500 transition-colors" />
-                    <input
-                      ref={(el) => props.assignSearchInputRef?.(el)}
-                      type="search"
-                      placeholder="Search settings..."
-                      value={props.searchQuery()}
-                      onInput={(event) => props.setSearchQuery(event.currentTarget.value)}
-                      class="w-full pl-9 pr-3 py-1.5 bg-surface-alt border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-base-content placeholder-gray-400"
-                    />
-                    <Show when={!props.searchQuery()}>
-                      <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center">
-                        <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-muted bg-surface-alt rounded border border-border">
-                          Any key
-                        </kbd>
-                      </div>
-                    </Show>
-                  </div>
+                  <SearchInput
+                    value={props.searchQuery}
+                    onChange={props.setSearchQuery}
+                    placeholder="Search settings..."
+                    class="w-full"
+                    captureBackspace
+                    clearOnEscape
+                    shortcutHint="Any key"
+                  />
                 </div>
               </Show>
 
@@ -194,7 +176,10 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                                 <div
                                   class={`flex items-center justify-center rounded-md lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900 lg:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-surface-alt lg:bg-transparent text-muted lg:text-inherit'}`}
                                 >
-                                  <item.icon class="w-5 h-5 lg:w-4 lg:h-4" {...(item.iconProps || {})} />
+                                  <item.icon
+                                    class="w-5 h-5 lg:w-4 lg:h-4"
+                                    {...(item.iconProps || {})}
+                                  />
                                 </div>
                                 <Show when={!props.sidebarCollapsed()}>
                                   <span

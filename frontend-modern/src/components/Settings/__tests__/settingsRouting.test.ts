@@ -70,7 +70,9 @@ describe('settingsRouting', () => {
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/api/pve')).toBe(
       '/settings/infrastructure/proxmox/pve',
     );
-    expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe('/settings/security/api');
+    expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe(
+      '/settings/security/api',
+    );
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
   });
 

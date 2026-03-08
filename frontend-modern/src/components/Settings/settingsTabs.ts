@@ -28,9 +28,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
   {
     id: 'infrastructure',
     label: 'Infrastructure',
-    items: [
-      { id: 'agents', label: 'Infrastructure', icon: Bot, iconProps: { strokeWidth: 2 } },
-    ],
+    items: [{ id: 'agents', label: 'Infrastructure', icon: Bot, iconProps: { strokeWidth: 2 } }],
   },
   {
     id: 'organization',

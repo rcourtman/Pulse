@@ -1,11 +1,4 @@
-import {
-  Component,
-  createSignal,
-  onMount,
-  Show,
-  Suspense,
-  createMemo,
-} from 'solid-js';
+import { Component, createSignal, onMount, Show, Suspense, createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
@@ -23,10 +16,7 @@ import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 
 import { getLimit, isPro, loadLicenseStatus } from '@/stores/license';
-import {
-  pbsInstanceFromResource,
-  pmgInstanceFromResource,
-} from '@/utils/resourceStateAdapters';
+import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 
 interface SettingsProps {
   darkMode: () => boolean;
@@ -40,8 +30,8 @@ const Settings: Component<SettingsProps> = (props) => {
   const location = useLocation();
   const { currentTab, activeTab, selectedAgent, setActiveTab, handleSelectAgent } =
     useSettingsNavigation({
-    navigate,
-    location,
+      navigate,
+      location,
     });
   const {
     headerMeta,
@@ -53,7 +43,6 @@ const Settings: Component<SettingsProps> = (props) => {
     setShowPasswordModal,
     searchQuery,
     setSearchQuery,
-    assignSearchInputRef,
   } = useSettingsShellState({ activeTab });
   const pbsInstancesFromResources = createMemo(() =>
     (state.resources || [])
@@ -95,17 +84,12 @@ const Settings: Component<SettingsProps> = (props) => {
   // Security
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
-  const {
-    securityStatus,
-    securityStatusLoading,
-    flatTabs,
-    filteredTabGroups,
-    loadSecurityStatus,
-  } = useSettingsAccess({
-    activeTab,
-    setActiveTab,
-    searchQuery,
-  });
+  const { securityStatus, securityStatusLoading, flatTabs, filteredTabGroups, loadSecurityStatus } =
+    useSettingsAccess({
+      activeTab,
+      setActiveTab,
+      searchQuery,
+    });
   const {
     exportPassphrase,
     setExportPassphrase,
@@ -439,7 +423,6 @@ const Settings: Component<SettingsProps> = (props) => {
         setSidebarCollapsed={setSidebarCollapsed}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        assignSearchInputRef={assignSearchInputRef}
         filteredTabGroups={filteredTabGroups}
         flatTabs={flatTabs}
         activeTab={activeTab}

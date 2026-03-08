@@ -99,8 +99,7 @@ const commercialMigrationNoticeFor = (
       'Pulse detected a paid v5 license, but the automatic v6 exchange did not complete yet.';
     switch (migration.reason) {
       case 'exchange_rate_limited':
-        body =
-          'Pulse detected a paid v5 license, but the v6 exchange is rate-limited right now.';
+        body = 'Pulse detected a paid v5 license, but the v6 exchange is rate-limited right now.';
         break;
       case 'exchange_conflict':
         body =
@@ -131,12 +130,10 @@ const commercialMigrationNoticeFor = (
         'Pulse detected a paid v5 license, but that key is no longer eligible for automatic migration.';
       break;
     case 'exchange_non_migratable':
-      body =
-        'Pulse detected a paid v5 license, but it is not eligible for automatic v6 migration.';
+      body = 'Pulse detected a paid v5 license, but it is not eligible for automatic v6 migration.';
       break;
     case 'exchange_unsupported':
-      body =
-        'Pulse detected a key that is not a supported v5 Pro/Lifetime migration input.';
+      body = 'Pulse detected a key that is not a supported v5 Pro/Lifetime migration input.';
       break;
     default:
       break;

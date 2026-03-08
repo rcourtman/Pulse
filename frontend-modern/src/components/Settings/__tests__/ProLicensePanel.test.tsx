@@ -258,9 +258,7 @@ describe('ProLicensePanel', () => {
     render(() => <ProLicensePanel />);
 
     expect(screen.getByText('v5 license migration pending')).toBeInTheDocument();
-    expect(
-      screen.getByText(/automatic v6 exchange did not complete yet/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/automatic v6 exchange did not complete yet/i)).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
     ).not.toBeInTheDocument();

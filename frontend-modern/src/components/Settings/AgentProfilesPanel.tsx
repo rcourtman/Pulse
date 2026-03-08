@@ -187,7 +187,9 @@ export const AgentProfilesPanel: Component = () => {
         status: resource.status || 'unknown',
         lastSeen: resource.lastSeen,
       }))
-      .sort((a, b) => getPreferredNamedEntityLabel(a).localeCompare(getPreferredNamedEntityLabel(b)));
+      .sort((a, b) =>
+        getPreferredNamedEntityLabel(a).localeCompare(getPreferredNamedEntityLabel(b)),
+      );
   });
 
   // Get assignment for a specific agent

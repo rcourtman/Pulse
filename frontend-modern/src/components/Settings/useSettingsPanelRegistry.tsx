@@ -118,7 +118,9 @@ interface UseSettingsPanelRegistryParams {
 }
 
 export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams) {
-  const settingsCapabilities = createMemo(() => params.securityStatus()?.settingsCapabilities ?? null);
+  const settingsCapabilities = createMemo(
+    () => params.securityStatus()?.settingsCapabilities ?? null,
+  );
 
   const systemAiPanel: Component = () => (
     <div class="space-y-6">
