@@ -508,7 +508,7 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	}
 }
 
-func TestHandleActivateLicense_PersistenceUnavailableClearsRuntimeState(t *testing.T) {
+func TestHandleActivateLicense_PersistenceUnavailableLeavesNoRuntimeLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := NewLicenseHandlers(nil)
@@ -538,7 +538,76 @@ func TestHandleActivateLicense_PersistenceUnavailableClearsRuntimeState(t *testi
 		t.Fatalf("expected message %q, got %q", "License could not be persisted", resp.Message)
 	}
 	if handler.Service(context.Background()).Current() != nil {
-		t.Fatalf("expected runtime license to be cleared after persistence failure")
+		t.Fatalf("expected no runtime license after persistence failure without a previous license")
+	}
+}
+
+func TestHandleActivateLicense_PersistenceFailureRestoresPreviousLicense(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+	handler, tempDir := createTestHandlerWithDir(t)
+	service := handler.Service(context.Background())
+
+	previousKey, err := license.GenerateLicenseForTesting("previous@example.com", license.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("failed to generate previous license: %v", err)
+	}
+	previousLicense, err := service.Activate(previousKey)
+	if err != nil {
+		t.Fatalf("failed to activate previous license: %v", err)
+	}
+
+	persistence, err := handler.getPersistenceForOrg("default")
+	if err != nil {
+		t.Fatalf("failed to get persistence: %v", err)
+	}
+	if err := persistence.SaveWithGracePeriod(previousKey, nil); err != nil {
+		t.Fatalf("failed to persist previous license: %v", err)
+	}
+
+	licensePath := filepath.Join(tempDir, license.LicenseFileName)
+	if err := os.Chmod(licensePath, 0400); err != nil {
+		t.Fatalf("failed to make persisted license read-only: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(licensePath, 0600)
+	})
+
+	newKey, err := license.GenerateLicenseForTesting("next@example.com", license.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("failed to generate next license: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{"license_key": newKey})
+	req := httptest.NewRequest(http.MethodPost, "/api/license/activate", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleActivateLicense(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusInternalServerError, rec.Code, rec.Body.String())
+	}
+
+	var resp ActivateLicenseResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Success {
+		t.Fatalf("expected Success=false when persistence fails")
+	}
+	if resp.Message != "License could not be persisted" {
+		t.Fatalf("expected message %q, got %q", "License could not be persisted", resp.Message)
+	}
+
+	current := handler.Service(context.Background()).Current()
+	if current == nil {
+		t.Fatal("expected previous runtime license to be restored")
+	}
+	if current.Raw != previousKey {
+		t.Fatalf("expected previous license key to be restored")
+	}
+	if current.Claims.Email != previousLicense.Claims.Email {
+		t.Fatalf("expected restored license email %q, got %q", previousLicense.Claims.Email, current.Claims.Email)
 	}
 }
 
