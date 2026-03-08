@@ -893,6 +893,13 @@ func (v HostView) IncidentLabel() string {
 	return v.r.IncidentLabel
 }
 
+func (v HostView) IncidentPriority() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentPriority
+}
+
 func (v HostView) IncidentUrgency() string {
 	if v.r == nil {
 		return ""
@@ -1358,6 +1365,13 @@ func (v StoragePoolView) IncidentLabel() string {
 	return v.r.IncidentLabel
 }
 
+func (v StoragePoolView) IncidentPriority() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentPriority
+}
+
 func (v StoragePoolView) IncidentUrgency() string {
 	if v.r == nil {
 		return ""
@@ -1667,6 +1681,13 @@ func (v PBSInstanceView) IncidentLabel() string {
 		return ""
 	}
 	return v.r.IncidentLabel
+}
+
+func (v PBSInstanceView) IncidentPriority() int {
+	if v.r == nil {
+		return 0
+	}
+	return v.r.IncidentPriority
 }
 
 func (v PBSInstanceView) IncidentUrgency() string {

@@ -2039,6 +2039,9 @@ func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
 	if resource.IncidentLabel != "Backup Coverage At Risk" {
 		t.Fatalf("incidentLabel = %q", resource.IncidentLabel)
 	}
+	if resource.IncidentPriority != 4502 {
+		t.Fatalf("incidentPriority = %d", resource.IncidentPriority)
+	}
 	if resource.IncidentUrgency != unified.IncidentUrgencyNow {
 		t.Fatalf("incidentUrgency = %q, want %q", resource.IncidentUrgency, unified.IncidentUrgencyNow)
 	}

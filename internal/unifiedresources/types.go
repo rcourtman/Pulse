@@ -41,6 +41,7 @@ type Resource struct {
 	IncidentSummary  string                  `json:"incidentSummary,omitempty"`
 	IncidentCategory string                  `json:"incidentCategory,omitempty"`
 	IncidentLabel    string                  `json:"incidentLabel,omitempty"`
+	IncidentPriority int                     `json:"incidentPriority,omitempty"`
 	IncidentUrgency  string                  `json:"incidentUrgency,omitempty"`
 	IncidentAction   string                  `json:"incidentAction,omitempty"`
 
