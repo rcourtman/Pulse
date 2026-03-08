@@ -15,7 +15,11 @@ import { LicenseAPI, type CommercialMigrationStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-import { getLicenseFeatureLabel, getLicenseTierLabel } from '@/utils/licensePresentation';
+import {
+  getLicenseFeatureLabel,
+  getLicenseSubscriptionStatusPresentation,
+  getLicenseTierLabel,
+} from '@/utils/licensePresentation';
 
 const formatTitleCase = (value: string) =>
   value.replace(/[_-]/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
@@ -174,39 +178,9 @@ export const ProLicensePanel: Component = () => {
     }
   };
 
-  const statusLabel = createMemo(() => {
-    switch (subscriptionState()) {
-      case 'trial':
-        return 'Trial';
-      case 'active':
-        return 'Active';
-      case 'grace':
-        return 'Grace Period';
-      case 'suspended':
-        return 'Suspended';
-      case 'canceled':
-      case 'expired':
-        return 'Expired';
-      default:
-        return 'Unknown';
-    }
-  });
-
-  const statusTone = createMemo(() => {
-    switch (subscriptionState()) {
-      case 'trial':
-      case 'active':
-        return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
-      case 'grace':
-        return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
-      case 'suspended':
-      case 'canceled':
-      case 'expired':
-        return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
-      default:
-        return 'bg-surface-alt text-muted';
-    }
-  });
+  const statusPresentation = createMemo(() =>
+    getLicenseSubscriptionStatusPresentation(subscriptionState()),
+  );
 
   const hasLicenseDetails = createMemo(() => {
     const current = entitlements();
@@ -515,8 +489,10 @@ export const ProLicensePanel: Component = () => {
         <Show when={!licenseLoadError()}>
           <Show when={!loading()} fallback={<p class="text-sm ">Loading license status...</p>}>
             <div class="flex flex-wrap items-center gap-2">
-              <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
-                {statusLabel()}
+              <span
+                class={`px-2 py-1 text-xs font-medium rounded-full ${statusPresentation().badgeClass}`}
+              >
+                {statusPresentation().label}
               </span>
               <Show when={entitlements()?.in_grace_period}>
                 <span class="text-xs text-amber-700 dark:text-amber-300">

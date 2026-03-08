@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
@@ -17,6 +17,7 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { getCephHealthPresentation } from '@/features/storageBackups/storageDomain';
 
 // Service type icon component with proper styling
 const ServiceIcon: Component<{ type: string; class?: string }> = (props) => {
@@ -132,51 +133,12 @@ const ServiceIcon: Component<{ type: string; class?: string }> = (props) => {
   }
 };
 
-// Get health color classes
-const getHealthInfo = (health: string) => {
-  const h = health?.toUpperCase() || '';
-  if (h === 'OK' || h === 'HEALTH_OK') {
-    return {
-      bgClass: 'bg-green-100 dark:bg-green-900',
-      textClass: 'text-green-700 dark:text-green-400',
-      borderClass: 'border-green-200 dark:border-green-700',
-      dotClass: 'bg-green-500',
-      label: 'OK',
-    };
-  }
-  if (h === 'WARN' || h === 'HEALTH_WARN' || h === 'WARNING') {
-    return {
-      bgClass: 'bg-yellow-100 dark:bg-yellow-900',
-      textClass: 'text-yellow-700 dark:text-yellow-400',
-      borderClass: 'border-yellow-200 dark:border-yellow-700',
-      dotClass: 'bg-yellow-500',
-      label: 'WARN',
-    };
-  }
-  if (h === 'ERR' || h === 'HEALTH_ERR' || h === 'ERROR' || h === 'CRITICAL') {
-    return {
-      bgClass: 'bg-red-100 dark:bg-red-900',
-      textClass: 'text-red-700 dark:text-red-400',
-      borderClass: 'border-red-200 dark:border-red-700',
-      dotClass: 'bg-red-500',
-      label: 'ERROR',
-    };
-  }
-  return {
-    bgClass: 'bg-surface-alt',
-    textClass: 'text-muted',
-    borderClass: 'border-border',
-    dotClass: 'bg-slate-400',
-    label: 'UNKNOWN',
-  };
-};
-
 // Cluster health status badge with tooltip
 const HealthBadge: Component<{ health: string; message?: string }> = (props) => {
   const [showTooltip, setShowTooltip] = createSignal(false);
   const [tooltipPos, setTooltipPos] = createSignal({ x: 0, y: 0 });
 
-  const healthInfo = createMemo(() => getHealthInfo(props.health));
+  const healthInfo = createMemo(() => getCephHealthPresentation(props.health));
 
   const handleMouseEnter = (e: MouseEvent) => {
     if (!props.message) return;
@@ -188,7 +150,7 @@ const HealthBadge: Component<{ health: string; message?: string }> = (props) => 
   return (
     <>
       <span
-        class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${healthInfo().bgClass} ${healthInfo().textClass} border ${healthInfo().borderClass}`}
+        class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${healthInfo().badgeClass}`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setShowTooltip(false)}
       >

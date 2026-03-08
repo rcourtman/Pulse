@@ -12,18 +12,7 @@ import {
 import { formatRelativeTime } from '@/utils/format';
 import { AgentLedgerAPI } from '@/api/agentLedger';
 import type { AgentLedgerEntry } from '@/api/agentLedger';
-import type { StatusIndicatorVariant } from '@/utils/status';
-
-function statusVariant(status: string): StatusIndicatorVariant {
-  switch (status) {
-    case 'online':
-      return 'success';
-    case 'offline':
-      return 'danger';
-    default:
-      return 'muted';
-  }
-}
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 function usagePercent(total: number, limit: number): number {
   if (limit <= 0) return 0;
@@ -111,26 +100,29 @@ export function AgentLedgerPanel() {
               </TableHeader>
               <TableBody>
                 <For each={agents()}>
-                  {(agent: AgentLedgerEntry) => (
-                    <TableRow>
-                      <TableCell>
-                        <span class="text-sm font-medium text-base-content">{agent.name}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span class="inline-flex items-center gap-1.5">
-                          <StatusDot variant={statusVariant(agent.status)} size="sm" />
-                          <span class="text-xs text-muted capitalize">{agent.status}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span class="text-xs text-muted">
-                          {agent.last_seen
-                            ? formatRelativeTime(agent.last_seen, { compact: true })
-                            : '—'}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  {(agent: AgentLedgerEntry) => {
+                    const indicator = getSimpleStatusIndicator(agent.status);
+                    return (
+                      <TableRow>
+                        <TableCell>
+                          <span class="text-sm font-medium text-base-content">{agent.name}</span>
+                        </TableCell>
+                        <TableCell>
+                          <span class="inline-flex items-center gap-1.5">
+                            <StatusDot variant={indicator.variant} size="sm" />
+                            <span class="text-xs text-muted">{indicator.label}</span>
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span class="text-xs text-muted">
+                            {agent.last_seen
+                              ? formatRelativeTime(agent.last_seen, { compact: true })
+                              : '—'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }}
                 </For>
               </TableBody>
             </Table>

@@ -4,6 +4,10 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { isPulseHttps } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
+import {
+  getSecurityScoreSymbol,
+  getSecurityScoreTextClass,
+} from '@/utils/securityScorePresentation';
 
 import type { SecurityStatus } from '@/types/config';
 
@@ -84,21 +88,6 @@ export const SecurityWarning: Component = () => {
     setDismissed(true);
   };
 
-  const getScoreColor = (score: number, max: number) => {
-    const percentage = (score / max) * 100;
-    if (percentage >= 80) return 'text-green-600 dark:text-green-400';
-    if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400';
-    if (percentage >= 40) return 'text-orange-600 dark:text-orange-400';
-    return 'text-red-600 dark:text-red-400';
-  };
-
-  const getScoreIcon = (score: number, max: number) => {
-    const percentage = (score / max) * 100;
-    if (percentage >= 80) return 'shield';
-    if (percentage >= 60) return 'warning';
-    return 'alert';
-  };
-
   // Show more aggressively if public access detected
   const shouldShow = () => {
     if (dismissed()) return false;
@@ -129,14 +118,8 @@ export const SecurityWarning: Component = () => {
         <div class="max-w-7xl mx-auto px-4 py-3">
           <div class="flex items-start justify-between">
             <div class="flex items-start space-x-3">
-              <span
-                class={`text-2xl ${getScoreIcon(status()!.score, status()!.maxScore) === 'shield' ? 'text-green-600' : getScoreIcon(status()!.score, status()!.maxScore) === 'warning' ? 'text-yellow-600' : 'text-red-600'}`}
-              >
-                {getScoreIcon(status()!.score, status()!.maxScore) === 'shield'
-                  ? '✓'
-                  : getScoreIcon(status()!.score, status()!.maxScore) === 'warning'
-                    ? '!'
-                    : '!!'}
+              <span class={`text-2xl ${getSecurityScoreTextClass((status()!.score / status()!.maxScore) * 100)}`}>
+                {getSecurityScoreSymbol((status()!.score / status()!.maxScore) * 100)}
               </span>
               <div>
                 <div class="flex items-center gap-3">
@@ -144,7 +127,7 @@ export const SecurityWarning: Component = () => {
                     title={
                       <span>
                         Security score:{' '}
-                        <span class={getScoreColor(status()!.score, status()!.maxScore)}>
+                        <span class={getSecurityScoreTextClass((status()!.score / status()!.maxScore) * 100)}>
                           {status()!.score}/{status()!.maxScore}
                         </span>
                       </span>

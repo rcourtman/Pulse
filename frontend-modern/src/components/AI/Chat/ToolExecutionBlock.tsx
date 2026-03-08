@@ -1,5 +1,6 @@
 import { Component, Show, createSignal, createMemo, For } from 'solid-js';
 import type { ToolExecution, PendingTool } from './types';
+import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
 
 interface ToolExecutionBlockProps {
   tool: ToolExecution;
@@ -62,10 +63,6 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   });
 
   const statusIcon = () => (props.tool.success ? '✓' : '✗');
-  const statusColor = () =>
-    props.tool.success
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : 'text-red-600 dark:text-red-400';
 
   return (
     <div class="my-1 font-mono text-[11px]">
@@ -77,7 +74,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         onClick={() => hasMoreOutput() && setShowOutput(!showOutput())}
       >
         {/* Status icon */}
-        <span class={`${statusColor()} font-bold`}>{statusIcon()}</span>
+        <span class={`${getToolCallResultTextClass(props.tool.success)} font-bold`}>
+          {statusIcon()}
+        </span>
 
         {/* Tool label */}
         <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">

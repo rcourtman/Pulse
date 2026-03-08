@@ -18,15 +18,12 @@ import {
   buildStoragePath,
 } from '@/routing/resourceLinks';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
+import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
+import { getProblemResourceStatusVariant } from '@/utils/problemResourcePresentation';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 
 interface ProblemResourcesTableProps {
   problems: ProblemResource[];
-}
-
-function statusVariant(pr: ProblemResource): 'danger' | 'warning' {
-  // Offline or very high metric values → danger; degraded → warning
-  return pr.worstValue >= 150 ? 'danger' : 'warning';
 }
 
 function resourceLink(pr: ProblemResource): string {
@@ -70,7 +67,11 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
               {(pr) => (
                 <TableRow>
                   <TableCell>
-                    <StatusDot variant={statusVariant(pr)} size="sm" pulse={pr.worstValue >= 200} />
+                    <StatusDot
+                      variant={getProblemResourceStatusVariant(pr.worstValue)}
+                      size="sm"
+                      pulse={pr.worstValue >= 200}
+                    />
                   </TableCell>
                   <TableCell>
                     <a
@@ -90,18 +91,12 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
                     <div class="flex items-center gap-1.5 flex-wrap">
                       <For each={pr.problems}>
                         {(problem) => {
-                          const isOffline = problem === 'Offline';
-                          const isDegraded = problem === 'Degraded';
-                          const badgeClass = isOffline
-                            ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                            : isDegraded
-                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
+                          const indicator = getSimpleStatusIndicator(problem);
                           return (
                             <span
-                              class={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${badgeClass}`}
+                              class={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusIndicatorBadgeToneClasses(indicator.variant)}`}
                             >
-                              {problem}
+                              {indicator.label}
                             </span>
                           );
                         }}

@@ -1,6 +1,7 @@
 import { Component, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { POLLING_INTERVALS } from '@/constants';
+import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -66,15 +67,7 @@ export const Toast: Component<ToastProps> = (props) => {
     ),
   };
 
-  const iconColors = {
-    success:
-      'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 border border-green-200 dark:border-green-800',
-    error:
-      'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 border border-red-200 dark:border-red-800',
-    warning:
-      'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800',
-    info: 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-800',
-  };
+  const iconTone = () => getSemanticTonePresentation(props.toast.type);
 
   const handleClose = () => {
     if (!show()) {
@@ -124,7 +117,7 @@ export const Toast: Component<ToastProps> = (props) => {
         `}
       >
         <div
-          class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md ${iconColors[props.toast.type]}`}
+          class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md border bg-surface ${iconTone().iconClass} ${iconTone().panelClass}`}
         >
           {icons[props.toast.type]}
         </div>

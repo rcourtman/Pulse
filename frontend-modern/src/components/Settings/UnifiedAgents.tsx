@@ -37,6 +37,16 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
+  getAgentCapabilityBadgeClass,
+  getAgentCapabilityLabel,
+  type AgentCapability,
+} from '@/utils/agentCapabilityPresentation';
+import {
+  ALLOW_RECONNECT_LABEL,
+  getUnifiedAgentStatusPresentation,
+  MONITORING_STOPPED_STATUS_LABEL,
+} from '@/utils/unifiedAgentStatusPresentation';
+import {
   trackAgentInstallCommandCopied,
   trackAgentInstallProfileSelected,
   trackAgentInstallTokenGenerated,
@@ -64,8 +74,6 @@ const normalizeTelemetryPart = (value: string) =>
     .replace(/^_+|_+$/g, '');
 
 type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
-/** What this agent monitors — derived from the v6 unified resource model. */
-type AgentCapability = 'agent' | 'docker' | 'kubernetes' | 'proxmox';
 type UnifiedAgentStatus = 'active' | 'removed';
 type ScopeCategory = 'default' | 'profile' | 'ai-managed' | 'na';
 type InstallProfile = 'auto' | 'docker' | 'kubernetes' | 'proxmox-pve' | 'proxmox-pbs' | 'truenas';
@@ -104,33 +112,6 @@ type UnifiedAgentRow = {
 
 const getInventorySubjectLabel = (name?: string, fallback?: string) =>
   name || fallback || 'this host';
-const MONITORING_STOPPED_STATUS_LABEL = 'Monitoring stopped';
-const ALLOW_RECONNECT_LABEL = 'Allow reconnect';
-
-const getCapabilityLabel = (cap: AgentCapability) => {
-  switch (cap) {
-    case 'agent':
-      return 'Agent';
-    case 'docker':
-      return 'Docker';
-    case 'kubernetes':
-      return 'Kubernetes';
-    case 'proxmox':
-      return 'Proxmox';
-  }
-};
-
-const getCapabilityBadgeClass = (cap: AgentCapability) => {
-  switch (cap) {
-    case 'proxmox':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-    case 'kubernetes':
-      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
-    default:
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-  }
-};
-
 const getRemovedItemLabel = (row: UnifiedAgentRow) => {
   if (row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent')) {
     return 'Kubernetes cluster';
@@ -441,12 +422,6 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       ...meta,
     }));
   });
-
-  const connectedFromStatus = (status: string | undefined | null) => {
-    if (!status) return false;
-    const value = status.toLowerCase();
-    return value === 'online' || value === 'running' || value === 'healthy';
-  };
 
   onMount(() => {
     if (typeof window === 'undefined') {
@@ -2069,9 +2044,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                         <For each={row.capabilities}>
                           {(cap) => (
                             <span
-                              class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
+                              class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getAgentCapabilityBadgeClass(cap)}`}
                             >
-                              {getCapabilityLabel(cap)}
+                              {getAgentCapabilityLabel(cap)}
                             </span>
                           )}
                         </For>
@@ -2082,23 +2057,13 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                     key: 'status',
                     label: 'Status',
                     render: (row: UnifiedAgentRow) => {
-                      const isRemoved = () => row.status === 'removed';
-                      const statusBadgeClass = () => {
-                        if (isRemoved()) {
-                          return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
-                        }
-                        if (connectedFromStatus(row.healthStatus)) {
-                          return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-                        }
-                        return 'bg-surface-alt text-base-content';
-                      };
+                      const statusPresentation = () =>
+                        getUnifiedAgentStatusPresentation(row.status, row.healthStatus);
                       return (
                         <span
-                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}
+                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusPresentation().badgeClass}`}
                         >
-                          {isRemoved()
-                            ? MONITORING_STOPPED_STATUS_LABEL
-                            : row.healthStatus || 'unknown'}
+                          {statusPresentation().label}
                         </span>
                       );
                     },
@@ -2382,9 +2347,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                             <For each={row.capabilities}>
                               {(cap) => (
                                 <span
-                                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getCapabilityBadgeClass(cap)}`}
+                                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getAgentCapabilityBadgeClass(cap)}`}
                                 >
-                                  {getCapabilityLabel(cap)}
+                                  {getAgentCapabilityLabel(cap)}
                                 </span>
                               )}
                             </For>
@@ -2595,7 +2560,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                               </span>
                             </div>
                             <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                              <span>{row.capabilities.map(getCapabilityLabel).join(', ')}</span>
+                              <span>{row.capabilities.map(getAgentCapabilityLabel).join(', ')}</span>
                               <Show
                                 when={
                                   row.displayName &&

@@ -8,6 +8,8 @@
 import { Component, Show, createSignal, createEffect, JSX } from 'solid-js';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
 import ChevronDown from 'lucide-solid/icons/chevron-down';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 export interface CollapsibleSectionProps {
   /** Unique identifier for the section */
@@ -198,11 +200,7 @@ export interface NestedGroupHeaderProps {
 }
 
 export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
-  const statusColors = {
-    online: 'bg-green-500',
-    offline: 'bg-red-500',
-    unknown: 'bg-slate-400',
-  };
+  const statusIndicator = () => getSimpleStatusIndicator(props.status);
 
   return (
     <div
@@ -221,9 +219,12 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
         </Show>
 
         <Show when={props.status}>
-          <span
-            class={`flex-shrink-0 w-2 h-2 rounded-full ${statusColors[props.status!]}`}
-            title={props.status}
+          <StatusDot
+            class="flex-shrink-0"
+            variant={statusIndicator().variant}
+            title={statusIndicator().label}
+            ariaLabel={statusIndicator().label}
+            size="xs"
           />
         </Show>
 

@@ -13,15 +13,9 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
-
-type NamespaceCounts = {
-  total: number;
-  online: number;
-  warning: number;
-  offline: number;
-  unknown: number;
-};
+import { getNamespaceCountsIndicator, type NamespaceCounts } from '@/utils/k8sStatusPresentation';
 
 type NamespaceRow = {
   namespace: string;
@@ -42,13 +36,6 @@ const formatInteger = (value?: number | null): string => {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n)) return '0';
   return Math.round(n).toLocaleString();
-};
-
-const statusTone = (counts: NamespaceCounts) => {
-  if (counts.offline > 0) return 'bg-rose-500';
-  if (counts.warning > 0) return 'bg-amber-500';
-  if (counts.online > 0) return 'bg-emerald-500';
-  return 'bg-slate-400';
 };
 
 export const K8sNamespacesDrawer: Component<{
@@ -181,11 +168,18 @@ export const K8sNamespacesDrawer: Component<{
                   </TableHeader>
                   <TableBody class="divide-y divide-border-subtle">
                     <For each={filteredRows()}>
-                      {(row) => (
+                      {(row) => {
+                        const podIndicator = () => getNamespaceCountsIndicator(row.pods);
+                        return (
                         <TableRow class="hover:bg-surface-hover">
                           <TableCell class="px-3 py-2">
                             <div class="flex items-center gap-2 min-w-0">
-                              <span class={`h-2 w-2 rounded-full ${statusTone(row.pods)}`} />
+                              <StatusDot
+                                size="sm"
+                                variant={podIndicator().variant}
+                                title={podIndicator().label}
+                                ariaHidden
+                              />
                               <span
                                 class="font-semibold text-base-content truncate"
                                 title={row.namespace}
@@ -237,7 +231,7 @@ export const K8sNamespacesDrawer: Component<{
                             </div>
                           </TableCell>
                         </TableRow>
-                      )}
+                      )}}
                     </For>
                   </TableBody>
                 </Table>

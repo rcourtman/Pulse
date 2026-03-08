@@ -13,6 +13,7 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
+import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 
 type PMGNodeStatus = {
   name: string;
@@ -119,15 +120,6 @@ const formatCompact = (value?: number | null): string => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return Math.round(value).toLocaleString();
-};
-
-const statusTone = (status?: string) => {
-  const normalized = (status || '').trim().toLowerCase();
-  if (!normalized) return 'bg-slate-400';
-  if (normalized === 'online' || normalized === 'healthy') return 'bg-emerald-500';
-  if (normalized === 'warning' || normalized === 'degraded') return 'bg-amber-500';
-  if (normalized === 'offline' || normalized === 'error') return 'bg-rose-500';
-  return 'bg-slate-400';
 };
 
 export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
@@ -250,12 +242,18 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                   </div>
 
                   <div class="shrink-0 flex items-center gap-2">
-                    <span
-                      class={`inline-block h-2.5 w-2.5 rounded-full ${statusTone(resource()?.status)}`}
-                    />
-                    <span class="text-xs font-medium text-base-content">
-                      {(resource()?.status || 'unknown').toLowerCase()}
-                    </span>
+                    {(() => {
+                      const health = getServiceHealthPresentation(
+                        resource()?.status,
+                        pmgData().connectionHealth,
+                      );
+                      return (
+                        <>
+                          <span class={`inline-block h-2.5 w-2.5 rounded-full ${health.dot}`} />
+                          <span class={`text-xs font-medium ${health.text}`}>{health.label}</span>
+                        </>
+                      );
+                    })()}
                     <Show when={resource()?.customUrl}>
                       {(url) => (
                         <a

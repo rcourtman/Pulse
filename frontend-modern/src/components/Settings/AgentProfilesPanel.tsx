@@ -38,6 +38,11 @@ import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
+import {
+  getAgentStatusIndicator,
+  getStatusIndicatorBadgeToneClasses,
+  isConnectedHealthStatus,
+} from '@/utils/status';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -123,12 +128,6 @@ export const AgentProfilesPanel: Component = () => {
   const [formDescription, setFormDescription] = createSignal('');
   const [formSettings, setFormSettings] = createSignal<Record<string, unknown>>({});
 
-  const connectedFromStatus = (status: string | undefined | null) => {
-    if (!status) return false;
-    const value = status.toLowerCase();
-    return value === 'online' || value === 'running' || value === 'healthy';
-  };
-
   const removedDockerHostIds = createMemo(() => {
     return new Set(
       (state.removedDockerHosts || [])
@@ -148,7 +147,7 @@ export const AgentProfilesPanel: Component = () => {
   const connectedAgents = createMemo(() => {
     const sorted = resources()
       .filter(isAgentProfileAssignableResource)
-      .filter((resource) => connectedFromStatus(resource.status))
+      .filter((resource) => isConnectedHealthStatus(resource.status))
       .filter((resource) => {
         if (resource.type === 'docker-host') {
           const runtimeId = getActionableDockerRuntimeIdFromResource(resource);
@@ -601,18 +600,12 @@ export const AgentProfilesPanel: Component = () => {
                       key: 'status',
                       label: 'Status',
                       render: (agent) => {
-                        const isOnline = () =>
-                          agent.status?.toLowerCase() === 'online' ||
-                          agent.status?.toLowerCase() === 'running';
+                        const indicator = () => getAgentStatusIndicator({ status: agent.status });
                         return (
                           <span
-                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              isOnline()
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                : 'bg-surface-alt text-muted'
-                            }`}
+                            class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(indicator().variant)}`}
                           >
-                            {isOnline() ? 'Online' : 'Offline'}
+                            {indicator().label}
                           </span>
                         );
                       },

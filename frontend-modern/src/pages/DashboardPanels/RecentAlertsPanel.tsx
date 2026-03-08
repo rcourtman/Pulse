@@ -4,6 +4,10 @@ import { ALERTS_OVERVIEW_PATH, AI_PATROL_PATH } from '@/routing/resourceLinks';
 import { AlertsAPI } from '@/api/alerts';
 import { formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
+import {
+  getAlertSeverityBadgeClass,
+  getAlertSeverityTextClass,
+} from '@/utils/alertSeverityPresentation';
 import type { Alert } from '@/types/api';
 import BellIcon from 'lucide-solid/icons/bell';
 
@@ -15,14 +19,6 @@ interface RecentAlertsPanelProps {
   warningCount: number;
   totalCount: number;
 }
-
-const severityBadgeClass = (level: Alert['level']): string => {
-  const base =
-    'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase';
-  return level === 'critical'
-    ? `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`
-    : `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`;
-};
 
 function sortByStartTimeDesc(alerts: Alert[]): Alert[] {
   const sorted = [...alerts];
@@ -118,11 +114,11 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           }
         >
           <p class="text-xs text-muted mb-1.5">
-            <span class="font-mono font-semibold text-red-600 dark:text-red-400">
+            <span class={`font-mono font-semibold ${getAlertSeverityTextClass('critical')}`}>
               {props.criticalCount}
             </span>{' '}
             critical ·{' '}
-            <span class="font-mono font-semibold text-amber-600 dark:text-amber-400">
+            <span class={`font-mono font-semibold ${getAlertSeverityTextClass('warning')}`}>
               {props.warningCount}
             </span>{' '}
             warning
@@ -132,7 +128,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
             <For each={recent()}>
               {(alert) => (
                 <li class="flex items-center gap-2 -mx-1 px-1 py-1 rounded hover:bg-surface-hover transition-colors">
-                  <span class={severityBadgeClass(alert.level)}>
+                  <span class={getAlertSeverityBadgeClass(alert.level)}>
                     {alert.level === 'critical' ? 'CRIT' : 'WARN'}
                   </span>
                   <p class="min-w-0 text-xs text-base-content truncate">{alert.resourceName}</p>

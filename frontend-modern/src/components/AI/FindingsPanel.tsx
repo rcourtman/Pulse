@@ -23,6 +23,7 @@ import {
   investigationOutcomeColors,
 } from '@/api/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
+import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import {
@@ -969,61 +970,59 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
         {(plan) => (
           <div class="mt-3 pt-3 border-t border-border-subtle">
-            <div class="flex items-center gap-2 mb-2">
-              <svg
-                class="w-4 h-4 text-green-600 dark:text-green-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                />
-              </svg>
-              <span class="text-sm font-medium text-base-content">Remediation Plan</span>
-              <span
-                class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                  plan().risk_level === 'high'
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                    : plan().risk_level === 'medium'
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                      : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                }`}
-              >
-                {plan().risk_level} risk
-              </span>
-            </div>
-            <div class="space-y-2">
-              <For each={plan().steps}>
-                {(step) => (
-                  <div class="flex items-start gap-2 text-sm">
-                    <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-surface-hover text-xs font-medium text-muted">
-                      {step.order}
+            {(() => {
+              const planRisk = getApprovalRiskPresentation(plan().risk_level);
+              return (
+                <>
+                  <div class="flex items-center gap-2 mb-2">
+                    <svg
+                      class="w-4 h-4 text-green-600 dark:text-green-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                      />
+                    </svg>
+                    <span class="text-sm font-medium text-base-content">Remediation Plan</span>
+                    <span
+                      class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${planRisk.badgeClass}`}
+                    >
+                      {planRisk.label} risk
                     </span>
-                    <div class="flex-1 min-w-0">
-                      <div class="text-base-content">{step.action}</div>
-                      <Show when={step.command}>
-                        <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-muted bg-surface-alt px-2 py-1 rounded">
-                          {step.command}
-                        </div>
-                      </Show>
-                    </div>
                   </div>
-                )}
-              </For>
-            </div>
+                  <div class="space-y-2">
+                    <For each={plan().steps}>
+                      {(step) => (
+                        <div class="flex items-start gap-2 text-sm">
+                          <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-surface-hover text-xs font-medium text-muted">
+                            {step.order}
+                          </span>
+                          <div class="flex-1 min-w-0">
+                            <div class="text-base-content">{step.action}</div>
+                            <Show when={step.command}>
+                              <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-muted bg-surface-alt px-2 py-1 rounded">
+                                {step.command}
+                              </div>
+                            </Show>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </div>
 
-            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-              <button
-                type="button"
-                onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
-                class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
+                  <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
+                      class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
@@ -1040,6 +1039,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 Dismiss
               </button>
             </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </Show>

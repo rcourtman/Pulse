@@ -9,7 +9,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
-import { formatTemperature } from '@/utils/temperature';
+import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
@@ -162,12 +162,6 @@ const getDiskRoleLabel = (disk: PhysicalDiskData): string => {
 const getDiskParentLabel = (disk: PhysicalDiskData): string => {
   if (disk.storageGroup?.trim()) return disk.storageGroup.trim();
   return '';
-};
-
-const getTemperatureTone = (temperature: number): string => {
-  if (temperature >= 70) return 'text-red-600 dark:text-red-400';
-  if (temperature >= 60) return 'text-amber-600 dark:text-amber-400';
-  return 'text-green-600 dark:text-green-400';
 };
 
 export const DiskList: Component<DiskListProps> = (props) => {
@@ -427,7 +421,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                           <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[72px]">
                             <span
-                              class={`text-[11px] font-medium ${getTemperatureTone(data.temperature)}`}
+                              class={`text-[11px] font-medium ${getTemperatureTextClass(data.temperature)}`}
                             >
                               {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
                             </span>

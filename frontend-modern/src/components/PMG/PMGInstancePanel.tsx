@@ -3,6 +3,7 @@ import { For, Show, createMemo } from 'solid-js';
 import { useTooltip } from '@/hooks/useTooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { Card } from '@/components/shared/Card';
+import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import {
   Table,
   TableHeader,
@@ -95,39 +96,7 @@ const ThreatBar: Component<{
 };
 
 const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
-  const statusInfo = createMemo(() => {
-    const status = (props.health || props.status || '').toLowerCase();
-    if (status.includes('healthy') || status === 'online') {
-      return {
-        bg: 'bg-green-100 dark:bg-green-900',
-        text: 'text-green-700 dark:text-green-400',
-        dot: 'bg-green-500',
-        label: 'Healthy',
-      };
-    }
-    if (status.includes('degraded') || status.includes('warning')) {
-      return {
-        bg: 'bg-yellow-100 dark:bg-yellow-900',
-        text: 'text-yellow-700 dark:text-yellow-400',
-        dot: 'bg-yellow-500',
-        label: 'Degraded',
-      };
-    }
-    if (status.includes('error') || status === 'offline') {
-      return {
-        bg: 'bg-red-100 dark:bg-red-900',
-        text: 'text-red-700 dark:text-red-400',
-        dot: 'bg-red-500',
-        label: 'Offline',
-      };
-    }
-    return {
-      bg: 'bg-surface-alt',
-      text: 'text-muted',
-      dot: 'bg-slate-400',
-      label: status || 'Unknown',
-    };
-  });
+  const statusInfo = createMemo(() => getServiceHealthPresentation(props.status, props.health));
 
   return (
     <span

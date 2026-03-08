@@ -5,6 +5,7 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
 import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
 import { SearchField } from '@/components/shared/SearchField';
+import { StatusDot } from '@/components/shared/StatusDot';
 import {
   Table,
   TableHeader,
@@ -15,6 +16,7 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 20;
@@ -81,16 +83,6 @@ const fetchAllDeployments = async (cluster: string): Promise<K8sDeploymentResour
   }
 
   return Array.from(new Map(deployments.map((d) => [d.id, d])).values());
-};
-
-const statusTone = (status?: string) => {
-  const normalized = (status || '').trim().toLowerCase();
-  if (!normalized) return 'bg-slate-400';
-  if (normalized === 'online' || normalized === 'running' || normalized === 'healthy')
-    return 'bg-green-500';
-  if (normalized === 'warning' || normalized === 'degraded') return 'bg-amber-500';
-  if (normalized === 'offline' || normalized === 'stopped') return 'bg-red-500';
-  return 'bg-slate-400';
 };
 
 export const K8sDeploymentsDrawer: Component<{
@@ -261,14 +253,17 @@ export const K8sDeploymentsDrawer: Component<{
                         const updated = () => dep.kubernetes?.updatedReplicas ?? 0;
                         const ready = () => dep.kubernetes?.readyReplicas ?? 0;
                         const available = () => dep.kubernetes?.availableReplicas ?? 0;
+                        const status = () => getSimpleStatusIndicator(dep.status);
 
                         return (
                           <TableRow class="hover:bg-surface-hover">
                             <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
-                                <span
-                                  class={`h-2 w-2 rounded-full ${statusTone(dep.status)}`}
+                                <StatusDot
+                                  size="sm"
+                                  variant={status().variant}
                                   title={dep.status || 'unknown'}
+                                  ariaHidden
                                 />
                                 <span
                                   class="font-semibold text-base-content truncate"

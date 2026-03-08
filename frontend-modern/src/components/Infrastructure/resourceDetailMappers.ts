@@ -540,27 +540,6 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
   return rows;
 };
 
-export const normalizeHealthLabel = (value?: string): string => {
-  const raw = (value || '').trim();
-  if (!raw) return 'Unknown';
-  if (raw.length <= 3) return raw.toUpperCase();
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-};
-
-export const healthToneClass = (value?: string): string => {
-  const normalized = (value || '').trim().toLowerCase();
-  if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
-    return 'text-emerald-600 dark:text-emerald-400';
-  }
-  if (['degraded', 'warning', 'stale'].includes(normalized)) {
-    return 'text-amber-600 dark:text-amber-400';
-  }
-  if (['offline', 'down', 'disconnected', 'error', 'failed'].includes(normalized)) {
-    return 'text-red-600 dark:text-red-400';
-  }
-  return 'text-base-content';
-};
-
 export const formatInteger = (value?: number): string => {
   if (value === undefined || value === null || Number.isNaN(value)) return '—';
   return new Intl.NumberFormat().format(Math.round(value));

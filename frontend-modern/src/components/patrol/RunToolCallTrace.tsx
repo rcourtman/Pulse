@@ -7,6 +7,7 @@
 
 import { Component, createSignal, createResource, Show, For } from 'solid-js';
 import { getPatrolRunHistoryWithToolCalls, type ToolCallRecord } from '@/api/patrol';
+import { getToolCallResultBadgeClass } from '@/utils/patrolRunPresentation';
 
 interface RunToolCallTraceProps {
   runId: string;
@@ -92,11 +93,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                       </div>
                       <div class="flex items-center gap-2 flex-shrink-0">
                         <span
-                          class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                            call.success
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                          }`}
+                          class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getToolCallResultBadgeClass(call.success)}`}
                         >
                           {call.success ? 'success' : 'failed'}
                         </span>

@@ -42,6 +42,11 @@ import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLi
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
+import {
+  getRecoveryOutcomeBadgeClass,
+  normalizeRecoveryOutcome as normalizeOutcome,
+  type RecoveryOutcome,
+} from '@/utils/recoveryOutcomePresentation';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
 import { RecoverySummary } from './RecoverySummary';
 import {
@@ -66,8 +71,6 @@ const groupHeaderRowClass = () => 'bg-surface-alt hover:bg-surface-alt';
 const groupHeaderTextClass = () =>
   'py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-base-content';
 
-type KnownOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown';
-
 const MODE_LABELS: Record<ArtifactMode, string> = {
   snapshot: 'Snapshots',
   local: 'Local',
@@ -84,14 +87,6 @@ const CHART_SEGMENT_CLASS: Record<ArtifactMode, string> = {
   snapshot: 'bg-yellow-500',
   local: 'bg-orange-500',
   remote: 'bg-violet-500',
-};
-
-const OUTCOME_BADGE_CLASS: Record<KnownOutcome, string> = {
-  success: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-  warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-  unknown: 'bg-surface-alt text-base-content',
 };
 
 const titleize = (value: string): string =>
@@ -166,13 +161,6 @@ const niceAxisMax = (value: number): number => {
   if (normalized <= 2) return 2 * magnitude;
   if (normalized <= 5) return 5 * magnitude;
   return 10 * magnitude;
-};
-
-const normalizeOutcome = (value: string | null | undefined): KnownOutcome => {
-  const v = (value || '').trim().toLowerCase();
-  if (v === 'success' || v === 'warning' || v === 'failed' || v === 'running' || v === 'unknown')
-    return v;
-  return 'unknown';
 };
 
 const rollupSubjectLabel = (
@@ -263,7 +251,7 @@ const subjectTypeBadgeClass = (p: RecoveryPoint): string => {
     .toLowerCase();
   const presentation = getResourceTypePresentation(raw);
   if (presentation) return presentation.badgeClasses;
-  return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+  return 'bg-surface-alt text-base-content';
 };
 
 const artifactColumnHeaderClass = (id: string): string => {
@@ -371,7 +359,7 @@ const Recovery: Component = () => {
   const [providerFilter, setProviderFilter] = createSignal('all');
   const [clusterFilter, setClusterFilter] = createSignal('all');
   const [modeFilter, setModeFilter] = createSignal<'all' | ArtifactMode>('all');
-  const [outcomeFilter, setOutcomeFilter] = createSignal<'all' | KnownOutcome>('all');
+  const [outcomeFilter, setOutcomeFilter] = createSignal<'all' | RecoveryOutcome>('all');
   const [verificationFilter, setVerificationFilter] = createSignal<VerificationFilter>('all');
   const [scopeFilter, setScopeFilter] = createSignal<'all' | 'workload'>('all');
   const [nodeFilter, setNodeFilter] = createSignal('all');
@@ -700,7 +688,7 @@ const Recovery: Component = () => {
   const summarizeRollups = (items: ProtectionRollup[]) => {
     const nowMs = Date.now();
     const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
-    const counts: Record<KnownOutcome, number> = {
+    const counts: Record<RecoveryOutcome, number> = {
       success: 0,
       warning: 0,
       failed: 0,
@@ -1165,7 +1153,7 @@ const Recovery: Component = () => {
                 label="Status"
                 value={outcomeFilter()}
                 onChange={(event) => {
-                  const value = event.currentTarget.value as 'all' | KnownOutcome;
+                  const value = event.currentTarget.value as 'all' | RecoveryOutcome;
                   setOutcomeFilter(value);
                   if (value !== 'all') setVerificationFilter('all');
                 }}
@@ -1362,7 +1350,7 @@ const Recovery: Component = () => {
                           </TableCell>
                           <TableCell class="whitespace-nowrap px-3 py-0.5">
                             <span
-                              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]}`}
+                              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(outcome)}`}
                             >
                               {titleize(outcome)}
                             </span>
@@ -1818,7 +1806,7 @@ const Recovery: Component = () => {
                   label="Status"
                   value={outcomeFilter()}
                   onChange={(event) => {
-                    const value = event.currentTarget.value as 'all' | KnownOutcome;
+                    const value = event.currentTarget.value as 'all' | RecoveryOutcome;
                     setOutcomeFilter(value);
                     if (value !== 'all') setVerificationFilter('all');
                     setCurrentPage(1);
@@ -2307,7 +2295,7 @@ const Recovery: Component = () => {
                                               <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
                                                 <span
                                                   class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${
-                                                    OUTCOME_BADGE_CLASS[outcome]
+                                                    getRecoveryOutcomeBadgeClass(outcome)
                                                   }`}
                                                 >
                                                   {titleize(outcome)}

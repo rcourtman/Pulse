@@ -12,6 +12,7 @@ import { Component, Show, createMemo, createSignal, createEffect, onCleanup } fr
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import type { ApprovalRequest } from '@/api/ai';
+import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckIcon from 'lucide-solid/icons/check';
 import XIcon from 'lucide-solid/icons/x';
@@ -46,17 +47,6 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
     const secs = Math.floor((diff % 60000) / 1000);
     if (mins > 0) return `${mins}m ${secs}s`;
     return `${secs}s`;
-  };
-
-  const riskBadgeColor = (level: string) => {
-    switch (level) {
-      case 'high':
-        return 'bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300';
-      case 'medium':
-        return 'bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-      default:
-        return 'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300';
-    }
   };
 
   const handleApprove = async (approval: ApprovalRequest) => {
@@ -94,6 +84,10 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
     }
   };
 
+  const firstApprovalRisk = createMemo(() =>
+    firstApproval() ? getApprovalRiskPresentation(firstApproval()!.riskLevel) : null,
+  );
+
   return (
     <Show when={pending().length > 0}>
       <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
@@ -109,9 +103,9 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                     Fix awaiting approval
                   </span>
                   <span
-                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(firstApproval()!.riskLevel)}`}
+                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${firstApprovalRisk()!.badgeClass}`}
                   >
-                    {firstApproval()!.riskLevel} risk
+                    {firstApprovalRisk()!.label} risk
                   </span>
                   <span class="text-xs text-amber-700 dark:text-amber-300">
                     expires {timeRemaining(firstApproval()!.expiresAt)}

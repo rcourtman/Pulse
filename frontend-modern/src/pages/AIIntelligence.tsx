@@ -28,6 +28,7 @@ import {
 } from '@/api/patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
+import { getFindingSeverityToneClasses } from '@/utils/aiFindingPresentation';
 
 interface ModelInfo {
   id: string;
@@ -1356,11 +1357,7 @@ export function AIIntelligence() {
               Findings
               <Show when={summaryStats().totalActive > 0}>
                 <span
-                  class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${
-                    summaryStats().criticalFindings > 0
-                      ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                  }`}
+                  class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${getFindingSeverityToneClasses(summaryStats().criticalFindings > 0 ? 'critical' : 'warning')}`}
                 >
                   {summaryStats().totalActive}
                 </span>

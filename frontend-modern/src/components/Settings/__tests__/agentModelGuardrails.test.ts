@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import unifiedAgentsSource from '../UnifiedAgents.tsx?raw';
+import agentLedgerPanelSource from '../AgentLedgerPanel.tsx?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import completeStepSource from '@/components/SetupWizard/steps/CompleteStep.tsx?raw';
 import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
@@ -48,11 +49,16 @@ import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
 import resourcePickerSource from '../ResourcePicker.tsx?raw';
 import reportableResourceTypesSource from '@/utils/reportableResourceTypes.ts?raw';
 import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
+import agentCapabilityPresentationSource from '@/utils/agentCapabilityPresentation.ts?raw';
+import statusUtilsSource from '@/utils/status.ts?raw';
+import unifiedAgentStatusPresentationSource from '@/utils/unifiedAgentStatusPresentation.ts?raw';
 
 describe('agent model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
     expect(agentProfilesPanelSource).toContain('const { resources } = useResources()');
     expect(agentProfilesPanelSource).not.toContain("const hosts = byType('host')");
+    expect(agentLedgerPanelSource).toContain('getSimpleStatusIndicator');
+    expect(agentLedgerPanelSource).not.toContain('function statusVariant(');
   });
 
   it('keeps APITokenManager runtime/agent usage mapped from unified resources', () => {
@@ -78,9 +84,28 @@ describe('agent model guardrails', () => {
   it('keeps UnifiedAgents free of v5 merge-workaround patterns', () => {
     expect(unifiedAgentsSource).not.toContain('previousHostTypes');
     expect(unifiedAgentsSource).not.toContain('const allHosts = createMemo(');
-    expect(unifiedAgentsSource).toContain('const MONITORING_STOPPED_STATUS_LABEL =');
-    expect(unifiedAgentsSource).toContain('const ALLOW_RECONNECT_LABEL =');
+    expect(unifiedAgentsSource).toContain('@/utils/unifiedAgentStatusPresentation');
+    expect(unifiedAgentsSource).not.toContain('const MONITORING_STOPPED_STATUS_LABEL =');
+    expect(unifiedAgentsSource).not.toContain('const ALLOW_RECONNECT_LABEL =');
     expect(unifiedAgentsSource).toContain('withPrivilegeEscalation');
+    expect(unifiedAgentsSource).toContain('@/utils/agentCapabilityPresentation');
+    expect(unifiedAgentsSource).not.toContain('const getCapabilityLabel =');
+    expect(unifiedAgentsSource).not.toContain('const getCapabilityBadgeClass =');
+    expect(agentCapabilityPresentationSource).toContain("export type AgentCapability = 'agent'");
+    expect(agentCapabilityPresentationSource).toContain('export function getAgentCapabilityLabel');
+    expect(agentCapabilityPresentationSource).toContain(
+      'export function getAgentCapabilityBadgeClass',
+    );
+    expect(unifiedAgentsSource).not.toContain('isConnectedHealthStatus');
+    expect(unifiedAgentsSource).not.toContain('const connectedFromStatus =');
+    expect(agentProfilesPanelSource).toContain('isConnectedHealthStatus');
+    expect(agentProfilesPanelSource).not.toContain('const connectedFromStatus =');
+    expect(statusUtilsSource).toContain('export function isConnectedHealthStatus');
+    expect(unifiedAgentsSource).toContain('@/utils/unifiedAgentStatusPresentation');
+    expect(unifiedAgentsSource).not.toContain('const statusBadgeClass =');
+    expect(unifiedAgentStatusPresentationSource).toContain(
+      'export function getUnifiedAgentStatusPresentation',
+    );
   });
 
   it('keeps websocket State contract resource-first without legacy per-type arrays', () => {

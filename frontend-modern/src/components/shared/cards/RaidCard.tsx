@@ -1,44 +1,16 @@
 import { Component, For, Show } from 'solid-js';
-import type { HostRAIDArray, HostRAIDDevice } from '@/types/api';
+import type { HostRAIDArray } from '@/types/api';
 import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  getRaidDeviceBadgeClass,
+  getRaidStateTextClass,
+  getRaidStateVariant,
+} from '@/utils/raidPresentation';
 
 interface RaidCardProps {
   arrays?: HostRAIDArray[];
   title?: string;
 }
-
-const normalize = (value?: string): string => (value || '').trim().toLowerCase();
-
-const raidStateVariant = (state?: string) => {
-  const s = normalize(state);
-  if (s === 'active' || s === 'clean') return 'success';
-  if (
-    s.includes('fail') ||
-    s.includes('inactive') ||
-    s.includes('offline') ||
-    s.includes('stopped')
-  )
-    return 'danger';
-  return 'warning';
-};
-
-const raidStateTextClass = (state?: string) => {
-  const variant = raidStateVariant(state);
-  if (variant === 'success') return 'text-emerald-600 dark:text-emerald-400';
-  if (variant === 'danger') return 'text-red-600 dark:text-red-400';
-  return 'text-amber-600 dark:text-amber-400';
-};
-
-const deviceToneClass = (device: HostRAIDDevice) => {
-  const s = normalize(device.state);
-  if (s === 'active' || s === 'in_sync' || s === 'online') {
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:border-emerald-800';
-  }
-  if (s.includes('fail') || s.includes('fault') || s.includes('offline') || s.includes('removed')) {
-    return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-800';
-  }
-  return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-800';
-};
 
 export const RaidCard: Component<RaidCardProps> = (props) => {
   if (!props.arrays || props.arrays.length === 0) return null;
@@ -105,12 +77,12 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                 <Show when={array.devices && array.devices.length > 0}>
                   <div class="mt-2 flex flex-wrap gap-1">
                     <For each={array.devices}>
-                      {(device) => (
-                        <span
-                          class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${deviceToneClass(device)}`}
-                          title={`slot ${device.slot} • ${device.state}`}
-                        >
-                          {device.device}
+                          {(device) => (
+                            <span
+                              class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getRaidDeviceBadgeClass(device)}`}
+                              title={`slot ${device.slot} • ${device.state}`}
+                            >
+                              {device.device}
                         </span>
                       )}
                     </For>

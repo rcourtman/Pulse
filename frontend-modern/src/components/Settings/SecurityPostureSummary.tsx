@@ -5,6 +5,7 @@ import ShieldCheck from 'lucide-solid/icons/shield-check';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
+import { getSecurityScorePresentation } from '@/utils/securityScorePresentation';
 
 interface SecurityPostureSummaryProps {
   status: {
@@ -96,70 +97,34 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
     return Math.round((criticalScore + optionalScore) * 100);
   });
 
-  const scoreTone = createMemo(() => {
-    const score = securityScore();
-    if (score >= 80) {
-      return {
-        headerBg: 'bg-emerald-50 dark:bg-emerald-950',
-        headerBorder: 'border-b border-emerald-200 dark:border-emerald-800',
-        iconWrap: 'bg-emerald-100 dark:bg-emerald-900',
-        icon: 'text-emerald-700 dark:text-emerald-300',
-        subtitle: 'text-emerald-700 dark:text-emerald-300',
-        score: 'text-emerald-800 dark:text-emerald-200',
-        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
-      };
-    }
-    if (score >= 50) {
-      return {
-        headerBg: 'bg-amber-50 dark:bg-amber-950',
-        headerBorder: 'border-b border-amber-200 dark:border-amber-800',
-        iconWrap: 'bg-amber-100 dark:bg-amber-900',
-        icon: 'text-amber-700 dark:text-amber-300',
-        subtitle: 'text-amber-700 dark:text-amber-300',
-        score: 'text-amber-800 dark:text-amber-200',
-        badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-      };
-    }
-    return {
-      headerBg: 'bg-rose-50 dark:bg-rose-950',
-      headerBorder: 'border-b border-rose-200 dark:border-rose-800',
-      iconWrap: 'bg-rose-100 dark:bg-rose-900',
-      icon: 'text-rose-700 dark:text-rose-300',
-      subtitle: 'text-rose-700 dark:text-rose-300',
-      score: 'text-rose-800 dark:text-rose-200',
-      badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
-    };
-  });
-
-  const scoreLabel = () => {
-    const score = securityScore();
-    if (score >= 80) return 'Strong';
-    if (score >= 50) return 'Moderate';
-    return 'Weak';
-  };
+  const scorePresentation = createMemo(() => getSecurityScorePresentation(securityScore()));
 
   const ScoreIcon = () => {
-    const score = securityScore();
-    if (score >= 80) return ShieldCheck;
-    if (score >= 50) return Shield;
-    return ShieldAlert;
+    switch (scorePresentation().icon) {
+      case 'shield-check':
+        return ShieldCheck;
+      case 'shield':
+        return Shield;
+      default:
+        return ShieldAlert;
+    }
   };
 
   return (
     <Card padding="none" class="overflow-hidden border border-border" border={false}>
       {/* Header with Security Score */}
-      <div class={`px-6 py-5 ${scoreTone().headerBg} ${scoreTone().headerBorder}`}>
+      <div class={`px-6 py-5 ${scorePresentation().tone.headerBg} ${scorePresentation().tone.headerBorder}`}>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
-            <div class={`p-3 rounded-md ${scoreTone().iconWrap}`}>
+            <div class={`p-3 rounded-md ${scorePresentation().tone.iconWrap}`}>
               {(() => {
                 const Icon = ScoreIcon();
-                return <Icon class={`w-6 h-6 ${scoreTone().icon}`} />;
+                return <Icon class={`w-6 h-6 ${scorePresentation().tone.icon}`} />;
               })()}
             </div>
             <div>
               <h2 class="text-lg font-semibold text-base-content">Security Posture</h2>
-              <p class={`text-sm ${scoreTone().subtitle}`}>
+              <p class={`text-sm ${scorePresentation().tone.subtitle}`}>
                 {props.status.publicAccess && !props.status.isPrivateNetwork
                   ? 'Public network access detected'
                   : 'Private network access'}
@@ -167,11 +132,11 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
             </div>
           </div>
           <div class="text-right">
-            <div class={`text-3xl font-semibold ${scoreTone().score}`}>{securityScore()}%</div>
+            <div class={`text-3xl font-semibold ${scorePresentation().tone.score}`}>{securityScore()}%</div>
             <div
-              class={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${scoreTone().badge}`}
+              class={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${scorePresentation().tone.badge}`}
             >
-              {scoreLabel()}
+              {scorePresentation().label}
             </div>
           </div>
         </div>

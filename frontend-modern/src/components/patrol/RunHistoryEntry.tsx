@@ -11,6 +11,7 @@ import {
   sanitizeAnalysis,
 } from '@/utils/patrolFormat';
 import { formatRelativeTime } from '@/utils/format';
+import { getPatrolRunStatusPresentation } from '@/utils/patrolRunPresentation';
 
 import BrainCircuitIcon from 'lucide-solid/icons/brain-circuit';
 import ActivityIcon from 'lucide-solid/icons/activity';
@@ -141,6 +142,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const run = props.run;
   const scopeSummary = formatScope(run);
   const duration = formatDurationMs(run.duration_ms);
+  const runStatus = getPatrolRunStatusPresentation(run.status);
 
   return (
     <div
@@ -159,19 +161,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <span class="text-base-content font-medium">
             {formatRelativeTime(run.started_at, { compact: true })}
           </span>
-          <span
-            class={`px-1.5 py-0.5 rounded ${
-              run.status === 'critical'
-                ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                : run.status === 'issues_found'
-                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                  : run.status === 'error'
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-            }`}
-          >
-            {run.status.replace(/_/g, ' ')}
-          </span>
+          <span class={`px-1.5 py-0.5 rounded ${runStatus.badgeClass}`}>{runStatus.label}</span>
           <span>{formatTriggerReason(run.trigger_reason)}</span>
           <Show when={scopeSummary}>
             <span>• {scopeSummary}</span>

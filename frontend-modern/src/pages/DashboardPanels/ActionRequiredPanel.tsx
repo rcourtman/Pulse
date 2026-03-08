@@ -11,6 +11,8 @@ import {
 } from '@/api/patrol';
 import { hasFeature } from '@/stores/license';
 import { formatRelativeTime } from '@/utils/format';
+import { getAlertSeverityBadgeClass } from '@/utils/alertSeverityPresentation';
+import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { ALERTS_OVERVIEW_PATH, AI_PATROL_PATH } from '@/routing/resourceLinks';
 import type { Alert } from '@/types/api';
 import type { ApprovalRequest } from '@/api/ai';
@@ -18,17 +20,6 @@ import CheckIcon from 'lucide-solid/icons/check';
 import XIcon from 'lucide-solid/icons/x';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
-
-// ─── Shared severity badge ─────────────────────────────────────────
-const severityBadgeClass = (level: 'critical' | 'warning' | string): string => {
-  const base =
-    'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase';
-  if (level === 'critical')
-    return `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`;
-  if (level === 'warning')
-    return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`;
-  return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300`;
-};
 
 // ─── Props ──────────────────────────────────────────────────────────
 interface ActionRequiredPanelProps {
@@ -57,17 +48,6 @@ function PendingApprovalRows(props: { approvals: ApprovalRequest[] }) {
     const secs = Math.floor((diff % 60000) / 1000);
     if (mins > 0) return `${mins}m ${secs}s`;
     return `${secs}s`;
-  };
-
-  const riskBadgeColor = (level: string) => {
-    switch (level) {
-      case 'high':
-        return 'bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300';
-      case 'medium':
-        return 'bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
-      default:
-        return 'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300';
-    }
   };
 
   const handleApprove = async (approval: ApprovalRequest) => {
@@ -107,48 +87,54 @@ function PendingApprovalRows(props: { approvals: ApprovalRequest[] }) {
       <p class="text-[11px] font-semibold uppercase tracking-wide text-muted">Pending Approvals</p>
       <ul class="space-y-1" role="list">
         <For each={props.approvals}>
-          {(approval) => (
-            <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
-              <span
-                class={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(approval.riskLevel)}`}
-              >
-                {approval.riskLevel}
-              </span>
-              <p class="min-w-0 text-xs text-base-content truncate flex-1" title={approval.context}>
-                {approval.context || approval.command}
-              </p>
-              <span class="shrink-0 text-[10px] font-mono text-amber-600 dark:text-amber-400">
-                {timeRemaining(approval.expiresAt)}
-              </span>
-              <div class="shrink-0 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleApprove(approval)}
-                  disabled={actionLoading() === approval.id}
-                  class="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-[10px] font-medium rounded transition-colors"
+          {(approval) => {
+            const approvalRisk = getApprovalRiskPresentation(approval.riskLevel);
+            return (
+              <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
+                <span
+                  class={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded ${approvalRisk.badgeClass}`}
                 >
-                  <Show
-                    when={actionLoading() !== approval.id}
-                    fallback={
-                      <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    }
+                  {approvalRisk.label}
+                </span>
+                <p
+                  class="min-w-0 text-xs text-base-content truncate flex-1"
+                  title={approval.context}
+                >
+                  {approval.context || approval.command}
+                </p>
+                <span class="shrink-0 text-[10px] font-mono text-amber-600 dark:text-amber-400">
+                  {timeRemaining(approval.expiresAt)}
+                </span>
+                <div class="shrink-0 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleApprove(approval)}
+                    disabled={actionLoading() === approval.id}
+                    class="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-[10px] font-medium rounded transition-colors"
                   >
-                    <CheckIcon class="w-3 h-3" />
-                  </Show>
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeny(approval)}
-                  disabled={actionLoading() === approval.id}
-                  class="flex items-center gap-1 px-2 py-1 bg-surface-alt hover:bg-surface-hover disabled:opacity-50 text-base-content text-[10px] font-medium rounded transition-colors"
-                >
-                  <XIcon class="w-3 h-3" />
-                  Deny
-                </button>
-              </div>
-            </li>
-          )}
+                    <Show
+                      when={actionLoading() !== approval.id}
+                      fallback={
+                        <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      }
+                    >
+                      <CheckIcon class="w-3 h-3" />
+                    </Show>
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeny(approval)}
+                    disabled={actionLoading() === approval.id}
+                    class="flex items-center gap-1 px-2 py-1 bg-surface-alt hover:bg-surface-hover disabled:opacity-50 text-base-content text-[10px] font-medium rounded transition-colors"
+                  >
+                    <XIcon class="w-3 h-3" />
+                    Deny
+                  </button>
+                </div>
+              </li>
+            );
+          }}
         </For>
       </ul>
     </div>
@@ -281,7 +267,7 @@ function FindingsAttentionRows(props: { findings: UnifiedFinding[] }) {
         <For each={props.findings}>
           {(finding) => (
             <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
-              <span class={severityBadgeClass(finding.severity)}>
+              <span class={getAlertSeverityBadgeClass(finding.severity)}>
                 {finding.severity === 'critical'
                   ? 'CRIT'
                   : finding.severity === 'warning'

@@ -5,6 +5,8 @@ import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { unwrap } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getClusterEndpointPresentation } from '@/utils/clusterEndpointPresentation';
 import {
   Table,
   TableHeader,
@@ -13,6 +15,11 @@ import {
   TableHead,
   TableCell,
 } from '@/components/shared/Table';
+import {
+  getSimpleStatusIndicator,
+  getStatusIndicatorBadgeToneClasses,
+  type StatusIndicator,
+} from '@/utils/status';
 
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
@@ -23,36 +30,6 @@ interface PveNodesTableProps {
   onDelete: (node: NodeConfigWithStatus) => void;
   onRefreshCluster?: (nodeId: string) => void;
 }
-
-type StatusMeta = { dotClass: string; label: string; labelClass: string };
-
-const STATUS_META: Record<string, StatusMeta> = {
-  online: {
-    dotClass: 'bg-emerald-400',
-    label: 'Online',
-    labelClass: 'text-green-600 dark:text-green-400',
-  },
-  offline: {
-    dotClass: 'bg-rose-400',
-    label: 'Offline',
-    labelClass: 'text-red-600 dark:text-red-400',
-  },
-  degraded: {
-    dotClass: 'bg-amber-300',
-    label: 'Degraded',
-    labelClass: 'text-amber-600 dark:text-amber-400',
-  },
-  pending: {
-    dotClass: 'bg-amber-400 animate-pulse',
-    label: 'Pending',
-    labelClass: 'text-amber-600 dark:text-amber-400',
-  },
-  unknown: {
-    dotClass: 'bg-slate-400',
-    label: 'Unknown',
-    labelClass: 'text-muted',
-  },
-};
 
 const isTemperatureMonitoringEnabled = (
   node: NodeConfigWithStatus,
@@ -68,42 +45,57 @@ const isTemperatureMonitoringEnabled = (
   return globalEnabled;
 };
 
-const resolvePveStatusMeta = (
+const resolveConfiguredNodeStatusIndicator = ({
+  configuredStatus,
+  liveStatus,
+  connectionHealth,
+}: {
+  configuredStatus?: string | null;
+  liveStatus?: string | null;
+  connectionHealth?: string | null;
+}): StatusIndicator => {
+  if (
+    connectionHealth === 'unhealthy' ||
+    connectionHealth === 'error' ||
+    liveStatus === 'offline' ||
+    liveStatus === 'disconnected'
+  ) {
+    return getSimpleStatusIndicator('offline');
+  }
+  if (connectionHealth === 'degraded') {
+    return getSimpleStatusIndicator('degraded');
+  }
+  if (liveStatus === 'online' || connectionHealth === 'healthy') {
+    return getSimpleStatusIndicator('online');
+  }
+
+  switch (configuredStatus) {
+    case 'connected':
+      return getSimpleStatusIndicator('online');
+    case 'pending':
+      return getSimpleStatusIndicator('pending');
+    case 'disconnected':
+    case 'offline':
+    case 'error':
+      return getSimpleStatusIndicator('offline');
+    default:
+      return getSimpleStatusIndicator('unknown');
+  }
+};
+
+const resolvePveStatusIndicator = (
   node: NodeConfigWithStatus,
   stateNodes: PveNodesTableProps['stateNodes'],
-): StatusMeta => {
+): StatusIndicator => {
   const stateNode = stateNodes.find((n) => n.platformId === node.name || n.name === node.name);
   const pd = stateNode?.platformData
     ? (unwrap(stateNode.platformData) as Record<string, unknown>)
     : undefined;
-  const connectionHealth = pd?.connectionHealth as string | undefined;
-  if (
-    connectionHealth === 'unhealthy' ||
-    connectionHealth === 'error' ||
-    stateNode?.status === 'offline' ||
-    stateNode?.status === ('disconnected' as string)
-  ) {
-    return STATUS_META.offline;
-  }
-  if (connectionHealth === 'degraded') {
-    return STATUS_META.degraded;
-  }
-  if (stateNode && (stateNode.status === 'online' || connectionHealth === 'healthy')) {
-    return STATUS_META.online;
-  }
-
-  switch (node.status) {
-    case 'connected':
-      return STATUS_META.online;
-    case 'pending':
-      return STATUS_META.pending;
-    case 'disconnected':
-    case 'offline':
-    case 'error':
-      return STATUS_META.offline;
-    default:
-      return STATUS_META.unknown;
-  }
+  return resolveConfiguredNodeStatusIndicator({
+    configuredStatus: node.status,
+    liveStatus: stateNode?.status,
+    connectionHealth: pd?.connectionHealth as string | undefined,
+  });
 };
 
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
@@ -133,7 +125,9 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
           <TableBody class="divide-y divide-border bg-surface">
             <For each={props.nodes}>
               {(node) => {
-                const statusMeta = createMemo(() => resolvePveStatusMeta(node, props.stateNodes));
+                const statusIndicator = createMemo(() =>
+                  resolvePveStatusIndicator(node, props.stateNodes),
+                );
                 const clusterEndpoints = createMemo(() =>
                   'clusterEndpoints' in node && node.clusterEndpoints ? node.clusterEndpoints : [],
                 );
@@ -145,7 +139,12 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                     <TableCell class="align-top py-3 pl-4 pr-3">
                       <div class="min-w-0 space-y-1">
                         <div class="flex items-start gap-3">
-                          <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
+                          <StatusDot
+                            variant={statusIndicator().variant}
+                            size="md"
+                            ariaHidden={true}
+                            class="mt-1.5"
+                          />
                           <div class="min-w-0 flex-1">
                             <p class="font-medium text-base-content truncate">{node.name}</p>
                             <p class="text-xs text-muted truncate">{node.host}</p>
@@ -163,26 +162,12 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                               <div class="flex flex-col gap-2">
                                 <For each={clusterEndpoints()}>
                                   {(endpoint) => {
-                                    const pulseStatus =
-                                      endpoint.pulseReachable === null ||
-                                      endpoint.pulseReachable === undefined
-                                        ? 'unknown'
-                                        : endpoint.pulseReachable
-                                          ? 'reachable'
-                                          : 'unreachable';
-
-                                    const statusColor =
-                                      endpoint.online && pulseStatus === 'reachable'
-                                        ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900 dark:text-green-300'
-                                        : pulseStatus === 'unreachable'
-                                          ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                                          : endpoint.online
-                                            ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                                            : 'border-border bg-surface-alt text-muted';
+                                    const endpointPresentation =
+                                      getClusterEndpointPresentation(endpoint);
 
                                     return (
                                       <div
-                                        class={`rounded border px-3 py-2 text-[0.7rem] ${statusColor}`}
+                                        class={`rounded border px-3 py-2 text-[0.7rem] ${endpointPresentation.panelClass}`}
                                       >
                                         <div class="flex items-center gap-2 mb-1">
                                           <span class="font-semibold">{endpoint.nodeName}</span>
@@ -193,21 +178,16 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                         <div class="flex flex-col gap-0.5 text-[0.65rem] opacity-90">
                                           <div class="flex items-center gap-1.5">
                                             <span class="w-16 font-medium">Proxmox:</span>
-                                            <span>{endpoint.online ? 'Online' : 'Offline'}</span>
+                                            <span>{endpointPresentation.proxmoxLabel}</span>
                                           </div>
                                           <div class="flex items-center gap-1.5">
                                             <span class="w-16 font-medium">Pulse:</span>
-                                            <span>
-                                              {pulseStatus === 'reachable'
-                                                ? 'Reachable'
-                                                : pulseStatus === 'unreachable'
-                                                  ? 'Unreachable'
-                                                  : 'Checking...'}
-                                            </span>
+                                            <span>{endpointPresentation.pulseLabel}</span>
                                           </div>
                                           <Show
                                             when={
-                                              pulseStatus === 'unreachable' && endpoint.pulseError
+                                              endpointPresentation.pulseStatus === 'unreachable' &&
+                                              endpoint.pulseError
                                             }
                                           >
                                             <div class="mt-1 pt-1 border-t border-current opacity-20">
@@ -325,10 +305,10 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                     </TableCell>
                     <TableCell class="align-top px-3 py-3 whitespace-nowrap">
                       <span
-                        class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}
+                        class={`inline-flex items-center gap-2 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(statusIndicator().variant)}`}
                       >
-                        <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
-                        {statusMeta().label}
+                        <StatusDot variant={statusIndicator().variant} size="sm" ariaHidden={true} />
+                        {statusIndicator().label}
                       </span>
                     </TableCell>
                     <TableCell class="align-top px-3 py-3">
@@ -408,38 +388,16 @@ interface PbsNodesTableProps {
   onDelete: (node: NodeConfigWithStatus) => void;
 }
 
-const resolvePbsStatusMeta = (
+const resolvePbsStatusIndicator = (
   node: NodeConfigWithStatus,
   statePbs: PbsNodesTableProps['statePbs'],
-): StatusMeta => {
+): StatusIndicator => {
   const statePBS = statePbs.find((p) => p.name === node.name);
-  if (
-    statePBS?.connectionHealth === 'unhealthy' ||
-    statePBS?.connectionHealth === 'error' ||
-    statePBS?.status === 'offline' ||
-    statePBS?.status === 'disconnected'
-  ) {
-    return STATUS_META.offline;
-  }
-  if (statePBS?.connectionHealth === 'degraded') {
-    return STATUS_META.degraded;
-  }
-  if (statePBS && (statePBS.status === 'online' || statePBS.connectionHealth === 'healthy')) {
-    return STATUS_META.online;
-  }
-
-  switch (node.status) {
-    case 'connected':
-      return STATUS_META.online;
-    case 'pending':
-      return STATUS_META.pending;
-    case 'disconnected':
-    case 'offline':
-    case 'error':
-      return STATUS_META.offline;
-    default:
-      return STATUS_META.unknown;
-  }
+  return resolveConfiguredNodeStatusIndicator({
+    configuredStatus: node.status,
+    liveStatus: statePBS?.status,
+    connectionHealth: statePBS?.connectionHealth,
+  });
 };
 
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
@@ -469,13 +427,20 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
           <TableBody class="divide-y divide-border bg-surface">
             <For each={props.nodes}>
               {(node) => {
-                const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
+                const statusIndicator = createMemo(() =>
+                  resolvePbsStatusIndicator(node, props.statePbs),
+                );
                 return (
                   <TableRow class="even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
                     <TableCell class="align-top py-3 pl-4 pr-3">
                       <div class="min-w-0 space-y-1">
                         <div class="flex items-start gap-3">
-                          <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
+                          <StatusDot
+                            variant={statusIndicator().variant}
+                            size="md"
+                            ariaHidden={true}
+                            class="mt-1.5"
+                          />
                           <div class="min-w-0 flex-1">
                             <p class="font-medium text-base-content truncate">{node.name}</p>
                             <p class="text-xs text-muted truncate">{node.host}</p>
@@ -552,10 +517,10 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                     </TableCell>
                     <TableCell class="align-top px-3 py-3 whitespace-nowrap">
                       <span
-                        class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}
+                        class={`inline-flex items-center gap-2 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(statusIndicator().variant)}`}
                       >
-                        <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
-                        {statusMeta().label}
+                        <StatusDot variant={statusIndicator().variant} size="sm" ariaHidden={true} />
+                        {statusIndicator().label}
                       </span>
                     </TableCell>
                     <TableCell class="align-top px-3 py-3">
@@ -635,38 +600,16 @@ interface PmgNodesTableProps {
   onDelete: (node: NodeConfigWithStatus) => void;
 }
 
-const resolvePmgStatusMeta = (
+const resolvePmgStatusIndicator = (
   node: NodeConfigWithStatus,
   statePmg: PmgNodesTableProps['statePmg'],
-): StatusMeta => {
+): StatusIndicator => {
   const statePMG = statePmg.find((p) => p.name === node.name);
-  if (
-    statePMG?.connectionHealth === 'unhealthy' ||
-    statePMG?.connectionHealth === 'error' ||
-    statePMG?.status === 'offline' ||
-    statePMG?.status === 'disconnected'
-  ) {
-    return STATUS_META.offline;
-  }
-  if (statePMG?.connectionHealth === 'degraded') {
-    return STATUS_META.degraded;
-  }
-  if (statePMG && (statePMG.status === 'online' || statePMG.connectionHealth === 'healthy')) {
-    return STATUS_META.online;
-  }
-
-  switch (node.status) {
-    case 'connected':
-      return STATUS_META.online;
-    case 'pending':
-      return STATUS_META.pending;
-    case 'disconnected':
-    case 'offline':
-    case 'error':
-      return STATUS_META.offline;
-    default:
-      return STATUS_META.unknown;
-  }
+  return resolveConfiguredNodeStatusIndicator({
+    configuredStatus: node.status,
+    liveStatus: statePMG?.status,
+    connectionHealth: statePMG?.connectionHealth,
+  });
 };
 
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
@@ -696,13 +639,20 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
           <TableBody class="divide-y divide-border bg-surface">
             <For each={props.nodes}>
               {(node) => {
-                const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
+                const statusIndicator = createMemo(() =>
+                  resolvePmgStatusIndicator(node, props.statePmg),
+                );
                 return (
                   <TableRow class="even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
                     <TableCell class="align-top py-3 pl-4 pr-3">
                       <div class="min-w-0 space-y-1">
                         <div class="flex items-start gap-3">
-                          <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
+                          <StatusDot
+                            variant={statusIndicator().variant}
+                            size="md"
+                            ariaHidden={true}
+                            class="mt-1.5"
+                          />
                           <div class="min-w-0 flex-1">
                             <p class="font-medium text-base-content truncate">{node.name}</p>
                             <p class="text-xs text-muted truncate">{node.host}</p>
@@ -761,10 +711,10 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                     </TableCell>
                     <TableCell class="align-top px-3 py-3 whitespace-nowrap">
                       <span
-                        class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}
+                        class={`inline-flex items-center gap-2 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(statusIndicator().variant)}`}
                       >
-                        <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
-                        {statusMeta().label}
+                        <StatusDot variant={statusIndicator().variant} size="sm" ariaHidden={true} />
+                        {statusIndicator().label}
                       </span>
                     </TableCell>
                     <TableCell class="align-top px-3 py-3">

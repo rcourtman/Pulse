@@ -11,6 +11,10 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
+import {
+  getAIProviderHealthPresentation,
+  type AIProviderHealthStatus,
+} from '@/utils/aiProviderHealthPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
   getUpgradeActionUrlOrFallback,
@@ -34,10 +38,8 @@ const AI_PROVIDERS: AIProvider[] = [
   'ollama',
 ];
 
-type ProviderHealthStatus = 'not_configured' | 'checking' | 'ok' | 'error';
-
 type ProviderHealthState = {
-  status: ProviderHealthStatus;
+  status: AIProviderHealthStatus;
   message: string;
 };
 
@@ -485,32 +487,6 @@ export const AISettings: Component = () => {
       setPreflightLastCheckedAt(null);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getProviderHealthBadgeClass = (provider: AIProvider): string => {
-    switch (providerHealth[provider].status) {
-      case 'ok':
-        return 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
-      case 'error':
-        return 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300';
-      case 'checking':
-        return 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
-      default:
-        return 'bg-surface-hover text-muted';
-    }
-  };
-
-  const getProviderHealthLabel = (provider: AIProvider): string => {
-    switch (providerHealth[provider].status) {
-      case 'ok':
-        return 'Healthy';
-      case 'error':
-        return 'Issue';
-      case 'checking':
-        return 'Checking...';
-      default:
-        return 'Not checked';
     }
   };
 
@@ -1416,9 +1392,9 @@ export const AISettings: Component = () => {
                         </Show>
                         <Show when={settings()?.anthropic_configured}>
                           <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('anthropic')}`}
+                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.anthropic.status).badgeClass}`}
                           >
-                            {getProviderHealthLabel('anthropic')}
+                            {getAIProviderHealthPresentation(providerHealth.anthropic.status).label}
                           </span>
                         </Show>
                       </div>
@@ -1518,9 +1494,9 @@ export const AISettings: Component = () => {
                         </Show>
                         <Show when={settings()?.openai_configured}>
                           <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('openai')}`}
+                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.openai.status).badgeClass}`}
                           >
-                            {getProviderHealthLabel('openai')}
+                            {getAIProviderHealthPresentation(providerHealth.openai.status).label}
                           </span>
                         </Show>
                       </div>
@@ -1632,9 +1608,9 @@ export const AISettings: Component = () => {
                         </Show>
                         <Show when={settings()?.openrouter_configured}>
                           <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('openrouter')}`}
+                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.openrouter.status).badgeClass}`}
                           >
-                            {getProviderHealthLabel('openrouter')}
+                            {getAIProviderHealthPresentation(providerHealth.openrouter.status).label}
                           </span>
                         </Show>
                       </div>
@@ -1737,9 +1713,9 @@ export const AISettings: Component = () => {
                         </Show>
                         <Show when={settings()?.deepseek_configured}>
                           <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('deepseek')}`}
+                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.deepseek.status).badgeClass}`}
                           >
-                            {getProviderHealthLabel('deepseek')}
+                            {getAIProviderHealthPresentation(providerHealth.deepseek.status).label}
                           </span>
                         </Show>
                       </div>
@@ -1837,9 +1813,9 @@ export const AISettings: Component = () => {
                         </Show>
                         <Show when={settings()?.gemini_configured}>
                           <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('gemini')}`}
+                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.gemini.status).badgeClass}`}
                           >
-                            {getProviderHealthLabel('gemini')}
+                            {getAIProviderHealthPresentation(providerHealth.gemini.status).label}
                           </span>
                         </Show>
                       </div>
@@ -1937,9 +1913,9 @@ export const AISettings: Component = () => {
                         </Show>
                         <Show when={settings()?.ollama_configured}>
                           <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('ollama')}`}
+                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.ollama.status).badgeClass}`}
                           >
-                            {getProviderHealthLabel('ollama')}
+                            {getAIProviderHealthPresentation(providerHealth.ollama.status).label}
                           </span>
                         </Show>
                       </div>

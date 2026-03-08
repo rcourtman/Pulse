@@ -17,6 +17,12 @@ import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import Sparkles from 'lucide-solid/icons/sparkles';
+import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  getSimpleStatusIndicator,
+  getStatusIndicatorBadgeToneClasses,
+} from '@/utils/status';
+import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 
 // Type definitions
 interface DiagnosticsNode {
@@ -158,26 +164,12 @@ const DiagnosticCard: Component<{
   status?: 'success' | 'warning' | 'error' | 'info';
   children: JSX.Element;
 }> = (props) => {
-  const statusColors = {
-    success: 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900',
-    warning: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900',
-    error: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900',
-    info: 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900',
-  };
-
-  const iconColors = {
-    success: 'text-green-600 dark:text-green-400',
-    warning: 'text-amber-600 dark:text-amber-400',
-    error: 'text-red-600 dark:text-red-400',
-    info: 'text-blue-600 dark:text-blue-400',
-  };
+  const tone = () => getSemanticTonePresentation(props.status || 'info');
 
   return (
-    <div
-      class={`rounded-md border p-4 transition-all hover:shadow-sm ${statusColors[props.status || 'info']}`}
-    >
+    <div class={`rounded-md border p-4 transition-all hover:shadow-sm ${tone().panelClass}`}>
       <div class="flex items-center gap-3 mb-3">
-        <div class={`p-2 rounded-md bg-surface ${iconColors[props.status || 'info']}`}>
+        <div class={`p-2 rounded-md bg-surface ${tone().iconClass}`}>
           <props.icon class="w-4 h-4" />
         </div>
         <h4 class="text-sm font-semibold text-base-content">{props.title}</h4>
@@ -192,21 +184,19 @@ const StatusBadge: Component<{
   status: 'online' | 'offline' | 'warning' | 'unknown';
   label?: string;
 }> = (props) => {
-  const colors = {
-    online: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-    offline: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-    warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-    unknown: 'bg-surface-alt text-base-content',
-  };
+  const indicator = () => getSimpleStatusIndicator(props.status);
 
   return (
     <span
-      class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide ${colors[props.status]}`}
+      class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide ${getStatusIndicatorBadgeToneClasses(indicator().variant)}`}
     >
-      <span
-        class={`w-1.5 h-1.5 rounded-full ${props.status === 'online' ? 'bg-emerald-400' : props.status === 'offline' ? 'bg-rose-400' : props.status === 'warning' ? 'bg-amber-400' : 'bg-slate-400'}`}
+      <StatusDot
+        variant={indicator().variant}
+        size="xs"
+        ariaHidden={true}
+        class="translate-y-[0.5px]"
       />
-      {props.label || props.status}
+      {props.label || indicator().label}
     </span>
   );
 };

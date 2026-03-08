@@ -4,6 +4,7 @@ import {
   formatFindingLoopState,
   getFindingLoopStateBadgeClasses,
   getFindingSeverityBadgeClasses,
+  getFindingSeverityToneClasses,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
   getInvestigationStatusBadgeClasses,
@@ -72,6 +73,10 @@ describe('FindingsPanel constants', () => {
 
     it('contains watch color classes', () => {
       expect(getFindingSeverityBadgeClasses('watch')).toContain('bg-surface-alt');
+    });
+
+    it('contains compact tone classes for critical severity', () => {
+      expect(getFindingSeverityToneClasses('critical')).toContain('bg-red-100');
     });
   });
 

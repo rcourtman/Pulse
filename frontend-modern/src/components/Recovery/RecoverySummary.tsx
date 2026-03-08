@@ -4,13 +4,21 @@ import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { InteractiveSparklineSeries } from '@/components/shared/InteractiveSparkline';
 import type { MetricPoint } from '@/api/charts';
-import type { ProtectionRollup, RecoveryPointsSeriesBucket } from '@/types/recovery';
+import type {
+  ProtectionRollup,
+  RecoveryOutcome,
+  RecoveryPointsSeriesBucket,
+} from '@/types/recovery';
+import {
+  getRecoveryOutcomeBarClass,
+  getRecoveryOutcomeLabel,
+  getRecoveryOutcomeTextClass,
+  normalizeRecoveryOutcome,
+} from '@/utils/recoveryOutcomePresentation';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type KnownOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown';
 
 type RecoverySummaryTimeRange = '7d' | '30d' | '90d';
 
@@ -28,26 +36,13 @@ export interface RecoverySummaryProps {
   seriesFailed?: () => boolean;
   summary: () => {
     total: number;
-    counts: Record<KnownOutcome, number>;
+    counts: Record<RecoveryOutcome, number>;
     stale: number;
     neverSucceeded: number;
   };
   timeRange: () => RecoverySummaryTimeRange;
   onTimeRangeChange?: (range: RecoverySummaryTimeRange) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Helper: normalize outcome
-// ---------------------------------------------------------------------------
-
-const normalizeOutcome = (raw: string | null | undefined): KnownOutcome => {
-  const v = (raw || '').trim().toLowerCase();
-  if (v === 'success' || v === 'ok') return 'success';
-  if (v === 'warning' || v === 'warn') return 'warning';
-  if (v === 'failed' || v === 'error' || v === 'failure') return 'failed';
-  if (v === 'running') return 'running';
-  return 'unknown';
-};
 
 // ---------------------------------------------------------------------------
 // Freshness buckets
@@ -90,33 +85,15 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const outcomeSegments = createMemo(() => {
     const s = summary();
     if (s.total <= 0) return [];
-    return [
-      {
-        label: 'Healthy',
-        count: s.counts.success,
-        color: 'bg-emerald-500',
-        textColor: 'text-emerald-600 dark:text-emerald-400',
-      },
-      {
-        label: 'Running',
-        count: s.counts.running,
-        color: 'bg-blue-500',
-        textColor: 'text-blue-600 dark:text-blue-400',
-      },
-      {
-        label: 'Warning',
-        count: s.counts.warning,
-        color: 'bg-amber-400',
-        textColor: 'text-amber-600 dark:text-amber-400',
-      },
-      {
-        label: 'Failed',
-        count: s.counts.failed,
-        color: 'bg-red-500',
-        textColor: 'text-red-600 dark:text-red-400',
-      },
-      { label: 'Unknown', count: s.counts.unknown, color: 'bg-gray-400', textColor: 'text-muted' },
-    ].filter((seg) => seg.count > 0);
+    return ['success', 'running', 'warning', 'failed', 'unknown']
+      .map((outcome) => ({
+        outcome: outcome as RecoveryOutcome,
+        label: getRecoveryOutcomeLabel(outcome),
+        count: s.counts[outcome as RecoveryOutcome],
+        color: getRecoveryOutcomeBarClass(outcome),
+        textColor: getRecoveryOutcomeTextClass(outcome),
+      }))
+      .filter((seg) => seg.count > 0);
   });
 
   // Card 2: Backup freshness
@@ -160,7 +137,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const issuesByProvider = createMemo((): ProviderIssue[] => {
     const map = new Map<string, { warning: number; failed: number }>();
     for (const r of props.rollups()) {
-      const outcome = normalizeOutcome(r.lastOutcome);
+      const outcome = normalizeRecoveryOutcome(r.lastOutcome);
       if (outcome !== 'warning' && outcome !== 'failed') continue;
       const providers = (r.providers || []).filter(Boolean);
       if (providers.length === 0) providers.push('unknown');

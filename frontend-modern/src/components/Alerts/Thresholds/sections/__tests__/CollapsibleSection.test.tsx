@@ -409,23 +409,23 @@ describe('NestedGroupHeader', () => {
 
   it('shows online status indicator', () => {
     const { container } = render(() => <NestedGroupHeader title="Node" status="online" />);
-    const dot = container.querySelector('[title="online"]');
+    const dot = container.querySelector('[title="Online"]');
     expect(dot).toBeInTheDocument();
-    expect(dot!.className).toContain('bg-green-500');
+    expect(dot!.className).toContain('bg-emerald-500');
   });
 
   it('shows offline status indicator', () => {
     const { container } = render(() => <NestedGroupHeader title="Node" status="offline" />);
-    const dot = container.querySelector('[title="offline"]');
+    const dot = container.querySelector('[title="Offline"]');
     expect(dot).toBeInTheDocument();
     expect(dot!.className).toContain('bg-red-500');
   });
 
   it('shows unknown status indicator', () => {
     const { container } = render(() => <NestedGroupHeader title="Node" status="unknown" />);
-    const dot = container.querySelector('[title="unknown"]');
+    const dot = container.querySelector('[title="Unknown"]');
     expect(dot).toBeInTheDocument();
-    expect(dot!.className).toContain('bg-slate-400');
+    expect(dot!.className).toContain('bg-amber-500');
   });
 
   it('calls onToggle when clicked', () => {

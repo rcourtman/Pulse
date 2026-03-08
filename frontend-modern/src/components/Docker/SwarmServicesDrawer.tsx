@@ -3,6 +3,7 @@ import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
 import { SearchField } from '@/components/shared/SearchField';
+import { StatusDot } from '@/components/shared/StatusDot';
 import {
   Table,
   TableHeader,
@@ -12,6 +13,7 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 20;
@@ -105,16 +107,6 @@ const fetchAllServices = async (cluster: string): Promise<DockerServiceResource[
   }
 
   return Array.from(new Map(services.map((s) => [s.id, s])).values());
-};
-
-const statusTone = (status?: string) => {
-  const normalized = (status || '').trim().toLowerCase();
-  if (!normalized) return 'bg-slate-400';
-  if (normalized === 'online' || normalized === 'running' || normalized === 'healthy')
-    return 'bg-green-500';
-  if (normalized === 'warning' || normalized === 'degraded') return 'bg-amber-500';
-  if (normalized === 'offline' || normalized === 'stopped') return 'bg-red-500';
-  return 'bg-slate-400';
 };
 
 const formatUpdate = (update?: DockerServiceUpdate) => {
@@ -287,14 +279,17 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                         const running = () => svc.docker?.runningTasks ?? 0;
                         const update = () => formatUpdate(svc.docker?.serviceUpdate);
                         const ports = () => formatPorts(svc.docker?.endpointPorts);
+                        const status = () => getSimpleStatusIndicator(svc.status);
 
                         return (
                           <TableRow class="hover:bg-surface-hover">
                             <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
-                                <span
-                                  class={`h-2 w-2 rounded-full ${statusTone(svc.status)}`}
+                                <StatusDot
+                                  size="sm"
+                                  variant={status().variant}
                                   title={svc.status || 'unknown'}
+                                  ariaHidden
                                 />
                                 <span
                                   class="font-semibold text-base-content truncate"

@@ -2,30 +2,16 @@ import { For, Show, createMemo } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { buildRecoveryPath } from '@/routing/resourceLinks';
 import { formatRelativeTime } from '@/utils/format';
+import {
+  RECOVERY_OUTCOMES,
+  getRecoveryOutcomeBadgeClass,
+} from '@/utils/recoveryOutcomePresentation';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 
 interface RecoveryStatusPanelProps {
   recovery: DashboardRecoverySummary;
 }
 
-type ProtectionOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown';
-const OUTCOMES: ProtectionOutcome[] = ['success', 'warning', 'failed', 'running', 'unknown'];
-
-const outcomeBadgeClass = (outcome: ProtectionOutcome): string => {
-  const base = 'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium';
-  switch (outcome) {
-    case 'success':
-      return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300`;
-    case 'warning':
-      return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`;
-    case 'failed':
-      return `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`;
-    case 'running':
-      return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300`;
-    default:
-      return `${base} bg-surface-alt text-muted`;
-  }
-};
 export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
   const latestAgeMs = createMemo(() => {
     const ts = props.recovery.latestEventTimestamp;
@@ -76,12 +62,12 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
           </Show>
 
           <div class="flex flex-wrap gap-2">
-            <For each={OUTCOMES}>
+            <For each={RECOVERY_OUTCOMES}>
               {(outcome) => {
                 const count = () => props.recovery.byOutcome[outcome] ?? 0;
                 return (
                   <Show when={count() > 0}>
-                    <span class={outcomeBadgeClass(outcome)}>
+                    <span class={getRecoveryOutcomeBadgeClass(outcome)}>
                       <span class="font-mono">{count()}</span>
                       <span class="ml-1">{outcome}</span>
                     </span>

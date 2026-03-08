@@ -36,6 +36,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -51,8 +52,6 @@ import {
   toNodeFromProxmox,
   toAgentFromResource,
   buildTemperatureRows,
-  normalizeHealthLabel,
-  healthToneClass,
   formatInteger,
   ALIAS_COLLAPSE_THRESHOLD,
   formatSourceType,
@@ -934,7 +933,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           </Show>
 
           <Show when={pbsData()}>
-            {(pbs) => (
+            {(pbs) => {
+              const connection = getServiceHealthPresentation(
+                props.resource.status,
+                pbs().connectionHealth,
+              );
+              return (
               <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
                 <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
@@ -952,8 +956,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Connection</span>
-                    <span class={`font-medium ${healthToneClass(pbs().connectionHealth)}`}>
-                      {normalizeHealthLabel(pbs().connectionHealth)}
+                    <span class={`font-medium ${connection.text}`}>
+                      {connection.label}
                     </span>
                   </div>
                   <Show when={pbs().version}>
@@ -1004,11 +1008,17 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </details>
                 </div>
               </div>
-            )}
+              );
+            }}
           </Show>
 
           <Show when={pmgData()}>
-            {(pmg) => (
+            {(pmg) => {
+              const connection = getServiceHealthPresentation(
+                props.resource.status,
+                pmg().connectionHealth,
+              );
+              return (
               <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
                 <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
@@ -1026,8 +1036,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Connection</span>
-                    <span class={`font-medium ${healthToneClass(pmg().connectionHealth)}`}>
-                      {normalizeHealthLabel(pmg().connectionHealth)}
+                    <span class={`font-medium ${connection.text}`}>
+                      {connection.label}
                     </span>
                   </div>
                   <Show when={pmg().version}>
@@ -1114,7 +1124,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </details>
                 </div>
               </div>
-            )}
+              );
+            }}
           </Show>
         </div>
 

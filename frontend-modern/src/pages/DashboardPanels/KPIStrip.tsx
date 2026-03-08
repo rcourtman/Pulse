@@ -5,6 +5,8 @@ import {
   WORKLOADS_PATH,
   buildStoragePath,
 } from '@/routing/resourceLinks';
+import { getDashboardAlertTone } from '@/utils/dashboardAlertPresentation';
+import { getAlertSeverityTextClass } from '@/utils/alertSeverityPresentation';
 import { formatBytes } from '@/utils/format';
 import ServerIcon from 'lucide-solid/icons/server';
 import ContainerIcon from 'lucide-solid/icons/box';
@@ -33,12 +35,6 @@ interface KPIStripProps {
 }
 
 export function KPIStrip(props: KPIStripProps) {
-  const alertsTone = () => {
-    if (props.alerts.activeCritical > 0) return 'danger' as const;
-    if (props.alerts.activeWarning > 0) return 'warning' as const;
-    return 'default' as const;
-  };
-
   return (
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <a href={INFRASTRUCTURE_PATH} class="group block">
@@ -124,7 +120,7 @@ export function KPIStrip(props: KPIStripProps) {
       <a href={ALERTS_OVERVIEW_PATH} class="group block">
         <Card
           hoverable
-          tone={alertsTone()}
+          tone={getDashboardAlertTone(props.alerts)}
           padding="none"
           class="h-full border-l-[3px] border-l-amber-500 dark:border-l-amber-400 group-hover:brightness-95 dark:group-hover:brightness-110 transition-all"
         >
@@ -140,11 +136,15 @@ export function KPIStrip(props: KPIStripProps) {
               {props.alerts.total}
             </p>
             <p class="text-xs text-muted mt-0.5">
-              <span class="font-mono font-medium text-red-600 dark:text-red-400">
+              <span
+                class={`font-mono font-medium ${getAlertSeverityTextClass('critical')}`}
+              >
                 {props.alerts.activeCritical}
               </span>{' '}
               critical ·{' '}
-              <span class="font-mono font-medium text-amber-600 dark:text-amber-400">
+              <span
+                class={`font-mono font-medium ${getAlertSeverityTextClass('warning')}`}
+              >
                 {props.alerts.activeWarning}
               </span>{' '}
               warning
