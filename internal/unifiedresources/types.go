@@ -40,6 +40,7 @@ type Resource struct {
 	IncidentSeverity storagehealth.RiskLevel `json:"incidentSeverity,omitempty"`
 	IncidentSummary  string                  `json:"incidentSummary,omitempty"`
 	IncidentCategory string                  `json:"incidentCategory,omitempty"`
+	IncidentLabel    string                  `json:"incidentLabel,omitempty"`
 	IncidentUrgency  string                  `json:"incidentUrgency,omitempty"`
 	IncidentAction   string                  `json:"incidentAction,omitempty"`
 

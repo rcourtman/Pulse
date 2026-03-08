@@ -104,6 +104,9 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryCapacity {
 		t.Fatalf("incidentCategory = %v", got)
 	}
+	if got := alert.Metadata["incidentLabel"]; got != "Capacity Pressure" {
+		t.Fatalf("incidentLabel = %v", got)
+	}
 	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyToday {
 		t.Fatalf("incidentUrgency = %v", got)
 	}
@@ -173,6 +176,9 @@ func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	}
 	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryRecoverability {
 		t.Fatalf("incidentCategory = %v", got)
+	}
+	if got := alert.Metadata["incidentLabel"]; got != "Backup Coverage At Risk" {
+		t.Fatalf("incidentLabel = %v", got)
 	}
 	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyNow {
 		t.Fatalf("incidentUrgency = %v", got)
@@ -249,6 +255,9 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 	}
 	if got := alert.Metadata["incidentCategory"]; got != unifiedresources.IncidentCategoryRecoverability {
 		t.Fatalf("incidentCategory = %v", got)
+	}
+	if got := alert.Metadata["incidentLabel"]; got != "Backup Coverage At Risk" {
+		t.Fatalf("incidentLabel = %v", got)
 	}
 	if got := alert.Metadata["incidentUrgency"]; got != unifiedresources.IncidentUrgencyNow {
 		t.Fatalf("incidentUrgency = %v", got)

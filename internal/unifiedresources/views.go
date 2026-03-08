@@ -886,6 +886,13 @@ func (v HostView) IncidentCategory() string {
 	return v.r.IncidentCategory
 }
 
+func (v HostView) IncidentLabel() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentLabel
+}
+
 func (v HostView) IncidentUrgency() string {
 	if v.r == nil {
 		return ""
@@ -1344,6 +1351,13 @@ func (v StoragePoolView) IncidentCategory() string {
 	return v.r.IncidentCategory
 }
 
+func (v StoragePoolView) IncidentLabel() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentLabel
+}
+
 func (v StoragePoolView) IncidentUrgency() string {
 	if v.r == nil {
 		return ""
@@ -1646,6 +1660,13 @@ func (v PBSInstanceView) IncidentCategory() string {
 		return ""
 	}
 	return v.r.IncidentCategory
+}
+
+func (v PBSInstanceView) IncidentLabel() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.IncidentLabel
 }
 
 func (v PBSInstanceView) IncidentUrgency() string {

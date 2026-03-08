@@ -469,6 +469,7 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		"incidentProvider": incident.Provider,
 		"incidentCode":     incident.Code,
 		"incidentCategory": unifiedresources.IncidentCategoryForResource(&resource, incident),
+		"incidentLabel":    unifiedresources.IncidentLabelForResource(&resource, incident, unifiedresources.IncidentCategoryForResource(&resource, incident)),
 		"incidentNativeID": incident.NativeID,
 		"incidentSource":   incident.Source,
 	}

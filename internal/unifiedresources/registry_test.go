@@ -926,7 +926,7 @@ func TestResourceRegistry_IngestResourcesDerivesPrimaryIncidentRollups(t *testin
 	if !ok {
 		t.Fatal("expected storage resource")
 	}
-	if storage.IncidentCount != 2 || storage.IncidentCode != "zfs_pool_state" || storage.IncidentSeverity != storagehealth.RiskWarning || storage.IncidentSummary != "ZFS pool tank is DEGRADED" || storage.IncidentCategory != IncidentCategoryProtection || storage.IncidentUrgency != IncidentUrgencyToday || storage.IncidentAction != "Investigate degraded protection and schedule maintenance to restore redundancy" {
+	if storage.IncidentCount != 2 || storage.IncidentCode != "zfs_pool_state" || storage.IncidentSeverity != storagehealth.RiskWarning || storage.IncidentSummary != "ZFS pool tank is DEGRADED" || storage.IncidentCategory != IncidentCategoryProtection || storage.IncidentLabel != "Protection Reduced" || storage.IncidentUrgency != IncidentUrgencyToday || storage.IncidentAction != "Investigate degraded protection and schedule maintenance to restore redundancy" {
 		t.Fatalf("unexpected storage incident rollup %+v", storage)
 	}
 
@@ -934,7 +934,7 @@ func TestResourceRegistry_IngestResourcesDerivesPrimaryIncidentRollups(t *testin
 	if !ok {
 		t.Fatal("expected pbs resource")
 	}
-	if pbs.IncidentCount != 2 || pbs.IncidentCode != "pbs_datastore_state" || pbs.IncidentSeverity != storagehealth.RiskWarning || pbs.IncidentSummary != "PBS datastore archive is READ_ONLY" || pbs.IncidentCategory != IncidentCategoryRecoverability || pbs.IncidentUrgency != IncidentUrgencyToday || pbs.IncidentAction != "Investigate backup target health and preserve backup coverage" {
+	if pbs.IncidentCount != 2 || pbs.IncidentCode != "pbs_datastore_state" || pbs.IncidentSeverity != storagehealth.RiskWarning || pbs.IncidentSummary != "PBS datastore archive is READ_ONLY" || pbs.IncidentCategory != IncidentCategoryRecoverability || pbs.IncidentLabel != "Backup Coverage At Risk" || pbs.IncidentUrgency != IncidentUrgencyToday || pbs.IncidentAction != "Investigate backup target health and preserve backup coverage" {
 		t.Fatalf("unexpected pbs incident rollup %+v", pbs)
 	}
 }
