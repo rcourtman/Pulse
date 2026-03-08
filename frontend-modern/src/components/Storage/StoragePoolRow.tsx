@@ -161,7 +161,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </span>
         </td>
 
-        <td class="px-2 py-1 align-middle text-[11px] text-base-content">
+        <td class="hidden xl:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
           <span class="block truncate" title={topologyLabel()}>
             {topologyLabel()}
           </span>
@@ -184,11 +184,11 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </Show>
         </td>
 
-        <td class="px-2 py-1 align-middle md:min-w-[220px]">
+        <td class="px-2 py-1 align-middle md:min-w-[190px] xl:min-w-[220px]">
           <Show when={totalBytes() > 0} fallback={<span class="text-[11px] text-muted">n/a</span>}>
             <div class="flex items-center gap-2 whitespace-nowrap text-[11px]">
               <span class="shrink-0 font-medium text-base-content">{formatPercent(usagePercent())}</span>
-              <div class="min-w-[120px] flex-1">
+              <div class="min-w-[96px] md:min-w-[120px] flex-1">
                 <EnhancedStorageBar
                   used={usedBytes()}
                   total={Math.max(totalBytes(), 0)}
@@ -197,7 +197,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
                 />
               </div>
               <span
-                class="truncate text-muted"
+                class="hidden xl:block truncate text-muted"
                 title={`${formatBytes(usedBytes())} / ${formatBytes(totalBytes())}`}
               >
                 {formatBytes(usedBytes())} / {formatBytes(totalBytes())}
@@ -221,7 +221,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
                 {compactIssue()}
               </span>
               <Show when={compactIssueSummary()}>
-                <span class="truncate text-muted" title={compactIssueSummary()}>
+                <span class="hidden xl:block truncate text-muted" title={compactIssueSummary()}>
                   {compactIssueSummary()}
                 </span>
               </Show>
