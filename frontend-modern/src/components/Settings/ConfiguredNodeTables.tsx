@@ -307,7 +307,11 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                       <span
                         class={`inline-flex items-center gap-2 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(statusIndicator().variant)}`}
                       >
-                        <StatusDot variant={statusIndicator().variant} size="sm" ariaHidden={true} />
+                        <StatusDot
+                          variant={statusIndicator().variant}
+                          size="sm"
+                          ariaHidden={true}
+                        />
                         {statusIndicator().label}
                       </span>
                     </TableCell>
@@ -519,7 +523,11 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                       <span
                         class={`inline-flex items-center gap-2 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(statusIndicator().variant)}`}
                       >
-                        <StatusDot variant={statusIndicator().variant} size="sm" ariaHidden={true} />
+                        <StatusDot
+                          variant={statusIndicator().variant}
+                          size="sm"
+                          ariaHidden={true}
+                        />
                         {statusIndicator().label}
                       </span>
                     </TableCell>
@@ -713,7 +721,11 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                       <span
                         class={`inline-flex items-center gap-2 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(statusIndicator().variant)}`}
                       >
-                        <StatusDot variant={statusIndicator().variant} size="sm" ariaHidden={true} />
+                        <StatusDot
+                          variant={statusIndicator().variant}
+                          size="sm"
+                          ariaHidden={true}
+                        />
                         {statusIndicator().label}
                       </span>
                     </TableCell>

@@ -118,7 +118,9 @@ export const SecurityWarning: Component = () => {
         <div class="max-w-7xl mx-auto px-4 py-3">
           <div class="flex items-start justify-between">
             <div class="flex items-start space-x-3">
-              <span class={`text-2xl ${getSecurityScoreTextClass((status()!.score / status()!.maxScore) * 100)}`}>
+              <span
+                class={`text-2xl ${getSecurityScoreTextClass((status()!.score / status()!.maxScore) * 100)}`}
+              >
                 {getSecurityScoreSymbol((status()!.score / status()!.maxScore) * 100)}
               </span>
               <div>
@@ -127,7 +129,11 @@ export const SecurityWarning: Component = () => {
                     title={
                       <span>
                         Security score:{' '}
-                        <span class={getSecurityScoreTextClass((status()!.score / status()!.maxScore) * 100)}>
+                        <span
+                          class={getSecurityScoreTextClass(
+                            (status()!.score / status()!.maxScore) * 100,
+                          )}
+                        >
                           {status()!.score}/{status()!.maxScore}
                         </span>
                       </span>

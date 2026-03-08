@@ -2560,7 +2560,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                               </span>
                             </div>
                             <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                              <span>{row.capabilities.map(getAgentCapabilityLabel).join(', ')}</span>
+                              <span>
+                                {row.capabilities.map(getAgentCapabilityLabel).join(', ')}
+                              </span>
                               <Show
                                 when={
                                   row.displayName &&

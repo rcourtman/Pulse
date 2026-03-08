@@ -1021,24 +1021,29 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                       onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
                       class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
                     >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        class="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M7 8h10M7 12h10M7 16h10"
-                  />
-                </svg>
-                Open In Assistant
-              </button>
-              <button
-                type="button"
-                onClick={(e) => handleDismissPlan(plan(), e)}
-                class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
-              >
-                Dismiss
-              </button>
-            </div>
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M7 8h10M7 12h10M7 16h10"
+                        />
+                      </svg>
+                      Open In Assistant
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDismissPlan(plan(), e)}
+                      class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
                 </>
               );
             })()}

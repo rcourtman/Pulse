@@ -95,13 +95,15 @@ describe('frontend resource type boundaries', () => {
     expect(workloadTypeBadgesSource).not.toContain('canonicalizeFrontendResourceType');
     expect(workloadTypeBadgesSource).toContain('getWorkloadTypePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
-    expect(recoveryOutcomePresentationSource).toContain("import type { RecoveryOutcome }");
+    expect(recoveryOutcomePresentationSource).toContain('import type { RecoveryOutcome }');
     expect(recoverySummarySource).toContain('normalizeRecoveryOutcome');
     expect(recoverySummarySource).not.toContain('const normalizeOutcome =');
     expect(dashboardRecoverySource).toContain('normalizeRecoveryOutcome');
     expect(dashboardRecoverySource).not.toContain('const normalizeOutcome =');
     expect(problemResourcesTableSource).toContain('getProblemResourceStatusVariant');
-    expect(problemResourcesTableSource).not.toContain('function statusVariant(pr: ProblemResource)');
+    expect(problemResourcesTableSource).not.toContain(
+      'function statusVariant(pr: ProblemResource)',
+    );
     expect(problemResourcePresentationSource).toContain(
       'export function getProblemResourceStatusVariant',
     );
@@ -114,7 +116,9 @@ describe('frontend resource type boundaries', () => {
     expect(temperatureUtilSource).toContain('export const getTemperatureTextClass');
     expect(pmgInstanceDrawerSource).toContain('getServiceHealthPresentation');
     expect(pmgInstanceDrawerSource).not.toContain('const statusTone =');
-    expect(serviceHealthPresentationSource).toContain('export function getServiceHealthPresentation');
+    expect(serviceHealthPresentationSource).toContain(
+      'export function getServiceHealthPresentation',
+    );
     expect(swarmServicesDrawerSource).toContain('getSimpleStatusIndicator');
     expect(swarmServicesDrawerSource).toContain('<StatusDot');
     expect(swarmServicesDrawerSource).not.toContain('const statusTone =');
@@ -140,7 +144,9 @@ describe('frontend resource type boundaries', () => {
     );
     expect(securityPostureSummarySource).toContain('getSecurityScorePresentation');
     expect(securityPostureSummarySource).not.toContain('const scoreTone =');
-    expect(securityScorePresentationSource).toContain('export function getSecurityScorePresentation');
+    expect(securityScorePresentationSource).toContain(
+      'export function getSecurityScorePresentation',
+    );
     expect(resourceDetailDrawerSource).toContain('getServiceHealthPresentation');
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
     expect(resourceDetailDrawerSource).not.toContain('normalizeHealthLabel(');

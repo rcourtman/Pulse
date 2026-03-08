@@ -45,7 +45,5 @@ export function getToolCallResultBadgeClass(success: boolean): string {
 }
 
 export function getToolCallResultTextClass(success: boolean): string {
-  return success
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : 'text-red-600 dark:text-red-400';
+  return success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
 }

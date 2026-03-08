@@ -171,67 +171,70 @@ export const K8sNamespacesDrawer: Component<{
                       {(row) => {
                         const podIndicator = () => getNamespaceCountsIndicator(row.pods);
                         return (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell class="px-3 py-2">
-                            <div class="flex items-center gap-2 min-w-0">
-                              <StatusDot
-                                size="sm"
-                                variant={podIndicator().variant}
-                                title={podIndicator().label}
-                                ariaHidden
-                              />
-                              <span
-                                class="font-semibold text-base-content truncate"
-                                title={row.namespace}
-                              >
-                                {row.namespace}
+                          <TableRow class="hover:bg-surface-hover">
+                            <TableCell class="px-3 py-2">
+                              <div class="flex items-center gap-2 min-w-0">
+                                <StatusDot
+                                  size="sm"
+                                  variant={podIndicator().variant}
+                                  title={podIndicator().label}
+                                  ariaHidden
+                                />
+                                <span
+                                  class="font-semibold text-base-content truncate"
+                                  title={row.namespace}
+                                >
+                                  {row.namespace}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">
+                              <span class="font-semibold">{formatInteger(row.pods.total)}</span>
+                              <span class="ml-2 text-[11px] text-muted">
+                                {row.pods.offline > 0
+                                  ? `${formatInteger(row.pods.offline)} off`
+                                  : ''}
+                                {row.pods.warning > 0
+                                  ? `${row.pods.offline > 0 ? ' · ' : ''}${formatInteger(row.pods.warning)} warn`
+                                  : ''}
                               </span>
-                            </div>
-                          </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            <span class="font-semibold">{formatInteger(row.pods.total)}</span>
-                            <span class="ml-2 text-[11px] text-muted">
-                              {row.pods.offline > 0 ? `${formatInteger(row.pods.offline)} off` : ''}
-                              {row.pods.warning > 0
-                                ? `${row.pods.offline > 0 ? ' · ' : ''}${formatInteger(row.pods.warning)} warn`
-                                : ''}
-                            </span>
-                          </TableCell>
-                          <TableCell class="px-3 py-2 text-base-content">
-                            <span class="font-semibold">
-                              {formatInteger(row.deployments.total)}
-                            </span>
-                            <span class="ml-2 text-[11px] text-muted">
-                              {row.deployments.warning > 0
-                                ? `${formatInteger(row.deployments.warning)} warn`
-                                : ''}
-                              {row.deployments.offline > 0
-                                ? `${row.deployments.warning > 0 ? ' · ' : ''}${formatInteger(row.deployments.offline)} off`
-                                : ''}
-                            </span>
-                          </TableCell>
-                          <TableCell class="px-3 py-2">
-                            <div class="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => openPods(row.namespace)}
-                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
-                              >
-                                Open Pods
-                              </button>
-                              <Show when={props.onOpenDeployments}>
+                            </TableCell>
+                            <TableCell class="px-3 py-2 text-base-content">
+                              <span class="font-semibold">
+                                {formatInteger(row.deployments.total)}
+                              </span>
+                              <span class="ml-2 text-[11px] text-muted">
+                                {row.deployments.warning > 0
+                                  ? `${formatInteger(row.deployments.warning)} warn`
+                                  : ''}
+                                {row.deployments.offline > 0
+                                  ? `${row.deployments.warning > 0 ? ' · ' : ''}${formatInteger(row.deployments.offline)} off`
+                                  : ''}
+                              </span>
+                            </TableCell>
+                            <TableCell class="px-3 py-2">
+                              <div class="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => props.onOpenDeployments?.(row.namespace)}
+                                  onClick={() => openPods(row.namespace)}
                                   class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                                 >
-                                  View Deployments
+                                  Open Pods
                                 </button>
-                              </Show>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}}
+                                <Show when={props.onOpenDeployments}>
+                                  <button
+                                    type="button"
+                                    onClick={() => props.onOpenDeployments?.(row.namespace)}
+                                    class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
+                                  >
+                                    View Deployments
+                                  </button>
+                                </Show>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }}
                     </For>
                   </TableBody>
                 </Table>

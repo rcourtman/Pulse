@@ -77,12 +77,12 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                 <Show when={array.devices && array.devices.length > 0}>
                   <div class="mt-2 flex flex-wrap gap-1">
                     <For each={array.devices}>
-                          {(device) => (
-                            <span
-                              class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getRaidDeviceBadgeClass(device)}`}
-                              title={`slot ${device.slot} • ${device.state}`}
-                            >
-                              {device.device}
+                      {(device) => (
+                        <span
+                          class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getRaidDeviceBadgeClass(device)}`}
+                          title={`slot ${device.slot} • ${device.state}`}
+                        >
+                          {device.device}
                         </span>
                       )}
                     </For>

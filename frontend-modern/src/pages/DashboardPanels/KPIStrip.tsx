@@ -136,15 +136,11 @@ export function KPIStrip(props: KPIStripProps) {
               {props.alerts.total}
             </p>
             <p class="text-xs text-muted mt-0.5">
-              <span
-                class={`font-mono font-medium ${getAlertSeverityTextClass('critical')}`}
-              >
+              <span class={`font-mono font-medium ${getAlertSeverityTextClass('critical')}`}>
                 {props.alerts.activeCritical}
               </span>{' '}
               critical ·{' '}
-              <span
-                class={`font-mono font-medium ${getAlertSeverityTextClass('warning')}`}
-              >
+              <span class={`font-mono font-medium ${getAlertSeverityTextClass('warning')}`}>
                 {props.alerts.activeWarning}
               </span>{' '}
               warning

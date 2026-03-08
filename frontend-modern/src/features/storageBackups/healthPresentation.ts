@@ -41,6 +41,5 @@ const STORAGE_HEALTH_PRESENTATION: Record<NormalizedHealth, StorageHealthPresent
   },
 };
 
-export const getStorageHealthPresentation = (
-  health: NormalizedHealth,
-): StorageHealthPresentation => STORAGE_HEALTH_PRESENTATION[health];
+export const getStorageHealthPresentation = (health: NormalizedHealth): StorageHealthPresentation =>
+  STORAGE_HEALTH_PRESENTATION[health];

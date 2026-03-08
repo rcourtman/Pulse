@@ -24,8 +24,6 @@ const SEMANTIC_TONE_PRESENTATION: Record<SemanticTone, SemanticTonePresentation>
   },
 };
 
-export function getSemanticTonePresentation(
-  tone: SemanticTone = 'info',
-): SemanticTonePresentation {
+export function getSemanticTonePresentation(tone: SemanticTone = 'info'): SemanticTonePresentation {
   return SEMANTIC_TONE_PRESENTATION[tone] || SEMANTIC_TONE_PRESENTATION.info;
 }

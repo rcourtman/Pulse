@@ -2294,9 +2294,9 @@ const Recovery: Component = () => {
                                             return (
                                               <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
                                                 <span
-                                                  class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${
-                                                    getRecoveryOutcomeBadgeClass(outcome)
-                                                  }`}
+                                                  class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryOutcomeBadgeClass(
+                                                    outcome,
+                                                  )}`}
                                                 >
                                                   {titleize(outcome)}
                                                 </span>

@@ -18,10 +18,7 @@ import XCircle from 'lucide-solid/icons/x-circle';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import Sparkles from 'lucide-solid/icons/sparkles';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  getSimpleStatusIndicator,
-  getStatusIndicatorBadgeToneClasses,
-} from '@/utils/status';
+import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 
 // Type definitions

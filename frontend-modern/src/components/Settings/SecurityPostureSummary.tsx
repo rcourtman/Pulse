@@ -113,7 +113,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
   return (
     <Card padding="none" class="overflow-hidden border border-border" border={false}>
       {/* Header with Security Score */}
-      <div class={`px-6 py-5 ${scorePresentation().tone.headerBg} ${scorePresentation().tone.headerBorder}`}>
+      <div
+        class={`px-6 py-5 ${scorePresentation().tone.headerBg} ${scorePresentation().tone.headerBorder}`}
+      >
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
             <div class={`p-3 rounded-md ${scorePresentation().tone.iconWrap}`}>
@@ -132,7 +134,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
             </div>
           </div>
           <div class="text-right">
-            <div class={`text-3xl font-semibold ${scorePresentation().tone.score}`}>{securityScore()}%</div>
+            <div class={`text-3xl font-semibold ${scorePresentation().tone.score}`}>
+              {securityScore()}%
+            </div>
             <div
               class={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${scorePresentation().tone.badge}`}
             >

@@ -939,75 +939,73 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 pbs().connectionHealth,
               );
               return (
-              <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
-                <div class="mb-2 flex items-center justify-between gap-2">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                    PBS Service
-                  </div>
-                  <Show when={pbs().hostname}>
-                    <span
-                      class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
-                      title={pbs().hostname}
-                    >
-                      {pbs().hostname}
-                    </span>
-                  </Show>
-                </div>
-                <div class="space-y-1.5 text-[11px]">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Connection</span>
-                    <span class={`font-medium ${connection.text}`}>
-                      {connection.label}
-                    </span>
-                  </div>
-                  <Show when={pbs().version}>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Version</span>
-                      <span class="font-medium text-base-content">{pbs().version}</span>
+                <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
+                  <div class="mb-2 flex items-center justify-between gap-2">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                      PBS Service
                     </div>
-                  </Show>
-                  <Show when={pbs().uptimeSeconds || props.resource.uptime}>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Uptime</span>
-                      <span class="font-medium text-base-content">
-                        {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                    <Show when={pbs().hostname}>
+                      <span
+                        class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
+                        title={pbs().hostname}
+                      >
+                        {pbs().hostname}
                       </span>
-                    </div>
-                  </Show>
-                  <div class="grid grid-cols-2 gap-2 pt-1">
-                    <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                      <div class="text-[10px] text-muted">Datastores</div>
-                      <div class="text-sm font-semibold text-base-content">
-                        {formatInteger(pbs().datastoreCount)}
-                      </div>
-                    </div>
-                    <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                      <div class="text-[10px] text-muted">Total Jobs</div>
-                      <div class="text-sm font-semibold text-base-content">
-                        {formatInteger(pbsJobTotal())}
-                      </div>
-                    </div>
+                    </Show>
                   </div>
-                  <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                      <span>Job breakdown</span>
-                      <span class="text-muted">{pbsVisibleJobBreakdown().length} types</span>
-                    </summary>
-                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
-                      <For each={pbsVisibleJobBreakdown()}>
-                        {(entry) => (
-                          <span class="text-muted">
-                            {entry.label}:{' '}
-                            <span class="font-medium text-base-content">
-                              {formatInteger(entry.value)}
-                            </span>
-                          </span>
-                        )}
-                      </For>
+                  <div class="space-y-1.5 text-[11px]">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-muted">Connection</span>
+                      <span class={`font-medium ${connection.text}`}>{connection.label}</span>
                     </div>
-                  </details>
+                    <Show when={pbs().version}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Version</span>
+                        <span class="font-medium text-base-content">{pbs().version}</span>
+                      </div>
+                    </Show>
+                    <Show when={pbs().uptimeSeconds || props.resource.uptime}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Uptime</span>
+                        <span class="font-medium text-base-content">
+                          {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                        </span>
+                      </div>
+                    </Show>
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                      <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                        <div class="text-[10px] text-muted">Datastores</div>
+                        <div class="text-sm font-semibold text-base-content">
+                          {formatInteger(pbs().datastoreCount)}
+                        </div>
+                      </div>
+                      <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                        <div class="text-[10px] text-muted">Total Jobs</div>
+                        <div class="text-sm font-semibold text-base-content">
+                          {formatInteger(pbsJobTotal())}
+                        </div>
+                      </div>
+                    </div>
+                    <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                      <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                        <span>Job breakdown</span>
+                        <span class="text-muted">{pbsVisibleJobBreakdown().length} types</span>
+                      </summary>
+                      <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
+                        <For each={pbsVisibleJobBreakdown()}>
+                          {(entry) => (
+                            <span class="text-muted">
+                              {entry.label}:{' '}
+                              <span class="font-medium text-base-content">
+                                {formatInteger(entry.value)}
+                              </span>
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </details>
+                  </div>
                 </div>
-              </div>
               );
             }}
           </Show>
@@ -1019,111 +1017,109 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 pmg().connectionHealth,
               );
               return (
-              <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
-                <div class="mb-2 flex items-center justify-between gap-2">
-                  <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                    Mail Gateway
-                  </div>
-                  <Show when={pmg().hostname}>
-                    <span
-                      class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
-                      title={pmg().hostname}
-                    >
-                      {pmg().hostname}
-                    </span>
-                  </Show>
-                </div>
-                <div class="space-y-1.5 text-[11px]">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Connection</span>
-                    <span class={`font-medium ${connection.text}`}>
-                      {connection.label}
-                    </span>
-                  </div>
-                  <Show when={pmg().version}>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Version</span>
-                      <span class="font-medium text-base-content">{pmg().version}</span>
+                <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
+                  <div class="mb-2 flex items-center justify-between gap-2">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                      Mail Gateway
                     </div>
-                  </Show>
-                  <Show when={pmg().uptimeSeconds || props.resource.uptime}>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Uptime</span>
-                      <span class="font-medium text-base-content">
-                        {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                    <Show when={pmg().hostname}>
+                      <span
+                        class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
+                        title={pmg().hostname}
+                      >
+                        {pmg().hostname}
                       </span>
-                    </div>
-                  </Show>
-                  <div class="grid grid-cols-3 gap-2 pt-1">
-                    <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                      <div class="text-[10px] text-muted">Nodes</div>
-                      <div class="text-sm font-semibold text-base-content">
-                        {formatInteger(pmg().nodeCount)}
-                      </div>
-                    </div>
-                    <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                      <div class="text-[10px] text-muted">Queue Total</div>
-                      <div
-                        class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                      >
-                        {formatInteger(pmg().queueTotal)}
-                      </div>
-                    </div>
-                    <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                      <div class="text-[10px] text-muted">Backlog</div>
-                      <div
-                        class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                      >
-                        {formatInteger(pmgQueueBacklog())}
-                      </div>
-                    </div>
+                    </Show>
                   </div>
-                  <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                      <span>Queue breakdown</span>
-                      <span class="text-muted">{pmgVisibleQueueBreakdown().length} signals</span>
-                    </summary>
-                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                      <For each={pmgVisibleQueueBreakdown()}>
-                        {(entry) => (
-                          <span class="text-muted">
-                            {entry.label}:{' '}
-                            <span
-                              class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                            >
-                              {formatInteger(entry.value)}
-                            </span>
-                          </span>
-                        )}
-                      </For>
+                  <div class="space-y-1.5 text-[11px]">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-muted">Connection</span>
+                      <span class={`font-medium ${connection.text}`}>{connection.label}</span>
                     </div>
-                  </details>
-                  <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                      <span>Mail processing</span>
-                      <span class="text-muted">{pmgVisibleMailBreakdown().length} signals</span>
-                    </summary>
-                    <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                      <For each={pmgVisibleMailBreakdown()}>
-                        {(entry) => (
-                          <span class="text-muted">
-                            {entry.label}:{' '}
-                            <span class="font-medium text-base-content">
-                              {formatInteger(entry.value)}
-                            </span>
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                    <Show when={pmgUpdatedRelative()}>
-                      <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                        <span class="text-muted">Updated</span>
-                        <span class="font-medium text-base-content">{pmgUpdatedRelative()}</span>
+                    <Show when={pmg().version}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Version</span>
+                        <span class="font-medium text-base-content">{pmg().version}</span>
                       </div>
                     </Show>
-                  </details>
+                    <Show when={pmg().uptimeSeconds || props.resource.uptime}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Uptime</span>
+                        <span class="font-medium text-base-content">
+                          {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                        </span>
+                      </div>
+                    </Show>
+                    <div class="grid grid-cols-3 gap-2 pt-1">
+                      <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                        <div class="text-[10px] text-muted">Nodes</div>
+                        <div class="text-sm font-semibold text-base-content">
+                          {formatInteger(pmg().nodeCount)}
+                        </div>
+                      </div>
+                      <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                        <div class="text-[10px] text-muted">Queue Total</div>
+                        <div
+                          class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                        >
+                          {formatInteger(pmg().queueTotal)}
+                        </div>
+                      </div>
+                      <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                        <div class="text-[10px] text-muted">Backlog</div>
+                        <div
+                          class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                        >
+                          {formatInteger(pmgQueueBacklog())}
+                        </div>
+                      </div>
+                    </div>
+                    <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                      <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                        <span>Queue breakdown</span>
+                        <span class="text-muted">{pmgVisibleQueueBreakdown().length} signals</span>
+                      </summary>
+                      <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                        <For each={pmgVisibleQueueBreakdown()}>
+                          {(entry) => (
+                            <span class="text-muted">
+                              {entry.label}:{' '}
+                              <span
+                                class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                              >
+                                {formatInteger(entry.value)}
+                              </span>
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </details>
+                    <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                      <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                        <span>Mail processing</span>
+                        <span class="text-muted">{pmgVisibleMailBreakdown().length} signals</span>
+                      </summary>
+                      <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                        <For each={pmgVisibleMailBreakdown()}>
+                          {(entry) => (
+                            <span class="text-muted">
+                              {entry.label}:{' '}
+                              <span class="font-medium text-base-content">
+                                {formatInteger(entry.value)}
+                              </span>
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                      <Show when={pmgUpdatedRelative()}>
+                        <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                          <span class="text-muted">Updated</span>
+                          <span class="font-medium text-base-content">{pmgUpdatedRelative()}</span>
+                        </div>
+                      </Show>
+                    </details>
+                  </div>
                 </div>
-              </div>
               );
             }}
           </Show>

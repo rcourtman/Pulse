@@ -34,7 +34,12 @@ describe('StorageGroupRow', () => {
     const { container } = render(() => (
       <table>
         <tbody>
-          <StorageGroupRow group={makeGroup()} groupBy="node" expanded={false} onToggle={onToggle} />
+          <StorageGroupRow
+            group={makeGroup()}
+            groupBy="node"
+            expanded={false}
+            onToggle={onToggle}
+          />
         </tbody>
       </table>
     ));

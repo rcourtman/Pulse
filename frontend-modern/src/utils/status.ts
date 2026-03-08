@@ -118,11 +118,7 @@ export function getSimpleStatusIndicator(value?: string | null): StatusIndicator
     return {
       variant: 'success',
       label:
-        normalized === 'healthy'
-          ? 'Healthy'
-          : normalized === RUNNING_STATUS
-            ? 'Running'
-            : 'Online',
+        normalized === 'healthy' ? 'Healthy' : normalized === RUNNING_STATUS ? 'Running' : 'Online',
     };
   }
 

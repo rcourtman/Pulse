@@ -1610,7 +1610,10 @@ export const AISettings: Component = () => {
                           <span
                             class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.openrouter.status).badgeClass}`}
                           >
-                            {getAIProviderHealthPresentation(providerHealth.openrouter.status).label}
+                            {
+                              getAIProviderHealthPresentation(providerHealth.openrouter.status)
+                                .label
+                            }
                           </span>
                         </Show>
                       </div>
