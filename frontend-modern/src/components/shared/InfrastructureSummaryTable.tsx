@@ -549,9 +549,10 @@ export const InfrastructureSummaryTable: Component<InfrastructureSummaryTablePro
                   return aliases.includes(nodeName.toLowerCase());
                 });
               };
-              const metricsKey = isPVEItem && node?.linkedAgentId
-                ? buildMetricKey('agent', node.linkedAgentId)
-                : buildMetricKey('node', resourceId);
+              const metricsKey =
+                isPVEItem && node?.linkedAgentId
+                  ? buildMetricKey('agent', node.linkedAgentId)
+                  : buildMetricKey('node', resourceId);
               const alertStyles = createMemo(() =>
                 getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
               );

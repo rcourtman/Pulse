@@ -16,9 +16,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
-import {
-  isAppContainerDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
+import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
   getActionableAgentIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,

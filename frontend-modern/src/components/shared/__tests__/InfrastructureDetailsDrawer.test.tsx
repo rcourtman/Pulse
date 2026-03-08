@@ -77,7 +77,9 @@ describe('InfrastructureDetailsDrawer', () => {
     discoveryTabMock.mockClear();
     webInterfaceUrlFieldMock.mockClear();
 
-    render(() => <InfrastructureDetailsDrawer node={makeNode({ linkedAgentId: 'agent-host-1' })} />);
+    render(() => (
+      <InfrastructureDetailsDrawer node={makeNode({ linkedAgentId: 'agent-host-1' })} />
+    ));
 
     expect(webInterfaceUrlFieldMock).toHaveBeenCalledWith(
       expect.objectContaining({ metadataId: 'agent-host-1' }),

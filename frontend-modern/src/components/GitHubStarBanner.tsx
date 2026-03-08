@@ -106,61 +106,61 @@ export function GitHubStarBanner() {
       ariaLabelledBy="github-star-title"
     >
       <div class="w-full overflow-hidden">
-          {/* Header with close button */}
-          <div class="flex justify-end p-3 pb-0">
-            <button
-              onClick={handleDismiss}
-              class="p-1.5 hover:bg-surface-hover rounded-md text-slate-400 hover:text-muted transition-colors"
-              title="Don't show again"
-              aria-label="Close and don't show again"
-              type="button"
-            >
-              <XIcon class="w-5 h-5" />
-            </button>
-          </div>
+        {/* Header with close button */}
+        <div class="flex justify-end p-3 pb-0">
+          <button
+            onClick={handleDismiss}
+            class="p-1.5 hover:bg-surface-hover rounded-md text-slate-400 hover:text-muted transition-colors"
+            title="Don't show again"
+            aria-label="Close and don't show again"
+            type="button"
+          >
+            <XIcon class="w-5 h-5" />
+          </button>
+        </div>
 
-          {/* Content */}
-          <div class="px-6 pb-6 text-center">
-            {/* Icon */}
-            <div class="flex justify-center mb-4">
-              <div class="relative">
-                <div class="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center">
-                  <GithubIcon class="w-8 h-8 text-base-content" />
-                </div>
-                <div class="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-sm">
-                  <StarIcon class="w-4 h-4 text-yellow-800" />
-                </div>
+        {/* Content */}
+        <div class="px-6 pb-6 text-center">
+          {/* Icon */}
+          <div class="flex justify-center mb-4">
+            <div class="relative">
+              <div class="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center">
+                <GithubIcon class="w-8 h-8 text-base-content" />
+              </div>
+              <div class="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-sm">
+                <StarIcon class="w-4 h-4 text-yellow-800" />
               </div>
             </div>
-
-            {/* Text */}
-            <h2 id="github-star-title" class="text-xl font-semibold text-base-content mb-2">
-              Enjoying Pulse?
-            </h2>
-            <p class="text-muted mb-6 leading-relaxed">
-              Pulse is built and maintained by an independent developer. If it's been useful for
-              monitoring your infrastructure, a GitHub star helps more than you'd think.
-            </p>
-
-            {/* Buttons */}
-            <div class="flex flex-col gap-3">
-              <button
-                onClick={handleStarClick}
-                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-                type="button"
-              >
-                <StarIcon class="w-4 h-4" />
-                Star on GitHub
-              </button>
-              <button
-                onClick={handleMaybeLater}
-                class="w-full px-4 py-2 text-sm text-muted hover:text-base-content transition-colors"
-                type="button"
-              >
-                Maybe later
-              </button>
-            </div>
           </div>
+
+          {/* Text */}
+          <h2 id="github-star-title" class="text-xl font-semibold text-base-content mb-2">
+            Enjoying Pulse?
+          </h2>
+          <p class="text-muted mb-6 leading-relaxed">
+            Pulse is built and maintained by an independent developer. If it's been useful for
+            monitoring your infrastructure, a GitHub star helps more than you'd think.
+          </p>
+
+          {/* Buttons */}
+          <div class="flex flex-col gap-3">
+            <button
+              onClick={handleStarClick}
+              class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+              type="button"
+            >
+              <StarIcon class="w-4 h-4" />
+              Star on GitHub
+            </button>
+            <button
+              onClick={handleMaybeLater}
+              class="w-full px-4 py-2 text-sm text-muted hover:text-base-content transition-colors"
+              type="button"
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
       </div>
     </Dialog>
   );

@@ -1,6 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const mockEntitlements = vi.hoisted(() => vi.fn(() => ({ overflow_days_remaining: undefined })));
 const mockGetLimit = vi.hoisted(() => vi.fn(() => undefined));
@@ -67,14 +66,7 @@ describe('AgentLimitWarningBanner', () => {
     const mod = await import('../AgentLimitWarningBanner');
     render(() => <mod.AgentLimitWarningBanner />);
 
-    expect(screen.getByText('Host Agents: 0/6')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /You also have 3 resources connected via API or legacy agents \(2 Proxmox nodes, 1 Docker host\) that do not count toward Host Agents\./i,
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Install v6 agents')).toHaveAttribute('href', '/settings');
-    expect(screen.getByLabelText('Dismiss agent migration notice')).toBeInTheDocument();
+    expect(screen.queryByText(/Host Agents:/i)).not.toBeInTheDocument();
   });
 
   it('keeps urgent limit warnings visible even without migration gap', async () => {
@@ -83,28 +75,33 @@ describe('AgentLimitWarningBanner', () => {
     const mod = await import('../AgentLimitWarningBanner');
     render(() => <mod.AgentLimitWarningBanner />);
 
-    expect(screen.getByText('Host Agents: 5/6')).toBeInTheDocument();
+    expect(screen.getByText('v6 Host Agents: 5/6')).toBeInTheDocument();
     expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
-    expect(screen.queryByText('Install v6 agents')).not.toBeInTheDocument();
+    expect(screen.queryByText('Install v6 host agents')).not.toBeInTheDocument();
   });
 
-  it('persists dismissal for migration-only notices', async () => {
+  it('keeps urgent limit warnings visible with migration context', async () => {
     mockHasMigrationGap.mockReturnValue(true);
+    mockEntitlements.mockReturnValue({ overflow_days_remaining: 14 });
+    mockGetLimit.mockReturnValue({ key: 'max_agents', limit: 6, current: 5, state: 'warning' });
     mockLegacyConnections.mockReturnValue({
-      proxmox_nodes: 1,
-      docker_hosts: 0,
+      proxmox_nodes: 2,
+      docker_hosts: 1,
       kubernetes_clusters: 0,
     });
 
     const mod = await import('../AgentLimitWarningBanner');
     render(() => <mod.AgentLimitWarningBanner />);
 
-    fireEvent.click(screen.getByLabelText('Dismiss agent migration notice'));
-
-    expect(screen.queryByText(/Host Agents:/i)).not.toBeInTheDocument();
-    const orgId = sessionStorage.getItem(STORAGE_KEYS.ORG_ID) ?? 'default';
-    expect(localStorage.getItem(`${STORAGE_KEYS.AGENT_MIGRATION_NOTICE_DISMISSED}:${orgId}`)).toBe(
-      'true',
-    );
+    expect(screen.getByText('v6 Host Agents: 5/6')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /You also have 3 resources connected via API or legacy agents \(2 Proxmox nodes, 1 Docker host\) that do not count toward Host Agents\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Install v6 host agents')).toHaveAttribute('href', '/settings');
+    expect(
+      screen.getByText('Includes 1 temporary onboarding slot \(14d remaining\)', { exact: false }),
+    ).toBeInTheDocument();
   });
 });

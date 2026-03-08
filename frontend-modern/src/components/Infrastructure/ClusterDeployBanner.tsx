@@ -25,7 +25,9 @@ export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) 
     if (!cluster) return null;
 
     // Only consider actual PVE node resources (not VMs/containers).
-    const pveNodes = resources.filter((r) => r.type === 'agent' && r.platformType === 'proxmox-pve');
+    const pveNodes = resources.filter(
+      (r) => r.type === 'agent' && r.platformType === 'proxmox-pve',
+    );
     if (pveNodes.length === 0) return null;
 
     const hasSourceAgent = pveNodes.some((r) => r.agent?.agentId);

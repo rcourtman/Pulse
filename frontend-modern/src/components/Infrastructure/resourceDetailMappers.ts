@@ -188,7 +188,9 @@ const asNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
 const getPreferredHostLabel = (resource: Resource): string =>
-  getPreferredResourceHostname(resource) || getPreferredResourceDisplayName(resource) || resource.id;
+  getPreferredResourceHostname(resource) ||
+  getPreferredResourceDisplayName(resource) ||
+  resource.id;
 
 export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
   const explicitDiscoveryTarget = resource.discoveryTarget;

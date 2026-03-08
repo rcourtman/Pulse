@@ -300,7 +300,9 @@ describe('InfrastructureSummary range behavior', () => {
       },
     });
 
-    const { container } = render(() => <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />);
+    const { container } = render(() => (
+      <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
+    ));
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');

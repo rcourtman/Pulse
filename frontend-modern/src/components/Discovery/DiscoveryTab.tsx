@@ -663,11 +663,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           </div>
 
           {/* Connection Status Warning - Show when commands are needed but not available */}
-          <Show
-            when={
-              props.resourceType === 'agent' && !connectedAgents.loading
-            }
-          >
+          <Show when={props.resourceType === 'agent' && !connectedAgents.loading}>
             <Show when={props.commandsEnabled === false}>
               <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
                 <div class="flex items-start gap-2">

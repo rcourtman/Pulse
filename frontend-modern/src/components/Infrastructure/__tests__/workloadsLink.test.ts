@@ -177,7 +177,9 @@ describe('buildWorkloadsHref', () => {
         platformType: 'docker',
         identity: { hostname: 'identity-host' },
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=identity-host');
+      expect(buildWorkloadsHref(resource)).toBe(
+        '/workloads?type=app-container&agent=identity-host',
+      );
     });
 
     it('falls back through name → displayName → platformId → id', () => {
@@ -213,7 +215,9 @@ describe('buildWorkloadsHref', () => {
         platformId: 'docker-plat-id',
         id: 'docker-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=docker-plat-id');
+      expect(buildWorkloadsHref(resource)).toBe(
+        '/workloads?type=app-container&agent=docker-plat-id',
+      );
     });
 
     it('falls back to resource.id as last resort for docker-host', () => {
@@ -225,7 +229,9 @@ describe('buildWorkloadsHref', () => {
         platformId: '',
         id: 'last-resort-id',
       });
-      expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=last-resort-id');
+      expect(buildWorkloadsHref(resource)).toBe(
+        '/workloads?type=app-container&agent=last-resort-id',
+      );
     });
   });
 

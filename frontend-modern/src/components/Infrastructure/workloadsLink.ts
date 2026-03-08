@@ -67,7 +67,9 @@ const resolveHostHint = (resource: Resource): string | undefined => {
 const hasDockerCapability = (resource: Resource): boolean => {
   const sources = Array.isArray(resource.sources) ? resource.sources : [];
   const platformData = resource.platformData as PlatformData | undefined;
-  return resource.type === 'docker-host' || sources.includes('docker') || Boolean(platformData?.docker);
+  return (
+    resource.type === 'docker-host' || sources.includes('docker') || Boolean(platformData?.docker)
+  );
 };
 
 export const buildWorkloadsHref = (resource: Resource): string | null => {
