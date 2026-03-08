@@ -1311,6 +1311,11 @@ func TestQuietHoursCategoryForAlert(t *testing.T) {
 			alert: &Alert{Type: "zfs-device"},
 			want:  "storage",
 		},
+		{
+			name:  "storage-incident returns storage",
+			alert: &Alert{Type: "storage-incident"},
+			want:  "storage",
+		},
 
 		// Offline metrics
 		{

@@ -2608,6 +2608,9 @@ func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateF
 func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
 	m.updateResourceStore(snapshot)
+	if currentState := m.GetState(); len(currentState.ActiveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
+		frontendState.ActiveAlerts = currentState.ActiveAlerts
+	}
 	frontendState.Resources = m.getResourcesForBroadcast()
 	if freshness := m.currentUnifiedResourceFreshness(); !freshness.IsZero() {
 		frontendState.LastUpdate = freshness.UnixMilli()
@@ -3099,6 +3102,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 				Int("records", len(records)).
 				Msg("[Resources] Atomically ingested supplemental records")
 		}
+		m.syncUnifiedResourceAlertsToState(store.GetAll())
 		return
 	}
 
@@ -3106,6 +3110,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 
 	supplementalStore, ok := store.(SupplementalRecordStore)
 	if !ok {
+		m.syncUnifiedResourceAlertsToState(store.GetAll())
 		return
 	}
 
@@ -3119,6 +3124,8 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 			Int("records", len(records)).
 			Msg("[Resources] Ingested supplemental records")
 	}
+
+	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
 // getResourcesForBroadcast retrieves all resources from the store and converts them to frontend format.

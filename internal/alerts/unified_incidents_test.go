@@ -1,0 +1,84 @@
+package alerts
+
+import (
+	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+)
+
+func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:         "storage:tank",
+		Type:       unifiedresources.ResourceTypeStorage,
+		Name:       "tank",
+		ParentName: "truenas-main",
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		Storage: &unifiedresources.StorageMeta{
+			Platform:   "truenas",
+			Topology:   "pool",
+			Protection: "zfs",
+			IsZFS:      true,
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "alert-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskWarning,
+			Summary:  "Pool tank is DEGRADED",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := "unified-incident-storage-tank-truenas-alert-1-truenas-volume-status"
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+
+	if alert.Type != "zfs-pool-state" {
+		t.Fatalf("alert type = %q, want zfs-pool-state", alert.Type)
+	}
+	if alert.ResourceID != resource.ID {
+		t.Fatalf("resource id = %q, want %q", alert.ResourceID, resource.ID)
+	}
+	if alert.Node != "truenas-main" {
+		t.Fatalf("node = %q, want truenas-main", alert.Node)
+	}
+
+	m.SyncUnifiedResourceIncidents(nil)
+	assertAlertMissing(t, m, alertID)
+}
+
+func TestSyncUnifiedResourceIncidentsRespectsDisableAllStorage(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.DisableAllStorage = true
+	configureUnifiedEvalManager(t, m, cfg)
+
+	resource := unifiedresources.Resource{
+		ID:   "disk:ada0",
+		Type: unifiedresources.ResourceTypePhysicalDisk,
+		Name: "ada0",
+		PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+			DevPath: "/dev/ada0",
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "alert-2",
+			Code:     "truenas_smart",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Device /dev/ada0 has SMART failures",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := "unified-incident-disk-ada0-truenas-alert-2-truenas-smart"
+	assertAlertMissing(t, m, alertID)
+}

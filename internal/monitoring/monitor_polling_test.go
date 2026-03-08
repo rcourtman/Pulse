@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -251,6 +253,108 @@ func TestRescheduleTaskUsesInstanceIntervalWhenSchedulerDisabled(t *testing.T) {
 	remaining := time.Until(entry.task.NextRun)
 	if remaining < cfg.PVEPollingInterval-2*time.Second || remaining > cfg.PVEPollingInterval+time.Second {
 		t.Fatalf("expected NextRun about %v from now, got %v", cfg.PVEPollingInterval, remaining)
+	}
+}
+
+func TestUpdateResourceStoreSyncsUnifiedIncidentAlerts(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	store := unifiedresources.NewMonitorAdapter(nil)
+	monitor := &Monitor{
+		state:         models.NewState(),
+		resourceStore: store,
+		alertManager:  alertManager,
+		orgID:         "default",
+		supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: &testMonitorSupplementalProvider{
+				recordsByOrg: map[string][]unifiedresources.IngestRecord{
+					"default": {{
+						SourceID: "pool:tank",
+						Resource: unifiedresources.Resource{
+							ID:         "storage:tank",
+							Type:       unifiedresources.ResourceTypeStorage,
+							Name:       "tank",
+							ParentName: "truenas-main",
+							Sources:    []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+							Storage: &unifiedresources.StorageMeta{
+								Platform:   "truenas",
+								Topology:   "pool",
+								Protection: "zfs",
+								IsZFS:      true,
+							},
+							Incidents: []unifiedresources.ResourceIncident{{
+								Provider: "truenas",
+								NativeID: "alert-1",
+								Code:     "truenas_volume_status",
+								Severity: storagehealth.RiskWarning,
+								Summary:  "Pool tank is DEGRADED",
+							}},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	monitor.updateResourceStore(models.StateSnapshot{})
+
+	active := alertManager.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("expected 1 active alert, got %d", len(active))
+	}
+	if active[0].Type != "zfs-pool-state" {
+		t.Fatalf("alert type = %q, want zfs-pool-state", active[0].Type)
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.ActiveAlerts) != 1 {
+		t.Fatalf("expected state snapshot to contain 1 active alert, got %d", len(snapshot.ActiveAlerts))
+	}
+}
+
+func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	store := unifiedresources.NewMonitorAdapter(nil)
+	monitor := &Monitor{
+		state:         models.NewState(),
+		resourceStore: store,
+		alertManager:  alertManager,
+		orgID:         "default",
+		supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: &testMonitorSupplementalProvider{
+				recordsByOrg: map[string][]unifiedresources.IngestRecord{
+					"default": {{
+						SourceID: "system:truenas-main",
+						Resource: unifiedresources.Resource{
+							ID:      "agent:truenas-main",
+							Type:    unifiedresources.ResourceTypeAgent,
+							Name:    "truenas-main",
+							Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+							TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-main"},
+							Incidents: []unifiedresources.ResourceIncident{{
+								Provider: "truenas",
+								NativeID: "alert-2",
+								Code:     "truenas_volume_status",
+								Severity: storagehealth.RiskCritical,
+								Summary:  "Pool tank is FAULTED",
+							}},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{})
+
+	if len(frontend.ActiveAlerts) != 1 {
+		t.Fatalf("expected 1 active alert in frontend state, got %d", len(frontend.ActiveAlerts))
+	}
+	if frontend.ActiveAlerts[0].Type != "storage-incident" {
+		t.Fatalf("alert type = %q, want storage-incident", frontend.ActiveAlerts[0].Type)
 	}
 }
 

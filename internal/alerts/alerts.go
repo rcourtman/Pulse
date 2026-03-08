@@ -2269,7 +2269,7 @@ func quietHoursCategoryForAlert(alert *Alert) string {
 		"docker-container-health", "docker-container-restart-loop",
 		"docker-container-oom-kill", "docker-container-memory-limit":
 		return "performance"
-	case "usage", "disk-health", "disk-wearout", "zfs-pool-state", "zfs-pool-errors", "zfs-device":
+	case "usage", "disk-health", "disk-wearout", "zfs-pool-state", "zfs-pool-errors", "zfs-device", "storage-incident":
 		return "storage"
 	case "connectivity", "offline", "powered-off", "docker-host-offline":
 		return "offline"

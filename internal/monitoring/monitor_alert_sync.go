@@ -5,6 +5,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -53,6 +54,15 @@ func (m *Monitor) syncAlertsToState() {
 
 // SyncAlertState is the exported wrapper used by APIs that mutate alerts outside the poll loop.
 func (m *Monitor) SyncAlertState() {
+	m.syncAlertsToState()
+}
+
+func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.Resource) {
+	if m == nil || m.alertManager == nil {
+		return
+	}
+
+	m.alertManager.SyncUnifiedResourceIncidents(resources)
 	m.syncAlertsToState()
 }
 
