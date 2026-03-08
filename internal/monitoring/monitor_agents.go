@@ -1531,6 +1531,36 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		cephData = convertAgentCephToModels(report.Ceph)
 	}
 
+	var unraidData *models.HostUnraidStorage
+	if report.Unraid != nil {
+		disks := make([]models.HostUnraidDisk, 0, len(report.Unraid.Disks))
+		for _, disk := range report.Unraid.Disks {
+			disks = append(disks, models.HostUnraidDisk{
+				Name:       strings.TrimSpace(disk.Name),
+				Device:     strings.TrimSpace(disk.Device),
+				Role:       strings.TrimSpace(disk.Role),
+				Status:     strings.TrimSpace(disk.Status),
+				RawStatus:  strings.TrimSpace(disk.RawStatus),
+				Serial:     strings.TrimSpace(disk.Serial),
+				Filesystem: strings.TrimSpace(disk.Filesystem),
+				SizeBytes:  disk.SizeBytes,
+				Slot:       disk.Slot,
+			})
+		}
+		unraidData = &models.HostUnraidStorage{
+			ArrayStarted: report.Unraid.ArrayStarted,
+			ArrayState:   strings.TrimSpace(report.Unraid.ArrayState),
+			SyncAction:   strings.TrimSpace(report.Unraid.SyncAction),
+			SyncProgress: report.Unraid.SyncProgress,
+			SyncErrors:   report.Unraid.SyncErrors,
+			NumProtected: report.Unraid.NumProtected,
+			NumDisabled:  report.Unraid.NumDisabled,
+			NumInvalid:   report.Unraid.NumInvalid,
+			NumMissing:   report.Unraid.NumMissing,
+			Disks:        disks,
+		}
+	}
+
 	host := models.Host{
 		ID:                identifier,
 		Hostname:          hostname,
@@ -1554,6 +1584,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			SMART:              convertAgentSMARTToModels(report.Sensors.SMART),
 		},
 		RAID:            raid,
+		Unraid:          unraidData,
 		Ceph:            cephData,
 		Status:          "online",
 		UptimeSeconds:   report.Host.UptimeSeconds,

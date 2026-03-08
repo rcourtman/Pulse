@@ -183,7 +183,39 @@ func TestBuildReport(t *testing.T) {
 		mc.cephStatusFn = nil
 	})
 
-	// Test case 5: SMART collection
+	// Test case 5: Unraid collection
+	t.Run("Unraid collection", func(t *testing.T) {
+		mc.unraidStorageFn = func(ctx context.Context) (*agentshost.UnraidStorage, error) {
+			return &agentshost.UnraidStorage{
+				ArrayStarted: true,
+				ArrayState:   "STARTED",
+				SyncAction:   "check",
+				Disks: []agentshost.UnraidDisk{
+					{Name: "parity", Role: "parity", Status: "online"},
+					{Name: "disk1", Role: "data", Status: "online"},
+				},
+			}, nil
+		}
+		mc.goos = "linux"
+
+		report, err := agent.buildReport(context.Background())
+		if err != nil {
+			t.Fatalf("buildReport failed: %v", err)
+		}
+
+		if report.Unraid == nil {
+			t.Fatal("Unraid report is nil")
+		}
+		if !report.Unraid.ArrayStarted {
+			t.Fatal("expected Unraid array to be started")
+		}
+		if len(report.Unraid.Disks) != 2 {
+			t.Fatalf("expected 2 Unraid disks, got %d", len(report.Unraid.Disks))
+		}
+		mc.unraidStorageFn = nil
+	})
+
+	// Test case 6: SMART collection
 	t.Run("SMART collection", func(t *testing.T) {
 		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {
 			return []DiskSMART{

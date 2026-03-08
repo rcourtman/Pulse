@@ -487,6 +487,54 @@ func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIden
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotPropagatesUnraidDiskRole(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-tower",
+				Hostname: "tower",
+				Status:   "online",
+				LastSeen: now,
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					Disks: []models.HostUnraidDisk{
+						{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", Serial: "SERIAL-TOWER-1"},
+					},
+				},
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/sdb",
+							Model:       "Seagate IronWolf",
+							Serial:      "SERIAL-TOWER-1",
+							Type:        "sata",
+							Temperature: 37,
+							Health:      "PASSED",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 physical disk resource, got %d", len(disks))
+	}
+	if disks[0].PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if got := disks[0].PhysicalDisk.StorageRole; got != "parity" {
+		t.Fatalf("storageRole = %q, want parity", got)
+	}
+	if got := disks[0].PhysicalDisk.StorageGroup; got != "unraid-array" {
+		t.Fatalf("storageGroup = %q, want unraid-array", got)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

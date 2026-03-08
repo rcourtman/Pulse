@@ -96,6 +96,66 @@ func AssessZFSPool(pool models.ZFSPool) Assessment {
 	return assessment
 }
 
+func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
+	assessment := Assessment{Level: RiskHealthy}
+	addReason := func(code string, severity RiskLevel, summary string) {
+		assessment.Reasons = append(assessment.Reasons, Reason{
+			Code:     code,
+			Severity: severity,
+			Summary:  summary,
+		})
+		if severityRank(severity) > severityRank(assessment.Level) {
+			assessment.Level = severity
+		}
+	}
+
+	if storage.NumInvalid > 0 {
+		addReason("unraid_invalid_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d invalid disk(s)", storage.NumInvalid))
+	}
+	if storage.NumDisabled > 0 {
+		addReason("unraid_disabled_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d disabled disk(s)", storage.NumDisabled))
+	}
+	if storage.NumMissing > 0 {
+		addReason("unraid_missing_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d missing disk(s)", storage.NumMissing))
+	}
+
+	parityConfigured := false
+	parityHealthy := false
+	for _, disk := range storage.Disks {
+		role := strings.ToLower(strings.TrimSpace(disk.Role))
+		status := strings.ToLower(strings.TrimSpace(disk.Status))
+		if role != "parity" {
+			continue
+		}
+		parityConfigured = true
+		if status == "online" {
+			parityHealthy = true
+			continue
+		}
+		if status != "" {
+			addReason("unraid_parity_unavailable", RiskCritical, fmt.Sprintf("Unraid parity disk %s is %s", disk.Name, strings.ToUpper(status)))
+		}
+	}
+
+	if storage.ArrayStarted && !parityConfigured {
+		addReason("unraid_no_parity", RiskWarning, "Unraid array is running without parity protection")
+	}
+	if storage.ArrayStarted && parityConfigured && !parityHealthy {
+		addReason("unraid_parity_unavailable", RiskCritical, "Unraid parity protection is unavailable")
+	}
+
+	if action := strings.TrimSpace(storage.SyncAction); action != "" {
+		summary := fmt.Sprintf("Unraid array is running %s", action)
+		if storage.SyncProgress > 0 {
+			summary = fmt.Sprintf("Unraid array is running %s (%.0f%%)", action, storage.SyncProgress)
+		}
+		addReason("unraid_sync_active", RiskWarning, summary)
+	}
+
+	sortReasons(&assessment)
+	return assessment
+}
+
 func SummarizeAssessments(assessments ...Assessment) Assessment {
 	summary := Assessment{Level: RiskHealthy}
 	for _, assessment := range assessments {

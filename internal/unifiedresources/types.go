@@ -231,19 +231,22 @@ type StorageMeta struct {
 
 // PhysicalDiskMeta contains physical disk-specific metadata.
 type PhysicalDiskMeta struct {
-	DevPath     string            `json:"devPath"`
-	Model       string            `json:"model,omitempty"`
-	Serial      string            `json:"serial,omitempty"`
-	WWN         string            `json:"wwn,omitempty"`
-	DiskType    string            `json:"diskType"` // nvme, sata, sas
-	SizeBytes   int64             `json:"sizeBytes"`
-	Health      string            `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout     int               `json:"wearout"`     // 0-100, -1 unavailable
-	Temperature int               `json:"temperature"` // Celsius
-	RPM         int               `json:"rpm"`
-	Used        string            `json:"used,omitempty"`
-	SMART       *SMARTMeta        `json:"smart,omitempty"`
-	Risk        *PhysicalDiskRisk `json:"risk,omitempty"`
+	DevPath      string            `json:"devPath"`
+	Model        string            `json:"model,omitempty"`
+	Serial       string            `json:"serial,omitempty"`
+	WWN          string            `json:"wwn,omitempty"`
+	DiskType     string            `json:"diskType"` // nvme, sata, sas
+	SizeBytes    int64             `json:"sizeBytes"`
+	Health       string            `json:"health"`      // PASSED, FAILED, UNKNOWN
+	Wearout      int               `json:"wearout"`     // 0-100, -1 unavailable
+	Temperature  int               `json:"temperature"` // Celsius
+	RPM          int               `json:"rpm"`
+	Used         string            `json:"used,omitempty"`
+	StorageRole  string            `json:"storageRole,omitempty"`
+	StorageGroup string            `json:"storageGroup,omitempty"`
+	StorageState string            `json:"storageState,omitempty"`
+	SMART        *SMARTMeta        `json:"smart,omitempty"`
+	Risk         *PhysicalDiskRisk `json:"risk,omitempty"`
 }
 
 type StorageRisk struct {
@@ -357,6 +360,34 @@ type HostRAIDMeta struct {
 	RebuildPercent float64              `json:"rebuildPercent,omitempty"`
 	RebuildSpeed   string               `json:"rebuildSpeed,omitempty"`
 	Risk           *StorageRisk         `json:"risk,omitempty"`
+}
+
+// HostUnraidDiskMeta describes a disk's role and state inside an Unraid array.
+type HostUnraidDiskMeta struct {
+	Name       string `json:"name"`
+	Device     string `json:"device,omitempty"`
+	Role       string `json:"role,omitempty"`
+	Status     string `json:"status,omitempty"`
+	RawStatus  string `json:"rawStatus,omitempty"`
+	Serial     string `json:"serial,omitempty"`
+	Filesystem string `json:"filesystem,omitempty"`
+	SizeBytes  int64  `json:"sizeBytes,omitempty"`
+	Slot       int    `json:"slot,omitempty"`
+}
+
+// HostUnraidMeta describes Unraid array topology from a host agent.
+type HostUnraidMeta struct {
+	ArrayStarted bool                 `json:"arrayStarted"`
+	ArrayState   string               `json:"arrayState,omitempty"`
+	SyncAction   string               `json:"syncAction,omitempty"`
+	SyncProgress float64              `json:"syncProgress,omitempty"`
+	SyncErrors   int64                `json:"syncErrors,omitempty"`
+	NumProtected int                  `json:"numProtected,omitempty"`
+	NumDisabled  int                  `json:"numDisabled,omitempty"`
+	NumInvalid   int                  `json:"numInvalid,omitempty"`
+	NumMissing   int                  `json:"numMissing,omitempty"`
+	Disks        []HostUnraidDiskMeta `json:"disks,omitempty"`
+	Risk         *StorageRisk         `json:"risk,omitempty"`
 }
 
 // HostDiskIOMeta describes disk I/O counters.
@@ -505,6 +536,7 @@ type AgentData struct {
 	Memory            *AgentMemoryMeta   `json:"memory,omitempty"`
 	Sensors           *HostSensorMeta    `json:"sensors,omitempty"`
 	RAID              []HostRAIDMeta     `json:"raid,omitempty"`
+	Unraid            *HostUnraidMeta    `json:"unraid,omitempty"`
 	DiskIO            []HostDiskIOMeta   `json:"diskIo,omitempty"`
 	Ceph              *HostCephMeta      `json:"ceph,omitempty"`
 	StorageRisk       *StorageRisk       `json:"storageRisk,omitempty"`

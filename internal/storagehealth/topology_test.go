@@ -57,3 +57,39 @@ func TestAssessZFSPoolErrors(t *testing.T) {
 		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
 	}
 }
+
+func TestAssessUnraidStorageParityUnavailable(t *testing.T) {
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true,
+		Disks: []models.HostUnraidDisk{
+			{Name: "parity", Role: "parity", Status: "disabled"},
+			{Name: "disk1", Role: "data", Status: "online"},
+		},
+	})
+
+	if assessment.Level != RiskCritical {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskCritical)
+	}
+	if len(assessment.Reasons) == 0 || assessment.Reasons[0].Code != "unraid_parity_unavailable" {
+		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
+	}
+}
+
+func TestAssessUnraidStorageSyncInProgress(t *testing.T) {
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true,
+		SyncAction:   "check",
+		SyncProgress: 65,
+		Disks: []models.HostUnraidDisk{
+			{Name: "parity", Role: "parity", Status: "online"},
+			{Name: "disk1", Role: "data", Status: "online"},
+		},
+	})
+
+	if assessment.Level != RiskWarning {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
+	}
+	if len(assessment.Reasons) == 0 || assessment.Reasons[0].Code != "unraid_sync_active" {
+		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
+	}
+}

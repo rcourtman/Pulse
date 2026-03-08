@@ -692,6 +692,12 @@ func TestResourceListIncludesHostSMARTPhysicalDisks(t *testing.T) {
 				Disks: []models.Disk{
 					{Device: "/dev/sdb", Total: 12 * 1024, Mountpoint: "/mnt/disk1"},
 				},
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					Disks: []models.HostUnraidDisk{
+						{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", Serial: "SERIAL-TOWER-1"},
+					},
+				},
 				Sensors: models.HostSensorSummary{
 					SMART: []models.HostDiskSMART{
 						{
@@ -734,6 +740,9 @@ func TestResourceListIncludesHostSMARTPhysicalDisks(t *testing.T) {
 	}
 	if resource.PhysicalDisk == nil || resource.PhysicalDisk.Serial != "SERIAL-TOWER-1" {
 		t.Fatalf("expected SMART-backed physical disk metadata, got %+v", resource.PhysicalDisk)
+	}
+	if resource.PhysicalDisk.StorageRole != "parity" {
+		t.Fatalf("storageRole = %q, want parity", resource.PhysicalDisk.StorageRole)
 	}
 	if resource.MetricsTarget == nil || resource.MetricsTarget.ResourceType != "disk" || resource.MetricsTarget.ResourceID != "SERIAL-TOWER-1" {
 		t.Fatalf("expected disk metrics target SERIAL-TOWER-1, got %+v", resource.MetricsTarget)

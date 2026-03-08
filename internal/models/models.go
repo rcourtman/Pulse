@@ -195,6 +195,7 @@ type Host struct {
 	NetworkInterfaces []HostNetworkInterface `json:"networkInterfaces,omitempty"`
 	Sensors           HostSensorSummary      `json:"sensors,omitempty"`
 	RAID              []HostRAIDArray        `json:"raid,omitempty"`
+	Unraid            *HostUnraidStorage     `json:"unraid,omitempty"`
 	Ceph              *HostCephCluster       `json:"ceph,omitempty"`
 	Status            string                 `json:"status"`
 	UptimeSeconds     int64                  `json:"uptimeSeconds,omitempty"`
@@ -291,6 +292,33 @@ type HostRAIDDevice struct {
 	Device string `json:"device"`
 	State  string `json:"state"`
 	Slot   int    `json:"slot"`
+}
+
+// HostUnraidStorage represents best-effort Unraid array topology from the agent.
+type HostUnraidStorage struct {
+	ArrayStarted bool             `json:"arrayStarted"`
+	ArrayState   string           `json:"arrayState,omitempty"`
+	SyncAction   string           `json:"syncAction,omitempty"`
+	SyncProgress float64          `json:"syncProgress,omitempty"`
+	SyncErrors   int64            `json:"syncErrors,omitempty"`
+	NumProtected int              `json:"numProtected,omitempty"`
+	NumDisabled  int              `json:"numDisabled,omitempty"`
+	NumInvalid   int              `json:"numInvalid,omitempty"`
+	NumMissing   int              `json:"numMissing,omitempty"`
+	Disks        []HostUnraidDisk `json:"disks,omitempty"`
+}
+
+// HostUnraidDisk represents a disk's role and state inside an Unraid array.
+type HostUnraidDisk struct {
+	Name       string `json:"name"`
+	Device     string `json:"device,omitempty"`
+	Role       string `json:"role,omitempty"`
+	Status     string `json:"status,omitempty"`
+	RawStatus  string `json:"rawStatus,omitempty"`
+	Serial     string `json:"serial,omitempty"`
+	Filesystem string `json:"filesystem,omitempty"`
+	SizeBytes  int64  `json:"sizeBytes,omitempty"`
+	Slot       int    `json:"slot,omitempty"`
 }
 
 // HostCephCluster represents Ceph cluster status collected directly by the host agent.

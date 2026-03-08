@@ -234,6 +234,18 @@ func cloneHostRAIDArrays(src []HostRAIDArray) []HostRAIDArray {
 	return dest
 }
 
+func cloneHostUnraidStorage(src *HostUnraidStorage) *HostUnraidStorage {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	if len(src.Disks) > 0 {
+		dest.Disks = make([]HostUnraidDisk, len(src.Disks))
+		copy(dest.Disks, src.Disks)
+	}
+	return &dest
+}
+
 func cloneHostCephHealth(src HostCephHealth) HostCephHealth {
 	dest := HostCephHealth{
 		Status:  src.Status,
@@ -279,6 +291,7 @@ func cloneHost(src Host) Host {
 	dest.NetworkInterfaces = cloneHostNetworkInterfaces(src.NetworkInterfaces)
 	dest.Sensors = cloneHostSensorSummary(src.Sensors)
 	dest.RAID = cloneHostRAIDArrays(src.RAID)
+	dest.Unraid = cloneHostUnraidStorage(src.Unraid)
 	dest.Ceph = cloneHostCephCluster(src.Ceph)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	dest.Tags = append([]string(nil), src.Tags...)

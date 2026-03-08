@@ -471,6 +471,61 @@ func TestApplyHostReport_PreservesPreviousTokenMetadata(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportStoresUnraidTopology(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower",
+			Hostname:  "tower",
+			MachineID: "machine-tower",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Unraid: &agentshost.UnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			SyncAction:   "check",
+			SyncProgress: 55,
+			Disks: []agentshost.UnraidDisk{
+				{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", RawStatus: "DISK_OK", Serial: "SERIAL-PARITY"},
+				{Name: "disk1", Device: "/dev/sdc", Role: "data", Status: "online", RawStatus: "DISK_OK", Serial: "SERIAL-DATA"},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if host.Unraid == nil {
+		t.Fatal("expected unraid topology on host")
+	}
+	if !host.Unraid.ArrayStarted || host.Unraid.SyncAction != "check" {
+		t.Fatalf("unexpected unraid summary %+v", host.Unraid)
+	}
+	if len(host.Unraid.Disks) != 2 || host.Unraid.Disks[0].Role != "parity" {
+		t.Fatalf("unexpected unraid disks %+v", host.Unraid.Disks)
+	}
+}
+
 func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
 	t.Helper()
 

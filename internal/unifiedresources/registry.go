@@ -966,6 +966,15 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.Used != "" {
 		merged.Used = incoming.Used
 	}
+	if incoming.StorageRole != "" {
+		merged.StorageRole = incoming.StorageRole
+	}
+	if incoming.StorageGroup != "" {
+		merged.StorageGroup = incoming.StorageGroup
+	}
+	if incoming.StorageState != "" {
+		merged.StorageState = incoming.StorageState
+	}
 	if incoming.SMART != nil {
 		smart := *incoming.SMART
 		merged.SMART = &smart

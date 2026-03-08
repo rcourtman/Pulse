@@ -130,6 +130,7 @@ func cloneAgentData(in *AgentData) *AgentData {
 	out.Disks = cloneDiskInfos(in.Disks)
 	out.Sensors = cloneHostSensorMeta(in.Sensors)
 	out.RAID = cloneHostRAIDMetaSlice(in.RAID)
+	out.Unraid = cloneHostUnraidMeta(in.Unraid)
 	out.DiskIO = cloneHostDiskIOMetaSlice(in.DiskIO)
 	out.Ceph = cloneHostCephMeta(in.Ceph)
 	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
@@ -225,6 +226,19 @@ func clonePhysicalDiskMeta(in *PhysicalDiskMeta) *PhysicalDiskMeta {
 	out := *in
 	out.SMART = cloneSMARTMeta(in.SMART)
 	out.Risk = clonePhysicalDiskRisk(in.Risk)
+	return &out
+}
+
+func cloneHostUnraidMeta(in *HostUnraidMeta) *HostUnraidMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	if len(in.Disks) > 0 {
+		out.Disks = make([]HostUnraidDiskMeta, len(in.Disks))
+		copy(out.Disks, in.Disks)
+	}
+	out.Risk = cloneStorageRisk(in.Risk)
 	return &out
 }
 

@@ -20,6 +20,7 @@ type mockCollector struct {
 	sensorsParseFn  func(jsonStr string) (*sensors.TemperatureData, error)
 	sensorsPowerFn  func(ctx context.Context) (*sensors.PowerData, error)
 	raidArraysFn    func(ctx context.Context) ([]agentshost.RAIDArray, error)
+	unraidStorageFn func(ctx context.Context) (*agentshost.UnraidStorage, error)
 	cephStatusFn    func(ctx context.Context) (*CephClusterStatus, error)
 	smartLocalFn    func(ctx context.Context, exclude []string) ([]DiskSMART, error)
 	nowFn           func() time.Time
@@ -83,6 +84,13 @@ func (m *mockCollector) SensorsPower(ctx context.Context) (*sensors.PowerData, e
 func (m *mockCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 	if m.raidArraysFn != nil {
 		return m.raidArraysFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockCollector) UnraidStorage(ctx context.Context) (*agentshost.UnraidStorage, error) {
+	if m.unraidStorageFn != nil {
+		return m.unraidStorageFn(ctx)
 	}
 	return nil, nil
 }

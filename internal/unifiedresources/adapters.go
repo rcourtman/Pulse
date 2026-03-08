@@ -125,6 +125,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		LinkedVMID:        host.LinkedVMID,
 		LinkedContainerID: host.LinkedContainerID,
 	}
+	storageAssessments := make([]storagehealth.Assessment, 0, len(host.RAID)+1)
 
 	// Populate sensors
 	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.SMART) > 0 {
@@ -169,7 +170,6 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	// Populate RAID
 	if len(host.RAID) > 0 {
 		raid := make([]HostRAIDMeta, len(host.RAID))
-		assessments := make([]storagehealth.Assessment, 0, len(host.RAID))
 		for i, r := range host.RAID {
 			devices := make([]HostRAIDDeviceMeta, len(r.Devices))
 			for j, device := range r.Devices {
@@ -197,11 +197,46 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 				Risk:           storageRiskFromAssessment(assessment),
 			}
 			if !isInternalHostRAIDDevice(r.Device) {
-				assessments = append(assessments, assessment)
+				storageAssessments = append(storageAssessments, assessment)
 			}
 		}
 		agent.RAID = raid
-		agent.StorageRisk = storageRiskFromAssessment(storagehealth.SummarizeAssessments(assessments...))
+	}
+
+	if host.Unraid != nil {
+		disks := make([]HostUnraidDiskMeta, len(host.Unraid.Disks))
+		for i, disk := range host.Unraid.Disks {
+			disks[i] = HostUnraidDiskMeta{
+				Name:       disk.Name,
+				Device:     disk.Device,
+				Role:       disk.Role,
+				Status:     disk.Status,
+				RawStatus:  disk.RawStatus,
+				Serial:     disk.Serial,
+				Filesystem: disk.Filesystem,
+				SizeBytes:  disk.SizeBytes,
+				Slot:       disk.Slot,
+			}
+		}
+		assessment := storagehealth.AssessUnraidStorage(*host.Unraid)
+		agent.Unraid = &HostUnraidMeta{
+			ArrayStarted: host.Unraid.ArrayStarted,
+			ArrayState:   host.Unraid.ArrayState,
+			SyncAction:   host.Unraid.SyncAction,
+			SyncProgress: host.Unraid.SyncProgress,
+			SyncErrors:   host.Unraid.SyncErrors,
+			NumProtected: host.Unraid.NumProtected,
+			NumDisabled:  host.Unraid.NumDisabled,
+			NumInvalid:   host.Unraid.NumInvalid,
+			NumMissing:   host.Unraid.NumMissing,
+			Disks:        disks,
+			Risk:         storageRiskFromAssessment(assessment),
+		}
+		storageAssessments = append(storageAssessments, assessment)
+	}
+
+	if len(storageAssessments) > 0 {
+		agent.StorageRisk = storageRiskFromAssessment(storagehealth.SummarizeAssessments(storageAssessments...))
 	}
 
 	// Populate DiskIO
@@ -363,6 +398,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 		sizeBytes = matchedDisk.Total
 		used = strings.TrimSpace(matchedDisk.Mountpoint)
 	}
+	unraidDisk := matchUnraidDisk(host.Unraid, disk)
 	assessment := storagehealth.AssessHostSMARTDisk(disk)
 
 	resource := Resource{
@@ -372,18 +408,21 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 		LastSeen:  host.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		PhysicalDisk: &PhysicalDiskMeta{
-			DevPath:     strings.TrimSpace(disk.Device),
-			Model:       strings.TrimSpace(disk.Model),
-			Serial:      strings.TrimSpace(disk.Serial),
-			WWN:         strings.TrimSpace(disk.WWN),
-			DiskType:    strings.TrimSpace(disk.Type),
-			SizeBytes:   sizeBytes,
-			Health:      strings.TrimSpace(disk.Health),
-			Wearout:     -1,
-			Temperature: disk.Temperature,
-			Used:        used,
-			SMART:       convertSMARTAttributes(disk.Attributes),
-			Risk:        physicalDiskRiskFromAssessment(assessment),
+			DevPath:      strings.TrimSpace(disk.Device),
+			Model:        strings.TrimSpace(disk.Model),
+			Serial:       strings.TrimSpace(disk.Serial),
+			WWN:          strings.TrimSpace(disk.WWN),
+			DiskType:     strings.TrimSpace(disk.Type),
+			SizeBytes:    sizeBytes,
+			Health:       strings.TrimSpace(disk.Health),
+			Wearout:      -1,
+			Temperature:  disk.Temperature,
+			Used:         used,
+			StorageRole:  unraidDiskRole(unraidDisk),
+			StorageGroup: unraidDiskGroup(unraidDisk),
+			StorageState: unraidDiskState(unraidDisk),
+			SMART:        convertSMARTAttributes(disk.Attributes),
+			Risk:         physicalDiskRiskFromAssessment(assessment),
 		},
 	}
 
@@ -397,6 +436,55 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	}
 
 	return resource, identity
+}
+
+func matchUnraidDisk(unraid *models.HostUnraidStorage, disk models.HostDiskSMART) *models.HostUnraidDisk {
+	if unraid == nil || len(unraid.Disks) == 0 {
+		return nil
+	}
+
+	normalizedDevice := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(disk.Device), "/dev/"))
+	normalizedSerial := strings.TrimSpace(strings.ToLower(disk.Serial))
+	for i := range unraid.Disks {
+		candidate := &unraid.Disks[i]
+		if normalizedSerial != "" && strings.EqualFold(strings.TrimSpace(candidate.Serial), normalizedSerial) {
+			return candidate
+		}
+		candidateDevice := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(candidate.Device), "/dev/"))
+		if normalizedDevice != "" && candidateDevice != "" && candidateDevice == normalizedDevice {
+			return candidate
+		}
+	}
+	return nil
+}
+
+func unraidDiskRole(disk *models.HostUnraidDisk) string {
+	if disk == nil {
+		return ""
+	}
+	return strings.TrimSpace(disk.Role)
+}
+
+func unraidDiskGroup(disk *models.HostUnraidDisk) string {
+	if disk == nil {
+		return ""
+	}
+	role := strings.TrimSpace(disk.Role)
+	switch role {
+	case "parity", "data":
+		return "unraid-array"
+	case "cache":
+		return "unraid-cache"
+	default:
+		return ""
+	}
+}
+
+func unraidDiskState(disk *models.HostUnraidDisk) string {
+	if disk == nil {
+		return ""
+	}
+	return strings.TrimSpace(disk.Status)
 }
 
 func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity) {

@@ -273,3 +273,64 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 		}
 	})
 }
+
+func TestAgent_collectUnraidStorage_GuardsAndErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-linux skips collection", func(t *testing.T) {
+		called := false
+		mc := &mockCollector{
+			goos: "darwin",
+			unraidStorageFn: func(context.Context) (*agentshost.UnraidStorage, error) {
+				called = true
+				return &agentshost.UnraidStorage{}, nil
+			},
+		}
+		a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+		if got := a.collectUnraidStorage(context.Background()); got != nil {
+			t.Fatalf("collectUnraidStorage() = %#v, want nil", got)
+		}
+		if called {
+			t.Fatal("unraidStorageFn should not be called on non-linux hosts")
+		}
+	})
+
+	t.Run("collector error returns nil", func(t *testing.T) {
+		mc := &mockCollector{
+			goos: "linux",
+			unraidStorageFn: func(context.Context) (*agentshost.UnraidStorage, error) {
+				return nil, errors.New("mdcmd missing")
+			},
+		}
+		a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+		if got := a.collectUnraidStorage(context.Background()); got != nil {
+			t.Fatalf("collectUnraidStorage() = %#v, want nil", got)
+		}
+	})
+
+	t.Run("successful collection returns topology", func(t *testing.T) {
+		mc := &mockCollector{
+			goos: "linux",
+			unraidStorageFn: func(context.Context) (*agentshost.UnraidStorage, error) {
+				return &agentshost.UnraidStorage{
+					ArrayStarted: true,
+					ArrayState:   "STARTED",
+					Disks: []agentshost.UnraidDisk{
+						{Name: "parity", Role: "parity", Status: "online"},
+					},
+				}, nil
+			},
+		}
+		a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+		got := a.collectUnraidStorage(context.Background())
+		if got == nil {
+			t.Fatal("collectUnraidStorage() returned nil")
+		}
+		if !got.ArrayStarted || len(got.Disks) != 1 || got.Disks[0].Role != "parity" {
+			t.Fatalf("collectUnraidStorage() = %#v, want populated topology", got)
+		}
+	})
+}

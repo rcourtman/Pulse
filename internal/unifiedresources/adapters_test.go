@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
@@ -260,13 +261,11 @@ func TestResourceFromHostDerivesStorageTopologyRisk(t *testing.T) {
 		ID:       "tower-host",
 		Hostname: "tower",
 		Status:   "online",
-		RAID: []models.HostRAIDArray{
-			{
-				Device:        "/dev/md2",
-				State:         "degraded",
-				TotalDevices:  2,
-				ActiveDevices: 1,
-				FailedDevices: 1,
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			Disks: []models.HostUnraidDisk{
+				{Name: "parity", Role: "parity", Status: "disabled"},
+				{Name: "disk1", Role: "data", Status: "online"},
 			},
 		},
 	}
@@ -281,7 +280,37 @@ func TestResourceFromHostDerivesStorageTopologyRisk(t *testing.T) {
 	if resource.Agent.StorageRisk.Level != storagehealth.RiskCritical {
 		t.Fatalf("risk level = %q, want %q", resource.Agent.StorageRisk.Level, storagehealth.RiskCritical)
 	}
-	if len(resource.Agent.RAID) != 1 || resource.Agent.RAID[0].Risk == nil {
-		t.Fatalf("expected raid risk payload, got %+v", resource.Agent.RAID)
+	if resource.Agent.Unraid == nil || resource.Agent.Unraid.Risk == nil {
+		t.Fatalf("expected unraid risk payload, got %+v", resource.Agent.Unraid)
+	}
+}
+
+func TestResourceFromHostSMARTDiskCarriesUnraidRole(t *testing.T) {
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		LastSeen: time.Now().UTC(),
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			Disks: []models.HostUnraidDisk{
+				{Name: "parity", Device: "/dev/sdb", Role: "parity", Status: "online", Serial: "PARITY-1"},
+			},
+		},
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{Device: "/dev/sdb", Serial: "PARITY-1", Model: "Seagate"},
+			},
+		},
+	}
+
+	resource, _ := resourceFromHostSMARTDisk(host, host.Sensors.SMART[0])
+	if resource.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if resource.PhysicalDisk.StorageRole != "parity" {
+		t.Fatalf("storageRole = %q, want parity", resource.PhysicalDisk.StorageRole)
+	}
+	if resource.PhysicalDisk.StorageGroup != "unraid-array" {
+		t.Fatalf("storageGroup = %q, want unraid-array", resource.PhysicalDisk.StorageGroup)
 	}
 }

@@ -23,6 +23,7 @@ type SystemCollector interface {
 	SensorsParse(jsonStr string) (*sensors.TemperatureData, error)
 	SensorsPower(ctx context.Context) (*sensors.PowerData, error)
 	RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error)
+	UnraidStorage(ctx context.Context) (*agentshost.UnraidStorage, error)
 	CephStatus(ctx context.Context) (*CephClusterStatus, error)
 	SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error)
 	Now() time.Time
@@ -73,6 +74,10 @@ func (c *defaultCollector) SensorsPower(ctx context.Context) (*sensors.PowerData
 
 func (c *defaultCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 	return CollectRAIDArrays(ctx)
+}
+
+func (c *defaultCollector) UnraidStorage(ctx context.Context) (*agentshost.UnraidStorage, error) {
+	return CollectUnraidStorage(ctx, c)
 }
 
 func (c *defaultCollector) CephStatus(ctx context.Context) (*CephClusterStatus, error) {

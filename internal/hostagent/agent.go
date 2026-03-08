@@ -629,6 +629,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect RAID array data (best effort - don't fail if unavailable)
 	raidData := a.collectRAIDArrays(collectCtx)
 
+	// Collect Unraid array topology (best effort - only on Unraid hosts).
+	unraidData := a.collectUnraidStorage(collectCtx)
+
 	// Collect Ceph cluster data (best effort - only on Ceph nodes)
 	cephData := a.collectCephStatus(collectCtx)
 
@@ -673,6 +676,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Network:        append([]agentshost.NetworkInterface(nil), snapshot.Network...),
 		Sensors:        sensorData,
 		RAID:           raidData,
+		Unraid:         unraidData,
 		Ceph:           cephData,
 		ClusterSensors: clusterSensors,
 		Tags:           append([]string(nil), a.cfg.Tags...),
@@ -1058,6 +1062,30 @@ func (a *Agent) collectRAIDArrays(ctx context.Context) []agentshost.RAIDArray {
 	}
 
 	return arrays
+}
+
+// collectUnraidStorage attempts to collect Unraid array topology.
+// Returns nil when not running on Unraid or if collection fails.
+func (a *Agent) collectUnraidStorage(ctx context.Context) *agentshost.UnraidStorage {
+	if a.collector.GOOS() != "linux" {
+		return nil
+	}
+
+	storage, err := a.collector.UnraidStorage(ctx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect Unraid storage data")
+		return nil
+	}
+	if storage == nil {
+		return nil
+	}
+
+	a.logger.Debug().
+		Bool("arrayStarted", storage.ArrayStarted).
+		Int("diskCount", len(storage.Disks)).
+		Msg("Collected Unraid storage data")
+
+	return storage
 }
 
 // collectCephStatus attempts to collect Ceph cluster status.
