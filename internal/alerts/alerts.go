@@ -2976,6 +2976,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
 		m.clearHostRAIDAlerts(host.ID)
+		m.clearHostUnraidAlerts(host.ID)
 		return
 	}
 
@@ -2985,6 +2986,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			m.clearHostMetricAlerts(host.ID)
 			m.clearHostDiskAlerts(host.ID)
 			m.clearHostRAIDAlerts(host.ID)
+			m.clearHostUnraidAlerts(host.ID)
 			return
 		}
 	}
@@ -3142,6 +3144,12 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	m.cleanupHostDiskAlerts(host, seenDisks)
+
+	if host.Unraid != nil {
+		m.syncHostUnraidStorageAlert(host, nodeName, instanceName, resourceName, baseMetadata)
+	} else {
+		m.clearHostUnraidAlerts(host.ID)
+	}
 
 	// Check RAID arrays for degraded or failed state
 	if len(host.RAID) > 0 {
@@ -3313,6 +3321,7 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 	m.clearHostMetricAlerts(host.ID)
 	m.clearHostDiskAlerts(host.ID)
 	m.clearHostRAIDAlerts(host.ID)
+	m.clearHostUnraidAlerts(host.ID)
 }
 
 // HandleHostOffline raises an alert when a host agent stops reporting.
@@ -3670,6 +3679,106 @@ func (m *Manager) clearHostRAIDAlerts(hostID string) {
 			m.clearAlertNoLock(alertID)
 		}
 	}
+}
+
+func (m *Manager) clearHostUnraidAlerts(hostID string) {
+	if hostID == "" {
+		return
+	}
+	m.clearAlert(fmt.Sprintf("host-%s-unraid-array", hostID))
+}
+
+func (m *Manager) syncHostUnraidStorageAlert(host models.Host, nodeName, instanceName, resourceName string, baseMetadata map[string]interface{}) {
+	if host.Unraid == nil {
+		m.clearHostUnraidAlerts(host.ID)
+		return
+	}
+
+	assessment := storagehealth.AssessUnraidStorage(*host.Unraid)
+	reasons := make([]storagehealth.Reason, 0, len(assessment.Reasons))
+	for _, reason := range assessment.Reasons {
+		if reason.Severity == storagehealth.RiskWarning || reason.Severity == storagehealth.RiskCritical {
+			reasons = append(reasons, reason)
+		}
+	}
+
+	alertID := fmt.Sprintf("host-%s-unraid-array", host.ID)
+	if len(reasons) == 0 {
+		m.clearAlert(alertID)
+		return
+	}
+
+	level := AlertLevelWarning
+	for _, reason := range reasons {
+		if reason.Severity == storagehealth.RiskCritical {
+			level = AlertLevelCritical
+			break
+		}
+	}
+
+	reasonCodes := make([]string, 0, len(reasons))
+	reasonSummaries := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		reasonCodes = append(reasonCodes, reason.Code)
+		reasonSummaries = append(reasonSummaries, reason.Summary)
+	}
+
+	metadata := cloneMetadata(baseMetadata)
+	metadata["metric"] = "storageTopology"
+	metadata["storagePlatform"] = "unraid"
+	metadata["storageTopology"] = "array"
+	metadata["arrayState"] = host.Unraid.ArrayState
+	metadata["syncAction"] = host.Unraid.SyncAction
+	metadata["syncProgress"] = host.Unraid.SyncProgress
+	metadata["numProtected"] = host.Unraid.NumProtected
+	metadata["numDisabled"] = host.Unraid.NumDisabled
+	metadata["numInvalid"] = host.Unraid.NumInvalid
+	metadata["numMissing"] = host.Unraid.NumMissing
+	metadata["riskCodes"] = reasonCodes
+	metadata["riskSummaries"] = reasonSummaries
+
+	resourceID := fmt.Sprintf("%s/storage:unraid-array", hostResourceID(host.ID))
+	resourceLabel := fmt.Sprintf("%s - Unraid Array", resourceName)
+	now := time.Now()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+		existing.LastSeen = now
+		existing.Level = level
+		existing.Message = strings.Join(reasonSummaries, "; ")
+		existing.ResourceID = resourceID
+		existing.ResourceName = resourceLabel
+		existing.Node = nodeName
+		existing.NodeDisplayName = m.resolveNodeDisplayName(nodeName)
+		existing.Instance = instanceName
+		existing.Metadata = metadata
+		return
+	}
+
+	alert := &Alert{
+		ID:              alertID,
+		Type:            "storage-topology",
+		Level:           level,
+		ResourceID:      resourceID,
+		ResourceName:    resourceLabel,
+		Node:            nodeName,
+		NodeDisplayName: m.resolveNodeDisplayName(nodeName),
+		Instance:        instanceName,
+		Message:         strings.Join(reasonSummaries, "; "),
+		Value:           0,
+		Threshold:       0,
+		StartTime:       now,
+		LastSeen:        now,
+		Metadata:        metadata,
+	}
+
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.dispatchAlert(alert, false)
 }
 
 func isPBSOffline(pbs models.PBSInstance) bool {

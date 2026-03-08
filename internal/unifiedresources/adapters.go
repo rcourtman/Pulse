@@ -370,6 +370,70 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	return resource, identity
 }
 
+func resourceFromHostUnraidStorage(host models.Host) (Resource, ResourceIdentity) {
+	name := host.Hostname
+	if host.DisplayName != "" {
+		name = host.DisplayName
+	}
+	name = strings.TrimSpace(name) + " Array"
+
+	assessment := storagehealth.AssessUnraidStorage(*host.Unraid)
+	protection := "none"
+	switch {
+	case host.Unraid.NumProtected >= 2:
+		protection = "dual-parity"
+	case host.Unraid.NumProtected == 1:
+		protection = "single-parity"
+	}
+
+	path := unraidStoragePath(host)
+	resource := Resource{
+		Type:       ResourceTypeStorage,
+		Technology: "unraid",
+		Name:       name,
+		Status:     storageStatus(statusFromString(host.Status), storageRiskFromAssessment(assessment)),
+		LastSeen:   host.LastSeen,
+		UpdatedAt:  time.Now().UTC(),
+		Metrics:    metricsFromUnraidStorage(host),
+		Storage: &StorageMeta{
+			Type:         "unraid-array",
+			Content:      "files",
+			ContentTypes: []string{"files"},
+			Shared:       false,
+			IsCeph:       false,
+			IsZFS:        false,
+			Platform:     "unraid",
+			Topology:     "array",
+			Protection:   protection,
+			Risk:         storageRiskFromAssessment(assessment),
+			Path:         path,
+			ArrayState:   host.Unraid.ArrayState,
+			SyncAction:   host.Unraid.SyncAction,
+			SyncProgress: host.Unraid.SyncProgress,
+			NumProtected: host.Unraid.NumProtected,
+			NumDisabled:  host.Unraid.NumDisabled,
+			NumInvalid:   host.Unraid.NumInvalid,
+			NumMissing:   host.Unraid.NumMissing,
+		},
+		Tags: uniqueStrings([]string{
+			"unraid",
+			"storage",
+			"array",
+			protection,
+		}),
+	}
+
+	identity := ResourceIdentity{
+		MachineID: hostUnraidStorageIdentity(host),
+		Hostnames: uniqueStrings([]string{
+			host.Hostname,
+			host.Hostname + ":unraid-array",
+		}),
+	}
+
+	return resource, identity
+}
+
 func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Resource, ResourceIdentity) {
 	name := strings.TrimSpace(disk.Model)
 	if name == "" {
@@ -436,6 +500,71 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	}
 
 	return resource, identity
+}
+
+func hostUnraidStorageIdentity(host models.Host) string {
+	if machineID := strings.TrimSpace(host.MachineID); machineID != "" {
+		return machineID + "/storage/unraid-array"
+	}
+	if hostname := strings.TrimSpace(host.Hostname); hostname != "" {
+		return hostname + "/storage/unraid-array"
+	}
+	return ""
+}
+
+func hostUnraidStorageSourceID(host models.Host) string {
+	hostID := strings.TrimSpace(host.ID)
+	if hostID == "" {
+		return ""
+	}
+	return hostID + "/storage:unraid-array"
+}
+
+func unraidStoragePath(host models.Host) string {
+	for _, disk := range host.Disks {
+		mount := strings.TrimSpace(disk.Mountpoint)
+		switch mount {
+		case "/mnt/user", "/mnt/user0":
+			return mount
+		}
+	}
+	return "/mnt/user"
+}
+
+func unraidStorageCapacity(host models.Host) (int64, int64, int64, float64) {
+	for _, disk := range host.Disks {
+		mount := strings.TrimSpace(disk.Mountpoint)
+		if mount == "/mnt/user" || mount == "/mnt/user0" {
+			return disk.Total, disk.Used, disk.Free, percentFromUsage(disk.Usage)
+		}
+	}
+
+	deviceUsage := make(map[string]models.Disk, len(host.Disks))
+	for _, disk := range host.Disks {
+		device := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(disk.Device), "/dev/"))
+		if device != "" {
+			deviceUsage[device] = disk
+		}
+	}
+
+	var total int64
+	var used int64
+	var free int64
+	for _, disk := range host.Unraid.Disks {
+		if strings.TrimSpace(disk.Role) != "data" {
+			continue
+		}
+		device := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(disk.Device), "/dev/"))
+		if usage, ok := deviceUsage[device]; ok && usage.Total > 0 {
+			total += usage.Total
+			used += usage.Used
+			free += usage.Free
+		}
+	}
+	if total <= 0 {
+		return 0, 0, 0, 0
+	}
+	return total, used, free, (float64(used) / float64(total)) * 100
 }
 
 func matchUnraidDisk(unraid *models.HostUnraidStorage, disk models.HostDiskSMART) *models.HostUnraidDisk {

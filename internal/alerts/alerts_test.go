@@ -3222,6 +3222,66 @@ func TestCheckHostSkipsSMARTDiskRiskAlertsWhenLinkedToProxmoxNode(t *testing.T) 
 	}
 }
 
+func TestCheckHostCreatesUnraidStorageTopologyAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			Disks: []models.HostUnraidDisk{
+				{Name: "parity", Role: "parity", Status: "disabled"},
+				{Name: "disk1", Role: "data", Status: "online"},
+			},
+		},
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	alert, exists := m.activeAlerts["host-tower-host-unraid-array"]
+	if !exists {
+		t.Fatalf("expected unraid storage-topology alert")
+	}
+	if alert.Type != "storage-topology" {
+		t.Fatalf("Type = %q, want storage-topology", alert.Type)
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("Level = %q, want %q", alert.Level, AlertLevelCritical)
+	}
+}
+
+func TestCheckHostClearsUnraidStorageTopologyAlertOnRecovery(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			Disks: []models.HostUnraidDisk{
+				{Name: "parity", Role: "parity", Status: "disabled"},
+				{Name: "disk1", Role: "data", Status: "online"},
+			},
+		},
+	}
+	m.CheckHost(host)
+
+	host.Unraid.Disks[0].Status = "online"
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := m.activeAlerts["host-tower-host-unraid-array"]; exists {
+		t.Fatalf("expected unraid storage-topology alert to clear on recovery")
+	}
+}
+
 func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 	m := newTestManager(t)
 

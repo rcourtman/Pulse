@@ -535,6 +535,53 @@ func TestResourceRegistry_IngestSnapshotPropagatesUnraidDiskRole(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotCreatesUnraidStorageResource(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-tower",
+				Hostname:  "tower",
+				Status:    "online",
+				LastSeen:  now,
+				MachineID: "machine-tower",
+				Disks: []models.Disk{
+					{Mountpoint: "/mnt/user", Total: 1000, Used: 400, Free: 600, Usage: 40},
+				},
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					ArrayState:   "STARTED",
+					NumProtected: 1,
+					Disks: []models.HostUnraidDisk{
+						{Name: "parity", Role: "parity", Status: "online"},
+						{Name: "disk1", Role: "data", Status: "online"},
+					},
+				},
+			},
+		},
+	})
+
+	storage := rr.ListByType(ResourceTypeStorage)
+	if len(storage) != 1 {
+		t.Fatalf("expected 1 unraid storage resource, got %d", len(storage))
+	}
+	resource := storage[0]
+	if !containsDataSource(resource.Sources, SourceAgent) {
+		t.Fatalf("expected agent-backed storage source, got %+v", resource.Sources)
+	}
+	if resource.ParentID == nil {
+		t.Fatalf("expected host parent on unraid storage")
+	}
+	if resource.Storage == nil || resource.Storage.Type != "unraid-array" || resource.Storage.Platform != "unraid" {
+		t.Fatalf("expected unraid storage metadata, got %+v", resource.Storage)
+	}
+	if resource.Metrics == nil || resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent != 40 {
+		t.Fatalf("expected disk metrics from unraid storage, got %+v", resource.Metrics)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

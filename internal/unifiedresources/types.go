@@ -216,6 +216,9 @@ type StorageMeta struct {
 	Shared       bool         `json:"shared"`
 	IsCeph       bool         `json:"isCeph"`
 	IsZFS        bool         `json:"isZfs"`
+	Platform     string       `json:"platform,omitempty"`
+	Topology     string       `json:"topology,omitempty"`
+	Protection   string       `json:"protection,omitempty"`
 	Risk         *StorageRisk `json:"risk,omitempty"`
 
 	// Accessibility metadata.
@@ -227,6 +230,15 @@ type StorageMeta struct {
 	ZFSReadErrors     int64  `json:"zfsReadErrors,omitempty"`
 	ZFSWriteErrors    int64  `json:"zfsWriteErrors,omitempty"`
 	ZFSChecksumErrors int64  `json:"zfsChecksumErrors,omitempty"`
+
+	// Unraid metadata (when Platform is "unraid").
+	ArrayState   string  `json:"arrayState,omitempty"`
+	SyncAction   string  `json:"syncAction,omitempty"`
+	SyncProgress float64 `json:"syncProgress,omitempty"`
+	NumProtected int     `json:"numProtected,omitempty"`
+	NumDisabled  int     `json:"numDisabled,omitempty"`
+	NumInvalid   int     `json:"numInvalid,omitempty"`
+	NumMissing   int     `json:"numMissing,omitempty"`
 }
 
 // PhysicalDiskMeta contains physical disk-specific metadata.

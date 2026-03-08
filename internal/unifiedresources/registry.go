@@ -132,6 +132,9 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		rr.ingestHost(host)
 	}
 	for _, host := range snapshot.Hosts {
+		rr.ingestHostUnraidStorage(host)
+	}
+	for _, host := range snapshot.Hosts {
 		rr.ingestHostSMARTDisks(host)
 	}
 	for _, dh := range snapshot.DockerHosts {
@@ -443,6 +446,19 @@ func (rr *ResourceRegistry) ingestProxmoxNode(node models.Node, linkedHost *mode
 func (rr *ResourceRegistry) ingestHost(host models.Host) {
 	resource, identity := resourceFromHost(host)
 	rr.ingest(SourceAgent, host.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestHostUnraidStorage(host models.Host) {
+	if host.Unraid == nil {
+		return
+	}
+
+	resource, identity := resourceFromHostUnraidStorage(host)
+	parentID := rr.sourceResourceID(SourceAgent, host.ID)
+	if parentID != "" {
+		resource.ParentID = &parentID
+	}
+	rr.ingest(SourceAgent, hostUnraidStorageSourceID(host), resource, identity)
 }
 
 func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {

@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -253,6 +254,53 @@ func TestResourceFromStorageDerivesZFSTopologyRisk(t *testing.T) {
 	}
 	if resource.Storage.Risk.Level != storagehealth.RiskWarning {
 		t.Fatalf("risk level = %q, want %q", resource.Storage.Risk.Level, storagehealth.RiskWarning)
+	}
+}
+
+func TestResourceFromHostUnraidStorageIncludesTopologyMetadata(t *testing.T) {
+	host := models.Host{
+		ID:          "tower-host",
+		Hostname:    "tower",
+		DisplayName: "Tower",
+		Status:      "online",
+		LastSeen:    time.Now().UTC(),
+		Disks: []models.Disk{
+			{Mountpoint: "/mnt/user", Total: 1000, Used: 400, Free: 600, Usage: 40},
+		},
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			SyncAction:   "check",
+			SyncProgress: 22,
+			NumProtected: 1,
+			Disks: []models.HostUnraidDisk{
+				{Name: "parity", Role: "parity", Status: "online"},
+				{Name: "disk1", Role: "data", Status: "online"},
+			},
+		},
+	}
+
+	resource, identity := resourceFromHostUnraidStorage(host)
+	if resource.Type != ResourceTypeStorage {
+		t.Fatalf("Type = %q, want %q", resource.Type, ResourceTypeStorage)
+	}
+	if resource.Storage == nil {
+		t.Fatal("expected storage metadata payload")
+	}
+	if got := resource.Storage.Type; got != "unraid-array" {
+		t.Fatalf("storage type = %q, want unraid-array", got)
+	}
+	if got := resource.Storage.Platform; got != "unraid" {
+		t.Fatalf("platform = %q, want unraid", got)
+	}
+	if got := resource.Storage.Protection; got != "single-parity" {
+		t.Fatalf("protection = %q, want single-parity", got)
+	}
+	if resource.Metrics == nil || resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent != 40 {
+		t.Fatalf("expected disk metrics from /mnt/user, got %+v", resource.Metrics)
+	}
+	if got := identity.MachineID; got != "" && !strings.Contains(got, "/storage/unraid-array") {
+		t.Fatalf("expected unraid storage identity suffix, got %q", got)
 	}
 }
 

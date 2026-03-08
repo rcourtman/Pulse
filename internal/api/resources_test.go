@@ -1748,6 +1748,66 @@ func TestResourceListIncludesStorageMetadata(t *testing.T) {
 	}
 }
 
+func TestResourceListIncludesHostUnraidStorage(t *testing.T) {
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-tower",
+				Hostname:  "tower",
+				Status:    "online",
+				LastSeen:  time.Now().UTC(),
+				MachineID: "machine-tower",
+				Disks: []models.Disk{
+					{Mountpoint: "/mnt/user", Total: 1000, Used: 400, Free: 600, Usage: 40},
+				},
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					ArrayState:   "STARTED",
+					NumProtected: 1,
+					Disks: []models.HostUnraidDisk{
+						{Name: "parity", Role: "parity", Status: "online"},
+						{Name: "disk1", Role: "data", Status: "online"},
+					},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=storage", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 storage resource, got %d", len(resp.Data))
+	}
+
+	resource := resp.Data[0]
+	if !containsSource(resource.Sources, unified.SourceAgent) {
+		t.Fatalf("expected agent-backed storage source, got %+v", resource.Sources)
+	}
+	if resource.Storage == nil || resource.Storage.Type != "unraid-array" {
+		t.Fatalf("expected unraid storage metadata, got %+v", resource.Storage)
+	}
+	if resource.Storage.Platform != "unraid" || resource.Storage.Protection != "single-parity" {
+		t.Fatalf("expected unraid storage platform/protection, got %+v", resource.Storage)
+	}
+	if resource.Metrics == nil || resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent != 40 {
+		t.Fatalf("expected unraid storage capacity metric, got %+v", resource.Metrics)
+	}
+}
+
 func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {
 	now := time.Now().UTC()
 

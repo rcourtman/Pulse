@@ -39,6 +39,21 @@ func metricsFromHost(host models.Host) *ResourceMetrics {
 	)
 }
 
+func metricsFromUnraidStorage(host models.Host) *ResourceMetrics {
+	metrics := &ResourceMetrics{}
+	total, used, _, percent := unraidStorageCapacity(host)
+	if total > 0 {
+		metrics.Disk = &MetricValue{
+			Used:    &used,
+			Total:   &total,
+			Percent: percent,
+			Unit:    "bytes",
+			Source:  SourceAgent,
+		}
+	}
+	return metrics
+}
+
 func metricsFromDockerHost(host models.DockerHost) *ResourceMetrics {
 	return buildHostMetricPayload(
 		host.CPUUsage,
