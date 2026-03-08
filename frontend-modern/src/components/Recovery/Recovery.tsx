@@ -24,7 +24,6 @@ import {
 } from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { Subtabs } from '@/components/shared/Subtabs';
-import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 import {
   getSourcePlatformBadge,
   getSourcePlatformLabel,
@@ -43,6 +42,7 @@ import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
 import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
+import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
 import { RecoverySummary } from './RecoverySummary';
 import {
@@ -251,26 +251,13 @@ const buildRepositoryLabelForPoint = (p: RecoveryPoint): string => {
 const buildDetailsSummaryForPoint = (p: RecoveryPoint): string =>
   String(p.display?.detailsSummary || '').trim();
 
-const SUBJECT_TYPE_LABELS: Record<string, string> = {
-  'proxmox-vm': 'VM',
-  'proxmox-vm-backup': 'VM',
-  'proxmox-lxc': 'LXC',
-  'proxmox-guest': 'Guest',
-  'k8s-pvc': 'PVC',
-  'k8s-pod': 'Pod',
-  'k8s-cluster': 'Cluster',
-  'velero-backup': 'Velero',
-  'docker-container': 'Container',
-  'truenas-dataset': 'Dataset',
-  'truenas-replication-task': 'Replication',
-};
-
 const buildSubjectTypeLabelForPoint = (p: RecoveryPoint): string => {
   const raw = String(p.display?.subjectType || p.subjectRef?.type || '')
     .trim()
     .toLowerCase();
   if (!raw) return '';
-  if (SUBJECT_TYPE_LABELS[raw]) return SUBJECT_TYPE_LABELS[raw];
+  const presentation = getResourceTypePresentation(raw);
+  if (presentation) return presentation.label;
   return titleize(
     raw
       .replace(/^k8s-/, '')
@@ -283,21 +270,8 @@ const subjectTypeBadgeClass = (p: RecoveryPoint): string => {
   const raw = String(p.display?.subjectType || p.subjectRef?.type || '')
     .trim()
     .toLowerCase();
-  if (raw === 'proxmox-vm' || raw === 'proxmox-vm-backup') {
-    return getWorkloadTypeBadge('vm').className;
-  }
-  if (raw === 'proxmox-lxc') {
-    return getWorkloadTypeBadge('system-container', { label: 'LXC' }).className;
-  }
-  if (raw === 'docker-container') {
-    return getWorkloadTypeBadge('app-container').className;
-  }
-  if (raw === 'k8s-pod') {
-    return getWorkloadTypeBadge('pod').className;
-  }
-  if (raw === 'k8s-cluster') {
-    return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300';
-  }
+  const presentation = getResourceTypePresentation(raw);
+  if (presentation) return presentation.badgeClasses;
   return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
 };
 
@@ -733,8 +707,7 @@ const Recovery: Component = () => {
     });
   });
 
-  const rollupsSummary = createMemo(() => {
-    const items = baseRollups();
+  const summarizeRollups = (items: ProtectionRollup[]) => {
     const nowMs = Date.now();
     const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
     const counts: Record<KnownOutcome, number> = {
@@ -744,16 +717,12 @@ const Recovery: Component = () => {
       running: 0,
       unknown: 0,
     };
-
     let stale = 0;
     let neverSucceeded = 0;
-
     for (const r of items) {
       counts[normalizeOutcome(r.lastOutcome)] += 1;
-
       const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
       const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
-
       if (successMs > 0) {
         if (successMs < staleThreshold) stale += 1;
       } else if (attemptMs > 0) {
@@ -761,37 +730,13 @@ const Recovery: Component = () => {
         if (attemptMs < staleThreshold) stale += 1;
       }
     }
-
     return { total: items.length, counts, stale, neverSucceeded };
-  });
+  };
+
+  const rollupsSummary = createMemo(() => summarizeRollups(baseRollups()));
 
   // Unfiltered summary for the RecoverySummary panel (sits above filters).
-  const unfilteredSummary = createMemo(() => {
-    const items = rollups();
-    const nowMs = Date.now();
-    const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
-    const counts: Record<KnownOutcome, number> = {
-      success: 0,
-      warning: 0,
-      failed: 0,
-      running: 0,
-      unknown: 0,
-    };
-    let stale = 0;
-    let neverSucceeded = 0;
-    for (const r of items) {
-      counts[normalizeOutcome(r.lastOutcome)] += 1;
-      const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
-      const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
-      if (successMs > 0) {
-        if (successMs < staleThreshold) stale += 1;
-      } else if (attemptMs > 0) {
-        neverSucceeded += 1;
-        if (attemptMs < staleThreshold) stale += 1;
-      }
-    }
-    return { total: items.length, counts, stale, neverSucceeded };
-  });
+  const unfilteredSummary = createMemo(() => summarizeRollups(rollups()));
 
   const filteredRollups = createMemo<ProtectionRollup[]>(() => {
     const selectedOutcome = outcomeFilter();
