@@ -2326,6 +2326,136 @@ func TestResourceListReturnsCanonicalStorageMetricsTargets(t *testing.T) {
 	})
 }
 
+func TestResourceStorageSummaryRollsUpIncidents(t *testing.T) {
+	now := time.Now().UTC()
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "pbs:main",
+				Type:      unified.ResourceTypePBS,
+				Name:      "pbs-main",
+				Status:    unified.StatusWarning,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourcePBS},
+				Incidents: []unified.ResourceIncident{{
+					Provider: "pulse",
+					NativeID: "pbs-alert-1",
+					Code:     "pbs_datastore_state",
+					Severity: storagehealth.RiskCritical,
+					Summary:  "PBS datastore archive is READ_ONLY",
+				}},
+				PBS: &unified.PBSData{
+					ProtectedWorkloadCount: 2,
+					AffectedDatastoreCount: 1,
+					ProtectedWorkloadNames: []string{"media01", "app01"},
+				},
+			},
+			{
+				ID:        "storage:tower-array",
+				Type:      unified.ResourceTypeStorage,
+				Name:      "Tower Array",
+				Status:    unified.StatusWarning,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceAgent},
+				Incidents: []unified.ResourceIncident{{
+					Provider: "pulse",
+					NativeID: "unraid-alert-1",
+					Code:     "unraid_parity_unavailable",
+					Severity: storagehealth.RiskWarning,
+					Summary:  "Unraid parity protection is unavailable",
+				}},
+				Storage: &unified.StorageMeta{
+					Platform: "unraid",
+					Topology: "array",
+					Risk: &unified.StorageRisk{
+						Level: storagehealth.RiskWarning,
+						Reasons: []unified.StorageRiskReason{{
+							Code:     "unraid_parity_unavailable",
+							Severity: storagehealth.RiskWarning,
+							Summary:  "Unraid parity protection is unavailable",
+						}},
+					},
+					ProtectionReduced:     true,
+					ConsumerCount:         3,
+					ConsumerImpactSummary: "Affects 3 dependent resources: media01, app01, and 1 more",
+				},
+			},
+			{
+				ID:        "disk:serial-1",
+				Type:      unified.ResourceTypePhysicalDisk,
+				Name:      "SERIAL-1",
+				Status:    unified.StatusWarning,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceAgent},
+				Incidents: []unified.ResourceIncident{{
+					Provider: "pulse",
+					NativeID: "disk-alert-1",
+					Code:     "smart_pending_sectors",
+					Severity: storagehealth.RiskWarning,
+					Summary:  "Disk has pending sectors",
+				}},
+				PhysicalDisk: &unified.PhysicalDiskMeta{Serial: "SERIAL-1"},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources/storage-summary", nil)
+	h.HandleStorageSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp StorageSummaryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.TotalResources != 3 {
+		t.Fatalf("totalResources = %d, want 3", resp.TotalResources)
+	}
+	if resp.RiskyResources != 3 || resp.CriticalResources != 1 || resp.WarningResources != 2 {
+		t.Fatalf("unexpected severity counts %+v", resp)
+	}
+	if resp.ProtectionReducedCount != 1 {
+		t.Fatalf("protectionReducedCount = %d, want 1", resp.ProtectionReducedCount)
+	}
+	if got := resp.ByIncidentCategory[unified.IncidentCategoryRecoverability]; got != 1 {
+		t.Fatalf("recoverability count = %d, want 1", got)
+	}
+	if got := resp.ByIncidentCategory[unified.IncidentCategoryProtection]; got != 1 {
+		t.Fatalf("protection count = %d, want 1", got)
+	}
+	if got := resp.ByIncidentCategory[unified.IncidentCategoryDiskHealth]; got != 1 {
+		t.Fatalf("disk-health count = %d, want 1", got)
+	}
+	if got := resp.ByPlatform["pbs"]; got != 1 {
+		t.Fatalf("pbs platform count = %d, want 1", got)
+	}
+	if got := resp.ByPlatform["unraid"]; got != 1 {
+		t.Fatalf("unraid platform count = %d, want 1", got)
+	}
+	if len(resp.TopIncidents) != 3 {
+		t.Fatalf("topIncidents len = %d, want 3", len(resp.TopIncidents))
+	}
+	if resp.TopIncidents[0].ResourceID != "pbs:main" || resp.TopIncidents[0].IncidentCategory != unified.IncidentCategoryRecoverability {
+		t.Fatalf("expected PBS recoverability incident first, got %+v", resp.TopIncidents[0])
+	}
+	if resp.TopIncidents[1].ResourceID != "storage:tower-array" || !resp.TopIncidents[1].ProtectionReduced {
+		t.Fatalf("expected unraid protection incident second, got %+v", resp.TopIncidents[1])
+	}
+	if resp.TopIncidents[2].ResourceID != "disk:serial-1" {
+		t.Fatalf("expected disk incident third, got %+v", resp.TopIncidents[2])
+	}
+}
+
 func findAPIResourceByNameAndNode(resources []unified.Resource, name, node string) unified.Resource {
 	for _, resource := range resources {
 		if resource.Name != name || resource.Proxmox == nil || resource.Proxmox.NodeName != node {

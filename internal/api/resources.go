@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -148,6 +149,37 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 		Meta:         meta,
 		Aggregations: stats,
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleStorageSummary handles GET /api/resources/storage-summary.
+func (h *ResourceHandlers) HandleStorageSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resources := registry.List()
+	filters := parseListFilters(r)
+	storageSubjects := make([]unified.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if !isStorageSummaryResource(resource) {
+			continue
+		}
+		storageSubjects = append(storageSubjects, resource)
+	}
+	storageSubjects = applyFilters(storageSubjects, filters)
+
+	response := buildStorageSummaryResponse(storageSubjects)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -753,9 +785,244 @@ type ResourcesMeta struct {
 	TotalPages int `json:"totalPages"`
 }
 
+type StorageSummaryResponse struct {
+	GeneratedAt            time.Time                `json:"generatedAt"`
+	TotalResources         int                      `json:"totalResources"`
+	RiskyResources         int                      `json:"riskyResources"`
+	CriticalResources      int                      `json:"criticalResources"`
+	WarningResources       int                      `json:"warningResources"`
+	ProtectionReducedCount int                      `json:"protectionReducedCount"`
+	RebuildInProgressCount int                      `json:"rebuildInProgressCount"`
+	DependentResourceCount int                      `json:"dependentResourceCount"`
+	ProtectedWorkloadCount int                      `json:"protectedWorkloadCount"`
+	AffectedDatastoreCount int                      `json:"affectedDatastoreCount"`
+	ByPlatform             map[string]int           `json:"byPlatform"`
+	ByResourceType         map[string]int           `json:"byResourceType"`
+	ByIncidentCategory     map[string]int           `json:"byIncidentCategory"`
+	TopIncidents           []StorageSummaryIncident `json:"topIncidents"`
+}
+
+type StorageSummaryIncident struct {
+	ResourceID            string `json:"resourceId"`
+	ResourceType          string `json:"resourceType"`
+	Name                  string `json:"name"`
+	ParentName            string `json:"parentName,omitempty"`
+	Platform              string `json:"platform,omitempty"`
+	Topology              string `json:"topology,omitempty"`
+	Status                string `json:"status"`
+	IncidentCount         int    `json:"incidentCount"`
+	IncidentCategory      string `json:"incidentCategory,omitempty"`
+	IncidentLabel         string `json:"incidentLabel,omitempty"`
+	IncidentSeverity      string `json:"incidentSeverity,omitempty"`
+	IncidentPriority      int    `json:"incidentPriority,omitempty"`
+	IncidentSummary       string `json:"incidentSummary,omitempty"`
+	IncidentImpactSummary string `json:"incidentImpactSummary,omitempty"`
+	IncidentUrgency       string `json:"incidentUrgency,omitempty"`
+	IncidentAction        string `json:"incidentAction,omitempty"`
+	ProtectionReduced     bool   `json:"protectionReduced,omitempty"`
+	RebuildInProgress     bool   `json:"rebuildInProgress,omitempty"`
+	ConsumerCount         int    `json:"consumerCount,omitempty"`
+	ProtectedWorkloads    int    `json:"protectedWorkloads,omitempty"`
+	AffectedDatastores    int    `json:"affectedDatastores,omitempty"`
+}
+
 type registryCacheEntry struct {
 	registry   *unified.ResourceRegistry
 	lastUpdate time.Time
+}
+
+func buildStorageSummaryResponse(resources []unified.Resource) StorageSummaryResponse {
+	response := StorageSummaryResponse{
+		GeneratedAt:        time.Now().UTC(),
+		ByPlatform:         make(map[string]int),
+		ByResourceType:     make(map[string]int),
+		ByIncidentCategory: make(map[string]int),
+		TopIncidents:       make([]StorageSummaryIncident, 0),
+	}
+
+	incidentCandidates := make([]unified.Resource, 0, len(resources))
+	for _, resource := range resources {
+		response.TotalResources++
+
+		platform := storageSummaryPlatform(resource)
+		if platform == "" {
+			platform = "unknown"
+		}
+		response.ByPlatform[platform]++
+		response.ByResourceType[string(frontendResourceType(resource))]++
+
+		if storageSummaryProtectionReduced(resource) {
+			response.ProtectionReducedCount++
+		}
+		if storageSummaryRebuildInProgress(resource) {
+			response.RebuildInProgressCount++
+		}
+		response.DependentResourceCount += storageSummaryConsumerCount(resource)
+		response.ProtectedWorkloadCount += storageSummaryProtectedWorkloadCount(resource)
+		response.AffectedDatastoreCount += storageSummaryAffectedDatastoreCount(resource)
+
+		if resource.IncidentCount > 0 {
+			response.RiskyResources++
+			switch resource.IncidentSeverity {
+			case storagehealth.RiskCritical:
+				response.CriticalResources++
+			default:
+				response.WarningResources++
+			}
+			category := strings.TrimSpace(resource.IncidentCategory)
+			if category != "" {
+				response.ByIncidentCategory[category]++
+			}
+			incidentCandidates = append(incidentCandidates, resource)
+		}
+	}
+
+	sort.Slice(incidentCandidates, func(i, j int) bool {
+		if incidentCandidates[i].IncidentPriority != incidentCandidates[j].IncidentPriority {
+			return incidentCandidates[i].IncidentPriority > incidentCandidates[j].IncidentPriority
+		}
+		if incidentCandidates[i].IncidentSeverity != incidentCandidates[j].IncidentSeverity {
+			return incidentCandidates[i].IncidentSeverity > incidentCandidates[j].IncidentSeverity
+		}
+		if incidentCandidates[i].Name != incidentCandidates[j].Name {
+			return incidentCandidates[i].Name < incidentCandidates[j].Name
+		}
+		return incidentCandidates[i].ID < incidentCandidates[j].ID
+	})
+
+	for i, resource := range incidentCandidates {
+		if i == 10 {
+			break
+		}
+		response.TopIncidents = append(response.TopIncidents, StorageSummaryIncident{
+			ResourceID:            resource.ID,
+			ResourceType:          string(frontendResourceType(resource)),
+			Name:                  resource.Name,
+			ParentName:            resource.ParentName,
+			Platform:              storageSummaryPlatform(resource),
+			Topology:              storageSummaryTopology(resource),
+			Status:                string(resource.Status),
+			IncidentCount:         resource.IncidentCount,
+			IncidentCategory:      resource.IncidentCategory,
+			IncidentLabel:         resource.IncidentLabel,
+			IncidentSeverity:      string(resource.IncidentSeverity),
+			IncidentPriority:      resource.IncidentPriority,
+			IncidentSummary:       resource.IncidentSummary,
+			IncidentImpactSummary: resource.IncidentImpactSummary,
+			IncidentUrgency:       resource.IncidentUrgency,
+			IncidentAction:        resource.IncidentAction,
+			ProtectionReduced:     storageSummaryProtectionReduced(resource),
+			RebuildInProgress:     storageSummaryRebuildInProgress(resource),
+			ConsumerCount:         storageSummaryConsumerCount(resource),
+			ProtectedWorkloads:    storageSummaryProtectedWorkloadCount(resource),
+			AffectedDatastores:    storageSummaryAffectedDatastoreCount(resource),
+		})
+	}
+
+	return response
+}
+
+func isStorageSummaryResource(resource unified.Resource) bool {
+	switch unified.CanonicalResourceType(resource.Type) {
+	case unified.ResourceTypeStorage, unified.ResourceTypePhysicalDisk, unified.ResourceTypePBS:
+		return true
+	case unified.ResourceTypeAgent:
+		if resource.TrueNAS != nil {
+			return true
+		}
+		if resource.Agent != nil && (resource.Agent.Unraid != nil || resource.Agent.StorageRisk != nil) {
+			return true
+		}
+	}
+	return false
+}
+
+func storageSummaryPlatform(resource unified.Resource) string {
+	if resource.Storage != nil && strings.TrimSpace(resource.Storage.Platform) != "" {
+		return strings.TrimSpace(resource.Storage.Platform)
+	}
+	if resource.TrueNAS != nil {
+		return "truenas"
+	}
+	if resource.PBS != nil {
+		return "pbs"
+	}
+	if resource.Agent != nil && resource.Agent.Unraid != nil {
+		return "unraid"
+	}
+	for _, source := range resource.Sources {
+		if trimmed := strings.TrimSpace(string(source)); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func storageSummaryTopology(resource unified.Resource) string {
+	if resource.Storage != nil && strings.TrimSpace(resource.Storage.Topology) != "" {
+		return strings.TrimSpace(resource.Storage.Topology)
+	}
+	switch unified.CanonicalResourceType(resource.Type) {
+	case unified.ResourceTypePhysicalDisk:
+		return "disk"
+	case unified.ResourceTypePBS:
+		return "backup-server"
+	case unified.ResourceTypeAgent:
+		if resource.Agent != nil && resource.Agent.Unraid != nil {
+			return "array-host"
+		}
+		if resource.TrueNAS != nil {
+			return "nas"
+		}
+	}
+	return string(frontendResourceType(resource))
+}
+
+func storageSummaryProtectionReduced(resource unified.Resource) bool {
+	if resource.Storage != nil && resource.Storage.ProtectionReduced {
+		return true
+	}
+	if resource.Agent != nil && resource.Agent.ProtectionReduced {
+		return true
+	}
+	if resource.TrueNAS != nil && resource.TrueNAS.ProtectionReduced {
+		return true
+	}
+	return false
+}
+
+func storageSummaryRebuildInProgress(resource unified.Resource) bool {
+	if resource.Storage != nil && resource.Storage.RebuildInProgress {
+		return true
+	}
+	if resource.Agent != nil && resource.Agent.RebuildInProgress {
+		return true
+	}
+	if resource.TrueNAS != nil && resource.TrueNAS.RebuildInProgress {
+		return true
+	}
+	return false
+}
+
+func storageSummaryConsumerCount(resource unified.Resource) int {
+	if resource.Storage != nil {
+		return resource.Storage.ConsumerCount
+	}
+	return 0
+}
+
+func storageSummaryProtectedWorkloadCount(resource unified.Resource) int {
+	if resource.PBS != nil {
+		return resource.PBS.ProtectedWorkloadCount
+	}
+	return 0
+}
+
+func storageSummaryAffectedDatastoreCount(resource unified.Resource) int {
+	if resource.PBS != nil {
+		return resource.PBS.AffectedDatastoreCount
+	}
+	return 0
 }
 
 // Filtering helpers.
