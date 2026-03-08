@@ -8,9 +8,10 @@ export const showToast = (
   title: string,
   message?: string,
   duration?: number,
+  detail?: string,
 ): string | undefined => {
   if (typeof window !== 'undefined' && window.showToast) {
-    return window.showToast(type, title, message, duration);
+    return window.showToast(type, title, message, duration, detail);
   }
 
   // Fallback to console if toast system not ready
@@ -23,5 +24,7 @@ export const showSuccess = (title: string, message?: string, duration?: number) 
   showToast('success', title, message, duration);
 export const showError = (title: string, message?: string, duration?: number) =>
   showToast('error', title, message, duration);
+export const showErrorWithDetail = (title: string, detail?: string, duration?: number) =>
+  showToast('error', title, undefined, duration, detail);
 export const showWarning = (title: string, message?: string, duration?: number) =>
   showToast('warning', title, message, duration);

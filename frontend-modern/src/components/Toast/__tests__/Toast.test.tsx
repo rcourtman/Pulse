@@ -41,4 +41,56 @@ describe('Toast', () => {
     vi.advanceTimersByTime(2000);
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
+
+  it('renders detail field in a collapsible details element', () => {
+    const onRemove = vi.fn();
+    render(() => (
+      <Toast
+        toast={{
+          id: 'err-1',
+          type: 'error',
+          title: 'Could not connect to the server',
+          detail: 'dial tcp smtp.gmail.com:587: connect: connection refused',
+        }}
+        onRemove={onRemove}
+      />
+    ));
+
+    // Title is visible
+    expect(screen.getByText('Could not connect to the server')).toBeInTheDocument();
+
+    // Detail is inside a <details> element (collapsed by default)
+    const details = document.querySelector('details');
+    expect(details).toBeInTheDocument();
+    expect(details!.open).toBe(false);
+
+    // The "Details" summary is visible
+    expect(screen.getByText('Details')).toBeInTheDocument();
+
+    // The raw error text is in the DOM but inside the collapsed details
+    expect(
+      screen.getByText('dial tcp smtp.gmail.com:587: connect: connection refused'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders message as visible subtitle without collapsing', () => {
+    const onRemove = vi.fn();
+    render(() => (
+      <Toast
+        toast={{
+          id: 'err-2',
+          type: 'error',
+          title: 'Unable to report merge',
+          message: 'The node is currently offline',
+        }}
+        onRemove={onRemove}
+      />
+    ));
+
+    // No details element when only message is set (no detail)
+    expect(document.querySelector('details')).not.toBeInTheDocument();
+
+    // Message is directly visible as a subtitle
+    expect(screen.getByText('The node is currently offline')).toBeInTheDocument();
+  });
 });

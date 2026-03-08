@@ -9,6 +9,7 @@ export interface ToastMessage {
   type: ToastType;
   title: string;
   message?: string;
+  detail?: string;
   duration?: number;
 }
 
@@ -132,6 +133,14 @@ export const Toast: Component<ToastProps> = (props) => {
           <Show when={props.toast.message}>
             <p class="mt-1 text-xs text-base-content opacity-90">{props.toast.message}</p>
           </Show>
+          <Show when={props.toast.detail}>
+            <details class="mt-1">
+              <summary class="text-xs text-muted cursor-pointer select-none hover:text-base-content">
+                Details
+              </summary>
+              <p class="mt-1 text-xs text-base-content/70 break-all">{props.toast.detail}</p>
+            </details>
+          </Show>
         </div>
         <button
           type="button"
@@ -156,7 +165,7 @@ export const Toast: Component<ToastProps> = (props) => {
 // Declare global interface extension
 declare global {
   interface Window {
-    showToast: (type: ToastType, title: string, message?: string, duration?: number) => string;
+    showToast: (type: ToastType, title: string, message?: string, duration?: number, detail?: string) => string;
   }
 }
 
@@ -168,12 +177,12 @@ export const ToastContainer: Component = () => {
   };
 
   // Expose global toast function
-  window.showToast = (type: ToastType, title: string, message?: string, duration?: number) => {
+  window.showToast = (type: ToastType, title: string, message?: string, duration?: number, detail?: string) => {
     const id =
       typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : Date.now().toString();
-    setToasts((prev) => [...prev, { id, type, title, message, duration }]);
+    setToasts((prev) => [...prev, { id, type, title, message, detail, duration }]);
     return id;
   };
 
