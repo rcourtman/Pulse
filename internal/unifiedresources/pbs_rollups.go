@@ -21,9 +21,12 @@ func (rr *ResourceRegistry) refreshPBSRollupsLocked() {
 		}
 		resource.PBS.AffectedDatastoreCount = 0
 		resource.PBS.AffectedDatastores = nil
+		resource.PBS.AffectedDatastoreSummary = ""
 		resource.PBS.ProtectedWorkloadCount = 0
 		resource.PBS.ProtectedWorkloadTypes = nil
 		resource.PBS.ProtectedWorkloadNames = nil
+		resource.PBS.ProtectedWorkloadSummary = ""
+		resource.PBS.PostureSummary = ""
 	}
 
 	affectedDatastores := make(map[string][]string)
@@ -84,9 +87,11 @@ func (rr *ResourceRegistry) refreshPBSRollupsLocked() {
 		sort.Strings(names)
 		resource.PBS.AffectedDatastores = append([]string(nil), names...)
 		resource.PBS.AffectedDatastoreCount = len(names)
+		resource.PBS.AffectedDatastoreSummary = summarizePBSAffectedDatastores(resource.PBS.AffectedDatastores)
 
 		workloads := protectedByPBS[resource.ID]
 		if len(workloads) == 0 {
+			resource.PBS.PostureSummary = summarizePBSPosture(resource.PBS)
 			continue
 		}
 
@@ -122,6 +127,8 @@ func (rr *ResourceRegistry) refreshPBSRollupsLocked() {
 		resource.PBS.ProtectedWorkloadTypes = uniqueStrings(types)
 		sort.Strings(resource.PBS.ProtectedWorkloadTypes)
 		resource.PBS.ProtectedWorkloadNames = protectedNames
+		resource.PBS.ProtectedWorkloadSummary = summarizePBSProtectedWorkloads(resource.PBS.ProtectedWorkloadCount, resource.PBS.ProtectedWorkloadNames)
+		resource.PBS.PostureSummary = summarizePBSPosture(resource.PBS)
 	}
 }
 
@@ -167,4 +174,55 @@ func pbsDatastoreAffectsPosture(resource *Resource) bool {
 		return true
 	}
 	return len(resource.Incidents) > 0
+}
+
+func summarizePBSAffectedDatastores(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	label := "backup datastore"
+	if len(names) != 1 {
+		label = "backup datastores"
+	}
+	if len(names) == 1 {
+		return "Affects 1 " + label + ": " + names[0]
+	}
+	return "Affects " + strconv.Itoa(len(names)) + " " + label + ": " + strings.Join(names, ", ")
+}
+
+func summarizePBSProtectedWorkloads(count int, names []string) string {
+	if count <= 0 {
+		return ""
+	}
+	label := "protected workload"
+	if count != 1 {
+		label = "protected workloads"
+	}
+	if len(names) == 0 {
+		return "Puts backups for " + strconv.Itoa(count) + " " + label + " at risk"
+	}
+	limited := append([]string(nil), names...)
+	if len(limited) > maxPBSTopProtectedWorkloads {
+		limited = limited[:maxPBSTopProtectedWorkloads]
+	}
+	if remaining := count - len(limited); remaining > 0 {
+		return "Puts backups for " + strconv.Itoa(count) + " " + label + " at risk: " + strings.Join(limited, ", ") + ", and " + strconv.Itoa(remaining) + " more"
+	}
+	return "Puts backups for " + strconv.Itoa(count) + " " + label + " at risk: " + strings.Join(limited, ", ")
+}
+
+func summarizePBSPosture(pbs *PBSData) string {
+	if pbs == nil {
+		return ""
+	}
+	switch {
+	case pbs.AffectedDatastoreCount > 0 && pbs.ProtectedWorkloadCount > 0:
+		return summarizePBSAffectedDatastores(pbs.AffectedDatastores) + ". " + summarizePBSProtectedWorkloads(pbs.ProtectedWorkloadCount, pbs.ProtectedWorkloadNames)
+	case pbs.AffectedDatastoreCount > 0:
+		return summarizePBSAffectedDatastores(pbs.AffectedDatastores)
+	case pbs.ProtectedWorkloadCount > 0:
+		return summarizePBSProtectedWorkloads(pbs.ProtectedWorkloadCount, pbs.ProtectedWorkloadNames)
+	default:
+		return ""
+	}
 }

@@ -859,6 +859,12 @@ func TestResourceRegistry_IngestSnapshotDerivesPBSDatastoreConsumers(t *testing.
 	if got := pbs.PBS.AffectedDatastoreCount; got != 0 {
 		t.Fatalf("affectedDatastoreCount = %d, want 0 without datastore risk", got)
 	}
+	if got := pbs.PBS.ProtectedWorkloadSummary; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("protectedWorkloadSummary = %q", got)
+	}
+	if got := pbs.PBS.PostureSummary; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("postureSummary = %q", got)
+	}
 }
 
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {

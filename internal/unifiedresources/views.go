@@ -1451,6 +1451,27 @@ func (v PBSInstanceView) AffectedDatastores() []string {
 	return cloneStringSlice(v.r.PBS.AffectedDatastores)
 }
 
+func (v PBSInstanceView) AffectedDatastoreSummary() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.AffectedDatastoreSummary
+}
+
+func (v PBSInstanceView) ProtectedWorkloadSummary() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.ProtectedWorkloadSummary
+}
+
+func (v PBSInstanceView) PostureSummary() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.PostureSummary
+}
+
 func (v PBSInstanceView) BackupJobCount() int {
 	if v.r == nil || v.r.PBS == nil {
 		return 0

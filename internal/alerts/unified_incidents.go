@@ -329,6 +329,9 @@ func unifiedIncidentPBSBaseMessage(resource unifiedresources.Resource, incident 
 }
 
 func unifiedIncidentPBSDatastoreSummary(resource unifiedresources.Resource, incidentCode string) string {
+	if resource.PBS != nil && strings.TrimSpace(resource.PBS.AffectedDatastoreSummary) != "" {
+		return strings.TrimSpace(resource.PBS.AffectedDatastoreSummary)
+	}
 	if resource.PBS == nil || len(resource.PBS.Datastores) == 0 {
 		return ""
 	}
@@ -632,6 +635,9 @@ func intLabel(value int) string {
 func unifiedIncidentPBSProtectedWorkloadSummary(pbs *unifiedresources.PBSData) string {
 	if pbs == nil || pbs.ProtectedWorkloadCount <= 0 {
 		return ""
+	}
+	if strings.TrimSpace(pbs.ProtectedWorkloadSummary) != "" {
+		return strings.TrimSpace(pbs.ProtectedWorkloadSummary)
 	}
 
 	workloadLabel := "protected workload"

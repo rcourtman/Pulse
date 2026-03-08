@@ -2066,6 +2066,15 @@ func TestResourceListIncludesPBSProtectedWorkloadRollup(t *testing.T) {
 	if got := pbs.PBS.AffectedDatastores; len(got) != 1 || got[0] != "backup-store" {
 		t.Fatalf("affectedDatastores = %v, want [backup-store]", got)
 	}
+	if got := pbs.PBS.AffectedDatastoreSummary; got != "Affects 1 backup datastore: backup-store" {
+		t.Fatalf("affectedDatastoreSummary = %q", got)
+	}
+	if got := pbs.PBS.ProtectedWorkloadSummary; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("protectedWorkloadSummary = %q", got)
+	}
+	if got := pbs.PBS.PostureSummary; got != "Affects 1 backup datastore: backup-store. Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("postureSummary = %q", got)
+	}
 }
 
 func TestResourceListIncludesHostUnraidStorage(t *testing.T) {

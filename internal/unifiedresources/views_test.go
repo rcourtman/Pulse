@@ -743,21 +743,24 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			Tags:      []string{"backup"},
 			CustomURL: "https://pbs.example/ui",
 			PBS: &PBSData{
-				Hostname:               "pbs.example",
-				Version:                "3.2",
-				UptimeSeconds:          100,
-				DatastoreCount:         2,
-				AffectedDatastoreCount: 1,
-				AffectedDatastores:     []string{"fast"},
-				ProtectedWorkloadCount: 2,
-				ProtectedWorkloadTypes: []string{"system-container", "vm"},
-				ProtectedWorkloadNames: []string{"app01", "media01"},
-				BackupJobCount:         3,
-				SyncJobCount:           4,
-				VerifyJobCount:         5,
-				PruneJobCount:          6,
-				GarbageJobCount:        7,
-				ConnectionHealth:       "online",
+				Hostname:                 "pbs.example",
+				Version:                  "3.2",
+				UptimeSeconds:            100,
+				DatastoreCount:           2,
+				AffectedDatastoreCount:   1,
+				AffectedDatastores:       []string{"fast"},
+				AffectedDatastoreSummary: "Affects 1 backup datastore: fast",
+				ProtectedWorkloadCount:   2,
+				ProtectedWorkloadTypes:   []string{"system-container", "vm"},
+				ProtectedWorkloadNames:   []string{"app01", "media01"},
+				ProtectedWorkloadSummary: "Puts backups for 2 protected workloads at risk: app01, media01",
+				PostureSummary:           "Affects 1 backup datastore: fast. Puts backups for 2 protected workloads at risk: app01, media01",
+				BackupJobCount:           3,
+				SyncJobCount:             4,
+				VerifyJobCount:           5,
+				PruneJobCount:            6,
+				GarbageJobCount:          7,
+				ConnectionHealth:         "online",
 			},
 			Metrics: &ResourceMetrics{
 				CPU:    &MetricValue{Percent: 1},
@@ -783,6 +786,15 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		assertStringSlice(t, v.ProtectedWorkloadTypes(), []string{"system-container", "vm"})
 		assertStringSlice(t, v.ProtectedWorkloadNames(), []string{"app01", "media01"})
 		assertStringSlice(t, v.AffectedDatastores(), []string{"fast"})
+		if v.AffectedDatastoreSummary() != "Affects 1 backup datastore: fast" {
+			t.Fatalf("unexpected affected datastore summary %q", v.AffectedDatastoreSummary())
+		}
+		if v.ProtectedWorkloadSummary() != "Puts backups for 2 protected workloads at risk: app01, media01" {
+			t.Fatalf("unexpected protected workload summary %q", v.ProtectedWorkloadSummary())
+		}
+		if v.PostureSummary() != "Affects 1 backup datastore: fast. Puts backups for 2 protected workloads at risk: app01, media01" {
+			t.Fatalf("unexpected posture summary %q", v.PostureSummary())
+		}
 		if v.ConnectionHealth() != "online" {
 			t.Fatalf("expected connection health %q, got %q", "online", v.ConnectionHealth())
 		}
