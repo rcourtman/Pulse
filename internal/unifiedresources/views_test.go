@@ -743,16 +743,21 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			Tags:      []string{"backup"},
 			CustomURL: "https://pbs.example/ui",
 			PBS: &PBSData{
-				Hostname:         "pbs.example",
-				Version:          "3.2",
-				UptimeSeconds:    100,
-				DatastoreCount:   2,
-				BackupJobCount:   3,
-				SyncJobCount:     4,
-				VerifyJobCount:   5,
-				PruneJobCount:    6,
-				GarbageJobCount:  7,
-				ConnectionHealth: "online",
+				Hostname:               "pbs.example",
+				Version:                "3.2",
+				UptimeSeconds:          100,
+				DatastoreCount:         2,
+				AffectedDatastoreCount: 1,
+				AffectedDatastores:     []string{"fast"},
+				ProtectedWorkloadCount: 2,
+				ProtectedWorkloadTypes: []string{"system-container", "vm"},
+				ProtectedWorkloadNames: []string{"app01", "media01"},
+				BackupJobCount:         3,
+				SyncJobCount:           4,
+				VerifyJobCount:         5,
+				PruneJobCount:          6,
+				GarbageJobCount:        7,
+				ConnectionHealth:       "online",
 			},
 			Metrics: &ResourceMetrics{
 				CPU:    &MetricValue{Percent: 1},
@@ -771,6 +776,13 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			t.Fatalf("expected pbs job/datastore counts to match, got ds=%d backup=%d sync=%d verify=%d prune=%d garbage=%d",
 				v.DatastoreCount(), v.BackupJobCount(), v.SyncJobCount(), v.VerifyJobCount(), v.PruneJobCount(), v.GarbageJobCount())
 		}
+		if v.ProtectedWorkloadCount() != 2 || v.AffectedDatastoreCount() != 1 {
+			t.Fatalf("expected protected workload / affected datastore counts to match, got workloads=%d datastores=%d",
+				v.ProtectedWorkloadCount(), v.AffectedDatastoreCount())
+		}
+		assertStringSlice(t, v.ProtectedWorkloadTypes(), []string{"system-container", "vm"})
+		assertStringSlice(t, v.ProtectedWorkloadNames(), []string{"app01", "media01"})
+		assertStringSlice(t, v.AffectedDatastores(), []string{"fast"})
 		if v.ConnectionHealth() != "online" {
 			t.Fatalf("expected connection health %q, got %q", "online", v.ConnectionHealth())
 		}

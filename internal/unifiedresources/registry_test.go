@@ -838,6 +838,27 @@ func TestResourceRegistry_IngestSnapshotDerivesPBSDatastoreConsumers(t *testing.
 	if !hasStorageConsumer(datastore.Storage.TopConsumers, "media01", ResourceTypeSystemContainer, 1) {
 		t.Fatalf("expected container consumer on backup-store, got %+v", datastore.Storage.TopConsumers)
 	}
+
+	pbsResources := rr.ListByType(ResourceTypePBS)
+	if len(pbsResources) != 1 {
+		t.Fatalf("expected 1 PBS resource, got %d", len(pbsResources))
+	}
+	pbs := pbsResources[0]
+	if pbs.PBS == nil {
+		t.Fatalf("expected PBS payload, got %+v", pbs)
+	}
+	if got := pbs.PBS.ProtectedWorkloadCount; got != 2 {
+		t.Fatalf("protectedWorkloadCount = %d, want 2", got)
+	}
+	if got := pbs.PBS.ProtectedWorkloadTypes; len(got) != 2 || got[0] != "system-container" || got[1] != "vm" {
+		t.Fatalf("protectedWorkloadTypes = %v, want [system-container vm]", got)
+	}
+	if got := pbs.PBS.ProtectedWorkloadNames; len(got) != 2 || got[0] != "media01" || got[1] != "app01" {
+		t.Fatalf("protectedWorkloadNames = %v, want [media01 app01] in sorted rollup order", got)
+	}
+	if got := pbs.PBS.AffectedDatastoreCount; got != 0 {
+		t.Fatalf("affectedDatastoreCount = %d, want 0 without datastore risk", got)
+	}
 }
 
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {

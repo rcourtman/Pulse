@@ -606,6 +606,20 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 				metadata["backupServerPostureSummary"] = "Affects " + intLabel(len(names)) + " backup datastores"
 			}
 		}
+		if resource.PBS.ProtectedWorkloadCount > 0 {
+			metadata["consumerCount"] = resource.PBS.ProtectedWorkloadCount
+			metadata["protectedWorkloadCount"] = resource.PBS.ProtectedWorkloadCount
+			metadata["consumerImpactSummary"] = unifiedIncidentPBSProtectedWorkloadSummary(resource.PBS)
+			metadata["protectedWorkloadSummary"] = unifiedIncidentPBSProtectedWorkloadSummary(resource.PBS)
+		}
+		if len(resource.PBS.ProtectedWorkloadTypes) > 0 {
+			metadata["consumerTypes"] = append([]string(nil), resource.PBS.ProtectedWorkloadTypes...)
+			metadata["protectedWorkloadTypes"] = append([]string(nil), resource.PBS.ProtectedWorkloadTypes...)
+		}
+		if len(resource.PBS.ProtectedWorkloadNames) > 0 {
+			metadata["topConsumerNames"] = append([]string(nil), resource.PBS.ProtectedWorkloadNames...)
+			metadata["protectedWorkloadNames"] = append([]string(nil), resource.PBS.ProtectedWorkloadNames...)
+		}
 	}
 
 	return metadata
@@ -613,6 +627,28 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 
 func intLabel(value int) string {
 	return strconv.Itoa(value)
+}
+
+func unifiedIncidentPBSProtectedWorkloadSummary(pbs *unifiedresources.PBSData) string {
+	if pbs == nil || pbs.ProtectedWorkloadCount <= 0 {
+		return ""
+	}
+
+	workloadLabel := "protected workload"
+	if pbs.ProtectedWorkloadCount != 1 {
+		workloadLabel = "protected workloads"
+	}
+	if len(pbs.ProtectedWorkloadNames) == 0 {
+		return "Puts backups for " + intLabel(pbs.ProtectedWorkloadCount) + " " + workloadLabel + " at risk"
+	}
+	names := append([]string(nil), pbs.ProtectedWorkloadNames...)
+	if len(names) > 3 {
+		names = names[:3]
+	}
+	if remaining := pbs.ProtectedWorkloadCount - len(names); remaining > 0 {
+		return "Puts backups for " + intLabel(pbs.ProtectedWorkloadCount) + " " + workloadLabel + " at risk: " + strings.Join(names, ", ") + ", and " + intLabel(remaining) + " more"
+	}
+	return "Puts backups for " + intLabel(pbs.ProtectedWorkloadCount) + " " + workloadLabel + " at risk: " + strings.Join(names, ", ")
 }
 
 func isBackupStorageResource(storage *unifiedresources.StorageMeta) bool {

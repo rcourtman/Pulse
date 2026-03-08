@@ -7285,9 +7285,11 @@ func alertRecoverabilitySortRank(alert Alert) int {
 	switch {
 	case metadataBoolValue(alert.Metadata, "backupTarget") && metadataIntValue(alert.Metadata["protectedWorkloadCount"]) > 0:
 		return 2
-	case metadataBoolValue(alert.Metadata, "backupServer") && metadataIntValue(alert.Metadata["affectedDatastoreCount"]) > 0:
+	case metadataBoolValue(alert.Metadata, "backupServer") && metadataIntValue(alert.Metadata["protectedWorkloadCount"]) > 0:
 		return 2
 	case metadataBoolValue(alert.Metadata, "backupTarget"):
+		return 1
+	case metadataBoolValue(alert.Metadata, "backupServer") && metadataIntValue(alert.Metadata["affectedDatastoreCount"]) > 0:
 		return 1
 	case metadataBoolValue(alert.Metadata, "backupServer"):
 		return 1

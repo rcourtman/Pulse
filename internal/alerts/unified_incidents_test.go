@@ -179,6 +179,9 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 				{Name: "fast", Status: "online", Total: 100, Used: 96},
 				{Name: "archive", Status: "online", Total: 100, Used: 40},
 			},
+			ProtectedWorkloadCount: 2,
+			ProtectedWorkloadTypes: []string{"system-container", "vm"},
+			ProtectedWorkloadNames: []string{"media01", "app01"},
 			StorageRisk: &unifiedresources.StorageRisk{
 				Level: storagehealth.RiskCritical,
 				Reasons: []unifiedresources.StorageRiskReason{
@@ -216,6 +219,15 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 	}
 	if got := alert.Metadata["affectedDatastoreCount"]; got != 1 {
 		t.Fatalf("affectedDatastoreCount = %v, want 1", got)
+	}
+	if got := alert.Metadata["protectedWorkloadCount"]; got != 2 {
+		t.Fatalf("protectedWorkloadCount = %v, want 2", got)
+	}
+	if got := alert.Metadata["consumerCount"]; got != 2 {
+		t.Fatalf("consumerCount = %v, want 2", got)
+	}
+	if got := alert.Metadata["protectedWorkloadSummary"]; got != "Puts backups for 2 protected workloads at risk: media01, app01" {
+		t.Fatalf("protectedWorkloadSummary = %v", got)
 	}
 }
 
@@ -306,6 +318,8 @@ func TestSyncUnifiedResourceIncidentsSuppressesPBSDatastoreChildWhenParentRollsU
 				Datastores: []unifiedresources.PBSDatastoreMeta{
 					{Name: "fast", Status: "online", Total: 100, Used: 96},
 				},
+				ProtectedWorkloadCount: 2,
+				ProtectedWorkloadNames: []string{"media01", "app01"},
 			},
 			Incidents: []unifiedresources.ResourceIncident{{
 				Provider: "pulse",
@@ -573,6 +587,8 @@ func TestGetActiveAlertsPrioritizesBackupPostureExposure(t *testing.T) {
 				Datastores: []unifiedresources.PBSDatastoreMeta{
 					{Name: "fast", Status: "online", Total: 100, Used: 96},
 				},
+				ProtectedWorkloadCount: 2,
+				ProtectedWorkloadNames: []string{"media01", "app01"},
 			},
 			Incidents: []unifiedresources.ResourceIncident{{
 				Provider: "pulse",

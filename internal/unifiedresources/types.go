@@ -693,19 +693,24 @@ type DockerData struct {
 //
 // NOTE: Some tools need per-datastore details; those are exposed via Datastores.
 type PBSData struct {
-	InstanceID       string             `json:"instanceId,omitempty"`
-	Hostname         string             `json:"hostname,omitempty"`
-	Version          string             `json:"version,omitempty"`
-	UptimeSeconds    int64              `json:"uptimeSeconds,omitempty"`
-	DatastoreCount   int                `json:"datastoreCount,omitempty"`
-	Datastores       []PBSDatastoreMeta `json:"datastores,omitempty"`
-	StorageRisk      *StorageRisk       `json:"storageRisk,omitempty"`
-	BackupJobCount   int                `json:"backupJobCount,omitempty"`
-	SyncJobCount     int                `json:"syncJobCount,omitempty"`
-	VerifyJobCount   int                `json:"verifyJobCount,omitempty"`
-	PruneJobCount    int                `json:"pruneJobCount,omitempty"`
-	GarbageJobCount  int                `json:"garbageJobCount,omitempty"`
-	ConnectionHealth string             `json:"connectionHealth,omitempty"`
+	InstanceID             string             `json:"instanceId,omitempty"`
+	Hostname               string             `json:"hostname,omitempty"`
+	Version                string             `json:"version,omitempty"`
+	UptimeSeconds          int64              `json:"uptimeSeconds,omitempty"`
+	DatastoreCount         int                `json:"datastoreCount,omitempty"`
+	Datastores             []PBSDatastoreMeta `json:"datastores,omitempty"`
+	StorageRisk            *StorageRisk       `json:"storageRisk,omitempty"`
+	AffectedDatastoreCount int                `json:"affectedDatastoreCount,omitempty"`
+	AffectedDatastores     []string           `json:"affectedDatastores,omitempty"`
+	ProtectedWorkloadCount int                `json:"protectedWorkloadCount,omitempty"`
+	ProtectedWorkloadTypes []string           `json:"protectedWorkloadTypes,omitempty"`
+	ProtectedWorkloadNames []string           `json:"protectedWorkloadNames,omitempty"`
+	BackupJobCount         int                `json:"backupJobCount,omitempty"`
+	SyncJobCount           int                `json:"syncJobCount,omitempty"`
+	VerifyJobCount         int                `json:"verifyJobCount,omitempty"`
+	PruneJobCount          int                `json:"pruneJobCount,omitempty"`
+	GarbageJobCount        int                `json:"garbageJobCount,omitempty"`
+	ConnectionHealth       string             `json:"connectionHealth,omitempty"`
 }
 
 // PBSDatastoreMeta describes a single PBS datastore.

@@ -1416,6 +1416,41 @@ func (v PBSInstanceView) Datastores() []PBSDatastoreMeta {
 	return clonePBSDatastoreMetaSlice(v.r.PBS.Datastores)
 }
 
+func (v PBSInstanceView) ProtectedWorkloadCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.ProtectedWorkloadCount
+}
+
+func (v PBSInstanceView) ProtectedWorkloadTypes() []string {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.PBS.ProtectedWorkloadTypes)
+}
+
+func (v PBSInstanceView) ProtectedWorkloadNames() []string {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.PBS.ProtectedWorkloadNames)
+}
+
+func (v PBSInstanceView) AffectedDatastoreCount() int {
+	if v.r == nil || v.r.PBS == nil {
+		return 0
+	}
+	return v.r.PBS.AffectedDatastoreCount
+}
+
+func (v PBSInstanceView) AffectedDatastores() []string {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.PBS.AffectedDatastores)
+}
+
 func (v PBSInstanceView) BackupJobCount() int {
 	if v.r == nil || v.r.PBS == nil {
 		return 0
