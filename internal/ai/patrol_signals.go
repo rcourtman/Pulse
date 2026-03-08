@@ -260,7 +260,7 @@ func detectSMARTFailures(tc *ToolCallRecord) []DetectedSignal {
 	node := data.Node
 	for _, disk := range data.Disks {
 		health := strings.ToUpper(strings.TrimSpace(disk.Health))
-		if health == "" || health == "PASSED" || health == "OK" {
+		if health == "" || health == "UNKNOWN" || health == "PASSED" || health == "OK" {
 			continue
 		}
 

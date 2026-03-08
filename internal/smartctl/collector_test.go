@@ -159,17 +159,94 @@ func TestSmartctlJSONParsing(t *testing.T) {
 	}
 	data.Device.Name = "/dev/sda"
 	data.Device.Protocol = "ATA"
-	data.SmartStatus.Passed = true
+	data.SmartStatus = &struct {
+		Passed bool `json:"passed"`
+	}{Passed: true}
 	data.Temperature.Current = 35
 
 	if data.ModelName != "Samsung SSD 870 EVO 1TB" {
 		t.Errorf("unexpected ModelName: %s", data.ModelName)
 	}
-	if data.SmartStatus.Passed != true {
+	if data.SmartStatus == nil || data.SmartStatus.Passed != true {
 		t.Errorf("expected Passed to be true")
 	}
 	if data.Temperature.Current != 35 {
 		t.Errorf("unexpected Temperature: %d", data.Temperature.Current)
+	}
+}
+
+func TestLinuxSMARTSkipReason(t *testing.T) {
+	tests := []struct {
+		name   string
+		device lsblkDevice
+		skip   bool
+	}{
+		{
+			name: "physical sata disk",
+			device: lsblkDevice{
+				Name:   "sda",
+				Type:   "disk",
+				Model:  "Samsung SSD 870 EVO",
+				Vendor: "ATA",
+			},
+			skip: false,
+		},
+		{
+			name: "zfs zvol device",
+			device: lsblkDevice{
+				Name: "zd16",
+				Type: "disk",
+			},
+			skip: true,
+		},
+		{
+			name: "device mapper device",
+			device: lsblkDevice{
+				Name: "dm-0",
+				Type: "disk",
+			},
+			skip: true,
+		},
+		{
+			name: "virtio transport",
+			device: lsblkDevice{
+				Name: "vda",
+				Type: "disk",
+				Tran: "virtio",
+			},
+			skip: true,
+		},
+		{
+			name: "vmware virtual disk",
+			device: lsblkDevice{
+				Name:   "sdb",
+				Type:   "disk",
+				Model:  "Virtual disk",
+				Vendor: "VMware",
+			},
+			skip: true,
+		},
+		{
+			name: "virtual subsystem",
+			device: lsblkDevice{
+				Name:       "sdc",
+				Type:       "disk",
+				Subsystems: "block:scsi:vmbus:pci",
+			},
+			skip: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason := linuxSMARTSkipReason(tt.device)
+			if tt.skip && reason == "" {
+				t.Fatalf("expected device to be skipped")
+			}
+			if !tt.skip && reason != "" {
+				t.Fatalf("expected device to be collected, got skip reason %q", reason)
+			}
+		})
 	}
 }
 

@@ -10,6 +10,16 @@ import (
 	"time"
 )
 
+func mustMarshalLSBLK(t *testing.T, devices []lsblkDevice) []byte {
+	t.Helper()
+
+	out, err := json.Marshal(lsblkJSON{Blockdevices: devices})
+	if err != nil {
+		t.Fatalf("marshal lsblk json: %v", err)
+	}
+	return out
+}
+
 func TestListBlockDevices(t *testing.T) {
 	origRun := runCommandOutput
 	origGOOS := runtimeGOOS
@@ -20,8 +30,12 @@ func TestListBlockDevices(t *testing.T) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
 		}
-		out := "sda disk\nsda1 part\nsr0 rom\nnvme0n1 disk\n\n"
-		return []byte(out), nil
+		return mustMarshalLSBLK(t, []lsblkDevice{
+			{Name: "sda", Type: "disk", Model: "Samsung SSD 870 EVO", Vendor: "ATA"},
+			{Name: "sda1", Type: "part"},
+			{Name: "sr0", Type: "rom"},
+			{Name: "nvme0n1", Type: "disk", Model: "Samsung SSD 980", Vendor: "Samsung"},
+		}), nil
 	}
 
 	devices, err := listBlockDevices(context.Background(), nil)
@@ -103,7 +117,7 @@ func TestCollectLocalNoDevices(t *testing.T) {
 
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
-			return []byte(""), nil
+			return mustMarshalLSBLK(t, nil), nil
 		}
 		return nil, errors.New("unexpected command")
 	}
@@ -146,7 +160,10 @@ func TestCollectLocalSkipsErrors(t *testing.T) {
 
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
-			return []byte("sda disk\nsdb disk\n"), nil
+			return mustMarshalLSBLK(t, []lsblkDevice{
+				{Name: "sda", Type: "disk", Model: "Samsung SSD 870 EVO", Vendor: "ATA"},
+				{Name: "sdb", Type: "disk", Model: "Samsung SSD 980", Vendor: "Samsung"},
+			}), nil
 		}
 		if name == "smartctl" {
 			device := args[len(args)-1]
@@ -158,7 +175,9 @@ func TestCollectLocalSkipsErrors(t *testing.T) {
 				SerialNumber: "Serial",
 			}
 			payload.Device.Protocol = "ATA"
-			payload.SmartStatus.Passed = true
+			payload.SmartStatus = &struct {
+				Passed bool `json:"passed"`
+			}{Passed: true}
 			payload.Temperature.Current = 30
 			out, _ := json.Marshal(payload)
 			return out, nil
@@ -302,7 +321,9 @@ func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 		payload := smartctlJSON{}
 		payload.Device.Protocol = "NVMe"
 		payload.NVMeSmartHealthInformationLog.Temperature = 55
-		payload.SmartStatus.Passed = true
+		payload.SmartStatus = &struct {
+			Passed bool `json:"passed"`
+		}{Passed: true}
 		out, _ := json.Marshal(payload)
 		return out, nil
 	}
@@ -339,7 +360,9 @@ func TestCollectDeviceSMARTFreeBSDAdaFallback(t *testing.T) {
 
 		payload := smartctlJSON{}
 		payload.Device.Protocol = "ATA"
-		payload.SmartStatus.Passed = true
+		payload.SmartStatus = &struct {
+			Passed bool `json:"passed"`
+		}{Passed: true}
 
 		if len(args) >= 2 && args[0] == "-d" && args[1] == "sat" {
 			payload.Temperature.Current = 37
@@ -382,7 +405,9 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 		payload.WWN.OUI = 0xabc
 		payload.WWN.ID = 0x1234
 		payload.Device.Protocol = "SAS"
-		payload.SmartStatus.Passed = true
+		payload.SmartStatus = &struct {
+			Passed bool `json:"passed"`
+		}{Passed: true}
 		out, _ := json.Marshal(payload)
 		return out, nil
 	}
@@ -393,5 +418,97 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 	}
 	if result.WWN != "5-abc-1234" {
 		t.Fatalf("unexpected WWN: %q", result.WWN)
+	}
+}
+
+func TestListBlockDevicesSkipsVirtualLinuxDevices(t *testing.T) {
+	origRun := runCommandOutput
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+
+	runtimeGOOS = "linux"
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "lsblk" {
+			return nil, errors.New("unexpected command")
+		}
+		return mustMarshalLSBLK(t, []lsblkDevice{
+			{Name: "sda", Type: "disk", Model: "Samsung SSD 870 EVO", Vendor: "ATA"},
+			{Name: "zd0", Type: "disk"},
+			{Name: "dm-0", Type: "disk"},
+			{Name: "vda", Type: "disk", Tran: "virtio"},
+			{Name: "sdb", Type: "disk", Model: "Virtual disk", Vendor: "VMware"},
+			{Name: "sdc", Type: "disk", Subsystems: "block:scsi:vmbus:pci"},
+		}), nil
+	}
+
+	devices, err := listBlockDevices(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("listBlockDevices error: %v", err)
+	}
+	if len(devices) != 1 || devices[0] != "/dev/sda" {
+		t.Fatalf("unexpected devices after virtual filtering: %#v", devices)
+	}
+}
+
+func TestCollectDeviceSMARTSkipsUnsupportedPayload(t *testing.T) {
+	origRun := runCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := smartctlJSON{
+			ModelName:    "QEMU HARDDISK",
+			SerialNumber: "disk0",
+		}
+		payload.Device.Protocol = "SCSI"
+		out, _ := json.Marshal(payload)
+		return out, nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected unsupported SMART payload to be skipped, got %#v", result)
+	}
+}
+
+func TestCollectDeviceSMARTMissingStatusDoesNotFail(t *testing.T) {
+	origRun := runCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := smartctlJSON{
+			ModelName:    "Samsung SSD 870 EVO",
+			SerialNumber: "disk1",
+		}
+		payload.Device.Protocol = "ATA"
+		payload.Temperature.Current = 38
+		out, _ := json.Marshal(payload)
+		return out, nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Health != "" {
+		t.Fatalf("expected empty health for SMART data without explicit status, got %q", result.Health)
+	}
+	if result.Temperature != 38 {
+		t.Fatalf("expected temperature 38, got %d", result.Temperature)
 	}
 }

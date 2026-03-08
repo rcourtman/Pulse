@@ -51,6 +51,7 @@ func TestDetectSignals_SMARTPassedNoSignal(t *testing.T) {
 		"disks": []map[string]interface{}{
 			{"device": "/dev/sda", "health": "PASSED"},
 			{"device": "/dev/sdb", "health": "OK"},
+			{"device": "/dev/sdc", "health": "UNKNOWN"},
 		},
 	})
 

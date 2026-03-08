@@ -598,6 +598,17 @@ func TestExtractFacts_StorageDiskHealth(t *testing.T) {
 	assert.Contains(t, minipcFact.Value, "1 disks all PASSED")
 }
 
+func TestExtractFacts_StorageDiskHealthIgnoresUnknown(t *testing.T) {
+	input := map[string]interface{}{"action": "disk_health"}
+	result := `{"hosts":[{"hostname":"pbs","smart":[{"device":"/dev/sda","model":"QEMU HARDDISK","health":"UNKNOWN"},{"device":"/dev/sdb","model":"QEMU HARDDISK","health":"PASSED"}]}]}`
+
+	facts := ExtractFacts("pulse_storage", input, result)
+	require.Len(t, facts, 2)
+	assert.Equal(t, "disk_health:queried", facts[0].Key)
+	assert.Contains(t, facts[1].Value, "2 disks all PASSED")
+	assert.NotContains(t, facts[1].Value, "FAILED")
+}
+
 // --- Metrics: Physical Disks ---
 
 func TestExtractFacts_MetricsDisks(t *testing.T) {
@@ -627,6 +638,16 @@ func TestExtractFacts_MetricsDisks_AllPassed(t *testing.T) {
 	require.Len(t, facts, 2) // marker + summary
 	assert.Equal(t, "physical_disks:queried", facts[0].Key)
 	assert.Contains(t, facts[1].Value, "2 disks total, all PASSED")
+}
+
+func TestExtractFacts_MetricsDisks_IgnoresUnknown(t *testing.T) {
+	input := map[string]interface{}{"action": "disks"}
+	result := `{"disks":[{"host":"Tower","device":"/dev/sda","health":"UNKNOWN"},{"host":"Tower","device":"/dev/sdb","health":"PASSED"}]}`
+
+	facts := ExtractFacts("pulse_metrics", input, result)
+	require.Len(t, facts, 2)
+	assert.Contains(t, facts[1].Value, "2 disks total, all PASSED")
+	assert.NotContains(t, facts[1].Value, "FAILED")
 }
 
 // --- PredictFactKeys: New entries ---

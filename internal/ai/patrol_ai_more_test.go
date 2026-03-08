@@ -435,7 +435,7 @@ func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 				Node:        "node-1",
 				DevPath:     "/dev/sda",
 				Model:       "disk",
-				Health:      "PASSED",
+				Health:      "UNKNOWN",
 				Wearout:     100,
 				Temperature: 40,
 			},

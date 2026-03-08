@@ -1890,7 +1890,9 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	if len(state.PhysicalDisks) > 0 {
 		hasIssues := false
 		for _, d := range state.PhysicalDisks {
-			if d.Health != "PASSED" || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
+			health := strings.ToUpper(strings.TrimSpace(d.Health))
+			healthIssue := health != "" && health != "UNKNOWN" && health != "PASSED" && health != "OK"
+			if healthIssue || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
 				hasIssues = true
 				break
 			}

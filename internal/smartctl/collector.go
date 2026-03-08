@@ -4,6 +4,7 @@ package smartctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -21,6 +22,8 @@ var (
 	}
 	timeNow     = time.Now
 	runtimeGOOS = runtime.GOOS
+
+	errSMARTDataUnavailable = errors.New("smart data unavailable for device")
 )
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
@@ -72,7 +75,7 @@ type smartctlJSON struct {
 		OUI uint64 `json:"oui"`
 		ID  uint64 `json:"id"`
 	} `json:"wwn"`
-	SmartStatus struct {
+	SmartStatus *struct {
 		Passed bool `json:"passed"`
 	} `json:"smart_status"`
 	Temperature struct {
@@ -103,6 +106,55 @@ type smartctlJSON struct {
 		PowerCycles     int64 `json:"power_cycles"`
 	} `json:"nvme_smart_health_information_log"`
 	PowerMode string `json:"power_mode"`
+}
+
+type lsblkJSON struct {
+	Blockdevices []lsblkDevice `json:"blockdevices"`
+}
+
+type lsblkDevice struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Tran       string `json:"tran"`
+	Model      string `json:"model"`
+	Vendor     string `json:"vendor"`
+	Subsystems string `json:"subsystems"`
+}
+
+var linuxSMARTVirtualPrefixes = []string{
+	"dm-",
+	"drbd",
+	"loop",
+	"md",
+	"nbd",
+	"pmem",
+	"ram",
+	"rbd",
+	"vd",
+	"xvd",
+	"zd",
+	"zram",
+}
+
+var linuxSMARTVirtualMetadataTokens = []string{
+	"hyper-v",
+	"msft virtual",
+	"parallels",
+	"qemu",
+	"vbox",
+	"virtual disk",
+	"virtual hd",
+	"virtualbox",
+	"vmware",
+}
+
+var linuxSMARTVirtualSubsystemTokens = []string{
+	"drbd",
+	"nbd",
+	"vmbus",
+	"virtio",
+	"xen",
+	"zfs",
 }
 
 // CollectLocal collects S.M.A.R.T. data from all local block devices.
@@ -145,30 +197,72 @@ func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, erro
 
 // listBlockDevicesLinux uses lsblk to find disks on Linux.
 func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string, error) {
-	output, err := runCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
+	output, err := runCommandOutput(ctx, "lsblk", "-J", "-d", "-o", "NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS")
 	if err != nil {
 		return nil, err
 	}
 
+	var data lsblkJSON
+	if err := json.Unmarshal(output, &data); err != nil {
+		return nil, err
+	}
+
 	var devices []string
-	for _, line := range strings.Split(string(output), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+	for _, disk := range data.Blockdevices {
+		if strings.TrimSpace(disk.Name) == "" {
 			continue
 		}
-		name, devType := fields[0], fields[1]
-		// Only include disk types (not loop, rom, partition)
-		if devType == "disk" {
-			devicePath := "/dev/" + name
-			if matchesDeviceExclude(name, devicePath, diskExclude) {
-				log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
-				continue
-			}
-			devices = append(devices, devicePath)
+
+		devicePath := "/dev/" + disk.Name
+		if reason := linuxSMARTSkipReason(disk); reason != "" {
+			log.Debug().
+				Str("device", devicePath).
+				Str("reason", reason).
+				Msg("Skipping non-physical device for SMART collection")
+			continue
 		}
+		if matchesDeviceExclude(disk.Name, devicePath, diskExclude) {
+			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
 	}
 
 	return devices, nil
+}
+
+func linuxSMARTSkipReason(device lsblkDevice) string {
+	if !strings.EqualFold(strings.TrimSpace(device.Type), "disk") {
+		return "not a whole disk"
+	}
+
+	name := strings.ToLower(strings.TrimSpace(device.Name))
+	for _, prefix := range linuxSMARTVirtualPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return "virtual/logical device prefix"
+		}
+	}
+
+	transport := strings.ToLower(strings.TrimSpace(device.Tran))
+	if transport == "virtio" {
+		return "virtio transport"
+	}
+
+	subsystems := strings.ToLower(strings.TrimSpace(device.Subsystems))
+	for _, token := range linuxSMARTVirtualSubsystemTokens {
+		if strings.Contains(subsystems, token) {
+			return "virtual/logical subsystem"
+		}
+	}
+
+	metadata := strings.ToLower(strings.TrimSpace(device.Vendor + " " + device.Model))
+	for _, token := range linuxSMARTVirtualMetadataTokens {
+		if strings.Contains(metadata, token) {
+			return "virtual disk model/vendor signature"
+		}
+	}
+
+	return ""
 }
 
 // listBlockDevicesFreeBSD uses sysctl kern.disks to find disks on FreeBSD.
@@ -308,6 +402,9 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		return firstParsed, nil
 	}
 	if lastErr != nil {
+		if errors.Is(lastErr, errSMARTDataUnavailable) {
+			return nil, nil
+		}
 		return nil, lastErr
 	}
 	return nil, nil
@@ -395,13 +492,18 @@ func parseSMARTOutput(output []byte, device string) (*DiskSMART, error) {
 		}
 	}
 
-	if smartData.SmartStatus.Passed {
-		result.Health = "PASSED"
-	} else {
-		result.Health = "FAILED"
+	if smartData.SmartStatus != nil {
+		if smartData.SmartStatus.Passed {
+			result.Health = "PASSED"
+		} else {
+			result.Health = "FAILED"
+		}
 	}
 
 	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
+	if result.Health == "" && result.Temperature == 0 && result.Attributes == nil {
+		return nil, errSMARTDataUnavailable
+	}
 
 	return result, nil
 }

@@ -1083,7 +1083,7 @@ func extractMetricsDisksFacts(resultText string) []FactEntry {
 		if health == "" {
 			health = strings.ToUpper(d.Status)
 		}
-		if health != "PASSED" && health != "OK" && health != "" {
+		if health != "PASSED" && health != "OK" && health != "UNKNOWN" && health != "" {
 			failed++
 			desc := d.Host + " " + d.Device
 			if d.Model != "" {
@@ -1170,7 +1170,7 @@ func extractDiskHealthFacts(resultText string) []FactEntry {
 			if health == "" {
 				health = strings.ToUpper(d.Status)
 			}
-			if health == "PASSED" || health == "OK" {
+			if health == "PASSED" || health == "OK" || health == "UNKNOWN" {
 				passed++
 			} else if health != "" {
 				failed++
