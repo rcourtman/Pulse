@@ -109,6 +109,109 @@ describe('useSystemSettingsState', () => {
     return { dispose, hookState: hookState! };
   };
 
+  const mountHookWithTab = (tab: SettingsTab) => {
+    let dispose = () => {};
+    let hookState: ReturnType<UseSystemSettingsStateModule['useSystemSettingsState']>;
+
+    createRoot((d) => {
+      dispose = d;
+      const [_discoveryEnabled, setDiscoveryEnabled] = createSignal(false);
+
+      hookState = useSystemSettingsState({
+        activeTab: () => tab,
+        loadSecurityStatus: async () => {},
+        setDiscoveryEnabled,
+        applySavedDiscoverySubnet: () => {},
+      });
+    });
+
+    return { dispose, hookState: hookState! };
+  };
+
+  it('shows clean success toast without port reference when saving from General tab', async () => {
+    const { hookState, dispose } = mountHookWithTab('system-general');
+    const { notificationStore } = await import('@/stores/notifications');
+
+    await hookState.saveSettings();
+    await flushAsync();
+
+    expect(notificationStore.success).toHaveBeenCalledWith('Settings saved successfully.');
+    dispose();
+  });
+
+  it('shows network changes toast when saving from Network tab', async () => {
+    const { hookState, dispose } = mountHookWithTab('system-network');
+    const { notificationStore } = await import('@/stores/notifications');
+
+    await hookState.saveSettings();
+    await flushAsync();
+
+    expect(notificationStore.success).toHaveBeenCalledWith(
+      'Settings saved successfully. Service restart may be required for network changes.',
+    );
+    dispose();
+  });
+
+  it('does not reload the page when saving from General tab', async () => {
+    const savedLocation = window.location;
+    vi.useFakeTimers();
+    try {
+      const reloadMock = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { ...savedLocation, reload: reloadMock },
+        writable: true,
+        configurable: true,
+      });
+
+      const { hookState, dispose } = mountHookWithTab('system-general');
+
+      await hookState.saveSettings();
+      await flushAsync();
+
+      vi.advanceTimersByTime(5000);
+      expect(reloadMock).not.toHaveBeenCalled();
+
+      dispose();
+    } finally {
+      Object.defineProperty(window, 'location', {
+        value: savedLocation,
+        writable: true,
+        configurable: true,
+      });
+      vi.useRealTimers();
+    }
+  });
+
+  it('reloads the page when saving from Network tab', async () => {
+    const savedLocation = window.location;
+    vi.useFakeTimers();
+    try {
+      const reloadMock = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { ...savedLocation, reload: reloadMock },
+        writable: true,
+        configurable: true,
+      });
+
+      const { hookState, dispose } = mountHookWithTab('system-network');
+
+      await hookState.saveSettings();
+      await flushAsync();
+
+      vi.advanceTimersByTime(3000);
+      expect(reloadMock).toHaveBeenCalledOnce();
+
+      dispose();
+    } finally {
+      Object.defineProperty(window, 'location', {
+        value: savedLocation,
+        writable: true,
+        configurable: true,
+      });
+      vi.useRealTimers();
+    }
+  });
+
   it('preserves explicit zero auto-update interval values from system settings', async () => {
     getSystemSettingsMock.mockResolvedValue({
       autoUpdateEnabled: true,

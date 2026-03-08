@@ -240,8 +240,9 @@ export function useSystemSettingsState({
   };
 
   const saveSettings = async () => {
+    const initiatingTab = activeTab();
     try {
-      if (getSettingsTabSaveBehavior(activeTab()) === 'system') {
+      if (getSettingsTabSaveBehavior(initiatingTab) === 'system') {
         await SettingsAPI.updateSystemSettings({
           pvePollingInterval: pvePollingInterval(),
           allowedOrigins: allowedOrigins(),
@@ -258,14 +259,19 @@ export function useSystemSettingsState({
         });
       }
 
+      const isNetworkTab = initiatingTab === 'system-network';
       notificationStore.success(
-        'Settings saved successfully. Service restart may be required for port changes.',
+        isNetworkTab
+          ? 'Settings saved successfully. Service restart may be required for network changes.'
+          : 'Settings saved successfully.',
       );
       setHasUnsavedChanges(false);
 
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
+      if (isNetworkTab) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      }
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Failed to save settings');
     }
