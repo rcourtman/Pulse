@@ -384,7 +384,11 @@ describe('Storage', () => {
     expect(screen.getAllByText('PVE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('pve1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Protection Reduced').length).toBeGreaterThan(0);
-    expect(screen.getByText('Pool redundancy is reduced.')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByText('Protection Reduced')
+        .some((element) => element.getAttribute('title') === 'Pool redundancy is reduced.'),
+    ).toBe(true);
 
     fireEvent.change(screen.getByLabelText('Sort By'), {
       target: { value: 'usage' },
@@ -629,7 +633,10 @@ describe('Storage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('DEGRADED').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText(/1 read, 2 checksum errors/i)).toBeInTheDocument();
+    expect(screen.getAllByText('DEGRADED')[0]).toHaveAttribute(
+      'title',
+      '1 read, 2 checksum errors',
+    );
   });
 
   it('shows disconnected waiting state while loading with no initial data', () => {

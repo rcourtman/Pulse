@@ -211,16 +211,12 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         <td class="px-2 py-1 align-middle text-[11px]">
           <Show when={compactIssue() !== '—'} fallback={<span class="text-muted">—</span>}>
-            <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-              <span class={`shrink-0 text-[11px] font-semibold ${issueTextClass(props.record)}`}>
-                {compactIssue()}
-              </span>
-              <Show when={compactIssueSummary()}>
-                <span class="hidden xl:block truncate text-muted" title={compactIssueSummary()}>
-                  {compactIssueSummary()}
-                </span>
-              </Show>
-            </div>
+            <span
+              class={`block truncate text-[11px] font-semibold ${issueTextClass(props.record)}`}
+              title={compactIssueSummary() || compactIssue()}
+            >
+              {compactIssue()}
+            </span>
           </Show>
         </td>
 
