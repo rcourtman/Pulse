@@ -879,6 +879,7 @@ type Monitor struct {
 	kubernetesTokenBindings    map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
 	hostTokenBindings          map[string]string             // Track tokenID:hostname -> host identity bindings
 	lastHostRuntimePersist     map[string]time.Time          // Track last persisted host runtime write per host ID
+	runningTasks               map[string]struct{}           // Prevent overlapping polls for the same instance
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -982,6 +983,103 @@ func safeFloat(val float64) float64 {
 // For standalone nodes, the instance name matches the node name.
 func makeGuestID(instanceName string, node string, vmid int) string {
 	return fmt.Sprintf("%s:%s:%d", instanceName, node, vmid)
+}
+
+func (m *Monitor) beginTaskExecution(task ScheduledTask) bool {
+	if m == nil {
+		return true
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.runningTasks == nil {
+		m.runningTasks = make(map[string]struct{})
+	}
+
+	if _, exists := m.runningTasks[key]; exists {
+		return false
+	}
+
+	m.runningTasks[key] = struct{}{}
+	return true
+}
+
+func (m *Monitor) finishTaskExecution(task ScheduledTask) {
+	if m == nil {
+		return
+	}
+
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.runningTasks != nil {
+		delete(m.runningTasks, key)
+	}
+}
+
+func preserveRecentMissingGuestsFromResponsiveNodes(
+	instanceName string,
+	prevState models.StateSnapshot,
+	currentVMs []models.VM,
+	currentContainers []models.Container,
+	nodeEffectiveStatus map[string]string,
+	nodesWithResources map[string]bool,
+	now time.Time,
+) ([]models.VM, []models.Container, int, int) {
+	currentGuestVMIDs := make(map[int]struct{}, len(currentVMs)+len(currentContainers))
+	for _, vm := range currentVMs {
+		currentGuestVMIDs[vm.VMID] = struct{}{}
+	}
+	for _, ct := range currentContainers {
+		currentGuestVMIDs[ct.VMID] = struct{}{}
+	}
+
+	preservedVMs := 0
+	for _, vm := range prevState.VMs {
+		if vm.Instance != instanceName {
+			continue
+		}
+		if nodeEffectiveStatus[vm.Node] != "online" || !nodesWithResources[vm.Node] {
+			continue
+		}
+		if !vm.LastSeen.IsZero() && now.Sub(vm.LastSeen) >= nodeOfflineGracePeriod {
+			continue
+		}
+		if _, exists := currentGuestVMIDs[vm.VMID]; exists {
+			continue
+		}
+
+		currentVMs = append(currentVMs, vm)
+		currentGuestVMIDs[vm.VMID] = struct{}{}
+		preservedVMs++
+	}
+
+	preservedContainers := 0
+	for _, ct := range prevState.Containers {
+		if ct.Instance != instanceName {
+			continue
+		}
+		if nodeEffectiveStatus[ct.Node] != "online" || !nodesWithResources[ct.Node] {
+			continue
+		}
+		if !ct.LastSeen.IsZero() && now.Sub(ct.LastSeen) >= nodeOfflineGracePeriod {
+			continue
+		}
+		if _, exists := currentGuestVMIDs[ct.VMID]; exists {
+			continue
+		}
+
+		currentContainers = append(currentContainers, ct)
+		currentGuestVMIDs[ct.VMID] = struct{}{}
+		preservedContainers++
+	}
+
+	return currentVMs, currentContainers, preservedVMs, preservedContainers
 }
 
 // parseDurationEnv parses a duration from an environment variable, returning defaultVal if not set or invalid
@@ -5315,6 +5413,17 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 		return
 	}
 
+	if !m.beginTaskExecution(task) {
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().
+				Str("instance", task.InstanceName).
+				Str("type", string(task.InstanceType)).
+				Msg("Skipping overlapping scheduled task for instance already being polled")
+		}
+		return
+	}
+	defer m.finishTaskExecution(task)
+
 	if m.pollMetrics != nil {
 		wait := time.Duration(0)
 		if !task.NextRun.IsZero() {
@@ -7981,6 +8090,25 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			Int("totalPreservedVMs", preservedVMCount).
 			Int("totalPreservedContainers", preservedContainerCount).
 			Msg("Grace period preservation complete")
+	}
+
+	partialPreservedVMs := 0
+	partialPreservedContainers := 0
+	allVMs, allContainers, partialPreservedVMs, partialPreservedContainers = preserveRecentMissingGuestsFromResponsiveNodes(
+		instanceName,
+		prevState,
+		allVMs,
+		allContainers,
+		nodeEffectiveStatus,
+		nodesWithResources,
+		time.Now(),
+	)
+	if partialPreservedVMs > 0 || partialPreservedContainers > 0 {
+		log.Warn().
+			Str("instance", instanceName).
+			Int("preservedMissingVMs", partialPreservedVMs).
+			Int("preservedMissingContainers", partialPreservedContainers).
+			Msg("Preserved recently seen guests missing from partial cluster/resources response")
 	}
 
 	m.logSuspiciousRepeatedVMMemoryUsage(instanceName, allVMs, prevInstanceVMs)

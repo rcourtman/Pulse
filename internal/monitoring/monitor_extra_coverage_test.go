@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -448,6 +449,70 @@ func TestMonitor_PollVMsAndContainersEfficient_UsesVMRRDMemUsedWhenStatusUnavail
 	}
 	if state.VMs[0].MemorySource != "rrd-memused" {
 		t.Fatalf("memory source mismatch: got %q want rrd-memused", state.VMs[0].MemorySource)
+	}
+}
+
+func TestMonitor_PollVMsAndContainersEfficient_PreservesMissingGuestsFromPartialResources(t *testing.T) {
+	now := time.Now()
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	m.state.UpdateVMsForInstance("pve1", []models.VM{
+		{ID: "pve1:node1:100", Instance: "pve1", Node: "node1", VMID: 100, Name: "vm100", Type: "qemu", Status: "stopped", LastSeen: now},
+		{ID: "pve1:node1:101", Instance: "pve1", Node: "node1", VMID: 101, Name: "vm101", Type: "qemu", Status: "stopped", LastSeen: now},
+	})
+
+	client := &mockPVEClientExtra{
+		resources: []proxmox.ClusterResource{
+			{Type: "qemu", VMID: 100, Name: "vm100", Node: "node1", Status: "stopped", MaxMem: 2048, Mem: 1024},
+		},
+	}
+
+	success := m.pollVMsAndContainersEfficient(
+		context.Background(),
+		"pve1",
+		"",
+		false,
+		client,
+		map[string]string{"node1": "online"},
+	)
+	if !success {
+		t.Fatal("pollVMsAndContainersEfficient failed")
+	}
+
+	state := m.GetState()
+	if len(state.VMs) != 2 {
+		t.Fatalf("expected 2 VMs after partial preservation, got %d", len(state.VMs))
+	}
+
+	found := false
+	for _, vm := range state.VMs {
+		if vm.VMID == 101 {
+			found = true
+			if vm.LastSeen.IsZero() {
+				t.Fatal("preserved VM should keep last seen timestamp")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing VM from partial cluster/resources response was not preserved")
 	}
 }
 
@@ -990,11 +1055,29 @@ func (m *mockPVEClientFailNodes) GetVMMemAvailableFromAgent(ctx context.Context,
 }
 
 type mockExecutor struct {
+	mu       sync.Mutex
 	executed []PollTask
+	started  chan struct{}
+	release  chan struct{}
 }
 
 func (m *mockExecutor) Execute(ctx context.Context, task PollTask) {
+	m.mu.Lock()
 	m.executed = append(m.executed, task)
+	started := m.started
+	release := m.release
+	m.mu.Unlock()
+
+	if started != nil {
+		select {
+		case <-started:
+		default:
+			close(started)
+		}
+	}
+	if release != nil {
+		<-release
+	}
 }
 
 func TestMonitor_ExecuteScheduledTask_Extra(t *testing.T) {
@@ -1020,6 +1103,45 @@ func TestMonitor_ExecuteScheduledTask_Extra(t *testing.T) {
 	if len(exec.executed) != 1 {
 		t.Error("PBS task should not be executed (missing client)")
 	}
+}
+
+func TestMonitor_ExecuteScheduledTask_SkipsOverlappingInstanceRuns(t *testing.T) {
+	m := &Monitor{
+		pveClients: map[string]PVEClientInterface{"pve1": &mockPVEClientExtra{}},
+	}
+
+	exec := &mockExecutor{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	m.SetExecutor(exec)
+
+	task := ScheduledTask{InstanceName: "pve1", InstanceType: InstanceTypePVE}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		m.executeScheduledTask(context.Background(), task)
+	}()
+
+	select {
+	case <-exec.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first task did not start execution")
+	}
+
+	m.executeScheduledTask(context.Background(), task)
+
+	exec.mu.Lock()
+	executed := len(exec.executed)
+	exec.mu.Unlock()
+	if executed != 1 {
+		t.Fatalf("expected overlapping execution to be skipped, got %d executions", executed)
+	}
+
+	close(exec.release)
+	wg.Wait()
 }
 
 func TestMonitor_Start_Extra(t *testing.T) {
