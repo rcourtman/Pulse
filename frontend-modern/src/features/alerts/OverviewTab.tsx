@@ -376,7 +376,9 @@ export function OverviewTab(props: {
                       </svg>
                     </div>
                     <p class="text-sm">Alerting is paused</p>
-                    <p class="text-xs mt-1">Toggle alerts on to resume monitoring</p>
+                    <p class="text-xs mt-1">
+                      Toggle alerts on to resume monitoring and unlock configuration tabs
+                    </p>
                   </>
                 }
               >

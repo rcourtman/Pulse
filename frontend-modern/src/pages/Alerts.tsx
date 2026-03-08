@@ -1857,7 +1857,13 @@ export function Alerts() {
                                     : 'hover:bg-surface-hover hover:text-base-content'
                               }`}
                               onClick={() => handleTabChange(item.id)}
-                              title={sidebarCollapsed() ? item.label : undefined}
+                              title={
+                                areAlertsDisabled()
+                                  ? 'Enable alerts to configure this setting'
+                                  : sidebarCollapsed()
+                                    ? item.label
+                                    : undefined
+                              }
                             >
                               {item.icon}
                               <Show when={!sidebarCollapsed()}>
@@ -1896,6 +1902,11 @@ export function Alerts() {
                                 : 'text-muted hover:text-base-content'
                           }`}
                           onClick={() => handleTabChange(tab.id)}
+                          title={
+                            areAlertsDisabled()
+                              ? 'Enable alerts to configure this setting'
+                              : undefined
+                          }
                         >
                           <span class="w-full text-center truncate block">{tab.label}</span>
                         </button>
