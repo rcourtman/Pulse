@@ -62,8 +62,9 @@ func newTestManager(t *testing.T) *Manager {
 		default:
 			close(m.cleanupStop)
 		}
-		// Brief pause to let goroutines finish any in-flight operations
-		time.Sleep(10 * time.Millisecond)
+		// Brief pause to let goroutines finish any in-flight operations.
+		// Under heavy parallel test load (full suite), 10ms is not enough.
+		time.Sleep(50 * time.Millisecond)
 
 		if hadOld {
 			os.Setenv("PULSE_DATA_DIR", oldVal)
