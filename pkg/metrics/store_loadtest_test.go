@@ -294,6 +294,49 @@ func BenchmarkLoadTest500Nodes_RollupAtScale(b *testing.B) {
 	}
 }
 
+// BenchmarkLoadTest500Nodes_QueryAllBatchDashboard measures QueryAllBatch
+// latency at 500-node scale — the production hot path when the dashboard
+// loads charts for all nodes in a single batched SQL call. Contrasts with
+// BenchmarkLoadTest500Nodes_QueryAllDashboard which queries one node at a time.
+func BenchmarkLoadTest500Nodes_QueryAllBatchDashboard(b *testing.B) {
+	suppressLogs(b)
+	store := newBenchStore(b)
+	start, end := seedLoadTestData(b, store)
+
+	// Build full ID list (all 500 nodes) and smaller subsets.
+	allIDs := make([]string, loadTestNodes)
+	for n := range allIDs {
+		allIDs[n] = fmt.Sprintf("node-%d", n)
+	}
+
+	for _, count := range []int{10, 50, 100, 500} {
+		ids := allIDs[:count]
+		b.Run(fmt.Sprintf("%d-nodes", count), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				result, err := store.QueryAllBatch("node", ids, start, end, 0)
+				if err != nil {
+					b.Fatalf("QueryAllBatch: %v", err)
+				}
+				if len(result) != count {
+					b.Fatalf("expected %d resources, got %d", count, len(result))
+				}
+				// Spot-check one resource per iteration (rotating) for metric completeness.
+				checkID := ids[i%count]
+				resMetrics := result[checkID]
+				if len(resMetrics) != loadTestMetrics {
+					b.Fatalf("resource %s: expected %d metric types, got %d", checkID, loadTestMetrics, len(resMetrics))
+				}
+				for _, mt := range loadTestMetricTypes {
+					if len(resMetrics[mt]) != loadTestSeedPoints {
+						b.Fatalf("resource %s metric %s: expected %d points, got %d", checkID, mt, loadTestSeedPoints, len(resMetrics[mt]))
+					}
+				}
+			}
+		})
+	}
+}
+
 // TestLoadTest500Nodes_WriteAndQueryIntegration is a non-benchmark integration
 // test that verifies correctness at 500-node scale: seeds data, queries every
 // resource, and validates result counts. Uses t.Parallel() for CI efficiency.

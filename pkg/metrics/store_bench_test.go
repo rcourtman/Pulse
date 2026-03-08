@@ -429,6 +429,72 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 	}
 }
 
+// BenchmarkQueryAllBatch measures batch multi-resource query latency —
+// the hot path for dashboard chart loading after the N+1 fix. Sub-benchmarks
+// vary resource count to show how batch performance scales with the number
+// of resources queried in a single call.
+func BenchmarkQueryAllBatch(b *testing.B) {
+	suppressLogs(b)
+	store := newBenchStore(b)
+	base := time.Now().Add(-2 * time.Hour)
+
+	const totalResources = 100
+	metricTypes := []string{"cpu", "memory", "disk_read", "disk_write"}
+	const pointsPerMetric = 100
+
+	// Seed data for 100 resources × 4 metrics × 100 points.
+	batch := make([]WriteMetric, 0, totalResources*len(metricTypes)*pointsPerMetric)
+	for r := 0; r < totalResources; r++ {
+		for _, mt := range metricTypes {
+			for p := 0; p < pointsPerMetric; p++ {
+				batch = append(batch, WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   fmt.Sprintf("vm-%d", r),
+					MetricType:   mt,
+					Value:        float64((r + p) % 100),
+					Timestamp:    base.Add(time.Duration(p) * 72 * time.Second),
+					Tier:         TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+
+	start := base.Add(-time.Second)
+	end := base.Add(time.Duration(pointsPerMetric) * 72 * time.Second)
+
+	for _, numResources := range []int{1, 10, 50, 100} {
+		ids := make([]string, numResources)
+		for i := range ids {
+			ids[i] = fmt.Sprintf("vm-%d", i)
+		}
+
+		b.Run(fmt.Sprintf("%d-resources", numResources), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				result, err := store.QueryAllBatch("vm", ids, start, end, 0)
+				if err != nil {
+					b.Fatalf("QueryAllBatch: %v", err)
+				}
+				if len(result) != numResources {
+					b.Fatalf("expected %d resources, got %d", numResources, len(result))
+				}
+				for _, id := range ids {
+					resMetrics := result[id]
+					if len(resMetrics) != len(metricTypes) {
+						b.Fatalf("resource %s: expected %d metric types, got %d", id, len(metricTypes), len(resMetrics))
+					}
+					for _, mt := range metricTypes {
+						if len(resMetrics[mt]) != pointsPerMetric {
+							b.Fatalf("resource %s metric %s: expected %d points, got %d", id, mt, pointsPerMetric, len(resMetrics[mt]))
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 // BenchmarkQueryManyResources measures query latency when the metrics table
 // contains data for many distinct resources — simulating a 100-resource
 // deployment where index isolation matters.
