@@ -1,19 +1,11 @@
-import { Component, Show, onCleanup, createEffect, createSignal } from 'solid-js';
+import { Component, Show, createEffect, createSignal } from 'solid-js';
+import { useTypeToSearch } from '@/hooks/useTypeToSearch';
 import { SearchInput, type SearchInputProps } from '@/components/shared/SearchInput';
 
-interface CollapsibleSearchInputProps extends Omit<SearchInputProps, 'autoFocus'> {
+interface CollapsibleSearchInputProps extends Omit<SearchInputProps, 'typeToSearch'> {
   triggerLabel?: string;
   fullWidthWhenExpanded?: boolean;
 }
-
-const isEditableTarget = (target: EventTarget | null): boolean => {
-  if (!target || !(target instanceof HTMLElement)) return false;
-  const tag = target.tagName.toLowerCase();
-  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-  if (target.isContentEditable) return true;
-  if (target.getAttribute('role') === 'textbox') return true;
-  return false;
-};
 
 export const CollapsibleSearchInput: Component<CollapsibleSearchInputProps> = (props) => {
   const [isExpanded, setIsExpanded] = createSignal(props.value().trim().length > 0);
@@ -53,23 +45,15 @@ export const CollapsibleSearchInput: Component<CollapsibleSearchInputProps> = (p
     }
   });
 
-  const handleAutoFocusKey = (e: KeyboardEvent) => {
-    if (isEditableTarget(e.target)) return;
-    if (e.key === '/' || e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (props.onBeforeAutoFocus?.()) return;
-
-    e.preventDefault();
-    if (!isExpanded()) {
-      setIsExpanded(true);
-    }
-    props.onChange(`${props.value()}${e.key}`);
-    focusInput(false);
-  };
-
-  if (typeof document !== 'undefined') {
-    document.addEventListener('keydown', handleAutoFocusKey);
-    onCleanup(() => document.removeEventListener('keydown', handleAutoFocusKey));
-  }
+  useTypeToSearch({
+    getInput: () => inputRef,
+    prepareInput: () => {
+      if (!isExpanded()) {
+        setIsExpanded(true);
+      }
+    },
+    onBeforeFocus: props.onBeforeAutoFocus,
+  });
 
   const triggerLabel = () => props.triggerLabel ?? 'Search';
   const showExpanded = () => isExpanded() || props.value().trim().length > 0;
@@ -101,7 +85,6 @@ export const CollapsibleSearchInput: Component<CollapsibleSearchInputProps> = (p
               class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 text-muted hover:text-base-content hover:bg-surface-hover"
               aria-label={props.title ?? props.placeholder ?? 'Open search'}
               title={`${props.placeholder ?? 'Search'} (/)`}
-              data-global-search-trigger
             >
               <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path
@@ -128,7 +111,7 @@ export const CollapsibleSearchInput: Component<CollapsibleSearchInputProps> = (p
             props.inputRef?.(el);
           }}
           onBeforeAutoFocus={props.onBeforeAutoFocus}
-          autoFocus={false}
+          typeToSearch={false}
         />
       </Show>
     </div>

@@ -6,6 +6,7 @@ import {
   buildStoragePath,
   buildWorkloadsPath,
 } from '@/routing/resourceLinks';
+import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
 
 type KeyboardShortcutsOptions = {
   enabled?: Accessor<boolean>;
@@ -54,16 +55,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   const focusSearch = () => {
     const handled = options.onFocusSearch?.();
     if (handled) return;
-    const el = document.querySelector<HTMLInputElement>('[data-global-search]');
-    if (el) {
-      el.focus();
-      el.select?.();
-      return;
-    }
-    const trigger = document.querySelector<HTMLElement>('[data-global-search-trigger]');
-    if (trigger) {
-      trigger.click();
-    }
+    focusActiveTypeToSearch({ selectText: true });
   };
 
   const openShortcuts = () => {
