@@ -6,7 +6,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
-func physicalDiskRiskFromAssessment(assessment storagehealth.Assessment) *PhysicalDiskRisk {
+func PhysicalDiskRiskFromAssessment(assessment storagehealth.Assessment) *PhysicalDiskRisk {
 	if assessment.Level == storagehealth.RiskHealthy && len(assessment.Reasons) == 0 {
 		return nil
 	}
@@ -24,6 +24,10 @@ func physicalDiskRiskFromAssessment(assessment storagehealth.Assessment) *Physic
 		Level:   assessment.Level,
 		Reasons: reasons,
 	}
+}
+
+func physicalDiskRiskFromAssessment(assessment storagehealth.Assessment) *PhysicalDiskRisk {
+	return PhysicalDiskRiskFromAssessment(assessment)
 }
 
 func physicalDiskAssessmentFromMeta(meta *PhysicalDiskMeta) storagehealth.Assessment {

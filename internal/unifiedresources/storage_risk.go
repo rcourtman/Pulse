@@ -6,7 +6,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
-func storageRiskFromAssessment(assessment storagehealth.Assessment) *StorageRisk {
+func StorageRiskFromAssessment(assessment storagehealth.Assessment) *StorageRisk {
 	if assessment.Level == storagehealth.RiskHealthy && len(assessment.Reasons) == 0 {
 		return nil
 	}
@@ -24,6 +24,10 @@ func storageRiskFromAssessment(assessment storagehealth.Assessment) *StorageRisk
 		Level:   assessment.Level,
 		Reasons: reasons,
 	}
+}
+
+func storageRiskFromAssessment(assessment storagehealth.Assessment) *StorageRisk {
+	return StorageRiskFromAssessment(assessment)
 }
 
 func storageStatus(base ResourceStatus, risk *StorageRisk) ResourceStatus {

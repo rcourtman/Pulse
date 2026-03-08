@@ -108,7 +108,50 @@ func TestPoolRecordHasZFSStorageMeta(t *testing.T) {
 		if hasTag(record.Resource.Tags, "dataset") && record.Resource.Storage.Type != "zfs-dataset" {
 			t.Fatalf("expected Type=zfs-dataset on dataset %q, got %q", record.Resource.Name, record.Resource.Storage.Type)
 		}
+		if got := record.Resource.Storage.Platform; got != "truenas" {
+			t.Fatalf("expected Platform=truenas on %q, got %q", record.Resource.Name, got)
+		}
+		if hasTag(record.Resource.Tags, "pool") {
+			if got := record.Resource.Storage.Topology; got != "pool" {
+				t.Fatalf("expected Topology=pool on pool %q, got %q", record.Resource.Name, got)
+			}
+		}
+		if hasTag(record.Resource.Tags, "dataset") {
+			if got := record.Resource.Storage.Topology; got != "dataset" {
+				t.Fatalf("expected Topology=dataset on dataset %q, got %q", record.Resource.Name, got)
+			}
+		}
+		if got := record.Resource.Storage.Protection; got != "zfs" {
+			t.Fatalf("expected Protection=zfs on %q, got %q", record.Resource.Name, got)
+		}
 	}
+}
+
+func TestPoolRecordIncludesCanonicalRiskForDegradedPool(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() { SetFeatureEnabled(previous) })
+
+	provider := NewDefaultProvider()
+	records := provider.Records()
+
+	for _, record := range records {
+		if record.Resource.Type != unifiedresources.ResourceTypeStorage || record.Resource.Name != "archive" {
+			continue
+		}
+		if record.Resource.Storage == nil || record.Resource.Storage.Risk == nil {
+			t.Fatalf("expected risk payload on degraded pool record, got %+v", record.Resource.Storage)
+		}
+		if record.Resource.Storage.Risk.Level != "warning" {
+			t.Fatalf("expected warning risk on degraded pool, got %+v", record.Resource.Storage.Risk)
+		}
+		if len(record.Resource.Storage.Risk.Reasons) == 0 || record.Resource.Storage.Risk.Reasons[0].Code != "zfs_pool_state" {
+			t.Fatalf("expected zfs_pool_state reason, got %+v", record.Resource.Storage.Risk.Reasons)
+		}
+		return
+	}
+
+	t.Fatal("expected degraded archive pool record")
 }
 
 func TestPoolRecordTagsIncludeHealthStatus(t *testing.T) {

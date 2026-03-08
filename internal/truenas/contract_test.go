@@ -71,6 +71,9 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	if pool.Storage.ZFSPoolState != "ONLINE" {
 		t.Fatalf("expected ZFSPoolState ONLINE, got %q", pool.Storage.ZFSPoolState)
 	}
+	if pool.Storage.Platform != "truenas" || pool.Storage.Topology != "pool" || pool.Storage.Protection != "zfs" {
+		t.Fatalf("expected canonical storage metadata on pool, got %+v", pool.Storage)
+	}
 	assertDiskMetric(t, pool.Metrics, 30*1024*1024*1024*1024, 12*1024*1024*1024*1024)
 
 	dataset := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank/apps")
@@ -235,12 +238,24 @@ func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
 			if meta.Health != "PASSED" {
 				t.Fatalf("expected health PASSED for %q, got %q", fixture.Name, meta.Health)
 			}
+			if meta.Risk != nil {
+				t.Fatalf("expected no risk payload for healthy disk %q, got %+v", fixture.Name, meta.Risk)
+			}
 		case "DEGRADED":
 			if record.Resource.Status != unifiedresources.StatusWarning {
 				t.Fatalf("expected status warning for %q, got %s", fixture.Name, record.Resource.Status)
 			}
 			if meta.Health != "UNKNOWN" {
 				t.Fatalf("expected health UNKNOWN for %q, got %q", fixture.Name, meta.Health)
+			}
+			if meta.Risk == nil {
+				t.Fatalf("expected risk payload for degraded disk %q", fixture.Name)
+			}
+			if meta.Risk.Level != "warning" {
+				t.Fatalf("expected warning risk for degraded disk %q, got %+v", fixture.Name, meta.Risk)
+			}
+			if len(meta.Risk.Reasons) == 0 || meta.Risk.Reasons[0].Code != "truenas_disk_state" {
+				t.Fatalf("expected truenas_disk_state reason for %q, got %+v", fixture.Name, meta.Risk.Reasons)
 			}
 		default:
 			t.Fatalf("unhandled fixture status %q for %q", fixture.Status, fixture.Name)

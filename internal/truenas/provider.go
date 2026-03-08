@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -205,6 +207,8 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	})
 
 	for _, pool := range snapshot.Pools {
+		assessment := assessPool(pool)
+		risk := unifiedresources.StorageRiskFromAssessment(assessment)
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:       poolSourceID(pool.Name),
 			ParentSourceID: systemSourceID,
@@ -220,6 +224,10 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Storage: &unifiedresources.StorageMeta{
 					Type:         "zfs-pool",
 					IsZFS:        true,
+					Platform:     "truenas",
+					Topology:     "pool",
+					Protection:   "zfs",
+					Risk:         risk,
 					ZFSPoolState: strings.ToUpper(strings.TrimSpace(pool.Status)),
 				},
 				Tags: []string{
@@ -257,8 +265,11 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					Disk: diskMetric(totalBytes, dataset.UsedBytes),
 				},
 				Storage: &unifiedresources.StorageMeta{
-					Type:  "zfs-dataset",
-					IsZFS: true,
+					Type:       "zfs-dataset",
+					IsZFS:      true,
+					Platform:   "truenas",
+					Topology:   "dataset",
+					Protection: "zfs",
 				},
 				Tags: []string{
 					"truenas",
@@ -277,6 +288,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	}
 
 	for _, disk := range snapshot.Disks {
+		assessment := assessDisk(disk)
 		diskIdentity := unifiedresources.ResourceIdentity{
 			Hostnames: []string{snapshot.System.Hostname},
 		}
@@ -301,6 +313,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					Health:    healthFromDisk(disk),
 					Wearout:   -1,
 					RPM:       rpmFromDisk(disk),
+					Risk:      unifiedresources.PhysicalDiskRiskFromAssessment(assessment),
 				},
 				Tags: []string{"truenas", "disk", disk.Transport},
 			},
@@ -309,6 +322,46 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	}
 
 	return records
+}
+
+func assessPool(pool Pool) storagehealth.Assessment {
+	return storagehealth.AssessZFSPool(models.ZFSPool{
+		Name:  strings.TrimSpace(pool.Name),
+		State: strings.ToUpper(strings.TrimSpace(pool.Status)),
+	})
+}
+
+func assessDisk(disk Disk) storagehealth.Assessment {
+	sampleAssessment := storagehealth.AssessSample(storagehealth.Sample{
+		Model:   strings.TrimSpace(disk.Model),
+		Health:  healthFromDisk(disk),
+		Wearout: -1,
+	})
+
+	stateUpper := strings.ToUpper(strings.TrimSpace(disk.Status))
+	stateAssessment := storagehealth.Assessment{Level: storagehealth.RiskHealthy}
+	switch stateUpper {
+	case "DEGRADED":
+		stateAssessment = storagehealth.Assessment{
+			Level: storagehealth.RiskWarning,
+			Reasons: []storagehealth.Reason{{
+				Code:     "truenas_disk_state",
+				Severity: storagehealth.RiskWarning,
+				Summary:  fmt.Sprintf("TrueNAS disk %s is DEGRADED", strings.TrimSpace(disk.Name)),
+			}},
+		}
+	case "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL":
+		stateAssessment = storagehealth.Assessment{
+			Level: storagehealth.RiskCritical,
+			Reasons: []storagehealth.Reason{{
+				Code:     "truenas_disk_state",
+				Severity: storagehealth.RiskCritical,
+				Summary:  fmt.Sprintf("TrueNAS disk %s is %s", strings.TrimSpace(disk.Name), stateUpper),
+			}},
+		}
+	}
+
+	return storagehealth.SummarizeAssessments(sampleAssessment, stateAssessment)
 }
 
 func statusFromSystem(system SystemInfo) unifiedresources.ResourceStatus {
