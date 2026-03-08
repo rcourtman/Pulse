@@ -1,5 +1,4 @@
 import { Component, Show, createMemo } from 'solid-js';
-import { formatBytes, formatPercent } from '@/utils/format';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import type { Resource } from '@/types/resource';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
@@ -156,7 +155,9 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td class="px-2 py-1 align-middle text-[11px]">
-          <span class={`inline-block font-semibold tracking-wide ${platformTextClass(platformLabel())}`}>
+          <span
+            class={`inline-block font-semibold tracking-wide ${platformTextClass(platformLabel())}`}
+          >
             {platformLabel()}
           </span>
         </td>
@@ -186,9 +187,8 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         <td class="px-2 py-1 align-middle md:min-w-[190px] xl:min-w-[220px]">
           <Show when={totalBytes() > 0} fallback={<span class="text-[11px] text-muted">n/a</span>}>
-            <div class="flex items-center gap-2 whitespace-nowrap text-[11px]">
-              <span class="shrink-0 font-medium text-base-content">{formatPercent(usagePercent())}</span>
-              <div class="min-w-[96px] md:min-w-[120px] flex-1">
+            <div class="flex items-center whitespace-nowrap text-[11px]">
+              <div class="min-w-[120px] flex-1">
                 <EnhancedStorageBar
                   used={usedBytes()}
                   total={Math.max(totalBytes(), 0)}
@@ -196,18 +196,15 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
                   zfsPool={zfsPool() || undefined}
                 />
               </div>
-              <span
-                class="hidden xl:block truncate text-muted"
-                title={`${formatBytes(usedBytes())} / ${formatBytes(totalBytes())}`}
-              >
-                {formatBytes(usedBytes())} / {formatBytes(totalBytes())}
-              </span>
             </div>
           </Show>
         </td>
 
         <td class="hidden lg:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
-          <span class={`block truncate ${compactImpact() === '—' ? 'text-muted' : ''}`} title={compactImpact()}>
+          <span
+            class={`block truncate ${compactImpact() === '—' ? 'text-muted' : ''}`}
+            title={compactImpact()}
+          >
             {compactImpact()}
           </span>
         </td>
@@ -215,9 +212,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         <td class="px-2 py-1 align-middle text-[11px]">
           <Show when={compactIssue() !== '—'} fallback={<span class="text-muted">—</span>}>
             <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-              <span
-                class={`shrink-0 text-[11px] font-semibold ${issueTextClass(props.record)}`}
-              >
+              <span class={`shrink-0 text-[11px] font-semibold ${issueTextClass(props.record)}`}>
                 {compactIssue()}
               </span>
               <Show when={compactIssueSummary()}>
