@@ -36,40 +36,40 @@ interface StoragePoolRowProps {
   };
 }
 
-const platformBadgeClass = (platform: string): string => {
+const platformTextClass = (platform: string): string => {
   switch (platform.trim().toLowerCase()) {
     case 'pve':
-      return 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300';
+      return 'text-blue-700 dark:text-blue-300';
     case 'pbs':
-      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300';
+      return 'text-emerald-700 dark:text-emerald-300';
     case 'truenas':
-      return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300';
+      return 'text-cyan-700 dark:text-cyan-300';
     case 'unraid':
-      return 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300';
+      return 'text-orange-700 dark:text-orange-300';
     default:
-      return 'bg-surface-hover text-base-content';
+      return 'text-base-content';
   }
 };
 
-const protectionBadgeClass = (record: StorageRecord): string => {
+const protectionTextClass = (record: StorageRecord): string => {
   if (record.rebuildInProgress) {
-    return 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300';
+    return 'text-blue-700 dark:text-blue-300';
   }
   if (record.protectionReduced || record.incidentCategory === 'recoverability') {
-    return 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300';
+    return 'text-red-700 dark:text-red-300';
   }
-  return 'bg-surface-hover text-base-content';
+  return 'text-base-content';
 };
 
-const issueBadgeClass = (record: StorageRecord): string => {
+const issueTextClass = (record: StorageRecord): string => {
   const severity = (record.incidentSeverity || record.health || '').trim().toLowerCase();
   if (severity === 'critical' || severity === 'offline') {
-    return 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300';
+    return 'text-red-700 dark:text-red-300';
   }
   if (severity === 'warning') {
-    return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
+    return 'text-amber-700 dark:text-amber-300';
   }
-  return 'bg-surface-hover text-base-content';
+  return 'text-base-content';
 };
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
@@ -182,11 +182,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td class="px-2 py-1 align-middle text-[11px]">
-          <span
-            class={`inline-flex rounded px-1.5 py-0.5 font-semibold ${platformBadgeClass(
-              platformLabel(),
-            )}`}
-          >
+          <span class={`inline-block font-semibold tracking-wide ${platformTextClass(platformLabel())}`}>
             {platformLabel()}
           </span>
         </td>
@@ -206,12 +202,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         <td class="px-2 py-1 align-middle text-[11px]">
           <Show when={compactProtection() !== '—'} fallback={<span class="text-muted">—</span>}>
             <span
-              class={`inline-flex max-w-full rounded px-1.5 py-0.5 font-semibold ${protectionBadgeClass(
-                props.record,
-              )}`}
+              class={`block truncate font-semibold ${protectionTextClass(props.record)}`}
               title={compactProtection()}
             >
-              <span class="truncate">{compactProtection()}</span>
+              {compactProtection()}
             </span>
           </Show>
         </td>
@@ -257,9 +251,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           <Show when={compactIssue() !== '—'} fallback={<span class="text-muted">—</span>}>
             <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
               <span
-                class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${issueBadgeClass(
-                  props.record,
-                )}`}
+                class={`shrink-0 text-[11px] font-semibold ${issueTextClass(props.record)}`}
               >
                 {compactIssue()}
               </span>
