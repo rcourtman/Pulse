@@ -8,6 +8,7 @@ import type {
   StorageCapability,
   StorageCategory,
   StorageRecord,
+  StorageMetricsTarget,
   StorageAdapter,
   StorageAdapterContext,
 } from './models';
@@ -87,6 +88,17 @@ const capacity = (
   freeBytes,
   usagePercent,
 });
+
+const metricsTargetForResource = (resource: Resource): StorageMetricsTarget | undefined => {
+  const resourceType = resource.metricsTarget?.resourceType;
+  const resourceId = resource.metricsTarget?.resourceId;
+  if (!resourceType || !resourceId) return undefined;
+
+  return {
+    resourceType,
+    resourceId,
+  };
+};
 
 const extractHealthTag = (tags: string[] | undefined): string | undefined => {
   if (!Array.isArray(tags)) return undefined;
@@ -185,7 +197,9 @@ const normalizeResourceHealth = (
   incidentSeverity?: string,
 ): NormalizedHealth =>
   normalizeHealthValue(incidentSeverity) ||
-  normalizeHealthValue(extractHealthTag(tags)) || normalizeHealthValue(status) || 'unknown';
+  normalizeHealthValue(extractHealthTag(tags)) ||
+  normalizeHealthValue(status) ||
+  'unknown';
 
 const platformLabelForResource = (resource: Resource, storagePlatform?: string): string => {
   const normalizedPlatform = (storagePlatform || '').trim().toLowerCase();
@@ -261,15 +275,19 @@ const issueSummaryForResource = (resource: Resource): string => {
 
 const impactSummaryForResource = (resource: Resource): string => {
   if (resource.incidentImpactSummary?.trim()) return resource.incidentImpactSummary.trim();
-  if (resource.storage?.consumerImpactSummary?.trim()) return resource.storage.consumerImpactSummary.trim();
-  if (resource.pbs?.protectedWorkloadSummary?.trim()) return resource.pbs.protectedWorkloadSummary.trim();
-  if (resource.pbs?.affectedDatastoreSummary?.trim()) return resource.pbs.affectedDatastoreSummary.trim();
+  if (resource.storage?.consumerImpactSummary?.trim())
+    return resource.storage.consumerImpactSummary.trim();
+  if (resource.pbs?.protectedWorkloadSummary?.trim())
+    return resource.pbs.protectedWorkloadSummary.trim();
+  if (resource.pbs?.affectedDatastoreSummary?.trim())
+    return resource.pbs.affectedDatastoreSummary.trim();
   return 'No dependent resources';
 };
 
 const actionSummaryForResource = (resource: Resource): string => {
   if (resource.incidentAction?.trim()) return resource.incidentAction.trim();
-  if (resource.storage?.rebuildInProgress) return resource.storage.rebuildSummary || 'Monitor rebuild progress';
+  if (resource.storage?.rebuildInProgress)
+    return resource.storage.rebuildSummary || 'Monitor rebuild progress';
   if (resource.storage?.protectionReduced) {
     return resource.storage.protectionSummary || 'Restore redundancy';
   }
@@ -430,6 +448,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const actionSummary = actionSummaryForResource(resource);
   const protectionLabel = protectionLabelForResource(resource);
   const topologyLabel = topologyLabelForResource(resource, storageType, resource.storage?.topology);
+  const metricsTarget = metricsTargetForResource(resource);
 
   return {
     id: resource.id,
@@ -471,8 +490,9 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       typeof resource.lastSeen === 'number' && Number.isFinite(resource.lastSeen)
         ? resource.lastSeen
         : Date.now(),
+    metricsTarget,
     refs: {
-      resourceId: resource.metricsTarget?.resourceId || resource.id,
+      resourceId: metricsTarget?.resourceId || resource.id,
       platformEntityId: resource.platformId,
     },
     details: {
@@ -517,7 +537,8 @@ const resourceStorageAdapter: StorageAdapter = {
 export const DEFAULT_STORAGE_ADAPTERS: StorageAdapter[] = [resourceStorageAdapter];
 
 const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): StorageRecord => {
-  const preferred = (current.incidentPriority || 0) >= (incoming.incidentPriority || 0) ? current : incoming;
+  const preferred =
+    (current.incidentPriority || 0) >= (incoming.incidentPriority || 0) ? current : incoming;
   const secondary = preferred === current ? incoming : current;
 
   return {
@@ -566,6 +587,15 @@ const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): S
       current.affectedDatastoreCount || 0,
       incoming.affectedDatastoreCount || 0,
     ),
+    metricsTarget: preferred.metricsTarget || secondary.metricsTarget,
+    refs: {
+      resourceId:
+        preferred.metricsTarget?.resourceId ||
+        secondary.metricsTarget?.resourceId ||
+        preferred.refs?.resourceId ||
+        secondary.refs?.resourceId,
+      platformEntityId: preferred.refs?.platformEntityId || secondary.refs?.platformEntityId,
+    },
     details: {
       ...(secondary.details || {}),
       ...(preferred.details || {}),

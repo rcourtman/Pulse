@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChartsAPI } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
@@ -98,6 +99,7 @@ type StorageResourceOptions = {
   incidentSummary?: Resource['incidentSummary'];
   incidentImpactSummary?: Resource['incidentImpactSummary'];
   incidentAction?: Resource['incidentAction'];
+  metricsTarget?: Resource['metricsTarget'];
 };
 
 const buildStorageResource = (
@@ -123,6 +125,7 @@ const buildStorageResource = (
   incidentSummary: options.incidentSummary,
   incidentImpactSummary: options.incidentImpactSummary,
   incidentAction: options.incidentAction,
+  metricsTarget: options.metricsTarget,
   storage: options.storage,
   pbs: options.pbs,
   disk: {
@@ -540,6 +543,55 @@ describe('Storage', () => {
     const toggleBtn = screen.getByRole('button', { name: 'Toggle details for Ceph-Pool-1' });
     expect(toggleBtn).toBeInTheDocument();
     fireEvent.click(toggleBtn);
+  });
+
+  it('uses canonical storage metrics target ids for expanded pool history charts', async () => {
+    const metricsHistorySpy = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      resourceType: 'storage',
+      resourceId: 'pool:tank',
+      metric: 'usage',
+      range: '7d',
+      start: Date.now() - 7 * 24 * 60 * 60 * 1000,
+      end: Date.now(),
+      points: [],
+      source: 'store',
+    });
+
+    hookResources = [
+      buildStorageResource('storage-truenas-display', 'tank', 'truenas01', {
+        platformId: 'truenas-1',
+        platformType: 'truenas',
+        storageType: 'zfs-pool',
+        parentName: 'truenas01',
+        includePlatformNode: false,
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:tank',
+        },
+        storage: {
+          type: 'zfs-pool',
+          platform: 'truenas',
+          topology: 'pool',
+          isZfs: true,
+        },
+      }),
+    ];
+
+    render(() => <Storage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for tank' }));
+
+    await waitFor(() => {
+      expect(metricsHistorySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceType: 'storage',
+          resourceId: 'pool:tank',
+          metric: 'usage',
+        }),
+      );
+    });
+
+    metricsHistorySpy.mockRestore();
   });
 
   it('applies alert highlight styling for rows with active unacknowledged alerts', async () => {
