@@ -120,6 +120,118 @@ export interface ResourceCanonicalIdentity {
   aliases?: string[];
 }
 
+export interface ResourceStorageConsumer {
+  resourceId?: string;
+  resourceType: ResourceType | string;
+  name: string;
+  diskCount?: number;
+}
+
+export interface ResourceStorageRiskReason {
+  code: string;
+  severity: string;
+  summary: string;
+}
+
+export interface ResourceStorageRisk {
+  level: string;
+  reasons?: ResourceStorageRiskReason[];
+}
+
+export interface ResourceStorageMeta {
+  type?: string;
+  content?: string;
+  contentTypes?: string[];
+  shared?: boolean;
+  isCeph?: boolean;
+  isZfs?: boolean;
+  platform?: string;
+  topology?: string;
+  protection?: string;
+  risk?: ResourceStorageRisk;
+  riskSummary?: string;
+  consumerCount?: number;
+  consumerTypes?: string[];
+  topConsumers?: ResourceStorageConsumer[];
+  consumerImpactSummary?: string;
+  postureSummary?: string;
+  protectionReduced?: boolean;
+  protectionSummary?: string;
+  rebuildInProgress?: boolean;
+  rebuildSummary?: string;
+  nodes?: string[];
+  path?: string;
+  zfsPoolState?: string;
+  zfsReadErrors?: number;
+  zfsWriteErrors?: number;
+  zfsChecksumErrors?: number;
+  arrayState?: string;
+  syncAction?: string;
+  syncProgress?: number;
+  numProtected?: number;
+  numDisabled?: number;
+  numInvalid?: number;
+  numMissing?: number;
+}
+
+export interface ResourcePBSMeta {
+  instanceId?: string;
+  hostname?: string;
+  version?: string;
+  uptimeSeconds?: number;
+  datastoreCount?: number;
+  backupJobCount?: number;
+  syncJobCount?: number;
+  verifyJobCount?: number;
+  pruneJobCount?: number;
+  garbageJobCount?: number;
+  connectionHealth?: string;
+  affectedDatastoreCount?: number;
+  affectedDatastores?: string[];
+  affectedDatastoreSummary?: string;
+  protectedWorkloadCount?: number;
+  protectedWorkloadTypes?: string[];
+  protectedWorkloadNames?: string[];
+  protectedWorkloadSummary?: string;
+  postureSummary?: string;
+  storageRisk?: ResourceStorageRisk;
+}
+
+export interface ResourcePhysicalDiskRisk {
+  level: string;
+  reasons?: ResourceStorageRiskReason[];
+}
+
+export interface ResourcePhysicalDiskMeta {
+  devPath?: string;
+  model?: string;
+  serial?: string;
+  wwn?: string;
+  diskType?: string;
+  sizeBytes?: number;
+  health?: string;
+  wearout?: number;
+  temperature?: number;
+  rpm?: number;
+  used?: string;
+  storageRole?: string;
+  storageGroup?: string;
+  storageState?: string;
+  smart?: {
+    powerOnHours?: number;
+    powerCycles?: number;
+    reallocatedSectors?: number;
+    pendingSectors?: number;
+    offlineUncorrectable?: number;
+    udmaCrcErrors?: number;
+    percentageUsed?: number;
+    availableSpare?: number;
+    mediaErrors?: number;
+    unsafeShutdowns?: number;
+  };
+  risk?: ResourcePhysicalDiskRisk;
+}
+
 export interface ResourceAgentDisk {
   device?: string;
   mountpoint?: string;
@@ -228,6 +340,16 @@ export interface Resource {
   labels?: Record<string, string>;
   lastSeen: number; // Unix milliseconds
   alerts?: ResourceAlert[];
+  incidentCount?: number;
+  incidentCode?: string;
+  incidentSeverity?: string;
+  incidentSummary?: string;
+  incidentCategory?: string;
+  incidentLabel?: string;
+  incidentPriority?: number;
+  incidentImpactSummary?: string;
+  incidentUrgency?: string;
+  incidentAction?: string;
 
   // Identity for deduplication
   identity?: ResourceIdentity;
@@ -246,13 +368,12 @@ export interface Resource {
   agent?: ResourceAgentMeta;
   kubernetes?: ResourceKubernetesMeta;
   proxmox?: ResourceProxmoxMeta;
+  pbs?: ResourcePBSMeta;
+  physicalDisk?: ResourcePhysicalDiskMeta;
+  storage?: ResourceStorageMeta;
 
   // Platform-specific data (varies by type)
   platformData?: Record<string, unknown>;
-
-  // Optional enriched facets (not always present in state payloads).
-  // Consumers should narrow/validate at runtime before use.
-  storage?: unknown;
 }
 
 /**

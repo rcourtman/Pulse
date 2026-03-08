@@ -51,6 +51,7 @@ import {
 type StorageView = 'pools' | 'disks';
 
 const STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label: string }> = [
+  { value: 'priority', label: 'Priority' },
   { value: 'name', label: 'Name' },
   { value: 'usage', label: 'Usage %' },
   { value: 'type', label: 'Type' },
@@ -69,19 +70,21 @@ const normalizeHealthFilter = (value: string): 'all' | NormalizedHealth => {
 };
 
 const normalizeSortKey = (value: string): StorageSortKey => {
-  if (value === 'usage' || value === 'type') return value;
-  return 'name';
+  if (value === 'priority' || value === 'name' || value === 'usage' || value === 'type')
+    return value;
+  return 'priority';
 };
 
 const normalizeGroupKey = (value: string): StorageGroupKey => {
-  if (value === 'type' || value === 'status') return value;
-  return 'node';
+  if (value === 'none' || value === 'node' || value === 'type' || value === 'status')
+    return value;
+  return 'none';
 };
 
 const normalizeView = (value: string): StorageView => (value === 'disks' ? 'disks' : 'pools');
 
 const normalizeSortDirection = (value: string): 'asc' | 'desc' =>
-  value === 'desc' ? 'desc' : 'asc';
+  value === 'asc' ? 'asc' : 'desc';
 
 const getStorageMetaBoolean = (record: StorageRecord, key: 'isCeph' | 'isZfs'): boolean | null => {
   const details = (record.details || {}) as Record<string, unknown>;
@@ -116,9 +119,9 @@ const Storage: Component = () => {
   const [healthFilter, setHealthFilter] = createSignal<'all' | NormalizedHealth>('all');
   const [view, setView] = createSignal<StorageView>('pools');
   const [selectedNodeId, setSelectedNodeId] = createSignal('all');
-  const [sortKey, setSortKey] = createSignal<StorageSortKey>('name');
-  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  const [groupBy, setGroupBy] = createSignal<StorageGroupKey>('node');
+  const [sortKey, setSortKey] = createSignal<StorageSortKey>('priority');
+  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('desc');
+  const [groupBy, setGroupBy] = createSignal<StorageGroupKey>('none');
   const [expandedGroups, setExpandedGroups] = createSignal<Set<string>>(new Set());
   const [expandedPoolId, setExpandedPoolId] = createSignal<string | null>(null);
   const [highlightedRecordId, setHighlightedRecordId] = createSignal<string | null>(null);
@@ -240,7 +243,7 @@ const Storage: Component = () => {
 
   const storageFilterGroupBy = (): StorageGroupByFilter => {
     const current = groupBy();
-    return current === 'type' || current === 'status' ? current : 'node';
+    return current === 'type' || current === 'status' || current === 'none' ? current : 'node';
   };
 
   const storageFilterStatus = (): StorageStatusFilter => {
@@ -361,19 +364,19 @@ const Storage: Component = () => {
         get: groupBy,
         set: setGroupBy,
         read: (parsed) => normalizeGroupKey(parsed.group),
-        write: (value) => (value !== 'node' ? value : null),
+        write: (value) => (value !== 'none' ? value : null),
       },
       sort: {
         get: sortKey,
         set: setSortKey,
         read: (parsed) => normalizeSortKey(parsed.sort),
-        write: (value) => (value !== 'name' ? value : null),
+        write: (value) => (value !== 'priority' ? value : null),
       },
       order: {
         get: sortDirection,
         set: setSortDirection,
         read: (parsed) => normalizeSortDirection(parsed.order),
-        write: (value) => (value !== 'asc' ? value : null),
+        write: (value) => (value !== 'desc' ? value : null),
       },
       query: {
         get: search,
@@ -610,24 +613,22 @@ const Storage: Component = () => {
                     <TableHeader>
                       <TableRow class="bg-surface-alt text-muted border-b border-border">
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                          Name
-                        </TableHead>
-                        <Show when={groupBy() !== 'node'}>
-                          <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                            Node
-                          </TableHead>
-                        </Show>
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">
-                          Type
+                          Storage
                         </TableHead>
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]">
-                          Capacity
+                          Protection
                         </TableHead>
-                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[120px] hidden md:table-cell">
-                          Trend
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[220px]">
+                          Usage
+                        </TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">
+                          Impact
                         </TableHead>
                         <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
-                          Health
+                          Primary Issue
+                        </TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden xl:table-cell">
+                          Action
                         </TableHead>
                         <TableHead class="px-1.5 sm:px-2 py-0.5 w-10" />
                       </TableRow>
@@ -642,12 +643,14 @@ const Storage: Component = () => {
                           const groupItems = createMemo(() => group().items);
                           return (
                             <>
-                              <StorageGroupRow
-                                group={group()}
-                                groupBy={groupBy()}
-                                expanded={expandedGroups().has(groupKey)}
-                                onToggle={() => toggleGroup(groupKey)}
-                              />
+                              <Show when={groupBy() !== 'none'}>
+                                <StorageGroupRow
+                                  group={group()}
+                                  groupBy={groupBy()}
+                                  expanded={expandedGroups().has(groupKey)}
+                                  onToggle={() => toggleGroup(groupKey)}
+                                />
+                              </Show>
                               <Show when={expandedGroups().has(groupKey)}>
                                 {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
                                 <Index each={groupItems()}>
@@ -723,7 +726,6 @@ const Storage: Component = () => {
                                     return (
                                       <StoragePoolRow
                                         record={record()}
-                                        groupBy={groupBy()}
                                         expanded={isExpanded()}
                                         groupExpanded={expandedGroups().has(groupKey)}
                                         onToggleExpand={() =>

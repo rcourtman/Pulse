@@ -2,7 +2,7 @@ import { Accessor, createMemo } from 'solid-js';
 import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
 import type { ZFSPool } from '@/types/api';
 
-export type StorageSortKey = 'name' | 'usage' | 'type';
+export type StorageSortKey = 'priority' | 'name' | 'usage' | 'type';
 export type StorageGroupKey = 'node' | 'type' | 'status' | 'none';
 
 export type StorageNodeOption = {
@@ -101,6 +101,30 @@ export const getRecordStatus = (record: StorageRecord): string => {
   if (record.health === 'critical') return 'critical';
   return 'unknown';
 };
+
+export const getRecordPlatformLabel = (record: StorageRecord): string =>
+  record.platformLabel?.trim() || sourceLabel(record.source.platform);
+
+export const getRecordHostLabel = (record: StorageRecord): string =>
+  record.hostLabel?.trim() || getRecordNodeLabel(record);
+
+export const getRecordTopologyLabel = (record: StorageRecord): string =>
+  record.topologyLabel?.trim() || getRecordType(record);
+
+export const getRecordProtectionLabel = (record: StorageRecord): string =>
+  record.protectionLabel?.trim() || 'Healthy';
+
+export const getRecordIssueLabel = (record: StorageRecord): string =>
+  record.issueLabel?.trim() || 'Healthy';
+
+export const getRecordIssueSummary = (record: StorageRecord): string =>
+  record.issueSummary?.trim() || record.issueLabel?.trim() || '';
+
+export const getRecordImpactSummary = (record: StorageRecord): string =>
+  record.impactSummary?.trim() || 'No dependent resources';
+
+export const getRecordActionSummary = (record: StorageRecord): string =>
+  record.actionSummary?.trim() || 'Monitor';
 
 export const getRecordShared = (record: StorageRecord): boolean | null => {
   const shared = getRecordDetails(record).shared;
@@ -219,6 +243,14 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
           record.category,
           record.location.label,
           record.source.platform,
+          getRecordPlatformLabel(record),
+          getRecordHostLabel(record),
+          getRecordTopologyLabel(record),
+          getRecordProtectionLabel(record),
+          getRecordIssueLabel(record),
+          getRecordIssueSummary(record),
+          getRecordImpactSummary(record),
+          getRecordActionSummary(record),
           getRecordType(record),
           getRecordContent(record),
           getRecordStatus(record),
@@ -242,6 +274,8 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
 
       if (options.sortKey() === 'usage') {
         comparison = numericCompare(getRecordUsagePercent(a), getRecordUsagePercent(b));
+      } else if (options.sortKey() === 'priority') {
+        comparison = numericCompare(a.incidentPriority || 0, b.incidentPriority || 0);
       } else if (options.sortKey() === 'type') {
         comparison = getRecordType(a).localeCompare(getRecordType(b), undefined, {
           sensitivity: 'base',

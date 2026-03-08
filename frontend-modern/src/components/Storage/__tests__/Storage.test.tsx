@@ -89,6 +89,15 @@ type StorageResourceOptions = {
   parentName?: string;
   includePlatformNode?: boolean;
   platformData?: Record<string, unknown>;
+  storage?: Resource['storage'];
+  pbs?: Resource['pbs'];
+  incidentCategory?: Resource['incidentCategory'];
+  incidentSeverity?: Resource['incidentSeverity'];
+  incidentPriority?: number;
+  incidentLabel?: Resource['incidentLabel'];
+  incidentSummary?: Resource['incidentSummary'];
+  incidentImpactSummary?: Resource['incidentImpactSummary'];
+  incidentAction?: Resource['incidentAction'];
 };
 
 const buildStorageResource = (
@@ -107,6 +116,15 @@ const buildStorageResource = (
   parentId: options.parentId,
   parentName: options.parentName,
   status: (options.status || 'online') as Resource['status'],
+  incidentCategory: options.incidentCategory,
+  incidentSeverity: options.incidentSeverity,
+  incidentPriority: options.incidentPriority,
+  incidentLabel: options.incidentLabel,
+  incidentSummary: options.incidentSummary,
+  incidentImpactSummary: options.incidentImpactSummary,
+  incidentAction: options.incidentAction,
+  storage: options.storage,
+  pbs: options.pbs,
   disk: {
     current: options.current ?? 50,
     total: options.total ?? 1_000,
@@ -338,16 +356,33 @@ describe('Storage', () => {
         total: 1_000,
         storageType: 'zfspool',
         status: 'degraded',
+        incidentSeverity: 'warning',
+        incidentPriority: 60,
+        incidentLabel: 'Protection Reduced',
+        incidentSummary: 'Pool redundancy is reduced.',
+        incidentAction: 'Replace affected member disk',
+        storage: {
+          platform: 'proxmox',
+          topology: 'pool',
+          protection: 'raidz',
+          protectionReduced: true,
+          protectionSummary: 'Protection Reduced',
+          consumerImpactSummary: 'Affects 2 dependent resources.',
+        },
       }),
     ];
 
     render(() => <Storage />);
 
-    // New compact columns: Name, Type, Capacity, Trend, Health
-    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Capacity' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Health' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Storage' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Protection' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Primary Issue' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Action' })).toBeInTheDocument();
+    expect(screen.getAllByText('pve1 · PVE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Protection Reduced').length).toBeGreaterThan(0);
+    expect(screen.getByText('Pool redundancy is reduced.')).toBeInTheDocument();
+    expect(screen.getByText('Replace affected member disk')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Sort By'), {
       target: { value: 'usage' },
@@ -355,16 +390,17 @@ describe('Storage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sort Direction' }));
 
     await waitFor(() => {
-      const alpha = screen.getByText('Alpha-Store');
-      const beta = screen.getByText('Beta-Store');
-      expect(beta.compareDocumentPosition(alpha) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const orderedRowIds = Array.from(document.querySelectorAll('tr[data-row-id]')).map((row) =>
+        row.getAttribute('data-row-id'),
+      );
+      expect(orderedRowIds.slice(0, 2)).toEqual(['storage-1', 'storage-2']);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'By Status' }));
 
     // Group headers now show just the key name (without prefix)
-    expect(screen.getByText('degraded')).toBeInTheDocument();
-    expect(screen.getByText('online')).toBeInTheDocument();
+    expect(screen.getAllByText('degraded').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('online').length).toBeGreaterThan(0);
   });
 
   it('round-trips managed storage query params through canonical URL state', async () => {
@@ -391,7 +427,7 @@ describe('Storage', () => {
     expect(initialParams.get('group')).toBe('status');
     expect(initialParams.get('source')).toBe('proxmox-pve');
     expect(initialParams.get('sort')).toBe('usage');
-    expect(initialParams.get('order')).toBe('desc');
+    expect(initialParams.get('order')).toBeNull();
     expect(initialParams.get('status')).toBe('warning');
     expect(initialParams.get('node')).toBe('node-2');
     expect(initialParams.get('from')).toBe('proxmox-overview');

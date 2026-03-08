@@ -210,6 +210,69 @@ type APIResource = {
     pruneJobCount?: number;
     garbageJobCount?: number;
     connectionHealth?: string;
+    affectedDatastoreCount?: number;
+    affectedDatastores?: string[];
+    affectedDatastoreSummary?: string;
+    protectedWorkloadCount?: number;
+    protectedWorkloadTypes?: string[];
+    protectedWorkloadNames?: string[];
+    protectedWorkloadSummary?: string;
+    postureSummary?: string;
+    storageRisk?: {
+      level?: string;
+      reasons?: Array<{
+        code?: string;
+        severity?: string;
+        summary?: string;
+      }>;
+    };
+  };
+  storage?: {
+    type?: string;
+    content?: string;
+    contentTypes?: string[];
+    shared?: boolean;
+    isCeph?: boolean;
+    isZfs?: boolean;
+    platform?: string;
+    topology?: string;
+    protection?: string;
+    risk?: {
+      level?: string;
+      reasons?: Array<{
+        code?: string;
+        severity?: string;
+        summary?: string;
+      }>;
+    };
+    riskSummary?: string;
+    consumerCount?: number;
+    consumerTypes?: string[];
+    topConsumers?: Array<{
+      resourceId?: string;
+      resourceType?: string;
+      name?: string;
+      diskCount?: number;
+    }>;
+    consumerImpactSummary?: string;
+    postureSummary?: string;
+    protectionReduced?: boolean;
+    protectionSummary?: string;
+    rebuildInProgress?: boolean;
+    rebuildSummary?: string;
+    nodes?: string[];
+    path?: string;
+    zfsPoolState?: string;
+    zfsReadErrors?: number;
+    zfsWriteErrors?: number;
+    zfsChecksumErrors?: number;
+    arrayState?: string;
+    syncAction?: string;
+    syncProgress?: number;
+    numProtected?: number;
+    numDisabled?: number;
+    numInvalid?: number;
+    numMissing?: number;
   };
   pmg?: {
     instanceId?: string;
@@ -294,6 +357,16 @@ type APIResource = {
     primaryId?: string;
     aliases?: string[];
   };
+  incidentCount?: number;
+  incidentCode?: string;
+  incidentSeverity?: string;
+  incidentSummary?: string;
+  incidentCategory?: string;
+  incidentLabel?: string;
+  incidentPriority?: number;
+  incidentImpactSummary?: string;
+  incidentUrgency?: string;
+  incidentAction?: string;
 };
 
 type APIListResponse = {
@@ -537,8 +610,21 @@ const toResource = (v2: APIResource): Resource => {
     parentName: v2.parentName,
     clusterId: v2.identity?.clusterName || v2.proxmox?.clusterName,
     status: resolveStatus(v2.status),
+    incidentCount: v2.incidentCount,
+    incidentCode: v2.incidentCode,
+    incidentSeverity: v2.incidentSeverity,
+    incidentSummary: v2.incidentSummary,
+    incidentCategory: v2.incidentCategory,
+    incidentLabel: v2.incidentLabel,
+    incidentPriority: v2.incidentPriority,
+    incidentImpactSummary: v2.incidentImpactSummary,
+    incidentUrgency: v2.incidentUrgency,
+    incidentAction: v2.incidentAction,
     agent: v2.agent,
     kubernetes: v2.kubernetes,
+    pbs: v2.pbs,
+    physicalDisk: v2.physicalDisk,
+    storage: v2.storage,
     proxmox: v2.proxmox
       ? {
           vmid: v2.proxmox.vmid,
@@ -598,6 +684,7 @@ const toResource = (v2: APIResource): Resource => {
       agent: v2.agent,
       docker: v2.docker,
       pbs: v2.pbs,
+      storage: v2.storage,
       pmg: v2.pmg,
       kubernetes: v2.kubernetes,
       physicalDisk: v2.physicalDisk,

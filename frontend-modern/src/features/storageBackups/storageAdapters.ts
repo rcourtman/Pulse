@@ -26,6 +26,13 @@ const getStringArray = (value: unknown): string[] =>
     ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     : [];
 
+const titleize = (value: string | undefined | null): string =>
+  (value || '')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
 type ResourceStorageMeta = {
   type?: string;
   content?: string;
@@ -175,8 +182,118 @@ const normalizeHealthValue = (value: string | undefined): NormalizedHealth | und
 const normalizeResourceHealth = (
   status: string | undefined,
   tags: string[] | undefined,
+  incidentSeverity?: string,
 ): NormalizedHealth =>
+  normalizeHealthValue(incidentSeverity) ||
   normalizeHealthValue(extractHealthTag(tags)) || normalizeHealthValue(status) || 'unknown';
+
+const platformLabelForResource = (resource: Resource, storagePlatform?: string): string => {
+  const normalizedPlatform = (storagePlatform || '').trim().toLowerCase();
+  switch (normalizedPlatform || resource.platformType) {
+    case 'proxmox':
+    case 'proxmox-pve':
+      return 'PVE';
+    case 'pbs':
+    case 'proxmox-pbs':
+      return 'PBS';
+    case 'pmg':
+    case 'proxmox-pmg':
+      return 'PMG';
+    case 'truenas':
+      return 'TrueNAS';
+    case 'unraid':
+      return 'Unraid';
+    case 'agent':
+      return 'Agent';
+    case 'kubernetes':
+      return 'Kubernetes';
+    default:
+      return titleize(storagePlatform) || titleize(resource.platformType) || 'Unknown';
+  }
+};
+
+const topologyLabelForResource = (
+  resource: Resource,
+  storageType: string,
+  topology?: string,
+): string => {
+  const normalized = (topology || '').trim().toLowerCase();
+  if (normalized) {
+    return titleize(normalized);
+  }
+  if (resource.type === 'datastore') return 'Backup Target';
+  switch ((storageType || '').trim().toLowerCase()) {
+    case 'zfspool':
+    case 'zfs-pool':
+    case 'pool':
+      return 'Pool';
+    case 'zfs-dataset':
+    case 'dataset':
+      return 'Dataset';
+    case 'dir':
+    case 'filesystem':
+      return 'Filesystem';
+    case 'pbs':
+      return 'Backup Target';
+    case 'rbd':
+    case 'cephfs':
+      return 'Cluster Storage';
+    default:
+      return titleize(storageType) || titleize(resource.type) || 'Storage';
+  }
+};
+
+const issueLabelForResource = (resource: Resource): string => {
+  if (resource.incidentLabel?.trim()) return resource.incidentLabel.trim();
+  if (resource.storage?.postureSummary?.trim()) return resource.storage.postureSummary.trim();
+  if (resource.storage?.riskSummary?.trim()) return resource.storage.riskSummary.trim();
+  if (resource.pbs?.postureSummary?.trim()) return resource.pbs.postureSummary.trim();
+  return 'Healthy';
+};
+
+const issueSummaryForResource = (resource: Resource): string => {
+  if (resource.incidentSummary?.trim()) return resource.incidentSummary.trim();
+  if (resource.storage?.riskSummary?.trim()) return resource.storage.riskSummary.trim();
+  if (resource.storage?.postureSummary?.trim()) return resource.storage.postureSummary.trim();
+  if (resource.pbs?.postureSummary?.trim()) return resource.pbs.postureSummary.trim();
+  return '';
+};
+
+const impactSummaryForResource = (resource: Resource): string => {
+  if (resource.incidentImpactSummary?.trim()) return resource.incidentImpactSummary.trim();
+  if (resource.storage?.consumerImpactSummary?.trim()) return resource.storage.consumerImpactSummary.trim();
+  if (resource.pbs?.protectedWorkloadSummary?.trim()) return resource.pbs.protectedWorkloadSummary.trim();
+  if (resource.pbs?.affectedDatastoreSummary?.trim()) return resource.pbs.affectedDatastoreSummary.trim();
+  return 'No dependent resources';
+};
+
+const actionSummaryForResource = (resource: Resource): string => {
+  if (resource.incidentAction?.trim()) return resource.incidentAction.trim();
+  if (resource.storage?.rebuildInProgress) return resource.storage.rebuildSummary || 'Monitor rebuild progress';
+  if (resource.storage?.protectionReduced) {
+    return resource.storage.protectionSummary || 'Restore redundancy';
+  }
+  return 'Monitor';
+};
+
+const protectionLabelForResource = (resource: Resource): string => {
+  if (resource.storage?.rebuildInProgress) {
+    return resource.storage.rebuildSummary || 'Rebuild In Progress';
+  }
+  if (resource.storage?.protectionReduced) {
+    return resource.storage.protectionSummary || 'Protection Reduced';
+  }
+  if (resource.incidentCategory === 'recoverability') {
+    return resource.incidentLabel || 'Backup Risk';
+  }
+  if (resource.storage?.protection?.trim()) {
+    return titleize(resource.storage.protection.trim());
+  }
+  if (resource.type === 'datastore' || resource.type === 'pbs') {
+    return 'Protected';
+  }
+  return 'Healthy';
+};
 
 const categoryFromStorageType = (type: string | undefined): StorageCategory => {
   const value = (type || '').toLowerCase();
@@ -305,6 +422,14 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const totalBytes = asNumberOrNull(resource.disk?.total);
   const usedBytes = asNumberOrNull(resource.disk?.used);
   const freeBytes = asNumberOrNull(resource.disk?.free);
+  const hostLabel = locationLabel;
+  const platformLabel = platformLabelForResource(resource, resource.storage?.platform);
+  const issueLabel = issueLabelForResource(resource);
+  const issueSummary = issueSummaryForResource(resource);
+  const impactSummary = impactSummaryForResource(resource);
+  const actionSummary = actionSummaryForResource(resource);
+  const protectionLabel = protectionLabelForResource(resource);
+  const topologyLabel = topologyLabelForResource(resource, storageType, resource.storage?.topology);
 
   return {
     id: resource.id,
@@ -314,7 +439,25 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       : storageMeta?.isCeph || storageMeta?.isZfs
         ? 'pool'
         : categoryFromStorageType(storageType),
-    health: normalizeResourceHealth(resource.status, resource.tags),
+    health: normalizeResourceHealth(resource.status, resource.tags, resource.incidentSeverity),
+    statusLabel: resource.status,
+    hostLabel,
+    platformLabel,
+    platformKey: resource.storage?.platform || resource.platformType,
+    topologyLabel,
+    protectionLabel,
+    protectionReduced: resource.storage?.protectionReduced,
+    rebuildInProgress: resource.storage?.rebuildInProgress,
+    incidentCategory: resource.incidentCategory,
+    incidentSeverity: resource.incidentSeverity,
+    incidentPriority: resource.incidentPriority || 0,
+    issueLabel,
+    issueSummary,
+    actionSummary,
+    impactSummary,
+    consumerCount: resource.storage?.consumerCount || 0,
+    protectedWorkloadCount: resource.pbs?.protectedWorkloadCount || 0,
+    affectedDatastoreCount: resource.pbs?.affectedDatastoreCount || 0,
     location: {
       label: locationLabel,
       scope: isDatastore ? 'cluster' : 'node',
@@ -339,6 +482,19 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       parentName: resource.parentName,
       node: proxmoxNode || (platformData.node as string | undefined) || storageNodes[0],
       nodeHints,
+      hostLabel,
+      platformLabel,
+      topologyLabel,
+      issueLabel,
+      issueSummary,
+      impactSummary,
+      actionSummary,
+      incidentCategory: resource.incidentCategory,
+      incidentSeverity: resource.incidentSeverity,
+      incidentPriority: resource.incidentPriority,
+      protectionLabel,
+      protectionReduced: resource.storage?.protectionReduced,
+      rebuildInProgress: resource.storage?.rebuildInProgress,
       content,
       contentTypes: storageMeta?.contentTypes,
       shared,
@@ -361,13 +517,55 @@ const resourceStorageAdapter: StorageAdapter = {
 export const DEFAULT_STORAGE_ADAPTERS: StorageAdapter[] = [resourceStorageAdapter];
 
 const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): StorageRecord => {
-  const preferred = current;
-  const secondary = incoming;
+  const preferred = (current.incidentPriority || 0) >= (incoming.incidentPriority || 0) ? current : incoming;
+  const secondary = preferred === current ? incoming : current;
 
   return {
     ...secondary,
     ...preferred,
     capabilities: dedupe([...(current.capabilities || []), ...(incoming.capabilities || [])]),
+    health:
+      preferred.health === 'unknown' && secondary.health !== 'unknown'
+        ? secondary.health
+        : preferred.health,
+    statusLabel: preferred.statusLabel || secondary.statusLabel,
+    hostLabel: preferred.hostLabel || secondary.hostLabel,
+    platformLabel: preferred.platformLabel || secondary.platformLabel,
+    platformKey: preferred.platformKey || secondary.platformKey,
+    topologyLabel: preferred.topologyLabel || secondary.topologyLabel,
+    protectionLabel:
+      preferred.protectionReduced || preferred.rebuildInProgress || preferred.incidentPriority
+        ? preferred.protectionLabel || secondary.protectionLabel
+        : secondary.protectionLabel || preferred.protectionLabel,
+    protectionReduced: preferred.protectionReduced || secondary.protectionReduced,
+    rebuildInProgress: preferred.rebuildInProgress || secondary.rebuildInProgress,
+    issueLabel:
+      (preferred.incidentPriority || 0) > 0
+        ? preferred.issueLabel || secondary.issueLabel
+        : secondary.issueLabel || preferred.issueLabel,
+    issueSummary:
+      (preferred.incidentPriority || 0) > 0
+        ? preferred.issueSummary || secondary.issueSummary
+        : secondary.issueSummary || preferred.issueSummary,
+    actionSummary:
+      (preferred.incidentPriority || 0) > 0
+        ? preferred.actionSummary || secondary.actionSummary
+        : secondary.actionSummary || preferred.actionSummary,
+    impactSummary:
+      secondary.impactSummary &&
+      secondary.impactSummary !== 'No dependent resources' &&
+      (preferred.impactSummary === 'No dependent resources' || !preferred.impactSummary)
+        ? secondary.impactSummary
+        : preferred.impactSummary || secondary.impactSummary,
+    consumerCount: Math.max(current.consumerCount || 0, incoming.consumerCount || 0),
+    protectedWorkloadCount: Math.max(
+      current.protectedWorkloadCount || 0,
+      incoming.protectedWorkloadCount || 0,
+    ),
+    affectedDatastoreCount: Math.max(
+      current.affectedDatastoreCount || 0,
+      incoming.affectedDatastoreCount || 0,
+    ),
     details: {
       ...(secondary.details || {}),
       ...(preferred.details || {}),

@@ -285,4 +285,58 @@ describe('storageAdapters', () => {
     expect(records[0].details?.type).toBe('zfs-dataset');
     expect(records[0].details?.isZfs).toBe(true);
   });
+
+  it('maps canonical posture, impact, and action fields from unified resources', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'pbs-datastore-1',
+          type: 'datastore',
+          name: 'pbs-fast',
+          platformId: 'pbs-1',
+          platformType: 'proxmox-pbs',
+          parentId: 'pbs-parent-1',
+          parentName: 'pbs01',
+          status: 'degraded',
+          incidentCategory: 'recoverability',
+          incidentSeverity: 'critical',
+          incidentPriority: 95,
+          incidentLabel: 'Backup Coverage At Risk',
+          incidentSummary: 'Datastore is unavailable to backup jobs.',
+          incidentImpactSummary: 'Puts backups for 3 protected workloads at risk.',
+          incidentAction: 'Restore backup target health immediately',
+          storage: {
+            type: 'pbs',
+            platform: 'pbs',
+            topology: 'datastore',
+            protection: 'backup',
+            protectionReduced: true,
+            protectionSummary: 'Backup target unavailable',
+            postureSummary: 'Recoverability degraded',
+            riskSummary: 'Datastore unavailable',
+          },
+          pbs: {
+            protectedWorkloadCount: 3,
+            affectedDatastoreCount: 1,
+            protectedWorkloadSummary: '3 protected workloads',
+          },
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].platformLabel).toBe('PBS');
+    expect(records[0].hostLabel).toBe('pbs01');
+    expect(records[0].topologyLabel).toBe('Datastore');
+    expect(records[0].protectionLabel).toBe('Backup target unavailable');
+    expect(records[0].issueLabel).toBe('Backup Coverage At Risk');
+    expect(records[0].issueSummary).toBe('Datastore is unavailable to backup jobs.');
+    expect(records[0].impactSummary).toBe('Puts backups for 3 protected workloads at risk.');
+    expect(records[0].actionSummary).toBe('Restore backup target health immediately');
+    expect(records[0].incidentPriority).toBe(95);
+    expect(records[0].protectedWorkloadCount).toBe(3);
+    expect(records[0].details?.platformLabel).toBe('PBS');
+    expect(records[0].details?.protectionReduced).toBe(true);
+  });
 });

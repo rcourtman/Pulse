@@ -22,7 +22,7 @@ export type StorageStatusFilter =
   | 'critical'
   | 'offline'
   | 'unknown';
-export type StorageGroupByFilter = 'node' | 'type' | 'status';
+export type StorageGroupByFilter = 'node' | 'type' | 'status' | 'none';
 
 interface StorageFilterProps {
   search: () => string;
@@ -58,13 +58,14 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
   const activeFilterCount = createMemo(() => {
     let count = 0;
     if (props.search().trim() !== '') count++;
-    if (props.groupBy && props.groupBy() !== 'node') count++;
+    if (props.groupBy && props.groupBy() !== 'none') count++;
     if (props.statusFilter && props.statusFilter() !== 'all') count++;
     if (props.sourceFilter && props.sourceFilter() !== 'all') count++;
     return count;
   });
 
   const sortOptions = props.sortOptions ?? [
+    { value: 'priority', label: 'Priority' },
     { value: 'name', label: 'Name' },
     { value: 'usage', label: 'Usage %' },
     { value: 'free', label: 'Free' },
@@ -73,9 +74,9 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
   const hasActiveFilters = () =>
     props.search().trim() !== '' ||
-    props.sortKey() !== 'name' ||
-    props.sortDirection() !== 'asc' ||
-    (props.groupBy && props.groupBy() !== 'node') ||
+    props.sortKey() !== 'priority' ||
+    props.sortDirection() !== 'desc' ||
+    (props.groupBy && props.groupBy() !== 'none') ||
     (props.statusFilter && props.statusFilter() !== 'all') ||
     (props.sourceFilter && props.sourceFilter() !== 'all');
 
@@ -135,6 +136,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               onChange={(value) => props.setGroupBy!(value as StorageGroupByFilter)}
               aria-label="Group By"
               options={[
+                { value: 'none', label: 'Flat' },
                 { value: 'node', label: 'By Node' },
                 { value: 'type', label: 'By Type' },
                 { value: 'status', label: 'By Status' },
@@ -223,9 +225,9 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           <FilterActionButton
             onClick={() => {
               props.setSearch('');
-              props.setSortKey('name');
-              props.setSortDirection('asc');
-              if (props.setGroupBy) props.setGroupBy('node');
+              props.setSortKey('priority');
+              props.setSortDirection('desc');
+              if (props.setGroupBy) props.setGroupBy('none');
               if (props.setStatusFilter) props.setStatusFilter('all');
               if (props.setSourceFilter) props.setSourceFilter('all');
             }}

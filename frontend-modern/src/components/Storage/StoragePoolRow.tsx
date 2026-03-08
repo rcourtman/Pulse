@@ -1,18 +1,28 @@
-import { Component, createMemo, Show } from 'solid-js';
+import { Component, Show, createMemo } from 'solid-js';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
+import { formatBytes, formatPercent } from '@/utils/format';
+import { getMetricColorHex } from '@/utils/metricThresholds';
+import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
+import type { Resource } from '@/types/resource';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
 import { ZFSHealthMap } from './ZFSHealthMap';
 import { useStorageSparkline } from './useStorageSparklines';
-import { getRecordNodeLabel, getRecordType, getRecordZfsPool } from './useStorageModel';
-import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
-import type { Resource } from '@/types/resource';
-import type { StorageGroupKey } from './useStorageModel';
-import { getMetricColorHex } from '@/utils/metricThresholds';
+import {
+  getRecordActionSummary,
+  getRecordHostLabel,
+  getRecordImpactSummary,
+  getRecordIssueLabel,
+  getRecordIssueSummary,
+  getRecordPlatformLabel,
+  getRecordProtectionLabel,
+  getRecordTopologyLabel,
+  getRecordUsagePercent,
+  getRecordZfsPool,
+} from './useStorageModel';
 
 interface StoragePoolRowProps {
   record: StorageRecord;
-  groupBy: StorageGroupKey;
   expanded: boolean;
   groupExpanded: boolean;
   onToggleExpand: () => void;
@@ -27,36 +37,58 @@ interface StoragePoolRowProps {
   };
 }
 
-const HEALTH_BADGE: Record<NormalizedHealth, { bg: string; text: string }> = {
-  healthy: { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-300' },
-  warning: { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-300' },
-  critical: { bg: 'bg-red-100 dark:bg-red-900', text: 'text-red-700 dark:text-red-300' },
-  offline: { bg: 'bg-surface-alt', text: 'text-muted' },
-  unknown: { bg: 'bg-surface-alt', text: 'text-muted' },
+const HEALTH_BADGE: Record<NormalizedHealth, string> = {
+  healthy: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
+  warning: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+  critical: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
+  offline: 'bg-surface-hover text-muted',
+  unknown: 'bg-surface-hover text-muted',
 };
 
-const TYPE_BADGE: Record<string, string> = {
-  zfspool: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-  dir: 'bg-surface-alt text-base-content',
-  lvm: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-  lvmthin: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-  nfs: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-  cifs: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-  cephfs: 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300',
-  rbd: 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300',
-  btrfs: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
-  iscsi: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
-  pbs: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+const platformBadgeClass = (platform: string): string => {
+  switch (platform.trim().toLowerCase()) {
+    case 'pve':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300';
+    case 'pbs':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300';
+    case 'truenas':
+      return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300';
+    case 'unraid':
+      return 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300';
+    default:
+      return 'bg-surface-hover text-base-content';
+  }
 };
 
-const getTypeBadgeClass = (type: string): string => {
-  const key = type.toLowerCase().replace(/[-_\s]/g, '');
-  return TYPE_BADGE[key] || 'bg-surface-alt text-muted';
+const protectionBadgeClass = (record: StorageRecord): string => {
+  if (record.rebuildInProgress) {
+    return 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300';
+  }
+  if (record.protectionReduced || record.incidentCategory === 'recoverability') {
+    return 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300';
+  }
+  if (record.health === 'warning') {
+    return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
+  }
+  if (record.health === 'critical' || record.health === 'offline') {
+    return 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300';
+  }
+  return 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300';
+};
+
+const issueBadgeClass = (record: StorageRecord): string => {
+  const severity = (record.incidentSeverity || record.health || '').trim().toLowerCase();
+  if (severity === 'critical' || severity === 'offline') {
+    return 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300';
+  }
+  if (severity === 'warning') {
+    return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
+  }
+  return 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300';
 };
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const zfsPool = createMemo(() => getRecordZfsPool(props.record));
-  const type = createMemo(() => getRecordType(props.record));
   const totalBytes = createMemo(() => props.record.capacity.totalBytes || 0);
   const usedBytes = createMemo(() => props.record.capacity.usedBytes || 0);
   const freeBytes = createMemo(
@@ -64,7 +96,15 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
       props.record.capacity.freeBytes ??
       (totalBytes() > 0 ? Math.max(totalBytes() - usedBytes(), 0) : 0),
   );
-  const healthBadge = createMemo(() => HEALTH_BADGE[props.record.health]);
+  const usagePercent = createMemo(() => getRecordUsagePercent(props.record));
+  const platformLabel = createMemo(() => getRecordPlatformLabel(props.record));
+  const hostLabel = createMemo(() => getRecordHostLabel(props.record));
+  const topologyLabel = createMemo(() => getRecordTopologyLabel(props.record));
+  const protectionLabel = createMemo(() => getRecordProtectionLabel(props.record));
+  const issueLabel = createMemo(() => getRecordIssueLabel(props.record));
+  const issueSummary = createMemo(() => getRecordIssueSummary(props.record));
+  const impactSummary = createMemo(() => getRecordImpactSummary(props.record));
+  const actionSummary = createMemo(() => getRecordActionSummary(props.record));
 
   const sparklineResourceId = createMemo(() => props.record.refs?.resourceId || props.record.id);
   const { data: sparklineData } = useStorageSparkline(
@@ -74,7 +114,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
   const sparklineColor = createMemo(() => {
     const data = sparklineData();
-    const latestValue = data.length > 0 ? data[data.length - 1].value : 0;
+    const latestValue = data.length > 0 ? data[data.length - 1].value : usagePercent();
     return getMetricColorHex(latestValue, 'disk');
   });
 
@@ -82,110 +122,164 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     <>
       <tr
         class={`group cursor-pointer ${props.rowClass} ${props.expanded ? 'bg-surface-alt' : ''}`}
-        style={{ ...props.rowStyle, 'min-height': '32px' }}
+        style={{ ...props.rowStyle, 'min-height': '44px' }}
         onClick={props.onToggleExpand}
         {...props.alertDataAttrs}
       >
-        {/* Name + badges */}
-        <td class="px-1.5 sm:px-2 py-0.5 text-base-content">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <span class="truncate max-w-[220px] text-[11px]" title={props.record.name}>
-              {props.record.name}
-            </span>
-            <Show when={zfsPool() && zfsPool()!.devices.length > 0}>
-              <span class="mx-0.5">
-                <ZFSHealthMap pool={zfsPool()!} />
+        <td class="px-2 py-1.5 align-top text-base-content">
+          <div class="min-w-0 space-y-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="truncate text-[12px] font-semibold" title={props.record.name}>
+                {props.record.name}
               </span>
-            </Show>
-            <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
-              <span
-                class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                  zfsPool()?.state === 'DEGRADED'
-                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                    : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                }`}
+              <Show when={zfsPool() && zfsPool()!.devices.length > 0}>
+                <span class="shrink-0">
+                  <ZFSHealthMap pool={zfsPool()!} />
+                </span>
+              </Show>
+              <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
+                <span
+                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    zfsPool()?.state === 'DEGRADED'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                      : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                  }`}
+                >
+                  {zfsPool()?.state}
+                </span>
+              </Show>
+              <Show
+                when={
+                  zfsPool() &&
+                  (zfsPool()!.readErrors > 0 ||
+                    zfsPool()!.writeErrors > 0 ||
+                    zfsPool()!.checksumErrors > 0)
+                }
               >
-                {zfsPool()?.state}
+                <span class="inline-flex rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                  ERRORS
+                </span>
+              </Show>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
+              <span
+                class={`inline-flex rounded px-1.5 py-0.5 font-semibold ${platformBadgeClass(
+                  platformLabel(),
+                )}`}
+              >
+                {platformLabel()}
               </span>
-            </Show>
-            <Show
-              when={
-                zfsPool() &&
-                (zfsPool()!.readErrors > 0 ||
-                  zfsPool()!.writeErrors > 0 ||
-                  zfsPool()!.checksumErrors > 0)
-              }
-            >
-              <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
-                ERRORS
+              <span class="inline-flex rounded bg-surface-hover px-1.5 py-0.5 font-medium text-base-content">
+                {topologyLabel()}
               </span>
-            </Show>
+              <span
+                class={`inline-flex rounded px-1.5 py-0.5 font-medium ${HEALTH_BADGE[props.record.health]}`}
+              >
+                {props.record.statusLabel || props.record.health}
+              </span>
+            </div>
+            <div class="truncate text-[11px] text-muted" title={`${hostLabel()} · ${platformLabel()}`}>
+              {hostLabel()} · {platformLabel()}
+            </div>
           </div>
         </td>
 
-        {/* Node (only when not grouped by node) */}
-        <Show when={props.groupBy !== 'node'}>
-          <td class="px-1.5 sm:px-2 py-0.5 text-xs text-muted">
-            {getRecordNodeLabel(props.record)}
-          </td>
-        </Show>
-
-        {/* Type badge */}
-        <td class="px-1.5 sm:px-2 py-0.5 hidden md:table-cell">
-          <span
-            class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(type())}`}
-          >
-            {type()}
-          </span>
+        <td class="px-2 py-1.5 align-top">
+          <div class="space-y-1">
+            <span
+              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${protectionBadgeClass(
+                props.record,
+              )}`}
+            >
+              {protectionLabel()}
+            </span>
+            <div class="text-[11px] text-muted">
+              <Show
+                when={props.record.rebuildInProgress || props.record.protectionReduced}
+                fallback={
+                  <span>{props.record.health === 'healthy' ? 'Redundancy intact' : 'Monitor posture'}</span>
+                }
+              >
+                <span>
+                  {props.record.rebuildInProgress ? 'Recovery activity in progress' : 'Protection reduced'}
+                </span>
+              </Show>
+            </div>
+          </div>
         </td>
 
-        {/* Capacity bar */}
-        <td class="px-1.5 sm:px-2 py-0.5 md:min-w-[180px]">
-          <Show when={totalBytes() > 0} fallback={<span class="text-xs ">n/a</span>}>
-            <EnhancedStorageBar
-              used={usedBytes()}
-              total={Math.max(totalBytes(), 0)}
-              free={Math.max(freeBytes(), 0)}
-              zfsPool={zfsPool() || undefined}
-            />
-          </Show>
-        </td>
-
-        {/* Sparkline: 7-day usage trend */}
-        <td class="px-1.5 sm:px-2 py-0.5 w-[120px] hidden md:table-cell">
-          <Show when={sparklineData().length > 0} fallback={<div class="h-4 w-full" />}>
-            <div style={{ width: '100px', height: '20px' }}>
-              <InteractiveSparkline
-                series={[{ data: sparklineData(), color: sparklineColor() }]}
-                yMode="percent"
-                size="sm"
+        <td class="px-2 py-1.5 align-top md:min-w-[220px]">
+          <Show when={totalBytes() > 0} fallback={<span class="text-[11px] text-muted">n/a</span>}>
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between gap-2 text-[11px]">
+                <span class="font-medium text-base-content">
+                  {formatPercent(usagePercent())}
+                </span>
+                <span class="truncate text-muted">
+                  {formatBytes(usedBytes())} / {formatBytes(totalBytes())}
+                </span>
+              </div>
+              <EnhancedStorageBar
+                used={usedBytes()}
+                total={Math.max(totalBytes(), 0)}
+                free={Math.max(freeBytes(), 0)}
+                zfsPool={zfsPool() || undefined}
               />
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] text-muted">Free {formatBytes(freeBytes())}</span>
+                <Show when={sparklineData().length > 0}>
+                  <div class="hidden xl:block" style={{ width: '90px', height: '20px' }}>
+                    <InteractiveSparkline
+                      series={[{ data: sparklineData(), color: sparklineColor() }]}
+                      yMode="percent"
+                      size="sm"
+                    />
+                  </div>
+                </Show>
+              </div>
             </div>
           </Show>
         </td>
 
-        {/* Health */}
-        <td class="px-1.5 sm:px-2 py-0.5">
-          <span
-            class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${healthBadge().bg} ${healthBadge().text}`}
-          >
-            {props.record.health}
-          </span>
+        <td class="hidden lg:table-cell px-2 py-1.5 align-top">
+          <div class="text-[11px] leading-5 text-base-content">
+            {impactSummary()}
+          </div>
         </td>
 
-        {/* Expand chevron */}
-        <td class="px-1.5 sm:px-2 py-0.5 text-right">
+        <td class="px-2 py-1.5 align-top">
+          <div class="space-y-1">
+            <span
+              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${issueBadgeClass(
+                props.record,
+              )}`}
+            >
+              {issueLabel()}
+            </span>
+            <div class="text-[11px] leading-5 text-muted">
+              {issueSummary() || 'No active issues'}
+            </div>
+          </div>
+        </td>
+
+        <td class="hidden xl:table-cell px-2 py-1.5 align-top">
+          <div class="text-[11px] leading-5 text-base-content">
+            {actionSummary()}
+          </div>
+        </td>
+
+        <td class="px-1.5 py-1.5 align-top text-right">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               props.onToggleExpand();
             }}
-            class="p-1 rounded hover:bg-surface-hover transition-colors"
+            class="rounded p-1 hover:bg-surface-hover transition-colors"
             aria-label={`Toggle details for ${props.record.name}`}
           >
             <svg
-              class={`w-3.5 h-3.5 text-muted transition-transform duration-150 ${
+              class={`h-3.5 w-3.5 text-muted transition-transform duration-150 ${
                 props.expanded ? 'rotate-90' : ''
               }`}
               viewBox="0 0 24 24"
