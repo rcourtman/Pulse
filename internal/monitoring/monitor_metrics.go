@@ -154,27 +154,63 @@ type DiskChartEntry struct {
 // physical disks that have temperature data. The Monitor owns state access
 // (monitoring is exempt from the ReadState-only rule), so this keeps state
 // reads out of API handler code.
+//
+// Uses batch queries to load all disk metrics in 1-2 SQL calls instead of N
+// (one per disk), avoiding N+1 query patterns on systems with many disks.
 func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[string]DiskChartEntry {
 	if m == nil {
 		return nil
 	}
 
 	state := m.GetState()
-	result := make(map[string]DiskChartEntry, len(state.PhysicalDisks))
 
+	// Phase 1: Collect disk metadata and resource IDs.
+	type diskMeta struct {
+		resourceID  string
+		name        string
+		node        string
+		instance    string
+		temperature int
+	}
+	var disks []diskMeta
 	for _, disk := range state.PhysicalDisks {
 		if disk.Temperature <= 0 {
 			continue
 		}
-
 		resourceID := unifiedresources.PhysicalDiskMetricID(disk)
 		if resourceID == "" {
 			continue
 		}
+		name := disk.Model
+		if name == "" {
+			name = disk.DevPath
+		}
+		disks = append(disks, diskMeta{
+			resourceID:  resourceID,
+			name:        name,
+			node:        disk.Node,
+			instance:    disk.Instance,
+			temperature: disk.Temperature,
+		})
+	}
 
+	if len(disks) == 0 {
+		return make(map[string]DiskChartEntry)
+	}
+
+	// Phase 2: Batch-load metrics for all disks (1-2 queries instead of N).
+	resourceIDs := make([]string, len(disks))
+	for i, d := range disks {
+		resourceIDs[i] = d.resourceID
+	}
+	batchMetrics := m.queryStoreBatchMetricMapWithGapFill("disk", resourceIDs, duration)
+
+	// Phase 3: Build result entries.
+	result := make(map[string]DiskChartEntry, len(disks))
+	for _, d := range disks {
 		var tempPoints []MetricPoint
-		if storeResult, ok := m.queryStoreMetricMapWithGapFill("disk", resourceID, duration); ok {
-			if pts, found := storeResult["smart_temp"]; found {
+		if resMetrics, ok := batchMetrics[d.resourceID]; ok {
+			if pts, found := resMetrics["smart_temp"]; found {
 				tempPoints = pts
 			}
 		}
@@ -185,21 +221,67 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		if len(tempPoints) < 2 {
 			now := time.Now()
 			tempPoints = []MetricPoint{
-				{Timestamp: now.Add(-60 * time.Second), Value: float64(disk.Temperature)},
-				{Timestamp: now, Value: float64(disk.Temperature)},
+				{Timestamp: now.Add(-60 * time.Second), Value: float64(d.temperature)},
+				{Timestamp: now, Value: float64(d.temperature)},
 			}
 		}
 
-		name := disk.Model
-		if name == "" {
-			name = disk.DevPath
-		}
-
-		result[resourceID] = DiskChartEntry{
-			Name:        name,
-			Node:        disk.Node,
-			Instance:    disk.Instance,
+		result[d.resourceID] = DiskChartEntry{
+			Name:        d.name,
+			Node:        d.node,
+			Instance:    d.instance,
 			Temperature: tempPoints,
+		}
+	}
+
+	return result
+}
+
+// queryStoreBatchMetricMapWithGapFill queries metrics for multiple resource IDs
+// of the same type in a single batch. If some resources have no data in the
+// primary window, re-queries those with a broader lookback window.
+// Returns map[resourceID]map[metricType][]MetricPoint (already downsampled).
+func (m *Monitor) queryStoreBatchMetricMapWithGapFill(resourceType string, resourceIDs []string, duration time.Duration) map[string]map[string][]MetricPoint {
+	if m == nil || m.metricsStore == nil || len(resourceIDs) == 0 {
+		return nil
+	}
+
+	end := time.Now()
+	start := end.Add(-duration)
+
+	// queryBatch fetches and downsamples metrics for the given IDs.
+	queryBatch := func(ids []string, from time.Time) map[string]map[string][]MetricPoint {
+		sqlResult, err := m.metricsStore.QueryAllBatch(resourceType, ids, from, end, 0)
+		if err != nil || len(sqlResult) == 0 {
+			return nil
+		}
+		// Convert metrics.MetricPoint → monitoring.MetricPoint and downsample.
+		converted := make(map[string]map[string][]MetricPoint, len(sqlResult))
+		for resID, metricMap := range sqlResult {
+			converted[resID] = convertAndDownsample(metricMap, chartDownsampleTarget)
+		}
+		return converted
+	}
+
+	result := queryBatch(resourceIDs, start)
+	if result == nil {
+		result = make(map[string]map[string][]MetricPoint)
+	}
+
+	// Collect resource IDs that returned no data for gap-fill retry.
+	var missing []string
+	for _, id := range resourceIDs {
+		if _, ok := result[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+
+	if len(missing) > 0 {
+		gapStart := end.Add(-chartGapFillLookbackWindow(duration))
+		if gapResult := queryBatch(missing, gapStart); gapResult != nil {
+			for id, metricMap := range gapResult {
+				result[id] = metricMap
+			}
 		}
 	}
 

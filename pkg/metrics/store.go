@@ -721,6 +721,153 @@ func (s *Store) queryAllWithTier(resourceType, resourceID string, start, end tim
 	return result, rows.Err()
 }
 
+// queryAllBatchChunkSize limits the number of resource IDs per SQL IN clause
+// to stay well within SQLite's host-parameter ceiling and keep individual
+// queries fast.
+const queryAllBatchChunkSize = 500
+
+// QueryAllBatch retrieves all metric types for multiple resources of the same
+// type in a single query. Returns map[resourceID]map[metricType][]MetricPoint.
+// This avoids N+1 query patterns when loading charts for many resources.
+// Resource IDs are deduplicated and chunked to stay within SQLite limits.
+func (s *Store) QueryAllBatch(resourceType string, resourceIDs []string, start, end time.Time, stepSecs int64) (map[string]map[string][]MetricPoint, error) {
+	// Deduplicate resource IDs.
+	seen := make(map[string]struct{}, len(resourceIDs))
+	unique := make([]string, 0, len(resourceIDs))
+	for _, id := range resourceIDs {
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			unique = append(unique, id)
+		}
+	}
+	if len(unique) == 0 {
+		return map[string]map[string][]MetricPoint{}, nil
+	}
+
+	tiers := s.tierFallbacks(end.Sub(start))
+	if len(tiers) == 0 {
+		return map[string]map[string][]MetricPoint{}, nil
+	}
+
+	result := make(map[string]map[string][]MetricPoint, len(unique))
+
+	for _, tier := range tiers {
+		// Process in chunks to stay within SQLite parameter limits.
+		for lo := 0; lo < len(unique); lo += queryAllBatchChunkSize {
+			hi := lo + queryAllBatchChunkSize
+			if hi > len(unique) {
+				hi = len(unique)
+			}
+			tierResult, err := s.queryAllBatchWithTier(resourceType, unique[lo:hi], start, end, stepSecs, tier)
+			if err != nil {
+				return nil, err
+			}
+
+			// Merge in metrics per resource, preferring earlier (coarser) tiers.
+			for resID, metricMap := range tierResult {
+				if _, exists := result[resID]; !exists {
+					result[resID] = make(map[string][]MetricPoint)
+				}
+				for metric, points := range metricMap {
+					if len(points) == 0 {
+						continue
+					}
+					if _, exists := result[resID][metric]; !exists {
+						result[resID][metric] = points
+					}
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string, start, end time.Time, stepSecs int64, tier Tier) (map[string]map[string][]MetricPoint, error) {
+	placeholders := make([]string, len(resourceIDs))
+	for i := range resourceIDs {
+		placeholders[i] = "?"
+	}
+	inClause := strings.Join(placeholders, ",")
+
+	var params []interface{}
+	var sqlQuery string
+
+	if stepSecs > 1 {
+		params = make([]interface{}, 0, len(resourceIDs)+7)
+		params = append(params, stepSecs, stepSecs, stepSecs, resourceType)
+		for _, id := range resourceIDs {
+			params = append(params, id)
+		}
+		params = append(params, string(tier), start.Unix(), end.Unix())
+
+		sqlQuery = fmt.Sprintf(`
+			SELECT
+				resource_id,
+				metric_type,
+				(timestamp / ?) * ? + (? / 2) as bucket_ts,
+				AVG(value),
+				MIN(COALESCE(min_value, value)),
+				MAX(COALESCE(max_value, value))
+			FROM metrics
+			WHERE resource_type = ? AND resource_id IN (%s) AND tier = ?
+			AND timestamp >= ? AND timestamp <= ?
+			GROUP BY resource_id, metric_type, bucket_ts
+			ORDER BY resource_id, metric_type, bucket_ts ASC
+		`, inClause)
+	} else {
+		params = make([]interface{}, 0, len(resourceIDs)+4)
+		params = append(params, resourceType)
+		for _, id := range resourceIDs {
+			params = append(params, id)
+		}
+		params = append(params, string(tier), start.Unix(), end.Unix())
+
+		sqlQuery = fmt.Sprintf(`
+			SELECT resource_id, metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
+			FROM metrics
+			WHERE resource_type = ? AND resource_id IN (%s) AND tier = ?
+			AND timestamp >= ? AND timestamp <= ?
+			ORDER BY resource_id, metric_type, timestamp ASC
+		`, inClause)
+	}
+
+	// Retry on SQLITE_BUSY
+	var rows *sql.Rows
+	var err error
+	for i := 0; i < 5; i++ {
+		rows, err = s.db.Query(sqlQuery, params...)
+		if err == nil {
+			break
+		}
+		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
+		return nil, fmt.Errorf("failed to batch query metrics: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]map[string][]MetricPoint)
+	for rows.Next() {
+		var resourceID, metricType string
+		var ts int64
+		var p MetricPoint
+		if err := rows.Scan(&resourceID, &metricType, &ts, &p.Value, &p.Min, &p.Max); err != nil {
+			log.Warn().Err(err).Msg("Failed to scan batch metric row")
+			continue
+		}
+		p.Timestamp = time.Unix(ts, 0)
+
+		if _, exists := result[resourceID]; !exists {
+			result[resourceID] = make(map[string][]MetricPoint)
+		}
+		result[resourceID][metricType] = append(result[resourceID][metricType], p)
+	}
+
+	return result, rows.Err()
+}
+
 // selectTier chooses the appropriate data tier based on time range
 // Note: Tier selection uses fixed thresholds to ensure queries use tiers with complete data:
 // - Raw: up to 2 hours (high-resolution real-time data)

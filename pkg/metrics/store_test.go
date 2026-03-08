@@ -299,3 +299,98 @@ func TestStoreQueryDownsampling(t *testing.T) {
 		t.Fatalf("expected 3 bucketed points, got %d", len(points))
 	}
 }
+
+func TestQueryAllBatch(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-batch.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Unix(1000, 0)
+	store.writeBatch([]bufferedMetric{
+		// disk-1: smart_temp with 2 points
+		{resourceType: "disk", resourceID: "disk-1", metricType: "smart_temp", value: 35, timestamp: ts, tier: TierRaw},
+		{resourceType: "disk", resourceID: "disk-1", metricType: "smart_temp", value: 36, timestamp: ts.Add(time.Second), tier: TierRaw},
+		// disk-2: smart_temp with 1 point, power_on_hours with 1 point
+		{resourceType: "disk", resourceID: "disk-2", metricType: "smart_temp", value: 40, timestamp: ts, tier: TierRaw},
+		{resourceType: "disk", resourceID: "disk-2", metricType: "smart_power_on_hours", value: 1000, timestamp: ts, tier: TierRaw},
+		// disk-3: no data (will not appear in results)
+	})
+
+	start := ts.Add(-time.Second)
+	end := ts.Add(2 * time.Second)
+
+	t.Run("returns data grouped by resource and metric", func(t *testing.T) {
+		result, err := store.QueryAllBatch("disk", []string{"disk-1", "disk-2", "disk-3"}, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+
+		// disk-1 should have smart_temp with 2 points
+		if got := len(result["disk-1"]["smart_temp"]); got != 2 {
+			t.Fatalf("disk-1 smart_temp: expected 2 points, got %d", got)
+		}
+		if result["disk-1"]["smart_temp"][0].Value != 35 || result["disk-1"]["smart_temp"][1].Value != 36 {
+			t.Fatalf("disk-1 smart_temp unexpected values: %+v", result["disk-1"]["smart_temp"])
+		}
+
+		// disk-2 should have smart_temp with 1 point and power_on_hours with 1 point
+		if got := len(result["disk-2"]["smart_temp"]); got != 1 {
+			t.Fatalf("disk-2 smart_temp: expected 1 point, got %d", got)
+		}
+		if got := len(result["disk-2"]["smart_power_on_hours"]); got != 1 {
+			t.Fatalf("disk-2 power_on_hours: expected 1 point, got %d", got)
+		}
+
+		// disk-3 should have no entry
+		if _, ok := result["disk-3"]; ok {
+			t.Fatalf("disk-3 should not appear in results: %+v", result["disk-3"])
+		}
+	})
+
+	t.Run("empty resource IDs returns empty map", func(t *testing.T) {
+		result, err := store.QueryAllBatch("disk", nil, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+		if len(result) != 0 {
+			t.Fatalf("expected empty map, got %d entries", len(result))
+		}
+	})
+
+	t.Run("single resource ID matches QueryAll", func(t *testing.T) {
+		batch, err := store.QueryAllBatch("disk", []string{"disk-1"}, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+		single, err := store.QueryAll("disk", "disk-1", start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAll: %v", err)
+		}
+
+		if len(batch["disk-1"]["smart_temp"]) != len(single["smart_temp"]) {
+			t.Fatalf("batch (%d points) != single (%d points)",
+				len(batch["disk-1"]["smart_temp"]), len(single["smart_temp"]))
+		}
+	})
+
+	t.Run("duplicate resource IDs are deduplicated", func(t *testing.T) {
+		result, err := store.QueryAllBatch("disk", []string{"disk-1", "disk-1", "disk-2", "disk-1"}, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+		// Should still return correct results despite dupes
+		if got := len(result["disk-1"]["smart_temp"]); got != 2 {
+			t.Fatalf("disk-1 smart_temp: expected 2 points after dedup, got %d", got)
+		}
+		if got := len(result["disk-2"]["smart_temp"]); got != 1 {
+			t.Fatalf("disk-2 smart_temp: expected 1 point after dedup, got %d", got)
+		}
+	})
+}
