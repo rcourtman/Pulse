@@ -17,6 +17,11 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
+import {
+  getPlatformBadge,
+  getSourceBadge,
+  getUnifiedSourceBadges,
+} from '@/utils/resourceBadgePresentation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getAgentStatusIndicator } from '@/utils/status';
 import type { Disk } from '@/types/api';
@@ -31,7 +36,6 @@ import {
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
-import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
 import { useTableWindowing } from './useTableWindowing';
 import { ClusterDeployBanner } from './ClusterDeployBanner';
 

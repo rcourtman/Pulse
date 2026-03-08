@@ -622,6 +622,7 @@ describe('useUnifiedResources', () => {
     await waitForResourceCount(() => result!.resources().length);
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(result!.resources()[0]?.id).toBe('node-1');
+    expect(result!.resources()[0]?.platformType).toBe('proxmox-pve');
 
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
@@ -648,6 +649,36 @@ describe('useUnifiedResources', () => {
 
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(result!.resources()[0]?.id).toBe('node-1');
+
+    dispose();
+  });
+
+  it('normalizes proxmox service aliases into canonical platform types', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { ...v2Resource, id: 'pve-1', name: 'pve-1', sources: ['proxmox'] },
+          { ...v2Resource, id: 'pbs-1', name: 'pbs-1', sources: ['pbs'] },
+          { ...v2Resource, id: 'pmg-1', name: 'pmg-1', sources: ['pmg'] },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length, 3);
+
+    const byId = new Map(result!.resources().map((resource) => [resource.id, resource]));
+    expect(byId.get('pve-1')?.platformType).toBe('proxmox-pve');
+    expect(byId.get('pbs-1')?.platformType).toBe('proxmox-pbs');
+    expect(byId.get('pmg-1')?.platformType).toBe('proxmox-pmg');
 
     dispose();
   });

@@ -118,7 +118,7 @@ describe('Infrastructure PBS/PMG integration', () => {
   it('syncs source filter selection to query params', async () => {
     const { getByLabelText } = render(() => <Infrastructure />);
 
-    fireEvent.change(getByLabelText('Source'), { target: { value: 'pmg' } });
+    fireEvent.change(getByLabelText('Source'), { target: { value: 'proxmox-pmg' } });
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe('Infrastructure PBS/PMG integration', () => {
 
     const [path, options] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
     const params = new URLSearchParams(path.split('?')[1] || '');
-    expect(params.get('source')).toBe('pmg');
+    expect(params.get('source')).toBe('proxmox-pmg');
     expect(options?.replace).toBe(true);
   });
 

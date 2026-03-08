@@ -9,7 +9,7 @@ describe('getUnifiedSourceBadges', () => {
   });
 
   it('returns badges for known sources', () => {
-    const badges = getUnifiedSourceBadges(['proxmox', 'docker']);
+    const badges = getUnifiedSourceBadges(['proxmox-pve', 'docker']);
     expect(badges).toHaveLength(2);
     expect(badges[0].label).toBe('PVE');
     expect(badges[1].label).toBe('Containers');
@@ -19,7 +19,7 @@ describe('getUnifiedSourceBadges', () => {
     const badges = getUnifiedSourceBadges(['truenas']);
     expect(badges).toHaveLength(1);
     expect(badges[0].label).toBe('TrueNAS');
-    expect(badges[0].title).toBe('truenas');
+    expect(badges[0].title).toBe('TrueNAS');
     expect(badges[0].classes).toContain('bg-blue-100');
   });
 
@@ -42,7 +42,15 @@ describe('getUnifiedSourceBadges', () => {
   });
 
   it('returns badges for all supported sources', () => {
-    const allSources = ['proxmox', 'agent', 'docker', 'pbs', 'pmg', 'kubernetes', 'truenas'];
+    const allSources = [
+      'proxmox-pve',
+      'agent',
+      'docker',
+      'proxmox-pbs',
+      'proxmox-pmg',
+      'kubernetes',
+      'truenas',
+    ];
     const badges = getUnifiedSourceBadges(allSources);
     expect(badges).toHaveLength(7);
   });

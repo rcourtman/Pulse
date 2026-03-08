@@ -23,6 +23,7 @@ import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
+export { getSourceTypeLabel as formatSourceType } from '@/utils/sourceTypePresentation';
 
 export type ProxmoxPlatformData = {
   nodeName?: string;
@@ -566,16 +567,3 @@ export const formatInteger = (value?: number): string => {
 };
 
 export const ALIAS_COLLAPSE_THRESHOLD = 4;
-
-export const formatSourceType = (value: Resource['sourceType']): string => {
-  switch (value) {
-    case 'hybrid':
-      return 'Hybrid';
-    case 'agent':
-      return 'Agent';
-    case 'api':
-      return 'API';
-    default:
-      return value;
-  }
-};

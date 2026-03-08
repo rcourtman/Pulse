@@ -64,17 +64,17 @@ describe('ReportMergeModal', () => {
       expect(screen.getByText('host:abc-123')).toBeInTheDocument();
     });
 
-    it('maps source strings to human labels', () => {
+    it('maps source strings to canonical platform labels', () => {
       const props = defaultProps();
       props.sources = ['proxmox', 'agent', 'docker', 'pbs', 'pmg', 'kubernetes'];
       render(() => <ReportMergeModal {...props} />);
 
-      expect(screen.getByText('Proxmox')).toBeInTheDocument();
+      expect(screen.getByText('PVE')).toBeInTheDocument();
       expect(screen.getByText('Agent')).toBeInTheDocument();
       expect(screen.getByText('Containers')).toBeInTheDocument();
       expect(screen.getByText('PBS')).toBeInTheDocument();
       expect(screen.getByText('PMG')).toBeInTheDocument();
-      expect(screen.getByText('Kubernetes')).toBeInTheDocument();
+      expect(screen.getByText('K8s')).toBeInTheDocument();
     });
 
     it('passes through unknown source strings as-is', () => {
@@ -82,7 +82,7 @@ describe('ReportMergeModal', () => {
       props.sources = ['custom-source', 'agent'];
       render(() => <ReportMergeModal {...props} />);
 
-      expect(screen.getByText('custom-source')).toBeInTheDocument();
+      expect(screen.getByText('Custom Source')).toBeInTheDocument();
     });
 
     it('normalises source strings case-insensitively', () => {
@@ -90,7 +90,7 @@ describe('ReportMergeModal', () => {
       props.sources = ['PROXMOX', 'Docker'];
       render(() => <ReportMergeModal {...props} />);
 
-      expect(screen.getByText('Proxmox')).toBeInTheDocument();
+      expect(screen.getByText('PVE')).toBeInTheDocument();
       expect(screen.getByText('Containers')).toBeInTheDocument();
     });
 

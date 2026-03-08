@@ -1,6 +1,8 @@
 import { Component, Show, For, createMemo, createSignal } from 'solid-js';
 import { apiFetch } from '@/utils/apiClient';
 import { Dialog } from '@/components/shared/Dialog';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { showError, showSuccess } from '@/utils/toast';
 import XIcon from 'lucide-solid/icons/x';
 
@@ -13,32 +15,22 @@ interface ReportMergeModalProps {
   onReported?: () => void;
 }
 
-const formatSourceLabel = (source: string) => {
-  const normalized = source.toLowerCase();
-  switch (normalized) {
-    case 'proxmox':
-      return 'Proxmox';
-    case 'agent':
-      return 'Agent';
-    case 'docker':
-      return 'Containers';
-    case 'pbs':
-      return 'PBS';
-    case 'pmg':
-      return 'PMG';
-    case 'kubernetes':
-      return 'Kubernetes';
-    default:
-      return source;
-  }
-};
-
 export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
   const [notes, setNotes] = createSignal('');
   const [isSubmitting, setIsSubmitting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
-  const sourceLabels = createMemo(() => props.sources.map((source) => formatSourceLabel(source)));
+  const sourceBadges = createMemo(() =>
+    props.sources.map((source) => {
+      const badge = getSourcePlatformBadge(source);
+      return {
+        label: badge?.label || getSourcePlatformLabel(source),
+        classes:
+          badge?.classes ||
+          'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content',
+      };
+    }),
+  );
   const dialogTitleId = createMemo(
     () => `report-merge-title-${props.resourceId.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
   );
@@ -119,12 +111,8 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
         <div>
           <div class="text-xs font-medium uppercase tracking-wide text-muted">Merged Sources</div>
           <div class="mt-2 flex flex-wrap gap-2">
-            <For each={sourceLabels()}>
-              {(label) => (
-                <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                  {label}
-                </span>
-              )}
+            <For each={sourceBadges()}>
+              {(badge) => <span class={badge.classes}>{badge.label}</span>}
             </For>
           </div>
         </div>

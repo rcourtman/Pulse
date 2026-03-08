@@ -11,6 +11,7 @@ import {
   getResourceSources,
   groupResources,
   matchesSearch,
+  normalizeInfrastructureSource,
   sortResources,
   splitPrimaryAndServiceResources,
   tokenizeSearch,
@@ -65,11 +66,18 @@ describe('infrastructureSelectors', () => {
   });
 
   describe('getResourceSources and collectors', () => {
+    it('normalizes legacy infrastructure source aliases to canonical platform keys', () => {
+      expect(normalizeInfrastructureSource('proxmox')).toBe('proxmox-pve');
+      expect(normalizeInfrastructureSource('pbs')).toBe('proxmox-pbs');
+      expect(normalizeInfrastructureSource('pmg')).toBe('proxmox-pmg');
+      expect(normalizeInfrastructureSource('k8s')).toBe('kubernetes');
+    });
+
     it('normalizes and deduplicates resource sources', () => {
       const resource = makeResource(1, {
         platformData: { sources: ['PVE', 'proxmox-pve', 'k8s', 'kubernetes', 'invalid'] },
       });
-      expect(getResourceSources(resource)).toEqual(['proxmox', 'kubernetes']);
+      expect(getResourceSources(resource)).toEqual(['proxmox-pve', 'kubernetes']);
     });
 
     it('collects available sources and statuses with deduplication', () => {
@@ -82,7 +90,7 @@ describe('infrastructureSelectors', () => {
         uppercaseStatus,
       ];
 
-      expect(collectAvailableSources(resources)).toEqual(new Set(['proxmox', 'docker']));
+      expect(collectAvailableSources(resources)).toEqual(new Set(['proxmox-pve', 'docker']));
       expect(collectAvailableStatuses(resources)).toEqual(new Set(['online', 'offline']));
     });
   });

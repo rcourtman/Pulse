@@ -1,5 +1,7 @@
 import type { Resource } from '@/types/resource';
 import { getCpuPercent, getDiskPercent, getDisplayName, getMemoryPercent } from '@/types/resource';
+import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
+import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
 
 export interface IODistributionStats {
   median: number;
@@ -20,18 +22,6 @@ export interface ResourceGroup {
   cluster: string;
   resources: Resource[];
 }
-
-const statusLabels: Record<string, string> = {
-  online: 'Online',
-  offline: 'Offline',
-  degraded: 'Degraded',
-  paused: 'Paused',
-  unknown: 'Unknown',
-  running: 'Running',
-  stopped: 'Stopped',
-};
-
-const statusOrder = ['online', 'degraded', 'paused', 'offline', 'stopped', 'unknown', 'running'];
 
 const isServiceInfrastructureResource = (resource: Resource) =>
   resource.type === 'pbs' || resource.type === 'pmg';
@@ -75,32 +65,7 @@ const buildIODistribution = (values: number[]): IODistributionStats => {
   return { median, mad, max, p97, p99, count: valid.length };
 };
 
-function normalizeSource(value: string): string | null {
-  const normalized = value.toLowerCase();
-  switch (normalized) {
-    case 'pve':
-    case 'proxmox':
-    case 'proxmox-pve':
-      return 'proxmox';
-    case 'agent':
-      return 'agent';
-    case 'docker':
-      return 'docker';
-    case 'pbs':
-    case 'proxmox-pbs':
-      return 'pbs';
-    case 'pmg':
-    case 'proxmox-pmg':
-      return 'pmg';
-    case 'k8s':
-    case 'kubernetes':
-      return 'kubernetes';
-    case 'truenas':
-      return 'truenas';
-    default:
-      return null;
-  }
-}
+export const normalizeInfrastructureSource = normalizeSourcePlatformKey;
 
 const getSortValue = (resource: Resource, key: string): number | string | null => {
   switch (key) {
@@ -181,16 +146,16 @@ export const matchesSearch = (resource: Resource, term: string): boolean => {
   return haystack.includes(normalizedTerm);
 };
 
-export const getResourceSources = (resource: Resource): string[] => {
+export const getResourceSources = (resource: Resource): KnownSourcePlatform[] => {
   const platformData = resource.platformData as { sources?: string[] } | undefined;
   const normalized = (platformData?.sources ?? [])
-    .map((source) => normalizeSource(source))
-    .filter((source): source is string => Boolean(source));
+    .map((source) => normalizeInfrastructureSource(source))
+    .filter((source): source is KnownSourcePlatform => Boolean(source));
   return Array.from(new Set(normalized));
 };
 
-export const collectAvailableSources = (resources: Resource[]): Set<string> => {
-  const set = new Set<string>();
+export const collectAvailableSources = (resources: Resource[]): Set<KnownSourcePlatform> => {
+  const set = new Set<KnownSourcePlatform>();
   resources.forEach((resource) => {
     getResourceSources(resource).forEach((source) => set.add(source));
   });
@@ -211,8 +176,8 @@ export const buildStatusOptions = (
 ): Array<{ key: string; label: string }> => {
   const items = Array.from(statuses);
   items.sort((a, b) => {
-    const indexA = statusOrder.indexOf(a);
-    const indexB = statusOrder.indexOf(b);
+    const indexA = STATUS_SORT_ORDER.indexOf(a);
+    const indexB = STATUS_SORT_ORDER.indexOf(b);
     if (indexA === -1 && indexB === -1) return a.localeCompare(b);
     if (indexA === -1) return 1;
     if (indexB === -1) return -1;
@@ -220,7 +185,7 @@ export const buildStatusOptions = (
   });
   return items.map((status) => ({
     key: status,
-    label: statusLabels[status] ?? status,
+    label: getCanonicalStatusLabel(status, status),
   }));
 };
 

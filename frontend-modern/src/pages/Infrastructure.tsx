@@ -30,7 +30,9 @@ import {
   collectAvailableSources,
   collectAvailableStatuses,
   buildStatusOptions,
+  normalizeInfrastructureSource,
 } from '@/components/Infrastructure/infrastructureSelectors';
+import { DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS } from '@/utils/sourcePlatformOptions';
 import {
   buildInfrastructurePath,
   INFRASTRUCTURE_PATH,
@@ -108,15 +110,7 @@ export function Infrastructure() {
       navigate(target, { replace: true });
     }, 0);
   };
-  const sourceOptions = [
-    { key: 'proxmox', label: 'PVE' },
-    { key: 'agent', label: 'Agent' },
-    { key: 'docker', label: 'Containers' },
-    { key: 'pbs', label: 'PBS' },
-    { key: 'pmg', label: 'PMG' },
-    { key: 'kubernetes', label: 'K8s' },
-    { key: 'truenas', label: 'TrueNAS' },
-  ];
+  const sourceOptions = DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS;
 
   createEffect(() => {
     const { resource: resourceId } = parseInfrastructureLinkSearch(location.search);
@@ -165,7 +159,7 @@ export function Infrastructure() {
       return;
     }
     if (sourceParam === handledSourceParam()) return;
-    const normalized = normalizeSource(sourceParam) ?? '';
+    const normalized = normalizeInfrastructureSource(sourceParam) ?? '';
     setSelectedSource(normalized);
     setHandledSourceParam(sourceParam);
   });
@@ -235,28 +229,6 @@ export function Infrastructure() {
       window.clearTimeout(highlightTimer);
     }
   });
-
-  function normalizeSource(value: string): string | null {
-    const normalized = value.toLowerCase();
-    switch (normalized) {
-      case 'proxmox':
-        return 'proxmox';
-      case 'agent':
-        return 'agent';
-      case 'docker':
-        return 'docker';
-      case 'pbs':
-        return 'pbs';
-      case 'pmg':
-        return 'pmg';
-      case 'kubernetes':
-        return 'kubernetes';
-      case 'truenas':
-        return 'truenas';
-      default:
-        return null;
-    }
-  }
 
   const availableSources = createMemo(() => collectAvailableSources(resources()));
 

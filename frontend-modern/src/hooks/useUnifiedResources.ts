@@ -6,8 +6,6 @@ import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
   ResourceDiscoveryTarget,
-  PlatformType,
-  SourceType,
   ResourceStatus,
   ResourceType,
 } from '@/types/resource';
@@ -16,6 +14,10 @@ import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
+import {
+  resolvePlatformTypeFromSources,
+  resolveSourceTypeFromSources,
+} from '@/utils/sourcePlatforms';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,pbs,pmg,k8s-cluster,k8s-node';
@@ -377,15 +379,6 @@ type APIListResponse = {
   };
 };
 
-type SourceFlags = {
-  hasAgent: boolean;
-  hasProxmox: boolean;
-  hasDocker: boolean;
-  hasKubernetes: boolean;
-  hasPbs: boolean;
-  hasPmg: boolean;
-};
-
 type UnifiedResourcesCacheEntry = {
   resources: Resource[];
   cachedAt: number;
@@ -402,66 +395,6 @@ const normalizeOrgScope = (orgID?: string | null): string => {
 
 const buildScopedUnifiedResourcesCacheKey = (cacheKey: string, orgScope: string): string =>
   `${encodeURIComponent(orgScope)}::${cacheKey}`;
-
-const readSourceFlags = (sources: string[] | undefined): SourceFlags => {
-  const flags: SourceFlags = {
-    hasAgent: false,
-    hasProxmox: false,
-    hasDocker: false,
-    hasKubernetes: false,
-    hasPbs: false,
-    hasPmg: false,
-  };
-
-  if (!sources || sources.length === 0) {
-    return flags;
-  }
-
-  for (const source of sources) {
-    switch (source.toLowerCase()) {
-      case 'agent':
-        flags.hasAgent = true;
-        break;
-      case 'proxmox':
-        flags.hasProxmox = true;
-        break;
-      case 'docker':
-        flags.hasDocker = true;
-        break;
-      case 'kubernetes':
-        flags.hasKubernetes = true;
-        break;
-      case 'pbs':
-        flags.hasPbs = true;
-        break;
-      case 'pmg':
-        flags.hasPmg = true;
-        break;
-      default:
-        break;
-    }
-  }
-
-  return flags;
-};
-
-const resolvePlatformType = (flags: SourceFlags): PlatformType => {
-  if (flags.hasProxmox) return 'proxmox-pve';
-  if (flags.hasPbs) return 'proxmox-pbs';
-  if (flags.hasPmg) return 'proxmox-pmg';
-  if (flags.hasDocker) return 'docker';
-  if (flags.hasKubernetes) return 'kubernetes';
-  if (flags.hasAgent) return 'agent';
-  return 'agent';
-};
-
-const resolveSourceType = (flags: SourceFlags): SourceType => {
-  const hasOther =
-    flags.hasProxmox || flags.hasDocker || flags.hasKubernetes || flags.hasPbs || flags.hasPmg;
-  if (flags.hasAgent && hasOther) return 'hybrid';
-  if (flags.hasAgent) return 'agent';
-  return 'api';
-};
 
 const resolveStatus = (status?: string): ResourceStatus => {
   const normalized = (status || '').toLowerCase();
@@ -575,7 +508,6 @@ const toResource = (v2: APIResource): Resource => {
   const sources = (v2.sources || []).filter(
     (s): s is string => typeof s === 'string' && s.trim().length > 0,
   );
-  const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
   const canonical = v2.canonicalIdentity;
   const name = asTrimmedString(canonical?.displayName) || v2.name || v2.id;
@@ -604,8 +536,8 @@ const toResource = (v2: APIResource): Resource => {
     name,
     displayName: name,
     platformId,
-    platformType: resolvePlatformType(sourceFlags),
-    sourceType: resolveSourceType(sourceFlags),
+    platformType: resolvePlatformTypeFromSources(sources) || 'agent',
+    sourceType: resolveSourceTypeFromSources(sources),
     parentId: v2.parentId,
     parentName: v2.parentName,
     clusterId: v2.identity?.clusterName || v2.proxmox?.clusterName,

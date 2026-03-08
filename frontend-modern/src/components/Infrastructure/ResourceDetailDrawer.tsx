@@ -11,7 +11,7 @@ import {
   getSourceBadge,
   getTypeBadge,
   getUnifiedSourceBadges,
-} from './resourceBadges';
+} from '@/utils/resourceBadgePresentation';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
 import {

@@ -16,7 +16,7 @@ export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string
 
   if (type === 'vm' || type === 'system-container') {
     const query = firstNonEmpty([guest.node, guest.instance, guest.name]);
-    return buildInfrastructurePath({ source: 'proxmox', query });
+    return buildInfrastructurePath({ source: 'proxmox-pve', query });
   }
 
   if (type === 'app-container') {

@@ -37,7 +37,7 @@ describe('buildInfrastructureHrefForWorkload', () => {
         instance: 'cluster-main',
       }),
     );
-    expect(href).toBe('/infrastructure?source=proxmox&q=pve1');
+    expect(href).toBe('/infrastructure?source=proxmox-pve&q=pve1');
   });
 
   it('maps app-container workloads to docker infrastructure source with context query', () => {
@@ -69,6 +69,6 @@ describe('buildInfrastructureHrefForWorkload', () => {
         workloadType: undefined,
       }),
     );
-    expect(href).toBe('/infrastructure?source=proxmox&q=node-1');
+    expect(href).toBe('/infrastructure?source=proxmox-pve&q=node-1');
   });
 });
