@@ -1,6 +1,7 @@
 package smartctl
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -428,6 +429,34 @@ func TestParseSMARTAttributes_Standby(t *testing.T) {
 	attrs = parseSMARTAttributes(data, "nvme")
 	if attrs != nil {
 		t.Errorf("expected nil attributes for empty NVMe data, got %+v", attrs)
+	}
+}
+
+func TestParseSMARTOutputStandbyPowerMode(t *testing.T) {
+	payload := smartctlJSON{
+		ModelName:    "WDC WD40EFRX",
+		SerialNumber: "WD-123",
+		PowerMode:    "STANDBY",
+	}
+	payload.Device.Protocol = "ATA"
+
+	out, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	result, err := parseSMARTOutput(out, "/dev/ada0")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if !result.Standby {
+		t.Fatalf("expected standby result, got %#v", result)
+	}
+	if result.Model != "WDC WD40EFRX" || result.Serial != "WD-123" {
+		t.Fatalf("expected model/serial to be preserved, got %#v", result)
 	}
 }
 

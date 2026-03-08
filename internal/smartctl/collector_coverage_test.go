@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os/exec"
 	"strings"
 	"testing"
@@ -19,6 +20,15 @@ func mustMarshalLSBLK(t *testing.T, devices []lsblkDevice) []byte {
 	}
 	return out
 }
+
+type fakeDirEntry struct {
+	name string
+}
+
+func (e fakeDirEntry) Name() string               { return e.name }
+func (e fakeDirEntry) IsDir() bool                { return false }
+func (e fakeDirEntry) Type() fs.FileMode          { return 0 }
+func (e fakeDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 
 func TestListBlockDevices(t *testing.T) {
 	origRun := runCommandOutput
@@ -49,8 +59,13 @@ func TestListBlockDevices(t *testing.T) {
 
 func TestListBlockDevicesFreeBSD(t *testing.T) {
 	origRun := runCommandOutput
+	origReadDir := readDir
 	origGOOS := runtimeGOOS
-	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		readDir = origReadDir
+		runtimeGOOS = origGOOS
+	})
 
 	runtimeGOOS = "freebsd"
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -58,6 +73,14 @@ func TestListBlockDevicesFreeBSD(t *testing.T) {
 			return nil, errors.New("unexpected command: " + name)
 		}
 		return []byte("ada0 da0 nvd0\n"), nil
+	}
+	readDir = func(string) ([]fs.DirEntry, error) {
+		return []fs.DirEntry{
+			fakeDirEntry{name: "ada0"},
+			fakeDirEntry{name: "da0"},
+			fakeDirEntry{name: "nvd0"},
+			fakeDirEntry{name: "ada0p1"},
+		}, nil
 	}
 
 	devices, err := listBlockDevices(context.Background(), nil)
@@ -71,12 +94,20 @@ func TestListBlockDevicesFreeBSD(t *testing.T) {
 
 func TestListBlockDevicesFreeBSDWithExcludes(t *testing.T) {
 	origRun := runCommandOutput
+	origReadDir := readDir
 	origGOOS := runtimeGOOS
-	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		readDir = origReadDir
+		runtimeGOOS = origGOOS
+	})
 
 	runtimeGOOS = "freebsd"
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte("ada0 da0 nvd0\n"), nil
+	}
+	readDir = func(string) ([]fs.DirEntry, error) {
+		return nil, nil
 	}
 
 	devices, err := listBlockDevices(context.Background(), []string{"da0"})
@@ -225,7 +256,7 @@ func TestCollectDeviceSMARTStandby(t *testing.T) {
 	timeNow = func() time.Time { return fixed }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
+		return exec.CommandContext(ctx, "sh", "-c", "exit 3").Output()
 	}
 
 	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
@@ -379,14 +410,92 @@ func TestCollectDeviceSMARTFreeBSDAdaFallback(t *testing.T) {
 	if result == nil || result.Temperature != 37 || !result.LastUpdated.Equal(fixed) {
 		t.Fatalf("unexpected result: %#v", result)
 	}
-	if len(attempts) != 2 {
-		t.Fatalf("expected 2 attempts, got %d", len(attempts))
+	if len(attempts) != 1 {
+		t.Fatalf("expected 1 attempt, got %d", len(attempts))
 	}
-	if len(attempts[0]) >= 2 && attempts[0][0] == "-d" {
-		t.Fatalf("expected first attempt without explicit device type, got %v", attempts[0])
+	if len(attempts[0]) < 2 || attempts[0][0] != "-d" || attempts[0][1] != "sat" {
+		t.Fatalf("expected sat probe on first attempt, got %v", attempts[0])
 	}
-	if len(attempts[1]) < 2 || attempts[1][0] != "-d" || attempts[1][1] != "sat" {
-		t.Fatalf("expected sat fallback on second attempt, got %v", attempts[1])
+}
+
+func TestListBlockDevicesFreeBSDFallsBackToDevEntries(t *testing.T) {
+	origRun := runCommandOutput
+	origReadDir := readDir
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		readDir = origReadDir
+		runtimeGOOS = origGOOS
+	})
+
+	runtimeGOOS = "freebsd"
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return []byte("\n"), nil
+	}
+	readDir = func(string) ([]fs.DirEntry, error) {
+		return []fs.DirEntry{
+			fakeDirEntry{name: "ada0"},
+			fakeDirEntry{name: "da0"},
+			fakeDirEntry{name: "nvd0"},
+			fakeDirEntry{name: "nda0"},
+			fakeDirEntry{name: "ada0p2"},
+			fakeDirEntry{name: "pass0"},
+		}, nil
+	}
+
+	devices, err := listBlockDevices(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("listBlockDevices error: %v", err)
+	}
+	if len(devices) != 4 || devices[0] != "/dev/ada0" || devices[1] != "/dev/da0" || devices[2] != "/dev/nda0" || devices[3] != "/dev/nvd0" {
+		t.Fatalf("unexpected devices from /dev fallback: %#v", devices)
+	}
+}
+
+func TestCollectDeviceSMARTFreeBSDPrefersTypedProbe(t *testing.T) {
+	origRun := runCommandOutput
+	origLook := execLookPath
+	origNow := timeNow
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		execLookPath = origLook
+		timeNow = origNow
+		runtimeGOOS = origGOOS
+	})
+
+	fixed := time.Date(2024, 4, 7, 8, 9, 10, 0, time.UTC)
+	timeNow = func() time.Time { return fixed }
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	runtimeGOOS = "freebsd"
+
+	var attempts [][]string
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		attempts = append(attempts, append([]string(nil), args...))
+
+		if len(args) >= 2 && args[0] == "-d" && args[1] == "sat" {
+			payload := smartctlJSON{}
+			payload.Device.Protocol = "ATA"
+			payload.SmartStatus = &struct {
+				Passed bool `json:"passed"`
+			}{Passed: true}
+			payload.Temperature.Current = 39
+			out, _ := json.Marshal(payload)
+			return out, nil
+		}
+
+		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/ada0")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.Standby || result.Temperature != 39 || !result.LastUpdated.Equal(fixed) {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if len(attempts) != 1 || len(attempts[0]) < 2 || attempts[0][0] != "-d" || attempts[0][1] != "sat" {
+		t.Fatalf("expected first probe to use -d sat, got %v", attempts)
 	}
 }
 

@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 
 var (
 	execLookPath     = exec.LookPath
+	readDir          = os.ReadDir
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, name, args...).Output()
 	}
@@ -25,6 +28,8 @@ var (
 
 	errSMARTDataUnavailable = errors.New("smart data unavailable for device")
 )
+
+const smartctlStandbyExitStatus = 3
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
@@ -267,16 +272,44 @@ func linuxSMARTSkipReason(device lsblkDevice) string {
 
 // listBlockDevicesFreeBSD uses sysctl kern.disks to find disks on FreeBSD.
 func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]string, error) {
-	output, err := runCommandOutput(ctx, "sysctl", "-n", "kern.disks")
-	if err != nil {
-		return nil, err
+	names, sysctlErr := freeBSDDiskNamesFromSysctl(ctx)
+	if sysctlErr != nil {
+		log.Debug().Err(sysctlErr).Msg("Failed to enumerate FreeBSD disks from kern.disks")
+	}
+
+	fallbackNames, fallbackErr := freeBSDDiskNamesFromDev()
+	if fallbackErr != nil {
+		log.Debug().Err(fallbackErr).Msg("Failed to enumerate FreeBSD disks from /dev")
+	}
+
+	if len(names) == 0 {
+		names = fallbackNames
+	} else if len(fallbackNames) > 0 {
+		seen := make(map[string]struct{}, len(names))
+		for _, name := range names {
+			seen[name] = struct{}{}
+		}
+		for _, name := range fallbackNames {
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			names = append(names, name)
+		}
+	}
+
+	if len(names) == 0 {
+		switch {
+		case sysctlErr != nil:
+			return nil, sysctlErr
+		case fallbackErr != nil:
+			return nil, fallbackErr
+		default:
+			return nil, nil
+		}
 	}
 
 	var devices []string
-	for _, name := range strings.Fields(strings.TrimSpace(string(output))) {
-		if name == "" {
-			continue
-		}
+	for _, name := range names {
 		devicePath := "/dev/" + name
 		if matchesDeviceExclude(name, devicePath, diskExclude) {
 			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
@@ -286,6 +319,91 @@ func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]strin
 	}
 
 	return devices, nil
+}
+
+func freeBSDDiskNamesFromSysctl(ctx context.Context) ([]string, error) {
+	output, err := runCommandOutput(ctx, "sysctl", "-n", "kern.disks")
+	if err != nil {
+		return nil, err
+	}
+
+	var devices []string
+	seen := make(map[string]struct{})
+	for _, name := range strings.Fields(strings.TrimSpace(string(output))) {
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		devices = append(devices, name)
+	}
+
+	return devices, nil
+}
+
+func freeBSDDiskNamesFromDev() ([]string, error) {
+	entries, err := readDir("/dev")
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name())
+		if !isFreeBSDDiskDeviceName(name) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	return names, nil
+}
+
+func isFreeBSDDiskDeviceName(name string) bool {
+	for _, prefix := range []string{
+		"ad",
+		"ada",
+		"aacd",
+		"amrd",
+		"da",
+		"idad",
+		"ipsd",
+		"mfid",
+		"mfisyspd",
+		"mlxd",
+		"mmcsd",
+		"nda",
+		"nvd",
+		"nvme",
+		"twa",
+		"twed",
+		"tws",
+		"vtbd",
+		"xbd",
+	} {
+		if hasNumericSuffix(name, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasNumericSuffix(name, prefix string) bool {
+	if !strings.HasPrefix(name, prefix) || len(name) == len(prefix) {
+		return false
+	}
+
+	for _, r := range name[len(prefix):] {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+
+	return true
 }
 
 // matchesDeviceExclude checks if a block device matches any exclusion pattern.
@@ -352,11 +470,9 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		output, err := runCommandOutput(cmdCtx, smartctlPath, args...)
 
 		// smartctl returns non-zero exit codes for various conditions.
-		// Exit code 2 means drive is in standby - that's okay.
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				exitCode := exitErr.ExitCode()
-				if exitCode&2 != 0 {
+				if exitErr.ExitCode() == smartctlStandbyExitStatus && len(output) == 0 {
 					return &DiskSMART{
 						Device:      filepath.Base(device),
 						Standby:     true,
@@ -411,15 +527,20 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 }
 
 func smartctlProbeAttempts(device string) [][]string {
-	attempts := [][]string{
+	if runtimeGOOS == "freebsd" {
+		deviceTypes := freeBSDSmartctlDeviceTypes(filepath.Base(device))
+		if len(deviceTypes) > 0 {
+			attempts := make([][]string, 0, len(deviceTypes)+1)
+			for _, deviceType := range deviceTypes {
+				attempts = append(attempts, smartctlArgs(device, deviceType))
+			}
+			return append(attempts, smartctlArgs(device, ""))
+		}
+	}
+
+	return [][]string{
 		smartctlArgs(device, ""),
 	}
-
-	for _, deviceType := range freeBSDSmartctlDeviceTypes(filepath.Base(device)) {
-		attempts = append(attempts, smartctlArgs(device, deviceType))
-	}
-
-	return attempts
 }
 
 func smartctlArgs(device, deviceType string) []string {
@@ -427,7 +548,7 @@ func smartctlArgs(device, deviceType string) []string {
 	if deviceType != "" {
 		args = append(args, "-d", deviceType)
 	}
-	args = append(args, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
+	args = append(args, "-n", "standby,"+strconv.Itoa(smartctlStandbyExitStatus), "-i", "-A", "-H", "--json=o", device)
 	return args
 }
 
@@ -441,7 +562,7 @@ func freeBSDSmartctlDeviceTypes(device string) []string {
 		return []string{"sat"}
 	case strings.HasPrefix(device, "da"):
 		return []string{"sat,auto", "scsi"}
-	case strings.HasPrefix(device, "nvd"), strings.HasPrefix(device, "nvme"):
+	case strings.HasPrefix(device, "nda"), strings.HasPrefix(device, "nvd"), strings.HasPrefix(device, "nvme"):
 		return []string{"nvme"}
 	default:
 		return nil
@@ -450,6 +571,9 @@ func freeBSDSmartctlDeviceTypes(device string) []string {
 
 func shouldRetryFreeBSDSMART(device string, result *DiskSMART, attemptIndex, attemptCount int) bool {
 	if runtimeGOOS != "freebsd" || attemptIndex >= attemptCount-1 || result == nil {
+		return false
+	}
+	if result.Standby {
 		return false
 	}
 	if result.Temperature > 0 {
@@ -471,6 +595,7 @@ func parseSMARTOutput(output []byte, device string) (*DiskSMART, error) {
 		Type:        detectDiskType(smartData),
 		LastUpdated: timeNow(),
 	}
+	result.Standby = isStandbyPowerMode(smartData.PowerMode)
 
 	if smartData.WWN.NAA != 0 {
 		result.WWN = formatWWN(smartData.WWN.NAA, smartData.WWN.OUI, smartData.WWN.ID)
@@ -501,11 +626,16 @@ func parseSMARTOutput(output []byte, device string) (*DiskSMART, error) {
 	}
 
 	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
-	if result.Health == "" && result.Temperature == 0 && result.Attributes == nil {
+	if result.Health == "" && result.Temperature == 0 && result.Attributes == nil && !result.Standby {
 		return nil, errSMARTDataUnavailable
 	}
 
 	return result, nil
+}
+
+func isStandbyPowerMode(powerMode string) bool {
+	mode := strings.ToLower(strings.TrimSpace(powerMode))
+	return strings.Contains(mode, "standby") || strings.Contains(mode, "sleep")
 }
 
 // parseSMARTAttributes extracts normalized SMART attributes from smartctl JSON output.
