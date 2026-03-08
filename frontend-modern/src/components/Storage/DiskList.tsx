@@ -331,13 +331,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
             <Table class="w-full">
               <TableHeader>
                 <TableRow class="border-b border-border bg-surface-alt text-muted">
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider md:min-w-[220px]">
                     Disk
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider w-[72px]">
                     Source
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider md:min-w-[120px]">
                     Host
                   </TableHead>
                   <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
@@ -346,13 +346,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   <TableHead class="hidden xl:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Belongs To
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider md:min-w-[160px]">
                     Health
                   </TableHead>
                   <TableHead class="hidden md:table-cell px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
                     Wear / Temp
                   </TableHead>
-                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">
+                  <TableHead class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider w-[96px]">
                     Size
                   </TableHead>
                   <TableHead class="px-1.5 py-1 w-10" />
@@ -373,7 +373,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           }`}
                           onClick={() => handleRowClick(disk)}
                         >
-                          <TableCell class="px-2 py-1 align-middle text-xs">
+                          <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[220px]">
                             <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
                               <span class="truncate text-[12px] font-semibold text-base-content">
                                 {data.model || 'Unknown Disk'}
@@ -395,7 +395,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </div>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs">
+                          <TableCell class="px-2 py-1 align-middle text-xs w-[72px]">
                             <span
                               class={`inline-block text-[11px] font-semibold tracking-wide ${platformTextClass(disk)}`}
                             >
@@ -403,7 +403,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs">
+                          <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[120px]">
                             <span
                               class="block truncate text-[11px] text-base-content"
                               title={data.node || disk.parentName || 'Unknown Host'}
@@ -430,7 +430,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs">
+                          <TableCell class="px-2 py-1 align-middle text-xs md:min-w-[160px]">
                             <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
                               <span
                                 class={`shrink-0 text-[11px] font-semibold ${status.tone}`}
@@ -460,7 +460,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </div>
                           </TableCell>
 
-                          <TableCell class="px-2 py-1 align-middle text-xs whitespace-nowrap">
+                          <TableCell class="px-2 py-1 align-middle text-xs whitespace-nowrap w-[96px]">
                             <span class="text-[11px] text-base-content">{formatBytes(data.size)}</span>
                           </TableCell>
 
