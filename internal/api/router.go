@@ -5848,9 +5848,21 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	currentTime := time.Now().Unix() * 1000
 	oldestTimestamp := currentTime
 
-	// Nodes - cpu/memory/disk/netin/netout
+	// Process Nodes - batch-load historical data (1-2 SQL calls instead of N×5).
+	nodeMetricTypes := []string{"cpu", "memory", "disk", "netin", "netout"}
 	nodeData := make(map[string]NodeChartData)
-	for _, node := range readState.Nodes() {
+	nodeList := readState.Nodes()
+	nodeIDs := make([]string, 0, len(nodeList))
+	for _, node := range nodeList {
+		if node == nil {
+			continue
+		}
+		if nid := node.SourceID(); nid != "" {
+			nodeIDs = append(nodeIDs, nid)
+		}
+	}
+	nodeBatchMetrics := monitor.GetNodeMetricsForChartBatch(nodeIDs, nodeMetricTypes, duration)
+	for _, node := range nodeList {
 		if node == nil {
 			continue
 		}
@@ -5858,19 +5870,27 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		if nid == "" {
 			continue
 		}
-		if nodeData[nid] == nil {
-			nodeData[nid] = make(NodeChartData)
-		}
-		for _, metricType := range []string{"cpu", "memory", "disk", "netin", "netout"} {
-			points := monitor.GetNodeMetricsForChart(nid, metricType, duration)
-			nodeData[nid][metricType] = make([]MetricPoint, len(points))
-			for i, point := range points {
-				ts := point.Timestamp.Unix() * 1000
-				if ts < oldestTimestamp {
-					oldestTimestamp = ts
+		nodeData[nid] = make(NodeChartData)
+		if batchMetrics, ok := nodeBatchMetrics[nid]; ok {
+			for _, metricType := range nodeMetricTypes {
+				points, found := batchMetrics[metricType]
+				if !found {
+					continue
 				}
-				nodeData[nid][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+				nodeData[nid][metricType] = make([]MetricPoint, len(points))
+				for i, point := range points {
+					ts := point.Timestamp.Unix() * 1000
+					if ts < oldestTimestamp {
+						oldestTimestamp = ts
+					}
+					nodeData[nid][metricType][i] = MetricPoint{
+						Timestamp: ts,
+						Value:     point.Value,
+					}
+				}
 			}
+		}
+		for _, metricType := range nodeMetricTypes {
 			if len(nodeData[nid][metricType]) == 0 {
 				var value float64
 				hasFallbackValue := true
@@ -5885,15 +5905,31 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 					hasFallbackValue = false
 				}
 				if hasFallbackValue {
-					nodeData[nid][metricType] = []MetricPoint{{Timestamp: currentTime, Value: value}}
+					nodeData[nid][metricType] = []MetricPoint{
+						{Timestamp: currentTime, Value: value},
+					}
 				}
 			}
 		}
 	}
 
-	// Docker hosts - cpu/memory/disk
+	// Process Docker hosts - batch-load historical data (1-2 SQL calls instead of N).
 	dockerHostData := make(map[string]VMChartData)
-	for _, dh := range readState.DockerHosts() {
+	dhList := readState.DockerHosts()
+	dhRequests := make([]monitoring.GuestChartRequest, 0, len(dhList))
+	for _, dh := range dhList {
+		if dh == nil {
+			continue
+		}
+		if dhID := dh.HostSourceID(); dhID != "" {
+			dhRequests = append(dhRequests, monitoring.GuestChartRequest{
+				InMemoryKey:   fmt.Sprintf("dockerHost:%s", dhID),
+				SQLResourceID: dhID,
+			})
+		}
+	}
+	dhBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerHost", dhRequests, duration)
+	for _, dh := range dhList {
 		if dh == nil {
 			continue
 		}
@@ -5901,22 +5937,23 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		if dhID == "" {
 			continue
 		}
-		if dockerHostData[dhID] == nil {
-			dockerHostData[dhID] = make(VMChartData)
-		}
-		metricKey := fmt.Sprintf("dockerHost:%s", dhID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerHost", dhID, duration)
-		for metricType, points := range metrics {
-			if !sparklineMetrics[metricType] {
-				continue
-			}
-			dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
-			for i, point := range points {
-				ts := point.Timestamp.Unix() * 1000
-				if ts < oldestTimestamp {
-					oldestTimestamp = ts
+		dockerHostData[dhID] = make(VMChartData)
+		if batchMetrics, ok := dhBatchMetrics[dhID]; ok {
+			for metricType, points := range batchMetrics {
+				if !sparklineMetrics[metricType] {
+					continue
 				}
-				dockerHostData[dhID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+				dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
+				for i, point := range points {
+					ts := point.Timestamp.Unix() * 1000
+					if ts < oldestTimestamp {
+						oldestTimestamp = ts
+					}
+					dockerHostData[dhID][metricType][i] = MetricPoint{
+						Timestamp: ts,
+						Value:     point.Value,
+					}
+				}
 			}
 		}
 		if len(dockerHostData[dhID]["cpu"]) == 0 {
@@ -5930,9 +5967,23 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	// Unified agents - cpu/memory/disk.
+	// Process unified agents - batch-load historical data (1-2 SQL calls instead of N).
 	agentData := make(map[string]VMChartData)
-	for _, h := range readState.Hosts() {
+	hostList := readState.Hosts()
+	agentRequests := make([]monitoring.GuestChartRequest, 0, len(hostList))
+	for _, h := range hostList {
+		if h == nil {
+			continue
+		}
+		if hID := h.AgentID(); hID != "" {
+			agentRequests = append(agentRequests, monitoring.GuestChartRequest{
+				InMemoryKey:   fmt.Sprintf("agent:%s", hID),
+				SQLResourceID: hID,
+			})
+		}
+	}
+	agentBatchMetrics := monitor.GetGuestMetricsForChartBatch("agent", agentRequests, duration)
+	for _, h := range hostList {
 		if h == nil {
 			continue
 		}
@@ -5940,22 +5991,23 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		if hID == "" {
 			continue
 		}
-		if agentData[hID] == nil {
-			agentData[hID] = make(VMChartData)
-		}
-		metricKey := fmt.Sprintf("agent:%s", hID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "agent", hID, duration)
-		for metricType, points := range metrics {
-			if !sparklineMetrics[metricType] {
-				continue
-			}
-			agentData[hID][metricType] = make([]MetricPoint, len(points))
-			for i, point := range points {
-				ts := point.Timestamp.Unix() * 1000
-				if ts < oldestTimestamp {
-					oldestTimestamp = ts
+		agentData[hID] = make(VMChartData)
+		if batchMetrics, ok := agentBatchMetrics[hID]; ok {
+			for metricType, points := range batchMetrics {
+				if !sparklineMetrics[metricType] {
+					continue
 				}
-				agentData[hID][metricType][i] = MetricPoint{Timestamp: ts, Value: point.Value}
+				agentData[hID][metricType] = make([]MetricPoint, len(points))
+				for i, point := range points {
+					ts := point.Timestamp.Unix() * 1000
+					if ts < oldestTimestamp {
+						oldestTimestamp = ts
+					}
+					agentData[hID][metricType][i] = MetricPoint{
+						Timestamp: ts,
+						Value:     point.Value,
+					}
+				}
 			}
 		}
 		if len(agentData[hID]["cpu"]) == 0 {
