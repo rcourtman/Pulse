@@ -48,4 +48,17 @@ describe('TokenRevealDialog', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByText(/API token ready/i)).toBeNull();
   });
+
+  it('renders canonical source badges for known platform aliases', async () => {
+    render(() => <TokenRevealDialog />);
+
+    showTokenReveal({
+      token: 'pbs-token',
+      record: mockRecord,
+      source: 'pbs',
+    });
+
+    const badge = await screen.findByText('PBS');
+    expect(badge.className).toContain('bg-indigo-100');
+  });
 });

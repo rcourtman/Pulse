@@ -1,6 +1,7 @@
 import type { EmailConfig } from '@/api/notifications';
 import type { Resource, ResourceType } from '@/types/resource';
 import type { RawOverrideConfig, HysteresisThreshold } from '@/types/alerts';
+import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import {
   MAX_ALERTS_MIN,
   MAX_ALERTS_MAX,
@@ -217,30 +218,7 @@ export const DEFAULT_DELAY_SECONDS = 5;
  * Exported for testing.
  */
 export function unifiedTypeToAlertDisplayType(type: ResourceType): string {
-  switch (type) {
-    case 'vm':
-      return 'VM';
-    case 'system-container':
-    case 'oci-container':
-      return 'Container';
-    case 'app-container':
-      return 'Container';
-    case 'agent':
-      return 'Agent';
-    case 'docker-host':
-      return 'Container Runtime';
-    case 'storage':
-    case 'datastore':
-      return 'Storage';
-    case 'pbs':
-      return 'PBS';
-    case 'pmg':
-      return 'PMG';
-    case 'k8s-cluster':
-      return 'K8s';
-    default:
-      return type;
-  }
+  return getResourceTypeLabel(type) || type;
 }
 
 /**

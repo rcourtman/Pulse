@@ -2,9 +2,9 @@ import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import type { Alert } from '@/types/api';
 import { formatAlertValue } from '@/utils/alertFormatters';
+import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 import { getUpgradeActionUrlOrFallback } from '@/stores/license';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
 interface InvestigateAlertButtonProps {
   alert: Alert;
@@ -24,109 +24,6 @@ interface InvestigateAlertButtonProps {
 export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const [isHovered, setIsHovered] = createSignal(false);
   const isLocked = () => props.licenseLocked === true;
-  const canonicalTargetType = (raw?: string): string | undefined => {
-    const normalized = (raw || '').trim().toLowerCase();
-    if (normalized === 'k8s' || normalized === 'kubernetes') {
-      return undefined;
-    }
-    if (normalized === 'docker-container' || normalized === 'docker-service') {
-      return 'app-container';
-    }
-    return canonicalizeFrontendResourceType(raw);
-  };
-
-  const inferTargetTypeFromResourceID = (resourceID?: string): string | undefined => {
-    const normalized = (resourceID || '').trim().toLowerCase();
-    if (!normalized) {
-      return undefined;
-    }
-
-    if (
-      normalized.startsWith('vm-') ||
-      normalized.startsWith('qemu-') ||
-      normalized.includes('/qemu/')
-    ) {
-      return 'vm';
-    }
-    if (
-      normalized.startsWith('ct-') ||
-      normalized.startsWith('lxc-') ||
-      normalized.includes('/lxc/')
-    ) {
-      return 'system-container';
-    }
-    if (
-      normalized.startsWith('docker:') ||
-      normalized.startsWith('app-container:') ||
-      normalized.includes('/container:')
-    ) {
-      return 'app-container';
-    }
-    if (normalized.startsWith('node:')) {
-      return 'agent';
-    }
-    if (normalized.startsWith('storage:')) {
-      return 'storage';
-    }
-    if (normalized.startsWith('disk:')) {
-      return 'disk';
-    }
-    if (normalized.startsWith('pbs:')) {
-      return 'pbs';
-    }
-    if (normalized.startsWith('pmg:')) {
-      return 'pmg';
-    }
-    if (
-      normalized.startsWith('k8s-') ||
-      normalized.startsWith('pod:') ||
-      normalized.includes(':pod:')
-    ) {
-      return 'pod';
-    }
-
-    return undefined;
-  };
-
-  const resolveTargetType = (): string => {
-    const metadataType =
-      typeof props.alert.metadata?.resourceType === 'string'
-        ? (props.alert.metadata.resourceType as string)
-        : undefined;
-
-    const fromExplicitType = canonicalTargetType(props.resourceType);
-    if (fromExplicitType) {
-      return fromExplicitType;
-    }
-
-    const fromMetadataType = canonicalTargetType(metadataType);
-    if (fromMetadataType) {
-      return fromMetadataType;
-    }
-
-    const fromResourceID = inferTargetTypeFromResourceID(props.alert.resourceId);
-    if (fromResourceID) {
-      return fromResourceID;
-    }
-
-    return 'agent';
-  };
-
-  const resolveTargetTypeForAlert = (): string => {
-    const baseType = resolveTargetType();
-    if (props.alert.type.startsWith('node_')) {
-      return 'agent';
-    }
-    if (props.alert.type.startsWith('docker_')) {
-      return 'app-container';
-    }
-    if (props.alert.type.startsWith('storage_')) {
-      return 'storage';
-    }
-
-    return baseType;
-  };
-
   // Don't render if AI is not enabled
   if (aiChatStore.enabled !== true) {
     return null;
@@ -167,7 +64,15 @@ Please:
 3. Suggest specific remediation steps
 4. Execute diagnostic commands if safe`;
 
-    const targetType = resolveTargetTypeForAlert();
+    const targetType = resolveAlertTargetType({
+      alertType: props.alert.type,
+      resourceType: props.resourceType,
+      metadataResourceType:
+        typeof props.alert.metadata?.resourceType === 'string'
+          ? (props.alert.metadata.resourceType as string)
+          : undefined,
+      resourceId: props.alert.resourceId,
+    });
 
     // Open AI chat with this context and prompt
     aiChatStore.openWithPrompt(prompt, {

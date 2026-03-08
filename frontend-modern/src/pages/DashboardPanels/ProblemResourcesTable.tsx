@@ -17,6 +17,7 @@ import {
   buildWorkloadsPath,
   buildStoragePath,
 } from '@/routing/resourceLinks';
+import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 
 interface ProblemResourcesTableProps {
@@ -36,22 +37,6 @@ function resourceLink(pr: ProblemResource): string {
     return buildStoragePath();
   }
   return buildWorkloadsPath({ resource: pr.resource.id });
-}
-
-function formatType(type: string): string {
-  const labels: Record<string, string> = {
-    agent: 'Agent',
-    'docker-host': 'Container Runtime',
-    'k8s-cluster': 'K8s Cluster',
-    'k8s-node': 'K8s Node',
-    vm: 'VM',
-    'system-container': 'Container',
-    'app-container': 'Container',
-    pod: 'Pod',
-    storage: 'Storage',
-    truenas: 'TrueNAS',
-  };
-  return labels[type] || type;
 }
 
 export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
@@ -97,7 +82,9 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
                     </a>
                   </TableCell>
                   <TableCell class="hidden sm:table-cell">
-                    <span class="text-xs text-muted">{formatType(pr.resource.type)}</span>
+                    <span class="text-xs text-muted">
+                      {getResourceTypeLabel(pr.resource.type) || pr.resource.type}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <div class="flex items-center gap-1.5 flex-wrap">

@@ -174,6 +174,73 @@ export function toMetricsHistoryAPIResourceType(
   }
 }
 
+export function asMetricsHistoryResourceType(type: string): ResourceType | null {
+  const normalizedType = type.trim().toLowerCase();
+  const historyTypes: ResourceType[] = [
+    'agent',
+    'vm',
+    'system-container',
+    'oci-container',
+    'app-container',
+    'storage',
+    'docker-host',
+    'k8s-cluster',
+    'k8s-node',
+    'pod',
+    'disk',
+  ];
+  return historyTypes.includes(normalizedType as ResourceType)
+    ? (normalizedType as ResourceType)
+    : null;
+}
+
+export function mapUnifiedTypeToHistoryResourceType(type: string): ResourceType | null {
+  switch (type) {
+    case 'agent':
+      return 'agent';
+    case 'docker-host':
+      return 'docker-host';
+    case 'k8s-node':
+      return 'k8s-node';
+    case 'k8s-cluster':
+      return 'k8s-cluster';
+    case 'truenas':
+      return 'agent';
+    case 'vm':
+      return 'vm';
+    case 'system-container':
+      return 'system-container';
+    case 'oci-container':
+      return 'oci-container';
+    case 'app-container':
+      return 'app-container';
+    case 'pod':
+      return 'pod';
+    default:
+      return null;
+  }
+}
+
+export function canonicalizeMetricsHistoryTargetType(
+  metricsType: string,
+  unifiedType?: string,
+): ResourceType | null {
+  const normalized = metricsType.trim().toLowerCase();
+  if (normalized === 'k8s') {
+    switch (unifiedType) {
+      case 'k8s-cluster':
+        return 'k8s-cluster';
+      case 'k8s-node':
+        return 'k8s-node';
+      case 'pod':
+        return 'pod';
+      default:
+        return null;
+    }
+  }
+  return asMetricsHistoryResourceType(normalized);
+}
+
 export interface SingleMetricHistoryResponse {
   resourceType: string;
   resourceId: string;

@@ -281,7 +281,7 @@ describe('unifiedTypeToAlertDisplayType', () => {
   });
 
   it('maps app-container to Container', () => {
-    expect(unifiedTypeToAlertDisplayType('app-container')).toBe('Container');
+    expect(unifiedTypeToAlertDisplayType('app-container')).toBe('App Container');
   });
 
   it('maps agent to Agent', () => {
@@ -292,9 +292,9 @@ describe('unifiedTypeToAlertDisplayType', () => {
     expect(unifiedTypeToAlertDisplayType('docker-host')).toBe('Container Runtime');
   });
 
-  it('maps storage and datastore to Storage', () => {
+  it('maps storage and datastore to canonical labels', () => {
     expect(unifiedTypeToAlertDisplayType('storage')).toBe('Storage');
-    expect(unifiedTypeToAlertDisplayType('datastore')).toBe('Storage');
+    expect(unifiedTypeToAlertDisplayType('datastore')).toBe('Datastore');
   });
 
   it('maps pbs to PBS', () => {
@@ -305,8 +305,8 @@ describe('unifiedTypeToAlertDisplayType', () => {
     expect(unifiedTypeToAlertDisplayType('pmg')).toBe('PMG');
   });
 
-  it('maps k8s-cluster to K8s', () => {
-    expect(unifiedTypeToAlertDisplayType('k8s-cluster')).toBe('K8s');
+  it('maps k8s-cluster to K8s Cluster', () => {
+    expect(unifiedTypeToAlertDisplayType('k8s-cluster')).toBe('K8s Cluster');
   });
 
   it('passes through unknown types', () => {
@@ -319,22 +319,22 @@ describe('Unified selector parity', () => {
     const cases: Array<[ResourceType, string]> = [
       ['agent', 'Agent'],
       ['docker-host', 'Container Runtime'],
-      ['k8s-cluster', 'K8s'],
-      ['k8s-node', 'k8s-node'],
-      ['truenas', 'truenas'],
+      ['k8s-cluster', 'K8s Cluster'],
+      ['k8s-node', 'K8s Node'],
+      ['truenas', 'TrueNAS'],
       ['vm', 'VM'],
       ['system-container', 'Container'],
       ['oci-container', 'Container'],
-      ['app-container', 'Container'],
-      ['pod', 'pod'],
-      ['jail', 'jail'],
-      ['docker-service', 'docker-service'],
-      ['k8s-deployment', 'k8s-deployment'],
-      ['k8s-service', 'k8s-service'],
+      ['app-container', 'App Container'],
+      ['pod', 'Pod'],
+      ['jail', 'Jail'],
+      ['docker-service', 'Docker Service'],
+      ['k8s-deployment', 'K8s Deployment'],
+      ['k8s-service', 'K8s Service'],
       ['storage', 'Storage'],
-      ['datastore', 'Storage'],
-      ['pool', 'pool'],
-      ['dataset', 'dataset'],
+      ['datastore', 'Datastore'],
+      ['pool', 'Pool'],
+      ['dataset', 'Dataset'],
       ['pbs', 'PBS'],
       ['pmg', 'PMG'],
     ];

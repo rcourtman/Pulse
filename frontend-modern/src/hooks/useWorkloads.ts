@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
+import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
 import { normalizeDiskArray } from '@/utils/format';
 import { resolveWorkloadTypeFromString } from '@/utils/workloads';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -231,17 +232,6 @@ const normalizeWorkloadStatus = (status?: string | null): string => {
 
 const resolveWorkloadType = resolveWorkloadTypeFromString;
 
-const resolvePlatformType = (sources?: string[]): string | undefined => {
-  const set = new Set((sources || []).map((source) => source.toLowerCase()));
-  if (set.has('proxmox')) return 'proxmox-pve';
-  if (set.has('pbs')) return 'proxmox-pbs';
-  if (set.has('pmg')) return 'proxmox-pmg';
-  if (set.has('docker')) return 'docker';
-  if (set.has('kubernetes')) return 'kubernetes';
-  if (set.has('agent')) return 'agent';
-  return undefined;
-};
-
 const buildMetric = (metric?: APIMetricValue) => {
   const total = metric?.total ?? 0;
   const used = metric?.used ?? 0;
@@ -437,7 +427,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
     dockerHostId: resource.docker?.hostSourceId,
     kubernetesAgentId: workloadType === 'pod' ? resource.kubernetes?.agentId : undefined,
-    platformType: resolvePlatformType(resource.sources),
+    platformType: resolvePlatformTypeFromSources(resource.sources),
   };
 };
 

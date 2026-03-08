@@ -4,7 +4,13 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
 }));
 
-import { ChartsAPI, toMetricsHistoryAPIResourceType } from '@/api/charts';
+import {
+  asMetricsHistoryResourceType,
+  canonicalizeMetricsHistoryTargetType,
+  ChartsAPI,
+  mapUnifiedTypeToHistoryResourceType,
+  toMetricsHistoryAPIResourceType,
+} from '@/api/charts';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 describe('ChartsAPI', () => {
@@ -105,5 +111,20 @@ describe('ChartsAPI', () => {
     expect(toMetricsHistoryAPIResourceType('k8s-cluster')).toBe('k8s');
     expect(toMetricsHistoryAPIResourceType('k8s-node')).toBe('k8s');
     expect(toMetricsHistoryAPIResourceType('pod')).toBe('k8s');
+  });
+
+  it('exposes shared metrics history resource type helpers', () => {
+    expect(asMetricsHistoryResourceType('agent')).toBe('agent');
+    expect(asMetricsHistoryResourceType('disk')).toBe('disk');
+    expect(asMetricsHistoryResourceType('host')).toBeNull();
+
+    expect(mapUnifiedTypeToHistoryResourceType('truenas')).toBe('agent');
+    expect(mapUnifiedTypeToHistoryResourceType('pod')).toBe('pod');
+    expect(mapUnifiedTypeToHistoryResourceType('container')).toBeNull();
+
+    expect(canonicalizeMetricsHistoryTargetType('k8s', 'k8s-node')).toBe('k8s-node');
+    expect(canonicalizeMetricsHistoryTargetType('k8s', 'pod')).toBe('pod');
+    expect(canonicalizeMetricsHistoryTargetType('k8s', 'agent')).toBeNull();
+    expect(canonicalizeMetricsHistoryTargetType('agent', 'agent')).toBe('agent');
   });
 });

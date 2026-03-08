@@ -1,9 +1,12 @@
 import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import {
+  asMetricsHistoryResourceType,
+  canonicalizeMetricsHistoryTargetType,
   ChartsAPI as ChartService,
   type AggregatedMetricPoint,
   type HistoryTimeRange,
   type ResourceType as HistoryResourceType,
+  mapUnifiedTypeToHistoryResourceType,
 } from '@/api/charts';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import {
@@ -104,47 +107,6 @@ function dedupeValues(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
-function asHistoryResourceType(type: string): HistoryResourceType | null {
-  const normalizedType = type.trim().toLowerCase();
-  const historyTypes: HistoryResourceType[] = [
-    'agent',
-    'vm',
-    'system-container',
-    'oci-container',
-    'app-container',
-    'storage',
-    'docker-host',
-    'k8s-cluster',
-    'k8s-node',
-    'pod',
-    'agent',
-    'disk',
-  ];
-  return historyTypes.includes(normalizedType as HistoryResourceType)
-    ? (normalizedType as HistoryResourceType)
-    : null;
-}
-
-function canonicalizeMetricsHistoryTargetType(
-  metricsType: string,
-  unifiedType?: UnifiedResourceType,
-): HistoryResourceType | null {
-  const normalized = metricsType.trim().toLowerCase();
-  if (normalized === 'k8s') {
-    switch (unifiedType) {
-      case 'k8s-cluster':
-        return 'k8s-cluster';
-      case 'k8s-node':
-        return 'k8s-node';
-      case 'pod':
-        return 'pod';
-      default:
-        return null;
-    }
-  }
-  return asHistoryResourceType(normalized);
-}
-
 function buildHistoryTargets(
   ids: string[],
   unifiedTypeById: Map<string, UnifiedResourceType>,
@@ -165,9 +127,9 @@ function buildHistoryTargets(
     }
     // Fallback: derive from unified type
     if (!unifiedType) continue;
-    const mappedType = mapUnifiedTypeToHistoryType(unifiedType);
+    const mappedType = mapUnifiedTypeToHistoryResourceType(unifiedType);
     if (!mappedType) continue;
-    const historyType = asHistoryResourceType(mappedType);
+    const historyType = asMetricsHistoryResourceType(mappedType);
     if (!historyType) continue;
     targets.push({ id, resourceType: historyType, originalId: id });
   }
@@ -233,33 +195,6 @@ export function computeTrendDelta(points: TrendPoint[]): number | null {
 
   const delta = ((lastAverage - firstAverage) / firstAverage) * 100;
   return Number.isFinite(delta) ? delta : null;
-}
-
-export function mapUnifiedTypeToHistoryType(type: string): string | null {
-  switch (type) {
-    case 'agent':
-      return 'agent';
-    case 'docker-host':
-      return 'docker-host';
-    case 'k8s-node':
-      return 'k8s-node';
-    case 'k8s-cluster':
-      return 'k8s-cluster';
-    case 'truenas':
-      return 'agent';
-    case 'vm':
-      return 'vm';
-    case 'system-container':
-      return 'system-container';
-    case 'oci-container':
-      return 'oci-container';
-    case 'app-container':
-      return 'app-container';
-    case 'pod':
-      return 'pod';
-    default:
-      return null;
-  }
 }
 
 export function extractTrendData(points: Array<{ timestamp: number; value: number }>): TrendData {

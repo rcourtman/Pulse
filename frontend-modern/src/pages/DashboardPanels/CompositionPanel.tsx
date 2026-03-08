@@ -6,6 +6,7 @@ import AppWindow from 'lucide-solid/icons/app-window';
 import Database from 'lucide-solid/icons/database';
 import Box from 'lucide-solid/icons/box';
 import Container from 'lucide-solid/icons/container';
+import { getDashboardCompositionLabel } from '@/utils/dashboardCompositionPresentation';
 
 interface CompositionPanelProps {
   infrastructureByType: Record<string, number>;
@@ -21,14 +22,6 @@ const TYPE_ICONS: Record<string, any> = {
   unknown: Server,
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  vm: 'Virtual Machines',
-  'system-container': 'System Containers',
-  'app-container': 'App Containers',
-  pod: 'Kubernetes Pods',
-  database: 'Databases',
-};
-
 function DistributionItem(props: { type: string; count: number; total: number }) {
   const percent = () => Math.round((props.count / props.total) * 100);
   const Icon = () => TYPE_ICONS[props.type] ?? Server;
@@ -38,7 +31,7 @@ function DistributionItem(props: { type: string; count: number; total: number })
       <div class="flex items-center justify-between text-xs">
         <div class="flex items-center gap-2 text-base-content">
           <Dynamic component={Icon()} class="w-3.5 h-3.5 text-muted" />
-          <span class="font-medium">{TYPE_LABELS[props.type] ?? props.type}</span>
+          <span class="font-medium">{getDashboardCompositionLabel(props.type)}</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span class="font-bold text-base-content">{props.count}</span>

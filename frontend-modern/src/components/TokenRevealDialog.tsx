@@ -2,18 +2,11 @@ import { Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import type { Component } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { copyToClipboard } from '@/utils/clipboard';
 import { showError, showSuccess } from '@/utils/toast';
 import { useTokenRevealState, dismissTokenReveal } from '@/stores/tokenReveal';
-
-const formatSourceLabel = (value?: string) => {
-  if (!value) return '';
-  return value
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
-};
 
 export const TokenRevealDialog: Component = () => {
   const state = useTokenRevealState();
@@ -56,7 +49,8 @@ export const TokenRevealDialog: Component = () => {
     <Show when={state()}>
       {(tokenInfo) => {
         const info = tokenInfo();
-        const sourceLabel = formatSourceLabel(info.source);
+        const sourceBadge = getSourcePlatformBadge(info.source);
+        const sourceLabel = sourceBadge?.label || getSourcePlatformLabel(info.source);
         const recordName = info.record?.name?.trim() || 'Untitled token';
         const hint =
           info.note ||
@@ -103,7 +97,12 @@ export const TokenRevealDialog: Component = () => {
                     <div class="flex flex-wrap items-center gap-2">
                       <h2 class="text-lg font-semibold text-base-content">API token ready</h2>
                       <Show when={sourceLabel}>
-                        <span class="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
+                        <span
+                          class={
+                            sourceBadge?.classes ||
+                            'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'
+                          }
+                        >
                           {sourceLabel}
                         </span>
                       </Show>

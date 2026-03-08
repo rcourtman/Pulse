@@ -1,4 +1,6 @@
-import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
+import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { normalizeStorageSourceKey } from '@/utils/storageSources';
+import { canonicalizeWorkloadFilterType } from '@/utils/workloads';
 
 export const WORKLOADS_QUERY_PARAMS = {
   type: 'type',
@@ -54,10 +56,8 @@ export const RECOVERY_QUERY_PARAMS = {
 
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
 
-const normalizeWorkloadsType = (value: string | null | undefined): string => {
-  const normalized = normalizeQueryValue(value).toLowerCase();
-  return canonicalizeFrontendResourceType(normalized) || normalized;
-};
+const normalizeWorkloadsType = (value: string | null | undefined): string =>
+  canonicalizeWorkloadFilterType(normalizeQueryValue(value));
 
 type WorkloadsLinkOptions = {
   type?: string | null;
@@ -133,7 +133,7 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
 export const parseInfrastructureLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
   return {
-    source: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.source)),
+    source: normalizeSourcePlatformQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.source)),
     query: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.query)),
     resource: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.resource)),
   };
@@ -141,7 +141,7 @@ export const parseInfrastructureLinkSearch = (search: string) => {
 
 export const buildInfrastructurePath = (options: InfrastructureLinkOptions = {}): string => {
   const params = new URLSearchParams();
-  const source = normalizeQueryValue(options.source);
+  const source = normalizeSourcePlatformQueryValue(options.source);
   const query = normalizeQueryValue(options.query);
   const resource = normalizeQueryValue(options.resource);
   if (source) params.set(INFRASTRUCTURE_QUERY_PARAMS.source, source);
@@ -156,7 +156,7 @@ export const parseStorageLinkSearch = (search: string) => {
   return {
     tab: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.tab)),
     group: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.group)),
-    source: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.source)),
+    source: normalizeStorageSourceKey(params.get(STORAGE_QUERY_PARAMS.source)),
     status: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.status)),
     node: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.node)),
     query: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.query)),
@@ -170,7 +170,7 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const tab = normalizeQueryValue(options.tab);
   const group = normalizeQueryValue(options.group);
-  const source = normalizeQueryValue(options.source);
+  const source = normalizeStorageSourceKey(options.source);
   const status = normalizeQueryValue(options.status);
   const node = normalizeQueryValue(options.node);
   const query = normalizeQueryValue(options.query);
@@ -198,7 +198,7 @@ export const parseRecoveryLinkSearch = (search: string) => {
   return {
     view: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.view)),
     rollupId: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.rollupId)),
-    provider: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.provider)),
+    provider: normalizeSourcePlatformQueryValue(params.get(RECOVERY_QUERY_PARAMS.provider)),
     cluster: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.cluster)),
     namespace: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.namespace)),
     mode: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.mode)),
@@ -214,7 +214,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const params = new URLSearchParams();
   const view = normalizeQueryValue(options.view);
   const rollupId = normalizeQueryValue(options.rollupId);
-  const provider = normalizeQueryValue(options.provider);
+  const provider = normalizeSourcePlatformQueryValue(options.provider);
   const cluster = normalizeQueryValue(options.cluster);
   const namespace = normalizeQueryValue(options.namespace);
   const mode = normalizeQueryValue(options.mode);

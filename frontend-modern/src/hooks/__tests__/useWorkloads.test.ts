@@ -130,6 +130,35 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('normalizes workload source aliases into canonical platform types', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        { ...sampleResource, id: 'vm-pve', sources: ['PROXMOX'] },
+        { ...sampleResource, id: 'vm-pbs', sources: ['pbs'], name: 'vm-pbs' },
+        { ...sampleResource, id: 'vm-pmg', sources: ['pmg'], name: 'vm-pmg' },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 3);
+
+    const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
+    expect(byName.get('vm-101')?.platformType).toBe('proxmox-pve');
+    expect(byName.get('vm-pbs')?.platformType).toBe('proxmox-pbs');
+    expect(byName.get('vm-pmg')?.platformType).toBe('proxmox-pmg');
+
+    dispose();
+  });
+
   it('keeps workload reference stable when polling returns identical payload', async () => {
     let dispose = () => {};
     let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;

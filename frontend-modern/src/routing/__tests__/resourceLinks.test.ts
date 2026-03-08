@@ -74,6 +74,17 @@ describe('resource link routing contract', () => {
     expect(INFRASTRUCTURE_QUERY_PARAMS.resource).toBe('resource');
   });
 
+  it('canonicalizes infrastructure source aliases when building and parsing links', () => {
+    expect(buildInfrastructurePath({ source: 'proxmox', query: 'pve1' })).toBe(
+      '/infrastructure?source=proxmox-pve&q=pve1',
+    );
+    expect(parseInfrastructureLinkSearch('?source=pbs&q=archive')).toEqual({
+      source: 'proxmox-pbs',
+      query: 'archive',
+      resource: '',
+    });
+  });
+
   it('builds and parses storage query params', () => {
     const href = buildStoragePath({
       tab: 'disks',
@@ -87,14 +98,14 @@ describe('resource link routing contract', () => {
       order: 'desc',
     });
     expect(href).toBe(
-      '/storage?tab=disks&group=storage&source=pbs&status=available&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc',
+      '/storage?tab=disks&group=storage&source=proxmox-pbs&status=available&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc',
     );
 
     const parsed = parseStorageLinkSearch(href.slice('/storage'.length));
     expect(parsed).toEqual({
       tab: 'disks',
       group: 'storage',
-      source: 'pbs',
+      source: 'proxmox-pbs',
       status: 'available',
       node: 'cluster-main-pve1',
       query: 'local-lvm',
@@ -109,6 +120,11 @@ describe('resource link routing contract', () => {
     expect(STORAGE_QUERY_PARAMS.resource).toBe('resource');
     expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');
     expect(STORAGE_QUERY_PARAMS.order).toBe('order');
+  });
+
+  it('canonicalizes legacy storage source aliases when parsing links', () => {
+    expect(parseStorageLinkSearch('?source=pbs')).toMatchObject({ source: 'proxmox-pbs' });
+    expect(parseStorageLinkSearch('?source=proxmox')).toMatchObject({ source: 'proxmox-pve' });
   });
 
   it('builds and parses recovery query params', () => {
@@ -159,5 +175,15 @@ describe('resource link routing contract', () => {
     expect(RECOVERY_QUERY_PARAMS.query).toBe('q');
 
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
+  });
+
+  it('canonicalizes recovery provider aliases when building and parsing links', () => {
+    expect(buildRecoveryPath({ provider: 'pbs', mode: 'remote' })).toBe(
+      '/recovery?provider=proxmox-pbs&mode=remote',
+    );
+    expect(parseRecoveryLinkSearch('?provider=proxmox&mode=local')).toMatchObject({
+      provider: 'proxmox-pve',
+      mode: 'local',
+    });
   });
 });
