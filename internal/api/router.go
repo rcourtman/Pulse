@@ -6911,6 +6911,7 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	}
 
 	duration := time.Duration(rangeMinutes) * time.Minute
+	selectedNodeID := strings.TrimSpace(query.Get("node"))
 
 	// Use tenant-aware monitor
 	monitor := r.getTenantMonitor(req.Context())
@@ -6924,12 +6925,32 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Resolve node filter — look up node name from ID to match pool/disk node fields.
+	var selectedNodeName string
+	if selectedNodeID != "" {
+		for _, n := range monitor.NodesSnapshot() {
+			if n.ID == selectedNodeID {
+				selectedNodeName = n.Name
+				break
+			}
+		}
+	}
+	matchesNode := func(nodeName string) bool {
+		if selectedNodeName == "" {
+			return true
+		}
+		return strings.EqualFold(strings.TrimSpace(nodeName), selectedNodeName)
+	}
+
 	// Build pool chart data — convert monitoring MetricPoints (time.Time) to
 	// API MetricPoints (Unix milliseconds) matching the infrastructure/workloads
 	// chart endpoints.
 	pools := make(map[string]StoragePoolChartData, len(readState.StoragePools()))
 	for _, sp := range readState.StoragePools() {
 		if sp == nil {
+			continue
+		}
+		if !matchesNode(sp.Node()) {
 			continue
 		}
 		sid := sp.SourceID()
@@ -6949,6 +6970,9 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	diskEntries := monitor.GetPhysicalDiskTemperatureCharts(duration)
 	disks := make(map[string]StorageDiskChartData, len(diskEntries))
 	for id, entry := range diskEntries {
+		if !matchesNode(entry.Node) {
+			continue
+		}
 		disks[id] = StorageDiskChartData{
 			Name:        entry.Name,
 			Node:        entry.Node,

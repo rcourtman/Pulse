@@ -326,9 +326,14 @@ export class ChartsAPI {
   static async getStorageSummaryCharts(
     range_: TimeRange = '1h',
     signal?: AbortSignal,
+    options?: { nodeId?: string },
   ): Promise<StorageSummaryChartsResponse> {
     const rangeMinutes = timeRangeToMinutes(range_);
-    const url = `${this.baseUrl}/storage-charts?range=${rangeMinutes}`;
+    const params = new URLSearchParams({ range: String(rangeMinutes) });
+    if (options?.nodeId) {
+      params.set('node', options.nodeId);
+    }
+    const url = `${this.baseUrl}/storage-charts?${params.toString()}`;
     return apiFetchJSON(url, { signal });
   }
 }

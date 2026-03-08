@@ -398,6 +398,7 @@ const Storage: Component = () => {
         diskCount={physicalDisks().length}
         timeRange={summaryTimeRange()}
         onTimeRangeChange={setSummaryTimeRange}
+        nodeId={selectedNodeId()}
       />
 
       <Show

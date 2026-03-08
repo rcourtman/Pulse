@@ -26,8 +26,8 @@ import { eventBus } from '@/stores/events';
 const POLL_INTERVAL_MS = 30_000;
 const inMemoryCache = new Map<string, StorageSummaryChartsResponse>();
 
-function inMemoryCacheKey(range: TimeRange): string {
-  return `${getOrgID() || 'default'}::${range}`;
+function inMemoryCacheKey(range: TimeRange, nodeId?: string): string {
+  return `${getOrgID() || 'default'}::${range}::${nodeId || '__all__'}`;
 }
 
 // Clear in-memory cache on org switch to prevent cross-org data leakage.
@@ -50,6 +50,7 @@ interface StorageSummaryProps {
   diskCount: number;
   timeRange: SummaryTimeRange;
   onTimeRangeChange?: (range: SummaryTimeRange) => void;
+  nodeId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,10 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
   const selectedRange = createMemo<TimeRange>(() => (props.timeRange as TimeRange) || '1h');
+  const selectedNodeId = createMemo(() => {
+    const id = props.nodeId?.trim();
+    return id && id !== 'all' ? id : undefined;
+  });
 
   // Fetch data with race-condition prevention via request ID
   const fetchData = async (options?: { prioritize?: boolean }) => {
@@ -82,14 +87,17 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     }
 
     const requestedRange = selectedRange();
-    // Capture org scope before async gap to prevent cross-org cache writes
-    const capturedCacheKey = inMemoryCacheKey(requestedRange);
+    const requestedNodeId = selectedNodeId();
+    // Capture scope before async gap to prevent cross-org/scope cache writes
+    const capturedCacheKey = inMemoryCacheKey(requestedRange, requestedNodeId);
     const controller = new AbortController();
     const requestId = ++activeFetchRequest;
     activeFetchController = controller;
 
     try {
-      const response = await ChartsAPI.getStorageSummaryCharts(requestedRange, controller.signal);
+      const response = await ChartsAPI.getStorageSummaryCharts(requestedRange, controller.signal, {
+        nodeId: requestedNodeId,
+      });
       if (requestId !== activeFetchRequest) return; // stale response
       inMemoryCache.set(capturedCacheKey, response);
       setData(response);
@@ -111,9 +119,10 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     }
   };
 
-  // Initial load + range/org change
+  // Initial load + range/org/node change
   createEffect(() => {
     const range = selectedRange();
+    const nodeId = selectedNodeId();
     const _org = orgVersion(); // subscribe to org switches
     void _org;
 
@@ -124,7 +133,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     }
 
     // Try cache first for instant display
-    const cached = inMemoryCache.get(inMemoryCacheKey(range));
+    const cached = inMemoryCache.get(inMemoryCacheKey(range, nodeId));
     if (cached) {
       setData(cached);
       setLoaded(true);
