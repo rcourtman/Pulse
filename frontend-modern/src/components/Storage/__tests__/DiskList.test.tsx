@@ -69,7 +69,13 @@ describe('DiskList', () => {
           buildDisk('sda', 'tower', {
             risk: {
               level: 'warning',
-              reasons: [{ code: 'pending-sectors', severity: 'warning', summary: 'Pending sectors detected.' }],
+              reasons: [
+                {
+                  code: 'pending-sectors',
+                  severity: 'warning',
+                  summary: 'Pending sectors detected.',
+                },
+              ],
             },
           }),
         ]}

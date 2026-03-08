@@ -1,6 +1,7 @@
 import { Component, Show, createMemo } from 'solid-js';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import type { Resource } from '@/types/resource';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
 import {
@@ -30,21 +31,6 @@ interface StoragePoolRowProps {
     'data-resource-highlighted': string;
   };
 }
-
-const platformTextClass = (platform: string): string => {
-  switch (platform.trim().toLowerCase()) {
-    case 'pve':
-      return 'text-blue-700 dark:text-blue-300';
-    case 'pbs':
-      return 'text-emerald-700 dark:text-emerald-300';
-    case 'truenas':
-      return 'text-cyan-700 dark:text-cyan-300';
-    case 'unraid':
-      return 'text-orange-700 dark:text-orange-300';
-    default:
-      return 'text-base-content';
-  }
-};
 
 const protectionTextClass = (record: StorageRecord): string => {
   if (record.rebuildInProgress) {
@@ -78,6 +64,9 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   );
   const usagePercent = createMemo(() => getRecordUsagePercent(props.record));
   const platformLabel = createMemo(() => getRecordPlatformLabel(props.record));
+  const platformBadge = createMemo(
+    () => getSourcePlatformBadge(props.record.platformKey || props.record.source.platform) || null,
+  );
   const hostLabel = createMemo(() => getRecordHostLabel(props.record));
   const topologyLabel = createMemo(() => getRecordTopologyLabel(props.record));
   const protectionLabel = createMemo(() => getRecordProtectionLabel(props.record));
@@ -111,6 +100,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const compactIssue = createMemo(() => {
     const label = issueLabel().trim();
     if (label && label.toLowerCase() !== 'healthy') {
+      const protection = compactProtection().trim();
+      if (protection && protection !== '—' && protection.toLowerCase() === label.toLowerCase()) {
+        return '—';
+      }
       return label;
     }
     if (zfsPool() && zfsPool()!.state !== 'ONLINE') {
@@ -156,9 +149,9 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         <td class="px-2 py-1 align-middle text-[11px]">
           <span
-            class={`inline-block font-semibold tracking-wide ${platformTextClass(platformLabel())}`}
+            class={`${platformBadge()?.classes || 'text-base-content'} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
           >
-            {platformLabel()}
+            {platformBadge()?.label || platformLabel()}
           </span>
         </td>
 

@@ -12,6 +12,7 @@ import { formatBytes } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
+import { getSourcePlatformBadge, getSourcePlatformLabel } from '@/components/shared/sourcePlatformBadges';
 import { DiskDetail } from './DiskDetail';
 import { getPhysicalDiskNodeIdentity, matchesPhysicalDiskNode } from './diskResourceUtils';
 
@@ -62,33 +63,7 @@ const titleize = (value: string | undefined | null): string =>
     .join(' ');
 
 const platformLabel = (resource: Resource): string => {
-  switch ((resource.platformType || '').trim().toLowerCase()) {
-    case 'proxmox-pve':
-      return 'PVE';
-    case 'proxmox-pbs':
-      return 'PBS';
-    case 'truenas':
-      return 'TrueNAS';
-    case 'agent':
-      return 'Agent';
-    default:
-      return titleize(resource.platformType) || 'Unknown';
-  }
-};
-
-const platformTextClass = (resource: Resource): string => {
-  switch ((resource.platformType || '').trim().toLowerCase()) {
-    case 'proxmox-pve':
-      return 'text-blue-700 dark:text-blue-300';
-    case 'proxmox-pbs':
-      return 'text-emerald-700 dark:text-emerald-300';
-    case 'truenas':
-      return 'text-cyan-700 dark:text-cyan-300';
-    case 'agent':
-      return 'text-violet-700 dark:text-violet-300';
-    default:
-      return 'text-base-content';
-  }
+  return getSourcePlatformLabel(resource.platformType) || 'Unknown';
 };
 
 function extractDiskData(resource: Resource): PhysicalDiskData {
@@ -384,9 +359,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                           <TableCell class="px-1.5 sm:px-2 py-1 align-middle text-xs w-[72px]">
                             <span
-                              class={`inline-block text-[11px] font-semibold tracking-wide ${platformTextClass(disk)}`}
+                              class={`${getSourcePlatformBadge(disk.platformType)?.classes || 'text-base-content'} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
                             >
-                              {platformLabel(disk)}
+                              {getSourcePlatformBadge(disk.platformType)?.label || platformLabel(disk)}
                             </span>
                           </TableCell>
 
