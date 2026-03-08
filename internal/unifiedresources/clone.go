@@ -184,6 +184,7 @@ func clonePBSData(in *PBSData) *PBSData {
 	}
 	out := *in
 	out.Datastores = clonePBSDatastoreMetaSlice(in.Datastores)
+	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
 	return &out
 }
 

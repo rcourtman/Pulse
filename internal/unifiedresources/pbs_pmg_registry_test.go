@@ -106,6 +106,15 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	if pbsResource.PBS == nil || pbsResource.PBS.DatastoreCount != 1 {
 		t.Fatalf("expected PBS payload with datastore count, got %+v", pbsResource.PBS)
 	}
+	if pbsResource.Status != StatusWarning {
+		t.Fatalf("expected PBS instance warning status from rolled-up datastore risk, got %q", pbsResource.Status)
+	}
+	if pbsResource.PBS.StorageRisk == nil || len(pbsResource.PBS.StorageRisk.Reasons) == 0 {
+		t.Fatalf("expected PBS instance storage risk payload, got %+v", pbsResource.PBS)
+	}
+	if len(pbsResource.Incidents) == 0 || pbsResource.Incidents[0].Code != "capacity_runway_low" {
+		t.Fatalf("expected rolled-up PBS incidents, got %+v", pbsResource.Incidents)
+	}
 	if datastoreResource == nil {
 		t.Fatal("expected PBS datastore storage resource")
 	}

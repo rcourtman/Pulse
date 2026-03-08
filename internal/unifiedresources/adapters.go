@@ -720,14 +720,26 @@ func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIde
 		name = extractHostname(instance.Host)
 	}
 
+	assessments := make([]storagehealth.Assessment, 0, len(instance.Datastores))
+	for _, datastore := range instance.Datastores {
+		assessments = append(assessments, storagehealth.AssessPBSDatastore(datastore))
+	}
+	storageAssessment := storagehealth.SummarizeAssessments(assessments...)
+	storageRisk := storageRiskFromAssessment(storageAssessment)
+	incidents := incidentsFromAssessment("pulse", string(SourcePBS), "pbs-instance:"+name, storageAssessment, instance.LastSeen)
+	status := statusFromPBSInstance(instance)
+	status = storageStatus(status, storageRisk)
+	status = incidentsStatus(status, incidents)
+
 	resource := Resource{
 		Type:      ResourceTypePBS,
 		Name:      name,
-		Status:    statusFromPBSInstance(instance),
+		Status:    status,
 		LastSeen:  instance.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metricsFromPBSInstance(instance),
 		CustomURL: instance.GuestURL,
+		Incidents: incidents,
 		PBS: &PBSData{
 			InstanceID:       instance.ID,
 			Hostname:         extractHostname(instance.Host),
@@ -739,6 +751,7 @@ func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIde
 			VerifyJobCount:   len(instance.VerifyJobs),
 			PruneJobCount:    len(instance.PruneJobs),
 			GarbageJobCount:  len(instance.GarbageJobs),
+			StorageRisk:      storageRisk,
 			ConnectionHealth: instance.ConnectionHealth,
 		},
 	}

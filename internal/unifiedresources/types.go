@@ -699,6 +699,7 @@ type PBSData struct {
 	UptimeSeconds    int64              `json:"uptimeSeconds,omitempty"`
 	DatastoreCount   int                `json:"datastoreCount,omitempty"`
 	Datastores       []PBSDatastoreMeta `json:"datastores,omitempty"`
+	StorageRisk      *StorageRisk       `json:"storageRisk,omitempty"`
 	BackupJobCount   int                `json:"backupJobCount,omitempty"`
 	SyncJobCount     int                `json:"syncJobCount,omitempty"`
 	VerifyJobCount   int                `json:"verifyJobCount,omitempty"`
