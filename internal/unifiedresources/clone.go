@@ -116,8 +116,19 @@ func cloneStorageMeta(in *StorageMeta) *StorageMeta {
 	out := *in
 	out.ContentTypes = cloneStringSlice(in.ContentTypes)
 	out.Nodes = cloneStringSlice(in.Nodes)
+	out.ConsumerTypes = cloneStringSlice(in.ConsumerTypes)
+	out.TopConsumers = cloneStorageConsumerMetaSlice(in.TopConsumers)
 	out.Risk = cloneStorageRisk(in.Risk)
 	return &out
+}
+
+func cloneStorageConsumerMetaSlice(in []StorageConsumerMeta) []StorageConsumerMeta {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]StorageConsumerMeta, len(in))
+	copy(out, in)
+	return out
 }
 
 func cloneAgentData(in *AgentData) *AgentData {

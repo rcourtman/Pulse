@@ -230,6 +230,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 
 	rr.mu.Lock()
 	rr.applyManualLinks()
+	rr.refreshStorageConsumersLocked()
 	rr.buildChildCounts()
 	rr.markStaleLocked(time.Now().UTC(), nil)
 	rr.viewsDirty = true
@@ -253,6 +254,7 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 	}
 
 	rr.mu.Lock()
+	rr.refreshStorageConsumersLocked()
 	rr.buildChildCounts()
 	rr.viewsDirty = true
 	rr.mu.Unlock()

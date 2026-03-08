@@ -630,6 +630,133 @@ func TestResourceRegistry_IngestSnapshotParentsUnraidArrayDisksUnderStorage(t *t
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotDerivesStorageConsumers(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Storage: []models.Storage{
+			{
+				ID:       "cluster-a-pve1-local-lvm",
+				Name:     "local-lvm",
+				Node:     "pve1",
+				Instance: "cluster-a",
+				Type:     "lvmthin",
+				Status:   "available",
+				Enabled:  true,
+				Active:   true,
+			},
+			{
+				ID:       "cluster-a-pve2-local-lvm",
+				Name:     "local-lvm",
+				Node:     "pve2",
+				Instance: "cluster-a",
+				Type:     "lvmthin",
+				Status:   "available",
+				Enabled:  true,
+				Active:   true,
+			},
+			{
+				ID:       "cluster-a-cluster-ceph",
+				Name:     "ceph",
+				Node:     "cluster",
+				Instance: "cluster-a",
+				Type:     "rbd",
+				Status:   "available",
+				Enabled:  true,
+				Active:   true,
+				Shared:   true,
+				Nodes:    []string{"pve1", "pve2"},
+			},
+			{
+				ID:       "cluster-a-pve1-media",
+				Name:     "media",
+				Node:     "pve1",
+				Instance: "cluster-a",
+				Type:     "dir",
+				Status:   "available",
+				Enabled:  true,
+				Active:   true,
+				Path:     "/mnt/pve/media",
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "vm-100",
+				Name:     "app01",
+				Node:     "pve1",
+				Instance: "cluster-a",
+				Status:   "running",
+				LastSeen: now,
+				Disks: []models.Disk{
+					{Device: "local-lvm:vm-100-disk-0"},
+					{Device: "ceph:vm-100-disk-1"},
+				},
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "ct-200",
+				Name:     "media01",
+				Node:     "pve1",
+				Instance: "cluster-a",
+				Status:   "running",
+				LastSeen: now,
+				Disks: []models.Disk{
+					{Device: "/mnt/pve/media/subvol-200-disk-1"},
+					{Device: "local-lvm:vm-200-disk-0"},
+				},
+			},
+		},
+	})
+
+	storageResources := rr.ListByType(ResourceTypeStorage)
+
+	local := findStorageResource(storageResources, "local-lvm", "pve1")
+	if local.Storage == nil {
+		t.Fatalf("expected local-lvm storage metadata, got %+v", local)
+	}
+	if got := local.Storage.ConsumerCount; got != 2 {
+		t.Fatalf("local-lvm consumerCount = %d, want 2", got)
+	}
+	if got := local.Storage.ConsumerTypes; len(got) != 2 || got[0] != "system-container" || got[1] != "vm" {
+		t.Fatalf("local-lvm consumerTypes = %v, want [system-container vm]", got)
+	}
+	if len(local.Storage.TopConsumers) != 2 {
+		t.Fatalf("local-lvm topConsumers length = %d, want 2", len(local.Storage.TopConsumers))
+	}
+	if !hasStorageConsumer(local.Storage.TopConsumers, "app01", ResourceTypeVM, 1) {
+		t.Fatalf("expected vm consumer on local-lvm, got %+v", local.Storage.TopConsumers)
+	}
+	if !hasStorageConsumer(local.Storage.TopConsumers, "media01", ResourceTypeSystemContainer, 1) {
+		t.Fatalf("expected container consumer on local-lvm, got %+v", local.Storage.TopConsumers)
+	}
+
+	ceph := findStorageResource(storageResources, "ceph", "cluster")
+	if ceph.Storage == nil || ceph.Storage.ConsumerCount != 1 {
+		t.Fatalf("ceph consumerCount = %+v, want 1", ceph.Storage)
+	}
+	if !hasStorageConsumer(ceph.Storage.TopConsumers, "app01", ResourceTypeVM, 1) {
+		t.Fatalf("expected vm consumer on ceph, got %+v", ceph.Storage.TopConsumers)
+	}
+
+	media := findStorageResource(storageResources, "media", "pve1")
+	if media.Storage == nil || media.Storage.ConsumerCount != 1 {
+		t.Fatalf("media consumerCount = %+v, want 1", media.Storage)
+	}
+	if !hasStorageConsumer(media.Storage.TopConsumers, "media01", ResourceTypeSystemContainer, 1) {
+		t.Fatalf("expected container consumer on media, got %+v", media.Storage.TopConsumers)
+	}
+
+	otherLocal := findStorageResource(storageResources, "local-lvm", "pve2")
+	if otherLocal.Storage == nil {
+		t.Fatalf("expected second local-lvm storage metadata")
+	}
+	if otherLocal.Storage.ConsumerCount != 0 {
+		t.Fatalf("expected pve2 local-lvm to remain without consumers, got %+v", otherLocal.Storage)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
@@ -678,6 +805,25 @@ func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	if len(disk.PhysicalDisk.Risk.Reasons) == 0 || disk.PhysicalDisk.Risk.Reasons[0].Code != "pending_sectors" {
 		t.Fatalf("expected pending sectors reason, got %+v", disk.PhysicalDisk.Risk.Reasons)
 	}
+}
+
+func hasStorageConsumer(consumers []StorageConsumerMeta, name string, resourceType ResourceType, diskCount int) bool {
+	for _, consumer := range consumers {
+		if consumer.Name == name && consumer.ResourceType == resourceType && consumer.DiskCount == diskCount {
+			return true
+		}
+	}
+	return false
+}
+
+func findStorageResource(resources []Resource, name, node string) Resource {
+	for _, resource := range resources {
+		if resource.Name != name || resource.Proxmox == nil || resource.Proxmox.NodeName != node {
+			continue
+		}
+		return resource
+	}
+	return Resource{}
 }
 
 func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testing.T) {

@@ -1748,6 +1748,112 @@ func TestResourceListIncludesStorageMetadata(t *testing.T) {
 	}
 }
 
+func TestResourceListIncludesStorageConsumerImpact(t *testing.T) {
+	snapshot := models.StateSnapshot{
+		Storage: []models.Storage{
+			{
+				ID:       "cluster-a-pve-1-local-lvm",
+				Name:     "local-lvm",
+				Node:     "pve-1",
+				Instance: "cluster-a",
+				Type:     "lvmthin",
+				Status:   "available",
+				Enabled:  true,
+				Active:   true,
+			},
+			{
+				ID:       "cluster-a-pve-1-media",
+				Name:     "media",
+				Node:     "pve-1",
+				Instance: "cluster-a",
+				Type:     "dir",
+				Status:   "available",
+				Enabled:  true,
+				Active:   true,
+				Path:     "/mnt/pve/media",
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "vm-100",
+				Name:     "app01",
+				Node:     "pve-1",
+				Instance: "cluster-a",
+				Status:   "running",
+				LastSeen: time.Now().UTC(),
+				Disks: []models.Disk{
+					{Device: "local-lvm:vm-100-disk-0"},
+					{Device: "local-lvm:vm-100-disk-1"},
+				},
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "ct-200",
+				Name:     "media01",
+				Node:     "pve-1",
+				Instance: "cluster-a",
+				Status:   "running",
+				LastSeen: time.Now().UTC(),
+				Disks: []models.Disk{
+					{Device: "/mnt/pve/media/subvol-200-disk-1"},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=storage", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 storage resources, got %d", len(resp.Data))
+	}
+
+	local := findAPIResourceByNameAndNode(resp.Data, "local-lvm", "pve-1")
+	if local.Storage == nil {
+		t.Fatalf("expected local-lvm storage payload")
+	}
+	if got := local.Storage.ConsumerCount; got != 1 {
+		t.Fatalf("local-lvm consumerCount = %d, want 1", got)
+	}
+	if got := local.Storage.ConsumerTypes; len(got) != 1 || got[0] != "vm" {
+		t.Fatalf("local-lvm consumerTypes = %v, want [vm]", got)
+	}
+	if len(local.Storage.TopConsumers) != 1 {
+		t.Fatalf("local-lvm topConsumers length = %d, want 1", len(local.Storage.TopConsumers))
+	}
+	if consumer := local.Storage.TopConsumers[0]; consumer.Name != "app01" || consumer.ResourceType != unified.ResourceTypeVM || consumer.DiskCount != 2 {
+		t.Fatalf("unexpected local-lvm top consumer %+v", consumer)
+	}
+
+	media := findAPIResourceByNameAndNode(resp.Data, "media", "pve-1")
+	if media.Storage == nil {
+		t.Fatalf("expected media storage payload")
+	}
+	if got := media.Storage.ConsumerCount; got != 1 {
+		t.Fatalf("media consumerCount = %d, want 1", got)
+	}
+	if len(media.Storage.TopConsumers) != 1 {
+		t.Fatalf("media topConsumers length = %d, want 1", len(media.Storage.TopConsumers))
+	}
+	if consumer := media.Storage.TopConsumers[0]; consumer.Name != "media01" || consumer.ResourceType != unified.ResourceTypeSystemContainer || consumer.DiskCount != 1 {
+		t.Fatalf("unexpected media top consumer %+v", consumer)
+	}
+}
+
 func TestResourceListIncludesHostUnraidStorage(t *testing.T) {
 	snapshot := models.StateSnapshot{
 		Hosts: []models.Host{
@@ -1806,6 +1912,16 @@ func TestResourceListIncludesHostUnraidStorage(t *testing.T) {
 	if resource.Metrics == nil || resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent != 40 {
 		t.Fatalf("expected unraid storage capacity metric, got %+v", resource.Metrics)
 	}
+}
+
+func findAPIResourceByNameAndNode(resources []unified.Resource, name, node string) unified.Resource {
+	for _, resource := range resources {
+		if resource.Name != name || resource.Proxmox == nil || resource.Proxmox.NodeName != node {
+			continue
+		}
+		return resource
+	}
+	return unified.Resource{}
 }
 
 func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {

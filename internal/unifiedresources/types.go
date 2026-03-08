@@ -210,16 +210,19 @@ type ProxmoxData struct {
 
 // StorageMeta contains storage-specific metadata for storage resources.
 type StorageMeta struct {
-	Type         string       `json:"type,omitempty"`
-	Content      string       `json:"content,omitempty"`
-	ContentTypes []string     `json:"contentTypes,omitempty"`
-	Shared       bool         `json:"shared"`
-	IsCeph       bool         `json:"isCeph"`
-	IsZFS        bool         `json:"isZfs"`
-	Platform     string       `json:"platform,omitempty"`
-	Topology     string       `json:"topology,omitempty"`
-	Protection   string       `json:"protection,omitempty"`
-	Risk         *StorageRisk `json:"risk,omitempty"`
+	Type          string                `json:"type,omitempty"`
+	Content       string                `json:"content,omitempty"`
+	ContentTypes  []string              `json:"contentTypes,omitempty"`
+	Shared        bool                  `json:"shared"`
+	IsCeph        bool                  `json:"isCeph"`
+	IsZFS         bool                  `json:"isZfs"`
+	Platform      string                `json:"platform,omitempty"`
+	Topology      string                `json:"topology,omitempty"`
+	Protection    string                `json:"protection,omitempty"`
+	Risk          *StorageRisk          `json:"risk,omitempty"`
+	ConsumerCount int                   `json:"consumerCount,omitempty"`
+	ConsumerTypes []string              `json:"consumerTypes,omitempty"`
+	TopConsumers  []StorageConsumerMeta `json:"topConsumers,omitempty"`
 
 	// Accessibility metadata.
 	Nodes []string `json:"nodes,omitempty"` // PVE nodes where this storage is accessible
@@ -239,6 +242,13 @@ type StorageMeta struct {
 	NumDisabled  int     `json:"numDisabled,omitempty"`
 	NumInvalid   int     `json:"numInvalid,omitempty"`
 	NumMissing   int     `json:"numMissing,omitempty"`
+}
+
+type StorageConsumerMeta struct {
+	ResourceID   string       `json:"resourceId,omitempty"`
+	ResourceType ResourceType `json:"resourceType"`
+	Name         string       `json:"name"`
+	DiskCount    int          `json:"diskCount,omitempty"`
 }
 
 // PhysicalDiskMeta contains physical disk-specific metadata.
