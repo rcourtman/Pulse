@@ -6925,21 +6925,36 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Resolve node filter — look up node name from ID to match pool/disk node fields.
-	var selectedNodeName string
+	// Resolve node filter — look up node name+instance from ID to disambiguate
+	// nodes with the same name across different Proxmox instances.
+	var selectedNodeName, selectedNodeInstance string
 	if selectedNodeID != "" {
+		found := false
 		for _, n := range monitor.NodesSnapshot() {
 			if n.ID == selectedNodeID {
 				selectedNodeName = n.Name
+				selectedNodeInstance = n.Instance
+				found = true
 				break
 			}
 		}
+		if !found {
+			log.Debug().
+				Str("selectedNodeID", selectedNodeID).
+				Msg("Storage charts node filter not found in current state; falling back to global scope")
+		}
 	}
-	matchesNode := func(nodeName string) bool {
+	matchesNode := func(nodeName, instance string) bool {
 		if selectedNodeName == "" {
 			return true
 		}
-		return strings.EqualFold(strings.TrimSpace(nodeName), selectedNodeName)
+		if !strings.EqualFold(strings.TrimSpace(nodeName), selectedNodeName) {
+			return false
+		}
+		if selectedNodeInstance != "" && instance != "" {
+			return strings.EqualFold(strings.TrimSpace(instance), selectedNodeInstance)
+		}
+		return true
 	}
 
 	// Build pool chart data — convert monitoring MetricPoints (time.Time) to
@@ -6950,7 +6965,7 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		if sp == nil {
 			continue
 		}
-		if !matchesNode(sp.Node()) {
+		if !matchesNode(sp.Node(), sp.Instance()) {
 			continue
 		}
 		sid := sp.SourceID()
@@ -6970,7 +6985,7 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	diskEntries := monitor.GetPhysicalDiskTemperatureCharts(duration)
 	disks := make(map[string]StorageDiskChartData, len(diskEntries))
 	for id, entry := range diskEntries {
-		if !matchesNode(entry.Node) {
+		if !matchesNode(entry.Node, entry.Instance) {
 			continue
 		}
 		disks[id] = StorageDiskChartData{

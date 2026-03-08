@@ -339,4 +339,57 @@ describe('storageAdapters', () => {
     expect(records[0].details?.platformLabel).toBe('PBS');
     expect(records[0].details?.protectionReduced).toBe(true);
   });
+
+  it('preserves canonical storage metrics targets across merged duplicate records', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'resource-storage-raw',
+          name: 'tank',
+          platformId: 'truenas-1',
+          platformType: 'truenas',
+          incidentPriority: 80,
+          incidentLabel: 'Protection Reduced',
+          status: 'degraded',
+          platformData: {
+            type: 'zfs-pool',
+            node: 'truenas01',
+            shared: false,
+          },
+          storage: {
+            type: 'zfs-pool',
+            isZfs: true,
+          },
+        }),
+        makeResourceStorage({
+          id: 'resource-storage-canonical',
+          name: 'tank',
+          platformId: 'truenas-1',
+          platformType: 'truenas',
+          status: 'online',
+          metricsTarget: {
+            resourceType: 'storage',
+            resourceId: 'pool:tank',
+          },
+          platformData: {
+            type: 'zfs-pool',
+            node: 'truenas01',
+            shared: false,
+          },
+          storage: {
+            type: 'zfs-pool',
+            isZfs: true,
+          },
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].metricsTarget).toEqual({
+      resourceType: 'storage',
+      resourceId: 'pool:tank',
+    });
+    expect(records[0].refs?.resourceId).toBe('pool:tank');
+  });
 });

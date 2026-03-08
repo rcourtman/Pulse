@@ -71,6 +71,11 @@ export interface CapacitySnapshot {
   usagePercent: number | null;
 }
 
+export interface StorageMetricsTarget {
+  resourceType: string;
+  resourceId: string;
+}
+
 export interface StorageRecord {
   id: string;
   name: string;
@@ -99,6 +104,7 @@ export interface StorageRecord {
   capabilities: StorageCapability[];
   source: SourceDescriptor;
   observedAt: number;
+  metricsTarget?: StorageMetricsTarget;
   refs?: {
     resourceId?: string;
     platformEntityId?: string;

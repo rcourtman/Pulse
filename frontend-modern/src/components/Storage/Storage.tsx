@@ -395,7 +395,15 @@ const Storage: Component = () => {
     <div class="space-y-4">
       <StorageSummary
         poolCount={filteredRecords().length}
-        diskCount={physicalDisks().length}
+        diskCount={(() => {
+          const nodeId = selectedNodeId();
+          if (nodeId === 'all') return physicalDisks().length;
+          const node = nodeOptions().find((n) => n.id === nodeId);
+          if (!node) return physicalDisks().length;
+          return physicalDisks().filter((d) =>
+            matchesPhysicalDiskNode(d, { id: node.id, name: node.label, instance: node.instance }),
+          ).length;
+        })()}
         timeRange={summaryTimeRange()}
         onTimeRangeChange={setSummaryTimeRange}
         nodeId={selectedNodeId()}

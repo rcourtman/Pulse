@@ -146,6 +146,7 @@ func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Dura
 type DiskChartEntry struct {
 	Name        string        `json:"name"`
 	Node        string        `json:"node"`
+	Instance    string        `json:"instance"`
 	Temperature []MetricPoint `json:"temperature"`
 }
 
@@ -197,6 +198,7 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		result[resourceID] = DiskChartEntry{
 			Name:        name,
 			Node:        disk.Node,
+			Instance:    disk.Instance,
 			Temperature: tempPoints,
 		}
 	}

@@ -1,6 +1,6 @@
 import { Component, createSignal, For, Show, createMemo } from 'solid-js';
 import { HistoryChart } from '@/components/shared/HistoryChart';
-import type { HistoryTimeRange } from '@/api/charts';
+import type { HistoryTimeRange, ResourceType as HistoryChartResourceType } from '@/api/charts';
 import { formatBytes, formatPercent } from '@/utils/format';
 import {
   getRecordContent,
@@ -49,10 +49,13 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
     });
   });
 
-  // Build resource ID for history chart
-  const chartResourceId = createMemo(() => {
-    return props.record.refs?.resourceId || props.record.id;
-  });
+  const chartResourceType = createMemo<HistoryChartResourceType>(
+    () => (props.record.metricsTarget?.resourceType as HistoryChartResourceType) || 'storage',
+  );
+  const chartResourceId = createMemo(
+    () =>
+      props.record.metricsTarget?.resourceId || props.record.refs?.resourceId || props.record.id,
+  );
 
   return (
     <tr class="border-t border-border">
@@ -80,7 +83,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
               </select>
             </div>
             <HistoryChart
-              resourceType="storage"
+              resourceType={chartResourceType()}
               resourceId={chartResourceId()}
               metric="usage"
               label="Usage"
