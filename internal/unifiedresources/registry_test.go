@@ -757,6 +757,89 @@ func TestResourceRegistry_IngestSnapshotDerivesStorageConsumers(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotDerivesPBSDatastoreConsumers(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:       "pbs-1",
+				Name:     "pbs-main",
+				Host:     "https://pbs-main.local:8007",
+				Status:   "online",
+				LastSeen: now,
+				Datastores: []models.PBSDatastore{
+					{Name: "backup-store", Status: "online"},
+				},
+			},
+		},
+		PBSBackups: []models.PBSBackup{
+			{
+				ID:         "pbs-1/backup-store/vm/100",
+				Instance:   "pbs-main",
+				Datastore:  "backup-store",
+				Namespace:  "pve",
+				BackupType: "vm",
+				VMID:       "100",
+				BackupTime: now,
+			},
+			{
+				ID:         "pbs-1/backup-store/ct/200",
+				Instance:   "pbs-main",
+				Datastore:  "backup-store",
+				Namespace:  "nat",
+				BackupType: "ct",
+				VMID:       "200",
+				BackupTime: now,
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "vm-100",
+				Name:     "app01",
+				Node:     "pve-1",
+				Instance: "pve",
+				Status:   "running",
+				LastSeen: now,
+				VMID:     100,
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "ct-200",
+				Name:     "media01",
+				Node:     "pve-2",
+				Instance: "pve-nat",
+				Status:   "running",
+				LastSeen: now,
+				VMID:     200,
+			},
+		},
+	})
+
+	storageResources := rr.ListByType(ResourceTypeStorage)
+	datastore := findStorageResourceByPlatform(storageResources, "backup-store", "pbs", "datastore")
+	if datastore.Storage == nil {
+		t.Fatalf("expected PBS datastore storage metadata, got %+v", datastore)
+	}
+	if got := datastore.Storage.ConsumerCount; got != 2 {
+		t.Fatalf("backup-store consumerCount = %d, want 2", got)
+	}
+	if got := datastore.Storage.ConsumerTypes; len(got) != 2 || got[0] != "system-container" || got[1] != "vm" {
+		t.Fatalf("backup-store consumerTypes = %v, want [system-container vm]", got)
+	}
+	if len(datastore.Storage.TopConsumers) != 2 {
+		t.Fatalf("backup-store topConsumers length = %d, want 2", len(datastore.Storage.TopConsumers))
+	}
+	if !hasStorageConsumer(datastore.Storage.TopConsumers, "app01", ResourceTypeVM, 1) {
+		t.Fatalf("expected vm consumer on backup-store, got %+v", datastore.Storage.TopConsumers)
+	}
+	if !hasStorageConsumer(datastore.Storage.TopConsumers, "media01", ResourceTypeSystemContainer, 1) {
+		t.Fatalf("expected container consumer on backup-store, got %+v", datastore.Storage.TopConsumers)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
@@ -819,6 +902,19 @@ func hasStorageConsumer(consumers []StorageConsumerMeta, name string, resourceTy
 func findStorageResource(resources []Resource, name, node string) Resource {
 	for _, resource := range resources {
 		if resource.Name != name || resource.Proxmox == nil || resource.Proxmox.NodeName != node {
+			continue
+		}
+		return resource
+	}
+	return Resource{}
+}
+
+func findStorageResourceByPlatform(resources []Resource, name, platform, topology string) Resource {
+	for _, resource := range resources {
+		if resource.Name != name || resource.Storage == nil {
+			continue
+		}
+		if resource.Storage.Platform != platform || resource.Storage.Topology != topology {
 			continue
 		}
 		return resource

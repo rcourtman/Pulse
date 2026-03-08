@@ -3,7 +3,10 @@ package unifiedresources
 import (
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 const maxStorageTopConsumers = 5
@@ -25,8 +28,17 @@ type storageConsumerSummary struct {
 	DiskCount    int
 }
 
+type pbsDatastoreIndexKey struct {
+	instance string
+	name     string
+}
+
+type pbsBackupWorkloadIndex struct {
+	byVMID        map[int][]*Resource
+	vmidAmbiguous map[int]bool
+}
+
 func (rr *ResourceRegistry) refreshStorageConsumersLocked() {
-	index := buildStorageConsumerIndex(rr.resources)
 	for _, resource := range rr.resources {
 		if resource.Storage == nil {
 			continue
@@ -35,40 +47,84 @@ func (rr *ResourceRegistry) refreshStorageConsumersLocked() {
 		resource.Storage.ConsumerTypes = nil
 		resource.Storage.TopConsumers = nil
 	}
-	if len(index.byName) == 0 && len(index.byPath) == 0 {
-		return
-	}
 
 	consumersByStorage := make(map[string]map[string]*storageConsumerSummary)
-	for _, resource := range rr.resources {
+
+	proxmoxIndex := buildStorageConsumerIndex(rr.resources)
+	if len(proxmoxIndex.byName) > 0 || len(proxmoxIndex.byPath) > 0 {
+		addProxmoxStorageConsumers(consumersByStorage, rr.resources, proxmoxIndex)
+	}
+
+	addPBSStorageConsumers(consumersByStorage, rr.resources, rr.pbsBackups)
+	applyStorageConsumers(rr.resources, consumersByStorage)
+}
+
+func addProxmoxStorageConsumers(consumersByStorage map[string]map[string]*storageConsumerSummary, resources map[string]*Resource, index storageConsumerIndex) {
+	for _, resource := range resources {
 		if !isStorageConsumerResource(resource) {
 			continue
 		}
 		matches := matchStorageConsumers(resource, index)
 		for storageID, diskCount := range matches {
-			if diskCount <= 0 {
-				continue
-			}
-			storageConsumers := consumersByStorage[storageID]
-			if storageConsumers == nil {
-				storageConsumers = make(map[string]*storageConsumerSummary)
-				consumersByStorage[storageID] = storageConsumers
-			}
-			summary := storageConsumers[resource.ID]
-			if summary == nil {
-				summary = &storageConsumerSummary{
-					ResourceID:   resource.ID,
-					ResourceType: resource.Type,
-					Name:         strings.TrimSpace(resource.Name),
-				}
-				storageConsumers[resource.ID] = summary
-			}
-			summary.DiskCount += diskCount
+			addStorageConsumerSummary(consumersByStorage, storageID, resource, diskCount)
 		}
 	}
+}
 
+func addPBSStorageConsumers(consumersByStorage map[string]map[string]*storageConsumerSummary, resources map[string]*Resource, backups []models.PBSBackup) {
+	if len(backups) == 0 {
+		return
+	}
+
+	datastoreIndex := buildPBSDatastoreIndex(resources)
+	workloadIndex := buildPBSBackupWorkloadIndex(resources)
+	if len(datastoreIndex) == 0 || len(workloadIndex.byVMID) == 0 {
+		return
+	}
+
+	for _, backup := range backups {
+		vmid, err := strconv.Atoi(strings.TrimSpace(backup.VMID))
+		if err != nil || vmid <= 0 {
+			continue
+		}
+		datastore := selectPBSDatastoreResource(datastoreIndex, backup)
+		if datastore == nil {
+			continue
+		}
+		workload := resolvePBSBackupWorkload(workloadIndex, backup, vmid)
+		if workload == nil {
+			continue
+		}
+		addStorageConsumerSummary(consumersByStorage, datastore.ID, workload, 1)
+	}
+}
+
+func addStorageConsumerSummary(consumersByStorage map[string]map[string]*storageConsumerSummary, storageID string, resource *Resource, count int) {
+	if count <= 0 || resource == nil || strings.TrimSpace(storageID) == "" {
+		return
+	}
+
+	storageConsumers := consumersByStorage[storageID]
+	if storageConsumers == nil {
+		storageConsumers = make(map[string]*storageConsumerSummary)
+		consumersByStorage[storageID] = storageConsumers
+	}
+
+	summary := storageConsumers[resource.ID]
+	if summary == nil {
+		summary = &storageConsumerSummary{
+			ResourceID:   resource.ID,
+			ResourceType: resource.Type,
+			Name:         strings.TrimSpace(resource.Name),
+		}
+		storageConsumers[resource.ID] = summary
+	}
+	summary.DiskCount += count
+}
+
+func applyStorageConsumers(resources map[string]*Resource, consumersByStorage map[string]map[string]*storageConsumerSummary) {
 	for storageID, storageConsumers := range consumersByStorage {
-		resource := rr.resources[storageID]
+		resource := resources[storageID]
 		if resource == nil || resource.Storage == nil {
 			continue
 		}
@@ -147,6 +203,65 @@ func buildStorageConsumerIndex(resources map[string]*Resource) storageConsumerIn
 	return index
 }
 
+func buildPBSDatastoreIndex(resources map[string]*Resource) map[pbsDatastoreIndexKey][]*Resource {
+	index := make(map[pbsDatastoreIndexKey][]*Resource)
+	for _, resource := range resources {
+		if !isPBSDatastoreResource(resource) {
+			continue
+		}
+		datastoreName := normalizePBSLookupName(resource.Name)
+		if datastoreName == "" {
+			continue
+		}
+		for _, alias := range pbsDatastoreInstanceAliases(resource, resources) {
+			key := pbsDatastoreIndexKey{
+				instance: normalizePBSLookupName(alias),
+				name:     datastoreName,
+			}
+			if key.instance == "" {
+				continue
+			}
+			index[key] = append(index[key], resource)
+		}
+	}
+	return index
+}
+
+func buildPBSBackupWorkloadIndex(resources map[string]*Resource) pbsBackupWorkloadIndex {
+	index := pbsBackupWorkloadIndex{
+		byVMID:        make(map[int][]*Resource),
+		vmidAmbiguous: make(map[int]bool),
+	}
+	vmidInstances := make(map[int]map[string]struct{})
+	for _, resource := range resources {
+		if resource == nil || resource.Proxmox == nil {
+			continue
+		}
+		switch resource.Type {
+		case ResourceTypeVM, ResourceTypeSystemContainer:
+		default:
+			continue
+		}
+		vmid := resource.Proxmox.VMID
+		if vmid <= 0 {
+			continue
+		}
+		index.byVMID[vmid] = append(index.byVMID[vmid], resource)
+		instances := vmidInstances[vmid]
+		if instances == nil {
+			instances = make(map[string]struct{})
+			vmidInstances[vmid] = instances
+		}
+		instances[strings.TrimSpace(resource.Proxmox.Instance)] = struct{}{}
+	}
+	for vmid, instances := range vmidInstances {
+		if len(instances) > 1 {
+			index.vmidAmbiguous[vmid] = true
+		}
+	}
+	return index
+}
+
 func isStorageConsumerResource(resource *Resource) bool {
 	if resource == nil || resource.Proxmox == nil {
 		return false
@@ -157,6 +272,14 @@ func isStorageConsumerResource(resource *Resource) bool {
 	default:
 		return false
 	}
+}
+
+func isPBSDatastoreResource(resource *Resource) bool {
+	return resource != nil &&
+		resource.Type == ResourceTypeStorage &&
+		resource.Storage != nil &&
+		strings.EqualFold(strings.TrimSpace(resource.Storage.Platform), "pbs") &&
+		strings.EqualFold(strings.TrimSpace(resource.Storage.Topology), "datastore")
 }
 
 func matchStorageConsumers(resource *Resource, index storageConsumerIndex) map[string]int {
@@ -189,6 +312,119 @@ func matchStorageConsumers(resource *Resource, index storageConsumerIndex) map[s
 	}
 
 	return matches
+}
+
+func pbsDatastoreInstanceAliases(resource *Resource, resources map[string]*Resource) []string {
+	if resource == nil {
+		return nil
+	}
+	aliases := []string{resource.Name}
+	if resource.ParentID != nil {
+		if parent := resources[strings.TrimSpace(*resource.ParentID)]; parent != nil {
+			aliases = append(aliases, parent.Name)
+			if parent.PBS != nil {
+				aliases = append(aliases, parent.PBS.InstanceID, parent.PBS.Hostname)
+			}
+		}
+	}
+	return uniqueStrings(aliases)
+}
+
+func selectPBSDatastoreResource(index map[pbsDatastoreIndexKey][]*Resource, backup models.PBSBackup) *Resource {
+	key := pbsDatastoreIndexKey{
+		instance: normalizePBSLookupName(backup.Instance),
+		name:     normalizePBSLookupName(backup.Datastore),
+	}
+	if key.instance == "" || key.name == "" {
+		return nil
+	}
+	candidates := index[key]
+	if len(candidates) != 1 {
+		return nil
+	}
+	return candidates[0]
+}
+
+func resolvePBSBackupWorkload(index pbsBackupWorkloadIndex, backup models.PBSBackup, vmid int) *Resource {
+	candidates := index.byVMID[vmid]
+	if len(candidates) == 0 {
+		return nil
+	}
+	candidates = filterPBSBackupCandidatesByType(candidates, backup.BackupType)
+	if len(candidates) == 0 {
+		return nil
+	}
+	if matched := filterPBSBackupCandidatesByNamespace(candidates, backup.Namespace); len(matched) == 1 {
+		return matched[0]
+	} else if len(matched) > 1 {
+		return nil
+	}
+	if index.vmidAmbiguous[vmid] {
+		return nil
+	}
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	return nil
+}
+
+func filterPBSBackupCandidatesByType(candidates []*Resource, backupType string) []*Resource {
+	backupType = strings.ToLower(strings.TrimSpace(backupType))
+	if backupType == "" {
+		return candidates
+	}
+	filtered := make([]*Resource, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate == nil {
+			continue
+		}
+		switch backupType {
+		case "vm":
+			if candidate.Type == ResourceTypeVM {
+				filtered = append(filtered, candidate)
+			}
+		case "ct", "container":
+			if candidate.Type == ResourceTypeSystemContainer {
+				filtered = append(filtered, candidate)
+			}
+		default:
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func filterPBSBackupCandidatesByNamespace(candidates []*Resource, namespace string) []*Resource {
+	namespace = strings.TrimSpace(namespace)
+	if namespace == "" {
+		return nil
+	}
+	filtered := make([]*Resource, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate == nil || candidate.Proxmox == nil {
+			continue
+		}
+		if pbsNamespaceMatchesInstance(namespace, candidate.Proxmox.Instance) {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func normalizePBSLookupName(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func pbsNamespaceMatchesInstance(namespace, instance string) bool {
+	namespace = normalizeStorageLookupName(namespace)
+	instance = normalizeStorageLookupName(instance)
+	if namespace == "" || instance == "" {
+		return false
+	}
+	if namespace == instance {
+		return true
+	}
+	return strings.HasSuffix(instance, namespace) || strings.HasSuffix(namespace, instance)
 }
 
 func selectStorageConsumerCandidate(candidates []*Resource, guestNode string) *Resource {
@@ -258,27 +494,28 @@ func storageSupportsNode(resource *Resource, guestNode string) bool {
 	if resource == nil || resource.Storage == nil || resource.Proxmox == nil {
 		return false
 	}
-	if resource.Storage.Shared {
-		if len(resource.Storage.Nodes) == 0 {
+	if normalizeStorageNodeName(resource.Proxmox.NodeName) == node {
+		return true
+	}
+	for _, candidate := range resource.Storage.Nodes {
+		if normalizeStorageNodeName(candidate) == node {
 			return true
 		}
-		for _, candidate := range resource.Storage.Nodes {
-			if normalizeStorageNodeName(candidate) == node {
-				return true
-			}
-		}
-		return false
 	}
-	return normalizeStorageNodeName(resource.Proxmox.NodeName) == node
+	return resource.Storage.Shared
 }
 
 func storageLookupNames(resource *Resource) []string {
 	if resource == nil {
 		return nil
 	}
-	return uniqueStrings([]string{
-		strings.TrimSpace(resource.Name),
-	})
+	names := []string{
+		resource.Name,
+	}
+	if resource.Storage != nil {
+		names = append(names, resource.Storage.Type, resource.Storage.Content)
+	}
+	return uniqueStrings(names)
 }
 
 func proxmoxStorageNameFromDevice(device string) string {
@@ -286,35 +523,26 @@ func proxmoxStorageNameFromDevice(device string) string {
 	if device == "" {
 		return ""
 	}
-	idx := strings.Index(device, ":")
-	if idx <= 0 {
-		return ""
+	if idx := strings.IndexRune(device, ':'); idx > 0 {
+		return device[:idx]
 	}
-	return strings.TrimSpace(device[:idx])
+	return ""
 }
 
 func normalizeStorageLookupName(name string) string {
-	return strings.ToLower(strings.TrimSpace(name))
-}
-
-func normalizeStorageNodeName(node string) string {
-	node = strings.TrimSpace(node)
-	if node == "" {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if name == "" {
 		return ""
 	}
-	normalized := NormalizeHostname(node)
-	if normalized != "" {
-		return normalized
-	}
-	return strings.ToLower(node)
+	return strings.Trim(name, "/")
 }
 
 func normalizeStoragePath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" || !strings.HasPrefix(path, "/") {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "." {
 		return ""
 	}
-	return filepath.Clean(path)
+	return path
 }
 
 func storagePathMatchesDevice(storagePath, devicePath string) bool {
@@ -325,4 +553,10 @@ func storagePathMatchesDevice(storagePath, devicePath string) bool {
 		return true
 	}
 	return strings.HasPrefix(devicePath, storagePath+"/")
+}
+
+func normalizeStorageNodeName(name string) string {
+	name = strings.TrimSpace(strings.ToLower(name))
+	name = strings.TrimSuffix(name, ".local")
+	return name
 }

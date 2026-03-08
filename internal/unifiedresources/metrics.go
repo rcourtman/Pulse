@@ -109,6 +109,28 @@ func metricsFromPBSInstance(instance models.PBSInstance) *ResourceMetrics {
 	return metrics
 }
 
+func metricsFromPBSDatastore(datastore models.PBSDatastore) *ResourceMetrics {
+	metrics := &ResourceMetrics{}
+	if datastore.Total <= 0 {
+		return metrics
+	}
+
+	used := datastore.Used
+	total := datastore.Total
+	percent := percentFromUsage(datastore.Usage)
+	if percent == 0 && total > 0 {
+		percent = clampMetricValue((float64(used)/float64(total))*100, 0, 100)
+	}
+	metrics.Disk = &MetricValue{
+		Used:    &used,
+		Total:   &total,
+		Percent: percent,
+		Unit:    "bytes",
+		Source:  SourcePBS,
+	}
+	return metrics
+}
+
 func metricsFromPMGInstance(instance models.PMGInstance) *ResourceMetrics {
 	// PMG currently exposes aggregate queue/mail counters, not point-in-time
 	// throughput rates. Return an empty metrics object to avoid mislabeling

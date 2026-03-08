@@ -68,17 +68,22 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	registry.IngestSnapshot(snapshot)
 
 	resources := registry.List()
-	if len(resources) != 2 {
-		t.Fatalf("expected 2 resources, got %d", len(resources))
+	if len(resources) != 3 {
+		t.Fatalf("expected 3 resources, got %d", len(resources))
 	}
 
 	var pbsResource *Resource
+	var datastoreResource *Resource
 	var pmgResource *Resource
 	for i := range resources {
 		resource := resources[i]
 		switch resource.Type {
 		case ResourceTypePBS:
 			pbsResource = &resource
+		case ResourceTypeStorage:
+			if resource.Storage != nil && resource.Storage.Platform == "pbs" {
+				datastoreResource = &resource
+			}
 		case ResourceTypePMG:
 			pmgResource = &resource
 		}
@@ -95,6 +100,18 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 	}
 	if pbsResource.PBS == nil || pbsResource.PBS.DatastoreCount != 1 {
 		t.Fatalf("expected PBS payload with datastore count, got %+v", pbsResource.PBS)
+	}
+	if datastoreResource == nil {
+		t.Fatal("expected PBS datastore storage resource")
+	}
+	if datastoreResource.Storage == nil {
+		t.Fatalf("expected PBS datastore storage metadata, got %+v", datastoreResource)
+	}
+	if datastoreResource.Storage.Platform != "pbs" || datastoreResource.Storage.Topology != "datastore" {
+		t.Fatalf("expected PBS datastore platform/topology, got %+v", datastoreResource.Storage)
+	}
+	if datastoreResource.ParentID == nil || *datastoreResource.ParentID != pbsResource.ID {
+		t.Fatalf("expected PBS datastore to be parented under PBS instance, got %+v", datastoreResource.ParentID)
 	}
 
 	if pmgResource == nil {

@@ -1854,6 +1854,115 @@ func TestResourceListIncludesStorageConsumerImpact(t *testing.T) {
 	}
 }
 
+func TestResourceListIncludesPBSStorageConsumerImpact(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:       "pbs-1",
+				Name:     "pbs-main",
+				Host:     "https://pbs-main.local:8007",
+				Status:   "online",
+				LastSeen: now,
+				Datastores: []models.PBSDatastore{
+					{
+						Name:   "backup-store",
+						Status: "online",
+					},
+				},
+			},
+		},
+		PBSBackups: []models.PBSBackup{
+			{
+				ID:         "pbs-1/backup-store/vm/100",
+				Instance:   "pbs-main",
+				Datastore:  "backup-store",
+				Namespace:  "pve",
+				BackupType: "vm",
+				VMID:       "100",
+				BackupTime: now,
+			},
+			{
+				ID:         "pbs-1/backup-store/ct/200",
+				Instance:   "pbs-main",
+				Datastore:  "backup-store",
+				Namespace:  "nat",
+				BackupType: "ct",
+				VMID:       "200",
+				BackupTime: now,
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "vm-100",
+				Name:     "app01",
+				Node:     "pve-1",
+				Instance: "pve",
+				Status:   "running",
+				LastSeen: now,
+				VMID:     100,
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "ct-200",
+				Name:     "media01",
+				Node:     "pve-2",
+				Instance: "pve-nat",
+				Status:   "running",
+				LastSeen: now,
+				VMID:     200,
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=storage", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 storage resource, got %d", len(resp.Data))
+	}
+
+	datastore := findAPIStorageResourceByPlatform(resp.Data, "backup-store", "pbs", "datastore")
+	if datastore.Storage == nil {
+		t.Fatalf("expected PBS datastore storage payload, got %+v", datastore)
+	}
+	if got := datastore.Storage.ConsumerCount; got != 2 {
+		t.Fatalf("backup-store consumerCount = %d, want 2", got)
+	}
+	if got := datastore.Storage.ConsumerTypes; len(got) != 2 || got[0] != "system-container" || got[1] != "vm" {
+		t.Fatalf("backup-store consumerTypes = %v, want [system-container vm]", got)
+	}
+	if len(datastore.Storage.TopConsumers) != 2 {
+		t.Fatalf("backup-store topConsumers length = %d, want 2", len(datastore.Storage.TopConsumers))
+	}
+	if !containsSource(datastore.Sources, unified.SourcePBS) {
+		t.Fatalf("expected PBS source on datastore, got %+v", datastore.Sources)
+	}
+	if datastore.ParentID == nil {
+		t.Fatalf("expected PBS datastore to remain parented under PBS instance")
+	}
+	if !hasAPIStorageConsumer(datastore.Storage.TopConsumers, "app01", unified.ResourceTypeVM, 1) {
+		t.Fatalf("expected vm consumer on backup-store, got %+v", datastore.Storage.TopConsumers)
+	}
+	if !hasAPIStorageConsumer(datastore.Storage.TopConsumers, "media01", unified.ResourceTypeSystemContainer, 1) {
+		t.Fatalf("expected container consumer on backup-store, got %+v", datastore.Storage.TopConsumers)
+	}
+}
+
 func TestResourceListIncludesHostUnraidStorage(t *testing.T) {
 	snapshot := models.StateSnapshot{
 		Hosts: []models.Host{
@@ -1922,6 +2031,28 @@ func findAPIResourceByNameAndNode(resources []unified.Resource, name, node strin
 		return resource
 	}
 	return unified.Resource{}
+}
+
+func findAPIStorageResourceByPlatform(resources []unified.Resource, name, platform, topology string) unified.Resource {
+	for _, resource := range resources {
+		if resource.Name != name || resource.Storage == nil {
+			continue
+		}
+		if resource.Storage.Platform != platform || resource.Storage.Topology != topology {
+			continue
+		}
+		return resource
+	}
+	return unified.Resource{}
+}
+
+func hasAPIStorageConsumer(consumers []unified.StorageConsumerMeta, name string, resourceType unified.ResourceType, diskCount int) bool {
+	for _, consumer := range consumers {
+		if consumer.Name == name && consumer.ResourceType == resourceType && consumer.DiskCount == diskCount {
+			return true
+		}
+	}
+	return false
 }
 
 func TestResourceListIncludesTrueNASFromSupplementalProvider(t *testing.T) {

@@ -769,6 +769,45 @@ func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIde
 	return resource, identity
 }
 
+func resourceFromPBSDatastore(instance models.PBSInstance, datastore models.PBSDatastore) (Resource, ResourceIdentity) {
+	name := strings.TrimSpace(datastore.Name)
+	status := statusFromString(datastore.Status)
+	if strings.TrimSpace(datastore.Error) != "" && status == StatusOnline {
+		status = StatusWarning
+	}
+
+	resource := Resource{
+		Type:      ResourceTypeStorage,
+		Name:      name,
+		Status:    status,
+		LastSeen:  instance.LastSeen,
+		UpdatedAt: time.Now().UTC(),
+		Metrics:   metricsFromPBSDatastore(datastore),
+		Storage: &StorageMeta{
+			Type:         "pbs-datastore",
+			Platform:     "pbs",
+			Topology:     "datastore",
+			Protection:   "backup-repository",
+			Content:      "backup",
+			ContentTypes: []string{"backup"},
+		},
+		Tags: []string{
+			"pbs",
+			"datastore",
+			"backup",
+		},
+	}
+
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			name,
+			instance.Name,
+			extractHostname(instance.Host),
+		}),
+	}
+	return resource, identity
+}
+
 func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIdentity) {
 	name := instance.Name
 	if strings.TrimSpace(name) == "" {

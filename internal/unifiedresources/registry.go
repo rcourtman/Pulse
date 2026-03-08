@@ -42,6 +42,7 @@ type ResourceRegistry struct {
 	store      ResourceStore
 	links      []ResourceLink
 	exclusions map[string]struct{}
+	pbsBackups []models.PBSBackup
 
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
@@ -229,6 +230,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	}
 
 	rr.mu.Lock()
+	rr.pbsBackups = clonePBSBackups(snapshot.PBSBackups)
 	rr.applyManualLinks()
 	rr.refreshStorageConsumersLocked()
 	rr.buildChildCounts()
@@ -499,6 +501,14 @@ func (rr *ResourceRegistry) ingestPBSInstance(instance models.PBSInstance) {
 	resource, identity := resourceFromPBSInstance(instance)
 	sourceID := pbsInstanceSourceID(instance)
 	rr.ingest(SourcePBS, sourceID, resource, identity)
+	parentID := rr.sourceResourceID(SourcePBS, sourceID)
+	for _, datastore := range instance.Datastores {
+		resource, identity := resourceFromPBSDatastore(instance, datastore)
+		if parentID != "" {
+			resource.ParentID = &parentID
+		}
+		rr.ingest(SourcePBS, pbsDatastoreSourceID(instance, datastore), resource, identity)
+	}
 }
 
 func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
@@ -1318,6 +1328,18 @@ func pbsInstanceSourceID(instance models.PBSInstance) string {
 	return extractHostname(instance.Host)
 }
 
+func pbsDatastoreSourceID(instance models.PBSInstance, datastore models.PBSDatastore) string {
+	instanceID := pbsInstanceSourceID(instance)
+	datastoreName := strings.TrimSpace(datastore.Name)
+	if instanceID == "" {
+		return datastoreName
+	}
+	if datastoreName == "" {
+		return instanceID
+	}
+	return instanceID + "/" + datastoreName
+}
+
 func pmgInstanceSourceID(instance models.PMGInstance) string {
 	if v := strings.TrimSpace(instance.ID); v != "" {
 		return v
@@ -1326,6 +1348,15 @@ func pmgInstanceSourceID(instance models.PMGInstance) string {
 		return v
 	}
 	return extractHostname(instance.Host)
+}
+
+func clonePBSBackups(in []models.PBSBackup) []models.PBSBackup {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]models.PBSBackup, len(in))
+	copy(out, in)
+	return out
 }
 
 func dockerSwarmClusterKey(host models.DockerHost) string {
