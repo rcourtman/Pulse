@@ -16,7 +16,7 @@ import {
   entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { toReportingResourceType } from './reportingResourceTypes';
+import { toReportingResourceType } from '@/utils/reportingResourceTypes';
 
 interface FormFieldProps {
   label: string;

@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agentKeyFromPlatformType,
   DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
   resolveCanonicalSettingsPath,
+  settingsAgentLabel,
+  settingsAgentNodeLabel,
+  settingsAgentPath,
+  settingsAgentPlatformType,
   settingsTabPath,
   type SettingsTab,
 } from '../settingsRouting';
@@ -151,6 +156,33 @@ describe('settingsRouting', () => {
     for (const [path, expectedAgent] of agentCases) {
       expect(deriveAgentFromPath(path)).toBe(expectedAgent);
     }
+  });
+
+  it('maps settings agent keys to canonical platform types, labels, and paths', () => {
+    expect(settingsAgentPath('pve')).toBe('/settings/infrastructure/proxmox/pve');
+    expect(settingsAgentPlatformType('pve')).toBe('proxmox-pve');
+    expect(settingsAgentLabel('pve')).toBe('Proxmox VE');
+    expect(settingsAgentNodeLabel('pve')).toBe('Proxmox VE node');
+
+    expect(settingsAgentPath('pbs')).toBe('/settings/infrastructure/proxmox/pbs');
+    expect(settingsAgentPlatformType('pbs')).toBe('proxmox-pbs');
+    expect(settingsAgentLabel('pbs')).toBe('Proxmox Backup Server');
+    expect(settingsAgentNodeLabel('pbs')).toBe('Proxmox Backup Server');
+
+    expect(settingsAgentPath('pmg')).toBe('/settings/infrastructure/proxmox/pmg');
+    expect(settingsAgentPlatformType('pmg')).toBe('proxmox-pmg');
+    expect(settingsAgentLabel('pmg')).toBe('Proxmox Mail Gateway');
+    expect(settingsAgentNodeLabel('pmg')).toBe('Proxmox Mail Gateway');
+  });
+
+  it('derives settings agent keys from canonical and legacy platform aliases', () => {
+    expect(agentKeyFromPlatformType('proxmox-pve')).toBe('pve');
+    expect(agentKeyFromPlatformType('proxmox-pbs')).toBe('pbs');
+    expect(agentKeyFromPlatformType('proxmox-pmg')).toBe('pmg');
+    expect(agentKeyFromPlatformType('proxmox')).toBe('pve');
+    expect(agentKeyFromPlatformType('pbs')).toBe('pbs');
+    expect(agentKeyFromPlatformType('pmg')).toBe('pmg');
+    expect(agentKeyFromPlatformType('agent')).toBeNull();
   });
 
   it('treats proxmox deep links as infrastructure aliases', () => {

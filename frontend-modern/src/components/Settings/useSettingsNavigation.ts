@@ -5,6 +5,7 @@ import {
   deriveTabFromPath,
   deriveTabFromQuery,
   resolveCanonicalSettingsPath,
+  settingsAgentPath,
   settingsTabPath,
   type AgentKey,
   type SettingsTab,
@@ -36,18 +37,12 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
 
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 
-  const agentPaths: Record<AgentKey, string> = {
-    pve: '/settings/infrastructure/proxmox/pve',
-    pbs: '/settings/infrastructure/proxmox/pbs',
-    pmg: '/settings/infrastructure/proxmox/pmg',
-  };
-
   const handleSelectAgent = (agent: AgentKey) => {
     setSelectedAgent(agent);
     if (currentTab() !== 'proxmox') {
       setCurrentTab('proxmox');
     }
-    const target = agentPaths[agent];
+    const target = settingsAgentPath(agent);
     if (target && location.pathname !== target) {
       navigate(target, { scroll: false });
     }

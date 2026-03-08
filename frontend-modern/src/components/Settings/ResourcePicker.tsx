@@ -6,7 +6,14 @@ import { formControl } from '@/components/shared/Form';
 import { SearchField } from '@/components/shared/SearchField';
 import { useResources, getDisplayName } from '@/hooks/useResources';
 import type { Resource, ResourceType } from '@/types/resource';
+import {
+  matchesReportableResourceTypeFilter,
+  REPORTABLE_RESOURCE_TYPES,
+  reportableResourceTypeSortOrder,
+  type ResourcePickerTypeFilter as TypeFilter,
+} from '@/utils/reportableResourceTypes';
 import { showWarning } from '@/utils/toast';
+import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 
 const MAX_SELECTION = 50;
 
@@ -21,8 +28,6 @@ interface ResourcePickerProps {
   onSelectionChange: (items: SelectedResource[]) => void;
 }
 
-type TypeFilter = 'all' | 'infrastructure' | 'workloads' | 'storage' | 'recovery';
-
 const typeFilterLabels: Record<TypeFilter, string> = {
   all: 'All',
   infrastructure: 'Infrastructure',
@@ -30,63 +35,6 @@ const typeFilterLabels: Record<TypeFilter, string> = {
   storage: 'Storage',
   recovery: 'Recovery',
 };
-
-const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
-  'agent',
-  'docker-host',
-  'k8s-cluster',
-  'k8s-node',
-  'vm',
-  'system-container',
-  'app-container',
-  'oci-container',
-  'pod',
-  'storage',
-  'datastore',
-  'pool',
-  'dataset',
-  'pbs',
-  'pmg',
-]);
-
-const INFRASTRUCTURE_TYPES = new Set<ResourceType>([
-  'agent',
-  'docker-host',
-  'k8s-cluster',
-  'k8s-node',
-  'pbs',
-  'pmg',
-]);
-
-const WORKLOAD_TYPES = new Set<ResourceType>([
-  'vm',
-  'system-container',
-  'app-container',
-  'oci-container',
-  'pod',
-]);
-
-const STORAGE_TYPES = new Set<ResourceType>(['storage', 'datastore', 'pool', 'dataset']);
-
-const RECOVERY_TYPES = new Set<ResourceType>(['pbs', 'datastore']);
-
-function normalizeType(type: ResourceType): string {
-  if (type === 'system-container' || type === 'oci-container') return 'system-container';
-  if (type === 'app-container') return 'app-container';
-  if (type === 'docker-host') return 'docker-host';
-  if (type === 'k8s-node') return 'node';
-  if (type === 'k8s-cluster') return 'k8s';
-  return type;
-}
-
-function matchesTypeFilter(resource: Resource, filter: TypeFilter): boolean {
-  if (filter === 'all') return true;
-  if (filter === 'infrastructure') return INFRASTRUCTURE_TYPES.has(resource.type);
-  if (filter === 'workloads') return WORKLOAD_TYPES.has(resource.type);
-  if (filter === 'storage') return STORAGE_TYPES.has(resource.type);
-  if (filter === 'recovery') return RECOVERY_TYPES.has(resource.type);
-  return true;
-}
 
 function getStatusColor(status: string): string {
   switch (status) {
@@ -102,39 +50,6 @@ function getStatusColor(status: string): string {
       return 'bg-blue-400';
     default:
       return 'bg-slate-500';
-  }
-}
-
-function getTypeBadge(type: ResourceType): { label: string; classes: string } {
-  switch (type) {
-    case 'agent':
-    case 'k8s-node':
-      return { label: 'Agent', classes: 'bg-blue-500 text-blue-300' };
-    case 'docker-host':
-      return { label: 'Agent', classes: 'bg-slate-500 text-slate-300' };
-    case 'k8s-cluster':
-      return { label: 'K8s', classes: 'bg-slate-500 text-slate-300' };
-    case 'vm':
-      return { label: 'VM', classes: 'bg-slate-500 text-slate-300' };
-    case 'system-container':
-    case 'oci-container':
-      return { label: 'Container', classes: 'bg-blue-500 text-blue-300' };
-    case 'app-container':
-      return { label: 'App Container', classes: 'bg-blue-500 text-blue-300' };
-    case 'pod':
-      return { label: 'Pod', classes: 'bg-slate-500 text-slate-300' };
-    case 'pbs':
-      return { label: 'PBS', classes: 'bg-slate-500 text-slate-300' };
-    case 'pmg':
-      return { label: 'PMG', classes: 'bg-slate-500 text-slate-300' };
-    case 'datastore':
-      return { label: 'Datastore', classes: 'bg-slate-500 text-slate-300' };
-    case 'storage':
-    case 'pool':
-    case 'dataset':
-      return { label: 'Storage', classes: 'bg-slate-500 text-slate-300' };
-    default:
-      return { label: type, classes: 'bg-slate-500 text-slate-400' };
   }
 }
 
@@ -154,7 +69,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
     let result = reportableResources();
 
     // Type filter
-    result = result.filter((r) => matchesTypeFilter(r, typeFilter()));
+    result = result.filter((r) => matchesReportableResourceTypeFilter(r, typeFilter()));
 
     // Search filter (name or ID)
     const searchTerm = search().toLowerCase().trim();
@@ -174,23 +89,8 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
     // Sort by domain first, then by type, then alphabetical.
     result.sort((a, b) => {
-      const typeOrder: Record<string, number> = {
-        agent: 0,
-        'docker-host': 1,
-        k8s: 2,
-        pbs: 3,
-        pmg: 4,
-        vm: 5,
-        'system-container': 6,
-        'app-container': 7,
-        pod: 8,
-        storage: 9,
-        datastore: 10,
-        pool: 11,
-        dataset: 12,
-      };
-      const aOrder = typeOrder[normalizeType(a.type)] ?? 13;
-      const bOrder = typeOrder[normalizeType(b.type)] ?? 13;
+      const aOrder = reportableResourceTypeSortOrder(a.type);
+      const bOrder = reportableResourceTypeSortOrder(b.type);
       if (aOrder !== bOrder) return aOrder - bOrder;
       return getDisplayName(a).localeCompare(getDisplayName(b));
     });
@@ -319,7 +219,10 @@ export function ResourcePicker(props: ResourcePickerProps) {
             <div class="max-h-[300px] overflow-y-auto">
               <For each={filteredResources()}>
                 {(resource) => {
-                  const badge = getTypeBadge(resource.type);
+                  const badge = getResourceTypePresentation(resource.type) || {
+                    label: resource.type,
+                    badgeClasses: 'bg-slate-500 text-slate-400',
+                  };
                   return (
                     <button
                       class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left transition-colors border-b border-border last:border-b-0 ${
@@ -366,7 +269,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                           {resource.id}
                         </div>
                         <div class="mt-1 flex flex-wrap items-center gap-1 sm:hidden">
-                          <span class={`text-xs px-2 py-0.5 rounded-full ${badge.classes}`}>
+                          <span class={`text-xs px-2 py-0.5 rounded-full ${badge.badgeClasses}`}>
                             {badge.label}
                           </span>
                           <Show when={resource.tags && resource.tags.length > 0}>
@@ -388,7 +291,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
                       {/* Type badge */}
                       <span
-                        class={`hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badge.classes}`}
+                        class={`hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badge.badgeClasses}`}
                       >
                         {badge.label}
                       </span>

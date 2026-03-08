@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toReportingResourceType } from '../reportingResourceTypes';
+import { toReportingResourceType } from '@/utils/reportingResourceTypes';
 
 describe('toReportingResourceType', () => {
   it('keeps canonical v6 workload and infrastructure types unchanged where supported', () => {

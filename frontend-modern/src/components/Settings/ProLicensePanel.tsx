@@ -15,40 +15,7 @@ import { LicenseAPI, type CommercialMigrationStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-
-const TIER_LABELS: Record<string, string> = {
-  free: 'Community',
-  relay: 'Relay',
-  pro: 'Pro',
-  pro_plus: 'Pro+',
-  pro_annual: 'Pro Annual',
-  lifetime: 'Lifetime',
-  cloud: 'Cloud',
-  msp: 'MSP',
-  enterprise: 'Enterprise',
-};
-
-const FEATURE_LABELS: Record<string, string> = {
-  ai_patrol: 'Pulse Patrol',
-  ai_alerts: 'Pulse Alert Analysis',
-  ai_autofix: 'Patrol Auto-Fix',
-  kubernetes_ai: 'Kubernetes Insights',
-  update_alerts: 'Update Alerts',
-  sso: 'Basic SSO (OIDC)',
-  advanced_sso: 'Advanced SSO (SAML/Multi-Provider)',
-  rbac: 'Role-Based Access Control (RBAC)',
-  audit_logging: 'Audit Logging',
-  advanced_reporting: 'PDF/CSV Reporting',
-  agent_profiles: 'Centralized Agent Profiles',
-  relay: 'Pulse Relay (Remote Access)',
-  mobile_app: 'Mobile App Access',
-  push_notifications: 'Push Notifications',
-  long_term_metrics: 'Extended Metric History',
-  multi_user: 'Multi-User Mode',
-  white_label: 'White-Label Branding',
-  multi_tenant: 'Multi-Tenant Mode',
-  unlimited: 'Unlimited Instances',
-};
+import { getLicenseFeatureLabel, getLicenseTierLabel } from '@/utils/licensePresentation';
 
 const formatTitleCase = (value: string) =>
   value.replace(/[_-]/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
@@ -255,7 +222,7 @@ export const ProLicensePanel: Component = () => {
   const formattedTier = createMemo(() => {
     const current = entitlements();
     if (!current) return 'Unknown';
-    return TIER_LABELS[current.tier] ?? formatTitleCase(current.tier);
+    return getLicenseTierLabel(current.tier);
   });
 
   const formattedPlanTerms = createMemo(() => {
@@ -269,7 +236,7 @@ export const ProLicensePanel: Component = () => {
     if (!current?.capabilities?.length) return [];
     return current.capabilities
       .filter((feature) => feature !== 'multi_tenant' || isMultiTenantEnabled())
-      .map((feature) => FEATURE_LABELS[feature] ?? formatTitleCase(feature));
+      .map((feature) => getLicenseFeatureLabel(feature));
   });
 
   const displayedExpiry = createMemo(() => {

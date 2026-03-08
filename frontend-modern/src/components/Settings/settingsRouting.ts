@@ -1,3 +1,6 @@
+import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
+import type { PlatformType } from '@/types/resource';
+
 export type SettingsTab =
   | 'proxmox'
   | 'agents'
@@ -23,6 +26,10 @@ export type SettingsTab =
   | 'security-webhooks';
 
 export type AgentKey = 'pve' | 'pbs' | 'pmg';
+export type ProxmoxPlatformType = Extract<
+  PlatformType,
+  'proxmox-pve' | 'proxmox-pbs' | 'proxmox-pmg'
+>;
 
 // Default landing tab for /settings when no deep-link tab is provided.
 export const DEFAULT_SETTINGS_TAB: SettingsTab = 'agents';
@@ -33,6 +40,35 @@ const PROXMOX_PREFIX = '/settings/infrastructure/proxmox';
 const LEGACY_PROXMOX_API_PREFIX = '/settings/infrastructure/api';
 const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
 const SECURITY_API_PREFIX = '/settings/security/api';
+
+const PROXMOX_AGENT_META: Record<
+  AgentKey,
+  {
+    path: string;
+    platformType: ProxmoxPlatformType;
+    label: string;
+    nodeLabel: string;
+  }
+> = {
+  pve: {
+    path: `${PROXMOX_PREFIX}/pve`,
+    platformType: 'proxmox-pve',
+    label: 'Proxmox VE',
+    nodeLabel: 'Proxmox VE node',
+  },
+  pbs: {
+    path: `${PROXMOX_PREFIX}/pbs`,
+    platformType: 'proxmox-pbs',
+    label: 'Proxmox Backup Server',
+    nodeLabel: 'Proxmox Backup Server',
+  },
+  pmg: {
+    path: `${PROXMOX_PREFIX}/pmg`,
+    platformType: 'proxmox-pmg',
+    label: 'Proxmox Mail Gateway',
+    nodeLabel: 'Proxmox Mail Gateway',
+  },
+};
 
 const normalizeSettingsPath = (path: string): string => {
   const trimmed = (path || '').trim();
@@ -120,10 +156,42 @@ export function deriveTabFromPath(path: string): SettingsTab {
 export function deriveAgentFromPath(path: string): AgentKey | null {
   const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
 
-  if (canonicalPath.includes(`${PROXMOX_PREFIX}/pve`)) return 'pve';
-  if (canonicalPath.includes(`${PROXMOX_PREFIX}/pbs`)) return 'pbs';
-  if (canonicalPath.includes(`${PROXMOX_PREFIX}/pmg`)) return 'pmg';
+  for (const [agent, meta] of Object.entries(PROXMOX_AGENT_META) as Array<
+    [AgentKey, (typeof PROXMOX_AGENT_META)[AgentKey]]
+  >) {
+    if (canonicalPath.includes(meta.path)) return agent;
+  }
   return null;
+}
+
+export function settingsAgentPath(agent: AgentKey): string {
+  return PROXMOX_AGENT_META[agent].path;
+}
+
+export function settingsAgentPlatformType(agent: AgentKey): ProxmoxPlatformType {
+  return PROXMOX_AGENT_META[agent].platformType;
+}
+
+export function settingsAgentLabel(agent: AgentKey): string {
+  return PROXMOX_AGENT_META[agent].label;
+}
+
+export function settingsAgentNodeLabel(agent: AgentKey): string {
+  return PROXMOX_AGENT_META[agent].nodeLabel;
+}
+
+export function agentKeyFromPlatformType(value: string | null | undefined): AgentKey | null {
+  const normalized = normalizeSourcePlatformKey(value);
+  switch (normalized) {
+    case 'proxmox-pve':
+      return 'pve';
+    case 'proxmox-pbs':
+      return 'pbs';
+    case 'proxmox-pmg':
+      return 'pmg';
+    default:
+      return null;
+  }
 }
 
 export function deriveTabFromQuery(search: string): SettingsTab | null {

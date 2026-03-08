@@ -27,6 +27,7 @@ import discoveryTargetUtilsSource from '@/utils/discoveryTarget.ts?raw';
 import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.tsx?raw';
 import commandPaletteSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
+import canonicalResourceTypesSource from '@/utils/canonicalResourceTypes.ts?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import alertsApiSource from '@/api/alerts.ts?raw';
 import licenseApiSource from '@/api/license.ts?raw';
@@ -35,12 +36,18 @@ import chartsApiSource from '@/api/charts.ts?raw';
 import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
+import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
+import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
+import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
+import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
 import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
 import websocketStoreSource from '@/stores/websocket.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
 import resourcePickerSource from '../ResourcePicker.tsx?raw';
+import reportableResourceTypesSource from '@/utils/reportableResourceTypes.ts?raw';
+import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
 
 describe('agent model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
@@ -103,9 +110,11 @@ describe('agent model guardrails', () => {
     expect(apiTypesSource).not.toContain("'qemu'");
     expect(apiTypesSource).not.toContain("'lxc'");
     expect(commandPaletteSource).not.toContain("'lxc'");
-    expect(organizationSharingPanelSource).toContain("'system-container'");
-    expect(organizationSharingPanelSource).toContain("'app-container'");
-    expect(organizationSharingPanelSource).not.toContain("'container',");
+    expect(organizationSharingPanelSource).toContain('@/utils/canonicalResourceTypes');
+    expect(canonicalResourceTypesSource).toContain('export const CANONICAL_RESOURCE_TYPES =');
+    expect(canonicalResourceTypesSource).toContain("'system-container'");
+    expect(canonicalResourceTypesSource).toContain("'app-container'");
+    expect(canonicalResourceTypesSource).not.toContain("'container',");
   });
 
   it('keeps alerts agent thresholds sourced from unified agent resources', () => {
@@ -168,6 +177,31 @@ describe('agent model guardrails', () => {
     expect(unifiedResourceTableSource).not.toContain("buildMetricKey('host', resource.id)");
     expect(resourceBadgesSource).not.toContain("host: 'Agent'");
     expect(problemResourcesTableSource).not.toContain("host: 'Agent'");
+  });
+
+  it('keeps dashboard and recovery type presentation on shared canonical helpers', () => {
+    expect(problemResourcesTableSource).toContain('getResourceTypeLabel(pr.resource.type)');
+    expect(problemResourcesTableSource).not.toContain('function formatType(');
+    expect(recoverySource).toContain('getResourceTypePresentation(raw)');
+    expect(recoverySource).not.toContain('SUBJECT_TYPE_LABELS');
+    expect(resourceBadgesSource).toContain('@/utils/resourceBadgePresentation');
+    expect(resourceBadgePresentationSource).toContain('getResourceTypePresentation');
+    expect(workloadTypeBadgesSource).toContain('getWorkloadTypePresentation');
+    expect(workloadTypeBadgesSource).not.toContain('canonicalizeFrontendResourceType');
+    expect(workloadTypePresentationSource).toContain('canonicalizeFrontendResourceType');
+    expect(recoverySource).toContain('normalizeSourcePlatformQueryValue');
+    expect(recoverySource).not.toContain('const normalizeProviderFromQuery');
+    expect(sourcePlatformsSource).toContain('export const normalizeSourcePlatformQueryValue');
+  });
+
+  it('keeps resource picker reportable type policy on shared utilities', () => {
+    expect(resourcePickerSource).toContain('@/utils/reportableResourceTypes');
+    expect(resourcePickerSource).not.toContain('const REPORTABLE_RESOURCE_TYPES =');
+    expect(resourcePickerSource).not.toContain('function normalizeType(');
+    expect(reportableResourceTypesSource).toContain('export const REPORTABLE_RESOURCE_TYPES =');
+    expect(reportableResourceTypesSource).toContain(
+      'export const matchesReportableResourceTypeFilter =',
+    );
   });
 
   it('keeps diagnostics alerts contract free of removed legacy threshold flags', () => {
@@ -261,11 +295,12 @@ describe('agent model guardrails', () => {
     expect(chartsApiSource).not.toContain("| 'dockerHost'");
     expect(chartsApiSource).not.toContain("| 'guest'");
     expect(chartsApiSource).not.toContain("| 'docker'");
-    expect(resourcePickerSource).toContain("return 'docker-host';");
-    expect(resourcePickerSource).toContain("return 'app-container';");
-    expect(resourcePickerSource).not.toContain("return 'dockerHost';");
-    expect(resourcePickerSource).not.toContain("return 'dockerContainer';");
-    expect(resourcePickerSource).not.toContain("return 'container';");
+    expect(resourcePickerSource).toContain('@/utils/reportableResourceTypes');
+    expect(reportableResourceTypesSource).toContain("return 'docker-host';");
+    expect(reportableResourceTypesSource).toContain("return 'app-container';");
+    expect(reportableResourceTypesSource).not.toContain("return 'dockerHost';");
+    expect(reportableResourceTypesSource).not.toContain("return 'dockerContainer';");
+    expect(reportableResourceTypesSource).not.toContain("return 'container';");
   });
 
   it('keeps login and SSO settings on provider-based flows only', () => {
@@ -297,8 +332,9 @@ describe('agent model guardrails', () => {
   it('keeps node link IDs on canonical linkedAgentId only', () => {
     expect(apiTypesSource).toContain('linkedAgentId?: string');
     expect(apiTypesSource).not.toContain('linkedHostAgentId');
+    expect(resourceStateAdaptersSource).toContain('const linkedAgentId =');
     expect(resourceStateAdaptersSource).toContain(
-      'const linkedAgentId = asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource);',
+      'asString(platform?.linkedAgentId) || getActionableAgentIdFromResource(resource)',
     );
     expect(resourceStateAdaptersSource).not.toContain('linkedHostAgentId');
   });

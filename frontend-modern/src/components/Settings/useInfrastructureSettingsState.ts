@@ -19,6 +19,7 @@ import type { Temperature } from '@/types/api';
 import type { ClusterEndpoint, NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { SettingsTab } from './settingsTypes';
+import { settingsAgentNodeLabel } from './settingsRouting';
 
 export interface DiscoveredServer {
   ip: string;
@@ -654,16 +655,11 @@ export function useInfrastructureSettingsState({
   const nodePendingDeleteType = () => nodePendingDelete()?.type || '';
 
   const nodePendingDeleteTypeLabel = () => {
-    switch (nodePendingDeleteType()) {
-      case 'pve':
-        return 'Proxmox VE node';
-      case 'pbs':
-        return 'Proxmox Backup Server';
-      case 'pmg':
-        return 'Proxmox Mail Gateway';
-      default:
-        return 'Pulse node';
+    const type = nodePendingDeleteType();
+    if (type === 'pve' || type === 'pbs' || type === 'pmg') {
+      return settingsAgentNodeLabel(type);
     }
+    return 'Pulse node';
   };
 
   const requestDeleteNode = (node: NodeConfigWithStatus) => {

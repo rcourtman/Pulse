@@ -7,24 +7,13 @@ import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { getLicenseTierLabel } from '@/utils/licensePresentation';
 import CreditCard from 'lucide-solid/icons/credit-card';
 
 interface OrganizationBillingPanelProps {
   nodeUsage: number;
   guestUsage: number;
 }
-
-const tierLabel: Record<string, string> = {
-  free: 'Community',
-  relay: 'Relay',
-  pro: 'Pro',
-  pro_plus: 'Pro+',
-  pro_annual: 'Pro Annual',
-  lifetime: 'Lifetime',
-  cloud: 'Cloud',
-  msp: 'MSP',
-  enterprise: 'Enterprise',
-};
 
 const ratio = (current: number, limit?: number) => {
   if (!limit || limit <= 0) return 0;
@@ -148,7 +137,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
               <div class="rounded-md border border-border p-3">
                 <p class="text-xs uppercase tracking-wide text-muted">Plan Tier</p>
                 <p class="mt-1 text-sm font-medium text-base-content">
-                  {tierLabel[status()?.tier || 'free'] || status()?.tier || 'Free'}
+                  {getLicenseTierLabel(status()?.tier || 'free')}
                 </p>
               </div>
               <div class="rounded-md border border-border p-3">

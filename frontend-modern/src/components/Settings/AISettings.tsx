@@ -11,6 +11,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
+import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
   getUpgradeActionUrlOrFallback,
   hasFeature,
@@ -23,16 +24,6 @@ import { showSuccess, showWarning } from '@/utils/toast';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
 // Providers are now configured via accordion sections, not a single-provider selector
-
-// Provider display names for optgroup labels
-const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  openrouter: 'OpenRouter',
-  deepseek: 'DeepSeek',
-  gemini: 'Google Gemini',
-  ollama: 'Ollama',
-};
 
 const AI_PROVIDERS: AIProvider[] = [
   'anthropic',
@@ -70,38 +61,6 @@ const normalizeControlLevel = (value?: string): ControlLevel => {
   }
   return 'read_only';
 };
-
-// Parse provider from model ID (format: "provider:model-name")
-function getProviderFromModelId(modelId: string): string {
-  const colonIndex = modelId.indexOf(':');
-  if (colonIndex > 0) {
-    return modelId.substring(0, colonIndex);
-  }
-  if (
-    /^(openai|anthropic|google|deepseek|meta-llama|mistralai|x-ai|xai|cohere|qwen)\//.test(modelId)
-  ) {
-    return 'openrouter';
-  }
-  // Default detection for models without prefix
-  if (
-    modelId.includes('claude') ||
-    modelId.includes('opus') ||
-    modelId.includes('sonnet') ||
-    modelId.includes('haiku')
-  ) {
-    return 'anthropic';
-  }
-  if (modelId.includes('gpt') || modelId.includes('o1') || modelId.includes('o3')) {
-    return 'openai';
-  }
-  if (modelId.includes('deepseek')) {
-    return 'deepseek';
-  }
-  if (modelId.includes('gemini')) {
-    return 'gemini';
-  }
-  return 'ollama';
-}
 
 // Check if a provider is configured based on settings
 function isProviderConfigured(provider: string, settings: AISettingsType | null): boolean {
@@ -682,8 +641,8 @@ export const AISettings: Component = () => {
 
         if (!isAddingCredential) {
           notificationStore.error(
-            `Cannot save: Model "${selectedModel}" requires ${PROVIDER_DISPLAY_NAMES[modelProvider] || modelProvider} to be configured. ` +
-              `Please add an API key for ${PROVIDER_DISPLAY_NAMES[modelProvider] || modelProvider} or select a different model.`,
+            `Cannot save: Model "${selectedModel}" requires ${getAIProviderDisplayName(modelProvider) || modelProvider} to be configured. ` +
+              `Please add an API key for ${getAIProviderDisplayName(modelProvider) || modelProvider} or select a different model.`,
           );
           return;
         }
@@ -874,11 +833,11 @@ export const AISettings: Component = () => {
     const currentModel = form.model.trim();
     const modelUsesProvider = currentModel && getProviderFromModelId(currentModel) === provider;
 
-    let confirmMessage = `Clear ${PROVIDER_DISPLAY_NAMES[provider] || provider} credentials?`;
+    let confirmMessage = `Clear ${getAIProviderDisplayName(provider) || provider} credentials?`;
     if (isLastProvider) {
       confirmMessage = `Warning: this is your only configured provider. Clearing it will disable Pulse Assistant until you configure another provider. Continue?`;
     } else if (modelUsesProvider) {
-      confirmMessage = `Your current model uses ${PROVIDER_DISPLAY_NAMES[provider] || provider}. Clearing this will require selecting a different model. Continue?`;
+      confirmMessage = `Your current model uses ${getAIProviderDisplayName(provider) || provider}. Clearing this will require selecting a different model. Continue?`;
     } else {
       confirmMessage += ` You'll need to re-enter credentials to use this provider.`;
     }
@@ -1139,7 +1098,7 @@ export const AISettings: Component = () => {
                       )}
                     >
                       {([provider, models]) => (
-                        <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                        <optgroup label={getAIProviderDisplayName(provider) || provider}>
                           <For each={models}>
                             {(model) => (
                               <option value={model.id} selected={model.id === form.model}>
@@ -1158,7 +1117,7 @@ export const AISettings: Component = () => {
                     >
                       {([provider, models]) => (
                         <optgroup
-                          label={`${PROVIDER_DISPLAY_NAMES[provider] || provider} (not configured)`}
+                          label={`${getAIProviderDisplayName(provider) || provider} (not configured)`}
                         >
                           <For each={models}>
                             {(model) => (
@@ -1213,7 +1172,7 @@ export const AISettings: Component = () => {
                       />
                     </svg>
                     This model requires{' '}
-                    {PROVIDER_DISPLAY_NAMES[getProviderFromModelId(form.model)] ||
+                    {getAIProviderDisplayName(getProviderFromModelId(form.model)) ||
                       getProviderFromModelId(form.model)}{' '}
                     to be configured. Add an API key below or select a different model.
                   </p>
@@ -1303,7 +1262,7 @@ export const AISettings: Component = () => {
                             each={Array.from(groupModelsByProvider(availableModels()).entries())}
                           >
                             {([provider, models]) => (
-                              <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                              <optgroup label={getAIProviderDisplayName(provider) || provider}>
                                 <For each={models}>
                                   {(model) => (
                                     <option value={model.id}>
@@ -1351,7 +1310,7 @@ export const AISettings: Component = () => {
                             each={Array.from(groupModelsByProvider(availableModels()).entries())}
                           >
                             {([provider, models]) => (
-                              <optgroup label={PROVIDER_DISPLAY_NAMES[provider] || provider}>
+                              <optgroup label={getAIProviderDisplayName(provider) || provider}>
                                 <For each={models}>
                                   {(model) => (
                                     <option value={model.id}>
@@ -1421,7 +1380,7 @@ export const AISettings: Component = () => {
                         {(provider) => (
                           <p class="text-[11px] text-red-600 dark:text-red-300">
                             <span class="font-medium">
-                              {PROVIDER_DISPLAY_NAMES[provider] || provider}:
+                              {getAIProviderDisplayName(provider) || provider}:
                             </span>{' '}
                             {providerHealth[provider].message}
                           </p>

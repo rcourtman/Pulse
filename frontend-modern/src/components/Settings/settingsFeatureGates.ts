@@ -1,5 +1,6 @@
 import type { SettingsTab } from './settingsTypes';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
+import { getFeatureMinTierLabel } from '@/utils/licensePresentation';
 
 export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
   'system-relay': ['relay'],
@@ -9,13 +10,6 @@ export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
   'organization-sharing': ['multi_tenant'],
   'organization-billing': ['multi_tenant'],
   'organization-billing-admin': ['multi_tenant'],
-};
-
-const featureMinTier: Record<string, string> = {
-  relay: 'Relay',
-  mobile_app: 'Relay',
-  push_notifications: 'Relay',
-  multi_tenant: 'MSP',
 };
 
 export function isFeatureLocked(
@@ -50,6 +44,6 @@ export function getTabLockReason(
   if (primaryRequiredFeature) {
     trackPaywallViewed(primaryRequiredFeature, 'settings_tab');
   }
-  const tierLabel = featureMinTier[primaryRequiredFeature ?? ''] ?? 'Pro';
+  const tierLabel = getFeatureMinTierLabel(primaryRequiredFeature);
   return `This settings section requires ${tierLabel}.`;
 }

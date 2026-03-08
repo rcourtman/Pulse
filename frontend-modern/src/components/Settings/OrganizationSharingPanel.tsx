@@ -22,6 +22,12 @@ import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import {
+  CANONICAL_RESOURCE_TYPES,
+  INVALID_RESOURCE_TYPE_ERROR,
+  isCanonicalResourceType,
+  normalizeCanonicalResourceTypeInput,
+} from '@/utils/canonicalResourceTypes';
 import { useResources, getDisplayName } from '@/hooks/useResources';
 import Share2 from 'lucide-solid/icons/share-2';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -44,39 +50,6 @@ const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [
   { value: 'editor', label: 'Editor' },
   { value: 'admin', label: 'Admin' },
 ];
-
-const CANONICAL_RESOURCE_TYPES = [
-  'agent',
-  'docker-host',
-  'k8s-cluster',
-  'k8s-node',
-  'truenas',
-  'vm',
-  'system-container',
-  'app-container',
-  'oci-container',
-  'pod',
-  'jail',
-  'docker-service',
-  'k8s-deployment',
-  'k8s-service',
-  'storage',
-  'datastore',
-  'pool',
-  'dataset',
-  'pbs',
-  'pmg',
-  'physical_disk',
-  'ceph',
-] as const;
-const INVALID_RESOURCE_TYPE_ERROR = `Invalid resource type. Valid types: ${CANONICAL_RESOURCE_TYPES.join(', ')}`;
-
-const normalizeResourceTypeInput = (value: string): string => {
-  return value.trim().toLowerCase();
-};
-
-const isValidResourceType = (value: string): value is (typeof CANONICAL_RESOURCE_TYPES)[number] =>
-  (CANONICAL_RESOURCE_TYPES as readonly string[]).includes(value);
 
 const normalizeShareRole = (role: OrganizationRole): ShareAccessRole => {
   const normalized = normalizeRole(role);
@@ -125,12 +98,14 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       .sort((left, right) => left.name.localeCompare(right.name));
   });
 
-  const normalizedResourceType = createMemo(() => normalizeResourceTypeInput(resourceType()));
+  const normalizedResourceType = createMemo(() =>
+    normalizeCanonicalResourceTypeInput(resourceType()),
+  );
   const normalizedResourceId = createMemo(() => resourceId().trim());
   const hasTargetOrg = createMemo(() => targetOrgId().trim() !== '');
   const hasQuickPickSelection = createMemo(() => selectedQuickPick().trim() !== '');
   const manualEntryValid = createMemo(
-    () => isValidResourceType(normalizedResourceType()) && normalizedResourceId() !== '',
+    () => isCanonicalResourceType(normalizedResourceType()) && normalizedResourceId() !== '',
   );
   const canCreateShare = createMemo(
     () => !saving() && hasTargetOrg() && (hasQuickPickSelection() || manualEntryValid()),
@@ -209,7 +184,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       (resource) => resource.id === (nextID ?? '') && resource.type === (nextType ?? ''),
     );
     if (!match) return;
-    setResourceType(normalizeResourceTypeInput(match.type));
+    setResourceType(normalizeCanonicalResourceTypeInput(match.type));
     setResourceId(match.id);
     setResourceName(match.name);
   };
@@ -232,9 +207,9 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const updateResourceType = (value: string) => {
     setSelectedQuickPick('');
     setResourceType(value);
-    const normalized = normalizeResourceTypeInput(value);
+    const normalized = normalizeCanonicalResourceTypeInput(value);
     setResourceTypeError(
-      normalized === '' || isValidResourceType(normalized) ? '' : INVALID_RESOURCE_TYPE_ERROR,
+      normalized === '' || isCanonicalResourceType(normalized) ? '' : INVALID_RESOURCE_TYPE_ERROR,
     );
   };
 
@@ -258,7 +233,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     const nextResourceId = normalizedResourceId();
     const nextResourceName = resourceName().trim();
     const hasQuickPick = hasQuickPickSelection();
-    const hasValidManualType = isValidResourceType(nextResourceType);
+    const hasValidManualType = isCanonicalResourceType(nextResourceType);
     const hasValidManualResourceId = nextResourceId !== '';
 
     setTargetOrgError(nextTargetOrgId === '' ? 'Target organization is required' : '');
