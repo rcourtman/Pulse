@@ -2,11 +2,10 @@ import { Component, Show, createMemo } from 'solid-js';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { getMetricColorHex } from '@/utils/metricThresholds';
-import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
+import type { StorageRecord } from '@/features/storageBackups/models';
 import type { Resource } from '@/types/resource';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
-import { ZFSHealthMap } from './ZFSHealthMap';
 import { useStorageSparkline } from './useStorageSparklines';
 import {
   getRecordActionSummary,
@@ -37,14 +36,6 @@ interface StoragePoolRowProps {
   };
 }
 
-const HEALTH_BADGE: Record<NormalizedHealth, string> = {
-  healthy: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
-  warning: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
-  critical: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
-  offline: 'bg-surface-hover text-muted',
-  unknown: 'bg-surface-hover text-muted',
-};
-
 const platformBadgeClass = (platform: string): string => {
   switch (platform.trim().toLowerCase()) {
     case 'pve':
@@ -67,13 +58,7 @@ const protectionBadgeClass = (record: StorageRecord): string => {
   if (record.protectionReduced || record.incidentCategory === 'recoverability') {
     return 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300';
   }
-  if (record.health === 'warning') {
-    return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
-  }
-  if (record.health === 'critical' || record.health === 'offline') {
-    return 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300';
-  }
-  return 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300';
+  return 'bg-surface-hover text-base-content';
 };
 
 const issueBadgeClass = (record: StorageRecord): string => {
@@ -84,7 +69,7 @@ const issueBadgeClass = (record: StorageRecord): string => {
   if (severity === 'warning') {
     return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
   }
-  return 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300';
+  return 'bg-surface-hover text-base-content';
 };
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
@@ -105,6 +90,70 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const issueSummary = createMemo(() => getRecordIssueSummary(props.record));
   const impactSummary = createMemo(() => getRecordImpactSummary(props.record));
   const actionSummary = createMemo(() => getRecordActionSummary(props.record));
+  const normalizedStatus = createMemo(() => (props.record.statusLabel || '').trim().toLowerCase());
+
+  const compactProtection = createMemo(() => {
+    if (props.record.rebuildInProgress || props.record.protectionReduced) {
+      return protectionLabel();
+    }
+    const label = protectionLabel().trim();
+    if (label && label.toLowerCase() !== 'healthy') {
+      return label;
+    }
+    return '—';
+  });
+
+  const compactImpact = createMemo(() => {
+    if (
+      (props.record.consumerCount || 0) > 0 ||
+      (props.record.protectedWorkloadCount || 0) > 0 ||
+      (props.record.affectedDatastoreCount || 0) > 0
+    ) {
+      return impactSummary();
+    }
+    return '—';
+  });
+
+  const compactIssue = createMemo(() => {
+    const label = issueLabel().trim();
+    if (label && label.toLowerCase() !== 'healthy') {
+      return label;
+    }
+    if (zfsPool() && zfsPool()!.state !== 'ONLINE') {
+      return zfsPool()!.state;
+    }
+    if (
+      normalizedStatus() &&
+      !['online', 'available', 'running', 'healthy'].includes(normalizedStatus())
+    ) {
+      return props.record.statusLabel || 'Issue';
+    }
+    return '—';
+  });
+
+  const compactIssueSummary = createMemo(() => {
+    if (compactIssue() === '—') return '';
+    const summary = issueSummary().trim();
+    if (summary && summary.toLowerCase() !== 'healthy') {
+      return summary;
+    }
+    const pool = zfsPool();
+    if (!pool) return '';
+    const errorParts: string[] = [];
+    if ((pool.readErrors || 0) > 0) errorParts.push(`${pool.readErrors} read`);
+    if ((pool.writeErrors || 0) > 0) errorParts.push(`${pool.writeErrors} write`);
+    if ((pool.checksumErrors || 0) > 0) errorParts.push(`${pool.checksumErrors} checksum`);
+    return errorParts.length > 0 ? `${errorParts.join(', ')} errors` : '';
+  });
+
+  const compactAction = createMemo(() => {
+    if (compactIssue() === '—') return '—';
+    const action = actionSummary().trim();
+    if (action && action.toLowerCase() !== 'monitor') {
+      return action;
+    }
+    return 'Investigate';
+  });
 
   const sparklineResourceId = createMemo(() => props.record.refs?.resourceId || props.record.id);
   const { data: sparklineData } = useStorageSparkline(
@@ -122,76 +171,49 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     <>
       <tr
         class={`group cursor-pointer ${props.rowClass} ${props.expanded ? 'bg-surface-alt' : ''}`}
-        style={{ ...props.rowStyle, 'height': '38px' }}
+        style={{ ...props.rowStyle, height: '38px' }}
         onClick={props.onToggleExpand}
         {...props.alertDataAttrs}
       >
         <td class="px-2 py-1 align-middle text-base-content">
-          <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-            <span class="truncate text-[12px] font-semibold" title={props.record.name}>
-              {props.record.name}
-            </span>
-            <span
-              class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${platformBadgeClass(
-                platformLabel(),
-              )}`}
-            >
-              {platformLabel()}
-            </span>
-            <span class="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-base-content">
-              {topologyLabel()}
-            </span>
-            <Show when={zfsPool() && zfsPool()!.devices.length > 0}>
-              <span class="shrink-0">
-                <ZFSHealthMap pool={zfsPool()!} />
-              </span>
-            </Show>
-            <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
-              <span
-                class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                  zfsPool()?.state === 'DEGRADED'
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                    : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
-                }`}
-              >
-                {zfsPool()?.state}
-              </span>
-            </Show>
-            <Show
-              when={
-                zfsPool() &&
-                (zfsPool()!.readErrors > 0 ||
-                  zfsPool()!.writeErrors > 0 ||
-                  zfsPool()!.checksumErrors > 0)
-              }
-            >
-              <span class="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">
-                ERRORS
-              </span>
-            </Show>
-            <span
-              class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${HEALTH_BADGE[props.record.health]}`}
-            >
-              {props.record.statusLabel || props.record.health}
-            </span>
-          </div>
-        </td>
-
-        <td class="px-2 py-1 align-middle text-[11px] text-base-content">
-          <span class="block truncate" title={`${hostLabel()} · ${platformLabel()}`}>
-            {hostLabel()} · {platformLabel()}
+          <span class="block truncate text-[12px] font-semibold" title={props.record.name}>
+            {props.record.name}
           </span>
         </td>
 
         <td class="px-2 py-1 align-middle text-[11px]">
           <span
-            class={`inline-flex max-w-full rounded px-1.5 py-0.5 font-semibold ${protectionBadgeClass(
-              props.record,
+            class={`inline-flex rounded px-1.5 py-0.5 font-semibold ${platformBadgeClass(
+              platformLabel(),
             )}`}
-            title={protectionLabel()}
           >
-            <span class="truncate">{protectionLabel()}</span>
+            {platformLabel()}
           </span>
+        </td>
+
+        <td class="px-2 py-1 align-middle text-[11px] text-base-content">
+          <span class="block truncate" title={topologyLabel()}>
+            {topologyLabel()}
+          </span>
+        </td>
+
+        <td class="px-2 py-1 align-middle text-[11px] text-base-content">
+          <span class="block truncate" title={hostLabel()}>
+            {hostLabel()}
+          </span>
+        </td>
+
+        <td class="px-2 py-1 align-middle text-[11px]">
+          <Show when={compactProtection() !== '—'} fallback={<span class="text-muted">—</span>}>
+            <span
+              class={`inline-flex max-w-full rounded px-1.5 py-0.5 font-semibold ${protectionBadgeClass(
+                props.record,
+              )}`}
+              title={compactProtection()}
+            >
+              <span class="truncate">{compactProtection()}</span>
+            </span>
+          </Show>
         </td>
 
         <td class="px-2 py-1 align-middle md:min-w-[220px]">
@@ -206,7 +228,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
                   zfsPool={zfsPool() || undefined}
                 />
               </div>
-              <span class="truncate text-muted" title={`${formatBytes(usedBytes())} / ${formatBytes(totalBytes())}`}>
+              <span
+                class="truncate text-muted"
+                title={`${formatBytes(usedBytes())} / ${formatBytes(totalBytes())}`}
+              >
                 {formatBytes(usedBytes())} / {formatBytes(totalBytes())}
               </span>
               <Show when={sparklineData().length > 0}>
@@ -223,29 +248,33 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         <td class="hidden lg:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
-          <span class="block truncate" title={impactSummary()}>
-            {impactSummary()}
+          <span class={`block truncate ${compactImpact() === '—' ? 'text-muted' : ''}`} title={compactImpact()}>
+            {compactImpact()}
           </span>
         </td>
 
         <td class="px-2 py-1 align-middle text-[11px]">
-          <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-            <span
-              class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${issueBadgeClass(
-                props.record,
-              )}`}
-            >
-              {issueLabel()}
-            </span>
-            <span class="truncate text-muted" title={issueSummary() || 'No active issues'}>
-              {issueSummary() || 'No active issues'}
-            </span>
-          </div>
+          <Show when={compactIssue() !== '—'} fallback={<span class="text-muted">—</span>}>
+            <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+              <span
+                class={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${issueBadgeClass(
+                  props.record,
+                )}`}
+              >
+                {compactIssue()}
+              </span>
+              <Show when={compactIssueSummary()}>
+                <span class="truncate text-muted" title={compactIssueSummary()}>
+                  {compactIssueSummary()}
+                </span>
+              </Show>
+            </div>
+          </Show>
         </td>
 
         <td class="hidden xl:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
-          <span class="block truncate" title={actionSummary()}>
-            {actionSummary()}
+          <span class={`block truncate ${compactAction() === '—' ? 'text-muted' : ''}`} title={compactAction()}>
+            {compactAction()}
           </span>
         </td>
 

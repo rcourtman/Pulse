@@ -375,12 +375,15 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(screen.getByRole('columnheader', { name: 'Storage' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Host / Platform' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Protection' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Host' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Primary Issue' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Action' })).toBeInTheDocument();
-    expect(screen.getAllByText('pve1 · PVE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('PVE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('pve1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Protection Reduced').length).toBeGreaterThan(0);
     expect(screen.getByText('Pool redundancy is reduced.')).toBeInTheDocument();
     expect(screen.getByText('Replace affected member disk')).toBeInTheDocument();
@@ -628,8 +631,7 @@ describe('Storage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('DEGRADED').length).toBeGreaterThan(0);
     });
-    // ZFS badges (DEGRADED, ERRORS) are now shown inline in pool rows
-    expect(screen.getByText('ERRORS')).toBeInTheDocument();
+    expect(screen.getByText(/1 read, 2 checksum errors/i)).toBeInTheDocument();
   });
 
   it('shows disconnected waiting state while loading with no initial data', () => {
