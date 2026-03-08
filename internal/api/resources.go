@@ -185,6 +185,37 @@ func (h *ResourceHandlers) HandleStorageSummary(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(response)
 }
 
+// HandleStorageIncidents handles GET /api/resources/storage-incidents.
+func (h *ResourceHandlers) HandleStorageIncidents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resources := registry.List()
+	filters := parseListFilters(r)
+	incidentSubjects := make([]unified.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if !isStorageSummaryResource(resource) || resource.IncidentCount == 0 {
+			continue
+		}
+		incidentSubjects = append(incidentSubjects, resource)
+	}
+	incidentSubjects = applyFilters(incidentSubjects, filters)
+
+	response := buildStorageIncidentsResponse(incidentSubjects)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // pruneResourcesForListResponse removes heavy, platform-specific fields that would bloat
 // the list response. Detail drawers can fetch full payloads via GET /api/resources/{id}.
 func pruneResourcesForListResponse(resources []unified.Resource) {
@@ -826,6 +857,26 @@ type StorageSummaryIncident struct {
 	AffectedDatastores    int    `json:"affectedDatastores,omitempty"`
 }
 
+type StorageIncidentsResponse struct {
+	GeneratedAt       time.Time                `json:"generatedAt"`
+	TotalResources    int                      `json:"totalResources"`
+	CriticalResources int                      `json:"criticalResources"`
+	WarningResources  int                      `json:"warningResources"`
+	ByCategory        map[string]int           `json:"byCategory"`
+	ByUrgency         map[string]int           `json:"byUrgency"`
+	Sections          []StorageIncidentSection `json:"sections"`
+}
+
+type StorageIncidentSection struct {
+	Category          string                   `json:"category"`
+	Label             string                   `json:"label"`
+	ResourceCount     int                      `json:"resourceCount"`
+	CriticalResources int                      `json:"criticalResources"`
+	WarningResources  int                      `json:"warningResources"`
+	PrimaryUrgency    string                   `json:"primaryUrgency,omitempty"`
+	Resources         []StorageSummaryIncident `json:"resources"`
+}
+
 type registryCacheEntry struct {
 	registry   *unified.ResourceRegistry
 	lastUpdate time.Time
@@ -878,48 +929,196 @@ func buildStorageSummaryResponse(resources []unified.Resource) StorageSummaryRes
 	}
 
 	sort.Slice(incidentCandidates, func(i, j int) bool {
-		if incidentCandidates[i].IncidentPriority != incidentCandidates[j].IncidentPriority {
-			return incidentCandidates[i].IncidentPriority > incidentCandidates[j].IncidentPriority
-		}
-		if incidentCandidates[i].IncidentSeverity != incidentCandidates[j].IncidentSeverity {
-			return incidentCandidates[i].IncidentSeverity > incidentCandidates[j].IncidentSeverity
-		}
-		if incidentCandidates[i].Name != incidentCandidates[j].Name {
-			return incidentCandidates[i].Name < incidentCandidates[j].Name
-		}
-		return incidentCandidates[i].ID < incidentCandidates[j].ID
+		return storageIncidentLess(incidentCandidates[i], incidentCandidates[j])
 	})
 
 	for i, resource := range incidentCandidates {
 		if i == 10 {
 			break
 		}
-		response.TopIncidents = append(response.TopIncidents, StorageSummaryIncident{
-			ResourceID:            resource.ID,
-			ResourceType:          string(frontendResourceType(resource)),
-			Name:                  resource.Name,
-			ParentName:            resource.ParentName,
-			Platform:              storageSummaryPlatform(resource),
-			Topology:              storageSummaryTopology(resource),
-			Status:                string(resource.Status),
-			IncidentCount:         resource.IncidentCount,
-			IncidentCategory:      resource.IncidentCategory,
-			IncidentLabel:         resource.IncidentLabel,
-			IncidentSeverity:      string(resource.IncidentSeverity),
-			IncidentPriority:      resource.IncidentPriority,
-			IncidentSummary:       resource.IncidentSummary,
-			IncidentImpactSummary: resource.IncidentImpactSummary,
-			IncidentUrgency:       resource.IncidentUrgency,
-			IncidentAction:        resource.IncidentAction,
-			ProtectionReduced:     storageSummaryProtectionReduced(resource),
-			RebuildInProgress:     storageSummaryRebuildInProgress(resource),
-			ConsumerCount:         storageSummaryConsumerCount(resource),
-			ProtectedWorkloads:    storageSummaryProtectedWorkloadCount(resource),
-			AffectedDatastores:    storageSummaryAffectedDatastoreCount(resource),
-		})
+		response.TopIncidents = append(response.TopIncidents, buildStorageSummaryIncident(resource))
 	}
 
 	return response
+}
+
+func buildStorageIncidentsResponse(resources []unified.Resource) StorageIncidentsResponse {
+	response := StorageIncidentsResponse{
+		GeneratedAt: time.Now().UTC(),
+		ByCategory:  make(map[string]int),
+		ByUrgency:   make(map[string]int),
+		Sections:    make([]StorageIncidentSection, 0),
+	}
+	if len(resources) == 0 {
+		return response
+	}
+
+	incidentResources := cloneStorageIncidentSubjects(resources)
+	sort.Slice(incidentResources, func(i, j int) bool {
+		return storageIncidentLess(incidentResources[i], incidentResources[j])
+	})
+
+	sectionIndex := make(map[string]int)
+	for _, resource := range incidentResources {
+		response.TotalResources++
+		switch resource.IncidentSeverity {
+		case storagehealth.RiskCritical:
+			response.CriticalResources++
+		default:
+			response.WarningResources++
+		}
+
+		category := strings.TrimSpace(resource.IncidentCategory)
+		if category == "" {
+			category = unified.IncidentCategoryHealth
+		}
+		response.ByCategory[category]++
+
+		urgency := strings.TrimSpace(resource.IncidentUrgency)
+		if urgency == "" {
+			urgency = unified.IncidentUrgencyPlan
+		}
+		response.ByUrgency[urgency]++
+
+		idx, ok := sectionIndex[category]
+		if !ok {
+			response.Sections = append(response.Sections, StorageIncidentSection{
+				Category:  category,
+				Label:     storageIncidentSectionLabel(category),
+				Resources: make([]StorageSummaryIncident, 0, 8),
+			})
+			idx = len(response.Sections) - 1
+			sectionIndex[category] = idx
+		}
+
+		section := &response.Sections[idx]
+		section.ResourceCount++
+		switch resource.IncidentSeverity {
+		case storagehealth.RiskCritical:
+			section.CriticalResources++
+		default:
+			section.WarningResources++
+		}
+		if storageIncidentUrgencyRank(urgency) > storageIncidentUrgencyRank(section.PrimaryUrgency) {
+			section.PrimaryUrgency = urgency
+		}
+		section.Resources = append(section.Resources, buildStorageSummaryIncident(resource))
+	}
+
+	sort.SliceStable(response.Sections, func(i, j int) bool {
+		left := response.Sections[i]
+		right := response.Sections[j]
+		if storageIncidentCategoryRank(left.Category) != storageIncidentCategoryRank(right.Category) {
+			return storageIncidentCategoryRank(left.Category) < storageIncidentCategoryRank(right.Category)
+		}
+		if left.CriticalResources != right.CriticalResources {
+			return left.CriticalResources > right.CriticalResources
+		}
+		if left.ResourceCount != right.ResourceCount {
+			return left.ResourceCount > right.ResourceCount
+		}
+		return left.Label < right.Label
+	})
+
+	return response
+}
+
+func buildStorageSummaryIncident(resource unified.Resource) StorageSummaryIncident {
+	return StorageSummaryIncident{
+		ResourceID:            resource.ID,
+		ResourceType:          string(frontendResourceType(resource)),
+		Name:                  resource.Name,
+		ParentName:            resource.ParentName,
+		Platform:              storageSummaryPlatform(resource),
+		Topology:              storageSummaryTopology(resource),
+		Status:                string(resource.Status),
+		IncidentCount:         resource.IncidentCount,
+		IncidentCategory:      resource.IncidentCategory,
+		IncidentLabel:         resource.IncidentLabel,
+		IncidentSeverity:      string(resource.IncidentSeverity),
+		IncidentPriority:      resource.IncidentPriority,
+		IncidentSummary:       resource.IncidentSummary,
+		IncidentImpactSummary: resource.IncidentImpactSummary,
+		IncidentUrgency:       resource.IncidentUrgency,
+		IncidentAction:        resource.IncidentAction,
+		ProtectionReduced:     storageSummaryProtectionReduced(resource),
+		RebuildInProgress:     storageSummaryRebuildInProgress(resource),
+		ConsumerCount:         storageSummaryConsumerCount(resource),
+		ProtectedWorkloads:    storageSummaryProtectedWorkloadCount(resource),
+		AffectedDatastores:    storageSummaryAffectedDatastoreCount(resource),
+	}
+}
+
+func cloneStorageIncidentSubjects(resources []unified.Resource) []unified.Resource {
+	cloned := make([]unified.Resource, len(resources))
+	copy(cloned, resources)
+	return cloned
+}
+
+func storageIncidentLess(left, right unified.Resource) bool {
+	if left.IncidentPriority != right.IncidentPriority {
+		return left.IncidentPriority > right.IncidentPriority
+	}
+	if left.IncidentSeverity != right.IncidentSeverity {
+		return left.IncidentSeverity > right.IncidentSeverity
+	}
+	if left.Name != right.Name {
+		return left.Name < right.Name
+	}
+	return left.ID < right.ID
+}
+
+func storageIncidentSectionLabel(category string) string {
+	switch strings.TrimSpace(category) {
+	case unified.IncidentCategoryRecoverability:
+		return "Backup & Recoverability"
+	case unified.IncidentCategoryProtection:
+		return "Protection & Redundancy"
+	case unified.IncidentCategoryRebuild:
+		return "Rebuild & Recovery"
+	case unified.IncidentCategoryCapacity:
+		return "Capacity Pressure"
+	case unified.IncidentCategoryDiskHealth:
+		return "Disk Health"
+	case unified.IncidentCategoryAvailability:
+		return "Availability"
+	default:
+		return "Storage Health"
+	}
+}
+
+func storageIncidentCategoryRank(category string) int {
+	switch strings.TrimSpace(category) {
+	case unified.IncidentCategoryRecoverability:
+		return 1
+	case unified.IncidentCategoryProtection:
+		return 2
+	case unified.IncidentCategoryRebuild:
+		return 3
+	case unified.IncidentCategoryCapacity:
+		return 4
+	case unified.IncidentCategoryDiskHealth:
+		return 5
+	case unified.IncidentCategoryAvailability:
+		return 6
+	default:
+		return 7
+	}
+}
+
+func storageIncidentUrgencyRank(urgency string) int {
+	switch strings.TrimSpace(urgency) {
+	case unified.IncidentUrgencyNow:
+		return 4
+	case unified.IncidentUrgencyToday:
+		return 3
+	case unified.IncidentUrgencyPlan:
+		return 2
+	case unified.IncidentUrgencyMonitor:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func isStorageSummaryResource(resource unified.Resource) bool {

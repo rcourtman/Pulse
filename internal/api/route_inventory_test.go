@@ -340,6 +340,7 @@ var allRouteAllowlist = []string{
 	"/api/recovery/facets",
 	"/api/recovery/rollups",
 	"/api/resources",
+	"/api/resources/storage-incidents",
 	"/api/resources/storage-summary",
 	"/api/resources/k8s/namespaces",
 	"/api/resources/stats",
