@@ -341,6 +341,24 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		if protection := strings.TrimSpace(resource.Storage.Protection); protection != "" {
 			metadata["storageProtection"] = protection
 		}
+		if resource.Storage.Risk != nil {
+			riskCodes, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := storageRiskAlertSemantics(resource.Storage.Risk)
+			if len(riskCodes) > 0 {
+				metadata["storageRiskCodes"] = riskCodes
+			}
+			if protectionReduced {
+				metadata["protectionReduced"] = true
+			}
+			if rebuildInProgress {
+				metadata["rebuildInProgress"] = true
+			}
+			if protectionSummary != "" {
+				metadata["protectionSummary"] = protectionSummary
+			}
+			if rebuildSummary != "" {
+				metadata["rebuildSummary"] = rebuildSummary
+			}
+		}
 		if resource.Storage.ConsumerCount > 0 {
 			metadata["consumerCount"] = resource.Storage.ConsumerCount
 			metadata["consumerImpactSummary"] = unifiedIncidentConsumerSummary(resource.Storage)
@@ -396,4 +414,36 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 
 func intLabel(value int) string {
 	return strconv.Itoa(value)
+}
+
+func storageRiskAlertSemantics(risk *unifiedresources.StorageRisk) ([]string, bool, bool, string, string) {
+	if risk == nil || len(risk.Reasons) == 0 {
+		return nil, false, false, "", ""
+	}
+
+	codes := make([]string, 0, len(risk.Reasons))
+	protectionReduced := false
+	rebuildInProgress := false
+	protectionSummary := ""
+	rebuildSummary := ""
+	for _, reason := range risk.Reasons {
+		code := strings.TrimSpace(reason.Code)
+		if code != "" {
+			codes = append(codes, code)
+		}
+		switch code {
+		case "raid_degraded", "raid_unavailable", "unraid_invalid_disks", "unraid_disabled_disks", "unraid_missing_disks", "unraid_parity_unavailable", "unraid_no_parity", "zfs_pool_state":
+			protectionReduced = true
+			if protectionSummary == "" {
+				protectionSummary = strings.TrimSpace(reason.Summary)
+			}
+		case "raid_rebuilding", "unraid_sync_active":
+			rebuildInProgress = true
+			if rebuildSummary == "" {
+				rebuildSummary = strings.TrimSpace(reason.Summary)
+			}
+		}
+	}
+
+	return codes, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary
 }

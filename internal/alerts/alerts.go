@@ -7228,6 +7228,9 @@ func (m *Manager) GetActiveAlerts() []Alert {
 		if left, right := alertSeveritySortRank(alerts[i]), alertSeveritySortRank(alerts[j]); left != right {
 			return left > right
 		}
+		if left, right := alertProtectionSortRank(alerts[i]), alertProtectionSortRank(alerts[j]); left != right {
+			return left > right
+		}
 		if left, right := alertImpactSortRank(alerts[i]), alertImpactSortRank(alerts[j]); left != right {
 			return left > right
 		}
@@ -7244,6 +7247,17 @@ func (m *Manager) GetActiveAlerts() []Alert {
 	})
 
 	return alerts
+}
+
+func alertProtectionSortRank(alert Alert) int {
+	switch {
+	case metadataBoolValue(alert.Metadata, "protectionReduced"):
+		return 2
+	case metadataBoolValue(alert.Metadata, "rebuildInProgress"):
+		return 1
+	default:
+		return 0
+	}
 }
 
 func alertSeveritySortRank(alert Alert) int {
@@ -7313,6 +7327,54 @@ func metadataIntValue(value interface{}) int {
 		}
 	}
 	return 0
+}
+
+func metadataBoolValue(metadata map[string]interface{}, key string) bool {
+	if metadata == nil {
+		return false
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return false
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "on":
+			return true
+		}
+	case int:
+		return v != 0
+	case int8:
+		return v != 0
+	case int16:
+		return v != 0
+	case int32:
+		return v != 0
+	case int64:
+		return v != 0
+	case uint:
+		return v != 0
+	case uint8:
+		return v != 0
+	case uint16:
+		return v != 0
+	case uint32:
+		return v != 0
+	case uint64:
+		return v != 0
+	case float32:
+		return v != 0
+	case float64:
+		return v != 0
+	case json.Number:
+		if parsed, err := v.Int64(); err == nil {
+			return parsed != 0
+		}
+	}
+	return false
 }
 
 // NotifyExistingAlert re-dispatches a notification for an existing active alert

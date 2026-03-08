@@ -177,6 +177,58 @@ func TestSyncUnifiedResourceIncidentsSuppressesRedundantParentAndChildAlerts(t *
 	}
 }
 
+func TestSyncUnifiedResourceIncidentsIncludesProtectionAndRebuildSemantics(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:   "storage:array",
+		Type: unifiedresources.ResourceTypeStorage,
+		Name: "array",
+		Storage: &unifiedresources.StorageMeta{
+			Platform:   "unraid",
+			Topology:   "array",
+			Protection: "single-parity",
+			Risk: &unifiedresources.StorageRisk{
+				Level: storagehealth.RiskCritical,
+				Reasons: []unifiedresources.StorageRiskReason{
+					{Code: "unraid_parity_unavailable", Severity: storagehealth.RiskCritical, Summary: "Unraid parity protection is unavailable"},
+					{Code: "unraid_sync_active", Severity: storagehealth.RiskWarning, Summary: "Unraid array is running parity-sync (25%)"},
+				},
+			},
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "pulse",
+			NativeID: "topology-1",
+			Code:     "storage_topology_risk",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Unraid array protection is unavailable",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := "unified-incident-storage-array-pulse-topology-1-storage-topology-risk"
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+
+	if got := alert.Metadata["protectionReduced"]; got != true {
+		t.Fatalf("protectionReduced = %v, want true", got)
+	}
+	if got := alert.Metadata["rebuildInProgress"]; got != true {
+		t.Fatalf("rebuildInProgress = %v, want true", got)
+	}
+	if got := alert.Metadata["protectionSummary"]; got != "Unraid parity protection is unavailable" {
+		t.Fatalf("protectionSummary = %v", got)
+	}
+	if got := alert.Metadata["rebuildSummary"]; got != "Unraid array is running parity-sync (25%)" {
+		t.Fatalf("rebuildSummary = %v", got)
+	}
+}
+
 func TestGetActiveAlertsPrioritizesHighImpactStorageIncidents(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
@@ -220,6 +272,62 @@ func TestGetActiveAlertsPrioritizesHighImpactStorageIncidents(t *testing.T) {
 	}
 	if active[0].ResourceID != "storage:shared" {
 		t.Fatalf("expected storage incident first, got %q then %q", active[0].ResourceID, active[1].ResourceID)
+	}
+}
+
+func TestGetActiveAlertsPrioritizesProtectionLossAboveRebuildOnly(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{
+		{
+			ID:   "storage:protection-loss",
+			Type: unifiedresources.ResourceTypeStorage,
+			Name: "protection-loss",
+			Storage: &unifiedresources.StorageMeta{
+				Risk: &unifiedresources.StorageRisk{
+					Level: storagehealth.RiskCritical,
+					Reasons: []unifiedresources.StorageRiskReason{
+						{Code: "unraid_parity_unavailable", Severity: storagehealth.RiskCritical, Summary: "Parity unavailable"},
+					},
+				},
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "protection",
+				Code:     "storage_topology_risk",
+				Severity: storagehealth.RiskCritical,
+				Summary:  "Protection lost",
+			}},
+		},
+		{
+			ID:   "storage:rebuild",
+			Type: unifiedresources.ResourceTypeStorage,
+			Name: "rebuild",
+			Storage: &unifiedresources.StorageMeta{
+				Risk: &unifiedresources.StorageRisk{
+					Level: storagehealth.RiskWarning,
+					Reasons: []unifiedresources.StorageRiskReason{
+						{Code: "raid_rebuilding", Severity: storagehealth.RiskWarning, Summary: "RAID is rebuilding"},
+					},
+				},
+			},
+			Incidents: []unifiedresources.ResourceIncident{{
+				Provider: "pulse",
+				NativeID: "rebuild",
+				Code:     "storage_topology_risk",
+				Severity: storagehealth.RiskWarning,
+				Summary:  "Rebuild in progress",
+			}},
+		},
+	})
+
+	active := m.GetActiveAlerts()
+	if len(active) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(active))
+	}
+	if active[0].ResourceID != "storage:protection-loss" {
+		t.Fatalf("expected protection-loss alert first, got %q then %q", active[0].ResourceID, active[1].ResourceID)
 	}
 }
 
