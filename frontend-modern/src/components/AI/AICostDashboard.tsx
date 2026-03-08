@@ -501,7 +501,8 @@ export const AICostDashboard: Component = () => {
                     {unpricedProviderModels()
                       .slice(0, 6)
                       .map(
-                        (pm) => `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`,
+                        (pm) =>
+                          `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`,
                       )
                       .join(', ')}
                     <Show when={unpricedProviderModels().length > 6}>

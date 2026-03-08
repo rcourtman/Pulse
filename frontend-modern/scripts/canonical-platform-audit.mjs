@@ -328,6 +328,14 @@ const MAP_RULES = [
     validate: () => true,
   },
   {
+    rule: 'canonical-ai/no-raw-provider-display-map-import',
+    regex:
+      /import\s*\{[\s\S]*?\bAI_PROVIDER_DISPLAY_NAMES\b[\s\S]*?\}\s*from\s*['"]@\/utils\/aiProviderPresentation['"]/g,
+    message:
+      'Do not import the raw AI provider display-name map in UI code. Use getAIProviderDisplayName from @/utils/aiProviderPresentation instead.',
+    validate: () => true,
+  },
+  {
     rule: 'canonical-license/no-local-tier-or-feature-label-map',
     regex:
       /\b(?:const|let|var)\s+(?:TIER_LABELS|FEATURE_LABELS|tierLabel|featureMinTier)\s*=\s*\{([\s\S]*?)\n\};?/g,
