@@ -28,6 +28,8 @@ export const createVisibleCanonicalTypeColumn = (
   options: CanonicalTypeColumnOptions = {},
 ): ColumnDef =>
   createCanonicalTypeColumn({
+    width: '60px',
+    sortKey: 'type',
     ...options,
     defaultVisibility: 'visible',
   });

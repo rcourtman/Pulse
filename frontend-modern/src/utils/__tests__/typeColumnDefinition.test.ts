@@ -11,6 +11,8 @@ describe('typeColumnDefinition', () => {
       label: 'Type',
       toggleable: true,
       defaultHidden: false,
+      width: '60px',
+      sortKey: 'type',
     });
   });
 
@@ -24,15 +26,15 @@ describe('typeColumnDefinition', () => {
   });
 
   it('passes through canonical size and sort options', () => {
-    expect(createVisibleCanonicalTypeColumn({ width: '60px', sortKey: 'type' })).toMatchObject({
-      width: '60px',
+    expect(createVisibleCanonicalTypeColumn({ width: '72px' })).toMatchObject({
+      width: '72px',
       sortKey: 'type',
       defaultHidden: false,
     });
   });
 
   it('provides a visible preset helper for standard type columns', () => {
-    expect(createVisibleCanonicalTypeColumn({ width: '60px' })).toMatchObject({
+    expect(createVisibleCanonicalTypeColumn()).toMatchObject({
       id: 'type',
       label: 'Type',
       toggleable: true,
