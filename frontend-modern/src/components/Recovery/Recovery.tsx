@@ -126,8 +126,6 @@ const titleize = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-const subjectMetaSlotClass = 'inline-flex shrink-0 items-center justify-end gap-1 min-w-[4.5rem]';
-
 type IssueTone = RecoveryIssueTone;
 
 const Recovery: Component = () => {
@@ -1945,17 +1943,17 @@ const Recovery: Component = () => {
                                           case 'subject':
                                             return (
                                               <TableCell
-                                                class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-base-content"
+                                                class="max-w-[420px] px-3 py-1 text-base-content"
                                                 title={subject}
                                               >
-                                                <span class="inline-flex min-w-0 max-w-full items-center gap-1.5">
-                                                  <span class="min-w-0 flex-1 truncate font-medium">
+                                                <div class="flex min-w-0 max-w-full flex-col gap-1">
+                                                  <span class="min-w-0 truncate font-medium leading-tight">
                                                     {subject}
                                                   </span>
-                                                  <span class={subjectMetaSlotClass}>
+                                                  <span class="inline-flex min-h-[0.875rem] items-center gap-1.5">
                                                     <Show when={subjectType}>
                                                       <span
-                                                        class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoverySubjectTypeBadgeClass(
+                                                        class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium leading-none ${getRecoverySubjectTypeBadgeClass(
                                                           p,
                                                         )}`}
                                                       >
@@ -1993,7 +1991,7 @@ const Recovery: Component = () => {
                                                       </svg>
                                                     </Show>
                                                   </span>
-                                                </span>
+                                                </div>
                                               </TableCell>
                                             );
                                           case 'entityId':
