@@ -133,41 +133,39 @@ describe('Recovery', () => {
   });
 
   it('renders protected rollups and resolves unified resource names', async () => {
-    mockLocationSearch = '?view=protected';
     render(() => <Recovery />);
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
   });
 
-  it('drills down into events when a rollup is clicked', async () => {
-    mockLocationSearch = '?view=protected';
+  it('focuses history when a rollup is clicked', async () => {
     render(() => <Recovery />);
 
     const subject = await screen.findByText('VM 123');
     fireEvent.click(subject);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&rollupId=res%3Avm-123', {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?rollupId=res%3Avm-123', {
         replace: true,
       });
     });
 
-    const tablesItems = await screen.findAllByText('VM 123');
-    expect(tablesItems.length).toBeGreaterThan(0);
+    expect(await screen.findByText('Showing history for')).toBeInTheDocument();
     await screen.findByText(/Showing 1 - 1 of 1 events/i);
-    const table = await screen.findByRole('table');
+    const tables = await screen.findAllByRole('table');
+    const table = tables[tables.length - 1];
     expect(within(table).getAllByText('Local').length).toBeGreaterThan(0);
     expect(within(table).getAllByText('Success').length).toBeGreaterThan(0);
   });
 
   it('filters protected rollups by provider', async () => {
-    mockLocationSearch = '?view=protected';
     render(() => <Recovery />);
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'truenas' } });
+    const providerSelects = screen.getAllByLabelText('Provider');
+    fireEvent.change(providerSelects[0], { target: { value: 'truenas' } });
 
     await waitFor(() => {
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
@@ -175,12 +173,9 @@ describe('Recovery', () => {
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
   });
 
-  it('normalizes legacy provider aliases from the URL into canonical provider filters', async () => {
-    mockLocationSearch = '?view=protected&provider=proxmox';
+  it('normalizes legacy provider aliases from the URL into canonical history filters', async () => {
+    mockLocationSearch = '?provider=proxmox';
     render(() => <Recovery />);
-
-    expect(await screen.findByText('VM 123')).toBeInTheDocument();
-    expect(screen.queryByText('tank/apps')).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith('/recovery?provider=proxmox-pve', {
@@ -190,7 +185,6 @@ describe('Recovery', () => {
   });
 
   it('adds cluster to the URL and API queries when the cluster filter changes', async () => {
-    mockLocationSearch = '?view=events';
     facetsPayload.clusters = ['dev-cluster', 'prod-cluster'];
 
     render(() => <Recovery />);
@@ -201,7 +195,7 @@ describe('Recovery', () => {
     fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&cluster=dev-cluster', {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?cluster=dev-cluster', {
         replace: true,
       });
     });
@@ -222,7 +216,7 @@ describe('Recovery', () => {
   });
 
   it('keeps the events card mounted while filter refetches are in flight', async () => {
-    mockLocationSearch = '?view=events&rollupId=res%3Avm-123';
+    mockLocationSearch = '?rollupId=res%3Avm-123';
     facetsPayload.clusters = ['dev-cluster'];
 
     let resolveDelayedPoints:
@@ -301,13 +295,13 @@ describe('Recovery', () => {
   });
 
   it('clears the events search query on Escape', async () => {
-    mockLocationSearch = '?view=events&q=gdfdgd';
+    mockLocationSearch = '?q=gdfdgd';
     render(() => <Recovery />);
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', { replace: true });
     });
   });
 });

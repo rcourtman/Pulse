@@ -1071,10 +1071,13 @@ const Recovery: Component = () => {
                           onClick={() => {
                             setRollupId(r.rollupId);
                             requestAnimationFrame(() =>
-                              historySectionRef?.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'start',
-                              }),
+                              historySectionRef &&
+                              typeof historySectionRef.scrollIntoView === 'function'
+                                ? historySectionRef.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start',
+                                  })
+                                : undefined,
                             );
                           }}
                         >
