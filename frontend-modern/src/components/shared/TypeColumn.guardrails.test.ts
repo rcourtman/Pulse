@@ -105,4 +105,22 @@ describe('type column guardrails', () => {
 
     expect(pageLevelTypeDefaultHiddenUsers).toEqual([]);
   });
+
+  it('limits direct type column contract imports to the shared helper and responsive schema', () => {
+    const runtimeEntries = Object.entries(sourceFiles).filter(
+      ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
+    );
+    const typeColumnContractImportPattern =
+      /from\s*['"]@\/utils\/typeColumnContract['"]/;
+
+    const directContractImportUsers = runtimeEntries
+      .filter(([, source]) => typeColumnContractImportPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
+    expect(directContractImportUsers).toEqual([
+      '../../types/responsive.ts',
+      '../../utils/typeColumnDefinition.ts',
+    ]);
+  });
 });
