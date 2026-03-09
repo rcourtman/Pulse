@@ -18,10 +18,9 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
 import {
-  FilterHeader,
-  FilterMobileToggleButton,
   LabeledFilterSelect,
 } from '@/components/shared/FilterToolbar';
+import { PageControls } from '@/components/shared/PageControls';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -65,6 +64,31 @@ import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
+import {
+  getAlertHistoryStatusPresentation,
+  getAlertIncidentLevelBadgeClass,
+  getAlertIncidentStatusPresentation,
+} from '@/utils/alertIncidentPresentation';
+import {
+  getAlertHistoryResourceTypeBadgeClass,
+  getAlertHistorySourcePresentation,
+} from '@/utils/alertHistoryPresentation';
+import { getAlertActivationPresentation } from '@/utils/alertActivationPresentation';
+import {
+  getAlertFrequencyClearFilterButtonClass,
+  getAlertFrequencySelectionPresentation,
+} from '@/utils/alertFrequencyPresentation';
+import { getAlertSeverityDotClass } from '@/utils/alertSeverityPresentation';
+import {
+  getAlertsMobileTabClass,
+  getAlertsSidebarTabClass,
+  getAlertsTabTitle,
+} from '@/utils/alertTabsPresentation';
+import {
+  getAlertGroupingCardClass,
+  getAlertGroupingCheckboxClass,
+} from '@/utils/alertGroupingPresentation';
+import { getAlertQuietDayButtonClass } from '@/utils/alertSchedulePresentation';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { filterIncidentEvents } from '@/features/alerts/types';
@@ -126,6 +150,12 @@ export function Alerts() {
   const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
   const isAlertsActive = createMemo(() => alertsActivation.activationState() === 'active');
   const areAlertsDisabled = createMemo(() => !isAlertsActive());
+  const alertActivationPresentation = createMemo(() =>
+    getAlertActivationPresentation({
+      isActive: isAlertsActive(),
+      isBusy: alertsActivation.isLoading() || isSwitchingActivation(),
+    }),
+  );
 
   const handleActivateAlerts = async () => {
     if (alertsActivation.isLoading() || isSwitchingActivation()) {
@@ -1465,12 +1495,8 @@ export function Alerts() {
           />
           <Show when={activeTab() === 'overview'}>
             <div class="flex items-center gap-3">
-              <span
-                class={`text-sm font-medium ${
-                  isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-muted'
-                }`}
-              >
-                {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
+              <span class={`text-sm font-medium ${alertActivationPresentation().labelClass}`}>
+                {alertActivationPresentation().label}
               </span>
               <label class="relative inline-flex items-center cursor-pointer">
                 <span class="sr-only">Toggle alerts</span>
@@ -1487,16 +1513,8 @@ export function Alerts() {
                     }
                   }}
                 />
-                <div
-                  class={`relative w-11 h-6 rounded-full transition ${
-                    isAlertsActive() ? 'bg-blue-600' : 'bg-surface-hover'
-                  } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
-                >
-                  <span
-                    class={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-all shadow ${
-                      isAlertsActive() ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
+                <div class={alertActivationPresentation().trackClass}>
+                  <span class={alertActivationPresentation().thumbClass} />
                 </div>
               </label>
             </div>
@@ -1849,21 +1867,17 @@ export function Alerts() {
                               aria-current={activeTab() === item.id ? 'page' : undefined}
                               aria-disabled={areAlertsDisabled()}
                               disabled={areAlertsDisabled()}
-                              class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${
-                                areAlertsDisabled()
-                                  ? 'cursor-not-allowed text-muted bg-surface-alt'
-                                  : activeTab() === item.id
-                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
-                                    : 'hover:bg-surface-hover hover:text-base-content'
-                              }`}
+                              class={getAlertsSidebarTabClass({
+                                isActive: activeTab() === item.id,
+                                isDisabled: areAlertsDisabled(),
+                                collapsed: sidebarCollapsed(),
+                              })}
                               onClick={() => handleTabChange(item.id)}
-                              title={
-                                areAlertsDisabled()
-                                  ? 'Enable alerts to configure this setting'
-                                  : sidebarCollapsed()
-                                    ? item.label
-                                    : undefined
-                              }
+                              title={getAlertsTabTitle({
+                                isDisabled: areAlertsDisabled(),
+                                collapsed: sidebarCollapsed(),
+                                label: item.label,
+                              })}
                             >
                               {item.icon}
                               <Show when={!sidebarCollapsed()}>
@@ -1894,19 +1908,15 @@ export function Alerts() {
                           type="button"
                           aria-disabled={areAlertsDisabled()}
                           disabled={areAlertsDisabled()}
-                          class={`flex-1 min-w-0 px-2 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all ${
-                            areAlertsDisabled()
-                              ? 'cursor-not-allowed text-muted bg-surface-alt'
-                              : activeTab() === tab.id
-                                ? 'bg-surface text-base-content shadow-sm'
-                                : 'text-muted hover:text-base-content'
-                          }`}
+                          class={getAlertsMobileTabClass({
+                            isActive: activeTab() === tab.id,
+                            isDisabled: areAlertsDisabled(),
+                          })}
                           onClick={() => handleTabChange(tab.id)}
-                          title={
-                            areAlertsDisabled()
-                              ? 'Enable alerts to configure this setting'
-                              : undefined
-                          }
+                          title={getAlertsTabTitle({
+                            isDisabled: areAlertsDisabled(),
+                            label: tab.label,
+                          })}
                         >
                           <span class="w-full text-center truncate block">{tab.label}</span>
                         </button>
@@ -3155,7 +3165,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           props.setHasUnsavedChanges(true);
                         }}
                         title={day.fullLabel}
-                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id] ? 'rounded-md bg-blue-500 text-white shadow-sm' : 'rounded-md text-muted hover:bg-surface-hover '}`}
+                        class={getAlertQuietDayButtonClass(quietHours().days[day.id])}
                       >
                         {day.label}
                       </button>
@@ -3408,11 +3418,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
-                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${
-                      grouping().byNode
-                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
-                        : 'border-border hover:bg-surface-hover'
-                    }`}
+                    class={getAlertGroupingCardClass(grouping().byNode)}
                   >
                     <input
                       type="checkbox"
@@ -3423,11 +3429,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                        grouping().byNode ? 'border-blue-500 bg-blue-500' : 'border-border'
-                      }`}
-                    >
+                    <div class={getAlertGroupingCheckboxClass(grouping().byNode)}>
                       <Show when={grouping().byNode}>
                         <svg
                           class="h-3 w-3 text-white"
@@ -3444,11 +3446,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </label>
 
                   <label
-                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${
-                      grouping().byGuest
-                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
-                        : 'border-border hover:bg-surface-hover'
-                    }`}
+                    class={getAlertGroupingCardClass(grouping().byGuest)}
                   >
                     <input
                       type="checkbox"
@@ -3459,11 +3457,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div
-                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                        grouping().byGuest ? 'border-blue-500 bg-blue-500' : 'border-border'
-                      }`}
-                    >
+                    <div class={getAlertGroupingCheckboxClass(grouping().byGuest)}>
                       <Show when={grouping().byGuest}>
                         <svg
                           class="h-3 w-3 text-white"
@@ -3771,6 +3765,9 @@ function HistoryTab(props: {
   allResources: ReturnType<typeof useResources>['resources'];
 }) {
   const { activeAlerts } = useWebSocket();
+  const alertFrequencySelectionPresentation = createMemo(() =>
+    getAlertFrequencySelectionPresentation(),
+  );
 
   // Filter states with localStorage persistence
   const [timeFilter, setTimeFilter] = usePersistentSignal<'24h' | '7d' | '30d' | 'all'>(
@@ -4602,8 +4599,8 @@ function HistoryTab(props: {
           <div class="flex flex-col items-start gap-2 sm:items-end">
             <Show when={selectedBucketDetails()}>
               {(selection) => (
-                <div class="inline-flex items-center gap-2 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900 px-3 py-1 text-xs text-blue-700 dark:text-blue-200">
-                  <span class="font-medium uppercase tracking-wide text-[10px] text-blue-600 dark:text-blue-300">
+                <div class={alertFrequencySelectionPresentation().containerClass}>
+                  <span class={alertFrequencySelectionPresentation().labelClass}>
                     Filtered Range
                   </span>
                   <span class="font-mono text-[11px]">{selection().rangeLabel}</span>
@@ -4630,18 +4627,18 @@ function HistoryTab(props: {
                 <button
                   type="button"
                   onClick={() => setSelectedBarIndex(null)}
-                  class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                  class={getAlertFrequencyClearFilterButtonClass()}
                 >
                   Clear filter
                 </button>
               </Show>
               <div class="flex items-center gap-2 text-xs text-muted">
                 <span class="flex items-center gap-1">
-                  <div class="h-2 w-2 rounded-full bg-yellow-500"></div>
+                  <div class={getAlertSeverityDotClass('warning')}></div>
                   {alertData().filter((a) => a.severity === 'warning').length} warnings
                 </span>
                 <span class="flex items-center gap-1">
-                  <div class="h-2 w-2 rounded-full bg-red-500"></div>
+                  <div class={getAlertSeverityDotClass('critical')}></div>
                   {alertData().filter((a) => a.severity === 'critical').length} critical
                 </span>
               </div>
@@ -4757,7 +4754,7 @@ function HistoryTab(props: {
 
       {/* Filters */}
       <Card padding="sm" class="mb-4">
-        <FilterHeader
+        <PageControls
           search={
             <SearchInput
               value={searchTerm}
@@ -4768,14 +4765,11 @@ function HistoryTab(props: {
               history={{ storageKey: STORAGE_KEYS.ALERTS_SEARCH_HISTORY }}
             />
           }
-          searchAccessory={
-            <Show when={isMobile()}>
-              <FilterMobileToggleButton
-                onClick={() => setFiltersOpen((o) => !o)}
-                count={activeFilterCount()}
-              />
-            </Show>
-          }
+          mobileFilters={{
+            enabled: isMobile(),
+            onToggle: () => setFiltersOpen((o) => !o),
+            count: activeFilterCount(),
+          }}
           showFilters={!isMobile() || filtersOpen()}
         >
           <LabeledFilterSelect
@@ -4803,7 +4797,7 @@ function HistoryTab(props: {
             <option value="critical">Critical</option>
             <option value="warning">Warning</option>
           </LabeledFilterSelect>
-        </FilterHeader>
+        </PageControls>
       </Card>
 
       <Show when={resourceIncidentPanel()}>
@@ -4869,20 +4863,10 @@ function HistoryTab(props: {
                   <div class="mt-3 space-y-3">
                     <For each={incidents()}>
                       {(incident) => {
-                        const statusLabel =
-                          incident.status === 'open' && incident.acknowledged
-                            ? 'acknowledged'
-                            : incident.status;
-                        const statusClasses =
-                          statusLabel === 'acknowledged'
-                            ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300'
-                            : statusLabel === 'open'
-                              ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                              : 'bg-surface-hover text-base-content';
-                        const levelClasses =
-                          incident.level === 'critical'
-                            ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                            : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300';
+                        const statusPresentation = getAlertIncidentStatusPresentation(
+                          incident.status,
+                          incident.acknowledged,
+                        );
                         const isExpanded = expandedResourceIncidentIds().has(incident.id);
                         const events = incident.events || [];
                         const filteredEvents = filterIncidentEvents(
@@ -4907,11 +4891,11 @@ function HistoryTab(props: {
                               <span class="font-medium text-base-content">
                                 {incident.alertType}
                               </span>
-                              <span class={`px-2 py-0.5 rounded ${levelClasses}`}>
+                              <span class={getAlertIncidentLevelBadgeClass(incident.level)}>
                                 {incident.level}
                               </span>
-                              <span class={`px-2 py-0.5 rounded ${statusClasses}`}>
-                                {statusLabel}
+                              <span class={statusPresentation.className}>
+                                {statusPresentation.label}
                               </span>
                               <span>opened {new Date(incident.openedAt).toLocaleString()}</span>
                               <Show when={incident.closedAt}>
@@ -5119,12 +5103,16 @@ function HistoryTab(props: {
                           <For each={group.alerts}>
                             {(alert) => {
                               const rowKey = getIncidentRowKey(alert);
+                              const historyStatusPresentation = getAlertHistoryStatusPresentation(
+                                alert.status,
+                              );
+                              const sourcePresentation = getAlertHistorySourcePresentation(
+                                alert.source,
+                              );
                               return (
                                 <>
                                   <TableRow
-                                    class={`border-b border-border hover:bg-surface-hover ${
-                                      alert.status === 'active' ? 'bg-red-50 dark:bg-red-900' : ''
-                                    }`}
+                                    class={`border-b border-border hover:bg-surface-hover ${historyStatusPresentation.rowClassName}`}
                                   >
                                     {/* Timestamp */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-muted font-mono whitespace-nowrap">
@@ -5136,14 +5124,8 @@ function HistoryTab(props: {
 
                                     {/* Source */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
-                                      <span
-                                        class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                                          alert.source === 'ai'
-                                            ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300'
-                                            : 'bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300'
-                                        }`}
-                                      >
-                                        {alert.source === 'ai' ? 'Patrol' : 'Alert'}
+                                      <span class={sourcePresentation.className}>
+                                        {sourcePresentation.label}
                                       </span>
                                     </TableCell>
 
@@ -5154,33 +5136,14 @@ function HistoryTab(props: {
 
                                     {/* Type */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2">
-                                      <span
-                                        class={`text-xs px-1 py-0.5 rounded ${
-                                          alert.resourceType === 'VM'
-                                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                                            : alert.resourceType === 'Container' ||
-                                                alert.resourceType === 'CT'
-                                              ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                              : alert.resourceType === 'Node'
-                                                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                                                : alert.resourceType === 'Storage'
-                                                  ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
-                                                  : 'bg-surface-hover text-base-content'
-                                        }`}
-                                      >
+                                      <span class={getAlertHistoryResourceTypeBadgeClass(alert.resourceType)}>
                                         {alert.resourceType}
                                       </span>
                                     </TableCell>
 
                                     {/* Severity */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
-                                      <span
-                                        class={`text-xs px-2 py-0.5 rounded font-medium ${
-                                          alert.severity === 'critical'
-                                            ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                            : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                        }`}
-                                      >
+                                      <span class={getAlertIncidentLevelBadgeClass(alert.severity)}>
                                         {alert.severity}
                                       </span>
                                     </TableCell>
@@ -5200,16 +5163,8 @@ function HistoryTab(props: {
 
                                     {/* Status */}
                                     <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
-                                      <span
-                                        class={`text-xs px-2 py-0.5 rounded ${
-                                          alert.status === 'active'
-                                            ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium'
-                                            : alert.status === 'acknowledged'
-                                              ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                              : 'bg-surface-hover text-base-content'
-                                        }`}
-                                      >
-                                        {alert.status}
+                                      <span class={historyStatusPresentation.className}>
+                                        {historyStatusPresentation.label}
                                       </span>
                                     </TableCell>
 

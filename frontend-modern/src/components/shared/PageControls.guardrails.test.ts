@@ -32,8 +32,22 @@ describe('page controls guardrails', () => {
     const runtimeEntries = Object.entries(tsxSources).filter(
       ([path]) => !path.endsWith('.test.tsx'),
     );
+    const sharedToolbarImportPattern =
+      /import\s*\{[\s\S]*\b(FilterHeader|FilterMobileToggleButton)\b[\s\S]*\}\s*from\s*['"]@\/components\/shared\/FilterToolbar['"]/;
+    const columnPickerImportPattern =
+      /import\s*\{[\s\S]*\bColumnPicker\b[\s\S]*\}\s*from\s*['"]@\/components\/shared\/ColumnPicker['"]/;
     const filterHeaderTagPattern = /<FilterHeader(?:\s|>)/;
     const columnPickerTagPattern = /<ColumnPicker(?:\s|>)/;
+    const mobileToggleTagPattern = /<FilterMobileToggleButton(?:\s|>)/;
+
+    const sharedToolbarImportUsers = runtimeEntries
+      .filter(([, source]) => sharedToolbarImportPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+    const columnPickerImportUsers = runtimeEntries
+      .filter(([, source]) => columnPickerImportPattern.test(source))
+      .map(([path]) => path)
+      .sort();
 
     const filterHeaderUsers = runtimeEntries
       .filter(([, source]) => filterHeaderTagPattern.test(source))
@@ -43,15 +57,28 @@ describe('page controls guardrails', () => {
       .filter(([, source]) => columnPickerTagPattern.test(source))
       .map(([path]) => path)
       .sort();
+    const mobileToggleUsers = runtimeEntries
+      .filter(([, source]) => mobileToggleTagPattern.test(source))
+      .map(([path]) => path)
+      .sort();
 
     expect(filterHeaderUsers).toEqual([
-      '../../pages/Alerts.tsx',
-      '../Storage/StorageFilter.tsx',
+      './PageControls.tsx',
+    ]);
+
+    expect(sharedToolbarImportUsers).toEqual([
       './PageControls.tsx',
     ]);
 
     expect(columnPickerUsers).toEqual([
-      '../Storage/StorageFilter.tsx',
+      './PageControls.tsx',
+    ]);
+
+    expect(columnPickerImportUsers).toEqual([
+      './PageControls.tsx',
+    ]);
+
+    expect(mobileToggleUsers).toEqual([
       './PageControls.tsx',
     ]);
   });
