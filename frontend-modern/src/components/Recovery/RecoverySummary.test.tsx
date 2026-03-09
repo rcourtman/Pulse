@@ -1,9 +1,16 @@
 import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RecoverySummary } from './RecoverySummary';
 
 describe('RecoverySummary', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders the recovery overview inside the shared summary panel style', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-09T12:00:00Z'));
+
     render(() => (
       <RecoverySummary
         rollups={() => [

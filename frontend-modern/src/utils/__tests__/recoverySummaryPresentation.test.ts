@@ -4,6 +4,8 @@ import {
   buildRecoveryAttentionItems,
   buildRecoveryFreshnessBuckets,
   buildRecoveryOutcomeSegments,
+  buildRecoveryPostureSegments,
+  buildRecoveryPostureSummary,
   RECOVERY_FRESHNESS_BUCKETS,
   RECOVERY_SUMMARY_TIME_RANGES,
   RECOVERY_SUMMARY_TIME_RANGE_LABELS,
@@ -58,6 +60,38 @@ describe('recoverySummaryPresentation', () => {
     );
 
     expect(buckets.map((bucket) => bucket.count)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('builds posture summary and disjoint posture segments for recovery readiness', () => {
+    const now = Date.parse('2026-03-09T12:00:00Z');
+    const rollups = [
+      { rollupId: 'healthy', lastOutcome: 'success', lastSuccessAt: '2026-03-09T11:30:00Z' },
+      { rollupId: 'stale', lastOutcome: 'success', lastSuccessAt: '2026-02-28T12:00:00Z' },
+      { rollupId: 'failed', lastOutcome: 'failed', lastSuccessAt: '2026-03-08T12:00:00Z' },
+      { rollupId: 'warning', lastOutcome: 'warning', lastSuccessAt: '2026-03-08T12:00:00Z' },
+      { rollupId: 'running', lastOutcome: 'running', lastSuccessAt: '2026-03-09T10:30:00Z' },
+      { rollupId: 'never', lastOutcome: 'failed', lastAttemptAt: '2026-03-09T10:00:00Z' },
+    ];
+
+    expect(buildRecoveryPostureSummary(rollups, now)).toMatchObject({
+      healthy: 1,
+      stale: 1,
+      failed: 1,
+      warning: 1,
+      running: 1,
+      neverSucceeded: 1,
+      unknown: 0,
+      attention: 4,
+    });
+
+    expect(buildRecoveryPostureSegments(rollups, now)).toMatchObject([
+      { key: 'healthy', count: 1, percent: 17 },
+      { key: 'stale', count: 1, percent: 17 },
+      { key: 'failed', count: 1, percent: 17 },
+      { key: 'warning', count: 1, percent: 17 },
+      { key: 'running', count: 1, percent: 17 },
+      { key: 'never-succeeded', count: 1, percent: 17 },
+    ]);
   });
 
   it('summarizes activity bars and headline metrics', () => {

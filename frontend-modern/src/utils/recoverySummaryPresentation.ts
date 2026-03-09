@@ -3,7 +3,9 @@ import {
   getRecoveryOutcomeBarClass,
   getRecoveryOutcomeLabel,
   getRecoveryOutcomeTextClass,
+  normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
+import { isRecoveryRollupStale } from '@/utils/recoveryTablePresentation';
 
 export const RECOVERY_SUMMARY_TIME_RANGES = ['7d', '30d', '90d'] as const;
 
@@ -35,6 +37,35 @@ export interface RecoveryOutcomeSegment {
   percent: number;
   color: string;
   textColor: string;
+}
+
+export type RecoveryPostureKey =
+  | 'healthy'
+  | 'stale'
+  | 'failed'
+  | 'warning'
+  | 'running'
+  | 'never-succeeded'
+  | 'unknown';
+
+export interface RecoveryPostureSegment {
+  key: RecoveryPostureKey;
+  label: string;
+  count: number;
+  percent: number;
+  color: string;
+  textColor: string;
+}
+
+export interface RecoveryPostureSummary {
+  healthy: number;
+  stale: number;
+  failed: number;
+  warning: number;
+  running: number;
+  neverSucceeded: number;
+  unknown: number;
+  attention: number;
 }
 
 export interface RecoveryActivityBar {
@@ -83,6 +114,47 @@ const formatShortDate = (value: string): string => {
 const toPercent = (count: number, total: number): number =>
   total > 0 ? Math.round((count / total) * 100) : 0;
 
+const RECOVERY_POSTURE_PRESENTATION: Record<
+  RecoveryPostureKey,
+  Pick<RecoveryPostureSegment, 'label' | 'color' | 'textColor'>
+> = {
+  healthy: {
+    label: 'Healthy',
+    color: 'bg-emerald-500',
+    textColor: 'text-emerald-600 dark:text-emerald-400',
+  },
+  stale: {
+    label: 'Stale',
+    color: 'bg-amber-400',
+    textColor: 'text-amber-600 dark:text-amber-400',
+  },
+  failed: {
+    label: 'Failed',
+    color: 'bg-rose-500',
+    textColor: 'text-rose-600 dark:text-rose-400',
+  },
+  warning: {
+    label: 'Warning',
+    color: 'bg-amber-500',
+    textColor: 'text-amber-600 dark:text-amber-400',
+  },
+  running: {
+    label: 'Running',
+    color: 'bg-blue-500',
+    textColor: 'text-blue-600 dark:text-blue-400',
+  },
+  'never-succeeded': {
+    label: 'Never Succeeded',
+    color: 'bg-rose-400',
+    textColor: 'text-rose-600 dark:text-rose-400',
+  },
+  unknown: {
+    label: 'Unknown',
+    color: 'bg-slate-500',
+    textColor: 'text-muted',
+  },
+};
+
 export function buildRecoveryOutcomeSegments(summary: {
   total: number;
   counts: Record<RecoveryOutcome, number>;
@@ -97,6 +169,102 @@ export function buildRecoveryOutcomeSegments(summary: {
       color: getRecoveryOutcomeBarClass(outcome),
       textColor: getRecoveryOutcomeTextClass(outcome),
     }))
+    .filter((segment) => segment.count > 0);
+}
+
+export function buildRecoveryPostureSummary(
+  rollups: ProtectionRollup[],
+  nowMs = Date.now(),
+): RecoveryPostureSummary {
+  const counts: RecoveryPostureSummary = {
+    healthy: 0,
+    stale: 0,
+    failed: 0,
+    warning: 0,
+    running: 0,
+    neverSucceeded: 0,
+    unknown: 0,
+    attention: 0,
+  };
+
+  for (const rollup of rollups) {
+    const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
+    const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
+    const neverSucceeded =
+      (!Number.isFinite(successMs) || successMs <= 0) &&
+      Number.isFinite(attemptMs) &&
+      attemptMs > 0;
+    const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
+    const stale = !neverSucceeded && isRecoveryRollupStale(rollup, nowMs);
+
+    if (neverSucceeded) {
+      counts.neverSucceeded += 1;
+      counts.attention += 1;
+      continue;
+    }
+    if (outcome === 'failed') {
+      counts.failed += 1;
+      counts.attention += 1;
+      continue;
+    }
+    if (outcome === 'warning') {
+      counts.warning += 1;
+      counts.attention += 1;
+      continue;
+    }
+    if (stale) {
+      counts.stale += 1;
+      counts.attention += 1;
+      continue;
+    }
+    if (outcome === 'running') {
+      counts.running += 1;
+      continue;
+    }
+    if (outcome === 'success') {
+      counts.healthy += 1;
+      continue;
+    }
+    counts.unknown += 1;
+  }
+
+  return counts;
+}
+
+export function buildRecoveryPostureSegments(
+  rollups: ProtectionRollup[],
+  nowMs = Date.now(),
+): RecoveryPostureSegment[] {
+  const summary = buildRecoveryPostureSummary(rollups, nowMs);
+  const total = rollups.length;
+  const order: RecoveryPostureKey[] = [
+    'healthy',
+    'stale',
+    'failed',
+    'warning',
+    'running',
+    'never-succeeded',
+    'unknown',
+  ];
+
+  return order
+    .map((key) => {
+      const count =
+        key === 'never-succeeded'
+          ? summary.neverSucceeded
+          : key === 'unknown'
+            ? summary.unknown
+            : summary[key];
+      const presentation = RECOVERY_POSTURE_PRESENTATION[key];
+      return {
+        key,
+        label: presentation.label,
+        count,
+        percent: toPercent(count, total),
+        color: presentation.color,
+        textColor: presentation.textColor,
+      };
+    })
     .filter((segment) => segment.count > 0);
 }
 

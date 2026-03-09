@@ -204,7 +204,7 @@ describe('frontend resource type boundaries', () => {
     expect(emptyStatePresentationSource).toContain('export function getEmptyStatePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
     expect(recoveryOutcomePresentationSource).toContain('import type { RecoveryOutcome }');
-    expect(recoverySummarySource).toContain('buildRecoveryOutcomeSegments');
+    expect(recoverySummarySource).toContain('buildRecoveryPostureSegments');
     expect(recoverySummarySource).toContain('RECOVERY_SUMMARY_TIME_RANGES');
     expect(recoverySummarySource).toContain('buildRecoveryFreshnessBuckets');
     expect(recoverySummarySource).not.toContain("const RECOVERY_TIME_RANGES: readonly string[] = ['7d', '30d', '90d']");

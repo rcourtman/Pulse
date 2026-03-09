@@ -6,7 +6,8 @@ import {
   buildRecoveryActivitySummary,
   buildRecoveryAttentionItems,
   buildRecoveryFreshnessBuckets,
-  buildRecoveryOutcomeSegments,
+  buildRecoveryPostureSegments,
+  buildRecoveryPostureSummary,
   RECOVERY_SUMMARY_TIME_RANGES,
   RECOVERY_SUMMARY_TIME_RANGE_LABELS,
   type RecoverySummaryTimeRange,
@@ -38,18 +39,27 @@ function getAttentionToneClass(tone: 'rose' | 'amber' | 'blue'): string {
   }
 }
 
+function getAttentionDotClass(tone: 'rose' | 'amber' | 'blue'): string {
+  switch (tone) {
+    case 'rose':
+      return 'bg-rose-500';
+    case 'blue':
+      return 'bg-blue-500';
+    default:
+      return 'bg-amber-500';
+  }
+}
+
 export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const summary = () => props.summary();
   const hasRollups = () => summary().total > 0;
 
-  const outcomeSegments = createMemo(() => buildRecoveryOutcomeSegments(summary()));
+  const postureSummary = createMemo(() => buildRecoveryPostureSummary(props.rollups()));
+  const postureSegments = createMemo(() => buildRecoveryPostureSegments(props.rollups()));
   const freshnessBuckets = createMemo(() => buildRecoveryFreshnessBuckets(props.rollups()));
   const activity = createMemo(() => buildRecoveryActivitySummary(props.series()));
   const attentionItems = createMemo(() => buildRecoveryAttentionItems(summary()));
-  const healthyCount = createMemo(() => summary().counts.success || 0);
-  const issueCount = createMemo(
-    () => (summary().counts.warning || 0) + (summary().counts.failed || 0) + summary().stale,
-  );
+  const healthyCount = createMemo(() => postureSummary().healthy);
 
   return (
     <Show when={hasRollups()}>
@@ -59,9 +69,14 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           <>
             <span class="font-medium text-base-content">{summary().total} protected</span>
             <span class="text-emerald-600 dark:text-emerald-400">{healthyCount()} healthy</span>
-            <Show when={issueCount() > 0}>
+            <Show when={postureSummary().stale > 0}>
               <span class="text-amber-600 dark:text-amber-400">
-                {issueCount()} need attention
+                {postureSummary().stale} stale
+              </span>
+            </Show>
+            <Show when={postureSummary().failed > 0}>
+              <span class="text-rose-600 dark:text-rose-400">
+                {postureSummary().failed} failed
               </span>
             </Show>
             <Show when={summary().neverSucceeded > 0}>
@@ -80,7 +95,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
             : undefined
         }
       >
-        <SummaryMetricCard label="Coverage" loaded={true} hasData={outcomeSegments().length > 0}>
+        <SummaryMetricCard label="Coverage" loaded={true} hasData={postureSegments().length > 0}>
           <div class="flex h-full flex-col justify-between gap-3">
             <div class="grid grid-cols-2 gap-2 text-sm">
               <div>
@@ -97,7 +112,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
             <div class="h-3 overflow-hidden rounded-full bg-surface-hover">
               <div class="flex h-full">
-                <For each={outcomeSegments()}>
+                <For each={postureSegments()}>
                   {(segment) => (
                     <div
                       class={segment.color}
@@ -110,7 +125,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
             </div>
 
             <div class="space-y-1">
-              <For each={outcomeSegments()}>
+              <For each={postureSegments()}>
                 {(segment) => (
                   <div class="flex items-center justify-between gap-2 text-xs">
                     <div class="flex items-center gap-2">
@@ -133,7 +148,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           hasData={freshnessBuckets().some((bucket) => bucket.count > 0)}
         >
           <div class="flex h-full flex-col justify-between gap-2">
-            <div class="text-sm text-muted">Last successful recovery point by age.</div>
             <div class="space-y-2">
               <For each={freshnessBuckets()}>
                 {(bucket) => (
@@ -210,14 +224,18 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
         <SummaryMetricCard label="Attention" loaded={true} hasData={attentionItems().length > 0}>
           <div class="flex h-full flex-col gap-2">
-            <For each={attentionItems().slice(0, 3)}>
+            <For each={attentionItems().slice(0, 4)}>
               {(item) => (
-                <div class={`rounded-md border px-2.5 py-2 text-xs ${getAttentionToneClass(item.tone)}`}>
+                <div
+                  class={`rounded-md border px-2.5 py-2 text-xs ${getAttentionToneClass(item.tone)}`}
+                >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium">{item.label}</span>
+                    <div class="flex items-center gap-2">
+                      <span class={`h-2 w-2 rounded-full ${getAttentionDotClass(item.tone)}`} />
+                      <span class="font-medium">{item.label}</span>
+                    </div>
                     <span class="tabular-nums font-semibold">{item.count}</span>
                   </div>
-                  <div class="mt-1 opacity-80">{item.detail}</div>
                 </div>
               )}
             </For>

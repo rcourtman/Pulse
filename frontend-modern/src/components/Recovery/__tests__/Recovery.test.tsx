@@ -151,7 +151,7 @@ describe('Recovery', () => {
       });
     });
 
-    expect(await screen.findByText('Focused item')).toBeInTheDocument();
+    expect(await screen.findByText('Focused')).toBeInTheDocument();
     expect(screen.getAllByText('VM 123').length).toBeGreaterThan(0);
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
@@ -281,7 +281,7 @@ describe('Recovery', () => {
       ).toBe(true);
     });
 
-    expect(screen.getByText('Recovery History')).toBeInTheDocument();
+    expect(screen.getByText('Backups By Date')).toBeInTheDocument();
     expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
 
     resolveDelayedPoints?.({
