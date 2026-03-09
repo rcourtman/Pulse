@@ -7249,6 +7249,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		networkInBytes := int64(res.NetIn)
 		networkOutBytes := int64(res.NetOut)
 		var individualDisks []models.Disk // Store individual filesystems for multi-disk monitoring
+		diskFromAgent := false            // Set true when guest agent successfully provided disk data
 		var ipAddresses []string
 		var networkInterfaces []models.GuestNetworkInterface
 		var osName, osVersion, agentVersion string
@@ -7701,6 +7702,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								diskUsed = usedBytes
 								diskFree = totalBytes - usedBytes
 								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+								diskFromAgent = true
 
 								log.Debug().
 									Str("instance", instanceName).
@@ -7758,7 +7760,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			// Skip when we know the agent is explicitly disabled — that's a
 			// permanent state and stale data shouldn't persist indefinitely.
 			agentExplicitlyOff := detailedStatus != nil && detailedStatus.Agent.Value == 0
-			if res.Status == "running" && res.Type == "qemu" && diskUsage <= 0 && !agentExplicitlyOff {
+			if res.Status == "running" && res.Type == "qemu" && !diskFromAgent && !agentExplicitlyOff {
 				if prev, ok := prevDiskByGuestID[guestID]; ok && prev.Usage > 0 && prev.Total > 0 && prev.Used >= 0 && prev.Used <= prev.Total {
 					diskTotal = uint64(prev.Total)
 					diskUsed = uint64(prev.Used)
