@@ -41,7 +41,6 @@ export const STORAGE_QUERY_PARAMS = {
 } as const;
 
 export const RECOVERY_QUERY_PARAMS = {
-  view: 'view',
   rollupId: 'rollupId',
   provider: 'provider',
   cluster: 'cluster',
@@ -87,7 +86,6 @@ type StorageLinkOptions = {
 };
 
 type RecoveryLinkOptions = {
-  view?: 'events' | 'protected' | null;
   rollupId?: string | null;
   provider?: string | null;
   cluster?: string | null;
@@ -196,7 +194,6 @@ export const parseRecoveryLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
 
   return {
-    view: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.view)),
     rollupId: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.rollupId)),
     provider: normalizeSourcePlatformQueryValue(params.get(RECOVERY_QUERY_PARAMS.provider)),
     cluster: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.cluster)),
@@ -212,7 +209,6 @@ export const parseRecoveryLinkSearch = (search: string) => {
 
 export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => {
   const params = new URLSearchParams();
-  const view = normalizeQueryValue(options.view);
   const rollupId = normalizeQueryValue(options.rollupId);
   const provider = normalizeSourcePlatformQueryValue(options.provider);
   const cluster = normalizeQueryValue(options.cluster);
@@ -224,7 +220,6 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const node = normalizeQueryValue(options.node);
   const query = normalizeQueryValue(options.query);
 
-  if (view) params.set(RECOVERY_QUERY_PARAMS.view, view);
   if (rollupId) params.set(RECOVERY_QUERY_PARAMS.rollupId, rollupId);
   if (provider) params.set(RECOVERY_QUERY_PARAMS.provider, provider);
   if (cluster) params.set(RECOVERY_QUERY_PARAMS.cluster, cluster);

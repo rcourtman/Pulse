@@ -153,7 +153,6 @@ describe('resource link routing contract', () => {
 
     const parsed = parseRecoveryLinkSearch(href.slice('/recovery'.length));
     expect(parsed).toEqual({
-      view: '',
       rollupId: '',
       provider: 'proxmox-pbs',
       cluster: 'cluster-main',
