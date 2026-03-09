@@ -73,7 +73,8 @@ describe('recoveryTablePresentation', () => {
 
   it('derives artifact header and row classes', () => {
     expect(getRecoveryArtifactColumnHeaderClass('time')).toContain('text-right');
-    expect(getRecoveryArtifactColumnHeaderClass('subject')).toContain('w-[320px]');
+    expect(getRecoveryArtifactColumnHeaderClass('type')).toContain('w-[72px]');
+    expect(getRecoveryArtifactColumnHeaderClass('subject')).toContain('w-[248px]');
     expect(getRecoveryArtifactRowClass(true)).toContain('outline-blue-200/80');
     expect(getRecoveryArtifactRowClass(false)).toBe('hover:bg-surface-hover');
   });

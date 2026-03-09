@@ -109,8 +109,10 @@ export function getRecoveryArtifactColumnHeaderClass(id: string): string {
   switch (id) {
     case 'time':
       return 'w-[76px] text-right';
+    case 'type':
+      return 'w-[72px] text-center';
     case 'subject':
-      return 'w-[320px]';
+      return 'w-[248px]';
     case 'entityId':
       return 'w-[84px]';
     case 'cluster':
