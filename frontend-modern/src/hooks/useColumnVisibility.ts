@@ -93,7 +93,7 @@ export function useColumnVisibility(
 
   // Show all toggleable columns (clear user hidden list)
   const resetToDefaults = () => {
-    setHiddenColumns([]);
+    setHiddenColumns(effectiveDefaultHidden);
   };
 
   // Compute visible columns based on user preferences and view-mode relevance

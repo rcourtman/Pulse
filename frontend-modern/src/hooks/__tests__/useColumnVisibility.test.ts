@@ -64,4 +64,26 @@ describe('useColumnVisibility', () => {
       dispose();
     });
   });
+
+  it('resets back to the canonical default-hidden set', () => {
+    createRoot((dispose) => {
+      const columns: ColumnDef[] = [
+        { id: 'name', label: 'Name' },
+        { id: 'type', label: 'Type', toggleable: true, defaultHidden: true },
+        { id: 'ip', label: 'IP', toggleable: true },
+      ];
+
+      const visibility = useColumnVisibility(storageKey, columns);
+
+      visibility.show('type');
+      visibility.hide('ip');
+      expect(visibility.hiddenColumns()).toEqual(['ip']);
+
+      visibility.resetToDefaults();
+      expect(visibility.hiddenColumns()).toEqual(['type']);
+      expect(visibility.visibleColumns().map((col) => col.id)).toEqual(['name', 'ip']);
+
+      dispose();
+    });
+  });
 });
