@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import { TYPE_COLUMN_ID, TYPE_COLUMN_LABEL } from '@/utils/typeColumnContract';
 
 type CanonicalTypeColumnOptions = Pick<
   ColumnDef,
@@ -15,8 +16,8 @@ const createCanonicalTypeColumn = (
   const { defaultVisibility = 'visible', ...columnOptions } = options;
 
   return {
-    id: 'type',
-    label: 'Type',
+    id: TYPE_COLUMN_ID,
+    label: TYPE_COLUMN_LABEL,
     toggleable: true,
     defaultHidden: defaultVisibility === 'hidden',
     ...columnOptions,

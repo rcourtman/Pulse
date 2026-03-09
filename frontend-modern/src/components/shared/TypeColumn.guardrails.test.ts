@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
+import responsiveSource from '@/types/responsive.ts?raw';
 import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
+import typeColumnContractSource from '@/utils/typeColumnContract.ts?raw';
 
 const sourceFiles = import.meta.glob(['../../**/*.ts', '../../**/*.tsx'], {
   query: '?raw',
@@ -14,10 +16,14 @@ const INLINE_TYPE_COLUMN_PATTERN =
 
 describe('type column guardrails', () => {
   it('keeps the canonical Type column definition in the shared helper', () => {
-    expect(typeColumnDefinitionSource).toContain("id: 'type'");
-    expect(typeColumnDefinitionSource).toContain("label: 'Type'");
+    expect(typeColumnContractSource).toContain("TYPE_COLUMN_ID = 'type'");
+    expect(typeColumnContractSource).toContain("TYPE_COLUMN_LABEL = 'Type'");
+    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_ID');
+    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_LABEL');
     expect(typeColumnDefinitionSource).toContain('toggleable: true');
     expect(typeColumnDefinitionSource).not.toContain('export const createCanonicalTypeColumn');
+    expect(responsiveSource).toContain('TYPE_COLUMN_ID');
+    expect(responsiveSource).toContain('TYPE_COLUMN_LABEL');
   });
 
   it('routes runtime Type columns through the shared helper', () => {
@@ -57,9 +63,7 @@ describe('type column guardrails', () => {
       '../Recovery/Recovery.tsx',
     ]);
 
-    expect(inlineTypeColumnUsers).toEqual([
-      '../../utils/typeColumnDefinition.ts',
-    ]);
+    expect(inlineTypeColumnUsers).toEqual([]);
   });
 
   it('keeps type default-visibility policy out of page-level hidden-column arrays', () => {

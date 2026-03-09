@@ -1,5 +1,6 @@
 import type { Component, JSX } from 'solid-js';
 import type { ColumnPriority, Breakpoint } from '@/hooks/useBreakpoint';
+import { TYPE_COLUMN_ID, TYPE_COLUMN_LABEL } from '@/utils/typeColumnContract';
 
 /**
  * Configuration for a responsive table column
@@ -175,8 +176,8 @@ export const STANDARD_COLUMNS = {
 
   /** Type badge column (VM/LXC, Container/Service, etc.) */
   type: {
-    id: 'type',
-    label: 'Type',
+    id: TYPE_COLUMN_ID,
+    label: TYPE_COLUMN_LABEL,
     priority: 'essential' as ColumnPriority,
     sortable: true,
     minWidth: '60px',
