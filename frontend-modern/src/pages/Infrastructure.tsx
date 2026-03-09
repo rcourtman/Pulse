@@ -3,12 +3,10 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import {
-  FilterActionButton,
-  FilterHeader,
-  FilterMobileToggleButton,
   FilterSegmentedControl,
   LabeledFilterSelect,
 } from '@/components/shared/FilterToolbar';
+import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -346,7 +344,7 @@ export function Infrastructure() {
 
               <Show when={!kioskMode()}>
                 <Card padding="sm" class="mb-4">
-                  <FilterHeader
+                  <PageControls
                     search={
                       <SearchInput
                         value={searchQuery}
@@ -360,14 +358,17 @@ export function Infrastructure() {
                         }}
                       />
                     }
-                    searchAccessory={
-                      <Show when={isMobile()}>
-                        <FilterMobileToggleButton
-                          onClick={() => setFiltersOpen((o) => !o)}
-                          count={activeFilterCount()}
-                        />
-                      </Show>
-                    }
+                    mobileFilters={{
+                      enabled: isMobile(),
+                      onToggle: () => setFiltersOpen((o) => !o),
+                      count: activeFilterCount(),
+                    }}
+                    resetAction={{
+                      show: hasActiveFilters(),
+                      onClick: clearFilters,
+                      label: 'Clear',
+                      class: 'ml-auto text-base-content',
+                    }}
                     showFilters={!isMobile() || filtersOpen()}
                     toolbarClass="lg:flex-nowrap"
                   >
@@ -473,12 +474,7 @@ export function Infrastructure() {
                       ]}
                     />
 
-                    <Show when={hasActiveFilters()}>
-                      <FilterActionButton onClick={clearFilters} class="ml-auto text-base-content">
-                        Clear
-                      </FilterActionButton>
-                    </Show>
-                  </FilterHeader>
+                  </PageControls>
                 </Card>
               </Show>
 
