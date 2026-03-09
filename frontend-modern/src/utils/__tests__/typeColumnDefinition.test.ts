@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
+import {
+  createCanonicalTypeColumn,
+  createHiddenCanonicalTypeColumn,
+  createVisibleCanonicalTypeColumn,
+} from '@/utils/typeColumnDefinition';
 
 describe('typeColumnDefinition', () => {
   it('creates the canonical visible Type column by default', () => {
@@ -25,6 +29,25 @@ describe('typeColumnDefinition', () => {
       width: '60px',
       sortKey: 'type',
       defaultHidden: false,
+    });
+  });
+
+  it('provides a visible preset helper for standard type columns', () => {
+    expect(createVisibleCanonicalTypeColumn({ width: '60px' })).toMatchObject({
+      id: 'type',
+      label: 'Type',
+      toggleable: true,
+      width: '60px',
+      defaultHidden: false,
+    });
+  });
+
+  it('provides a hidden preset helper for recovery-style type columns', () => {
+    expect(createHiddenCanonicalTypeColumn()).toMatchObject({
+      id: 'type',
+      label: 'Type',
+      toggleable: true,
+      defaultHidden: true,
     });
   });
 });

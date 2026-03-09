@@ -22,3 +22,19 @@ export const createCanonicalTypeColumn = (
     ...columnOptions,
   };
 };
+
+export const createVisibleCanonicalTypeColumn = (
+  options: CanonicalTypeColumnOptions = {},
+): ColumnDef =>
+  createCanonicalTypeColumn({
+    ...options,
+    defaultVisibility: 'visible',
+  });
+
+export const createHiddenCanonicalTypeColumn = (
+  options: CanonicalTypeColumnOptions = {},
+): ColumnDef =>
+  createCanonicalTypeColumn({
+    ...options,
+    defaultVisibility: 'hidden',
+  });

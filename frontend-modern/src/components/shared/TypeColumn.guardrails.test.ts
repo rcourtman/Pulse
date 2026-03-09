@@ -20,11 +20,13 @@ describe('type column guardrails', () => {
   });
 
   it('routes runtime Type columns through the shared helper', () => {
-    expect(guestRowSource).toContain('createCanonicalTypeColumn');
+    expect(guestRowSource).toContain('createVisibleCanonicalTypeColumn');
     expect(guestRowSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
+    expect(guestRowSource).not.toContain("defaultVisibility:");
 
-    expect(recoverySource).toContain('createCanonicalTypeColumn');
+    expect(recoverySource).toContain('createHiddenCanonicalTypeColumn');
     expect(recoverySource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
+    expect(recoverySource).not.toContain("defaultVisibility:");
   });
 
   it('limits runtime Type columns to the known allowlist', () => {
@@ -34,7 +36,10 @@ describe('type column guardrails', () => {
 
     const typeColumnUsers = runtimeEntries
       .filter(([, source]) => {
-        return source.includes('createCanonicalTypeColumn(');
+        return (
+          source.includes('createVisibleCanonicalTypeColumn(') ||
+          source.includes('createHiddenCanonicalTypeColumn(')
+        );
       })
       .map(([path]) => path)
       .sort();

@@ -115,7 +115,7 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import { createCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
+import { createHiddenCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 type ArtifactMode = RecoveryArtifactMode;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
@@ -718,7 +718,7 @@ const Recovery: Component = () => {
 
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
-    createCanonicalTypeColumn({ defaultVisibility: 'hidden' }),
+    createHiddenCanonicalTypeColumn(),
     { id: 'subject', label: 'Subject' },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: 'Cluster', toggleable: true },

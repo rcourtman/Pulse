@@ -31,7 +31,7 @@ import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { getWorkloadDockerHostId } from './workloadSelectors';
-import { createCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
+import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
@@ -514,7 +514,7 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 // Column configuration using the priority system
 export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'name', label: 'Name', width: '200px', sortKey: 'name' },
-  createCanonicalTypeColumn({ width: '60px', sortKey: 'type' }),
+  createVisibleCanonicalTypeColumn({ width: '60px', sortKey: 'type' }),
   { id: 'info', label: 'Info', width: '100px' }, // Merged identifier: VMID for VMs/LXCs, image for app containers, namespace for pods
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
 
