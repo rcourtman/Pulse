@@ -7,7 +7,7 @@ type CanonicalTypeColumnOptions = Pick<
 
 type CanonicalTypeColumnVisibility = 'visible' | 'hidden';
 
-export const createCanonicalTypeColumn = (
+const createCanonicalTypeColumn = (
   options: CanonicalTypeColumnOptions & {
     defaultVisibility?: CanonicalTypeColumnVisibility;
   } = {},

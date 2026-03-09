@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createCanonicalTypeColumn,
   createHiddenCanonicalTypeColumn,
   createVisibleCanonicalTypeColumn,
 } from '@/utils/typeColumnDefinition';
 
 describe('typeColumnDefinition', () => {
   it('creates the canonical visible Type column by default', () => {
-    expect(createCanonicalTypeColumn()).toMatchObject({
+    expect(createVisibleCanonicalTypeColumn()).toMatchObject({
       id: 'type',
       label: 'Type',
       toggleable: true,
@@ -15,8 +14,8 @@ describe('typeColumnDefinition', () => {
     });
   });
 
-  it('supports an explicit hidden-by-default visibility preset', () => {
-    expect(createCanonicalTypeColumn({ defaultVisibility: 'hidden' })).toMatchObject({
+  it('supports a hidden-by-default visibility preset', () => {
+    expect(createHiddenCanonicalTypeColumn()).toMatchObject({
       id: 'type',
       label: 'Type',
       toggleable: true,
@@ -25,7 +24,7 @@ describe('typeColumnDefinition', () => {
   });
 
   it('passes through canonical size and sort options', () => {
-    expect(createCanonicalTypeColumn({ width: '60px', sortKey: 'type' })).toMatchObject({
+    expect(createVisibleCanonicalTypeColumn({ width: '60px', sortKey: 'type' })).toMatchObject({
       width: '60px',
       sortKey: 'type',
       defaultHidden: false,
@@ -43,10 +42,11 @@ describe('typeColumnDefinition', () => {
   });
 
   it('provides a hidden preset helper for recovery-style type columns', () => {
-    expect(createHiddenCanonicalTypeColumn()).toMatchObject({
+    expect(createHiddenCanonicalTypeColumn({ width: '72px' })).toMatchObject({
       id: 'type',
       label: 'Type',
       toggleable: true,
+      width: '72px',
       defaultHidden: true,
     });
   });
