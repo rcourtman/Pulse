@@ -2,7 +2,7 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 
 type CanonicalTypeColumnOptions = Pick<
   ColumnDef,
-  'icon' | 'width' | 'minWidth' | 'maxWidth' | 'flex' | 'sortKey'
+  'icon' | 'width' | 'minWidth' | 'maxWidth' | 'flex' | 'sortKey' | 'defaultHidden'
 >;
 
 export const createCanonicalTypeColumn = (

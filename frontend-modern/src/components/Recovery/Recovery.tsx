@@ -718,7 +718,7 @@ const Recovery: Component = () => {
 
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
-    createCanonicalTypeColumn(),
+    createCanonicalTypeColumn({ defaultHidden: true }),
     { id: 'subject', label: 'Subject' },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: 'Cluster', toggleable: true },
@@ -756,7 +756,7 @@ const Recovery: Component = () => {
   const artifactColumnVisibility = useColumnVisibility(
     STORAGE_KEYS.RECOVERY_HIDDEN_COLUMNS,
     artifactColumns,
-    ['type', 'entityId', 'cluster', 'nodeAgent', 'namespace'],
+    ['entityId', 'cluster', 'nodeAgent', 'namespace'],
     relevantArtifactColumnIDs,
   );
 

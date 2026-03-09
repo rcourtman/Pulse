@@ -7,6 +7,7 @@ export interface ColumnDef {
   label: string;
   icon?: JSX.Element; // Optional icon for compact column headers
   toggleable?: boolean;
+  defaultHidden?: boolean;
   width?: string; // Fixed width for consistent column sizing
   minWidth?: string;
   maxWidth?: string;
@@ -33,6 +34,11 @@ export function useColumnVisibility(
   defaultHidden: string[] = [],
   relevantColumns?: Accessor<Set<string> | null>,
 ) {
+  const defaultHiddenFromColumns = columns
+    .filter((c) => c.defaultHidden)
+    .map((c) => c.id);
+  const effectiveDefaultHidden = Array.from(new Set([...defaultHiddenFromColumns, ...defaultHidden]));
+
   // Get list of toggleable column IDs
   const toggleableIds = columns.filter((c) => c.toggleable).map((c) => c.id);
 
@@ -44,7 +50,7 @@ export function useColumnVisibility(
   // Use defaultHidden only if no user preference exists yet
   const [hiddenColumns, setHiddenColumns] = usePersistentSignal<string[]>(
     storageKey,
-    hasUserPreference ? [] : defaultHidden,
+    hasUserPreference ? [] : effectiveDefaultHidden,
     {
       serialize: (arr) => JSON.stringify(arr),
       deserialize: (str) => {
