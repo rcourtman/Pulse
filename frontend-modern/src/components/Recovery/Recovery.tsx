@@ -918,6 +918,7 @@ const Recovery: Component = () => {
                   />
                 </Show>
               }
+              searchRowClass="w-full"
               showFilters={!isMobile() || protectedFiltersOpen()}
               toolbarClass="lg:flex-nowrap"
             >
@@ -1591,7 +1592,7 @@ const Recovery: Component = () => {
                         setCurrentPage(1);
                       }}
                       placeholder="Search recovery history..."
-                      class="w-full shrink-0 sm:w-[20rem] md:w-[22rem] lg:w-[24rem] xl:w-[28rem]"
+                      class="w-full"
                       clearOnEscape
                       history={{
                         storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
@@ -1599,6 +1600,7 @@ const Recovery: Component = () => {
                       }}
                     />
                   }
+                  searchRowClass="w-full"
                   searchAccessory={
                     <Show when={isMobile()}>
                       <FilterMobileToggleButton
@@ -1822,7 +1824,6 @@ const Recovery: Component = () => {
 
                     <Show when={artifactColumnVisibility.availableToggles().length > 0}>
                       <ColumnPicker
-                        label="Display"
                         columns={artifactColumnVisibility.availableToggles()}
                         isHidden={artifactColumnVisibility.isHiddenByUser}
                         onToggle={artifactColumnVisibility.toggle}
