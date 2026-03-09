@@ -4464,6 +4464,18 @@ else
     fi
 fi
 
+# VM.GuestAgent.FileRead (PVE 9+): needed for reading /proc/meminfo
+# via the guest agent for accurate memory reporting
+HAS_VM_GUEST_AGENT_FILE_READ=false
+if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
+    HAS_VM_GUEST_AGENT_FILE_READ=true
+else
+    if pveum role add TestGuestAgentFileRead -privs VM.GuestAgent.FileRead 2>/dev/null; then
+        HAS_VM_GUEST_AGENT_FILE_READ=true
+        pveum role delete TestGuestAgentFileRead 2>/dev/null || true
+    fi
+fi
+
 # Detect availability of Sys.Audit (needed for Ceph metrics)
 HAS_SYS_AUDIT=false
 if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
@@ -4494,6 +4506,9 @@ if [ "$HAS_VM_MONITOR" = true ]; then
 elif [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
     # PVE 9+ - VM.Monitor removed, prefer VM.GuestAgent.Audit for guest data
     EXTRA_PRIVS+=("VM.GuestAgent.Audit")
+    if [ "$HAS_VM_GUEST_AGENT_FILE_READ" = true ]; then
+        EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
+    fi
 fi
 
 	if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then

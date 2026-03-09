@@ -340,6 +340,30 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					cancel()
 				}
 
+				// Preferred fallback: read /proc/meminfo directly via the QEMU guest
+				// agent's file-read endpoint. This gives real-time MemAvailable which
+				// correctly excludes reclaimable buff/cache. Results are cached (60s
+				// positive, 5min negative) so this is cheap after the first call.
+				// Refs: #1270
+				if vm.Status == "running" && agentEnabled && memAvailable == 0 {
+					m.runGuestAgentVMWork(ctx, instanceName, n.Node, vm.Name, vm.VMID, func(agentCtx context.Context) {
+						if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, n.Node, vm.VMID); agentErr == nil && agentAvail > 0 {
+							memAvailable = agentAvail
+							memorySource = "guest-agent-meminfo"
+							guestRaw.MemInfoAvailable = memAvailable
+							log.Debug().
+								Str("vm", vm.Name).
+								Str("node", n.Node).
+								Int("vmid", vm.VMID).
+								Uint64("total", memTotal).
+								Uint64("available", memAvailable).
+								Msg("QEMU memory: using guest agent /proc/meminfo (excludes reclaimable cache)")
+						}
+					})
+				}
+
+				// Fallback: try Proxmox RRD memory when guest agent file-read
+				// didn't work or isn't available.
 				if vm.Status == "running" && memAvailable == 0 {
 					if rrdEntry, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, n.Node, vm.VMID); rrdErr == nil {
 						if rrdEntry.total > 0 {
@@ -391,23 +415,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
 						}
 					}
-				}
-
-				if vm.Status == "running" && memAvailable == 0 && agentEnabled {
-					m.runGuestAgentVMWork(ctx, instanceName, n.Node, vm.Name, vm.VMID, func(agentCtx context.Context) {
-						if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, n.Node, vm.VMID); agentErr == nil && agentAvail > 0 {
-							memAvailable = agentAvail
-							memorySource = "guest-agent-meminfo"
-							guestRaw.MemInfoAvailable = memAvailable
-							log.Debug().
-								Str("vm", vm.Name).
-								Str("node", n.Node).
-								Int("vmid", vm.VMID).
-								Uint64("total", memTotal).
-								Uint64("available", memAvailable).
-								Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
-						}
-					})
 				}
 
 				if vm.Status == "running" && memAvailable == 0 && memInfoTotalMinusUsed > 0 {
@@ -595,7 +602,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 										Str("instance", instanceName).
 										Str("vm", vm.Name).
 										Int("vmid", vm.VMID).
-										Msg("Permission denied accessing guest agent. Verify Pulse user has VM.Monitor (PVE 8) or VM.Audit+VM.GuestAgent.Audit (PVE 9) permissions")
+										Msg("Permission denied accessing guest agent. Verify Pulse user has VM.Monitor (PVE 8) or VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9) permissions")
 								} else if strings.Contains(errStr, "500") {
 									// Generic 500 error without clear indicators - likely agent unavailable
 									// Refs #596: Proxmox returns 500 errors when guest agent isn't installed/running

@@ -179,7 +179,7 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 
 	// Extra privileges are optional, but enable additional features:
 	// - Sys.Audit: required for pending apt updates + some cluster/ceph visibility
-	// - VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+): guest agent data
+	// - VM.Monitor (PVE 8) or VM.GuestAgent.Audit+VM.GuestAgent.FileRead (PVE 9+): guest agent data
 	// - Datastore.Audit: improved storage visibility
 	var extraPrivs []string
 
@@ -191,6 +191,11 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 		extraPrivs = append(extraPrivs, "VM.Monitor")
 	} else if p.probePVEPrivilege(ctx, "VM.GuestAgent.Audit") {
 		extraPrivs = append(extraPrivs, "VM.GuestAgent.Audit")
+		// VM.GuestAgent.FileRead is needed for reading /proc/meminfo via the
+		// guest agent file-read endpoint (accurate memory excluding buff/cache).
+		if p.probePVEPrivilege(ctx, "VM.GuestAgent.FileRead") {
+			extraPrivs = append(extraPrivs, "VM.GuestAgent.FileRead")
+		}
 	}
 
 	if p.probePVEPrivilege(ctx, "Datastore.Audit") {

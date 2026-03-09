@@ -1690,14 +1690,28 @@ PY
         pveum role delete PulseGuestAuditProbe >/dev/null 2>&1 || true
     fi
 
+    # VM.GuestAgent.FileRead (PVE 9+): needed for reading /proc/meminfo
+    # via the guest agent for accurate memory reporting
+    local has_guest_file_read=false
+    if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
+        has_guest_file_read=true
+    elif pveum role add PulseGuestFileReadProbe -privs VM.GuestAgent.FileRead >/dev/null 2>&1; then
+        has_guest_file_read=true
+        pveum role delete PulseGuestFileReadProbe >/dev/null 2>&1 || true
+    fi
+
     if [[ "$has_vm_monitor" == true ]]; then
         extra_privs+=("VM.Monitor")
     elif [[ "$has_guest_audit" == true ]]; then
         extra_privs+=("VM.GuestAgent.Audit")
+        if [[ "$has_guest_file_read" == true ]]; then
+            extra_privs+=("VM.GuestAgent.FileRead")
+        fi
     fi
 
     if [[ ${#extra_privs[@]} -gt 0 ]]; then
-        local priv_string="${extra_privs[*]}"
+        local priv_string
+        priv_string="$(IFS=,; echo "${extra_privs[*]}")"
         pveum role delete PulseMonitor >/dev/null 2>&1 || true
         if pveum role add PulseMonitor -privs "$priv_string" >/dev/null 2>&1; then
             pveum aclmod / -user pulse-monitor@pam -role PulseMonitor >/dev/null 2>&1 || true

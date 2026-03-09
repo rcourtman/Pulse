@@ -7240,8 +7240,30 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				}
 			}
 
-			// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available:
-			// try Proxmox RRD memory first, even if detailed status was unavailable.
+			// Preferred fallback: read /proc/meminfo directly via the QEMU guest
+			// agent's file-read endpoint. This gives real-time MemAvailable which
+			// correctly excludes reclaimable buff/cache. Results are cached (60s
+			// positive, 5min negative) so this is cheap after the first call.
+			// Refs: #1270
+			if res.Status == "running" && agentEnabled && memAvailable == 0 {
+				m.runGuestAgentVMWork(ctx, instanceName, res.Node, res.Name, res.VMID, func(agentCtx context.Context) {
+					if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
+						memAvailable = agentAvail
+						memorySource = "guest-agent-meminfo"
+						guestRaw.MemInfoAvailable = memAvailable
+						log.Debug().
+							Str("vm", res.Name).
+							Str("node", res.Node).
+							Int("vmid", res.VMID).
+							Uint64("total", memTotal).
+							Uint64("available", memAvailable).
+							Msg("QEMU memory: using guest agent /proc/meminfo (excludes reclaimable cache)")
+					}
+				})
+			}
+
+			// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available
+			// and the direct file-read didn't work: try Proxmox RRD memory.
 			if res.Status == "running" && memAvailable == 0 {
 				if rrdEntry, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, res.Node, res.VMID); rrdErr == nil {
 					if rrdEntry.total > 0 {
@@ -7356,7 +7378,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 9: Ensure token/user has VM.GuestAgent.Audit privilege (Pulse setup adds this via PulseMonitor role)")
+									Msg("• Proxmox 9: Ensure token/user has VM.GuestAgent.Audit+VM.GuestAgent.FileRead privileges (Pulse setup adds these via PulseMonitor role)")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -7593,25 +7615,6 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Int("filesystems_found", len(fsInfo)).
 									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 							}
-						}
-					}
-
-					// Last-resort fallback before status-mem: read /proc/meminfo via the
-					// QEMU guest agent's file-read endpoint. This works for Linux VMs with
-					// the guest agent running even when the balloon driver doesn't populate
-					// the meminfo fields. Results are cached with negative backoff. Refs: #1270
-					if memAvailable == 0 {
-						if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
-							memAvailable = agentAvail
-							memorySource = "guest-agent-meminfo"
-							guestRaw.MemInfoAvailable = memAvailable
-							log.Debug().
-								Str("vm", res.Name).
-								Str("node", res.Node).
-								Int("vmid", res.VMID).
-								Uint64("total", memTotal).
-								Uint64("available", memAvailable).
-								Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
 						}
 					}
 
