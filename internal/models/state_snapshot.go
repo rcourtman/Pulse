@@ -11,6 +11,7 @@ type StateSnapshot struct {
 	RemovedDockerHosts           []RemovedDockerHost        `json:"removedDockerHosts"`
 	KubernetesClusters           []KubernetesCluster        `json:"kubernetesClusters"`
 	RemovedKubernetesClusters    []RemovedKubernetesCluster `json:"removedKubernetesClusters"`
+	RemovedHosts                 []RemovedHost              `json:"removedHosts"`
 	Hosts                        []Host                     `json:"hosts"`
 	Storage                      []Storage                  `json:"storage"`
 	CephClusters                 []CephCluster              `json:"cephClusters"`
@@ -54,6 +55,7 @@ func (s *State) GetSnapshot() StateSnapshot {
 		RemovedDockerHosts:        append([]RemovedDockerHost{}, s.RemovedDockerHosts...),
 		KubernetesClusters:        append([]KubernetesCluster{}, s.KubernetesClusters...),
 		RemovedKubernetesClusters: append([]RemovedKubernetesCluster{}, s.RemovedKubernetesClusters...),
+		RemovedHosts:              append([]RemovedHost{}, s.RemovedHosts...),
 		Hosts:                     append([]Host{}, s.Hosts...),
 		Storage:                   append([]Storage{}, s.Storage...),
 		CephClusters:              append([]CephCluster{}, s.CephClusters...),
@@ -343,6 +345,11 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		removedKubernetesClusters[i] = entry.ToFrontend()
 	}
 
+	removedHosts := make([]RemovedHostFrontend, len(s.RemovedHosts))
+	for i, entry := range s.RemovedHosts {
+		removedHosts[i] = entry.ToFrontend()
+	}
+
 	hosts := make([]HostFrontend, len(s.Hosts))
 	for i, host := range s.Hosts {
 		hosts[i] = host.ToFrontend()
@@ -392,6 +399,7 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		RemovedDockerHosts:           removedDockerHosts,
 		KubernetesClusters:           kubernetesClusters,
 		RemovedKubernetesClusters:    removedKubernetesClusters,
+		RemovedHosts:                 removedHosts,
 		Hosts:                        hosts,
 		Storage:                      storage,
 		CephClusters:                 cephClusters,

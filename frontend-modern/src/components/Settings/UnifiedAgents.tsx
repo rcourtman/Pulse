@@ -606,6 +606,11 @@ export const UnifiedAgents: Component = () => {
         return removed.sort((a, b) => b.removedAt - a.removedAt);
     });
 
+    const removedHosts = createMemo(() => {
+        const removed = state.removedHosts || [];
+        return removed.sort((a, b) => b.removedAt - a.removedAt);
+    });
+
     const kubernetesClusters = createMemo(() => {
         const clusters = state.kubernetesClusters || [];
         return clusters.slice().sort((a, b) => (a.displayName || a.name || a.id).localeCompare(b.displayName || b.name || b.id));
@@ -697,6 +702,22 @@ export const UnifiedAgents: Component = () => {
                 hostname: host.hostname,
                 displayName: host.displayName,
                 types: ['docker'],
+                status: 'removed',
+                removedAt: host.removedAt,
+                scope: getScopeInfo(undefined),
+                searchText: [name, host.hostname, host.id].filter(Boolean).join(' ').toLowerCase(),
+            });
+        });
+
+        removedHosts().forEach(host => {
+            const name = host.displayName || host.hostname || host.id;
+            rows.push({
+                rowKey: `removed-host-${host.id}`,
+                id: host.id,
+                name,
+                hostname: host.hostname,
+                displayName: host.displayName,
+                types: ['host'],
                 status: 'removed',
                 removedAt: host.removedAt,
                 scope: getScopeInfo(undefined),
@@ -863,6 +884,16 @@ export const UnifiedAgents: Component = () => {
             notificationStore.success(`Re-enrollment allowed for ${hostname || hostId}. Restart the agent to reconnect.`);
         } catch (err) {
             logger.error('Failed to allow re-enrollment', err);
+            notificationStore.error('Failed to allow re-enrollment');
+        }
+    };
+
+    const handleAllowHostReenroll = async (hostId: string, hostname?: string) => {
+        try {
+            await MonitoringAPI.allowHostReenroll(hostId);
+            notificationStore.success(`Re-enrollment allowed for ${hostname || hostId}. Restart the agent to reconnect.`);
+        } catch (err) {
+            logger.error('Failed to allow host re-enrollment', err);
             notificationStore.error('Failed to allow re-enrollment');
         }
     };
@@ -1718,12 +1749,21 @@ export const UnifiedAgents: Component = () => {
                                                         </Show>
                                                     }>
                                                         <Show when={row.types.includes('docker')} fallback={
-                                                            <button
-                                                                onClick={() => handleAllowKubernetesReenroll(row.id, row.name)}
-                                                                class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                                            >
-                                                                Allow re-enroll
-                                                            </button>
+                                                            <Show when={row.types.includes('host')} fallback={
+                                                                <button
+                                                                    onClick={() => handleAllowKubernetesReenroll(row.id, row.name)}
+                                                                    class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                >
+                                                                    Allow re-enroll
+                                                                </button>
+                                                            }>
+                                                                <button
+                                                                    onClick={() => handleAllowHostReenroll(row.id, row.hostname)}
+                                                                    class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                >
+                                                                    Allow re-enroll
+                                                                </button>
+                                                            </Show>
                                                         }>
                                                             <button
                                                                 onClick={() => handleAllowReenroll(row.id, row.hostname)}

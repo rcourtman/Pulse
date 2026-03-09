@@ -19,6 +19,7 @@ type State struct {
 	RemovedDockerHosts           []RemovedDockerHost        `json:"removedDockerHosts"`
 	KubernetesClusters           []KubernetesCluster        `json:"kubernetesClusters"`
 	RemovedKubernetesClusters    []RemovedKubernetesCluster `json:"removedKubernetesClusters"`
+	RemovedHosts                 []RemovedHost              `json:"removedHosts"`
 	Hosts                        []Host                     `json:"hosts"`
 	Storage                      []Storage                  `json:"storage"`
 	CephClusters                 []CephCluster              `json:"cephClusters"`
@@ -433,6 +434,14 @@ type DockerHost struct {
 
 // RemovedDockerHost tracks a docker host that was deliberately removed and blocked from reporting.
 type RemovedDockerHost struct {
+	ID          string    `json:"id"`
+	Hostname    string    `json:"hostname,omitempty"`
+	DisplayName string    `json:"displayName,omitempty"`
+	RemovedAt   time.Time `json:"removedAt"`
+}
+
+// RemovedHost tracks a host agent that was deliberately removed and blocked from reporting.
+type RemovedHost struct {
 	ID          string    `json:"id"`
 	Hostname    string    `json:"hostname,omitempty"`
 	DisplayName string    `json:"displayName,omitempty"`
@@ -2085,6 +2094,52 @@ func (s *State) GetRemovedDockerHosts() []RemovedDockerHost {
 
 	entries := make([]RemovedDockerHost, len(s.RemovedDockerHosts))
 	copy(entries, s.RemovedDockerHosts)
+	return entries
+}
+
+// AddRemovedHost records a removed host agent entry.
+func (s *State) AddRemovedHost(entry RemovedHost) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	replaced := false
+	for i, existing := range s.RemovedHosts {
+		if existing.ID == entry.ID {
+			s.RemovedHosts[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		s.RemovedHosts = append(s.RemovedHosts, entry)
+	}
+	sort.Slice(s.RemovedHosts, func(i, j int) bool {
+		return s.RemovedHosts[i].RemovedAt.After(s.RemovedHosts[j].RemovedAt)
+	})
+	s.LastUpdate = time.Now()
+}
+
+// RemoveRemovedHost deletes a removed host agent entry by ID.
+func (s *State) RemoveRemovedHost(hostID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, entry := range s.RemovedHosts {
+		if entry.ID == hostID {
+			s.RemovedHosts = append(s.RemovedHosts[:i], s.RemovedHosts[i+1:]...)
+			s.LastUpdate = time.Now()
+			break
+		}
+	}
+}
+
+// GetRemovedHosts returns a copy of removed host agent entries.
+func (s *State) GetRemovedHosts() []RemovedHost {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	entries := make([]RemovedHost, len(s.RemovedHosts))
+	copy(entries, s.RemovedHosts)
 	return entries
 }
 

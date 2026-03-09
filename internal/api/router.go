@@ -331,6 +331,16 @@ func (r *Router) setupRoutes() {
 			r.hostAgentHandlers.HandleConfig(w, req)
 			return
 		}
+		// Route POST /api/agents/host/{id}/allow-reenroll to HandleAllowReenroll
+		if strings.HasSuffix(req.URL.Path, "/allow-reenroll") && req.Method == http.MethodPost {
+			RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
+				if !ensureScope(w, req, config.ScopeSettingsWrite) {
+					return
+				}
+				r.hostAgentHandlers.HandleAllowReenroll(w, req)
+			})(w, req)
+			return
+		}
 		// Route DELETE /api/agents/host/{id} to HandleDeleteHost
 		// SECURITY: Require settings:write (not just host_manage) to prevent compromised host tokens from deleting other hosts
 		if req.Method == http.MethodDelete {

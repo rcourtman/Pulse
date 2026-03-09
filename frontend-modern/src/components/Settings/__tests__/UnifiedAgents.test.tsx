@@ -3,7 +3,7 @@ import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/te
 import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
-import type { Host, DockerHost, KubernetesCluster, RemovedDockerHost, RemovedKubernetesCluster } from '@/types/api';
+import type { Host, DockerHost, KubernetesCluster, RemovedDockerHost, RemovedHost, RemovedKubernetesCluster } from '@/types/api';
 
 let mockWsStore: {
   state: {
@@ -11,6 +11,7 @@ let mockWsStore: {
     dockerHosts: DockerHost[];
     kubernetesClusters?: KubernetesCluster[];
     removedDockerHosts?: RemovedDockerHost[];
+    removedHosts?: RemovedHost[];
     removedKubernetesClusters?: RemovedKubernetesCluster[];
   };
   connected: () => boolean;
@@ -140,12 +141,14 @@ const setupComponent = (
   kubernetesClusters: KubernetesCluster[] = [],
   removedDockerHosts: RemovedDockerHost[] = [],
   removedKubernetesClusters: RemovedKubernetesCluster[] = [],
+  removedHosts: RemovedHost[] = [],
 ) => {
   const [state] = createStore({
     hosts,
     dockerHosts,
     kubernetesClusters,
     removedDockerHosts,
+    removedHosts,
     removedKubernetesClusters,
   });
 

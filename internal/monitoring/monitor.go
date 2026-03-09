@@ -875,6 +875,7 @@ type Monitor struct {
 	vmAgentMemCache            map[string]agentMemCacheEntry // Guest agent /proc/meminfo cache
 	removedDockerHosts         map[string]time.Time          // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
+	removedHosts               map[string]time.Time          // Track deliberately removed host agents (ID -> removal time)
 	removedKubernetesClusters  map[string]time.Time          // Track deliberately removed Kubernetes clusters (ID -> removal time)
 	kubernetesTokenBindings    map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
 	hostTokenBindings          map[string]string             // Track tokenID:hostname -> host identity bindings
@@ -1902,6 +1903,20 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 			Msg("Unbound host agent token bindings after host removal")
 	}
 
+	// Track removal to prevent resurrection from cached/in-flight reports
+	removedAt := time.Now()
+
+	m.mu.Lock()
+	m.removedHosts[hostID] = removedAt
+	m.mu.Unlock()
+
+	m.state.AddRemovedHost(models.RemovedHost{
+		ID:          hostID,
+		Hostname:    host.Hostname,
+		DisplayName: host.DisplayName,
+		RemovedAt:   removedAt,
+	})
+
 	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
 
 	// Clear LinkedHostAgentID from any nodes that were linked to this host agent
@@ -1926,6 +1941,33 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	m.deletePersistedHostRuntime(hostID)
 
 	return host, nil
+}
+
+// AllowHostReenroll removes a host ID from the removal blocklist so it can report again.
+func (m *Monitor) AllowHostReenroll(hostID string) error {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return fmt.Errorf("host id is required")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.removedHosts[hostID]; !exists {
+		log.Info().
+			Str("hostID", hostID).
+			Msg("Allow re-enroll requested but host was not blocked; ignoring")
+		return nil
+	}
+
+	delete(m.removedHosts, hostID)
+	m.state.RemoveRemovedHost(hostID)
+
+	log.Info().
+		Str("hostID", hostID).
+		Msg("Host agent removal block cleared; host may report again")
+
+	return nil
 }
 
 // LinkHostAgent manually links a host agent to a specific PVE node.
@@ -2971,6 +3013,22 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 	}
 
+	// Check if this host was deliberately removed - reject report to prevent resurrection.
+	// Unlike Docker agents, host agents don't have legacy IDs, so we only check the
+	// resolved identifier. The identifier is deterministic given the same machine/agent/hostname
+	// inputs, so a running agent will always resolve to the same blocked ID.
+	m.mu.RLock()
+	removedAt, wasRemoved := m.removedHosts[identifier]
+	m.mu.RUnlock()
+
+	if wasRemoved {
+		log.Info().
+			Str("hostID", identifier).
+			Time("removedAt", removedAt).
+			Msg("Rejecting report from deliberately removed host agent")
+		return models.Host{}, fmt.Errorf("host %q was removed at %v and cannot report again. Use Allow re-enroll in Settings -> Agents to clear this block", identifier, removedAt.Format(time.RFC3339))
+	}
+
 	var previous models.Host
 	var hasPrevious bool
 	for _, candidate := range existingHosts {
@@ -3394,6 +3452,7 @@ func (m *Monitor) linkNodeToHostAgent(nodeID, hostAgentID string) {
 
 const (
 	removedDockerHostsTTL = 24 * time.Hour // Clean up removed hosts tracking after 24 hours
+	removedHostsTTL       = 24 * time.Hour // Clean up removed host agents tracking after 24 hours
 )
 
 // recoverFromPanic recovers from panics in monitoring goroutines and logs them.
@@ -3434,6 +3493,33 @@ func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
 			Str("dockerHostID", hostID).
 			Time("removedAt", removedAt).
 			Msg("Cleaned up old removed Docker host entry")
+	}
+}
+
+// cleanupRemovedHosts removes entries from the removed host agents map that are older than 24 hours.
+func (m *Monitor) cleanupRemovedHosts(now time.Time) {
+	var toRemove []string
+
+	m.mu.Lock()
+	for hostID, removedAt := range m.removedHosts {
+		if now.Sub(removedAt) > removedHostsTTL {
+			toRemove = append(toRemove, hostID)
+		}
+	}
+	m.mu.Unlock()
+
+	for _, hostID := range toRemove {
+		m.state.RemoveRemovedHost(hostID)
+
+		m.mu.Lock()
+		removedAt := m.removedHosts[hostID]
+		delete(m.removedHosts, hostID)
+		m.mu.Unlock()
+
+		log.Debug().
+			Str("hostID", hostID).
+			Time("removedAt", removedAt).
+			Msg("Cleaned up old removed host agent entry")
 	}
 }
 
@@ -4266,6 +4352,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		vmAgentMemCache:            make(map[string]agentMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
+		removedHosts:               make(map[string]time.Time),
 		removedKubernetesClusters:  make(map[string]time.Time),
 		kubernetesTokenBindings:    make(map[string]string),
 		hostTokenBindings:          make(map[string]string),
@@ -4310,6 +4397,19 @@ func New(cfg *config.Config) (*Monitor, error) {
 	// when Pulse restarts while agents are offline.
 	m.restorePersistedHostAgents()
 	m.RebuildTokenBindings()
+
+	// Sync removed-agent maps from state (currently a no-op on cold start since
+	// state begins empty, but ensures consistency if state is ever restored from
+	// a snapshot or populated before Start is called).
+	for _, entry := range m.state.GetRemovedDockerHosts() {
+		m.removedDockerHosts[entry.ID] = entry.RemovedAt
+	}
+	for _, entry := range m.state.GetRemovedHosts() {
+		m.removedHosts[entry.ID] = entry.RemovedAt
+	}
+	for _, entry := range m.state.GetRemovedKubernetesClusters() {
+		m.removedKubernetesClusters[entry.ID] = entry.RemovedAt
+	}
 
 	if m.pollMetrics != nil {
 		m.pollMetrics.ResetQueueDepth(0)
@@ -4976,6 +5076,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.evaluateKubernetesAgents(now)
 			m.evaluateHostAgents(now)
 			m.cleanupRemovedDockerHosts(now)
+			m.cleanupRemovedHosts(now)
 			m.cleanupRemovedKubernetesClusters(now)
 			m.cleanupGuestMetadataCache(now)
 			m.cleanupDiagnosticSnapshots(now)

@@ -235,6 +235,14 @@ type KubernetesDeploymentFrontend struct {
 	Labels            map[string]string `json:"labels,omitempty"`
 }
 
+// RemovedHostFrontend represents a blocked host agent entry for the frontend.
+type RemovedHostFrontend struct {
+	ID          string `json:"id"`
+	Hostname    string `json:"hostname,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
+	RemovedAt   int64  `json:"removedAt"`
+}
+
 // RemovedKubernetesClusterFrontend represents a blocked kubernetes cluster entry for the frontend.
 type RemovedKubernetesClusterFrontend struct {
 	ID          string `json:"id"`
@@ -559,6 +567,7 @@ type StateFrontend struct {
 	RemovedDockerHosts           []RemovedDockerHostFrontend        `json:"removedDockerHosts"`
 	KubernetesClusters           []KubernetesClusterFrontend        `json:"kubernetesClusters"`
 	RemovedKubernetesClusters    []RemovedKubernetesClusterFrontend `json:"removedKubernetesClusters"`
+	RemovedHosts                 []RemovedHostFrontend              `json:"removedHosts"`
 	Hosts                        []HostFrontend                     `json:"hosts"`
 	Storage                      []StorageFrontend                  `json:"storage"`
 	CephClusters                 []CephClusterFrontend              `json:"cephClusters"`

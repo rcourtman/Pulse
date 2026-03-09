@@ -230,6 +230,34 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// HandleAllowReenroll clears the removal block for a host agent to permit future reports.
+func (h *HostAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http.Request) {
+	// Extract host ID from URL path
+	// Expected format: /api/agents/host/{hostId}/allow-reenroll
+	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/host/")
+	trimmedPath = strings.TrimSuffix(trimmedPath, "/allow-reenroll")
+	hostID := strings.TrimSpace(trimmedPath)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Host ID is required", nil)
+		return
+	}
+
+	if err := h.getMonitor(r.Context()).AllowHostReenroll(hostID); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "host_reenroll_failed", err.Error(), nil)
+		return
+	}
+
+	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success": true,
+		"hostId":  hostID,
+		"message": "Host agent removal block cleared",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize host allow reenroll response")
+	}
+}
+
 // HandleDeleteHost removes a host from the shared state.
 func (h *HostAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {

@@ -186,6 +186,36 @@ export class MonitoringAPI {
     }
   }
 
+  static async allowHostReenroll(hostId: string): Promise<void> {
+    const url = `${this.baseUrl}/agents/host/${encodeURIComponent(hostId)}/allow-reenroll`;
+
+    const response = await apiFetch(url, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      let message = `Failed with status ${response.status}`;
+      try {
+        const text = await response.text();
+        if (text?.trim()) {
+          message = text.trim();
+          try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              message = parsed.error.trim();
+            }
+          } catch (_err) {
+            // ignore parse error, use raw text
+          }
+        }
+      } catch (_err) {
+        // ignore read error
+      }
+
+      throw new Error(message);
+    }
+  }
+
   static async allowDockerHostReenroll(hostId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/allow-reenroll`;
 

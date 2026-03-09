@@ -10,6 +10,7 @@ export interface State {
   removedDockerHosts?: RemovedDockerHost[];
   kubernetesClusters?: KubernetesCluster[];
   removedKubernetesClusters?: RemovedKubernetesCluster[];
+  removedHosts?: RemovedHost[];
   hosts: Host[];
   replicationJobs: ReplicationJob[];
   storage: Storage[];
@@ -62,6 +63,13 @@ export interface KubernetesCluster {
   nodes?: KubernetesNode[];
   pods?: KubernetesPod[];
   deployments?: KubernetesDeployment[];
+}
+
+export interface RemovedHost {
+  id: string;
+  hostname?: string;
+  displayName?: string;
+  removedAt: number;
 }
 
 export interface RemovedKubernetesCluster {

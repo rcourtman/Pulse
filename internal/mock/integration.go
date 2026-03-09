@@ -378,6 +378,8 @@ func cloneState(state models.StateSnapshot) models.StateSnapshot {
 		DockerHosts:               append([]models.DockerHost(nil), state.DockerHosts...),
 		KubernetesClusters:        kubernetesClusters,
 		RemovedKubernetesClusters: append([]models.RemovedKubernetesCluster(nil), state.RemovedKubernetesClusters...),
+		RemovedDockerHosts:        append([]models.RemovedDockerHost(nil), state.RemovedDockerHosts...),
+		RemovedHosts:              append([]models.RemovedHost(nil), state.RemovedHosts...),
 		Hosts:                     append([]models.Host(nil), state.Hosts...),
 		PMGInstances:              append([]models.PMGInstance(nil), state.PMGInstances...),
 		Storage:                   append([]models.Storage(nil), state.Storage...),

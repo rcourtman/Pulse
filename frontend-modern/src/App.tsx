@@ -294,6 +294,7 @@ function App() {
     containers: [],
     dockerHosts: [],
     removedDockerHosts: [],
+    removedHosts: [],
     hosts: [],
     storage: [],
     cephClusters: [],

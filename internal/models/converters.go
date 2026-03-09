@@ -460,6 +460,16 @@ func (r RemovedKubernetesCluster) ToFrontend() RemovedKubernetesClusterFrontend 
 	}
 }
 
+// ToFrontend converts a RemovedHost to its frontend representation.
+func (r RemovedHost) ToFrontend() RemovedHostFrontend {
+	return RemovedHostFrontend{
+		ID:          r.ID,
+		Hostname:    r.Hostname,
+		DisplayName: r.DisplayName,
+		RemovedAt:   r.RemovedAt.Unix() * 1000,
+	}
+}
+
 // ToFrontend converts a Host to HostFrontend.
 func (h Host) ToFrontend() HostFrontend {
 	host := HostFrontend{

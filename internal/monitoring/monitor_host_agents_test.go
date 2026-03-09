@@ -136,6 +136,7 @@ func TestApplyHostReportPersistsAndRemoveHostAgentClearsRuntime(t *testing.T) {
 		state:                  models.NewState(),
 		alertManager:           alerts.NewManager(),
 		hostTokenBindings:      make(map[string]string),
+		removedHosts:           make(map[string]time.Time),
 		config:                 &config.Config{},
 		rateTracker:            NewRateTracker(),
 		hostRuntimeStore:       runtimeStore,
@@ -326,6 +327,7 @@ func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
+		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 		rateTracker:       NewRateTracker(),
 	}
@@ -409,6 +411,7 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
+		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -757,6 +760,7 @@ func TestRemoveHostAgent_EmptyHostID(t *testing.T) {
 	monitor := &Monitor{
 		state:        models.NewState(),
 		alertManager: alerts.NewManager(),
+		removedHosts: make(map[string]time.Time),
 		config:       &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -782,6 +786,7 @@ func TestRemoveHostAgent_NotFound(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
+		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -806,6 +811,7 @@ func TestRemoveHostAgent_NoTokenBinding(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
+		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
@@ -834,6 +840,7 @@ func TestRemoveHostAgent_NilAlertManager(t *testing.T) {
 		state:             models.NewState(),
 		alertManager:      nil, // No alert manager
 		hostTokenBindings: make(map[string]string),
+		removedHosts:      make(map[string]time.Time),
 		config:            &config.Config{},
 	}
 
