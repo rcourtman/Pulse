@@ -5,7 +5,7 @@ import { segmentedButtonClass } from '@/utils/segmentedButton';
 export const filterToolbarShellClass = '';
 export const filterToolbarRowClass = 'flex flex-wrap items-center gap-2 text-xs text-muted';
 export const filterToolbarContentClass = 'flex flex-col gap-2';
-export const filterToolbarSearchRowClass = 'flex items-center gap-2';
+export const filterToolbarSearchRowClass = 'flex w-full items-center gap-2';
 export const filterGroupClass = 'inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5';
 export const filterLabelClass =
   'px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted';
@@ -205,7 +205,7 @@ export const FilterSegmentedControl: Component<FilterSegmentedControlProps> = (p
   );
 };
 
-interface FilterDividerProps extends JSX.HTMLAttributes<HTMLDivElement> {}
+type FilterDividerProps = JSX.HTMLAttributes<HTMLDivElement>;
 
 export const FilterDivider: Component<FilterDividerProps> = (props) => {
   const [local, divProps] = splitProps(props, ['class']);

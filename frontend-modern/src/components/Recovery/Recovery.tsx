@@ -918,7 +918,6 @@ const Recovery: Component = () => {
                   />
                 </Show>
               }
-              searchRowClass="w-full"
               showFilters={!isMobile() || protectedFiltersOpen()}
               toolbarClass="lg:flex-nowrap"
             >
@@ -1600,7 +1599,6 @@ const Recovery: Component = () => {
                       }}
                     />
                   }
-                  searchRowClass="w-full"
                   searchAccessory={
                     <Show when={isMobile()}>
                       <FilterMobileToggleButton

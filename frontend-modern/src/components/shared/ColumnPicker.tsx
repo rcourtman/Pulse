@@ -15,8 +15,6 @@ interface ColumnPickerProps {
   onToggle: (id: string) => void;
   /** Reset all columns to visible */
   onReset?: () => void;
-  /** Optional button label override */
-  label?: string;
 }
 
 export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
@@ -44,8 +42,6 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
 
   // Count how many are hidden
   const hiddenCount = () => props.columns.filter((c) => props.isHidden(c.id)).length;
-  const buttonLabel = () => props.label?.trim() || 'Columns';
-
   return (
     <div ref={containerRef} class="relative shrink-0">
       <FilterActionButton
@@ -64,7 +60,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 4v16M15 4v16M4 9h16M4 15h16" />
         </svg>
-        <span>{buttonLabel()}</span>
+        <span>Columns</span>
         <Show when={hiddenCount() > 0}>
           <span class={filterUtilityBadgeClass}>{hiddenCount()}</span>
         </Show>
