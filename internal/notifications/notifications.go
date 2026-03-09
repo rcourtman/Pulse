@@ -871,11 +871,30 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	}
 }
 
-// CancelAlert removes pending notifications for a resolved alert
+// CancelAlert removes pending notifications for a resolved alert and cleans
+// up cooldown and queue state. Always cleans up cooldown and queued firing
+// notifications even when the alert has already left the pending buffer
+// (was already grouped and flushed to the queue). Refs: #1332
 func (n *NotificationManager) CancelAlert(alertID string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	// Always clean up cooldown record for resolved alert, even if it
+	// already left the pending buffer (i.e. was already sent/grouped).
+	// Without this, a stale cooldown entry can suppress the next firing.
+	delete(n.lastNotified, alertID)
+
+	// Always cancel queued firing notifications for this alert. If the
+	// alert was flushed from the pending buffer to the persistent queue
+	// but hasn't been sent yet, we must cancel it to avoid delivering a
+	// stale "firing" notification after the alert has already resolved.
+	if n.queue != nil {
+		if err := n.queue.CancelByAlertIDs([]string{alertID}); err != nil {
+			log.Error().Err(err).Str("alertID", alertID).Msg("Failed to cancel queued notifications")
+		}
+	}
+
+	// Remove from the in-memory pending buffer if still there
 	if len(n.pendingAlerts) == 0 {
 		return
 	}
@@ -908,16 +927,6 @@ func (n *NotificationManager) CancelAlert(alertID string) {
 			log.Debug().Str("alertID", alertID).Msg("Stopped grouping timer after alert cancellation")
 		}
 		n.groupTimer = nil
-	}
-
-	// Clean up cooldown record for resolved alert
-	delete(n.lastNotified, alertID)
-
-	// Cancel any queued notifications containing this alert
-	if n.queue != nil {
-		if err := n.queue.CancelByAlertIDs([]string{alertID}); err != nil {
-			log.Error().Err(err).Str("alertID", alertID).Msg("Failed to cancel queued notifications")
-		}
 	}
 
 	log.Debug().

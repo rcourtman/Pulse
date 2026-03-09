@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -142,10 +143,30 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	// Limit request body to 64KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
-	var config alerts.AlertConfig
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	var config alerts.AlertConfig
+	if err := json.Unmarshal(body, &config); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Preserve notifyOnResolve when the client omits it from the request body.
+	// Go decodes a missing bool as false, which would silently disable recovery
+	// notifications. Use a *bool probe to distinguish "missing" from "explicitly false".
+	// Refs: #1259, #1332
+	var scheduleProbe struct {
+		Schedule struct {
+			NotifyOnResolve *bool `json:"notifyOnResolve"`
+		} `json:"schedule"`
+	}
+	if err := json.Unmarshal(body, &scheduleProbe); err == nil && scheduleProbe.Schedule.NotifyOnResolve == nil {
+		currentConfig := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
+		config.Schedule.NotifyOnResolve = currentConfig.Schedule.NotifyOnResolve
 	}
 
 	// Migrate deprecated GroupingWindow to Grouping.Window if needed before applying.
