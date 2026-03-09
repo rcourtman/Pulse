@@ -16,7 +16,6 @@ describe('typeColumnDefinition', () => {
       id: 'type',
       label: 'Type',
       toggleable: true,
-      defaultHidden: false,
       width: TYPE_COLUMN_WIDTH,
       sortKey: TYPE_COLUMN_SORT_KEY,
     });
@@ -31,30 +30,20 @@ describe('typeColumnDefinition', () => {
     });
   });
 
-  it('passes through canonical size and sort options', () => {
-    expect(createVisibleCanonicalTypeColumn({ width: '72px' })).toMatchObject({
-      width: '72px',
-      sortKey: TYPE_COLUMN_SORT_KEY,
-      defaultHidden: false,
-    });
-  });
-
   it('provides a visible preset helper for standard type columns', () => {
     expect(createVisibleCanonicalTypeColumn()).toMatchObject({
       id: 'type',
       label: 'Type',
       toggleable: true,
       width: TYPE_COLUMN_WIDTH,
-      defaultHidden: false,
     });
   });
 
   it('provides a hidden preset helper for recovery-style type columns', () => {
-    expect(createHiddenCanonicalTypeColumn({ width: '72px' })).toMatchObject({
+    expect(createHiddenCanonicalTypeColumn()).toMatchObject({
       id: 'type',
       label: 'Type',
       toggleable: true,
-      width: '72px',
       defaultHidden: true,
     });
   });

@@ -6,43 +6,24 @@ import {
   TYPE_COLUMN_WIDTH,
 } from '@/utils/typeColumnContract';
 
-type CanonicalTypeColumnOptions = Pick<
-  ColumnDef,
-  'icon' | 'width' | 'minWidth' | 'maxWidth' | 'flex' | 'sortKey'
->;
-
-type CanonicalTypeColumnVisibility = 'visible' | 'hidden';
-
 const createCanonicalTypeColumn = (
-  options: CanonicalTypeColumnOptions & {
-    defaultVisibility?: CanonicalTypeColumnVisibility;
-  } = {},
+  options: Pick<ColumnDef, 'defaultHidden' | 'width' | 'sortKey'> = {},
 ): ColumnDef => {
-  const { defaultVisibility = 'visible', ...columnOptions } = options;
-
   return {
     id: TYPE_COLUMN_ID,
     label: TYPE_COLUMN_LABEL,
     toggleable: true,
-    defaultHidden: defaultVisibility === 'hidden',
-    ...columnOptions,
+    ...options,
   };
 };
 
-export const createVisibleCanonicalTypeColumn = (
-  options: CanonicalTypeColumnOptions = {},
-): ColumnDef =>
+export const createVisibleCanonicalTypeColumn = (): ColumnDef =>
   createCanonicalTypeColumn({
     width: TYPE_COLUMN_WIDTH,
     sortKey: TYPE_COLUMN_SORT_KEY,
-    ...options,
-    defaultVisibility: 'visible',
   });
 
-export const createHiddenCanonicalTypeColumn = (
-  options: CanonicalTypeColumnOptions = {},
-): ColumnDef =>
+export const createHiddenCanonicalTypeColumn = (): ColumnDef =>
   createCanonicalTypeColumn({
-    ...options,
-    defaultVisibility: 'hidden',
+    defaultHidden: true,
   });
