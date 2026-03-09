@@ -106,6 +106,24 @@ describe('type column guardrails', () => {
     expect(pageLevelTypeDefaultHiddenUsers).toEqual([]);
   });
 
+  it('limits type column helper imports to the known runtime tables', () => {
+    const runtimeEntries = Object.entries(sourceFiles).filter(
+      ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
+    );
+    const typeColumnDefinitionImportPattern =
+      /from\s*['"]@\/utils\/typeColumnDefinition['"]/;
+
+    const directHelperImportUsers = runtimeEntries
+      .filter(([, source]) => typeColumnDefinitionImportPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
+    expect(directHelperImportUsers).toEqual([
+      '../Dashboard/GuestRow.tsx',
+      '../Recovery/Recovery.tsx',
+    ]);
+  });
+
   it('limits direct type column contract imports to the shared helper and responsive schema', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
