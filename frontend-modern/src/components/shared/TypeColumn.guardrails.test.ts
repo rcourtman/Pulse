@@ -52,12 +52,12 @@ describe('type column guardrails', () => {
   });
 
   it('routes runtime Type columns through the shared helper', () => {
-    expect(guestRowSource).toContain('createVisibleCanonicalTypeColumn');
+    expect(guestRowSource).toContain('createVisibleCanonicalTypeColumn()');
     expect(guestRowSource).not.toContain('createCanonicalTypeColumn');
     expect(guestRowSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
     expect(guestRowSource).not.toContain("defaultVisibility:");
 
-    expect(recoverySource).toContain('createHiddenCanonicalTypeColumn');
+    expect(recoverySource).toContain('createHiddenCanonicalTypeColumn()');
     expect(recoverySource).not.toContain('createCanonicalTypeColumn');
     expect(recoverySource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
     expect(recoverySource).not.toContain("defaultVisibility:");
