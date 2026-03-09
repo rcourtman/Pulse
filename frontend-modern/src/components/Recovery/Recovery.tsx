@@ -126,6 +126,9 @@ const titleize = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
+const subjectTypeSlotClass = 'inline-flex w-[3.25rem] shrink-0 items-center justify-center';
+const subjectFlagsSlotClass = 'inline-flex w-[1.75rem] shrink-0 items-center justify-start gap-1';
+
 type IssueTone = RecoveryIssueTone;
 
 const Recovery: Component = () => {
@@ -1943,14 +1946,11 @@ const Recovery: Component = () => {
                                           case 'subject':
                                             return (
                                               <TableCell
-                                                class="max-w-[420px] px-3 py-1 text-base-content"
+                                                class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-base-content"
                                                 title={subject}
                                               >
-                                                <div class="flex min-w-0 max-w-full flex-col gap-1">
-                                                  <span class="min-w-0 truncate font-medium leading-tight">
-                                                    {subject}
-                                                  </span>
-                                                  <span class="inline-flex min-h-[0.875rem] items-center gap-1.5">
+                                                <div class="flex min-w-0 max-w-full items-center gap-2">
+                                                  <span class={subjectTypeSlotClass}>
                                                     <Show when={subjectType}>
                                                       <span
                                                         class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium leading-none ${getRecoverySubjectTypeBadgeClass(
@@ -1960,6 +1960,8 @@ const Recovery: Component = () => {
                                                         {subjectType}
                                                       </span>
                                                     </Show>
+                                                  </span>
+                                                  <span class={subjectFlagsSlotClass}>
                                                     <Show when={p.immutable === true}>
                                                       <svg
                                                         class="h-3 w-3 text-emerald-500 dark:text-emerald-400"
@@ -1990,6 +1992,9 @@ const Recovery: Component = () => {
                                                         />
                                                       </svg>
                                                     </Show>
+                                                  </span>
+                                                  <span class="min-w-0 flex-1 truncate font-medium">
+                                                    {subject}
                                                   </span>
                                                 </div>
                                               </TableCell>
