@@ -4,6 +4,12 @@ import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?ra
 import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
 import infrastructureSource from '@/pages/Infrastructure.tsx?raw';
 
+const tsxSources = import.meta.glob('../../**/*.tsx', {
+  query: '?raw',
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
 describe('page controls guardrails', () => {
   it('keeps canonical page-level controls routed through PageControls', () => {
     expect(pageControlsSource).toContain('FilterHeader');
@@ -20,5 +26,33 @@ describe('page controls guardrails', () => {
 
     expect(infrastructureSource).toContain('PageControls');
     expect(infrastructureSource).not.toContain('<FilterHeader');
+  });
+
+  it('limits raw FilterHeader and ColumnPicker usage to the known allowlist', () => {
+    const runtimeEntries = Object.entries(tsxSources).filter(
+      ([path]) => !path.endsWith('.test.tsx'),
+    );
+    const filterHeaderTagPattern = /<FilterHeader(?:\s|>)/;
+    const columnPickerTagPattern = /<ColumnPicker(?:\s|>)/;
+
+    const filterHeaderUsers = runtimeEntries
+      .filter(([, source]) => filterHeaderTagPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+    const columnPickerUsers = runtimeEntries
+      .filter(([, source]) => columnPickerTagPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
+    expect(filterHeaderUsers).toEqual([
+      '../../pages/Alerts.tsx',
+      '../Storage/StorageFilter.tsx',
+      './PageControls.tsx',
+    ]);
+
+    expect(columnPickerUsers).toEqual([
+      '../Storage/StorageFilter.tsx',
+      './PageControls.tsx',
+    ]);
   });
 });
