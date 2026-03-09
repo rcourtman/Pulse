@@ -13,21 +13,42 @@ const sourceFiles = import.meta.glob(['../../**/*.ts', '../../**/*.tsx'], {
 
 const INLINE_TYPE_COLUMN_PATTERN =
   /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?toggleable:\s*true[\s\S]*?\}/g;
+const RESPONSIVE_TYPE_BLOCK_PATTERN = /type:\s*\{[\s\S]*?\n\s*\},/;
 
 describe('type column guardrails', () => {
   it('keeps the canonical Type column definition in the shared helper', () => {
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_ID = 'type'");
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_LABEL = 'Type'");
+    expect(typeColumnContractSource).toContain("TYPE_COLUMN_SORT_KEY = 'type'");
+    expect(typeColumnContractSource).toContain("TYPE_COLUMN_WIDTH = '60px'");
+    expect(typeColumnContractSource).toContain("TYPE_COLUMN_MIN_WIDTH = '60px'");
+    expect(typeColumnContractSource).toContain("TYPE_COLUMN_MAX_WIDTH = '80px'");
+    expect(typeColumnContractSource).toContain("TYPE_COLUMN_ALIGN = 'center'");
     expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_ID');
     expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_LABEL');
+    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_SORT_KEY');
+    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_WIDTH');
     expect(typeColumnDefinitionSource).toContain('toggleable: true');
     expect(typeColumnDefinitionSource).not.toContain('export const createCanonicalTypeColumn');
     expect(typeColumnDefinitionSource).not.toContain("id: 'type'");
     expect(typeColumnDefinitionSource).not.toContain("label: 'Type'");
+    expect(typeColumnDefinitionSource).not.toContain("width: '60px'");
+    expect(typeColumnDefinitionSource).not.toContain("sortKey: 'type'");
     expect(responsiveSource).toContain('TYPE_COLUMN_ID');
     expect(responsiveSource).toContain('TYPE_COLUMN_LABEL');
-    expect(responsiveSource).not.toContain("id: 'type'");
-    expect(responsiveSource).not.toContain("label: 'Type'");
+    expect(responsiveSource).toContain('TYPE_COLUMN_MIN_WIDTH');
+    expect(responsiveSource).toContain('TYPE_COLUMN_MAX_WIDTH');
+    expect(responsiveSource).toContain('TYPE_COLUMN_ALIGN');
+    const responsiveTypeBlock = responsiveSource.match(RESPONSIVE_TYPE_BLOCK_PATTERN)?.[0] ?? '';
+    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_ID');
+    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_LABEL');
+    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_MIN_WIDTH');
+    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_MAX_WIDTH');
+    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_ALIGN');
+    expect(responsiveTypeBlock).not.toContain("id: 'type'");
+    expect(responsiveTypeBlock).not.toContain("label: 'Type'");
+    expect(responsiveTypeBlock).not.toContain("minWidth: '60px'");
+    expect(responsiveTypeBlock).not.toContain("maxWidth: '80px'");
   });
 
   it('routes runtime Type columns through the shared helper', () => {

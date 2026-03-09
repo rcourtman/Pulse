@@ -1,6 +1,12 @@
 import type { Component, JSX } from 'solid-js';
 import type { ColumnPriority, Breakpoint } from '@/hooks/useBreakpoint';
-import { TYPE_COLUMN_ID, TYPE_COLUMN_LABEL } from '@/utils/typeColumnContract';
+import {
+  TYPE_COLUMN_ALIGN,
+  TYPE_COLUMN_ID,
+  TYPE_COLUMN_LABEL,
+  TYPE_COLUMN_MAX_WIDTH,
+  TYPE_COLUMN_MIN_WIDTH,
+} from '@/utils/typeColumnContract';
 
 /**
  * Configuration for a responsive table column
@@ -180,9 +186,9 @@ export const STANDARD_COLUMNS = {
     label: TYPE_COLUMN_LABEL,
     priority: 'essential' as ColumnPriority,
     sortable: true,
-    minWidth: '60px',
-    maxWidth: '80px',
-    align: 'center' as const,
+    minWidth: TYPE_COLUMN_MIN_WIDTH,
+    maxWidth: TYPE_COLUMN_MAX_WIDTH,
+    align: TYPE_COLUMN_ALIGN,
   },
 
   /** VMID column */
