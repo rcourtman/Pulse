@@ -717,7 +717,7 @@ const Recovery: Component = () => {
 
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
-    { id: 'type', label: 'Type' },
+    { id: 'type', label: 'Type', toggleable: true },
     { id: 'subject', label: 'Subject' },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: 'Cluster', toggleable: true },
@@ -755,7 +755,7 @@ const Recovery: Component = () => {
   const artifactColumnVisibility = useColumnVisibility(
     STORAGE_KEYS.RECOVERY_HIDDEN_COLUMNS,
     artifactColumns,
-    ['entityId', 'cluster', 'nodeAgent', 'namespace'],
+    ['type', 'entityId', 'cluster', 'nodeAgent', 'namespace'],
     relevantArtifactColumnIDs,
   );
 
