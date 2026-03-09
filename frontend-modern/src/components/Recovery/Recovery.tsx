@@ -10,18 +10,16 @@ import {
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
-import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { EmptyState } from '@/components/shared/EmptyState';
 import {
   FilterActionButton,
-  FilterHeader,
-  FilterMobileToggleButton,
   FilterToolbarPanel,
   LabeledFilterSelect,
   filterPanelDescriptionClass,
   filterPanelTitleClass,
   filterUtilityBadgeClass,
 } from '@/components/shared/FilterToolbar';
+import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
@@ -896,7 +894,7 @@ const Recovery: Component = () => {
         </div>
         <Show when={!kioskMode()}>
           <div class="border-b border-border px-3 py-3">
-            <FilterHeader
+            <PageControls
               search={
                 <SearchInput
                   value={protectedQuery}
@@ -910,14 +908,11 @@ const Recovery: Component = () => {
                   }}
                 />
               }
-              searchAccessory={
-                <Show when={isMobile()}>
-                  <FilterMobileToggleButton
-                    onClick={() => setProtectedFiltersOpen((o) => !o)}
-                    count={protectedActiveFilterCount()}
-                  />
-                </Show>
-              }
+              mobileFilters={{
+                enabled: isMobile(),
+                onToggle: () => setProtectedFiltersOpen((o) => !o),
+                count: protectedActiveFilterCount(),
+              }}
               showFilters={!isMobile() || protectedFiltersOpen()}
               toolbarClass="lg:flex-nowrap"
             >
@@ -968,7 +963,7 @@ const Recovery: Component = () => {
               >
                 Stale only
               </button>
-            </FilterHeader>
+            </PageControls>
           </div>
         </Show>
         <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
@@ -1582,7 +1577,7 @@ const Recovery: Component = () => {
             </div>
             <Show when={!kioskMode()}>
               <div class="border-b border-border px-3 py-3">
-                <FilterHeader
+                <PageControls
                   search={
                     <SearchInput
                       value={historyQuery}
@@ -1599,14 +1594,189 @@ const Recovery: Component = () => {
                       }}
                     />
                   }
-                  searchAccessory={
-                    <Show when={isMobile()}>
-                      <FilterMobileToggleButton
-                        onClick={() => setHistoryFiltersOpen((o) => !o)}
-                        count={historyActiveFilterCount()}
-                      />
-                    </Show>
+                  mobileFilters={{
+                    enabled: isMobile(),
+                    onToggle: () => setHistoryFiltersOpen((o) => !o),
+                    count: historyActiveFilterCount(),
+                  }}
+                  utilityActions={
+                    <div class="ml-auto flex items-center gap-2">
+                      <div class="relative">
+                        <FilterActionButton
+                          ref={advancedFiltersButtonRef}
+                          aria-label="Filter"
+                          aria-expanded={moreFiltersOpen()}
+                          aria-controls="recovery-filter-panel"
+                          aria-haspopup="dialog"
+                          onClick={() => setMoreFiltersOpen((v) => !v)}
+                          active={moreFiltersOpen() || activeAdvancedFilterCount() > 0}
+                        >
+                          <span>Filter</span>
+                          <Show when={activeAdvancedFilterCount() > 0}>
+                            <span class={filterUtilityBadgeClass}>
+                              {activeAdvancedFilterCount()}
+                            </span>
+                          </Show>
+                        </FilterActionButton>
+
+                        <Show when={moreFiltersOpen()}>
+                          <FilterToolbarPanel ref={advancedFiltersPanelRef} id="recovery-filter-panel">
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                              <div>
+                                <div class={filterPanelTitleClass}>Filter results</div>
+                                <div class={filterPanelDescriptionClass}>
+                                  Narrow by scope, method, verification, or location.
+                                </div>
+                              </div>
+                              <Show when={activeAdvancedFilterCount() > 0}>
+                                <button
+                                  type="button"
+                                  onClick={resetAdvancedArtifactFilters}
+                                  class={getRecoveryFilterPanelClearClass()}
+                                >
+                                  Clear filters
+                                </button>
+                              </Show>
+                            </div>
+
+                            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              <label class="flex min-w-0 flex-col gap-1">
+                                <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Scope</span>
+                                <select
+                                  value={scopeFilter()}
+                                  onChange={(event) => {
+                                    const value =
+                                      event.currentTarget.value === 'workload' ? 'workload' : 'all';
+                                    setScopeFilter(value);
+                                    setCurrentPage(1);
+                                  }}
+                                  class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                                >
+                                  <option value="all">All history</option>
+                                  <option value="workload">Workloads only</option>
+                                </select>
+                              </label>
+
+                              <label class="flex min-w-0 flex-col gap-1">
+                                <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Method</span>
+                                <select
+                                  value={modeFilter()}
+                                  onChange={(event) => {
+                                    setModeFilter(
+                                      normalizeRecoveryModeQueryValue(event.currentTarget.value),
+                                    );
+                                    setCurrentPage(1);
+                                  }}
+                                  class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                                >
+                                  <option value="all">Any method</option>
+                                  <option value="snapshot">
+                                    {getRecoveryArtifactModePresentation('snapshot').label}
+                                  </option>
+                                  <option value="local">
+                                    {getRecoveryArtifactModePresentation('local').label}
+                                  </option>
+                                  <option value="remote">
+                                    {getRecoveryArtifactModePresentation('remote').label}
+                                  </option>
+                                </select>
+                              </label>
+
+                              <Show when={showVerificationFilter()}>
+                                <label class="flex min-w-0 flex-col gap-1">
+                                  <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                                    Verification
+                                  </span>
+                                  <select
+                                    value={verificationFilter()}
+                                    onChange={(event) => {
+                                      setVerificationFilter(
+                                        event.currentTarget.value as VerificationFilter,
+                                      );
+                                      if (event.currentTarget.value !== 'all')
+                                        setHistoryOutcomeFilter('all');
+                                      setCurrentPage(1);
+                                    }}
+                                    class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                                  >
+                                    <option value="all">Any verification</option>
+                                    <option value="verified">Verified</option>
+                                    <option value="unverified">Unverified</option>
+                                    <option value="unknown">Unknown</option>
+                                  </select>
+                                </label>
+                              </Show>
+
+                              <Show when={showClusterFilter()}>
+                                <label class="flex min-w-0 flex-col gap-1">
+                                  <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Cluster</span>
+                                  <select
+                                    value={clusterFilter()}
+                                    onChange={(event) => {
+                                      setClusterFilter(event.currentTarget.value);
+                                      setCurrentPage(1);
+                                    }}
+                                    class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                                  >
+                                    <option value="all">Any cluster</option>
+                                    <For each={clusterOptions().filter((value) => value !== 'all')}>
+                                      {(cluster) => <option value={cluster}>{cluster}</option>}
+                                    </For>
+                                  </select>
+                                </label>
+                              </Show>
+
+                              <Show when={showNodeFilter()}>
+                                <label class="flex min-w-0 flex-col gap-1">
+                                  <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                                    Node or agent
+                                  </span>
+                                  <select
+                                    value={nodeFilter()}
+                                    onChange={(event) => {
+                                      setNodeFilter(event.currentTarget.value);
+                                      setCurrentPage(1);
+                                    }}
+                                    class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                                  >
+                                    <option value="all">Any node or agent</option>
+                                    <For each={nodeOptions().filter((value) => value !== 'all')}>
+                                      {(node) => <option value={node}>{node}</option>}
+                                    </For>
+                                  </select>
+                                </label>
+                              </Show>
+
+                              <Show when={showNamespaceFilter()}>
+                                <label class="flex min-w-0 flex-col gap-1">
+                                  <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Namespace</span>
+                                  <select
+                                    value={namespaceFilter()}
+                                    onChange={(event) => {
+                                      setNamespaceFilter(event.currentTarget.value);
+                                      setCurrentPage(1);
+                                    }}
+                                    class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
+                                  >
+                                    <option value="all">Any namespace</option>
+                                    <For each={namespaceOptions().filter((value) => value !== 'all')}>
+                                      {(namespace) => <option value={namespace}>{namespace}</option>}
+                                    </For>
+                                  </select>
+                                </label>
+                              </Show>
+                            </div>
+                          </FilterToolbarPanel>
+                        </Show>
+                      </div>
+                    </div>
                   }
+                  columnVisibility={artifactColumnVisibility}
+                  resetAction={{
+                    show: hasActiveArtifactFilters(),
+                    onClick: resetAllArtifactFilters,
+                    label: 'Reset all',
+                  }}
                   showFilters={!isMobile() || historyFiltersOpen()}
                   toolbarClass="lg:flex-nowrap"
                 >
@@ -1651,191 +1821,7 @@ const Recovery: Component = () => {
                       )}
                     </For>
                   </LabeledFilterSelect>
-
-                  <div class="ml-auto flex items-center gap-2">
-                    <div class="relative">
-                      <FilterActionButton
-                        ref={advancedFiltersButtonRef}
-                        aria-label="Filter"
-                        aria-expanded={moreFiltersOpen()}
-                        aria-controls="recovery-filter-panel"
-                        aria-haspopup="dialog"
-                        onClick={() => setMoreFiltersOpen((v) => !v)}
-                        active={moreFiltersOpen() || activeAdvancedFilterCount() > 0}
-                      >
-                        <span>Filter</span>
-                        <Show when={activeAdvancedFilterCount() > 0}>
-                          <span class={filterUtilityBadgeClass}>{activeAdvancedFilterCount()}</span>
-                        </Show>
-                      </FilterActionButton>
-
-                      <Show when={moreFiltersOpen()}>
-                        <FilterToolbarPanel ref={advancedFiltersPanelRef} id="recovery-filter-panel">
-                          <div class="mb-3 flex items-center justify-between gap-3">
-                            <div>
-                              <div class={filterPanelTitleClass}>Filter results</div>
-                              <div class={filterPanelDescriptionClass}>
-                                Narrow by scope, method, verification, or location.
-                              </div>
-                            </div>
-                            <Show when={activeAdvancedFilterCount() > 0}>
-                              <button
-                                type="button"
-                                onClick={resetAdvancedArtifactFilters}
-                                class={getRecoveryFilterPanelClearClass()}
-                              >
-                                Clear filters
-                              </button>
-                            </Show>
-                          </div>
-
-                          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            <label class="flex min-w-0 flex-col gap-1">
-                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Scope</span>
-                              <select
-                                value={scopeFilter()}
-                                onChange={(event) => {
-                                  const value =
-                                    event.currentTarget.value === 'workload' ? 'workload' : 'all';
-                                  setScopeFilter(value);
-                                  setCurrentPage(1);
-                                }}
-                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                              >
-                                <option value="all">All history</option>
-                                <option value="workload">Workloads only</option>
-                              </select>
-                            </label>
-
-                            <label class="flex min-w-0 flex-col gap-1">
-                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Method</span>
-                              <select
-                                value={modeFilter()}
-                                onChange={(event) => {
-                                  setModeFilter(
-                                    normalizeRecoveryModeQueryValue(event.currentTarget.value),
-                                  );
-                                  setCurrentPage(1);
-                                }}
-                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                              >
-                                <option value="all">Any method</option>
-                                <option value="snapshot">
-                                  {getRecoveryArtifactModePresentation('snapshot').label}
-                                </option>
-                                <option value="local">
-                                  {getRecoveryArtifactModePresentation('local').label}
-                                </option>
-                                <option value="remote">
-                                  {getRecoveryArtifactModePresentation('remote').label}
-                                </option>
-                              </select>
-                            </label>
-
-                            <Show when={showVerificationFilter()}>
-                              <label class="flex min-w-0 flex-col gap-1">
-                                <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
-                                  Verification
-                                </span>
-                                <select
-                                  value={verificationFilter()}
-                                  onChange={(event) => {
-                                    setVerificationFilter(
-                                      event.currentTarget.value as VerificationFilter,
-                                    );
-                                    if (event.currentTarget.value !== 'all')
-                                      setHistoryOutcomeFilter('all');
-                                    setCurrentPage(1);
-                                  }}
-                                  class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                                >
-                                  <option value="all">Any verification</option>
-                                  <option value="verified">Verified</option>
-                                  <option value="unverified">Unverified</option>
-                                  <option value="unknown">Unknown</option>
-                                </select>
-                              </label>
-                            </Show>
-
-                            <Show when={showClusterFilter()}>
-                              <label class="flex min-w-0 flex-col gap-1">
-                                <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Cluster</span>
-                                <select
-                                  value={clusterFilter()}
-                                  onChange={(event) => {
-                                    setClusterFilter(event.currentTarget.value);
-                                    setCurrentPage(1);
-                                  }}
-                                  class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                                >
-                                  <option value="all">Any cluster</option>
-                                  <For each={clusterOptions().filter((value) => value !== 'all')}>
-                                    {(cluster) => <option value={cluster}>{cluster}</option>}
-                                  </For>
-                                </select>
-                              </label>
-                            </Show>
-
-                            <Show when={showNodeFilter()}>
-                              <label class="flex min-w-0 flex-col gap-1">
-                                <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
-                                  Node or agent
-                                </span>
-                                <select
-                                  value={nodeFilter()}
-                                  onChange={(event) => {
-                                    setNodeFilter(event.currentTarget.value);
-                                    setCurrentPage(1);
-                                  }}
-                                  class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                                >
-                                  <option value="all">Any node or agent</option>
-                                  <For each={nodeOptions().filter((value) => value !== 'all')}>
-                                    {(node) => <option value={node}>{node}</option>}
-                                  </For>
-                                </select>
-                              </label>
-                            </Show>
-
-                            <Show when={showNamespaceFilter()}>
-                              <label class="flex min-w-0 flex-col gap-1">
-                                <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Namespace</span>
-                                <select
-                                  value={namespaceFilter()}
-                                  onChange={(event) => {
-                                    setNamespaceFilter(event.currentTarget.value);
-                                    setCurrentPage(1);
-                                  }}
-                                  class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
-                                >
-                                  <option value="all">Any namespace</option>
-                                  <For each={namespaceOptions().filter((value) => value !== 'all')}>
-                                    {(namespace) => <option value={namespace}>{namespace}</option>}
-                                  </For>
-                                </select>
-                              </label>
-                            </Show>
-                          </div>
-                        </FilterToolbarPanel>
-                      </Show>
-                    </div>
-
-                    <Show when={artifactColumnVisibility.availableToggles().length > 0}>
-                      <ColumnPicker
-                        columns={artifactColumnVisibility.availableToggles()}
-                        isHidden={artifactColumnVisibility.isHiddenByUser}
-                        onToggle={artifactColumnVisibility.toggle}
-                        onReset={artifactColumnVisibility.resetToDefaults}
-                      />
-                    </Show>
-
-                    <Show when={hasActiveArtifactFilters()}>
-                      <FilterActionButton onClick={resetAllArtifactFilters}>
-                        Reset all
-                      </FilterActionButton>
-                    </Show>
-                  </div>
-                </FilterHeader>
+                </PageControls>
               </div>
             </Show>
             <Show

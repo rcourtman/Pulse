@@ -1,14 +1,11 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
-  FilterActionButton,
-  FilterHeader,
-  FilterMobileToggleButton,
   FilterSegmentedControl,
   LabeledFilterSelect,
 } from '@/components/shared/FilterToolbar';
+import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
-import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { ViewMode } from '@/types/workloads';
@@ -73,7 +70,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
   return (
     <Card class="dashboard-filter mb-4" padding="sm">
-      <FilterHeader
+      <PageControls
         search={
           <SearchInput
             value={props.search}
@@ -85,14 +82,61 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             history={{ storageKey: STORAGE_KEYS.DASHBOARD_SEARCH_HISTORY }}
           />
         }
-        searchAccessory={
-          <Show when={isMobile()}>
-            <FilterMobileToggleButton
-              onClick={() => setFiltersOpen((o) => !o)}
-              count={activeFilterCount()}
-            />
-          </Show>
+        mobileFilters={{
+          enabled: isMobile(),
+          onToggle: () => setFiltersOpen((o) => !o),
+          count: activeFilterCount(),
+        }}
+        columnVisibility={
+          props.availableColumns && props.isColumnHidden && props.onColumnToggle
+            ? {
+                availableToggles: () => props.availableColumns!,
+                isHiddenByUser: props.isColumnHidden!,
+                toggle: props.onColumnToggle!,
+                resetToDefaults: props.onColumnReset ?? (() => undefined),
+              }
+            : undefined
         }
+        resetAction={{
+          show:
+            props.search().trim() !== '' ||
+            props.viewMode() !== 'all' ||
+            props.statusMode() !== 'all' ||
+            props.groupingMode() !== 'grouped' ||
+            (props.hostFilter ? props.hostFilter.value !== '' : false) ||
+            (props.namespaceFilter ? props.namespaceFilter.value !== '' : false),
+          onClick: () => {
+            props.setSearch('');
+            props.setSortKey('name');
+            props.setSortDirection('asc');
+            props.setViewMode('all');
+            props.setStatusMode('all');
+            props.setGroupingMode('grouped');
+            if (props.hostFilter) {
+              props.hostFilter.onChange('');
+            }
+            if (props.namespaceFilter) {
+              props.namespaceFilter.onChange('');
+            }
+          },
+          title: 'Reset all filters',
+          class: 'ml-auto text-base-content',
+          icon: (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M8 16H3v5" />
+            </svg>
+          ),
+        }}
         showFilters={!isMobile() || filtersOpen()}
         toolbarClass="lg:flex-nowrap"
       >
@@ -264,60 +308,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           />
         </Show>
 
-        <Show when={props.availableColumns && props.isColumnHidden && props.onColumnToggle}>
-          <ColumnPicker
-            columns={props.availableColumns!}
-            isHidden={props.isColumnHidden!}
-            onToggle={props.onColumnToggle!}
-            onReset={props.onColumnReset}
-          />
-        </Show>
-
-        <Show
-          when={
-            props.search().trim() !== '' ||
-            props.viewMode() !== 'all' ||
-            props.statusMode() !== 'all' ||
-            props.groupingMode() !== 'grouped' ||
-            (props.hostFilter ? props.hostFilter.value !== '' : false) ||
-            (props.namespaceFilter ? props.namespaceFilter.value !== '' : false)
-          }
-        >
-          <FilterActionButton
-            onClick={() => {
-              props.setSearch('');
-              props.setSortKey('name');
-              props.setSortDirection('asc');
-              props.setViewMode('all');
-              props.setStatusMode('all');
-              props.setGroupingMode('grouped');
-              if (props.hostFilter) {
-                props.hostFilter.onChange('');
-              }
-              if (props.namespaceFilter) {
-                props.namespaceFilter.onChange('');
-              }
-            }}
-            title="Reset all filters"
-            class="ml-auto text-base-content"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M8 16H3v5" />
-            </svg>
-            Reset
-          </FilterActionButton>
-        </Show>
-      </FilterHeader>
+      </PageControls>
     </Card>
   );
 };
