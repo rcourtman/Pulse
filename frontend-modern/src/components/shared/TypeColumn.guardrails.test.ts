@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
+import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
 
 const tsxSources = import.meta.glob('../../**/*.tsx', {
   query: '?raw',
@@ -8,14 +9,21 @@ const tsxSources = import.meta.glob('../../**/*.tsx', {
   import: 'default',
 }) as Record<string, string>;
 
-const TYPE_COLUMN_PATTERN =
-  /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?toggleable:\s*true[\s\S]*?\}/;
-const TYPE_COLUMN_DEFINITION_PATTERN = /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?\}/g;
+const INLINE_TYPE_COLUMN_PATTERN = /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?\}/g;
 
 describe('type column guardrails', () => {
-  it('keeps runtime type columns user-toggleable', () => {
-    expect(guestRowSource).toMatch(TYPE_COLUMN_PATTERN);
-    expect(recoverySource).toMatch(TYPE_COLUMN_PATTERN);
+  it('keeps the canonical Type column definition in the shared helper', () => {
+    expect(typeColumnDefinitionSource).toContain("id: 'type'");
+    expect(typeColumnDefinitionSource).toContain("label: 'Type'");
+    expect(typeColumnDefinitionSource).toContain('toggleable: true');
+  });
+
+  it('routes runtime Type columns through the shared helper', () => {
+    expect(guestRowSource).toContain('createCanonicalTypeColumn');
+    expect(guestRowSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
+
+    expect(recoverySource).toContain('createCanonicalTypeColumn');
+    expect(recoverySource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
   });
 
   it('limits runtime Type columns to the known allowlist', () => {
@@ -25,8 +33,7 @@ describe('type column guardrails', () => {
 
     const typeColumnUsers = runtimeEntries
       .filter(([, source]) => {
-        const matches = source.match(TYPE_COLUMN_DEFINITION_PATTERN);
-        return Boolean(matches && matches.some((match) => match.includes("id: 'type'")));
+        return source.includes('createCanonicalTypeColumn(');
       })
       .map(([path]) => path)
       .sort();
