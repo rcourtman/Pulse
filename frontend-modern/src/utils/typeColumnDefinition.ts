@@ -2,14 +2,23 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 
 type CanonicalTypeColumnOptions = Pick<
   ColumnDef,
-  'icon' | 'width' | 'minWidth' | 'maxWidth' | 'flex' | 'sortKey' | 'defaultHidden'
+  'icon' | 'width' | 'minWidth' | 'maxWidth' | 'flex' | 'sortKey'
 >;
 
+type CanonicalTypeColumnVisibility = 'visible' | 'hidden';
+
 export const createCanonicalTypeColumn = (
-  options: CanonicalTypeColumnOptions = {},
-): ColumnDef => ({
-  id: 'type',
-  label: 'Type',
-  toggleable: true,
-  ...options,
-});
+  options: CanonicalTypeColumnOptions & {
+    defaultVisibility?: CanonicalTypeColumnVisibility;
+  } = {},
+): ColumnDef => {
+  const { defaultVisibility = 'visible', ...columnOptions } = options;
+
+  return {
+    id: 'type',
+    label: 'Type',
+    toggleable: true,
+    defaultHidden: defaultVisibility === 'hidden',
+    ...columnOptions,
+  };
+};

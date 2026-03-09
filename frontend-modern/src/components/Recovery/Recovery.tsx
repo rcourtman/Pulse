@@ -718,7 +718,7 @@ const Recovery: Component = () => {
 
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
-    createCanonicalTypeColumn({ defaultHidden: true }),
+    createCanonicalTypeColumn({ defaultVisibility: 'hidden' }),
     { id: 'subject', label: 'Subject' },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: 'Cluster', toggleable: true },
