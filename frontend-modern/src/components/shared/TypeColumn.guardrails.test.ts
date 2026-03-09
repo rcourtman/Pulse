@@ -22,8 +22,12 @@ describe('type column guardrails', () => {
     expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_LABEL');
     expect(typeColumnDefinitionSource).toContain('toggleable: true');
     expect(typeColumnDefinitionSource).not.toContain('export const createCanonicalTypeColumn');
+    expect(typeColumnDefinitionSource).not.toContain("id: 'type'");
+    expect(typeColumnDefinitionSource).not.toContain("label: 'Type'");
     expect(responsiveSource).toContain('TYPE_COLUMN_ID');
     expect(responsiveSource).toContain('TYPE_COLUMN_LABEL');
+    expect(responsiveSource).not.toContain("id: 'type'");
+    expect(responsiveSource).not.toContain("label: 'Type'");
   });
 
   it('routes runtime Type columns through the shared helper', () => {
