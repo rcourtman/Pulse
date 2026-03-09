@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { RecoverySummary } from './RecoverySummary';
 
 describe('RecoverySummary', () => {
-  it('renders an operational overview instead of mini summary charts', () => {
+  it('renders the recovery overview inside the shared summary panel style', () => {
     render(() => (
       <RecoverySummary
         rollups={() => [
@@ -43,12 +43,13 @@ describe('RecoverySummary', () => {
       />
     ));
 
-    expect(screen.getByText('Recovery Overview')).toBeInTheDocument();
-    expect(screen.getByText('Protection Posture')).toBeInTheDocument();
-    expect(screen.getByText('Freshness Distribution')).toBeInTheDocument();
-    expect(screen.getByText('Attention Queue')).toBeInTheDocument();
-    expect(screen.getByText('2 protected items')).toBeInTheDocument();
+    expect(screen.getByTestId('recovery-summary')).toBeInTheDocument();
+    expect(screen.getByText('Coverage')).toBeInTheDocument();
+    expect(screen.getByText('Freshness')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByText('Attention')).toBeInTheDocument();
+    expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getByText('1 healthy')).toBeInTheDocument();
-    expect(screen.getByText('Never Succeeded')).toBeInTheDocument();
+    expect(screen.getByText('1 never succeeded')).toBeInTheDocument();
   });
 });
