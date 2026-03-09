@@ -108,7 +108,6 @@ import {
   RECOVERY_TIMELINE_RANGE_GROUP_CLASS,
 } from '@/utils/recoveryTimelineChartPresentation';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
-import { RecoverySummary } from './RecoverySummary';
 import {
   Table,
   TableHeader,
@@ -185,24 +184,6 @@ const Recovery: Component = () => {
 
   const rollups = createMemo<ProtectionRollup[]>(() => recoveryRollups.rollups() || []);
   const tzOffsetMinutes = createMemo(() => -new Date().getTimezoneOffset());
-
-  // Summary panel time range and dedicated series hook
-  type SummaryTimeRangeValue = '7d' | '30d' | '90d';
-  const [summaryTimeRange, setSummaryTimeRange] = createSignal<SummaryTimeRangeValue>('30d');
-  const summarySeriesWindow = createMemo(() => {
-    const daysMap: Record<SummaryTimeRangeValue, number> = { '7d': 7, '30d': 30, '90d': 90 };
-    const days = daysMap[summaryTimeRange()];
-    const now = new Date();
-    const from = new Date(now);
-    from.setDate(from.getDate() - (days - 1));
-    from.setHours(0, 0, 0, 0);
-    return { from: from.toISOString(), to: now.toISOString() };
-  });
-  const summarySeries = useRecoveryPointsSeries(() => ({
-    from: summarySeriesWindow().from,
-    to: summarySeriesWindow().to,
-    tzOffsetMinutes: tzOffsetMinutes(),
-  }));
 
   const chartWindow = createMemo(() => {
     const days = chartRangeDays();
@@ -506,9 +487,7 @@ const Recovery: Component = () => {
   };
 
   const rollupsSummary = createMemo(() => summarizeRollups(baseRollups()));
-
-  // Unfiltered summary for the RecoverySummary panel (sits above filters).
-  const unfilteredSummary = createMemo(() => summarizeRollups(rollups()));
+  const overallRollupsSummary = createMemo(() => summarizeRollups(rollups()));
 
   const filteredRollups = createMemo<ProtectionRollup[]>(() => {
     const selectedOutcome = protectedOutcomeFilter();
@@ -822,6 +801,19 @@ const Recovery: Component = () => {
     return { points, maxValue, axisMax, axisTicks, labelEvery };
   });
 
+  const activitySummary = createMemo(() => {
+    const points = timeline().points;
+    const totalPoints = points.reduce((sum, point) => sum + point.total, 0);
+    const activeDays = points.filter((point) => point.total > 0).length;
+    const averagePerDay = points.length > 0 ? totalPoints / points.length : 0;
+
+    return {
+      totalPoints,
+      activeDays,
+      averagePerDay,
+    };
+  });
+
   const selectedDateLabel = createMemo(() => {
     const key = selectedDateKey();
     if (!key) return '';
@@ -879,21 +871,11 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
-      <RecoverySummary
-        rollups={rollups}
-        series={summarySeries.series}
-        seriesLoaded={() => !summarySeries.response.loading}
-        seriesFailed={() => !!summarySeries.response.error}
-        summary={unfilteredSummary}
-        timeRange={summaryTimeRange}
-        onTimeRangeChange={setSummaryTimeRange}
-      />
-
-      <Card padding="none" tone="card" class="overflow-hidden">
+      <Card padding="none" tone="card" class="order-3 overflow-hidden">
         <div class="border-b border-border bg-surface-hover px-3 py-2">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-              Protected Items
+              Protected Inventory
             </div>
             <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
               <span>
@@ -1170,7 +1152,7 @@ const Recovery: Component = () => {
           </Show>
         </Card>
 
-      <div ref={historySectionRef} class="flex flex-col gap-4">
+      <div ref={historySectionRef} class="order-1 flex flex-col gap-4">
         <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
           <Card padding="sm">
             <EmptyState
@@ -1184,33 +1166,67 @@ const Recovery: Component = () => {
 
         <Show when={!recoveryPoints.response.error}>
           <Card padding="sm" class="h-full">
-            <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Recovery Activity
-                </div>
-                <div class="text-xs text-muted">Trend over the selected recovery window.</div>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <Show when={selectedHistorySubjectLabel()}>
-                  <div class="inline-flex items-center gap-2 rounded-md border border-border bg-surface-alt px-2.5 py-1.5 text-xs">
-                    <span class="font-semibold uppercase tracking-wide text-muted">Focused</span>
-                    <span class="max-w-[18rem] truncate font-medium text-base-content">
-                      {selectedHistorySubjectLabel()}
+            <div class="mb-3 flex flex-col gap-3">
+              <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                <div class="flex flex-col gap-2">
+                  <div class="flex flex-wrap items-center gap-3 text-sm">
+                    <span class="font-medium text-base-content">
+                      {overallRollupsSummary().total} protected
                     </span>
+                    <Show when={overallRollupsSummary().total - overallRollupsSummary().stale > 0}>
+                      <span class="text-emerald-600 dark:text-emerald-400">
+                        {overallRollupsSummary().total - overallRollupsSummary().stale} healthy
+                      </span>
+                    </Show>
+                    <Show when={overallRollupsSummary().stale > 0}>
+                      <span class="text-amber-500">
+                        {overallRollupsSummary().stale} stale
+                      </span>
+                    </Show>
+                    <Show when={overallRollupsSummary().neverSucceeded > 0}>
+                      <span class="text-rose-500">
+                        {overallRollupsSummary().neverSucceeded} never succeeded
+                      </span>
+                    </Show>
                   </div>
-                </Show>
-                <Show
-                  when={rollupId().trim()}
-                  fallback={<span class="text-xs text-muted">All protected items</span>}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setRollupId('')}
-                    class={getRecoveryBreadcrumbLinkClass()}
+                  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      Recovery Activity
+                    </div>
+                    <div class="text-xs text-muted">
+                      Daily recovery points across the selected history window.
+                    </div>
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Show when={selectedHistorySubjectLabel()}>
+                    <div class="inline-flex items-center gap-2 rounded-md border border-border bg-surface-alt px-2.5 py-1.5 text-xs">
+                      <span class="font-semibold uppercase tracking-wide text-muted">Focused</span>
+                      <span class="max-w-[18rem] truncate font-medium text-base-content">
+                        {selectedHistorySubjectLabel()}
+                      </span>
+                    </div>
+                  </Show>
+                  <Show
+                    when={rollupId().trim()}
+                    fallback={<span class="text-xs text-muted">All protected items</span>}
                   >
-                    All history
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setRollupId('')}
+                      class={getRecoveryBreadcrumbLinkClass()}
+                    >
+                      All history
+                    </button>
+                  </Show>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-3 text-xs text-muted">
+                <span>{activitySummary().totalPoints} recovery points</span>
+                <span>{activitySummary().averagePerDay.toFixed(1)} per day</span>
+                <span>{activitySummary().activeDays} active days</span>
+                <Show when={selectedDateKey()}>
+                  <span>{selectedDateLabel()}</span>
                 </Show>
               </div>
             </div>
