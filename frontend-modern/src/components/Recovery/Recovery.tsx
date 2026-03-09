@@ -23,7 +23,6 @@ import {
   filterUtilityBadgeClass,
 } from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
-import { Subtabs } from '@/components/shared/Subtabs';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
@@ -32,6 +31,7 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatAbsoluteTime, formatBytes, formatRelativeTime } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
@@ -41,12 +41,72 @@ import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
 import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
-import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import {
   getRecoveryOutcomeBadgeClass,
   normalizeRecoveryOutcome as normalizeOutcome,
   type RecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
+import {
+  getRecoveryArtifactModePresentation,
+  type RecoveryArtifactMode,
+} from '@/utils/recoveryArtifactModePresentation';
+import {
+  getRecoveryIssueRailClass,
+  type RecoveryIssueTone,
+} from '@/utils/recoveryIssuePresentation';
+import { getRecoveryTimelineColumnButtonClass } from '@/utils/recoveryTimelinePresentation';
+import { getRecoveryFilterChipPresentation } from '@/utils/recoveryFilterChipPresentation';
+import {
+  getRecoveryBreadcrumbLinkClass,
+  getRecoveryDrawerCloseButtonClass,
+  getRecoveryEmptyStateActionClass,
+  getRecoveryFilterPanelClearClass,
+} from '@/utils/recoveryActionPresentation';
+import {
+  getRecoveryPointDetailsSummary,
+  getRecoveryPointRepositoryLabel,
+  getRecoveryPointSubjectLabel,
+  getRecoveryPointTimestampMs,
+  getRecoveryRollupSubjectLabel,
+  normalizeRecoveryModeQueryValue,
+} from '@/utils/recoveryRecordPresentation';
+import {
+  formatRecoveryTimeOnly,
+  getRecoveryCompactAxisLabel,
+  getRecoveryFullDateLabel,
+  getRecoveryNiceAxisMax,
+  getRecoveryPrettyDateLabel,
+  parseRecoveryDateKey,
+  recoveryDateKeyFromTimestamp,
+} from '@/utils/recoveryDatePresentation';
+import {
+  getRecoveryProtectedToggleClass,
+  getRecoveryRollupStatusPillClass,
+  getRecoveryRollupStatusPillLabel,
+  getRecoverySpecialOutcomeTextClass,
+} from '@/utils/recoveryStatusPresentation';
+import {
+  getRecoveryArtifactColumnHeaderClass,
+  getRecoveryArtifactRowClass,
+  getRecoveryEventTimeTextClass,
+  getRecoveryRollupAgeTextClass,
+  getRecoveryRollupIssueTone,
+  getRecoverySubjectTypeBadgeClass,
+  getRecoverySubjectTypeLabel,
+  isRecoveryRollupStale,
+  STALE_ISSUE_THRESHOLD_MS,
+  RECOVERY_ADVANCED_FILTER_FIELD_CLASS,
+  RECOVERY_ADVANCED_FILTER_LABEL_CLASS,
+  RECOVERY_GROUP_HEADER_ROW_CLASS,
+  RECOVERY_GROUP_HEADER_TEXT_CLASS,
+} from '@/utils/recoveryTablePresentation';
+import {
+  getRecoveryTimelineAxisLabelClass,
+  getRecoveryTimelineBarMinWidthClass,
+  getRecoveryTimelineLabelEvery,
+  RECOVERY_TIMELINE_LEGEND_ITEM_CLASS,
+  RECOVERY_TIMELINE_RANGE_GROUP_CLASS,
+} from '@/utils/recoveryTimelineChartPresentation';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
 import { RecoverySummary } from './RecoverySummary';
 import {
@@ -59,35 +119,8 @@ import {
 } from '@/components/shared/Table';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 
-type RecoveryView = 'protected' | 'events';
-
-type ArtifactMode = 'snapshot' | 'local' | 'remote';
+type ArtifactMode = RecoveryArtifactMode;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
-
-const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
-const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
-
-const groupHeaderRowClass = () => 'bg-surface-alt hover:bg-surface-alt';
-const groupHeaderTextClass = () =>
-  'py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-base-content';
-
-const MODE_LABELS: Record<ArtifactMode, string> = {
-  snapshot: 'Snapshots',
-  local: 'Local',
-  remote: 'Remote',
-};
-
-const MODE_BADGE_CLASS: Record<ArtifactMode, string> = {
-  snapshot: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-  local: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-  remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-};
-
-const CHART_SEGMENT_CLASS: Record<ArtifactMode, string> = {
-  snapshot: 'bg-yellow-500',
-  local: 'bg-orange-500',
-  remote: 'bg-violet-500',
-};
 
 const titleize = (value: string): string =>
   (value || '')
@@ -96,253 +129,9 @@ const titleize = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-const dateKeyFromTimestamp = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const parseDateKey = (key: string): Date => {
-  const [year, month, day] = key.split('-').map((value) => Number.parseInt(value, 10));
-  if (!year || !month || !day) return new Date(key);
-  return new Date(year, month - 1, day);
-};
-
-const prettyDateLabel = (key: string): string =>
-  parseDateKey(key).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-
-const fullDateLabel = (key: string): string =>
-  parseDateKey(key).toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
-const compactAxisLabel = (key: string, days: 7 | 30 | 90 | 365): string => {
-  const date = parseDateKey(key);
-  if (days <= 30) {
-    if (date.getDate() === 1) return `${date.getMonth() + 1}/1`;
-    return `${date.getDate()}`;
-  }
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-};
-
-const formatTimeOnly = (timestamp: number | null): string => {
-  if (!timestamp) return '—';
-  return new Date(timestamp).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-};
-
-const eventTimeTextClass = (timestamp: number): string => {
-  if (!timestamp) return 'text-muted';
-  const ageMs = Date.now() - timestamp;
-  if (ageMs <= 24 * 60 * 60 * 1000) return 'text-emerald-600 dark:text-emerald-400 font-medium';
-  if (ageMs <= 7 * 24 * 60 * 60 * 1000) return 'text-amber-600 dark:text-amber-400 font-medium';
-  if (ageMs <= 30 * 24 * 60 * 60 * 1000) return 'text-orange-600 dark:text-orange-400';
-  return 'text-muted';
-};
-
-const niceAxisMax = (value: number): number => {
-  if (!Number.isFinite(value) || value <= 0) return 1;
-  if (value <= 5) return Math.max(1, value);
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  const normalized = value / magnitude;
-  if (normalized <= 1) return magnitude;
-  if (normalized <= 2) return 2 * magnitude;
-  if (normalized <= 5) return 5 * magnitude;
-  return 10 * magnitude;
-};
-
-const rollupSubjectLabel = (
-  rollup: ProtectionRollup,
-  resourcesById: Map<string, Resource>,
-): string => {
-  const subjectRID = (rollup.subjectResourceId || '').trim();
-  if (subjectRID) {
-    const res = resourcesById.get(subjectRID);
-    const name = (res?.name || '').trim();
-    if (name) return name;
-  }
-
-  const ref = rollup.subjectRef || null;
-  if (ref?.namespace && ref?.name) return `${ref.namespace}/${ref.name}`;
-  if (ref?.name) return ref.name;
-  if (subjectRID) return subjectRID;
-  return rollup.rollupId;
-};
-
-const pointTimestampMs = (p: RecoveryPoint): number => {
-  const raw = String(p.completedAt || p.startedAt || '');
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const buildSubjectLabelForPoint = (
-  p: RecoveryPoint,
-  resourcesById: Map<string, Resource>,
-): string => {
-  const subjectRID = (p.subjectResourceId || '').trim();
-  if (subjectRID) {
-    const res = resourcesById.get(subjectRID);
-    const name = (res?.name || '').trim();
-    if (name) return name;
-    return subjectRID;
-  }
-
-  const displayLabel = String(p.display?.subjectLabel || '').trim();
-  if (displayLabel) return displayLabel;
-
-  const ref = p.subjectRef || null;
-  const ns = String(ref?.namespace || '').trim();
-  const name = String(ref?.name || '').trim();
-  if (ns && name) return `${ns}/${name}`;
-  if (name) return name;
-  const id = String(ref?.id || '').trim();
-  if (id) return id;
-  return p.id;
-};
-
-const buildRepositoryLabelForPoint = (p: RecoveryPoint): string => {
-  const displayLabel = String(p.display?.repositoryLabel || '').trim();
-  if (displayLabel) return displayLabel;
-
-  const repo = p.repositoryRef || null;
-  const repoName = String(repo?.name || '').trim();
-  const repoType = String(repo?.type || '').trim();
-  const repoClass = String(repo?.class || '').trim();
-  if (repoName) return repoName;
-  if (repoType && repoClass) return `${repoClass}:${repoType}`;
-  if (repoType) return repoType;
-  if (repoClass) return repoClass;
-  return '';
-};
-
-const buildDetailsSummaryForPoint = (p: RecoveryPoint): string =>
-  String(p.display?.detailsSummary || '').trim();
-
-const buildSubjectTypeLabelForPoint = (p: RecoveryPoint): string => {
-  const raw = String(p.display?.subjectType || p.subjectRef?.type || '')
-    .trim()
-    .toLowerCase();
-  if (!raw) return '';
-  const presentation = getResourceTypePresentation(raw);
-  if (presentation) return presentation.label;
-  return titleize(
-    raw
-      .replace(/^k8s-/, '')
-      .replace(/^proxmox-/, '')
-      .replace(/^truenas-/, ''),
-  );
-};
-
-const subjectTypeBadgeClass = (p: RecoveryPoint): string => {
-  const raw = String(p.display?.subjectType || p.subjectRef?.type || '')
-    .trim()
-    .toLowerCase();
-  const presentation = getResourceTypePresentation(raw);
-  if (presentation) return presentation.badgeClasses;
-  return 'bg-surface-alt text-base-content';
-};
-
-const artifactColumnHeaderClass = (id: string): string => {
-  switch (id) {
-    case 'time':
-      return 'w-[76px] text-right';
-    case 'subject':
-      return 'w-[320px]';
-    case 'entityId':
-      return 'w-[84px]';
-    case 'cluster':
-      return 'w-[120px]';
-    case 'nodeAgent':
-      return 'w-[120px]';
-    case 'namespace':
-      return 'w-[120px]';
-    case 'source':
-      return 'w-[78px] text-center';
-    case 'verified':
-      return 'w-[56px] text-center';
-    case 'size':
-      return 'w-[92px] text-right';
-    case 'method':
-      return 'w-[84px] text-center';
-    case 'repository':
-      return 'w-[160px]';
-    case 'details':
-      return 'w-[220px]';
-    case 'outcome':
-      return 'w-[88px] text-center';
-    default:
-      return '';
-  }
-};
-
-const artifactRowClass = (selected: boolean): string =>
-  selected
-    ? 'bg-blue-50/40 dark:bg-blue-900/20 outline outline-1 -outline-offset-1 outline-blue-200/80 dark:outline-blue-800/80'
-    : 'hover:bg-surface-hover';
-
 const subjectMetaSlotClass = 'inline-flex shrink-0 items-center justify-end gap-1 min-w-[4.5rem]';
-const advancedFilterLabelClass = 'text-[11px] font-medium text-muted';
-const advancedFilterFieldClass =
-  'min-h-[2.25rem] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content outline-none focus:border-blue-500';
 
-const normalizeModeFromQuery = (value: string | null | undefined): 'all' | ArtifactMode => {
-  const v = (value || '').trim().toLowerCase();
-  if (v === 'snapshot' || v === 'local' || v === 'remote') return v;
-  return 'all';
-};
-
-const rollupTimestampMs = (r: ProtectionRollup): number => {
-  const raw = r.lastSuccessAt || r.lastAttemptAt || '';
-  const ms = raw ? Date.parse(raw) : 0;
-  return Number.isFinite(ms) ? ms : 0;
-};
-
-type IssueTone = 'none' | 'amber' | 'rose' | 'blue';
-
-const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string> = {
-  amber: 'bg-amber-400',
-  rose: 'bg-rose-500',
-  blue: 'bg-blue-500',
-};
-
-const isRollupStale = (r: ProtectionRollup, nowMs: number): boolean => {
-  const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
-  if (Number.isFinite(successMs) && successMs > 0)
-    return nowMs - successMs >= STALE_ISSUE_THRESHOLD_MS;
-  const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
-  if (Number.isFinite(attemptMs) && attemptMs > 0)
-    return nowMs - attemptMs >= STALE_ISSUE_THRESHOLD_MS;
-  return false;
-};
-
-const deriveRollupIssueTone = (r: ProtectionRollup, nowMs: number): IssueTone => {
-  const outcome = normalizeOutcome(r.lastOutcome);
-  if (outcome === 'failed') return 'rose';
-  if (outcome === 'running') return 'blue';
-  if (outcome === 'warning' || isRollupStale(r, nowMs)) return 'amber';
-  return 'none';
-};
-
-const rollupAgeTextClass = (r: ProtectionRollup, nowMs: number): string => {
-  const ts = rollupTimestampMs(r);
-  if (!ts || ts <= 0) return 'text-muted';
-  const ageMs = nowMs - ts;
-  if (ageMs >= STALE_ISSUE_THRESHOLD_MS) return 'text-rose-700 dark:text-rose-300';
-  if (ageMs >= AGING_THRESHOLD_MS) return 'text-amber-700 dark:text-amber-300';
-  return 'text-muted';
-};
+type IssueTone = RecoveryIssueTone;
 
 const Recovery: Component = () => {
   const navigate = useNavigate();
@@ -353,13 +142,17 @@ const Recovery: Component = () => {
   const storageRecoveryResources = useStorageRecoveryResources();
   const recoveryRollups = useRecoveryRollups();
 
-  const [view, setView] = createSignal<RecoveryView>('protected');
   const [rollupId, setRollupId] = createSignal('');
-  const [query, setQuery] = createSignal('');
-  const [providerFilter, setProviderFilter] = createSignal('all');
+  const [protectedQuery, setProtectedQuery] = createSignal('');
+  const [protectedProviderFilter, setProtectedProviderFilter] = createSignal('all');
+  const [protectedOutcomeFilter, setProtectedOutcomeFilter] =
+    createSignal<'all' | RecoveryOutcome>('all');
+  const [historyQuery, setHistoryQuery] = createSignal('');
+  const [historyProviderFilter, setHistoryProviderFilter] = createSignal('all');
   const [clusterFilter, setClusterFilter] = createSignal('all');
   const [modeFilter, setModeFilter] = createSignal<'all' | ArtifactMode>('all');
-  const [outcomeFilter, setOutcomeFilter] = createSignal<'all' | RecoveryOutcome>('all');
+  const [historyOutcomeFilter, setHistoryOutcomeFilter] =
+    createSignal<'all' | RecoveryOutcome>('all');
   const [verificationFilter, setVerificationFilter] = createSignal<VerificationFilter>('all');
   const [scopeFilter, setScopeFilter] = createSignal<'all' | 'workload'>('all');
   const [nodeFilter, setNodeFilter] = createSignal('all');
@@ -375,6 +168,7 @@ const Recovery: Component = () => {
   const [eventsFiltersOpen, setEventsFiltersOpen] = createSignal(false);
   let advancedFiltersPanelRef: HTMLDivElement | undefined;
   let advancedFiltersButtonRef: HTMLButtonElement | undefined;
+  let historySectionRef: HTMLDivElement | undefined;
 
   type ProtectedSortCol = 'subject' | 'source' | 'lastBackup' | 'outcome';
   type SortDir = 'asc' | 'desc';
@@ -423,7 +217,7 @@ const Recovery: Component = () => {
   const tableWindow = createMemo(() => {
     const selected = selectedDateKey();
     if (selected) {
-      const start = parseDateKey(selected);
+      const start = parseRecoveryDateKey(selected);
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setHours(23, 59, 59, 999);
@@ -433,7 +227,6 @@ const Recovery: Component = () => {
   });
 
   const recoveryPoints = useRecoveryPoints(() => {
-    if (view() !== 'events') return null;
     const rid = rollupId().trim();
     const window = chartWindow();
     const vf = verificationFilter();
@@ -441,11 +234,11 @@ const Recovery: Component = () => {
       page: currentPage(),
       limit: 200,
       rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
+      provider: historyProviderFilter() === 'all' ? null : historyProviderFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: outcomeFilter() === 'all' ? null : outcomeFilter(),
-      q: query().trim() || null,
+      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
+      q: historyQuery().trim() || null,
       node: nodeFilter() === 'all' ? null : nodeFilter(),
       namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
       scope: scopeFilter() === 'workload' ? 'workload' : null,
@@ -456,17 +249,16 @@ const Recovery: Component = () => {
   });
 
   const recoveryFacets = useRecoveryPointsFacets(() => {
-    if (view() !== 'events') return null;
     const rid = rollupId().trim();
     const window = chartWindow();
     const vf = verificationFilter();
     return {
       rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
+      provider: historyProviderFilter() === 'all' ? null : historyProviderFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: outcomeFilter() === 'all' ? null : outcomeFilter(),
-      q: query().trim() || null,
+      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
+      q: historyQuery().trim() || null,
       scope: scopeFilter() === 'workload' ? 'workload' : null,
       verification: vf === 'all' ? null : vf,
       from: window.from,
@@ -475,17 +267,16 @@ const Recovery: Component = () => {
   });
 
   const recoverySeries = useRecoveryPointsSeries(() => {
-    if (view() !== 'events') return null;
     const rid = rollupId().trim();
     const window = chartWindow();
     const vf = verificationFilter();
     return {
       rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
+      provider: historyProviderFilter() === 'all' ? null : historyProviderFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: outcomeFilter() === 'all' ? null : outcomeFilter(),
-      q: query().trim() || null,
+      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
+      q: historyQuery().trim() || null,
       node: nodeFilter() === 'all' ? null : nodeFilter(),
       namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
       scope: scopeFilter() === 'workload' ? 'workload' : null,
@@ -507,13 +298,11 @@ const Recovery: Component = () => {
   createEffect(() => {
     const parsed = parseRecoveryLinkSearch(location.search);
 
-    const rawView = (parsed.view || '').trim().toLowerCase();
-    const nextView: RecoveryView = rawView === 'events' ? 'events' : 'protected';
     const nextRollup = (parsed.rollupId || '').trim();
     const nextQuery = (parsed.query || '').trim();
     const nextProvider = normalizeSourcePlatformQueryValue(parsed.provider || '');
     const nextCluster = (parsed.cluster || 'all').trim() || 'all';
-    const nextMode = normalizeModeFromQuery(parsed.mode);
+    const nextMode = normalizeRecoveryModeQueryValue(parsed.mode);
     const rawScope = (parsed.scope || '').trim().toLowerCase();
     const nextScope: 'all' | 'workload' = rawScope === 'workload' ? 'workload' : 'all';
     const nextNode = (parsed.node || 'all').trim() || 'all';
@@ -521,10 +310,10 @@ const Recovery: Component = () => {
     const verificationValue = (parsed.verification || '').trim().toLowerCase();
     const statusValue = (parsed.status || '').trim().toLowerCase();
 
-    if (nextView !== untrack(view)) setView(nextView);
     if (nextRollup !== untrack(rollupId)) setRollupId(nextRollup);
-    if (nextQuery !== untrack(query)) setQuery(nextQuery);
-    if (nextProvider !== untrack(providerFilter)) setProviderFilter(nextProvider || 'all');
+    if (nextQuery !== untrack(historyQuery)) setHistoryQuery(nextQuery);
+    if (nextProvider !== untrack(historyProviderFilter))
+      setHistoryProviderFilter(nextProvider || 'all');
     if (nextCluster !== untrack(clusterFilter)) setClusterFilter(nextCluster);
 
     if (nextMode !== untrack(modeFilter)) setModeFilter(nextMode);
@@ -539,32 +328,31 @@ const Recovery: Component = () => {
     ) {
       if (verificationValue !== untrack(verificationFilter))
         setVerificationFilter(verificationValue as VerificationFilter);
-      if (untrack(outcomeFilter) !== 'all') setOutcomeFilter('all');
+      if (untrack(historyOutcomeFilter) !== 'all') setHistoryOutcomeFilter('all');
     } else {
       if (untrack(verificationFilter) !== 'all') setVerificationFilter('all');
       const normalizedOutcome = normalizeOutcome(statusValue);
       if (statusValue && normalizedOutcome !== 'unknown') {
-        if (normalizedOutcome !== untrack(outcomeFilter)) setOutcomeFilter(normalizedOutcome);
-      } else if (untrack(outcomeFilter) !== 'all') {
-        setOutcomeFilter('all');
+        if (normalizedOutcome !== untrack(historyOutcomeFilter))
+          setHistoryOutcomeFilter(normalizedOutcome);
+      } else if (untrack(historyOutcomeFilter) !== 'all') {
+        setHistoryOutcomeFilter('all');
       }
     }
   });
 
   createEffect(() => {
-    // Avoid leaving modals open when switching views/filters.
-    view();
+    // Avoid leaving modals open when filters or selection change.
     rollupId();
-    providerFilter();
+    historyProviderFilter();
     clusterFilter();
     modeFilter();
-    outcomeFilter();
+    historyOutcomeFilter();
     verificationFilter();
     nodeFilter();
     namespaceFilter();
     currentPage();
     setSelectedPoint(null);
-    if (view() !== 'events' && untrack(moreFiltersOpen)) setMoreFiltersOpen(false);
   });
 
   const handleAdvancedFiltersClickOutside = (event: MouseEvent) => {
@@ -589,13 +377,12 @@ const Recovery: Component = () => {
 
   createEffect(() => {
     // Keep paging stable: any filter change resets to the first page.
-    if (view() !== 'events') return;
     rollupId();
-    query();
-    providerFilter();
+    historyQuery();
+    historyProviderFilter();
     clusterFilter();
     modeFilter();
-    outcomeFilter();
+    historyOutcomeFilter();
     verificationFilter();
     nodeFilter();
     namespaceFilter();
@@ -607,24 +394,20 @@ const Recovery: Component = () => {
 
   createEffect(() => {
     const rid = rollupId().trim();
-    const v = view();
-
-    const status = outcomeFilter() !== 'all' ? outcomeFilter() : null;
-    const verification =
-      v === 'events' && verificationFilter() !== 'all' ? verificationFilter() : null;
+    const status = historyOutcomeFilter() !== 'all' ? historyOutcomeFilter() : null;
+    const verification = verificationFilter() !== 'all' ? verificationFilter() : null;
 
     const nextPath = buildRecoveryPath({
-      view: v === 'events' ? 'events' : null,
-      rollupId: v === 'events' && rid ? rid : null,
-      query: query().trim() || null,
-      provider: providerFilter() !== 'all' ? providerFilter() : null,
-      cluster: v === 'events' && clusterFilter() !== 'all' ? clusterFilter() : null,
-      mode: v === 'events' && modeFilter() !== 'all' ? modeFilter() : null,
+      rollupId: rid || null,
+      query: historyQuery().trim() || null,
+      provider: historyProviderFilter() !== 'all' ? historyProviderFilter() : null,
+      cluster: clusterFilter() !== 'all' ? clusterFilter() : null,
+      mode: modeFilter() !== 'all' ? modeFilter() : null,
       status,
       verification,
-      scope: v === 'events' && scopeFilter() === 'workload' ? 'workload' : null,
-      node: v === 'events' && nodeFilter() !== 'all' ? nodeFilter() : null,
-      namespace: v === 'events' && namespaceFilter() !== 'all' ? namespaceFilter() : null,
+      scope: scopeFilter() === 'workload' ? 'workload' : null,
+      node: nodeFilter() !== 'all' ? nodeFilter() : null,
+      namespace: namespaceFilter() !== 'all' ? namespaceFilter() : null,
     });
 
     const currentPath = `${location.pathname}${location.search || ''}`;
@@ -633,7 +416,18 @@ const Recovery: Component = () => {
     }
   });
 
-  const providerOptions = createMemo(() => {
+  const protectedProviderOptions = createMemo(() => {
+    const providers = new Set<string>();
+    for (const r of rollups()) {
+      for (const p of r.providers || []) {
+        const v = normalizeSourcePlatformQueryValue(String(p || '').trim());
+        if (v) providers.add(v);
+      }
+    }
+    return ['all', ...buildSourcePlatformOptions(providers).map((option) => option.key)];
+  });
+
+  const historyProviderOptions = createMemo(() => {
     const providers = new Set<string>();
     for (const r of rollups()) {
       for (const p of r.providers || []) {
@@ -649,8 +443,8 @@ const Recovery: Component = () => {
   });
 
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
-    const q = query().trim().toLowerCase();
-    const provider = providerFilter() === 'all' ? '' : providerFilter();
+    const q = protectedQuery().trim().toLowerCase();
+    const provider = protectedProviderFilter() === 'all' ? '' : protectedProviderFilter();
     const resIndex = resourcesById();
 
     const out = rollups().filter((r) => {
@@ -660,7 +454,7 @@ const Recovery: Component = () => {
       if (provider && !providers.includes(provider)) return false;
 
       if (!q) return true;
-      const label = rollupSubjectLabel(r, resIndex);
+      const label = getRecoveryRollupSubjectLabel(r, resIndex);
       const haystack = [
         r.rollupId,
         r.subjectResourceId || '',
@@ -717,7 +511,7 @@ const Recovery: Component = () => {
   const unfilteredSummary = createMemo(() => summarizeRollups(rollups()));
 
   const filteredRollups = createMemo<ProtectionRollup[]>(() => {
-    const selectedOutcome = outcomeFilter();
+    const selectedOutcome = protectedOutcomeFilter();
     const staleOnly = protectedStaleOnly();
     if (selectedOutcome === 'all' && !staleOnly) return baseRollups();
 
@@ -747,8 +541,8 @@ const Recovery: Component = () => {
     items.sort((a, b) => {
       switch (col) {
         case 'subject': {
-          const la = rollupSubjectLabel(a, resIndex).toLowerCase();
-          const lb = rollupSubjectLabel(b, resIndex).toLowerCase();
+          const la = getRecoveryRollupSubjectLabel(a, resIndex).toLowerCase();
+          const lb = getRecoveryRollupSubjectLabel(b, resIndex).toLowerCase();
           return mul * la.localeCompare(lb);
         }
         case 'source': {
@@ -843,16 +637,17 @@ const Recovery: Component = () => {
   });
   const protectedActiveFilterCount = createMemo(() => {
     let count = 0;
-    if (providerFilter() !== 'all') count++;
-    if (outcomeFilter() !== 'all') count++;
+    if (protectedQuery().trim() !== '') count++;
+    if (protectedProviderFilter() !== 'all') count++;
+    if (protectedOutcomeFilter() !== 'all') count++;
     if (protectedStaleOnly()) count++;
     return count;
   });
   const eventsActiveFilterCount = createMemo(() => {
     let count = 0;
-    if (query().trim() !== '') count++;
-    if (providerFilter() !== 'all') count++;
-    if (outcomeFilter() !== 'all') count++;
+    if (historyQuery().trim() !== '') count++;
+    if (historyProviderFilter() !== 'all') count++;
+    if (historyOutcomeFilter() !== 'all') count++;
     if (scopeFilter() !== 'all') count++;
     if (modeFilter() !== 'all') count++;
     if (verificationFilter() !== 'all') count++;
@@ -872,7 +667,7 @@ const Recovery: Component = () => {
     const fromMs = Date.parse(from);
     const toMs = Date.parse(to);
     return points.filter((p) => {
-      const ts = pointTimestampMs(p);
+      const ts = getRecoveryPointTimestampMs(p);
       return ts >= fromMs && ts <= toMs;
     });
   });
@@ -880,11 +675,11 @@ const Recovery: Component = () => {
   const sortedPoints = createMemo<RecoveryPoint[]>(() => {
     const resIndex = resourcesById();
     return [...(filteredPoints() || [])].sort((a, b) => {
-      const aTs = pointTimestampMs(a);
-      const bTs = pointTimestampMs(b);
+      const aTs = getRecoveryPointTimestampMs(a);
+      const bTs = getRecoveryPointTimestampMs(b);
       if (aTs !== bTs) return bTs - aTs;
-      const aName = buildSubjectLabelForPoint(a, resIndex);
-      const bName = buildSubjectLabelForPoint(b, resIndex);
+      const aName = getRecoveryPointSubjectLabel(a, resIndex);
+      const bName = getRecoveryPointSubjectLabel(b, resIndex);
       return aName.localeCompare(bName);
     });
   });
@@ -905,21 +700,21 @@ const Recovery: Component = () => {
       { key: string; label: string; tone: 'recent' | 'default'; items: RecoveryPoint[] }
     >();
     for (const p of sortedPoints()) {
-      const key = p.completedAt ? dateKeyFromTimestamp(Date.parse(p.completedAt)) : 'unknown';
+      const key = p.completedAt ? recoveryDateKeyFromTimestamp(Date.parse(p.completedAt)) : 'unknown';
       if (!groupMap.has(key)) {
         let label = 'No Timestamp';
         let tone: 'recent' | 'default' = 'default';
         if (key !== 'unknown') {
-          const date = parseDateKey(key);
+          const date = parseRecoveryDateKey(key);
           const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
           if (dateOnly === today) {
-            label = `Today (${fullDateLabel(key)})`;
+            label = `Today (${getRecoveryFullDateLabel(key)})`;
             tone = 'recent';
           } else if (dateOnly === yesterday) {
-            label = `Yesterday (${fullDateLabel(key)})`;
+            label = `Yesterday (${getRecoveryFullDateLabel(key)})`;
             tone = 'recent';
           } else {
-            label = fullDateLabel(key);
+            label = getRecoveryFullDateLabel(key);
           }
         }
         const group = { key, label, tone, items: [] as RecoveryPoint[] };
@@ -1004,7 +799,7 @@ const Recovery: Component = () => {
     const series = recoverySeries.series() || [];
     const points = series.map((bucket) => {
       const key = String(bucket.day || '').trim();
-      const date = parseDateKey(key);
+      const date = parseRecoveryDateKey(key);
       return {
         key,
         label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
@@ -1015,10 +810,10 @@ const Recovery: Component = () => {
       };
     });
     const maxValue = points.reduce((max, point) => Math.max(max, point.total), 0);
-    const axisMax = niceAxisMax(maxValue);
+    const axisMax = getRecoveryNiceAxisMax(maxValue);
     const axisTicks = [0, 1, 2, 3, 4].map((step) => Math.round((axisMax * step) / 4));
     const dayCount = points.length;
-    const labelEvery = dayCount <= 7 ? 1 : dayCount <= 30 ? 3 : 10;
+    const labelEvery = getRecoveryTimelineLabelEvery(dayCount);
 
     return { points, maxValue, axisMax, axisTicks, labelEvery };
   });
@@ -1040,11 +835,11 @@ const Recovery: Component = () => {
 
   const hasActiveArtifactFilters = createMemo(
     () =>
-      query().trim() !== '' ||
-      providerFilter() !== 'all' ||
+      historyQuery().trim() !== '' ||
+      historyProviderFilter() !== 'all' ||
       clusterFilter() !== 'all' ||
       modeFilter() !== 'all' ||
-      outcomeFilter() !== 'all' ||
+      historyOutcomeFilter() !== 'all' ||
       scopeFilter() !== 'all' ||
       nodeFilter() !== 'all' ||
       namespaceFilter() !== 'all' ||
@@ -1064,11 +859,11 @@ const Recovery: Component = () => {
   };
 
   const resetAllArtifactFilters = () => {
-    setQuery('');
-    setProviderFilter('all');
+    setHistoryQuery('');
+    setHistoryProviderFilter('all');
     setClusterFilter('all');
     setModeFilter('all');
-    setOutcomeFilter('all');
+    setHistoryOutcomeFilter('all');
     setScopeFilter('all');
     setNodeFilter('all');
     setNamespaceFilter('all');
@@ -1080,117 +875,102 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
+      <RecoverySummary
+        rollups={rollups}
+        series={summarySeries.series}
+        seriesLoaded={() => !summarySeries.response.loading}
+        seriesFailed={() => !!summarySeries.response.error}
+        summary={unfilteredSummary}
+        timeRange={summaryTimeRange}
+        onTimeRangeChange={setSummaryTimeRange}
+      />
+
       <Show when={!kioskMode()}>
-        <Subtabs
-          value={view()}
-          onChange={(value) => {
-            setView(value as RecoveryView);
-            if (value === 'protected') setRollupId('');
-          }}
-          ariaLabel="Recovery view"
-          tabs={[
-            { value: 'protected', label: 'Recovery' },
-            { value: 'events', label: 'Events' },
-          ]}
-        />
+        <Card padding="sm">
+          <FilterHeader
+            search={
+              <SearchInput
+                value={protectedQuery}
+                onChange={(value) => setProtectedQuery(value)}
+                placeholder="Search protected items..."
+                class="w-full"
+                clearOnEscape
+                history={{
+                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                  emptyMessage: 'Recent searches appear here.',
+                }}
+              />
+            }
+            searchAccessory={
+              <Show when={isMobile()}>
+                <FilterMobileToggleButton
+                  onClick={() => setProtectedFiltersOpen((o) => !o)}
+                  count={protectedActiveFilterCount()}
+                />
+              </Show>
+            }
+            showFilters={!isMobile() || protectedFiltersOpen()}
+          >
+            <LabeledFilterSelect
+              id="recovery-provider-filter"
+              label="Provider"
+              value={protectedProviderFilter()}
+              onChange={(event) =>
+                setProtectedProviderFilter(normalizeSourcePlatformQueryValue(event.currentTarget.value))
+              }
+              selectClass="min-w-[10rem] max-w-[14rem]"
+            >
+              <For each={protectedProviderOptions()}>
+                {(p) => (
+                  <option value={p}>
+                    {p === 'all' ? 'All Providers' : getSourcePlatformLabel(p)}
+                  </option>
+                )}
+              </For>
+            </LabeledFilterSelect>
+
+            <LabeledFilterSelect
+              id="recovery-protected-status-filter"
+              label="Status"
+              value={protectedOutcomeFilter()}
+              onChange={(event) => {
+                const value = event.currentTarget.value as 'all' | RecoveryOutcome;
+                setProtectedOutcomeFilter(value);
+              }}
+              selectClass="min-w-[7rem]"
+            >
+              <For each={availableOutcomes}>
+                {(outcome) => (
+                  <option value={outcome}>{outcome === 'all' ? 'Any' : titleize(outcome)}</option>
+                )}
+              </For>
+            </LabeledFilterSelect>
+
+            <button
+              type="button"
+              aria-pressed={protectedStaleOnly()}
+              onClick={() => setProtectedStaleOnly((v) => !v)}
+              class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(protectedStaleOnly())}`}
+            >
+              Stale only
+            </button>
+
+            <Show when={rollupsSummary().stale > 0}>
+              <span class={getRecoveryRollupStatusPillClass('stale')}>
+                {rollupsSummary().stale} stale
+              </span>
+            </Show>
+
+            <Show when={rollupsSummary().neverSucceeded > 0}>
+              <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
+                {rollupsSummary().neverSucceeded} never succeeded
+              </span>
+            </Show>
+          </FilterHeader>
+        </Card>
       </Show>
 
-      <Show when={view() === 'protected'}>
-        <RecoverySummary
-          rollups={rollups}
-          series={summarySeries.series}
-          seriesLoaded={() => !summarySeries.response.loading}
-          seriesFailed={() => !!summarySeries.response.error}
-          summary={unfilteredSummary}
-          timeRange={summaryTimeRange}
-          onTimeRangeChange={setSummaryTimeRange}
-        />
-
-        <Show when={!kioskMode()}>
-          <Card padding="sm">
-            <FilterHeader
-              search={
-                <SearchInput
-                  value={query}
-                  onChange={(value) => setQuery(value)}
-                  placeholder="Search protected items..."
-                  class="w-full"
-                  clearOnEscape
-                  history={{
-                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                    emptyMessage: 'Recent searches appear here.',
-                  }}
-                />
-              }
-              searchAccessory={
-                <Show when={isMobile()}>
-                  <FilterMobileToggleButton
-                    onClick={() => setProtectedFiltersOpen((o) => !o)}
-                    count={protectedActiveFilterCount()}
-                  />
-                </Show>
-              }
-              showFilters={!isMobile() || protectedFiltersOpen()}
-            >
-              <LabeledFilterSelect
-                id="recovery-provider-filter"
-                label="Provider"
-                value={providerFilter()}
-                onChange={(event) => setProviderFilter(event.currentTarget.value)}
-                selectClass="min-w-[10rem] max-w-[14rem]"
-              >
-                <For each={providerOptions()}>
-                  {(p) => (
-                    <option value={p}>
-                      {p === 'all' ? 'All Providers' : getSourcePlatformLabel(p)}
-                    </option>
-                  )}
-                </For>
-              </LabeledFilterSelect>
-
-              <LabeledFilterSelect
-                id="recovery-protected-status-filter"
-                label="Status"
-                value={outcomeFilter()}
-                onChange={(event) => {
-                  const value = event.currentTarget.value as 'all' | RecoveryOutcome;
-                  setOutcomeFilter(value);
-                  if (value !== 'all') setVerificationFilter('all');
-                }}
-                selectClass="min-w-[7rem]"
-              >
-                <For each={availableOutcomes}>
-                  {(outcome) => (
-                    <option value={outcome}>{outcome === 'all' ? 'Any' : titleize(outcome)}</option>
-                  )}
-                </For>
-              </LabeledFilterSelect>
-
-              <button
-                type="button"
-                aria-pressed={protectedStaleOnly()}
-                onClick={() => setProtectedStaleOnly((v) => !v)}
-                class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly() ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content hover:bg-surface-hover'}`}
-              >
-                Stale only
-              </button>
-
-              <Show when={rollupsSummary().stale > 0}>
-                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">
-                  {rollupsSummary().stale} stale
-                </span>
-              </Show>
-
-              <Show when={rollupsSummary().neverSucceeded > 0}>
-                <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900 dark:text-rose-200">
-                  {rollupsSummary().neverSucceeded} never succeeded
-                </span>
-              </Show>
-            </FilterHeader>
-          </Card>
-        </Show>
-
-        <Card padding="none" tone="card" class="mb-4 overflow-hidden">
+      <Card padding="none" tone="card" class="overflow-hidden">
           <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Protected Items
           </div>
@@ -1265,7 +1045,7 @@ const Recovery: Component = () => {
                   <For each={sortedRollups()}>
                     {(r) => {
                       const resIndex = resourcesById();
-                      const label = rollupSubjectLabel(r, resIndex);
+                      const label = getRecoveryRollupSubjectLabel(r, resIndex);
                       const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
                       const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
                       const outcome = normalizeOutcome(r.lastOutcome);
@@ -1277,10 +1057,10 @@ const Recovery: Component = () => {
                           getSourcePlatformLabel(a).localeCompare(getSourcePlatformLabel(b)),
                         );
                       const nowMs = Date.now();
-                      const issueTone = deriveRollupIssueTone(r, nowMs);
+                      const issueTone: IssueTone = getRecoveryRollupIssueTone(r, nowMs);
                       const issueRailClass =
-                        issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
-                      const stale = isRollupStale(r, nowMs);
+                        issueTone === 'none' ? '' : getRecoveryIssueRailClass(issueTone);
+                      const stale = isRecoveryRollupStale(r, nowMs);
                       const neverSucceeded =
                         (!Number.isFinite(successMs) || successMs <= 0) &&
                         Number.isFinite(attemptMs) &&
@@ -1289,8 +1069,13 @@ const Recovery: Component = () => {
                         <TableRow
                           class="cursor-pointer border-b border-border hover:bg-surface-hover"
                           onClick={() => {
-                            setView('events');
                             setRollupId(r.rollupId);
+                            requestAnimationFrame(() =>
+                              historySectionRef?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start',
+                              }),
+                            );
                           }}
                         >
                           <TableCell
@@ -1305,13 +1090,13 @@ const Recovery: Component = () => {
                             <div class="flex items-center gap-2">
                               <span class="truncate">{label}</span>
                               <Show when={neverSucceeded}>
-                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">
-                                  never succeeded
+                                <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
+                                  {getRecoveryRollupStatusPillLabel('never-succeeded')}
                                 </span>
                               </Show>
                               <Show when={!neverSucceeded && stale}>
-                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">
-                                  stale
+                                <span class={getRecoveryRollupStatusPillClass('stale')}>
+                                  {getRecoveryRollupStatusPillLabel('stale')}
                                 </span>
                               </Show>
                             </div>
@@ -1331,7 +1116,7 @@ const Recovery: Component = () => {
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`whitespace-nowrap px-3 py-0.5 ${rollupAgeTextClass(r, nowMs)}`}
+                            class={`whitespace-nowrap px-3 py-0.5 ${getRecoveryRollupAgeTextClass(r, nowMs)}`}
                             title={
                               successMs > 0
                                 ? formatAbsoluteTime(successMs)
@@ -1343,7 +1128,9 @@ const Recovery: Component = () => {
                             {successMs > 0 ? (
                               formatRelativeTime(successMs)
                             ) : neverSucceeded ? (
-                              <span class="text-amber-600 dark:text-amber-400">never</span>
+                              <span class={getRecoverySpecialOutcomeTextClass('never')}>
+                                never
+                              </span>
                             ) : (
                               '—'
                             )}
@@ -1364,9 +1151,44 @@ const Recovery: Component = () => {
             </div>
           </Show>
         </Card>
-      </Show>
 
-      <Show when={view() === 'events'}>
+      <div ref={historySectionRef} class="flex flex-col gap-4">
+        <Card padding="sm" class="border-border-subtle">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div class="space-y-1">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                History
+              </div>
+              <div class="text-sm text-muted">
+                Recovery evidence lives here: the existing activity chart and date-grouped backup
+                table. Select a protected item above to focus the history.
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <Show when={selectedRollup()}>
+                <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+                  Showing history for{' '}
+                  <span class="font-medium">
+                    {getRecoveryRollupSubjectLabel(selectedRollup()!, resourcesById())}
+                  </span>
+                </div>
+              </Show>
+              <Show
+                when={rollupId().trim()}
+                fallback={<span class="text-sm text-muted">All protected items</span>}
+              >
+                <button
+                  type="button"
+                  onClick={() => setRollupId('')}
+                  class={getRecoveryBreadcrumbLinkClass()}
+                >
+                  All protected items
+                </button>
+              </Show>
+            </div>
+          </div>
+        </Card>
+
         <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
           <Card padding="sm">
             <EmptyState
@@ -1390,79 +1212,99 @@ const Recovery: Component = () => {
             >
               <div class="mb-1 flex flex-wrap items-center gap-1.5">
                 <Show when={selectedDateKey()}>
-                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                    <span class="font-medium uppercase tracking-wide">Day</span>
-                    <span class="truncate font-mono text-[10px]" title={selectedDateLabel()}>
-                      {selectedDateLabel()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDateKey(null);
-                        setCurrentPage(1);
-                      }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-blue-100 dark:hover:bg-blue-900"
-                    >
-                      Clear
-                    </button>
-                  </div>
+                  {(() => {
+                    const chip = getRecoveryFilterChipPresentation('day');
+                    return (
+                      <div class={chip.className}>
+                        <span class="font-medium uppercase tracking-wide">{chip.label}</span>
+                        <span class="truncate font-mono text-[10px]" title={selectedDateLabel()}>
+                          {selectedDateLabel()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDateKey(null);
+                            setCurrentPage(1);
+                          }}
+                          class={chip.clearButtonClass}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </Show>
                 <Show when={activeClusterLabel()}>
-                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] text-cyan-700 dark:border-cyan-700 dark:bg-cyan-900 dark:text-cyan-200">
-                    <span class="font-medium uppercase tracking-wide">Cluster</span>
-                    <span class="truncate font-mono text-[10px]" title={activeClusterLabel()}>
-                      {activeClusterLabel()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setClusterFilter('all');
-                        setCurrentPage(1);
-                      }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-cyan-100 dark:hover:bg-cyan-900"
-                    >
-                      Clear
-                    </button>
-                  </div>
+                  {(() => {
+                    const chip = getRecoveryFilterChipPresentation('cluster');
+                    return (
+                      <div class={chip.className}>
+                        <span class="font-medium uppercase tracking-wide">{chip.label}</span>
+                        <span class="truncate font-mono text-[10px]" title={activeClusterLabel()}>
+                          {activeClusterLabel()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClusterFilter('all');
+                            setCurrentPage(1);
+                          }}
+                          class={chip.clearButtonClass}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </Show>
                 <Show when={activeNodeLabel()}>
-                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-200">
-                    <span class="font-medium uppercase tracking-wide">Node/Agent</span>
-                    <span class="truncate font-mono text-[10px]" title={activeNodeLabel()}>
-                      {activeNodeLabel()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNodeFilter('all');
-                        setCurrentPage(1);
-                      }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-emerald-100 dark:hover:bg-emerald-900"
-                    >
-                      Clear
-                    </button>
-                  </div>
+                  {(() => {
+                    const chip = getRecoveryFilterChipPresentation('node');
+                    return (
+                      <div class={chip.className}>
+                        <span class="font-medium uppercase tracking-wide">{chip.label}</span>
+                        <span class="truncate font-mono text-[10px]" title={activeNodeLabel()}>
+                          {activeNodeLabel()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNodeFilter('all');
+                            setCurrentPage(1);
+                          }}
+                          class={chip.clearButtonClass}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </Show>
                 <Show when={activeNamespaceLabel()}>
-                  <div
-                    data-testid="active-namespace-chip"
-                    class="inline-flex max-w-full items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700 dark:border-violet-700 dark:bg-violet-900 dark:text-violet-200"
-                  >
-                    <span class="font-medium uppercase tracking-wide">Namespace</span>
-                    <span class="truncate font-mono text-[10px]" title={activeNamespaceLabel()}>
-                      {activeNamespaceLabel()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNamespaceFilter('all');
-                        setCurrentPage(1);
-                      }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900"
-                    >
-                      Clear
-                    </button>
-                  </div>
+                  {(() => {
+                    const chip = getRecoveryFilterChipPresentation('namespace');
+                    return (
+                      <div data-testid="active-namespace-chip" class={chip.className}>
+                        <span class="font-medium uppercase tracking-wide">{chip.label}</span>
+                        <span
+                          class="truncate font-mono text-[10px]"
+                          title={activeNamespaceLabel()}
+                        >
+                          {activeNamespaceLabel()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNamespaceFilter('all');
+                            setCurrentPage(1);
+                          }}
+                          class={chip.clearButtonClass}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </Show>
               </div>
             </Show>
@@ -1482,20 +1324,26 @@ const Recovery: Component = () => {
             >
               <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
                 <div class="flex items-center gap-3">
-                  <span class="flex items-center gap-1">
-                    <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.snapshot}`} />
-                    Snapshots
+                  <span class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
+                    <span
+                      class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`}
+                    />
+                    {getRecoveryArtifactModePresentation('snapshot').label}
                   </span>
-                  <span class="flex items-center gap-1">
-                    <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.local}`} />
-                    Local
+                  <span class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
+                    <span
+                      class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('local').segmentClassName}`}
+                    />
+                    {getRecoveryArtifactModePresentation('local').label}
                   </span>
-                  <span class="flex items-center gap-1">
-                    <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.remote}`} />
-                    Remote
+                  <span class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
+                    <span
+                      class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('remote').segmentClassName}`}
+                    />
+                    {getRecoveryArtifactModePresentation('remote').label}
                   </span>
                 </div>
-                <div class="inline-flex rounded border border-border bg-surface p-0.5 text-xs">
+                <div class={RECOVERY_TIMELINE_RANGE_GROUP_CLASS}>
                   <For each={[7, 30, 90, 365] as const}>
                     {(range) => (
                       <button
@@ -1505,11 +1353,7 @@ const Recovery: Component = () => {
                           setSelectedDateKey(null);
                           setCurrentPage(1);
                         }}
-                        class={`rounded px-2 py-1 ${
-                          chartRangeDays() === range
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                            : 'text-muted hover:bg-surface-hover'
-                        }`}
+                        class={`px-2 py-1 ${segmentedButtonClass(chartRangeDays() === range, false, 'accent')}`}
                       >
                         {range === 365 ? '1y' : `${range}d`}
                       </button>
@@ -1597,12 +1441,8 @@ const Recovery: Component = () => {
                             <div class="flex-1">
                               <button
                                 type="button"
-                                class={`h-full w-full rounded-sm ${
-                                  isSelected
-                                    ? 'bg-blue-100 dark:bg-blue-900'
-                                    : 'hover:bg-surface-hover'
-                                }`}
-                                aria-label={`${prettyDateLabel(point.key)}: ${total} recovery points`}
+                                class={`h-full w-full rounded-sm ${getRecoveryTimelineColumnButtonClass(isSelected)}`}
+                                aria-label={`${getRecoveryPrettyDateLabel(point.key)}: ${total} recovery points`}
                                 onClick={() => {
                                   setSelectedDateKey((prev) =>
                                     prev === point.key ? null : point.key,
@@ -1618,8 +1458,8 @@ const Recovery: Component = () => {
                                   if (point.remote > 0) breakdown.push(`Remote: ${point.remote}`);
                                   const tooltipText =
                                     point.total > 0
-                                      ? `${prettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`
-                                      : `${prettyDateLabel(point.key)}\nNo recovery points available`;
+                                      ? `${getRecoveryPrettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`
+                                      : `${getRecoveryPrettyDateLabel(point.key)}\nNo recovery points available`;
                                   showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
                                     align: 'center',
                                     direction: 'up',
@@ -1628,7 +1468,7 @@ const Recovery: Component = () => {
                                 onMouseLeave={() => hideTooltip()}
                                 onFocus={(event) => {
                                   const rect = event.currentTarget.getBoundingClientRect();
-                                  const tooltipText = `${prettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}`;
+                                  const tooltipText = `${getRecoveryPrettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}`;
                                   showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
                                     align: 'center',
                                     direction: 'up',
@@ -1644,19 +1484,19 @@ const Recovery: Component = () => {
                                     >
                                       <Show when={remoteHeight > 0}>
                                         <div
-                                          class={`w-full ${CHART_SEGMENT_CLASS.remote}`}
+                                          class={`w-full ${getRecoveryArtifactModePresentation('remote').segmentClassName}`}
                                           style={{ height: `${remoteHeight}%` }}
                                         />
                                       </Show>
                                       <Show when={localHeight > 0}>
                                         <div
-                                          class={`w-full ${CHART_SEGMENT_CLASS.local}`}
+                                          class={`w-full ${getRecoveryArtifactModePresentation('local').segmentClassName}`}
                                           style={{ height: `${localHeight}%` }}
                                         />
                                       </Show>
                                       <Show when={snapshotHeight > 0}>
                                         <div
-                                          class={`w-full ${CHART_SEGMENT_CLASS.snapshot}`}
+                                          class={`w-full ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`}
                                           style={{ height: `${snapshotHeight}%` }}
                                         />
                                       </Show>
@@ -1677,13 +1517,10 @@ const Recovery: Component = () => {
                             index() % timeline().labelEvery === 0 ||
                             index() === timeline().points.length - 1;
                           const isSelected = selectedDateKey() === point.key;
-                          const barMinWidth = isMobile()
-                            ? ''
-                            : chartRangeDays() === 7
-                              ? 'min-w-[28px]'
-                              : chartRangeDays() === 30
-                                ? 'min-w-[14px]'
-                                : 'min-w-[8px]';
+                          const barMinWidth = getRecoveryTimelineBarMinWidthClass(
+                            isMobile(),
+                            chartRangeDays(),
+                          );
                           return (
                             <div
                               class={`relative flex-1 ${isMobile() ? '' : 'shrink-0'} ${barMinWidth}`}
@@ -1692,11 +1529,11 @@ const Recovery: Component = () => {
                                 <span
                                   class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
                                     isSelected
-                                      ? 'font-semibold text-blue-700 dark:text-blue-300'
-                                      : 'text-muted'
+                                      ? getRecoveryTimelineAxisLabelClass(true)
+                                      : getRecoveryTimelineAxisLabelClass(false)
                                   }`}
                                 >
-                                  {compactAxisLabel(point.key, chartRangeDays())}
+                                  {getRecoveryCompactAxisLabel(point.key, chartRangeDays())}
                                 </span>
                               </Show>
                             </div>
@@ -1715,12 +1552,12 @@ const Recovery: Component = () => {
               <FilterHeader
                 search={
                   <SearchInput
-                    value={query}
+                    value={historyQuery}
                     onChange={(value) => {
-                      setQuery(value);
+                      setHistoryQuery(value);
                       setCurrentPage(1);
                     }}
-                    placeholder="Search recovery events..."
+                    placeholder="Search history..."
                     class="w-full shrink-0 sm:w-[20rem] md:w-[22rem] lg:w-[24rem] xl:w-[28rem]"
                     clearOnEscape
                     history={{
@@ -1742,18 +1579,15 @@ const Recovery: Component = () => {
                     <div class="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => {
-                          setRollupId('');
-                          setView('protected');
-                        }}
-                        class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                        onClick={() => setRollupId('')}
+                        class={getRecoveryBreadcrumbLinkClass()}
                       >
-                        Recovery
+                        All history
                       </button>
                       <span class="text-muted text-sm">›</span>
                       <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
                         <Show when={selectedRollup()}>
-                          {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                          {getRecoveryRollupSubjectLabel(selectedRollup()!, resourcesById())}
                         </Show>
                       </span>
                     </div>
@@ -1765,18 +1599,15 @@ const Recovery: Component = () => {
                   <div class="hidden sm:flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => {
-                        setRollupId('');
-                        setView('protected');
-                      }}
-                      class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                      onClick={() => setRollupId('')}
+                      class={getRecoveryBreadcrumbLinkClass()}
                     >
-                      Recovery
+                      All history
                     </button>
                     <span class="text-muted text-sm">›</span>
                     <span class="text-sm font-medium text-base-content truncate max-w-[12rem]">
                       <Show when={selectedRollup()}>
-                        {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                        {getRecoveryRollupSubjectLabel(selectedRollup()!, resourcesById())}
                       </Show>
                     </span>
                   </div>
@@ -1785,14 +1616,16 @@ const Recovery: Component = () => {
                 <LabeledFilterSelect
                   id="recovery-provider-filter-events"
                   label="Provider"
-                  value={providerFilter()}
+                  value={historyProviderFilter()}
                   onChange={(event) => {
-                    setProviderFilter(normalizeSourcePlatformQueryValue(event.currentTarget.value));
+                    setHistoryProviderFilter(
+                      normalizeSourcePlatformQueryValue(event.currentTarget.value),
+                    );
                     setCurrentPage(1);
                   }}
                   selectClass="min-w-[10rem] max-w-[14rem]"
                 >
-                  <For each={providerOptions()}>
+                  <For each={historyProviderOptions()}>
                     {(p) => (
                       <option value={p}>
                         {p === 'all' ? 'All Providers' : getSourcePlatformLabel(p)}
@@ -1804,10 +1637,10 @@ const Recovery: Component = () => {
                 <LabeledFilterSelect
                   id="recovery-status-filter"
                   label="Status"
-                  value={outcomeFilter()}
+                  value={historyOutcomeFilter()}
                   onChange={(event) => {
                     const value = event.currentTarget.value as 'all' | RecoveryOutcome;
-                    setOutcomeFilter(value);
+                    setHistoryOutcomeFilter(value);
                     if (value !== 'all') setVerificationFilter('all');
                     setCurrentPage(1);
                   }}
@@ -1852,7 +1685,7 @@ const Recovery: Component = () => {
                             <button
                               type="button"
                               onClick={resetAdvancedArtifactFilters}
-                              class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                              class={getRecoveryFilterPanelClearClass()}
                             >
                               Clear filters
                             </button>
@@ -1861,7 +1694,7 @@ const Recovery: Component = () => {
 
                         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           <label class="flex min-w-0 flex-col gap-1">
-                            <span class={advancedFilterLabelClass}>Scope</span>
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Scope</span>
                             <select
                               value={scopeFilter()}
                               onChange={(event) => {
@@ -1870,7 +1703,7 @@ const Recovery: Component = () => {
                                 setScopeFilter(value);
                                 setCurrentPage(1);
                               }}
-                              class={advancedFilterFieldClass}
+                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                             >
                               <option value="all">All events</option>
                               <option value="workload">Workloads only</option>
@@ -1878,35 +1711,44 @@ const Recovery: Component = () => {
                           </label>
 
                           <label class="flex min-w-0 flex-col gap-1">
-                            <span class={advancedFilterLabelClass}>Method</span>
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Method</span>
                             <select
                               value={modeFilter()}
                               onChange={(event) => {
-                                setModeFilter(normalizeModeFromQuery(event.currentTarget.value));
+                                setModeFilter(
+                                  normalizeRecoveryModeQueryValue(event.currentTarget.value),
+                                );
                                 setCurrentPage(1);
                               }}
-                              class={advancedFilterFieldClass}
+                              class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                             >
                               <option value="all">Any method</option>
-                              <option value="snapshot">{MODE_LABELS.snapshot}</option>
-                              <option value="local">{MODE_LABELS.local}</option>
-                              <option value="remote">{MODE_LABELS.remote}</option>
+                              <option value="snapshot">
+                                {getRecoveryArtifactModePresentation('snapshot').label}
+                              </option>
+                              <option value="local">
+                                {getRecoveryArtifactModePresentation('local').label}
+                              </option>
+                              <option value="remote">
+                                {getRecoveryArtifactModePresentation('remote').label}
+                              </option>
                             </select>
                           </label>
 
                           <Show when={showVerificationFilter()}>
                             <label class="flex min-w-0 flex-col gap-1">
-                              <span class={advancedFilterLabelClass}>Verification</span>
+                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Verification</span>
                               <select
                                 value={verificationFilter()}
                                 onChange={(event) => {
                                   setVerificationFilter(
                                     event.currentTarget.value as VerificationFilter,
                                   );
-                                  if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
+                                  if (event.currentTarget.value !== 'all')
+                                    setHistoryOutcomeFilter('all');
                                   setCurrentPage(1);
                                 }}
-                                class={advancedFilterFieldClass}
+                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                               >
                                 <option value="all">Any verification</option>
                                 <option value="verified">Verified</option>
@@ -1918,14 +1760,14 @@ const Recovery: Component = () => {
 
                           <Show when={showClusterFilter()}>
                             <label class="flex min-w-0 flex-col gap-1">
-                              <span class={advancedFilterLabelClass}>Cluster</span>
+                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Cluster</span>
                               <select
                                 value={clusterFilter()}
                                 onChange={(event) => {
                                   setClusterFilter(event.currentTarget.value);
                                   setCurrentPage(1);
                                 }}
-                                class={advancedFilterFieldClass}
+                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                               >
                                 <option value="all">Any cluster</option>
                                 <For each={clusterOptions().filter((value) => value !== 'all')}>
@@ -1937,14 +1779,14 @@ const Recovery: Component = () => {
 
                           <Show when={showNodeFilter()}>
                             <label class="flex min-w-0 flex-col gap-1">
-                              <span class={advancedFilterLabelClass}>Node or agent</span>
+                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Node or agent</span>
                               <select
                                 value={nodeFilter()}
                                 onChange={(event) => {
                                   setNodeFilter(event.currentTarget.value);
                                   setCurrentPage(1);
                                 }}
-                                class={advancedFilterFieldClass}
+                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                               >
                                 <option value="all">Any node or agent</option>
                                 <For each={nodeOptions().filter((value) => value !== 'all')}>
@@ -1956,14 +1798,14 @@ const Recovery: Component = () => {
 
                           <Show when={showNamespaceFilter()}>
                             <label class="flex min-w-0 flex-col gap-1">
-                              <span class={advancedFilterLabelClass}>Namespace</span>
+                              <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Namespace</span>
                               <select
                                 value={namespaceFilter()}
                                 onChange={(event) => {
                                   setNamespaceFilter(event.currentTarget.value);
                                   setCurrentPage(1);
                                 }}
-                                class={advancedFilterFieldClass}
+                                class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                               >
                                 <option value="all">Any namespace</option>
                                 <For each={namespaceOptions().filter((value) => value !== 'all')}>
@@ -2016,7 +1858,7 @@ const Recovery: Component = () => {
                             <button
                               type="button"
                               onClick={resetAllArtifactFilters}
-                              class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover"
+                              class={getRecoveryEmptyStateActionClass()}
                             >
                               Clear filters
                             </button>
@@ -2040,7 +1882,7 @@ const Recovery: Component = () => {
                       <For each={mobileVisibleArtifactColumns()}>
                         {(col) => (
                           <TableHead
-                            class={`py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap ${artifactColumnHeaderClass(
+                            class={`py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap ${getRecoveryArtifactColumnHeaderClass(
                               col.id,
                             )}`}
                           >
@@ -2054,16 +1896,19 @@ const Recovery: Component = () => {
                     <For each={groupedByDay()}>
                       {(group) => (
                         <>
-                          <TableRow class={groupHeaderRowClass()}>
-                            <TableCell colSpan={tableColumnCount()} class={groupHeaderTextClass()}>
+                          <TableRow class={RECOVERY_GROUP_HEADER_ROW_CLASS}>
+                            <TableCell
+                              colSpan={tableColumnCount()}
+                              class={RECOVERY_GROUP_HEADER_TEXT_CLASS}
+                            >
                               <div class="flex items-center justify-between gap-3">
                                 <div class="flex min-w-0 items-center gap-2">
                                   <span class="truncate" title={group.label}>
                                     {group.label}
                                   </span>
                                   <Show when={group.tone === 'recent'}>
-                                    <span class="rounded-full bg-blue-100/80 px-1.5 py-px text-[9px] font-medium text-blue-700 dark:bg-blue-900/70 dark:text-blue-200">
-                                      recent
+                                    <span class={getRecoveryRollupStatusPillClass('recent')}>
+                                      {getRecoveryRollupStatusPillLabel('recent')}
                                     </span>
                                   </Show>
                                 </div>
@@ -2077,20 +1922,20 @@ const Recovery: Component = () => {
                           <For each={group.items}>
                             {(p) => {
                               const resIndex = resourcesById();
-                              const subject = buildSubjectLabelForPoint(p, resIndex);
-                              const subjectType = buildSubjectTypeLabelForPoint(p);
-                              const detailsSummary = buildDetailsSummaryForPoint(p);
+                              const subject = getRecoveryPointSubjectLabel(p, resIndex);
+                              const subjectType = getRecoverySubjectTypeLabel(p);
+                              const detailsSummary = getRecoveryPointDetailsSummary(p);
                               const mode =
                                 (String(p.mode || '')
                                   .trim()
                                   .toLowerCase() as ArtifactMode) || 'local';
-                              const repoLabel = buildRepositoryLabelForPoint(p);
+                              const repoLabel = getRecoveryPointRepositoryLabel(p);
                               const provider = String(p.provider || '').trim();
                               const outcome = normalizeOutcome(p.outcome);
                               const completedMs = p.completedAt ? Date.parse(p.completedAt) : 0;
                               const startedMs = p.startedAt ? Date.parse(p.startedAt) : 0;
                               const tsMs = completedMs || startedMs || 0;
-                              const timeOnly = tsMs ? formatTimeOnly(tsMs) : '—';
+                              const timeOnly = formatRecoveryTimeOnly(tsMs);
 
                               const entityId = String(p.entityId || '').trim();
                               const cluster = String(p.cluster || '').trim();
@@ -2100,7 +1945,7 @@ const Recovery: Component = () => {
                               return (
                                 <>
                                   <TableRow
-                                    class={`cursor-pointer ${artifactRowClass(selectedPoint()?.id === p.id)}`}
+                                    class={`cursor-pointer ${getRecoveryArtifactRowClass(selectedPoint()?.id === p.id)}`}
                                     onClick={() =>
                                       setSelectedPoint(selectedPoint()?.id === p.id ? null : p)
                                     }
@@ -2111,7 +1956,7 @@ const Recovery: Component = () => {
                                           case 'time':
                                             return (
                                               <TableCell
-                                                class={`whitespace-nowrap px-3 py-0.5 text-right font-mono text-[11px] tabular-nums ${eventTimeTextClass(tsMs)}`}
+                                                class={`whitespace-nowrap px-3 py-0.5 text-right font-mono text-[11px] tabular-nums ${getRecoveryEventTimeTextClass(tsMs)}`}
                                               >
                                                 {timeOnly}
                                               </TableCell>
@@ -2129,7 +1974,7 @@ const Recovery: Component = () => {
                                                   <span class={subjectMetaSlotClass}>
                                                     <Show when={subjectType}>
                                                       <span
-                                                        class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${subjectTypeBadgeClass(
+                                                        class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoverySubjectTypeBadgeClass(
                                                           p,
                                                         )}`}
                                                       >
@@ -2266,9 +2111,9 @@ const Recovery: Component = () => {
                                             return (
                                               <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
                                                 <span
-                                                  class={`inline-flex min-w-[3.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${MODE_BADGE_CLASS[mode]}`}
+                                                  class={`inline-flex min-w-[3.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryArtifactModePresentation(mode).badgeClassName}`}
                                                 >
-                                                  {MODE_LABELS[mode]}
+                                                  {getRecoveryArtifactModePresentation(mode).label}
                                                 </span>
                                               </TableCell>
                                             );
@@ -2328,7 +2173,7 @@ const Recovery: Component = () => {
                                               e.stopPropagation();
                                               setSelectedPoint(null);
                                             }}
-                                            class="rounded-md p-1 hover:text-base-content hover:bg-surface-hover"
+                                            class={getRecoveryDrawerCloseButtonClass()}
                                             aria-label="Close details"
                                           >
                                             <svg
@@ -2404,7 +2249,7 @@ const Recovery: Component = () => {
             </Show>
           </Card>
         </Show>
-      </Show>
+      </div>
     </div>
   );
 };
