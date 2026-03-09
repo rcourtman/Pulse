@@ -3,13 +3,14 @@ import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
 import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
 
-const tsxSources = import.meta.glob('../../**/*.tsx', {
+const sourceFiles = import.meta.glob(['../../**/*.ts', '../../**/*.tsx'], {
   query: '?raw',
   eager: true,
   import: 'default',
 }) as Record<string, string>;
 
-const INLINE_TYPE_COLUMN_PATTERN = /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?\}/g;
+const INLINE_TYPE_COLUMN_PATTERN =
+  /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?toggleable:\s*true[\s\S]*?\}/g;
 
 describe('type column guardrails', () => {
   it('keeps the canonical Type column definition in the shared helper', () => {
@@ -27,8 +28,8 @@ describe('type column guardrails', () => {
   });
 
   it('limits runtime Type columns to the known allowlist', () => {
-    const runtimeEntries = Object.entries(tsxSources).filter(
-      ([path]) => !path.endsWith('.test.tsx'),
+    const runtimeEntries = Object.entries(sourceFiles).filter(
+      ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
     );
 
     const typeColumnUsers = runtimeEntries
@@ -38,9 +39,18 @@ describe('type column guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const inlineTypeColumnUsers = runtimeEntries
+      .filter(([, source]) => INLINE_TYPE_COLUMN_PATTERN.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(typeColumnUsers).toEqual([
       '../Dashboard/GuestRow.tsx',
       '../Recovery/Recovery.tsx',
+    ]);
+
+    expect(inlineTypeColumnUsers).toEqual([
+      '../../utils/typeColumnDefinition.ts',
     ]);
   });
 });
