@@ -53,4 +53,19 @@ describe('type column guardrails', () => {
       '../../utils/typeColumnDefinition.ts',
     ]);
   });
+
+  it('keeps type default-visibility policy out of page-level hidden-column arrays', () => {
+    const runtimeEntries = Object.entries(sourceFiles).filter(
+      ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
+    );
+    const hiddenTypeArrayPattern =
+      /useColumnVisibility\([\s\S]*?\[\s*['"]type['"][\s\S]*?\]/;
+
+    const pageLevelTypeDefaultHiddenUsers = runtimeEntries
+      .filter(([, source]) => hiddenTypeArrayPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
+    expect(pageLevelTypeDefaultHiddenUsers).toEqual([]);
+  });
 });
