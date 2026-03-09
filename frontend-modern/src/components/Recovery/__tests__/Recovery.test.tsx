@@ -151,8 +151,9 @@ describe('Recovery', () => {
       });
     });
 
-    expect(await screen.findByText('Showing history for')).toBeInTheDocument();
-    await screen.findByText(/Showing 1 - 1 of 1 events/i);
+    expect(await screen.findByText('Focused item')).toBeInTheDocument();
+    expect(screen.getAllByText('VM 123').length).toBeGreaterThan(0);
+    await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
     const table = tables[tables.length - 1];
     expect(within(table).getAllByText('Local').length).toBeGreaterThan(0);
@@ -164,8 +165,7 @@ describe('Recovery', () => {
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    const providerSelects = screen.getAllByLabelText('Provider');
-    fireEvent.change(providerSelects[0], { target: { value: 'truenas' } });
+    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'truenas' } });
 
     await waitFor(() => {
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
@@ -215,7 +215,7 @@ describe('Recovery', () => {
     });
   });
 
-  it('keeps the events card mounted while filter refetches are in flight', async () => {
+  it('keeps the history card mounted while filter refetches are in flight', async () => {
     mockLocationSearch = '?rollupId=res%3Avm-123';
     facetsPayload.clusters = ['dev-cluster'];
 
@@ -265,7 +265,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByText(/Showing 1 - 1 of 1 events/i);
+    await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
     fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
     fireEvent.change(await screen.findByLabelText('Cluster'), {
@@ -281,8 +281,8 @@ describe('Recovery', () => {
       ).toBe(true);
     });
 
-    expect(screen.getByText('Recovery Events')).toBeInTheDocument();
-    expect(screen.getByText(/Showing 1 - 1 of 1 events/i)).toBeInTheDocument();
+    expect(screen.getByText('Recovery History')).toBeInTheDocument();
+    expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
 
     resolveDelayedPoints?.({
       data: pointsByRollupId['res:vm-123'],
@@ -290,11 +290,11 @@ describe('Recovery', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Showing 1 - 1 of 1 events/i)).toBeInTheDocument();
+      expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
     });
   });
 
-  it('clears the events search query on Escape', async () => {
+  it('clears the history search query on Escape', async () => {
     mockLocationSearch = '?q=gdfdgd';
     render(() => <Recovery />);
 

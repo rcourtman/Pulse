@@ -46,8 +46,9 @@ describe('RecoverySummary', () => {
     expect(screen.getByTestId('recovery-summary')).toBeInTheDocument();
     expect(screen.getByText('Coverage')).toBeInTheDocument();
     expect(screen.getByText('Freshness')).toBeInTheDocument();
-    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByText('Recent History')).toBeInTheDocument();
     expect(screen.getByText('Attention')).toBeInTheDocument();
+    expect(screen.getByText('Recovery Points')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getByText('1 healthy')).toBeInTheDocument();
     expect(screen.getByText('1 never succeeded')).toBeInTheDocument();

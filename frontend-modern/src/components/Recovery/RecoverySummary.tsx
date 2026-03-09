@@ -154,7 +154,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         </SummaryMetricCard>
 
         <SummaryMetricCard
-          label="Activity"
+          label="Recent History"
           loaded={props.seriesLoaded()}
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
@@ -162,7 +162,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           <div class="flex h-full flex-col justify-between gap-3">
             <div class="grid grid-cols-3 gap-2 text-sm">
               <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Events</div>
+                <div class="text-[11px] uppercase tracking-wide text-muted">Recovery Points</div>
                 <div class="text-lg font-semibold text-base-content">{activity().totalEvents}</div>
               </div>
               <div>
@@ -172,7 +172,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 </div>
               </div>
               <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Active Days</div>
+                <div class="text-[11px] uppercase tracking-wide text-muted">Days Active</div>
                 <div class="text-lg font-semibold text-base-content">{activity().activeDays}</div>
               </div>
             </div>
@@ -190,7 +190,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                             : 'bg-blue-200 dark:bg-blue-900'
                       }`}
                       style={{ height: `${bar.heightPct}%` }}
-                      title={`${bar.day}: ${bar.total} events`}
+                      title={`${bar.day}: ${bar.total} recovery points`}
                     />
                   </div>
                 )}

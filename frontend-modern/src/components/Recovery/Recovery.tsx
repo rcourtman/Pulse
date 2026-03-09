@@ -165,7 +165,7 @@ const Recovery: Component = () => {
   const [moreFiltersOpen, setMoreFiltersOpen] = createSignal(false);
   const { isMobile } = useBreakpoint();
   const [protectedFiltersOpen, setProtectedFiltersOpen] = createSignal(false);
-  const [eventsFiltersOpen, setEventsFiltersOpen] = createSignal(false);
+  const [historyFiltersOpen, setHistoryFiltersOpen] = createSignal(false);
   let advancedFiltersPanelRef: HTMLDivElement | undefined;
   let advancedFiltersButtonRef: HTMLButtonElement | undefined;
   let historySectionRef: HTMLDivElement | undefined;
@@ -577,6 +577,10 @@ const Recovery: Component = () => {
     if (!rid) return null;
     return rollups().find((r) => r.rollupId === rid) || null;
   });
+  const selectedHistorySubjectLabel = createMemo(() => {
+    const rollup = selectedRollup();
+    return rollup ? getRecoveryRollupSubjectLabel(rollup, resourcesById()) : null;
+  });
 
   const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
 
@@ -643,7 +647,7 @@ const Recovery: Component = () => {
     if (protectedStaleOnly()) count++;
     return count;
   });
-  const eventsActiveFilterCount = createMemo(() => {
+  const historyActiveFilterCount = createMemo(() => {
     let count = 0;
     if (historyQuery().trim() !== '') count++;
     if (historyProviderFilter() !== 'all') count++;
@@ -886,97 +890,118 @@ const Recovery: Component = () => {
       />
 
       <Show when={!kioskMode()}>
-        <Card padding="sm">
-          <FilterHeader
-            search={
-              <SearchInput
-                value={protectedQuery}
-                onChange={(value) => setProtectedQuery(value)}
-                placeholder="Search protected items..."
-                class="w-full"
-                clearOnEscape
-                history={{
-                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                  emptyMessage: 'Recent searches appear here.',
-                }}
-              />
-            }
-            searchAccessory={
-              <Show when={isMobile()}>
-                <FilterMobileToggleButton
-                  onClick={() => setProtectedFiltersOpen((o) => !o)}
-                  count={protectedActiveFilterCount()}
+        <Card padding="sm" class="border-border-subtle">
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div class="space-y-1">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Protected inventory
+                </div>
+                <div class="text-sm text-muted">
+                  Start here to see what is protected, what is stale, and what has never
+                  completed successfully.
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
+                <span>
+                  {filteredRollups()?.length ?? 0} of {rollups().length} items shown
+                </span>
+                <Show when={rollupsSummary().stale > 0}>
+                  <span class={getRecoveryRollupStatusPillClass('stale')}>
+                    {rollupsSummary().stale} stale
+                  </span>
+                </Show>
+                <Show when={rollupsSummary().neverSucceeded > 0}>
+                  <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
+                    {rollupsSummary().neverSucceeded} never succeeded
+                  </span>
+                </Show>
+              </div>
+            </div>
+
+            <FilterHeader
+              search={
+                <SearchInput
+                  value={protectedQuery}
+                  onChange={(value) => setProtectedQuery(value)}
+                  placeholder="Search protected items..."
+                  class="w-full"
+                  clearOnEscape
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: 'Recent searches appear here.',
+                  }}
                 />
-              </Show>
-            }
-            showFilters={!isMobile() || protectedFiltersOpen()}
-          >
-            <LabeledFilterSelect
-              id="recovery-provider-filter"
-              label="Provider"
-              value={protectedProviderFilter()}
-              onChange={(event) =>
-                setProtectedProviderFilter(normalizeSourcePlatformQueryValue(event.currentTarget.value))
               }
-              selectClass="min-w-[10rem] max-w-[14rem]"
+              searchAccessory={
+                <Show when={isMobile()}>
+                  <FilterMobileToggleButton
+                    onClick={() => setProtectedFiltersOpen((o) => !o)}
+                    count={protectedActiveFilterCount()}
+                  />
+                </Show>
+              }
+              showFilters={!isMobile() || protectedFiltersOpen()}
             >
-              <For each={protectedProviderOptions()}>
-                {(p) => (
-                  <option value={p}>
-                    {p === 'all' ? 'All Providers' : getSourcePlatformLabel(p)}
-                  </option>
-                )}
-              </For>
-            </LabeledFilterSelect>
+              <LabeledFilterSelect
+                id="recovery-provider-filter"
+                label="Provider"
+                value={protectedProviderFilter()}
+                onChange={(event) =>
+                  setProtectedProviderFilter(
+                    normalizeSourcePlatformQueryValue(event.currentTarget.value),
+                  )
+                }
+                selectClass="min-w-[10rem] max-w-[14rem]"
+              >
+                <For each={protectedProviderOptions()}>
+                  {(p) => (
+                    <option value={p}>
+                      {p === 'all' ? 'All Providers' : getSourcePlatformLabel(p)}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
 
-            <LabeledFilterSelect
-              id="recovery-protected-status-filter"
-              label="Status"
-              value={protectedOutcomeFilter()}
-              onChange={(event) => {
-                const value = event.currentTarget.value as 'all' | RecoveryOutcome;
-                setProtectedOutcomeFilter(value);
-              }}
-              selectClass="min-w-[7rem]"
-            >
-              <For each={availableOutcomes}>
-                {(outcome) => (
-                  <option value={outcome}>{outcome === 'all' ? 'Any' : titleize(outcome)}</option>
-                )}
-              </For>
-            </LabeledFilterSelect>
+              <LabeledFilterSelect
+                id="recovery-protected-status-filter"
+                label="Latest status"
+                value={protectedOutcomeFilter()}
+                onChange={(event) => {
+                  const value = event.currentTarget.value as 'all' | RecoveryOutcome;
+                  setProtectedOutcomeFilter(value);
+                }}
+                selectClass="min-w-[9rem]"
+              >
+                <For each={availableOutcomes}>
+                  {(outcome) => (
+                    <option value={outcome}>
+                      {outcome === 'all' ? 'Any status' : titleize(outcome)}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
 
-            <button
-              type="button"
-              aria-pressed={protectedStaleOnly()}
-              onClick={() => setProtectedStaleOnly((v) => !v)}
-              class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(protectedStaleOnly())}`}
-            >
-              Stale only
-            </button>
-
-            <Show when={rollupsSummary().stale > 0}>
-              <span class={getRecoveryRollupStatusPillClass('stale')}>
-                {rollupsSummary().stale} stale
-              </span>
-            </Show>
-
-            <Show when={rollupsSummary().neverSucceeded > 0}>
-              <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
-                {rollupsSummary().neverSucceeded} never succeeded
-              </span>
-            </Show>
-          </FilterHeader>
+              <button
+                type="button"
+                aria-pressed={protectedStaleOnly()}
+                onClick={() => setProtectedStaleOnly((v) => !v)}
+                class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(protectedStaleOnly())}`}
+              >
+                Stale only
+              </button>
+            </FilterHeader>
+          </div>
         </Card>
       </Show>
 
       <Card padding="none" tone="card" class="overflow-hidden">
-          <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Protected Items
-          </div>
-          <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
-            <div class="px-6 py-6 text-sm text-muted">Loading protected items...</div>
-          </Show>
+        <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+          Protected Items
+        </div>
+        <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
+          <div class="px-6 py-6 text-sm text-muted">Loading protected items...</div>
+        </Show>
 
           <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
             <div class="p-6">
@@ -1000,7 +1025,7 @@ const Recovery: Component = () => {
             <div class="p-6">
               <EmptyState
                 title="No protected items yet"
-                description="Pulse hasn’t received any recovery events for this org yet."
+                description="Pulse hasn’t observed any protected items for this org yet."
               />
             </div>
           </Show>
@@ -1156,42 +1181,6 @@ const Recovery: Component = () => {
         </Card>
 
       <div ref={historySectionRef} class="flex flex-col gap-4">
-        <Card padding="sm" class="border-border-subtle">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div class="space-y-1">
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                History
-              </div>
-              <div class="text-sm text-muted">
-                Recovery evidence lives here: the existing activity chart and date-grouped backup
-                table. Select a protected item above to focus the history.
-              </div>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <Show when={selectedRollup()}>
-                <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
-                  Showing history for{' '}
-                  <span class="font-medium">
-                    {getRecoveryRollupSubjectLabel(selectedRollup()!, resourcesById())}
-                  </span>
-                </div>
-              </Show>
-              <Show
-                when={rollupId().trim()}
-                fallback={<span class="text-sm text-muted">All protected items</span>}
-              >
-                <button
-                  type="button"
-                  onClick={() => setRollupId('')}
-                  class={getRecoveryBreadcrumbLinkClass()}
-                >
-                  All protected items
-                </button>
-              </Show>
-            </div>
-          </div>
-        </Card>
-
         <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
           <Card padding="sm">
             <EmptyState
@@ -1205,6 +1194,42 @@ const Recovery: Component = () => {
 
         <Show when={!recoveryPoints.response.error}>
           <Card padding="sm" class="h-full">
+            <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div class="space-y-1">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Recovery history
+                </div>
+                <div class="text-sm text-muted">
+                  Keep the activity chart and dated backup records together as the audit trail for
+                  the selected item.
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <Show when={selectedHistorySubjectLabel()}>
+                  <div class="rounded-md border border-border bg-surface-alt px-3 py-1.5">
+                    <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      Focused item
+                    </div>
+                    <div class="text-sm font-medium text-base-content">
+                      {selectedHistorySubjectLabel()}
+                    </div>
+                  </div>
+                </Show>
+                <Show
+                  when={rollupId().trim()}
+                  fallback={<span class="text-sm text-muted">All protected items</span>}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setRollupId('')}
+                    class={getRecoveryBreadcrumbLinkClass()}
+                  >
+                    Show all history
+                  </button>
+                </Show>
+              </div>
+            </div>
+
             <Show
               when={
                 selectedDateKey() ||
@@ -1560,7 +1585,7 @@ const Recovery: Component = () => {
                       setHistoryQuery(value);
                       setCurrentPage(1);
                     }}
-                    placeholder="Search history..."
+                    placeholder="Search recovery history..."
                     class="w-full shrink-0 sm:w-[20rem] md:w-[22rem] lg:w-[24rem] xl:w-[28rem]"
                     clearOnEscape
                     history={{
@@ -1571,10 +1596,10 @@ const Recovery: Component = () => {
                 }
                 searchAccessory={
                   <Show when={isMobile()}>
-                    <FilterMobileToggleButton
-                      onClick={() => setEventsFiltersOpen((o) => !o)}
-                      count={eventsActiveFilterCount()}
-                    />
+                  <FilterMobileToggleButton
+                    onClick={() => setHistoryFiltersOpen((o) => !o)}
+                    count={historyActiveFilterCount()}
+                  />
                   </Show>
                 }
                 mobileLeading={
@@ -1596,7 +1621,7 @@ const Recovery: Component = () => {
                     </div>
                   </Show>
                 }
-                showFilters={!isMobile() || eventsFiltersOpen()}
+                showFilters={!isMobile() || historyFiltersOpen()}
               >
                 <Show when={rollupId().trim()}>
                   <div class="hidden sm:flex items-center gap-1.5">
@@ -1617,8 +1642,8 @@ const Recovery: Component = () => {
                 </Show>
 
                 <LabeledFilterSelect
-                  id="recovery-provider-filter-events"
-                  label="Provider"
+                  id="recovery-provider-filter-history"
+                  label="History provider"
                   value={historyProviderFilter()}
                   onChange={(event) => {
                     setHistoryProviderFilter(
@@ -1639,7 +1664,7 @@ const Recovery: Component = () => {
 
                 <LabeledFilterSelect
                   id="recovery-status-filter"
-                  label="Status"
+                  label="History status"
                   value={historyOutcomeFilter()}
                   onChange={(event) => {
                     const value = event.currentTarget.value as 'all' | RecoveryOutcome;
@@ -1708,7 +1733,7 @@ const Recovery: Component = () => {
                               }}
                               class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                             >
-                              <option value="all">All events</option>
+                              <option value="all">All history</option>
                               <option value="workload">Workloads only</option>
                             </select>
                           </label>
@@ -1844,7 +1869,7 @@ const Recovery: Component = () => {
 
           <Card padding="none" tone="card" class="mb-4 overflow-hidden">
             <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-              Recovery Events
+              Recovery History
             </div>
             <Show
               when={groupedByDay().length > 0}
@@ -1854,7 +1879,7 @@ const Recovery: Component = () => {
                     when={recoveryPoints.response.loading}
                     fallback={
                       <EmptyState
-                        title="No recovery events match your filters"
+                        title="No recovery history matches your filters"
                         description="Adjust your search, provider, method, status, or verification filters."
                         actions={
                           <Show when={hasActiveArtifactFilters()}>
@@ -2215,7 +2240,7 @@ const Recovery: Component = () => {
                 <div>
                   <Show
                     when={(recoveryPoints.meta().total || 0) > 0}
-                    fallback={<span>Showing 0 of 0 events</span>}
+                    fallback={<span>Showing 0 of 0 recovery points</span>}
                   >
                     <span>
                       Showing {(recoveryPoints.meta().page - 1) * recoveryPoints.meta().limit + 1} -{' '}
@@ -2223,7 +2248,7 @@ const Recovery: Component = () => {
                         recoveryPoints.meta().page * recoveryPoints.meta().limit,
                         recoveryPoints.meta().total,
                       )}{' '}
-                      of {recoveryPoints.meta().total} events
+                      of {recoveryPoints.meta().total} recovery points
                     </span>
                   </Show>
                 </div>
