@@ -220,6 +220,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	// a memory fallback before the inflated status.Mem value. Refs: #1270
 	prevState := m.GetState()
 	prevInstanceVMs := filterVMsByInstance(prevState.VMs, instanceName)
+	// Build a lookup for previous disk data so we can carry it forward when the
+	// guest agent call fails (prevents disk usage flickering 57% → 0% → 57%).
+	prevDiskByGuestID := make(map[string]models.Disk, len(prevInstanceVMs))
+	for _, pvm := range prevInstanceVMs {
+		if pvm.Disk.Usage > 0 {
+			prevDiskByGuestID[pvm.ID] = pvm.Disk
+		}
+	}
 	vmIDToHostAgent := make(map[string]models.Host)
 	for _, h := range prevState.Hosts {
 		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
@@ -764,6 +772,33 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					// Running VM but no vmStatus - show allocated disk
 					diskUsage = -1
 					diskStatusReason = "no-status"
+				}
+
+				// Carry forward previous disk data when the guest agent failed this cycle.
+				// Proxmox cluster/resources always returns 0 for disk usage, so without
+				// the guest agent we'd show 0% or "allocated only", causing chart spikes
+				// when the agent intermittently times out. Refs: #1319
+				// Only carry forward for transient failures — not when the agent is
+				// permanently disabled or absent, as those won't self-resolve.
+				if vm.Status == "running" && diskUsage <= 0 && diskStatusReason != "" &&
+					diskStatusReason != "vm-stopped" && diskStatusReason != "agent-disabled" && diskStatusReason != "no-agent" {
+					if prev, ok := prevDiskByGuestID[guestID]; ok && prev.Usage > 0 && prev.Total > 0 && prev.Used >= 0 && prev.Used <= prev.Total {
+						diskTotal = uint64(prev.Total)
+						diskUsed = uint64(prev.Used)
+						diskFree = diskTotal - diskUsed
+						diskUsage = prev.Usage
+						individualDisks = nil // Don't carry forward stale per-disk breakdown
+						if logging.IsLevelEnabled(zerolog.DebugLevel) {
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Int("vmid", vm.VMID).
+								Str("reason", diskStatusReason).
+								Float64("prevUsage", prev.Usage).
+								Msg("Guest agent disk query failed; carrying forward previous disk data")
+						}
+						diskStatusReason = "prev-" + diskStatusReason
+					}
 				}
 
 				memTotalBytes := clampToInt64(memTotal)

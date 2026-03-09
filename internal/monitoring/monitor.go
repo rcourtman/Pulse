@@ -7218,6 +7218,16 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		}
 	}
 
+	// Build a lookup for previous disk data so we can carry it forward when the
+	// guest agent call fails (prevents disk usage flickering 57% → 0% → 57%).
+	// Refs: #1319
+	prevDiskByGuestID := make(map[string]models.Disk, len(prevInstanceVMs))
+	for _, pvm := range prevInstanceVMs {
+		if pvm.Disk.Usage > 0 {
+			prevDiskByGuestID[pvm.ID] = pvm.Disk
+		}
+	}
+
 	var allVMs []models.VM
 	var allContainers []models.Container
 
@@ -7736,6 +7746,29 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						agentVersion = guestAgentVersion
 					}
 				})
+			}
+
+			// Carry forward previous disk data when the guest agent was expected
+			// but failed to provide data this cycle.  Proxmox cluster/resources
+			// always returns 0 for VM disk, so without the guest agent we'd show
+			// 0% or "allocated only", causing chart spikes when the agent
+			// intermittently times out. Refs: #1319
+			// Also triggers when GetVMStatus itself failed (agentEnabled stays
+			// false but the VM had real disk data last cycle).
+			if res.Status == "running" && res.Type == "qemu" && diskUsage <= 0 {
+				if prev, ok := prevDiskByGuestID[guestID]; ok && prev.Usage > 0 && prev.Total > 0 && prev.Used >= 0 && prev.Used <= prev.Total {
+					diskTotal = uint64(prev.Total)
+					diskUsed = uint64(prev.Used)
+					diskFree = diskTotal - diskUsed
+					diskUsage = prev.Usage
+					individualDisks = nil // Don't carry forward stale per-disk breakdown
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", res.Name).
+						Int("vmid", res.VMID).
+						Float64("prevUsage", prev.Usage).
+						Msg("Guest agent disk query failed; carrying forward previous disk data")
+				}
 			}
 
 			// Last-chance MemInfo fallback: use Total-Used only after RRD/agent
