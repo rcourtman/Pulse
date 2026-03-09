@@ -6,6 +6,8 @@ import {
   TYPE_COLUMN_LABEL,
   TYPE_COLUMN_MAX_WIDTH,
   TYPE_COLUMN_MIN_WIDTH,
+  TYPE_COLUMN_PRIORITY,
+  TYPE_COLUMN_SORTABLE,
 } from '@/utils/typeColumnContract';
 
 /**
@@ -184,8 +186,8 @@ export const STANDARD_COLUMNS = {
   type: {
     id: TYPE_COLUMN_ID,
     label: TYPE_COLUMN_LABEL,
-    priority: 'essential' as ColumnPriority,
-    sortable: true,
+    priority: TYPE_COLUMN_PRIORITY as ColumnPriority,
+    sortable: TYPE_COLUMN_SORTABLE,
     minWidth: TYPE_COLUMN_MIN_WIDTH,
     maxWidth: TYPE_COLUMN_MAX_WIDTH,
     align: TYPE_COLUMN_ALIGN,

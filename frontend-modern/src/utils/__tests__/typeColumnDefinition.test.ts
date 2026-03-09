@@ -6,7 +6,9 @@ import {
 import {
   TYPE_COLUMN_MAX_WIDTH,
   TYPE_COLUMN_MIN_WIDTH,
+  TYPE_COLUMN_PRIORITY,
   TYPE_COLUMN_SORT_KEY,
+  TYPE_COLUMN_SORTABLE,
   TYPE_COLUMN_WIDTH,
 } from '@/utils/typeColumnContract';
 
@@ -51,5 +53,7 @@ describe('typeColumnDefinition', () => {
   it('exports the canonical responsive type sizing contract', () => {
     expect(TYPE_COLUMN_MIN_WIDTH).toBe('60px');
     expect(TYPE_COLUMN_MAX_WIDTH).toBe('80px');
+    expect(TYPE_COLUMN_PRIORITY).toBe('essential');
+    expect(TYPE_COLUMN_SORTABLE).toBe(true);
   });
 });
