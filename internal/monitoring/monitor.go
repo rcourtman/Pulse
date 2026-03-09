@@ -7755,7 +7755,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			// intermittently times out. Refs: #1319
 			// Also triggers when GetVMStatus itself failed (agentEnabled stays
 			// false but the VM had real disk data last cycle).
-			if res.Status == "running" && res.Type == "qemu" && diskUsage <= 0 {
+			// Skip when we know the agent is explicitly disabled — that's a
+			// permanent state and stale data shouldn't persist indefinitely.
+			agentExplicitlyOff := detailedStatus != nil && detailedStatus.Agent.Value == 0
+			if res.Status == "running" && res.Type == "qemu" && diskUsage <= 0 && !agentExplicitlyOff {
 				if prev, ok := prevDiskByGuestID[guestID]; ok && prev.Usage > 0 && prev.Total > 0 && prev.Used >= 0 && prev.Used <= prev.Total {
 					diskTotal = uint64(prev.Total)
 					diskUsed = uint64(prev.Used)
