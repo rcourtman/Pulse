@@ -685,6 +685,7 @@ describe('GUEST_COLUMNS', () => {
   it('marks toggleable columns correctly', () => {
     const toggleable = GUEST_COLUMNS.filter((c) => c.toggleable);
     const toggleableIds = toggleable.map((c) => c.id);
+    expect(toggleableIds).toContain('type');
     expect(toggleableIds).toContain('ip');
     expect(toggleableIds).toContain('uptime');
     expect(toggleableIds).toContain('node');
@@ -702,6 +703,7 @@ describe('GUEST_COLUMNS', () => {
     expect(ids).toContain('cpu');
     expect(ids).toContain('memory');
     expect(ids).toContain('disk');
+    expect(ids).not.toContain('type');
   });
 });
 

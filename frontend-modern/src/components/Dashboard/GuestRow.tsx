@@ -513,7 +513,7 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 // Column configuration using the priority system
 export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'name', label: 'Name', width: '200px', sortKey: 'name' },
-  { id: 'type', label: 'Type', width: '60px', sortKey: 'type' },
+  { id: 'type', label: 'Type', width: '60px', sortKey: 'type', toggleable: true },
   { id: 'info', label: 'Info', width: '100px' }, // Merged identifier: VMID for VMs/LXCs, image for app containers, namespace for pods
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
 
