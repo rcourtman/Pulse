@@ -3097,8 +3097,18 @@ func (m *Manager) CheckHost(host models.Host) {
 					diskTempMetadata["device"] = disk.Device
 					diskTempMetadata["temperature"] = disk.Temperature
 					diskTempMetadata["model"] = disk.Model
+					spec, err := buildCanonicalMetricSpec(tempResourceID, tempResourceName, unifiedresources.ResourceType("agent-disk"), "diskTemperature", thresholds.DiskTemperature)
+					if err != nil {
+						log.Warn().
+							Err(err).
+							Str("resourceID", tempResourceID).
+							Str("host", resourceName).
+							Str("device", disk.Device).
+							Msg("Skipping invalid canonical host disk temperature metric spec")
+						continue
+					}
 
-					m.checkMetric(tempResourceID, tempResourceName, nodeName, disk.Device, "agent", "diskTemperature", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
+					m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), thresholds.DiskTemperature, &metricOptions{Metadata: diskTempMetadata})
 				}
 			}
 		}
@@ -3167,8 +3177,18 @@ func (m *Manager) CheckHost(host models.Host) {
 			diskMetadata["diskUsedBytes"] = disk.Used
 			diskMetadata["diskFreeBytes"] = disk.Free
 		}
+		spec, err := buildCanonicalMetricSpec(diskResourceID, diskName, unifiedresources.ResourceType("agent-disk"), "disk", effectiveDiskThreshold)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", diskResourceID).
+				Str("host", resourceName).
+				Str("mountpoint", disk.Mountpoint).
+				Msg("Skipping invalid canonical host disk metric spec")
+			continue
+		}
 
-		m.checkMetric(diskResourceID, diskName, nodeName, instanceName, "agent-disk", "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+		m.checkMetricWithCanonicalSpec(spec, diskName, nodeName, instanceName, "agent-disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
 	}
 
 	// Clear all disk alerts if host-level disk alerting is completely disabled and no disk-specific overrides

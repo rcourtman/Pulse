@@ -556,8 +556,60 @@ func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
 
 	diskResourceID, _ := hostDiskResourceID(host, host.Disks[0])
 	diskAlertID := fmt.Sprintf("%s-disk", diskResourceID)
-	if _, exists := m.activeAlerts[diskAlertID]; !exists {
+	diskAlert, exists := m.activeAlerts[diskAlertID]
+	if !exists {
 		t.Fatalf("expected disk alert %q to be active", diskAlertID)
+	}
+	if got := diskAlert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("disk canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := diskAlert.Metadata["canonicalSpecID"]; got != diskAlertID {
+		t.Fatalf("disk canonicalSpecID = %v, want %s", got, diskAlertID)
+	}
+}
+
+func TestCheckHostDiskTemperatureAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.AgentDefaults = ThresholdConfig{
+		DiskTemperature: &HysteresisThreshold{Trigger: 50.0, Clear: 45.0},
+	}
+	m.mu.Unlock()
+
+	host := models.Host{
+		ID:          "host-temp",
+		DisplayName: "Temp Host",
+		Hostname:    "host-temp.example",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{
+					Device:      "/dev/sda",
+					Model:       "Samsung",
+					Temperature: 55,
+				},
+			},
+		},
+		Status:          "online",
+		IntervalSeconds: 30,
+		LastSeen:        time.Now(),
+	}
+
+	m.CheckHost(host)
+
+	alertID := fmt.Sprintf("%s/disk_temp:%s-diskTemperature", hostResourceID(host.ID), sanitizeHostComponent("/dev/sda"))
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+	if alert == nil {
+		t.Fatalf("expected disk temperature alert %q", alertID)
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != alertID {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, alertID)
 	}
 }
 

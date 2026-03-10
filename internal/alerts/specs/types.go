@@ -669,14 +669,17 @@ func isKnownResourceType(rt unifiedresources.ResourceType) bool {
 	if rt == "" {
 		return false
 	}
-	// "node" remains a migration bridge while live node alerts are still keyed
-	// separately from canonical agent resources.
-	if rt != unifiedresources.ResourceType("node") && unifiedresources.CanonicalResourceType(rt) != rt {
+	// "node" and "agent-disk" remain migration bridges while live alerts are
+	// still keyed separately from the canonical unified resource graph.
+	if rt != unifiedresources.ResourceType("node") &&
+		rt != unifiedresources.ResourceType("agent-disk") &&
+		unifiedresources.CanonicalResourceType(rt) != rt {
 		return false
 	}
 	switch rt {
 	case unifiedresources.ResourceTypeAgent,
 		unifiedresources.ResourceType("node"),
+		unifiedresources.ResourceType("agent-disk"),
 		unifiedresources.ResourceTypeVM,
 		unifiedresources.ResourceTypeSystemContainer,
 		unifiedresources.ResourceTypeAppContainer,

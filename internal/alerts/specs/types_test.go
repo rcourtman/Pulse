@@ -173,6 +173,27 @@ func TestResourceAlertSpecValidateAllowsNodeMigrationBridgeType(t *testing.T) {
 	}
 }
 
+func TestResourceAlertSpecValidateAllowsAgentDiskMigrationBridgeType(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "agent:host1/disk:data-disk",
+		ResourceID:   "agent:host1/disk:data",
+		ResourceType: unifiedresources.ResourceType("agent-disk"),
+		Kind:         AlertSpecKindMetricThreshold,
+		Severity:     AlertSeverityWarning,
+		MetricThreshold: &MetricThresholdSpec{
+			Metric:    "disk",
+			Direction: ThresholdDirectionAbove,
+			Trigger:   85,
+		},
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestResourceAlertSpecValidateRejectsPayloadKindMismatch(t *testing.T) {
 	t.Parallel()
 
