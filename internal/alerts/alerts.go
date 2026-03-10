@@ -3614,6 +3614,9 @@ var (
 	zfsPoolAssessmentCodes = []string{
 		"zfs_pool_state",
 	}
+	zfsPoolErrorAssessmentCodes = []string{
+		"zfs_pool_errors",
+	}
 	zfsDeviceAssessmentCodes = []string{
 		"zfs_device_state",
 		"zfs_device_errors",
@@ -3679,6 +3682,17 @@ func storageHealthAssessmentSeverity(reasons []storagehealth.Reason) alertspecs.
 		}
 	}
 	return severity
+}
+
+func (m *Manager) activeAlertValue(alertID string) (float64, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	alert, ok := m.activeAlerts[alertID]
+	if !ok || alert == nil {
+		return 0, false
+	}
+	return alert.Value, true
 }
 
 func filterStorageHealthReasonsByCodes(reasons []storagehealth.Reason, codes []string) []storagehealth.Reason {
@@ -6314,55 +6328,46 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 	totalErrors := pool.ReadErrors + pool.WriteErrors + pool.ChecksumErrors
 	errorsAlertID := fmt.Sprintf("zfs-pool-errors-%s", storage.ID)
 	if totalErrors > 0 {
-		m.mu.Lock()
-		existingAlert, exists := m.activeAlerts[errorsAlertID]
-
-		// Only create new alert or update if error count increased
-		if !exists || float64(totalErrors) > existingAlert.Value {
-			alert := &Alert{
-				ID:           errorsAlertID,
-				Type:         "zfs-pool-errors",
-				Level:        AlertLevelWarning,
-				ResourceID:   storage.ID,
-				ResourceName: poolResourceName,
-				Node:         storage.Node,
-				Instance:     storage.Instance,
-				Message: fmt.Sprintf("ZFS pool '%s' has errors: %d read, %d write, %d checksum",
-					pool.Name, pool.ReadErrors, pool.WriteErrors, pool.ChecksumErrors),
-				Value:     float64(totalErrors),
-				Threshold: 0,
-				StartTime: time.Now(),
-				LastSeen:  time.Now(),
-				Metadata: map[string]interface{}{
-					"pool_name":       pool.Name,
-					"read_errors":     pool.ReadErrors,
-					"write_errors":    pool.WriteErrors,
-					"checksum_errors": pool.ChecksumErrors,
+		existingValue, exists := m.activeAlertValue(errorsAlertID)
+		if !exists || float64(totalErrors) > existingValue {
+			errorMetadata := map[string]interface{}{
+				"pool_name":       pool.Name,
+				"read_errors":     pool.ReadErrors,
+				"write_errors":    pool.WriteErrors,
+				"checksum_errors": pool.ChecksumErrors,
+			}
+			errorReasons := filterStorageHealthReasonsByCodes(poolAssessment.Reasons, zfsPoolErrorAssessmentCodes)
+			result, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
+				SpecID:         storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name) + "-errors",
+				Signal:         "zfs-pool-errors",
+				Codes:          zfsPoolErrorAssessmentCodes,
+				Reasons:        errorReasons,
+				AlertID:        errorsAlertID,
+				AlertType:      "zfs-pool-errors",
+				SpecResourceID: storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name),
+				ResourceID:     storage.ID,
+				ResourceName:   poolResourceName,
+				ResourceType:   unifiedresources.ResourceTypeStorage,
+				Node:           storage.Node,
+				Instance:       storage.Instance,
+				Metadata:       errorMetadata,
+				MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+					return fmt.Sprintf(
+						"ZFS pool '%s' has errors: %d read, %d write, %d checksum",
+						pool.Name, pool.ReadErrors, pool.WriteErrors, pool.ChecksumErrors,
+					), float64(totalErrors), 0
 				},
+			})
+			if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+				log.Error().
+					Str("pool", pool.Name).
+					Int64("read_errors", pool.ReadErrors).
+					Int64("write_errors", pool.WriteErrors).
+					Int64("checksum_errors", pool.ChecksumErrors).
+					Str("node", storage.Node).
+					Msg("ZFS pool has I/O errors")
 			}
-
-			if exists {
-				// Preserve original start time when updating
-				alert.StartTime = existingAlert.StartTime
-			}
-
-			m.preserveAlertState(errorsAlertID, alert)
-
-			m.activeAlerts[errorsAlertID] = alert
-			m.recentAlerts[errorsAlertID] = alert
-			m.historyManager.AddAlert(*alert)
-
-			m.dispatchAlert(alert, false)
-
-			log.Error().
-				Str("pool", pool.Name).
-				Int64("read_errors", pool.ReadErrors).
-				Int64("write_errors", pool.WriteErrors).
-				Int64("checksum_errors", pool.ChecksumErrors).
-				Str("node", storage.Node).
-				Msg("ZFS pool has I/O errors")
 		}
-		m.mu.Unlock()
 	} else {
 		m.clearAlert(errorsAlertID)
 	}

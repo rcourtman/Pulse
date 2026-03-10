@@ -10852,6 +10852,12 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		if alert.Value != 8 { // 5 + 2 + 1
 			t.Errorf("expected value 8, got %f", alert.Value)
 		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+			t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != "local-zfs/zfs-pool:rpool-errors" {
+			t.Fatalf("canonicalSpecID = %v, want local-zfs/zfs-pool:rpool-errors", got)
+		}
 	})
 
 	t.Run("pool error count increase updates alert", func(t *testing.T) {
@@ -10895,6 +10901,57 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		// Start time should be preserved
 		if !alert.StartTime.Equal(oldTime) {
 			t.Error("expected StartTime to be preserved on update")
+		}
+	})
+
+	t.Run("pool error count decrease does not overwrite existing alert", func(t *testing.T) {
+		m := newTestManager(t)
+
+		oldTime := time.Now().Add(-1 * time.Hour)
+		m.mu.Lock()
+		m.activeAlerts["zfs-pool-errors-local-zfs"] = &Alert{
+			ID:        "zfs-pool-errors-local-zfs",
+			Type:      "zfs-pool-errors",
+			Level:     AlertLevelWarning,
+			Value:     10,
+			StartTime: oldTime,
+			LastSeen:  oldTime,
+			Metadata: map[string]interface{}{
+				"pool_name":       "rpool",
+				"read_errors":     int64(10),
+				"write_errors":    int64(0),
+				"checksum_errors": int64(0),
+			},
+		}
+		m.mu.Unlock()
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "Local ZFS",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:           "rpool",
+				State:          "ONLINE",
+				ReadErrors:     5,
+				WriteErrors:    0,
+				ChecksumErrors: 0,
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected errors alert to exist")
+		}
+		if alert.Value != 10 {
+			t.Fatalf("expected existing higher value to be preserved, got %f", alert.Value)
+		}
+		if !alert.StartTime.Equal(oldTime) {
+			t.Error("expected StartTime to remain unchanged")
 		}
 	})
 
