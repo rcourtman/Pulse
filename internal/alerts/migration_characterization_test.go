@@ -558,3 +558,45 @@ func TestAlertCharacterizationManualClearRemovesCanonicalTrackingState(t *testin
 		t.Fatalf("expected manual clear to remove canonical tracking entries, got recent=%t suppressed=%t rate=%t", recentExists, suppressedExists, rateExists)
 	}
 }
+
+func TestAlertCharacterizationResolvedCallbackUsesPublicIDForCanonicalAliasClear(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	alertID := resourceID + "-cpu"
+	canonicalState := buildCanonicalStateID(resourceID, alertID)
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	resolved := make(chan string, 1)
+	m.SetResolvedCallback(func(id string) {
+		select {
+		case resolved <- id:
+		default:
+		}
+	})
+
+	alert := &Alert{
+		ID:              alertID,
+		Type:            "cpu",
+		ResourceID:      resourceID,
+		ResourceName:    "app01",
+		CanonicalSpecID: alertID,
+		CanonicalKind:   "metric_threshold",
+		CanonicalState:  canonicalState,
+		StartTime:       time.Now().Add(-time.Minute),
+		LastSeen:        time.Now(),
+	}
+
+	m.mu.Lock()
+	m.setActiveAlertNoLock(canonicalState, alert)
+	m.mu.Unlock()
+
+	m.clearAlert(canonicalState)
+
+	select {
+	case got := <-resolved:
+		if got != alertID {
+			t.Fatalf("resolved callback = %q, want %q", got, alertID)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("expected resolved callback for %q", alertID)
+	}
+}

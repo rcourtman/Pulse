@@ -5739,6 +5739,28 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 		}
 	})
 
+	t.Run("uses public alert ID when resolving a canonical alert object", func(t *testing.T) {
+		m := newTestManager(t)
+
+		var receivedID string
+		m.SetResolvedCallback(func(alertID string) {
+			receivedID = alertID
+		})
+
+		alert := &Alert{
+			ID:              "guest-powered-off-pve1:node1:101",
+			ResourceID:      "pve1:node1:101",
+			CanonicalSpecID: "powered-state:powered-off",
+			CanonicalState:  buildCanonicalStateID("pve1:node1:101", "powered-state:powered-off"),
+		}
+
+		m.safeCallResolvedAlertCallback(alert, alert.CanonicalState, false)
+
+		if receivedID != alert.ID {
+			t.Errorf("expected public alert ID %q, got %q", alert.ID, receivedID)
+		}
+	})
+
 	t.Run("noop when callback is nil", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)

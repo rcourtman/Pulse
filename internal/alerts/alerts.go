@@ -916,21 +916,32 @@ func (m *Manager) getEscalateCallback() func(alert *Alert, level int) {
 
 // safeCallResolvedCallback invokes onResolved with panic recovery
 func (m *Manager) safeCallResolvedCallback(alertID string, async bool) {
+	m.safeCallResolvedAlertCallback(&Alert{ID: alertID}, alertID, async)
+}
+
+// safeCallResolvedAlertCallback invokes onResolved with panic recovery while
+// preserving canonical state as the internal identity and emitting the public
+// alert ID to external callbacks for compatibility.
+func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string, async bool) {
 	callback := m.getResolvedCallback()
 	if callback == nil {
 		return
 	}
+
+	publicID := effectiveAlertID(alert, fallbackID)
+	trackingKey := canonicalTrackingKeyForAlert(alert)
 
 	callbackFunc := func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error().
 					Interface("panic", r).
-					Str("alertID", alertID).
+					Str("alertID", publicID).
+					Str("trackingKey", trackingKey).
 					Msg("Panic in onResolved callback")
 			}
 		}()
-		callback(alertID)
+		callback(publicID)
 	}
 
 	if async {
@@ -2079,7 +2090,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				Str("alertID", alertID).
 				Msg("Alert auto-resolved after configuration change")
 
-			m.safeCallResolvedCallback(alertID, true)
+			m.safeCallResolvedAlertCallback(resolvedAlert.Alert, alertID, true)
 		}
 	}
 
@@ -6450,7 +6461,7 @@ func (m *Manager) clearAlert(alertID string) {
 
 	m.addRecentlyResolvedUnlocked(publicID, resolvedAlert)
 
-	m.safeCallResolvedCallback(publicID, false)
+	m.safeCallResolvedAlertCallback(alert, publicID, false)
 
 	log.Info().
 		Str("alertID", publicID).
@@ -7019,9 +7030,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					Bool("wasAcknowledged", existingAlert.Acknowledged).
 					Msg("Alert resolved with hysteresis")
 
-				if resolvedCallback := m.getResolvedCallback(); resolvedCallback != nil {
-					go resolvedCallback(alertID)
-				}
+				m.safeCallResolvedAlertCallback(existingAlert, alertID, true)
 			}
 		}
 	}
@@ -7596,7 +7605,7 @@ func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceNam
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedCallback(alertID, true)
+	m.safeCallResolvedAlertCallback(alert, alertID, true)
 
 	// Log recovery
 	log.Info().
@@ -7678,7 +7687,7 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedCallback(alertID, true)
+	m.safeCallResolvedAlertCallback(alert, alertID, true)
 
 	// Log recovery
 	log.Info().
@@ -8805,7 +8814,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedCallback(alertID, true)
+	m.safeCallResolvedAlertCallback(alert, alertID, true)
 
 	// Log recovery
 	log.Info().
@@ -9444,6 +9453,7 @@ func (m *Manager) checkEscalations() {
 
 				log.Info().
 					Str("alertID", alert.ID).
+					Str("trackingKey", canonicalTrackingKeyForAlert(alert)).
 					Int("level", i+1).
 					Str("notify", level.Notify).
 					Msg("Alert escalated")
@@ -10279,7 +10289,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 
 	m.addRecentlyResolvedWithPrimaryLock(publicID, resolvedAlert)
 
-	m.safeCallResolvedCallback(publicID, true) // Make async to prevent deadlock
+	m.safeCallResolvedAlertCallback(alert, publicID, true) // Make async to prevent deadlock
 
 	log.Info().
 		Str("alertID", publicID).
