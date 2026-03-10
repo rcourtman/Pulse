@@ -46,6 +46,7 @@ import { InvestigateAlertButton } from '../InvestigateAlertButton';
 function makeAlert(overrides: Partial<Alert> = {}): Alert {
   return {
     id: 'alert-1',
+    legacyId: 'legacy-alert-1',
     type: 'cpu',
     level: 'warning',
     resourceId: 'vm-101',
@@ -242,6 +243,7 @@ describe('InvestigateAlertButton', () => {
         targetId: 'vm-101',
         context: {
           alertId: 'alert-1',
+          legacyAlertId: 'legacy-alert-1',
           alertType: 'cpu',
           alertLevel: 'warning',
           alertMessage: 'CPU usage is high',

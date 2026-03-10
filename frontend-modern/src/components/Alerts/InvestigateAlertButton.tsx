@@ -1,6 +1,7 @@
 import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import type { Alert } from '@/types/api';
+import { getCanonicalAlertId, getLegacyAlertId } from '@/features/alerts/identity';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 import { getUpgradeActionUrlOrFallback } from '@/stores/license';
@@ -79,7 +80,8 @@ Please:
       targetType,
       targetId: props.alert.resourceId,
       context: {
-        alertId: props.alert.id,
+        alertId: getCanonicalAlertId(props.alert),
+        legacyAlertId: getLegacyAlertId(props.alert),
         alertType: props.alert.type,
         alertLevel: props.alert.level,
         alertMessage: props.alert.message,

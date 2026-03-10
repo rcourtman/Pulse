@@ -8,6 +8,7 @@ import { AlertsAPI } from '@/api/alerts';
 import type { Alert, IncidentEvent } from '@/types/api';
 import type { Override } from './types';
 import { alertTypeDisplayLabel } from './helpers';
+import { getCanonicalAlertId } from './identity';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { notificationStore } from '@/stores/notifications';
@@ -449,7 +450,7 @@ export function OverviewTab(props: {
                     setBulkAckProcessing(true);
                     try {
                       const result = await AlertsAPI.bulkAcknowledge(
-                        pending.map((alert) => alert.id),
+                        pending.map((alert) => getCanonicalAlertId(alert)),
                       );
                       const successes = result.results.filter((r) => r.success);
                       const failures = result.results.filter((r) => !r.success);
@@ -496,9 +497,9 @@ export function OverviewTab(props: {
             <For each={filteredAlerts()}>
               {(alert) => (
                 <div
-                  id={`alert-${alert.id}`}
+                  id={`alert-${getCanonicalAlertId(alert)}`}
                   class={`border rounded-md p-3 sm:p-4 transition-all ${
-                    processingAlerts().has(alert.id) ? 'opacity-50' : ''
+                    processingAlerts().has(getCanonicalAlertId(alert)) ? 'opacity-50' : ''
                   } ${
                     alert.acknowledged
                       ? 'opacity-60 border-border bg-surface-alt'
@@ -589,15 +590,17 @@ export function OverviewTab(props: {
                             ? ' text-base-content border-border hover:bg-surface-hover'
                             : ' text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
                         }`}
-                        disabled={processingAlerts().has(alert.id)}
+                        disabled={processingAlerts().has(getCanonicalAlertId(alert))}
                         onClick={async (e) => {
                           e.preventDefault();
                           e.stopPropagation();
 
-                          // Prevent double-clicks
-                          if (processingAlerts().has(alert.id)) return;
+                          const alertId = getCanonicalAlertId(alert);
 
-                          setProcessingAlerts((prev) => new Set(prev).add(alert.id));
+                          // Prevent double-clicks
+                          if (processingAlerts().has(alertId)) return;
+
+                          setProcessingAlerts((prev) => new Set(prev).add(alertId));
 
                           // Store current state to avoid race conditions
                           const wasAcknowledged = alert.acknowledged;
@@ -605,9 +608,9 @@ export function OverviewTab(props: {
                           try {
                             if (wasAcknowledged) {
                               // Call API first, only update local state if successful
-                              await AlertsAPI.unacknowledge(alert.id);
+                              await AlertsAPI.unacknowledge(alertId);
                               // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
+                              props.updateAlert(alertId, {
                                 acknowledged: false,
                                 ackTime: undefined,
                                 ackUser: undefined,
@@ -615,9 +618,9 @@ export function OverviewTab(props: {
                               notificationStore.success('Alert restored');
                             } else {
                               // Call API first, only update local state if successful
-                              await AlertsAPI.acknowledge(alert.id);
+                              await AlertsAPI.acknowledge(alertId);
                               // Only update local state after successful API call
-                              props.updateAlert(alert.id, {
+                              props.updateAlert(alertId, {
                                 acknowledged: true,
                                 ackTime: new Date().toISOString(),
                               });
@@ -634,20 +637,20 @@ export function OverviewTab(props: {
                             // Don't update local state on error - let WebSocket keep the correct state
                           } finally {
                             // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            clearProcessingReleaseTimer(alert.id);
+                            clearProcessingReleaseTimer(alertId);
                             const timer = setTimeout(() => {
-                              processingReleaseTimers.delete(alert.id);
+                              processingReleaseTimers.delete(alertId);
                               setProcessingAlerts((prev) => {
                                 const next = new Set(prev);
-                                next.delete(alert.id);
+                                next.delete(alertId);
                                 return next;
                               });
                             }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                            processingReleaseTimers.set(alert.id, timer);
+                            processingReleaseTimers.set(alertId, timer);
                           }
                         }}
                       >
-                        {processingAlerts().has(alert.id)
+                        {processingAlerts().has(getCanonicalAlertId(alert))
                           ? 'Processing...'
                           : alert.acknowledged
                             ? 'Unacknowledge'
@@ -656,10 +659,12 @@ export function OverviewTab(props: {
                       <button
                         class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover"
                         onClick={() => {
-                          void toggleIncidentTimeline(alert.id, alert.startTime);
+                          void toggleIncidentTimeline(getCanonicalAlertId(alert), alert.startTime);
                         }}
                       >
-                        {expandedIncidents().has(alert.id) ? 'Hide Timeline' : 'Timeline'}
+                        {expandedIncidents().has(getCanonicalAlertId(alert))
+                          ? 'Hide Timeline'
+                          : 'Timeline'}
                       </button>
                       <InvestigateAlertButton
                         alert={alert}
@@ -674,13 +679,13 @@ export function OverviewTab(props: {
                       />
                     </div>
                   </div>
-                  <Show when={expandedIncidents().has(alert.id)}>
+                  <Show when={expandedIncidents().has(getCanonicalAlertId(alert))}>
                     <div class="mt-3 border-t border-border pt-3">
-                      <Show when={incidentLoading()[alert.id]}>
+                      <Show when={incidentLoading()[getCanonicalAlertId(alert)]}>
                         <p class="text-xs text-muted">{getAlertTimelineLoadingState().text}</p>
                       </Show>
-                      <Show when={!incidentLoading()[alert.id]}>
-                        <Show when={incidentTimelines()[alert.id]}>
+                      <Show when={!incidentLoading()[getCanonicalAlertId(alert)]}>
+                        <Show when={incidentTimelines()[getCanonicalAlertId(alert)]}>
                           {(timeline) => (
                             <div class="space-y-3">
                               <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -787,12 +792,12 @@ export function OverviewTab(props: {
                                   class="w-full rounded border border-border bg-surface p-2 text-xs text-base-content"
                                   rows={2}
                                   placeholder={getAlertResourceIncidentNotePlaceholder()}
-                                  value={incidentNoteDrafts()[alert.id] || ''}
+                                  value={incidentNoteDrafts()[getCanonicalAlertId(alert)] || ''}
                                   onInput={(e) => {
                                     const value = e.currentTarget.value;
                                     setIncidentNoteDrafts((prev) => ({
                                       ...prev,
-                                      [alert.id]: value,
+                                      [getCanonicalAlertId(alert)]: value,
                                     }));
                                   }}
                                 />
@@ -800,15 +805,20 @@ export function OverviewTab(props: {
                                   <button
                                     class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={
-                                      incidentNoteSaving().has(alert.id) ||
-                                      !(incidentNoteDrafts()[alert.id] || '').trim()
+                                      incidentNoteSaving().has(getCanonicalAlertId(alert)) ||
+                                      !(
+                                        incidentNoteDrafts()[getCanonicalAlertId(alert)] || ''
+                                      ).trim()
                                     }
                                     onClick={() => {
-                                      void saveIncidentNote(alert.id, alert.startTime);
+                                      void saveIncidentNote(
+                                        getCanonicalAlertId(alert),
+                                        alert.startTime,
+                                      );
                                     }}
                                   >
                                     {getAlertResourceIncidentSaveNoteLabel(
-                                      incidentNoteSaving().has(alert.id),
+                                      incidentNoteSaving().has(getCanonicalAlertId(alert)),
                                     )}
                                   </button>
                                 </div>
@@ -816,9 +826,9 @@ export function OverviewTab(props: {
                             </div>
                           )}
                         </Show>
-                        <Show when={!incidentTimelines()[alert.id]}>
+                        <Show when={!incidentTimelines()[getCanonicalAlertId(alert)]}>
                           <Show
-                            when={incidentErrors()[alert.id]}
+                            when={incidentErrors()[getCanonicalAlertId(alert)]}
                             fallback={
                               <p class="text-xs text-muted">
                                 {getAlertTimelineUnavailableState().text}
@@ -831,7 +841,9 @@ export function OverviewTab(props: {
                               </p>
                               <button
                                 class="text-xs text-primary hover:underline"
-                                onClick={() => loadIncidentTimeline(alert.id, alert.startTime)}
+                                onClick={() =>
+                                  loadIncidentTimeline(getCanonicalAlertId(alert), alert.startTime)
+                                }
                               >
                                 {getAlertTimelineFailureState().actionLabel}
                               </button>
