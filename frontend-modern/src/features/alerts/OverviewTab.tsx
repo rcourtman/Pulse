@@ -12,6 +12,20 @@ import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import {
+  ALERTS_EMPTY_STATE,
+  ALERTS_THRESHOLD_HINT,
+  getAlertListEmptyState,
+  getAlertTimelineEmptyState,
+  getAlertTimelineFailureState,
+  getAlertTimelineFilterEmptyState,
+  getAlertTimelineLoadingState,
+  getAlertTimelineUnavailableState,
+} from '@/utils/alertOverviewPresentation';
+import {
+  getAlertResourceIncidentNotePlaceholder,
+  getAlertResourceIncidentSaveNoteLabel,
+} from '@/utils/alertIncidentPresentation';
 
 const INCIDENT_EVENT_TYPES = [
   'alert_fired',
@@ -405,8 +419,8 @@ export function OverviewTab(props: {
                     />
                   </svg>
                 </div>
-                <p class="text-sm">No active alerts</p>
-                <p class="text-xs mt-1">Alerts will appear here when thresholds are exceeded</p>
+                <p class="text-sm">{ALERTS_EMPTY_STATE}</p>
+                <p class="text-xs mt-1">{ALERTS_THRESHOLD_HINT}</p>
               </Show>
             </div>
           }
@@ -476,7 +490,7 @@ export function OverviewTab(props: {
           <div class="space-y-2">
             <Show when={filteredAlerts().length === 0}>
               <div class="text-center py-8 text-muted">
-                {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
+                {getAlertListEmptyState(props.showAcknowledged())}
               </div>
             </Show>
             <For each={filteredAlerts()}>
@@ -663,7 +677,7 @@ export function OverviewTab(props: {
                   <Show when={expandedIncidents().has(alert.id)}>
                     <div class="mt-3 border-t border-border pt-3">
                       <Show when={incidentLoading()[alert.id]}>
-                        <p class="text-xs text-muted">Loading timeline...</p>
+                        <p class="text-xs text-muted">{getAlertTimelineLoadingState().text}</p>
                       </Show>
                       <Show when={!incidentLoading()[alert.id]}>
                         <Show when={incidentTimelines()[alert.id]}>
@@ -757,11 +771,13 @@ export function OverviewTab(props: {
                                     </Show>
                                     <Show when={events.length > 0 && filteredEvents.length === 0}>
                                       <p class="text-xs text-muted">
-                                        No timeline events match the selected filters.
+                                        {getAlertTimelineFilterEmptyState().text}
                                       </p>
                                     </Show>
                                     <Show when={events.length === 0}>
-                                      <p class="text-xs text-muted">No timeline events yet.</p>
+                                      <p class="text-xs text-muted">
+                                        {getAlertTimelineEmptyState().text}
+                                      </p>
                                     </Show>
                                   </>
                                 );
@@ -770,7 +786,7 @@ export function OverviewTab(props: {
                                 <textarea
                                   class="w-full rounded border border-border bg-surface p-2 text-xs text-base-content"
                                   rows={2}
-                                  placeholder="Add a note for this incident..."
+                                  placeholder={getAlertResourceIncidentNotePlaceholder()}
                                   value={incidentNoteDrafts()[alert.id] || ''}
                                   onInput={(e) => {
                                     const value = e.currentTarget.value;
@@ -791,7 +807,9 @@ export function OverviewTab(props: {
                                       void saveIncidentNote(alert.id, alert.startTime);
                                     }}
                                   >
-                                    {incidentNoteSaving().has(alert.id) ? 'Saving...' : 'Save Note'}
+                                    {getAlertResourceIncidentSaveNoteLabel(
+                                      incidentNoteSaving().has(alert.id),
+                                    )}
                                   </button>
                                 </div>
                               </div>
@@ -802,16 +820,20 @@ export function OverviewTab(props: {
                           <Show
                             when={incidentErrors()[alert.id]}
                             fallback={
-                              <p class="text-xs text-muted">No incident timeline available.</p>
+                              <p class="text-xs text-muted">
+                                {getAlertTimelineUnavailableState().text}
+                              </p>
                             }
                           >
                             <div class="flex items-center gap-2">
-                              <p class="text-xs text-error">Failed to load timeline.</p>
+                              <p class="text-xs text-error">
+                                {getAlertTimelineFailureState().text}
+                              </p>
                               <button
                                 class="text-xs text-primary hover:underline"
                                 onClick={() => loadIncidentTimeline(alert.id, alert.startTime)}
                               >
-                                Retry
+                                {getAlertTimelineFailureState().actionLabel}
                               </button>
                             </div>
                           </Show>
