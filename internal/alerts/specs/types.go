@@ -16,6 +16,7 @@ const (
 	AlertSpecKindMetricThreshold        AlertSpecKind = "metric-threshold"
 	AlertSpecKindSeverityThreshold      AlertSpecKind = "severity-threshold"
 	AlertSpecKindChangeThreshold        AlertSpecKind = "change-threshold"
+	AlertSpecKindBaselineAnomaly        AlertSpecKind = "baseline-anomaly"
 	AlertSpecKindConnectivity           AlertSpecKind = "connectivity"
 	AlertSpecKindPoweredState           AlertSpecKind = "powered-state"
 	AlertSpecKindProviderIncident       AlertSpecKind = "provider-incident"
@@ -29,6 +30,7 @@ func (k AlertSpecKind) valid() bool {
 	case AlertSpecKindMetricThreshold,
 		AlertSpecKindSeverityThreshold,
 		AlertSpecKindChangeThreshold,
+		AlertSpecKindBaselineAnomaly,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -128,6 +130,7 @@ type ResourceAlertSpec struct {
 	MetricThreshold        *MetricThresholdSpec        `json:"metricThreshold,omitempty"`
 	SeverityThreshold      *SeverityThresholdSpec      `json:"severityThreshold,omitempty"`
 	ChangeThreshold        *ChangeThresholdSpec        `json:"changeThreshold,omitempty"`
+	BaselineAnomaly        *BaselineAnomalySpec        `json:"baselineAnomaly,omitempty"`
 	Connectivity           *ConnectivitySpec           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateSpec           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentSpec       `json:"providerIncident,omitempty"`
@@ -164,6 +167,9 @@ func (s ResourceAlertSpec) Validate() error {
 		payloads++
 	}
 	if s.ChangeThreshold != nil {
+		payloads++
+	}
+	if s.BaselineAnomaly != nil {
 		payloads++
 	}
 	if s.Connectivity != nil {
@@ -204,6 +210,11 @@ func (s ResourceAlertSpec) Validate() error {
 			return fmt.Errorf("change threshold payload is required")
 		}
 		return s.ChangeThreshold.Validate()
+	case AlertSpecKindBaselineAnomaly:
+		if s.BaselineAnomaly == nil {
+			return fmt.Errorf("baseline anomaly payload is required")
+		}
+		return s.BaselineAnomaly.Validate()
 	case AlertSpecKindConnectivity:
 		if s.Connectivity == nil {
 			return fmt.Errorf("connectivity payload is required")
@@ -359,6 +370,45 @@ func (s ChangeThresholdSpec) Validate() error {
 	return nil
 }
 
+type BaselineAnomalySpec struct {
+	Metric             string  `json:"metric"`
+	QuietBaseline      float64 `json:"quietBaseline,omitempty"`
+	WarningRatio       float64 `json:"warningRatio,omitempty"`
+	CriticalRatio      float64 `json:"criticalRatio,omitempty"`
+	WarningDelta       float64 `json:"warningDelta,omitempty"`
+	CriticalDelta      float64 `json:"criticalDelta,omitempty"`
+	QuietWarningDelta  float64 `json:"quietWarningDelta,omitempty"`
+	QuietCriticalDelta float64 `json:"quietCriticalDelta,omitempty"`
+}
+
+func (s BaselineAnomalySpec) Validate() error {
+	if strings.TrimSpace(s.Metric) == "" {
+		return fmt.Errorf("metric is required")
+	}
+	if !isFinite(s.QuietBaseline) || !isFinite(s.WarningRatio) || !isFinite(s.CriticalRatio) || !isFinite(s.WarningDelta) || !isFinite(s.CriticalDelta) || !isFinite(s.QuietWarningDelta) || !isFinite(s.QuietCriticalDelta) {
+		return fmt.Errorf("thresholds must be finite")
+	}
+	if s.QuietBaseline < 0 {
+		return fmt.Errorf("quiet baseline must not be negative")
+	}
+	if s.WarningRatio < 0 || s.CriticalRatio < 0 {
+		return fmt.Errorf("ratios must not be negative")
+	}
+	if s.WarningDelta <= 0 || s.CriticalDelta <= 0 || s.QuietWarningDelta <= 0 || s.QuietCriticalDelta <= 0 {
+		return fmt.Errorf("delta thresholds must be positive")
+	}
+	if s.WarningRatio > 0 && s.CriticalRatio > 0 && s.CriticalRatio < s.WarningRatio {
+		return fmt.Errorf("critical ratio must be greater than or equal to warning ratio")
+	}
+	if s.CriticalDelta < s.WarningDelta {
+		return fmt.Errorf("critical delta must be greater than or equal to warning delta")
+	}
+	if s.QuietCriticalDelta < s.QuietWarningDelta {
+		return fmt.Errorf("quiet critical delta must be greater than or equal to quiet warning delta")
+	}
+	return nil
+}
+
 type ConnectivitySpec struct {
 	Signal     string        `json:"signal"`
 	LostAfter  time.Duration `json:"lostAfter"`
@@ -480,6 +530,7 @@ type AlertEvidence struct {
 	MetricThreshold        *MetricThresholdEvidence        `json:"metricThreshold,omitempty"`
 	SeverityThreshold      *SeverityThresholdEvidence      `json:"severityThreshold,omitempty"`
 	ChangeThreshold        *ChangeThresholdEvidence        `json:"changeThreshold,omitempty"`
+	BaselineAnomaly        *BaselineAnomalyEvidence        `json:"baselineAnomaly,omitempty"`
 	Connectivity           *ConnectivityEvidence           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateEvidence           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentEvidence       `json:"providerIncident,omitempty"`
@@ -501,6 +552,9 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 		payloads++
 	}
 	if e.ChangeThreshold != nil {
+		payloads++
+	}
+	if e.BaselineAnomaly != nil {
 		payloads++
 	}
 	if e.Connectivity != nil {
@@ -541,6 +595,11 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 			return fmt.Errorf("change threshold evidence is required")
 		}
 		return e.ChangeThreshold.Validate()
+	case AlertSpecKindBaselineAnomaly:
+		if e.BaselineAnomaly == nil {
+			return fmt.Errorf("baseline anomaly evidence is required")
+		}
+		return e.BaselineAnomaly.Validate()
 	case AlertSpecKindConnectivity:
 		if e.Connectivity == nil {
 			return fmt.Errorf("connectivity evidence is required")
@@ -622,6 +681,25 @@ func (e ChangeThresholdEvidence) Validate() error {
 	}
 	if e.PreviousObserved != nil && !isFinite(*e.PreviousObserved) {
 		return fmt.Errorf("previous observed must be finite")
+	}
+	return nil
+}
+
+type BaselineAnomalyEvidence struct {
+	Metric   string  `json:"metric"`
+	Observed float64 `json:"observed"`
+	Baseline float64 `json:"baseline"`
+}
+
+func (e BaselineAnomalyEvidence) Validate() error {
+	if strings.TrimSpace(e.Metric) == "" {
+		return fmt.Errorf("metric is required")
+	}
+	if !isFinite(e.Observed) || !isFinite(e.Baseline) {
+		return fmt.Errorf("observed and baseline must be finite")
+	}
+	if e.Baseline < 0 {
+		return fmt.Errorf("baseline must not be negative")
 	}
 	return nil
 }

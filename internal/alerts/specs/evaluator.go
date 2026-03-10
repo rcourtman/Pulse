@@ -81,6 +81,7 @@ func Evaluate(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvi
 		return evaluateMetricThreshold(spec, previous, evidence, now, fingerprint), nil
 	case AlertSpecKindSeverityThreshold,
 		AlertSpecKindChangeThreshold,
+		AlertSpecKindBaselineAnomaly,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -332,6 +333,11 @@ func matches(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverit
 			return false, "", ""
 		}
 		return matchesChangeThreshold(*spec.ChangeThreshold, *evidence.ChangeThreshold)
+	case AlertSpecKindBaselineAnomaly:
+		if evidence.BaselineAnomaly == nil || spec.BaselineAnomaly == nil {
+			return false, "", ""
+		}
+		return matchesBaselineAnomaly(*spec.BaselineAnomaly, *evidence.BaselineAnomaly)
 	case AlertSpecKindConnectivity:
 		return evidence.Connectivity != nil && !evidence.Connectivity.Connected, spec.Severity, "connectivity-lost"
 	case AlertSpecKindPoweredState:
@@ -448,6 +454,44 @@ func matchesChangeThreshold(spec ChangeThresholdSpec, evidence ChangeThresholdEv
 	}
 
 	return false, "", "change-threshold-normal"
+}
+
+func matchesBaselineAnomaly(spec BaselineAnomalySpec, evidence BaselineAnomalyEvidence) (bool, AlertSeverity, string) {
+	if evidence.Metric != spec.Metric {
+		return false, "", ""
+	}
+
+	baseline := evidence.Baseline
+	if baseline == 0 && evidence.Observed > 0 {
+		baseline = 1
+	}
+
+	if baseline < spec.QuietBaseline {
+		delta := evidence.Observed - baseline
+		switch {
+		case delta >= spec.QuietCriticalDelta:
+			return true, AlertSeverityCritical, "baseline-anomaly-quiet-critical"
+		case delta >= spec.QuietWarningDelta:
+			return true, AlertSeverityWarning, "baseline-anomaly-quiet-warning"
+		default:
+			return false, "", "baseline-anomaly-normal"
+		}
+	}
+
+	if baseline <= 0 {
+		return false, "", "baseline-anomaly-normal"
+	}
+
+	ratio := evidence.Observed / baseline
+	delta := evidence.Observed - baseline
+	switch {
+	case spec.CriticalRatio > 0 && ratio >= spec.CriticalRatio && delta >= spec.CriticalDelta:
+		return true, AlertSeverityCritical, "baseline-anomaly-critical"
+	case spec.WarningRatio > 0 && ratio >= spec.WarningRatio && delta >= spec.WarningDelta:
+		return true, AlertSeverityWarning, "baseline-anomaly-warning"
+	default:
+		return false, "", "baseline-anomaly-normal"
+	}
 }
 
 func metricTriggered(spec *MetricThresholdSpec, observed float64) bool {

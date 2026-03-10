@@ -30,6 +30,8 @@ type canonicalLifecycleAlertParams struct {
 type canonicalStatefulAlertParams struct {
 	Spec                         alertspecs.ResourceAlertSpec
 	Evidence                     alertspecs.AlertEvidence
+	PendingTracking              map[string]time.Time
+	PendingKey                   string
 	AlertID                      string
 	AlertType                    string
 	ResourceID                   string
@@ -171,6 +173,31 @@ func buildCanonicalChangeThresholdSpec(specID, resourceID, title string, resourc
 	return spec, spec.Validate()
 }
 
+func buildCanonicalBaselineAnomalySpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, confirmations int, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	spec := alertspecs.ResourceAlertSpec{
+		ID:                    specID,
+		ResourceID:            resourceID,
+		ResourceType:          resourceType,
+		Kind:                  alertspecs.AlertSpecKindBaselineAnomaly,
+		Severity:              alertspecs.AlertSeverityWarning,
+		Title:                 title,
+		Disabled:              disabled,
+		ConfirmationsRequired: confirmations,
+		BaselineAnomaly: &alertspecs.BaselineAnomalySpec{
+			Metric:             metric,
+			QuietBaseline:      40,
+			WarningRatio:       1.8,
+			CriticalRatio:      2.5,
+			WarningDelta:       150,
+			CriticalDelta:      300,
+			QuietWarningDelta:  60,
+			QuietCriticalDelta: 120,
+		},
+	}
+
+	return spec, spec.Validate()
+}
+
 func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	switch level {
 	case AlertLevelCritical:
@@ -203,6 +230,34 @@ func lifecyclePreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, 
 			Severity:           spec.Severity,
 			ConsecutiveMatches: confirmations,
 			FirstMatchedAt:     observedAt,
+		}
+	}
+	return alertspecs.EvaluatorState{
+		SpecID: spec.ID,
+		State:  alertspecs.AlertStateClear,
+	}
+}
+
+func statefulPreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, pendingSince time.Time) alertspecs.EvaluatorState {
+	if existing != nil {
+		return alertspecs.EvaluatorState{
+			SpecID:         spec.ID,
+			State:          alertspecs.AlertStateFiring,
+			Severity:       canonicalAlertSeverity(existing.Level),
+			Reason:         "",
+			ActiveSince:    existing.StartTime,
+			FirstMatchedAt: existing.StartTime,
+			LastObservedAt: existing.LastSeen,
+		}
+	}
+	if !pendingSince.IsZero() {
+		return alertspecs.EvaluatorState{
+			SpecID:             spec.ID,
+			State:              alertspecs.AlertStatePending,
+			Severity:           spec.Severity,
+			ConsecutiveMatches: 1,
+			FirstMatchedAt:     pendingSince,
+			LastObservedAt:     pendingSince,
 		}
 	}
 	return alertspecs.EvaluatorState{
@@ -330,7 +385,12 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		existing = current
 	}
 
-	result, err := alertspecs.Evaluate(params.Spec, lifecyclePreviousState(params.Spec, existing, 0, params.Evidence.ObservedAt), params.Evidence)
+	var pendingSince time.Time
+	if params.PendingTracking != nil {
+		pendingSince = params.PendingTracking[params.PendingKey]
+	}
+
+	result, err := alertspecs.Evaluate(params.Spec, statefulPreviousState(params.Spec, existing, pendingSince), params.Evidence)
 	if err != nil {
 		log.Warn().
 			Err(err).
@@ -341,7 +401,20 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		return alertspecs.EvaluationResult{}, false
 	}
 
+	if params.PendingTracking != nil {
+		switch result.State.State {
+		case alertspecs.AlertStatePending:
+			if pendingSince.IsZero() {
+				params.PendingTracking[params.PendingKey] = params.Evidence.ObservedAt
+			}
+		default:
+			delete(params.PendingTracking, params.PendingKey)
+		}
+	}
+
 	switch result.State.State {
+	case alertspecs.AlertStatePending:
+		return result, true
 	case alertspecs.AlertStateFiring:
 		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
 		if !ok {

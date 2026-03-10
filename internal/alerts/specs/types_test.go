@@ -67,6 +67,26 @@ func TestResourceAlertSpecValidateAcceptsSupportedKinds(t *testing.T) {
 			},
 		},
 		{
+			name: "baseline anomaly",
+			spec: ResourceAlertSpec{
+				ID:           "pmg-01-anomaly-spamIn",
+				ResourceID:   "pmg-01",
+				ResourceType: unifiedresources.ResourceTypePMG,
+				Kind:         AlertSpecKindBaselineAnomaly,
+				Severity:     AlertSeverityWarning,
+				BaselineAnomaly: &BaselineAnomalySpec{
+					Metric:             "spamIn",
+					QuietBaseline:      40,
+					WarningRatio:       1.8,
+					CriticalRatio:      2.5,
+					WarningDelta:       150,
+					CriticalDelta:      300,
+					QuietWarningDelta:  60,
+					QuietCriticalDelta: 120,
+				},
+			},
+		},
+		{
 			name: "connectivity",
 			spec: ResourceAlertSpec{
 				ID:           "agent-01-heartbeat-lost",
@@ -327,6 +347,29 @@ func TestChangeThresholdSpecValidateRejectsPercentWithoutDelta(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	if !strings.Contains(err.Error(), "warning delta is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBaselineAnomalySpecValidateRejectsInvertedQuietDelta(t *testing.T) {
+	t.Parallel()
+
+	spec := BaselineAnomalySpec{
+		Metric:             "spamIn",
+		QuietBaseline:      40,
+		WarningRatio:       1.8,
+		CriticalRatio:      2.5,
+		WarningDelta:       150,
+		CriticalDelta:      300,
+		QuietWarningDelta:  80,
+		QuietCriticalDelta: 60,
+	}
+
+	err := spec.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "quiet critical delta must be greater than or equal to quiet warning delta") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

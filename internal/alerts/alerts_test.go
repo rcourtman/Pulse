@@ -16195,6 +16195,155 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 	})
 }
 
+func TestCheckPMGAnomalies(t *testing.T) {
+	buildTracker := func(start time.Time, samples int, spamIn float64) *pmgAnomalyTracker {
+		tracker := &pmgAnomalyTracker{
+			Samples:        make([]pmgMailMetricSample, 0, samples),
+			LastSampleTime: start.Add(time.Duration(samples-1) * time.Hour),
+			SampleCount:    samples,
+		}
+		for i := 0; i < samples; i++ {
+			tracker.Samples = append(tracker.Samples, pmgMailMetricSample{
+				SpamIn:    spamIn,
+				SpamOut:   10,
+				VirusIn:   1,
+				VirusOut:  1,
+				Timestamp: start.Add(time.Duration(i) * time.Hour),
+			})
+		}
+		return tracker
+	}
+
+	t.Run("requires second anomalous sample before alerting", func(t *testing.T) {
+		m := newTestManager(t)
+		base := time.Now().Add(-13 * time.Hour)
+
+		m.mu.Lock()
+		m.pmgAnomalyTrackers["pmg1"] = buildTracker(base, 12, 100)
+		m.mu.Unlock()
+
+		first := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			MailCount: []models.PMGMailCountPoint{
+				{Timestamp: base.Add(12 * time.Hour), SpamIn: 420},
+			},
+		}
+		m.checkPMGAnomalies(first, PMGThresholdConfig{})
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Fatal("expected no anomaly alert on first anomalous sample")
+		}
+		if !pendingExists {
+			t.Fatal("expected pending anomaly confirmation after first anomalous sample")
+		}
+
+		second := models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			MailCount: []models.PMGMailCountPoint{
+				{Timestamp: base.Add(13 * time.Hour), SpamIn: 430},
+			},
+		}
+		m.checkPMGAnomalies(second, PMGThresholdConfig{})
+
+		m.mu.RLock()
+		alert := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, pendingExists = m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected anomaly alert after second anomalous sample")
+		}
+		if alert.Level != AlertLevelCritical {
+			t.Fatalf("expected critical anomaly alert, got %s", alert.Level)
+		}
+		if pendingExists {
+			t.Fatal("expected pending anomaly confirmation to be cleared after alert activation")
+		}
+	})
+
+	t.Run("normal sample clears pending confirmation", func(t *testing.T) {
+		m := newTestManager(t)
+		base := time.Now().Add(-13 * time.Hour)
+
+		m.mu.Lock()
+		m.pmgAnomalyTrackers["pmg1"] = buildTracker(base, 12, 100)
+		m.mu.Unlock()
+
+		m.checkPMGAnomalies(models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			MailCount: []models.PMGMailCountPoint{
+				{Timestamp: base.Add(12 * time.Hour), SpamIn: 420},
+			},
+		}, PMGThresholdConfig{})
+
+		m.checkPMGAnomalies(models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			MailCount: []models.PMGMailCountPoint{
+				{Timestamp: base.Add(13 * time.Hour), SpamIn: 100},
+			},
+		}, PMGThresholdConfig{})
+
+		m.mu.RLock()
+		_, alertExists := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		m.mu.RUnlock()
+
+		if alertExists {
+			t.Fatal("expected no anomaly alert after a normal second sample")
+		}
+		if pendingExists {
+			t.Fatal("expected pending anomaly confirmation to be cleared by a normal sample")
+		}
+	})
+
+	t.Run("data gap resets anomaly warmup history", func(t *testing.T) {
+		m := newTestManager(t)
+		base := time.Now().Add(-16 * time.Hour)
+
+		m.mu.Lock()
+		m.pmgAnomalyTrackers["pmg1"] = buildTracker(base, 12, 100)
+		m.mu.Unlock()
+
+		m.checkPMGAnomalies(models.PMGInstance{
+			ID:   "pmg1",
+			Name: "pmg-server",
+			Host: "pmg.example.com",
+			MailCount: []models.PMGMailCountPoint{
+				{Timestamp: base.Add(15 * time.Hour), SpamIn: 420},
+			},
+		}, PMGThresholdConfig{})
+
+		m.mu.RLock()
+		tracker := m.pmgAnomalyTrackers["pmg1"]
+		_, alertExists := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
+		m.mu.RUnlock()
+
+		if tracker == nil || len(tracker.Samples) != 1 {
+			t.Fatalf("expected anomaly tracker history to reset to one sample after data gap, got %+v", tracker)
+		}
+		if alertExists {
+			t.Fatal("expected no anomaly alert after data gap reset")
+		}
+		if pendingExists {
+			t.Fatal("expected no pending anomaly confirmation after data gap reset")
+		}
+	})
+}
+
 func TestLoadActiveAlerts(t *testing.T) {
 	t.Run("no file returns nil error", func(t *testing.T) {
 		m := newTestManager(t)

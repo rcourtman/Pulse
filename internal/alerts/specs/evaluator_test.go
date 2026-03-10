@@ -236,6 +236,62 @@ func TestEvaluateChangeThresholdAbsoluteAndGrowth(t *testing.T) {
 	}
 }
 
+func TestEvaluateBaselineAnomalyNormalAndQuietSite(t *testing.T) {
+	spec := ResourceAlertSpec{
+		ID:           "pmg-anomaly-spamIn",
+		ResourceID:   "pmg-1",
+		ResourceType: unifiedresources.ResourceTypePMG,
+		Kind:         AlertSpecKindBaselineAnomaly,
+		Severity:     AlertSeverityWarning,
+		BaselineAnomaly: &BaselineAnomalySpec{
+			Metric:             "spamIn",
+			QuietBaseline:      40,
+			WarningRatio:       1.8,
+			CriticalRatio:      2.5,
+			WarningDelta:       150,
+			CriticalDelta:      300,
+			QuietWarningDelta:  60,
+			QuietCriticalDelta: 120,
+		},
+	}
+
+	normal, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 10, 10, 0, 0, time.UTC),
+		BaselineAnomaly: &BaselineAnomalyEvidence{
+			Metric:   "spamIn",
+			Observed: 420,
+			Baseline: 100,
+		},
+	})
+	if err != nil {
+		t.Fatalf("normal evaluation failed: %v", err)
+	}
+	if normal.State.State != AlertStateFiring || normal.State.Severity != AlertSeverityCritical {
+		t.Fatalf("normal state = %+v, want firing critical", normal.State)
+	}
+	if normal.State.Reason != "baseline-anomaly-critical" {
+		t.Fatalf("normal reason = %q, want baseline-anomaly-critical", normal.State.Reason)
+	}
+
+	quiet, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 10, 11, 0, 0, time.UTC),
+		BaselineAnomaly: &BaselineAnomalyEvidence{
+			Metric:   "spamIn",
+			Observed: 140,
+			Baseline: 10,
+		},
+	})
+	if err != nil {
+		t.Fatalf("quiet evaluation failed: %v", err)
+	}
+	if quiet.State.State != AlertStateFiring || quiet.State.Severity != AlertSeverityCritical {
+		t.Fatalf("quiet state = %+v, want firing critical", quiet.State)
+	}
+	if quiet.State.Reason != "baseline-anomaly-quiet-critical" {
+		t.Fatalf("quiet reason = %q, want baseline-anomaly-quiet-critical", quiet.State.Reason)
+	}
+}
+
 func TestEvaluateConnectivityConfirmationAndRecovery(t *testing.T) {
 	spec := ResourceAlertSpec{
 		ID:           "node-pve1-connectivity",

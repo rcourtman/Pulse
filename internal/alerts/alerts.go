@@ -478,19 +478,11 @@ type pmgMailMetricSample struct {
 	Timestamp time.Time
 }
 
-// pmgBaselineCache stores calculated baseline values for a metric
-type pmgBaselineCache struct {
-	TrimmedMean float64
-	Median      float64
-	LastUpdated time.Time
-}
-
-// pmgAnomalyTracker tracks history and baselines for anomaly detection
+// pmgAnomalyTracker tracks history for anomaly detection.
 type pmgAnomalyTracker struct {
-	Samples        []pmgMailMetricSample       // Ring buffer (max 48 samples)
-	Baselines      map[string]pmgBaselineCache // Cached baselines per metric (spamIn, spamOut, virusIn, virusOut)
-	LastSampleTime time.Time                   // Timestamp of most recent sample
-	SampleCount    int                         // Total samples collected (for warmup check)
+	Samples        []pmgMailMetricSample // Ring buffer (max 48 samples)
+	LastSampleTime time.Time             // Timestamp of most recent sample
+	SampleCount    int                   // Total samples collected (for warmup check)
 }
 
 // Manager handles alert monitoring and state
@@ -8547,6 +8539,14 @@ func calculateTrimmedBaseline(samples []float64) (baseline float64, trustworthy 
 	return sum / float64(len(samples)), true
 }
 
+func anomalyAlertMessage(pmg models.PMGInstance, metricName string, current, baseline float64) string {
+	ratio := 0.0
+	if baseline > 0 {
+		ratio = current / baseline
+	}
+	return fmt.Sprintf("PMG %s anomaly detected: %s is %.1f messages/hour (%.1fx baseline of %.1f)", pmg.Name, metricName, current, ratio, baseline)
+}
+
 // checkPMGAnomalies detects spam/virus rate anomalies using trimmed baseline
 func (m *Manager) checkPMGAnomalies(pmg models.PMGInstance, _ PMGThresholdConfig) {
 	// Need mail count data
@@ -8563,8 +8563,7 @@ func (m *Manager) checkPMGAnomalies(pmg models.PMGInstance, _ PMGThresholdConfig
 	tracker := m.pmgAnomalyTrackers[pmg.ID]
 	if tracker == nil {
 		tracker = &pmgAnomalyTracker{
-			Samples:   make([]pmgMailMetricSample, 0, 48),
-			Baselines: make(map[string]pmgBaselineCache),
+			Samples: make([]pmgMailMetricSample, 0, 48),
 		}
 		m.pmgAnomalyTrackers[pmg.ID] = tracker
 	}
@@ -8667,121 +8666,71 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 		return
 	}
 
-	// Handle zero baseline edge case
-	if baseline == 0 && current > 0 {
-		baseline = 1.0 // Treat as 1 for ratio math
-	}
-
-	// Determine warning and critical thresholds
-	var warnRatio, critRatio float64
-	var warnDelta, critDelta float64
-
-	if baseline < 40 {
-		// Quiet site: use minimum absolute deltas
-		warnRatio = 0
-		critRatio = 0
-		warnDelta = baseline + 60
-		critDelta = baseline + 120
-	} else {
-		// Normal site: use ratio + absolute delta
-		warnRatio = 1.8
-		critRatio = 2.5
-		warnDelta = baseline + 150
-		critDelta = baseline + 300
-	}
-
 	alertID := fmt.Sprintf("%s-anomaly-%s", pmg.ID, metricName)
 	pendingKey := fmt.Sprintf("pmg-anomaly-%s-%s", pmg.ID, metricName)
-
-	var level AlertLevel
-	var triggered bool
-	var ratio float64
-
-	if baseline > 0 {
-		ratio = current / baseline
+	spec, err := buildCanonicalBaselineAnomalySpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, metricName, 2, false)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("pmg", pmg.Name).
+			Str("metric", metricName).
+			Str("alertID", alertID).
+			Msg("Skipping invalid canonical PMG anomaly spec")
+		return
 	}
 
-	// Check critical threshold
-	if critRatio > 0 && ratio >= critRatio && current >= critDelta {
-		level = AlertLevelCritical
-		triggered = true
-	} else if warnRatio > 0 && ratio >= warnRatio && current >= warnDelta {
-		level = AlertLevelWarning
-		triggered = true
-	} else if baseline < 40 {
-		// Quiet site absolute check
-		if current >= critDelta {
-			level = AlertLevelCritical
-			triggered = true
-		} else if current >= warnDelta {
-			level = AlertLevelWarning
-			triggered = true
-		}
-	}
+	result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec:            spec,
+		Evidence:        alertspecs.AlertEvidence{ObservedAt: now, BaselineAnomaly: &alertspecs.BaselineAnomalyEvidence{Metric: metricName, Observed: current, Baseline: baseline}},
+		PendingTracking: m.pendingAlerts,
+		PendingKey:      pendingKey,
+		AlertID:         alertID,
+		AlertType:       fmt.Sprintf("anomaly-%s", metricName),
+		ResourceID:      pmg.ID,
+		ResourceName:    pmg.Name,
+		Node:            pmg.Host,
+		Instance:        pmg.Name,
+		MessageBuilder: func(_ alertspecs.EvaluationResult) (string, float64, float64) {
+			return anomalyAlertMessage(pmg, metricName, current, baseline), current, baseline
+		},
+		DispatchAsync: true,
+	})
 
-	// Two-sample confirmation using pendingAlerts
-	if triggered {
-		m.mu.Lock()
-		firstSeen, pending := m.pendingAlerts[pendingKey]
-		if !pending {
-			// First sample above threshold - mark as pending
-			m.pendingAlerts[pendingKey] = now
-			m.mu.Unlock()
-			log.Debug().
-				Str("pmg", pmg.Name).
-				Str("metric", metricName).
-				Float64("current", current).
-				Float64("baseline", baseline).
-				Msg("PMG anomaly pending confirmation (first sample)")
-			return
-		}
-		m.mu.Unlock()
-
-		// Second consecutive sample above threshold - issue alert
+	if result.State.State == alertspecs.AlertStatePending {
 		log.Debug().
 			Str("pmg", pmg.Name).
 			Str("metric", metricName).
 			Float64("current", current).
 			Float64("baseline", baseline).
-			Dur("pending", now.Sub(firstSeen)).
+			Msg("PMG anomaly pending confirmation (first sample)")
+		return
+	}
+
+	if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+		pendingSince := result.Previous.FirstMatchedAt
+		if pendingSince.IsZero() {
+			pendingSince = now
+		}
+
+		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
+		if !ok {
+			level = AlertLevelWarning
+		}
+		ratio := 0.0
+		effectiveBaseline := baseline
+		if effectiveBaseline == 0 && current > 0 {
+			effectiveBaseline = 1
+		}
+		if effectiveBaseline > 0 {
+			ratio = current / effectiveBaseline
+		}
+		log.Debug().
+			Str("pmg", pmg.Name).
+			Str("metric", metricName).
+			Float64("current", current).
+			Float64("baseline", baseline).
+			Dur("pending", now.Sub(pendingSince)).
 			Msg("PMG anomaly confirmed (second sample)")
-
-		m.mu.Lock()
-		delete(m.pendingAlerts, pendingKey) // Clear pending
-
-		// Check if alert already exists
-		if alert, exists := m.activeAlerts[alertID]; exists {
-			alert.LastSeen = now
-			alert.Value = current
-			alert.Threshold = baseline
-			alert.Level = level
-			m.mu.Unlock()
-			return
-		}
-
-		// Create new alert
-		message := fmt.Sprintf("PMG %s anomaly detected: %s is %.1f messages/hour (%.1fx baseline of %.1f)",
-			pmg.Name, metricName, current, ratio, baseline)
-
-		alert := &Alert{
-			ID:              alertID,
-			Type:            fmt.Sprintf("anomaly-%s", metricName),
-			Level:           level,
-			ResourceID:      pmg.ID,
-			ResourceName:    pmg.Name,
-			Node:            pmg.Host,
-			NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
-			Instance:        pmg.Name,
-			Message:         message,
-			Value:           current,
-			Threshold:       baseline,
-			StartTime:       now,
-			LastSeen:        now,
-		}
-
-		m.activeAlerts[alertID] = alert
-		m.mu.Unlock()
-		m.dispatchAlert(alert, true)
 
 		log.Warn().
 			Str("pmg", pmg.Name).
@@ -8791,12 +8740,6 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 			Float64("ratio", ratio).
 			Str("level", string(level)).
 			Msg("PMG anomaly alert triggered")
-	} else {
-		// Below threshold - clear pending and alert
-		m.mu.Lock()
-		delete(m.pendingAlerts, pendingKey)
-		m.mu.Unlock()
-		m.clearAlert(alertID)
 	}
 }
 

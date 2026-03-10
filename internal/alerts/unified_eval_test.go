@@ -679,3 +679,49 @@ func TestCheckPMGQuarantineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 		t.Fatalf("canonicalSpecID = %v, want pmg-1-quarantine-spam", got)
 	}
 }
+
+func TestCheckPMGAnomalyAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	base := time.Now().Add(-13 * time.Hour)
+
+	tracker := &pmgAnomalyTracker{
+		Samples:        make([]pmgMailMetricSample, 0, 12),
+		LastSampleTime: base.Add(11 * time.Hour),
+		SampleCount:    12,
+	}
+	for i := 0; i < 12; i++ {
+		tracker.Samples = append(tracker.Samples, pmgMailMetricSample{
+			SpamIn:    100,
+			SpamOut:   10,
+			VirusIn:   1,
+			VirusOut:  1,
+			Timestamp: base.Add(time.Duration(i) * time.Hour),
+		})
+	}
+
+	m.mu.Lock()
+	m.pmgAnomalyTrackers["pmg-1"] = tracker
+	m.mu.Unlock()
+
+	pmg := models.PMGInstance{
+		ID:   "pmg-1",
+		Name: "PMG 1",
+		MailCount: []models.PMGMailCountPoint{
+			{Timestamp: base.Add(12 * time.Hour), SpamIn: 420},
+		},
+	}
+	m.checkPMGAnomalies(pmg, PMGThresholdConfig{})
+
+	pmg.MailCount = []models.PMGMailCountPoint{
+		{Timestamp: base.Add(13 * time.Hour), SpamIn: 430},
+	}
+	m.checkPMGAnomalies(pmg, PMGThresholdConfig{})
+
+	alert := activeAlert(t, m, "pmg-1-anomaly-spamIn")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "baseline-anomaly" {
+		t.Fatalf("canonicalAlertKind = %v, want baseline-anomaly", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "pmg-1-anomaly-spamIn" {
+		t.Fatalf("canonicalSpecID = %v, want pmg-1-anomaly-spamIn", got)
+	}
+}
