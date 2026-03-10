@@ -10106,6 +10106,39 @@ func TestCleanup(t *testing.T) {
 		}
 	})
 
+	t.Run("cleans up resolved aliases for old canonical alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		resourceID := "res1"
+		alertID := "res1-cpu"
+		canonicalState := buildCanonicalStateID(resourceID, "metric-threshold:cpu")
+		resolved := &ResolvedAlert{
+			Alert: &Alert{
+				ID:              alertID,
+				ResourceID:      resourceID,
+				CanonicalSpecID: "metric-threshold:cpu",
+				CanonicalKind:   "metric_threshold",
+				CanonicalState:  canonicalState,
+			},
+			ResolvedTime: time.Now().Add(-10 * time.Minute),
+		}
+
+		m.resolvedMutex.Lock()
+		m.recentlyResolved[canonicalState] = resolved
+		m.registerResolvedAliasUnlocked(canonicalState, resolved)
+		m.resolvedMutex.Unlock()
+
+		m.Cleanup(1 * time.Hour)
+
+		m.resolvedMutex.RLock()
+		_, byPublicID := m.resolvedAlias[alertID]
+		_, byCanonicalState := m.resolvedAlias[canonicalState]
+		m.resolvedMutex.RUnlock()
+		if byPublicID || byCanonicalState {
+			t.Fatalf("expected resolved aliases to be cleaned up, got public=%t canonical=%t", byPublicID, byCanonicalState)
+		}
+	})
+
 	t.Run("cleans up stale pending alerts", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)

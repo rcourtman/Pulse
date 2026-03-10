@@ -9003,13 +9003,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	m.resolvedMutex.Lock()
 	for alertID, resolved := range m.recentlyResolved {
 		if resolved.ResolvedTime.Before(fiveMinutesAgo) {
-			if resolved != nil && resolved.Alert != nil {
-				backfillCanonicalIdentity(resolved.Alert)
-				if resolved.Alert.CanonicalState != "" && resolved.Alert.CanonicalState != alertID {
-					delete(m.resolvedAlias, resolved.Alert.CanonicalState)
-				}
-			}
-			delete(m.recentlyResolved, alertID)
+			m.removeResolvedAlertUnlocked(alertID)
 		}
 	}
 	m.resolvedMutex.Unlock()
