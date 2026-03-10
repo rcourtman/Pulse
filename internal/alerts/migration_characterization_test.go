@@ -243,6 +243,17 @@ func TestAlertCharacterizationAcknowledgeByCanonicalStateAlias(t *testing.T) {
 	if alert.AckUser != "alice" {
 		t.Fatalf("AckUser = %q, want alice", alert.AckUser)
 	}
+
+	m.mu.RLock()
+	_, legacyAck := m.ackState[alertID]
+	record, canonicalAck := m.ackStateByCanonical[canonicalState]
+	m.mu.RUnlock()
+	if legacyAck {
+		t.Fatalf("expected canonical alert acknowledgment to be keyed by canonical state, not legacy alert ID")
+	}
+	if !canonicalAck || !record.acknowledged || record.user != "alice" {
+		t.Fatalf("expected canonical ack record for %q, got %+v exists=%t", canonicalState, record, canonicalAck)
+	}
 }
 
 func TestAlertCharacterizationGuestThresholdPrecedence(t *testing.T) {
@@ -475,5 +486,34 @@ func TestAlertCharacterizationResolvedLookupByCanonicalStateAlias(t *testing.T) 
 	}
 	if resolved.Alert.ID != alertID {
 		t.Fatalf("resolved alert ID = %q, want %q", resolved.Alert.ID, alertID)
+	}
+}
+
+func TestAlertCharacterizationManualClearRemovesCanonicalTrackingState(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	alertID := resourceID + "-cpu"
+	trackingKey := buildCanonicalStateID(resourceID, alertID)
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.85), "pve1")
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.Lock()
+	m.recentAlerts[trackingKey] = &Alert{ID: alertID, ResourceID: resourceID, CanonicalState: trackingKey, StartTime: time.Now(), LastSeen: time.Now()}
+	m.suppressedUntil[trackingKey] = time.Now().Add(time.Hour)
+	m.alertRateLimit[trackingKey] = []time.Time{time.Now()}
+	m.mu.Unlock()
+
+	if !m.ClearAlert(alertID) {
+		t.Fatalf("expected ClearAlert(%q) to succeed", alertID)
+	}
+
+	m.mu.RLock()
+	_, recentExists := m.recentAlerts[trackingKey]
+	_, suppressedExists := m.suppressedUntil[trackingKey]
+	_, rateExists := m.alertRateLimit[trackingKey]
+	m.mu.RUnlock()
+	if recentExists || suppressedExists || rateExists {
+		t.Fatalf("expected manual clear to remove canonical tracking entries, got recent=%t suppressed=%t rate=%t", recentExists, suppressedExists, rateExists)
 	}
 }

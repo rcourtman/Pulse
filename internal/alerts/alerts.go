@@ -7146,18 +7146,11 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 
 	// Write the modified alert back to the map
 	m.activeAlerts[key] = alert
-	m.ackState[alertID] = ackRecord{
+	m.setAckRecordNoLock(alert, alertID, ackRecord{
 		acknowledged: true,
 		user:         user,
 		time:         now,
-	}
-	if alert.CanonicalState != "" {
-		m.ackStateByCanonical[alert.CanonicalState] = ackRecord{
-			acknowledged: true,
-			user:         user,
-			time:         now,
-		}
-	}
+	})
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -7189,10 +7182,7 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 
 	// Write the modified alert back to the map
 	m.activeAlerts[key] = alert
-	delete(m.ackState, alertID)
-	if alert.CanonicalState != "" {
-		delete(m.ackStateByCanonical, alert.CanonicalState)
-	}
+	m.deleteAckRecordNoLock(alert, alertID)
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -7252,18 +7242,7 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 		return
 	}
 
-	if updated.CanonicalState != "" {
-		if record, ok := m.ackStateByCanonical[updated.CanonicalState]; ok && record.acknowledged {
-			updated.Acknowledged = true
-			updated.AckUser = record.user
-			t := record.time
-			updated.AckTime = &t
-			return
-		}
-	}
-
-	// Fall back to previously recorded acknowledgement state for this alert ID (e.g., flapping alerts)
-	if record, ok := m.ackState[alertID]; ok && record.acknowledged {
+	if record, ok := m.getAckRecordNoLock(updated, alertID); ok && record.acknowledged {
 		updated.Acknowledged = true
 		updated.AckUser = record.user
 		t := record.time
@@ -7274,12 +7253,12 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	// Before deleting, update the history entry with the alert's final LastSeen
 	// timestamp so the stored duration reflects how long the alert was actually active.
-	var canonicalState string
 	publicID := alertID
+	var currentAlert *Alert
 	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
 	if alert, ok := m.getActiveAlertNoLock(alertID); exists && ok && alert != nil {
+		currentAlert = alert
 		backfillCanonicalIdentity(alert)
-		canonicalState = alert.CanonicalState
 		publicID = effectiveAlertID(alert, alertID)
 		m.historyManager.UpdateAlertLastSeen(publicID, alert.LastSeen)
 		m.unregisterActiveAlertAliasNoLock(key, alert)
@@ -7291,15 +7270,8 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	// reappears (e.g., powered-off VM during backup), the acknowledgement
 	// is restored via preserveAlertState. ackState is cleaned up in Cleanup().
 	// Update inactiveAt so the cleanup TTL is measured from removal time, not ack time.
-	if record, exists := m.ackState[publicID]; exists {
-		record.inactiveAt = time.Now()
-		m.ackState[publicID] = record
-	}
-	if canonicalState != "" {
-		if record, ok := m.ackStateByCanonical[canonicalState]; ok {
-			record.inactiveAt = time.Now()
-			m.ackStateByCanonical[canonicalState] = record
-		}
+	if exists {
+		m.markAckInactiveNoLock(currentAlert, publicID, time.Now())
 	}
 }
 
@@ -8845,16 +8817,24 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 // ClearAlert removes an alert from active alerts (but keeps in history)
 func (m *Manager) ClearAlert(alertID string) bool {
 	m.mu.Lock()
-	if !m.hasActiveAlertNoLock(alertID) {
+	alert, exists := m.getActiveAlertNoLock(alertID)
+	if !exists || alert == nil {
 		m.mu.Unlock()
 		return false
 	}
+	trackingKey := canonicalTrackingKeyForAlert(alert)
 
 	m.clearAlertNoLock(alertID)
 	delete(m.recentAlerts, alertID)
 	delete(m.pendingAlerts, alertID)
 	delete(m.suppressedUntil, alertID)
 	delete(m.alertRateLimit, alertID)
+	if trackingKey != "" && trackingKey != alertID {
+		delete(m.recentAlerts, trackingKey)
+		delete(m.pendingAlerts, trackingKey)
+		delete(m.suppressedUntil, trackingKey)
+		delete(m.alertRateLimit, trackingKey)
+	}
 	m.mu.Unlock()
 
 	m.saveActiveAlertsAsync("manual-clear")
@@ -8944,7 +8924,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	// to handle transient alert clears (e.g., backups of powered-off VMs)
 	ackStateTTL := 1 * time.Hour
 	for id, record := range m.ackState {
-		if _, alertExists := m.activeAlerts[id]; !alertExists {
+		if !m.hasActiveAlertNoLock(id) {
 			// Use inactiveAt (when alert was removed) for TTL, not ack time
 			checkTime := record.inactiveAt
 			if checkTime.IsZero() {
@@ -8957,6 +8937,9 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 	for canonicalID, record := range m.ackStateByCanonical {
+		if m.hasActiveAlertTrackingKeyNoLock(canonicalID) {
+			continue
+		}
 		checkTime := record.inactiveAt
 		if checkTime.IsZero() {
 			checkTime = record.time
@@ -9702,18 +9685,11 @@ func (m *Manager) LoadActiveAlerts() error {
 			if alert.AckTime != nil {
 				ackTime = *alert.AckTime
 			}
-			m.ackState[alert.ID] = ackRecord{
+			m.setAckRecordNoLock(alert, alert.ID, ackRecord{
 				acknowledged: true,
 				user:         alert.AckUser,
 				time:         ackTime,
-			}
-			if alert.CanonicalState != "" {
-				m.ackStateByCanonical[alert.CanonicalState] = ackRecord{
-					acknowledged: true,
-					user:         alert.AckUser,
-					time:         ackTime,
-				}
-			}
+			})
 			continue
 		}
 
@@ -9723,18 +9699,11 @@ func (m *Manager) LoadActiveAlerts() error {
 			if alert.AckTime != nil {
 				ackTime = *alert.AckTime
 			}
-			m.ackState[alert.ID] = ackRecord{
+			m.setAckRecordNoLock(alert, alert.ID, ackRecord{
 				acknowledged: true,
 				user:         alert.AckUser,
 				time:         ackTime,
-			}
-			if alert.CanonicalState != "" {
-				m.ackStateByCanonical[alert.CanonicalState] = ackRecord{
-					acknowledged: true,
-					user:         alert.AckUser,
-					time:         ackTime,
-				}
-			}
+			})
 		}
 		restoredCount++
 
