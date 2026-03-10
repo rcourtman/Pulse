@@ -18,6 +18,7 @@ import {
   buildStoragePath,
 } from '@/routing/resourceLinks';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
+import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
 import { getProblemResourceStatusVariant } from '@/utils/problemResourcePresentation';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
@@ -58,7 +59,7 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
             <TableRow>
               <TableHead class="w-8" />
               <TableHead>Resource</TableHead>
-              <TableHead class="hidden sm:table-cell">Type</TableHead>
+              <TableHead class="hidden sm:table-cell">{getTypeColumnLabel()}</TableHead>
               <TableHead>Problem</TableHead>
             </TableRow>
           </TableHeader>
