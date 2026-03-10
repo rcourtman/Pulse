@@ -329,3 +329,104 @@ func TestCheckNodeTemperatureAnnotatesCanonicalSpecMetadata(t *testing.T) {
 		t.Fatalf("canonicalSpecID = %v, want node/pve-1-temperature", got)
 	}
 }
+
+func TestCheckGuestPoweredOffAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	guest := models.VM{
+		ID:       resourceID,
+		VMID:     101,
+		Name:     "app01",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "stopped",
+	}
+
+	m.CheckGuest(guest, "pve1")
+	m.CheckGuest(guest, "pve1")
+
+	alert := activeAlert(t, m, "guest-powered-off-"+resourceID)
+	if got := alert.Metadata["canonicalAlertKind"]; got != "powered-state" {
+		t.Fatalf("canonicalAlertKind = %v, want powered-state", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-powered-state" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-powered-state")
+	}
+}
+
+func TestCheckNodeOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.mu.Lock()
+	m.nodeOfflineCount["node/pve-1"] = 2
+	m.mu.Unlock()
+
+	m.CheckNode(models.Node{
+		ID:               "node/pve-1",
+		Name:             "pve-1",
+		Instance:         "pve1",
+		Status:           "offline",
+		ConnectionHealth: "failed",
+	})
+
+	alert := activeAlert(t, m, "node-offline-node/pve-1")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
+		t.Fatalf("canonicalAlertKind = %v, want connectivity", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "node/pve-1-connectivity" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, "node/pve-1-connectivity")
+	}
+}
+
+func TestCheckPBSOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.mu.Lock()
+	m.offlineConfirmations["pbs-1"] = 2
+	m.mu.Unlock()
+
+	m.CheckPBS(models.PBSInstance{
+		ID:               "pbs-1",
+		Name:             "pbs-main",
+		Host:             "pbs-host",
+		Status:           "online",
+		ConnectionHealth: "unhealthy",
+	})
+
+	alert := activeAlert(t, m, "pbs-offline-pbs-1")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
+		t.Fatalf("canonicalAlertKind = %v, want connectivity", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "pbs-1-connectivity" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, "pbs-1-connectivity")
+	}
+}
+
+func TestCheckStorageOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.mu.Lock()
+	m.offlineConfirmations["storage-1"] = 1
+	m.mu.Unlock()
+
+	m.CheckStorage(models.Storage{
+		ID:       "storage-1",
+		Name:     "local-lvm",
+		Node:     "pve-1",
+		Instance: "pve1",
+		Status:   "unavailable",
+	})
+
+	alert := activeAlert(t, m, "storage-offline-storage-1")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
+		t.Fatalf("canonicalAlertKind = %v, want connectivity", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "storage-1-connectivity" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, "storage-1-connectivity")
+	}
+}

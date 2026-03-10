@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
@@ -7684,95 +7685,39 @@ func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceNam
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	thresholds := m.resolveResourceThresholds("node", node.ID)
-	if thresholds.Disabled || thresholds.DisableConnectivity {
-		// Node connectivity alerts are disabled, clear any existing alert and return
-		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			m.clearAlertNoLock(alertID)
-			log.Debug().
-				Str("node", node.Name).
-				Msg("Node offline alert cleared (connectivity alerts disabled)")
-		}
-		delete(m.nodeOfflineCount, node.ID)
-		return
-	}
-
-	// Check if alert already exists
-	if _, exists := m.activeAlerts[alertID]; exists {
-		// Alert already exists, just update last seen time
-		m.activeAlerts[alertID].LastSeen = time.Now()
-		return
-	}
-
-	// Increment offline count
-	m.nodeOfflineCount[node.ID]++
-	offlineCount := m.nodeOfflineCount[node.ID]
-
-	log.Debug().
-		Str("node", node.Name).
-		Str("instance", node.Instance).
-		Int("offlineCount", offlineCount).
-		Msg("Node offline detection count")
-
-	// Require 3 consecutive offline polls (~15 seconds) before alerting
-	// This prevents false positives from transient cluster communication issues
-	const requiredOfflineCount = 3
-	if offlineCount < requiredOfflineCount {
-		log.Info().
+	spec, err := buildCanonicalConnectivitySpec(node.ID, node.Name, unifiedresources.ResourceType("node"), AlertLevelCritical, 3, thresholds.Disabled || thresholds.DisableConnectivity)
+	if err != nil {
+		log.Warn().
+			Err(err).
 			Str("node", node.Name).
-			Int("count", offlineCount).
-			Int("required", requiredOfflineCount).
-			Msg("Node appears offline, waiting for confirmation")
+			Str("nodeID", node.ID).
+			Msg("Skipping invalid canonical node connectivity spec")
 		return
 	}
 
-	// Create new offline alert after confirmation
-	alert := &Alert{
-		ID:              alertID,
-		Type:            "connectivity",
-		Level:           AlertLevelCritical, // Node offline is always critical
-		ResourceID:      node.ID,
-		ResourceName:    node.Name,
-		Node:            node.Name,
-		NodeDisplayName: m.resolveNodeDisplayName(node.Name),
-		Instance:        node.Instance,
-		Message:         fmt.Sprintf("Node '%s' is offline", node.Name),
-		Value:           0, // Not applicable for offline status
-		Threshold:       0, // Not applicable for offline status
-		StartTime:       time.Now(),
-		Acknowledged:    false,
-	}
-
-	m.preserveAlertState(alertID, alert)
-
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-
-	// Add to history
-	m.historyManager.AddAlert(*alert)
-
-	// Send notification after confirmation
-	if !m.checkRateLimit(alertID) {
-		log.Debug().
-			Str("alertID", alertID).
-			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-			Msg("Node offline alert suppressed due to rate limit")
-		return
-	}
-
-	m.dispatchAlert(alert, false)
-
-	// Log the critical event
-	log.Error().
-		Str("node", node.Name).
-		Str("instance", node.Instance).
-		Str("status", node.Status).
-		Str("connectionHealth", node.ConnectionHealth).
-		Int("confirmedAfter", requiredOfflineCount).
-		Msg("CRITICAL: Node is offline (confirmed)")
+	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
+		Tracking:     m.nodeOfflineCount,
+		TrackingKey:  node.ID,
+		AlertID:      alertID,
+		AlertType:    "connectivity",
+		ResourceID:   node.ID,
+		ResourceName: node.Name,
+		Node:         node.Name,
+		Instance:     node.Instance,
+		Message:      fmt.Sprintf("Node '%s' is offline", node.Name),
+		Metadata: map[string]interface{}{
+			"resourceType":     "node",
+			"status":           node.Status,
+			"connectionHealth": node.ConnectionHealth,
+		},
+		AddToRecent:   true,
+		AddToHistory:  true,
+		RateLimit:     true,
+		DispatchAsync: false,
+	})
 }
 
 // clearNodeOfflineAlert removes offline alert when node comes back online
@@ -7820,13 +7765,36 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 
 // checkPBSOffline creates an alert for offline PBS instances
 func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
-	m.checkResourceOffline(offlineCheckParams{
-		alertPrefix:  "pbs-offline",
-		resourceID:   pbs.ID,
-		resourceName: pbs.Name,
-		host:         pbs.Host,
-		alertType:    "offline",
-		resourceKind: "PBS",
+	thresholds := m.resolveResourceThresholds("pbs", pbs.ID)
+	spec, err := buildCanonicalConnectivitySpec(pbs.ID, pbs.Name, unifiedresources.ResourceTypePBS, AlertLevelCritical, 3, thresholds.Disabled || thresholds.DisableConnectivity)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("pbs", pbs.Name).
+			Str("pbsID", pbs.ID).
+			Msg("Skipping invalid canonical PBS connectivity spec")
+		return
+	}
+
+	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
+		Tracking:     m.offlineConfirmations,
+		TrackingKey:  pbs.ID,
+		AlertID:      fmt.Sprintf("pbs-offline-%s", pbs.ID),
+		AlertType:    "offline",
+		ResourceID:   pbs.ID,
+		ResourceName: pbs.Name,
+		Node:         pbs.Host,
+		Instance:     pbs.Name,
+		Message:      fmt.Sprintf("PBS instance %s is offline", pbs.Name),
+		Metadata: map[string]interface{}{
+			"resourceType":     "pbs",
+			"status":           pbs.Status,
+			"connectionHealth": pbs.ConnectionHealth,
+		},
+		RateLimit:     true,
+		DispatchAsync: true,
 	})
 }
 
@@ -8764,78 +8732,36 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 func (m *Manager) checkStorageOffline(storage models.Storage) {
 	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	thresholds := m.resolveResourceThresholds("storage", storage.ID)
-	if thresholds.Disabled || thresholds.DisableConnectivity {
-		// Storage alerts are disabled, clear any existing alert and return
-		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			m.clearAlertNoLock(alertID)
-			log.Debug().
-				Str("storage", storage.Name).
-				Msg("Storage offline alert cleared (alerts disabled)")
-		}
-		delete(m.offlineConfirmations, storage.ID)
-		return
-	}
-
-	// Track confirmation count for this storage
-	m.offlineConfirmations[storage.ID]++
-
-	// Require 2 consecutive offline polls (~10 seconds) before alerting for storage
-	// (less than nodes since storage status can be more transient)
-	if m.offlineConfirmations[storage.ID] < 2 {
-		log.Debug().
+	spec, err := buildCanonicalConnectivitySpec(storage.ID, storage.Name, unifiedresources.ResourceTypeStorage, AlertLevelWarning, 2, thresholds.Disabled || thresholds.DisableConnectivity)
+	if err != nil {
+		log.Warn().
+			Err(err).
 			Str("storage", storage.Name).
-			Int("confirmations", m.offlineConfirmations[storage.ID]).
-			Msg("Storage offline detected, waiting for confirmation")
+			Str("storageID", storage.ID).
+			Msg("Skipping invalid canonical storage connectivity spec")
 		return
 	}
 
-	// Check if alert already exists
-	if _, exists := m.activeAlerts[alertID]; exists {
-		// Update last seen time
-		m.activeAlerts[alertID].LastSeen = time.Now()
-		return
-	}
-
-	// Create new offline alert after confirmation
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "offline",
-		Level:        AlertLevelWarning, // Storage offline is Warning, not Critical
+	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
+		Tracking:     m.offlineConfirmations,
+		TrackingKey:  storage.ID,
+		AlertID:      alertID,
+		AlertType:    "offline",
 		ResourceID:   storage.ID,
 		ResourceName: storage.Name,
 		Node:         storage.Node,
 		Instance:     storage.Instance,
 		Message:      fmt.Sprintf("Storage %s on node %s is unavailable", storage.Name, storage.Node),
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
-	}
-
-	m.preserveAlertState(alertID, alert)
-
-	m.activeAlerts[alertID] = alert
-
-	// Log and notify
-	log.Warn().
-		Str("storage", storage.Name).
-		Str("node", storage.Node).
-		Int("confirmations", m.offlineConfirmations[storage.ID]).
-		Msg("Storage is offline/unavailable")
-
-	if !m.checkRateLimit(alertID) {
-		log.Debug().
-			Str("alertID", alertID).
-			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-			Msg("Storage offline alert suppressed due to rate limit")
-		return
-	}
-
-	m.dispatchAlert(alert, true)
+		Metadata: map[string]interface{}{
+			"resourceType": "storage",
+			"status":       storage.Status,
+		},
+		RateLimit:     true,
+		DispatchAsync: true,
+	})
 }
 
 // clearStorageOfflineAlert removes offline alert when storage comes back online
@@ -8853,98 +8779,47 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 
 func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool) {
 	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
-
-	// Check if powered-off alerts are disabled for this guest
-	if thresholds.Disabled || thresholds.DisableConnectivity {
-		// Powered-off alerts are disabled, clear any existing alert and return
-		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			m.clearAlertNoLock(alertID)
-			log.Debug().
-				Str("guest", name).
-				Msg("Guest powered-off alert cleared (alerts disabled)")
-		}
-		delete(m.offlineConfirmations, guestID)
-		return
+	resourceType := unifiedresources.ResourceTypeVM
+	if strings.EqualFold(guestType, "container") {
+		resourceType = unifiedresources.ResourceTypeSystemContainer
 	}
-
-	// Check if alert already exists
-	if alert, exists := m.activeAlerts[alertID]; exists {
-		// Alert already exists, just update LastSeen
-		alert.LastSeen = time.Now()
-		alert.Level = severity
-		if alert.Metadata == nil {
-			alert.Metadata = map[string]interface{}{}
-		}
-		alert.Metadata["monitorOnly"] = monitorOnly
-		return
-	}
-
-	// Increment confirmation count
-	m.offlineConfirmations[guestID]++
-	confirmCount := m.offlineConfirmations[guestID]
-
-	log.Debug().
-		Str("guest", name).
-		Str("type", guestType).
-		Int("confirmations", confirmCount).
-		Msg("Guest powered-off detected")
-
-	// Require 2 consecutive powered-off polls (~10 seconds) before alerting
-	// This prevents false positives from transient states
-	const requiredConfirmations = 2
-	if confirmCount < requiredConfirmations {
-		log.Debug().
+	spec, err := buildCanonicalPoweredStateSpec(guestID, name, resourceType, severity, 2, thresholds.Disabled || thresholds.DisableConnectivity)
+	if err != nil {
+		log.Warn().
+			Err(err).
 			Str("guest", name).
-			Int("count", confirmCount).
-			Int("required", requiredConfirmations).
-			Msg("Guest appears powered-off, waiting for confirmation")
+			Str("guestID", guestID).
+			Msg("Skipping invalid canonical guest powered-state spec")
 		return
 	}
 
-	// Create new powered-off alert after confirmation
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "powered-off",
-		Level:        severity,
+	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			PoweredState: &alertspecs.PoweredStateEvidence{
+				Expected: alertspecs.PowerStateOn,
+				Observed: alertspecs.PowerStateOff,
+			},
+		},
+		Tracking:     m.offlineConfirmations,
+		TrackingKey:  guestID,
+		AlertID:      alertID,
+		AlertType:    "powered-off",
 		ResourceID:   guestID,
 		ResourceName: name,
 		Node:         node,
 		Instance:     instanceName,
 		Message:      fmt.Sprintf("%s '%s' is powered off", guestType, name),
-		Value:        0, // Not applicable for powered-off status
-		Threshold:    0, // Not applicable for powered-off status
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
-		Acknowledged: false,
 		Metadata: map[string]interface{}{
-			"monitorOnly": monitorOnly,
+			"monitorOnly":  monitorOnly,
+			"resourceType": strings.ToLower(guestType),
 		},
-	}
-
-	m.preserveAlertState(alertID, alert)
-
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-
-	// Add to history
-	m.historyManager.AddAlert(*alert)
-
-	// Send notification after confirmation
-	m.dispatchAlert(alert, false)
-
-	// Log the event
-	log.Warn().
-		Str("guest", name).
-		Str("type", guestType).
-		Str("node", node).
-		Str("instance", instanceName).
-		Int("confirmedAfter", requiredConfirmations).
-		Msg("Guest is powered off (confirmed)")
+		AddToRecent:   true,
+		AddToHistory:  true,
+		DispatchAsync: false,
+	})
 }
 
 // clearGuestPoweredOffAlert removes powered-off alert when guest starts running
