@@ -273,7 +273,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
 
                                     <Show when={(props.cache || 0) > 0}>
                                         <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                                            <span class="text-amber-400">Reclaimable</span>
+                                            <span class="text-amber-400">Reclaimable cache</span>
                                             <span class="whitespace-nowrap text-gray-300">
                                                 {formatBytes(props.cache || 0)}
                                             </span>
@@ -299,7 +299,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                     {/* Proxmox reconciliation — only shown when cache data is available */}
                                     <Show when={(props.cache || 0) > 0}>
                                         <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                                            <span class="text-gray-500 italic">Proxmox view</span>
+                                            <span class="text-gray-500 italic">Shown in Proxmox</span>
                                             <span class="whitespace-nowrap text-gray-500 italic">
                                                 {formatPercent(proxmoxPercent())}
                                             </span>
