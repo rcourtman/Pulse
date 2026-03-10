@@ -7260,7 +7260,7 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 		currentAlert = alert
 		backfillCanonicalIdentity(alert)
 		publicID = effectiveAlertID(alert, alertID)
-		m.historyManager.UpdateAlertLastSeen(publicID, alert.LastSeen)
+		m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
 		m.unregisterActiveAlertAliasNoLock(key, alert)
 	}
 	if exists {

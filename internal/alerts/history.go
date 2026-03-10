@@ -56,6 +56,17 @@ type HistoryManager struct {
 	callbacks    []AlertCallback // Called when alerts are added
 }
 
+func historyIdentityKey(alert *Alert) string {
+	if alert == nil {
+		return ""
+	}
+	backfillCanonicalIdentity(alert)
+	if alert.CanonicalState != "" {
+		return alert.CanonicalState
+	}
+	return alert.ID
+}
+
 // NewHistoryManager creates a new history manager
 func NewHistoryManager(dataDir string) *HistoryManager {
 	if dataDir == "" {
@@ -125,12 +136,32 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 // resolved so that the stored history reflects the true duration of the alert,
 // not just the snapshot captured at creation time.
 func (hm *HistoryManager) UpdateAlertLastSeen(alertID string, lastSeen time.Time) {
+	hm.UpdateAlertLastSeenForAlert(&Alert{ID: alertID}, lastSeen)
+}
+
+// UpdateAlertLastSeenForAlert updates the LastSeen timestamp on the most recent
+// history entry matching the given alert identity. Canonical alerts match by
+// canonical state first, then fall back to legacy alert ID for compatibility.
+func (hm *HistoryManager) UpdateAlertLastSeenForAlert(alert *Alert, lastSeen time.Time) {
+	if alert == nil {
+		return
+	}
+
+	matchKey := historyIdentityKey(alert)
+	matchID := alert.ID
+
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
 
-	// Iterate from newest to oldest to find the most recent entry for this alert
+	// Iterate from newest to oldest to find the most recent entry for this alert.
 	for i := len(hm.history) - 1; i >= 0; i-- {
-		if hm.history[i].Alert.ID == alertID {
+		entry := hm.history[i].Alert.Clone()
+		entryKey := historyIdentityKey(entry)
+		if matchKey != "" && entryKey == matchKey {
+			hm.history[i].Alert.LastSeen = lastSeen
+			return
+		}
+		if matchID != "" && hm.history[i].Alert.ID == matchID {
 			hm.history[i].Alert.LastSeen = lastSeen
 			return
 		}

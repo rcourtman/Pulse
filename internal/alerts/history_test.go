@@ -128,6 +128,42 @@ func TestAddAlert(t *testing.T) {
 	}
 }
 
+func TestUpdateAlertLastSeenForAlertMatchesCanonicalState(t *testing.T) {
+	hm := newTestHistoryManager(t)
+
+	oldLastSeen := time.Now().Add(-10 * time.Minute)
+	updatedLastSeen := time.Now()
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	specID := resourceID + "-cpu"
+
+	entry := Alert{
+		ID:              "legacy-" + specID,
+		Type:            "cpu",
+		ResourceID:      resourceID,
+		CanonicalSpecID: specID,
+		CanonicalState:  buildCanonicalStateID(resourceID, specID),
+		LastSeen:        oldLastSeen,
+	}
+	hm.history = []HistoryEntry{{
+		Alert:     entry,
+		Timestamp: time.Now().Add(-15 * time.Minute),
+	}}
+
+	current := &Alert{
+		ID:              specID,
+		Type:            "cpu",
+		ResourceID:      resourceID,
+		CanonicalSpecID: specID,
+		CanonicalState:  buildCanonicalStateID(resourceID, specID),
+	}
+
+	hm.UpdateAlertLastSeenForAlert(current, updatedLastSeen)
+
+	if !hm.history[0].Alert.LastSeen.Equal(updatedLastSeen) {
+		t.Fatalf("LastSeen = %v, want %v", hm.history[0].Alert.LastSeen, updatedLastSeen)
+	}
+}
+
 func TestOnAlert(t *testing.T) {
 	// t.Parallel()
 

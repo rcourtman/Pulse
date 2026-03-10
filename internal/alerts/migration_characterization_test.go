@@ -170,6 +170,47 @@ func TestAlertCharacterizationAcknowledgmentSurvivesAlertIDChangeForSameCanonica
 	}
 }
 
+func TestAlertCharacterizationHistoryUpdateUsesCanonicalStateAcrossAlertIDChange(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	oldAlertID := "legacy-" + resourceID + "-cpu"
+	newAlertID := resourceID + "-cpu"
+	lastSeen := time.Now()
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+
+	oldHistoryAlert := Alert{
+		ID:         oldAlertID,
+		Type:       "cpu",
+		ResourceID: resourceID,
+		StartTime:  time.Now().Add(-10 * time.Minute),
+		LastSeen:   time.Now().Add(-5 * time.Minute),
+	}
+	applyCanonicalIdentity(&oldHistoryAlert, newAlertID, "metric-threshold")
+	m.historyManager.AddAlert(oldHistoryAlert)
+
+	current := &Alert{
+		ID:         newAlertID,
+		Type:       "cpu",
+		ResourceID: resourceID,
+		StartTime:  time.Now().Add(-2 * time.Minute),
+		LastSeen:   lastSeen,
+	}
+	applyCanonicalIdentity(current, newAlertID, "metric-threshold")
+
+	m.historyManager.UpdateAlertLastSeenForAlert(current, lastSeen)
+
+	history := m.GetAlertHistory(10)
+	if len(history) == 0 {
+		t.Fatalf("expected history entry")
+	}
+	if !history[0].LastSeen.Equal(lastSeen) {
+		t.Fatalf("LastSeen = %v, want %v", history[0].LastSeen, lastSeen)
+	}
+	if history[0].ID != oldAlertID {
+		t.Fatalf("history alert ID = %q, want legacy ID %q preserved", history[0].ID, oldAlertID)
+	}
+}
+
 func TestAlertCharacterizationRecentSuppressionSurvivesAlertIDChangeForSameCanonicalState(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
 	oldAlertID := "legacy-" + resourceID + "-cpu"
