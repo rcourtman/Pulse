@@ -15,6 +15,7 @@ type AlertSpecKind string
 const (
 	AlertSpecKindMetricThreshold        AlertSpecKind = "metric-threshold"
 	AlertSpecKindSeverityThreshold      AlertSpecKind = "severity-threshold"
+	AlertSpecKindChangeThreshold        AlertSpecKind = "change-threshold"
 	AlertSpecKindConnectivity           AlertSpecKind = "connectivity"
 	AlertSpecKindPoweredState           AlertSpecKind = "powered-state"
 	AlertSpecKindProviderIncident       AlertSpecKind = "provider-incident"
@@ -27,6 +28,7 @@ func (k AlertSpecKind) valid() bool {
 	switch k {
 	case AlertSpecKindMetricThreshold,
 		AlertSpecKindSeverityThreshold,
+		AlertSpecKindChangeThreshold,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -125,6 +127,7 @@ type ResourceAlertSpec struct {
 
 	MetricThreshold        *MetricThresholdSpec        `json:"metricThreshold,omitempty"`
 	SeverityThreshold      *SeverityThresholdSpec      `json:"severityThreshold,omitempty"`
+	ChangeThreshold        *ChangeThresholdSpec        `json:"changeThreshold,omitempty"`
 	Connectivity           *ConnectivitySpec           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateSpec           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentSpec       `json:"providerIncident,omitempty"`
@@ -160,6 +163,9 @@ func (s ResourceAlertSpec) Validate() error {
 	if s.SeverityThreshold != nil {
 		payloads++
 	}
+	if s.ChangeThreshold != nil {
+		payloads++
+	}
 	if s.Connectivity != nil {
 		payloads++
 	}
@@ -193,6 +199,11 @@ func (s ResourceAlertSpec) Validate() error {
 			return fmt.Errorf("severity threshold payload is required")
 		}
 		return s.SeverityThreshold.Validate()
+	case AlertSpecKindChangeThreshold:
+		if s.ChangeThreshold == nil {
+			return fmt.Errorf("change threshold payload is required")
+		}
+		return s.ChangeThreshold.Validate()
 	case AlertSpecKindConnectivity:
 		if s.Connectivity == nil {
 			return fmt.Errorf("connectivity payload is required")
@@ -299,6 +310,51 @@ func (s SeverityThresholdSpec) Validate() error {
 				return fmt.Errorf("critical must be less than or equal to warning when direction is below")
 			}
 		}
+	}
+	return nil
+}
+
+type ChangeThresholdSpec struct {
+	Metric          string        `json:"metric"`
+	ReferenceWindow time.Duration `json:"referenceWindow,omitempty"`
+	WarningCurrent  float64       `json:"warningCurrent,omitempty"`
+	CriticalCurrent float64       `json:"criticalCurrent,omitempty"`
+	WarningDelta    float64       `json:"warningDelta,omitempty"`
+	CriticalDelta   float64       `json:"criticalDelta,omitempty"`
+	WarningPercent  float64       `json:"warningPercent,omitempty"`
+	CriticalPercent float64       `json:"criticalPercent,omitempty"`
+}
+
+func (s ChangeThresholdSpec) Validate() error {
+	if strings.TrimSpace(s.Metric) == "" {
+		return fmt.Errorf("metric is required")
+	}
+	if s.ReferenceWindow < 0 {
+		return fmt.Errorf("reference window must be zero or positive")
+	}
+	if !isFinite(s.WarningCurrent) || !isFinite(s.CriticalCurrent) || !isFinite(s.WarningDelta) || !isFinite(s.CriticalDelta) || !isFinite(s.WarningPercent) || !isFinite(s.CriticalPercent) {
+		return fmt.Errorf("thresholds must be finite")
+	}
+	if s.WarningPercent < 0 || s.CriticalPercent < 0 {
+		return fmt.Errorf("percent thresholds must not be negative")
+	}
+	if s.WarningPercent > 0 && s.WarningDelta <= 0 {
+		return fmt.Errorf("warning delta is required when warning percent is set")
+	}
+	if s.CriticalPercent > 0 && s.CriticalDelta <= 0 {
+		return fmt.Errorf("critical delta is required when critical percent is set")
+	}
+	if s.WarningPercent > 0 && s.CriticalPercent > 0 && s.CriticalPercent < s.WarningPercent {
+		return fmt.Errorf("critical percent must be greater than or equal to warning percent")
+	}
+	if s.WarningCurrent <= 0 && s.CriticalCurrent <= 0 && s.WarningDelta <= 0 && s.CriticalDelta <= 0 {
+		return fmt.Errorf("at least one current or delta threshold is required")
+	}
+	if s.WarningCurrent > 0 && s.CriticalCurrent > 0 && s.CriticalCurrent < s.WarningCurrent {
+		return fmt.Errorf("critical current must be greater than or equal to warning current")
+	}
+	if s.WarningDelta > 0 && s.CriticalDelta > 0 && s.CriticalDelta < s.WarningDelta {
+		return fmt.Errorf("critical delta must be greater than or equal to warning delta")
 	}
 	return nil
 }
@@ -423,6 +479,7 @@ type AlertEvidence struct {
 
 	MetricThreshold        *MetricThresholdEvidence        `json:"metricThreshold,omitempty"`
 	SeverityThreshold      *SeverityThresholdEvidence      `json:"severityThreshold,omitempty"`
+	ChangeThreshold        *ChangeThresholdEvidence        `json:"changeThreshold,omitempty"`
 	Connectivity           *ConnectivityEvidence           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateEvidence           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentEvidence       `json:"providerIncident,omitempty"`
@@ -441,6 +498,9 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 		payloads++
 	}
 	if e.SeverityThreshold != nil {
+		payloads++
+	}
+	if e.ChangeThreshold != nil {
 		payloads++
 	}
 	if e.Connectivity != nil {
@@ -476,6 +536,11 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 			return fmt.Errorf("severity threshold evidence is required")
 		}
 		return e.SeverityThreshold.Validate()
+	case AlertSpecKindChangeThreshold:
+		if e.ChangeThreshold == nil {
+			return fmt.Errorf("change threshold evidence is required")
+		}
+		return e.ChangeThreshold.Validate()
 	case AlertSpecKindConnectivity:
 		if e.Connectivity == nil {
 			return fmt.Errorf("connectivity evidence is required")
@@ -540,6 +605,25 @@ func (e SeverityThresholdEvidence) Validate() error {
 		Direction: e.Direction,
 		Warning:   1,
 	}.Validate()
+}
+
+type ChangeThresholdEvidence struct {
+	Metric           string   `json:"metric"`
+	Observed         float64  `json:"observed"`
+	PreviousObserved *float64 `json:"previousObserved,omitempty"`
+}
+
+func (e ChangeThresholdEvidence) Validate() error {
+	if strings.TrimSpace(e.Metric) == "" {
+		return fmt.Errorf("metric is required")
+	}
+	if !isFinite(e.Observed) {
+		return fmt.Errorf("observed must be finite")
+	}
+	if e.PreviousObserved != nil && !isFinite(*e.PreviousObserved) {
+		return fmt.Errorf("previous observed must be finite")
+	}
+	return nil
 }
 
 type ConnectivityEvidence struct {

@@ -47,6 +47,26 @@ func TestResourceAlertSpecValidateAcceptsSupportedKinds(t *testing.T) {
 			},
 		},
 		{
+			name: "change threshold",
+			spec: ResourceAlertSpec{
+				ID:           "pmg-01-quarantine-spam",
+				ResourceID:   "pmg-01",
+				ResourceType: unifiedresources.ResourceTypePMG,
+				Kind:         AlertSpecKindChangeThreshold,
+				Severity:     AlertSeverityWarning,
+				ChangeThreshold: &ChangeThresholdSpec{
+					Metric:          "quarantine-spam",
+					ReferenceWindow: 2 * time.Hour,
+					WarningCurrent:  2000,
+					CriticalCurrent: 5000,
+					WarningDelta:    250,
+					CriticalDelta:   500,
+					WarningPercent:  25,
+					CriticalPercent: 50,
+				},
+			},
+		},
+		{
 			name: "connectivity",
 			spec: ResourceAlertSpec{
 				ID:           "agent-01-heartbeat-lost",
@@ -290,6 +310,23 @@ func TestSeverityThresholdSpecValidateRejectsInvertedAboveBands(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	if !strings.Contains(err.Error(), "critical must be greater than or equal to warning") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestChangeThresholdSpecValidateRejectsPercentWithoutDelta(t *testing.T) {
+	t.Parallel()
+
+	spec := ChangeThresholdSpec{
+		Metric:         "quarantine-spam",
+		WarningPercent: 25,
+	}
+
+	err := spec.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "warning delta is required") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

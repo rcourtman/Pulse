@@ -147,6 +147,30 @@ func buildCanonicalSeverityThresholdSpec(specID, resourceID, title string, resou
 	return spec, spec.Validate()
 }
 
+func buildCanonicalChangeThresholdSpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, warningCurrent, criticalCurrent, warningDelta, criticalDelta, warningPercent, criticalPercent float64, window time.Duration, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	spec := alertspecs.ResourceAlertSpec{
+		ID:           specID,
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		Kind:         alertspecs.AlertSpecKindChangeThreshold,
+		Severity:     alertspecs.AlertSeverityWarning,
+		Title:        title,
+		Disabled:     disabled,
+		ChangeThreshold: &alertspecs.ChangeThresholdSpec{
+			Metric:          metric,
+			ReferenceWindow: window,
+			WarningCurrent:  warningCurrent,
+			CriticalCurrent: criticalCurrent,
+			WarningDelta:    warningDelta,
+			CriticalDelta:   criticalDelta,
+			WarningPercent:  warningPercent,
+			CriticalPercent: criticalPercent,
+		},
+	}
+
+	return spec, spec.Validate()
+}
+
 func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	switch level {
 	case AlertLevelCritical:

@@ -7839,6 +7839,57 @@ func thresholdForCanonicalSeverity(severity alertspecs.AlertSeverity, warningThr
 	}
 }
 
+func quarantineAlertThreshold(metricType, reason string, previousCount int, defaults PMGThresholdConfig) float64 {
+	switch metricType {
+	case "spam":
+		switch reason {
+		case "change-threshold-current-critical":
+			return float64(defaults.QuarantineSpamCritical)
+		case "change-threshold-current-warning":
+			return float64(defaults.QuarantineSpamWarn)
+		case "change-threshold-growth-critical":
+			return float64(previousCount + defaults.QuarantineGrowthCritMin)
+		case "change-threshold-growth-warning":
+			return float64(previousCount + defaults.QuarantineGrowthWarnMin)
+		default:
+			return 0
+		}
+	case "virus":
+		switch reason {
+		case "change-threshold-current-critical":
+			return float64(defaults.QuarantineVirusCritical)
+		case "change-threshold-current-warning":
+			return float64(defaults.QuarantineVirusWarn)
+		case "change-threshold-growth-critical":
+			return float64(previousCount + defaults.QuarantineGrowthCritMin)
+		case "change-threshold-growth-warning":
+			return float64(previousCount + defaults.QuarantineGrowthWarnMin)
+		default:
+			return 0
+		}
+	default:
+		return 0
+	}
+}
+
+func quarantineAlertMessage(pmg models.PMGInstance, metricType string, current, previousCount int, reason string, defaults PMGThresholdConfig) string {
+	switch reason {
+	case "change-threshold-growth-critical", "change-threshold-growth-warning":
+		growth := current - previousCount
+		growthPct := 0.0
+		if previousCount > 0 {
+			growthPct = (float64(growth) / float64(previousCount)) * 100
+		}
+		if reason == "change-threshold-growth-critical" {
+			return fmt.Sprintf("PMG %s %s quarantine growing rapidly: +%d messages (+%.1f%%) in 2 hours", pmg.Name, metricType, growth, growthPct)
+		}
+		return fmt.Sprintf("PMG %s %s quarantine growing: +%d messages (+%.1f%%) in 2 hours", pmg.Name, metricType, growth, growthPct)
+	default:
+		threshold := quarantineAlertThreshold(metricType, reason, previousCount, defaults)
+		return fmt.Sprintf("PMG %s has %d %s messages in quarantine (threshold: %d)", pmg.Name, current, metricType, int(threshold))
+	}
+}
+
 func (m *Manager) checkPMGQueueDepth(pmg models.PMGInstance, warningThreshold, criticalThreshold, value int, alertIDSuffix, alertType, messageFormat, logField string) {
 	if warningThreshold <= 0 && criticalThreshold <= 0 {
 		return
@@ -8356,99 +8407,79 @@ func (m *Manager) checkQuarantineMetric(pmg models.PMGInstance, metricType strin
 		}
 	}
 
-	var level AlertLevel
-	var message string
-	var threshold int
-	var alertTriggered bool
-
-	// Check absolute thresholds first
-	if absoluteCrit > 0 && current >= absoluteCrit {
-		level = AlertLevelCritical
-		threshold = absoluteCrit
-		message = fmt.Sprintf("PMG %s has %d %s messages in quarantine (threshold: %d)", pmg.Name, current, metricType, threshold)
-		alertTriggered = true
-	} else if absoluteWarn > 0 && current >= absoluteWarn {
-		level = AlertLevelWarning
-		threshold = absoluteWarn
-		message = fmt.Sprintf("PMG %s has %d %s messages in quarantine (threshold: %d)", pmg.Name, current, metricType, threshold)
-		alertTriggered = true
-	}
-
-	// Check growth thresholds if we have historical data
-	if twoHoursAgo != nil && previousCount > 0 {
-		growth := current - previousCount
-		growthPct := (float64(growth) / float64(previousCount)) * 100
-
-		// Critical growth: ≥50% AND ≥500 messages
-		if defaults.QuarantineGrowthCritPct > 0 && defaults.QuarantineGrowthCritMin > 0 {
-			if growthPct >= float64(defaults.QuarantineGrowthCritPct) && growth >= defaults.QuarantineGrowthCritMin {
-				if level != AlertLevelCritical { // Only override if not already critical from absolute
-					level = AlertLevelCritical
-					threshold = previousCount + defaults.QuarantineGrowthCritMin
-					message = fmt.Sprintf("PMG %s %s quarantine growing rapidly: +%d messages (+%.1f%%) in 2 hours", pmg.Name, metricType, growth, growthPct)
-					alertTriggered = true
-				}
-			}
-		}
-
-		// Warning growth: ≥25% AND ≥250 messages (if not already critical)
-		if level != AlertLevelCritical && defaults.QuarantineGrowthWarnPct > 0 && defaults.QuarantineGrowthWarnMin > 0 {
-			if growthPct >= float64(defaults.QuarantineGrowthWarnPct) && growth >= defaults.QuarantineGrowthWarnMin {
-				level = AlertLevelWarning
-				threshold = previousCount + defaults.QuarantineGrowthWarnMin
-				message = fmt.Sprintf("PMG %s %s quarantine growing: +%d messages (+%.1f%%) in 2 hours", pmg.Name, metricType, growth, growthPct)
-				alertTriggered = true
-			}
-		}
-	}
-
-	// Clear alert if no thresholds exceeded
-	if !alertTriggered {
+	if absoluteWarn <= 0 && absoluteCrit <= 0 &&
+		defaults.QuarantineGrowthWarnMin <= 0 && defaults.QuarantineGrowthCritMin <= 0 {
 		m.clearAlert(alertID)
 		return
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Check if alert already exists
-	if alert, exists := m.activeAlerts[alertID]; exists {
-		// Update existing alert
-		alert.LastSeen = time.Now()
-		alert.Value = float64(current)
-		alert.Threshold = float64(threshold)
-		alert.Level = level
-		alert.Message = message
+	spec, err := buildCanonicalChangeThresholdSpec(
+		alertID,
+		pmg.ID,
+		pmg.Name,
+		unifiedresources.ResourceTypePMG,
+		"quarantine-"+metricType,
+		float64(absoluteWarn),
+		float64(absoluteCrit),
+		float64(defaults.QuarantineGrowthWarnMin),
+		float64(defaults.QuarantineGrowthCritMin),
+		float64(defaults.QuarantineGrowthWarnPct),
+		float64(defaults.QuarantineGrowthCritPct),
+		2*time.Hour,
+		false,
+	)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("pmg", pmg.Name).
+			Str("alertID", alertID).
+			Str("metricType", metricType).
+			Msg("Skipping invalid canonical PMG quarantine spec")
 		return
 	}
 
-	// Create new alert
-	alert := &Alert{
-		ID:              alertID,
-		Type:            fmt.Sprintf("quarantine-%s", metricType),
-		Level:           level,
-		ResourceID:      pmg.ID,
-		ResourceName:    pmg.Name,
-		Node:            pmg.Host,
-		NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
-		Instance:        pmg.Name,
-		Message:         message,
-		Value:           float64(current),
-		Threshold:       float64(threshold),
-		StartTime:       time.Now(),
-		LastSeen:        time.Now(),
+	evidence := alertspecs.AlertEvidence{
+		ObservedAt: time.Now(),
+		ChangeThreshold: &alertspecs.ChangeThresholdEvidence{
+			Metric:   "quarantine-" + metricType,
+			Observed: float64(current),
+		},
+	}
+	if previousCount > 0 {
+		previous := float64(previousCount)
+		evidence.ChangeThreshold.PreviousObserved = &previous
 	}
 
-	m.activeAlerts[alertID] = alert
-	m.dispatchAlert(alert, true)
+	result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec:         spec,
+		Evidence:     evidence,
+		AlertID:      alertID,
+		AlertType:    fmt.Sprintf("quarantine-%s", metricType),
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         pmg.Host,
+		Instance:     pmg.Name,
+		MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+			reason := result.State.Reason
+			threshold := quarantineAlertThreshold(metricType, reason, previousCount, defaults)
+			return quarantineAlertMessage(pmg, metricType, current, previousCount, reason, defaults), float64(current), threshold
+		},
+		DispatchAsync: true,
+	})
 
-	log.Warn().
-		Str("pmg", pmg.Name).
-		Str("type", metricType).
-		Int("current", current).
-		Int("threshold", threshold).
-		Str("level", string(level)).
-		Msg("PMG quarantine backlog alert triggered")
+	if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
+		if !ok {
+			level = AlertLevelWarning
+		}
+		log.Warn().
+			Str("pmg", pmg.Name).
+			Str("type", metricType).
+			Int("current", current).
+			Int("threshold", int(quarantineAlertThreshold(metricType, result.State.Reason, previousCount, defaults))).
+			Str("level", string(level)).
+			Msg("PMG quarantine backlog alert triggered")
+	}
 }
 
 // calculateTrimmedBaseline computes a robust baseline from historical samples

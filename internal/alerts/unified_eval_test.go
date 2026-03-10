@@ -654,3 +654,28 @@ func TestCheckPMGNodeQueueAnnotatesCanonicalSpecMetadata(t *testing.T) {
 		t.Fatalf("canonicalSpecID = %v, want pmg-1-node-a-queue-total", got)
 	}
 }
+
+func TestCheckPMGQuarantineAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	pmg := models.PMGInstance{
+		ID:   "pmg-1",
+		Name: "PMG 1",
+		Quarantine: &models.PMGQuarantineTotals{
+			Spam: 2500,
+		},
+	}
+
+	m.checkPMGQuarantineBacklog(pmg, PMGThresholdConfig{
+		QuarantineSpamWarn:     2000,
+		QuarantineSpamCritical: 5000,
+	})
+
+	alert := activeAlert(t, m, "pmg-1-quarantine-spam")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "change-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want change-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "pmg-1-quarantine-spam" {
+		t.Fatalf("canonicalSpecID = %v, want pmg-1-quarantine-spam", got)
+	}
+}

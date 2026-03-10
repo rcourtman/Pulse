@@ -26,6 +26,7 @@ type EvaluatorState struct {
 	SpecFingerprint    string        `json:"specFingerprint,omitempty"`
 	State              AlertState    `json:"state"`
 	Severity           AlertSeverity `json:"severity,omitempty"`
+	Reason             string        `json:"reason,omitempty"`
 	ConsecutiveMatches int           `json:"consecutiveMatches,omitempty"`
 	FirstMatchedAt     time.Time     `json:"firstMatchedAt,omitempty"`
 	ActiveSince        time.Time     `json:"activeSince,omitempty"`
@@ -79,6 +80,7 @@ func Evaluate(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvi
 	case AlertSpecKindMetricThreshold:
 		return evaluateMetricThreshold(spec, previous, evidence, now, fingerprint), nil
 	case AlertSpecKindSeverityThreshold,
+		AlertSpecKindChangeThreshold,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -107,6 +109,7 @@ func evaluateMetricThreshold(spec ResourceAlertSpec, previous EvaluatorState, ev
 	if triggered {
 		next.State = AlertStateFiring
 		next.Severity = spec.Severity
+		next.Reason = "threshold-exceeded"
 		next.ConsecutiveMatches = 1
 		if next.ActiveSince.IsZero() {
 			next.ActiveSince = now
@@ -133,6 +136,7 @@ func evaluateMetricThreshold(spec ResourceAlertSpec, previous EvaluatorState, ev
 
 	next.State = AlertStateClear
 	next.Severity = ""
+	next.Reason = ""
 	next.ConsecutiveMatches = 0
 	next.FirstMatchedAt = time.Time{}
 	next.ActiveSince = time.Time{}
@@ -182,6 +186,7 @@ func evaluateMatchSpec(spec ResourceAlertSpec, previous EvaluatorState, evidence
 	if !match {
 		next.State = AlertStateClear
 		next.Severity = ""
+		next.Reason = ""
 		next.ConsecutiveMatches = 0
 		next.FirstMatchedAt = time.Time{}
 		next.ActiveSince = time.Time{}
@@ -240,6 +245,7 @@ func evaluateMatchSpec(spec ResourceAlertSpec, previous EvaluatorState, evidence
 		next.FirstMatchedAt = now
 	}
 	next.Severity = severity
+	next.Reason = reason
 
 	if count < required {
 		next.State = AlertStatePending
@@ -263,6 +269,7 @@ func evaluateMatchSpec(spec ResourceAlertSpec, previous EvaluatorState, evidence
 	next.State = AlertStateFiring
 	next.ConsecutiveMatches = required
 	next.ActiveSince = now
+	next.Reason = reason
 	result.State = next
 	result.Transition = &EvaluationTransition{
 		Kind:       EvaluationTransitionActivated,
@@ -289,6 +296,7 @@ func terminalEvaluation(spec ResourceAlertSpec, previous EvaluatorState, evidenc
 	if state != AlertStateFiring {
 		next.ActiveSince = time.Time{}
 		next.Severity = ""
+		next.Reason = ""
 	}
 
 	result := EvaluationResult{
@@ -319,6 +327,11 @@ func matches(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverit
 			return false, "", ""
 		}
 		return matchesSeverityThreshold(*spec.SeverityThreshold, *evidence.SeverityThreshold)
+	case AlertSpecKindChangeThreshold:
+		if evidence.ChangeThreshold == nil || spec.ChangeThreshold == nil {
+			return false, "", ""
+		}
+		return matchesChangeThreshold(*spec.ChangeThreshold, *evidence.ChangeThreshold)
 	case AlertSpecKindConnectivity:
 		return evidence.Connectivity != nil && !evidence.Connectivity.Connected, spec.Severity, "connectivity-lost"
 	case AlertSpecKindPoweredState:
@@ -402,6 +415,39 @@ func matchesSeverityThreshold(spec SeverityThresholdSpec, evidence SeverityThres
 	default:
 		return false, "", ""
 	}
+}
+
+func matchesChangeThreshold(spec ChangeThresholdSpec, evidence ChangeThresholdEvidence) (bool, AlertSeverity, string) {
+	if evidence.Metric != spec.Metric {
+		return false, "", ""
+	}
+
+	if spec.CriticalCurrent > 0 && evidence.Observed >= spec.CriticalCurrent {
+		return true, AlertSeverityCritical, "change-threshold-current-critical"
+	}
+	if spec.WarningCurrent > 0 && evidence.Observed >= spec.WarningCurrent {
+		return true, AlertSeverityWarning, "change-threshold-current-warning"
+	}
+
+	if evidence.PreviousObserved == nil || *evidence.PreviousObserved <= 0 {
+		return false, "", "change-threshold-normal"
+	}
+
+	delta := evidence.Observed - *evidence.PreviousObserved
+	percent := (delta / *evidence.PreviousObserved) * 100
+
+	if spec.CriticalDelta > 0 && delta >= spec.CriticalDelta {
+		if spec.CriticalPercent <= 0 || percent >= spec.CriticalPercent {
+			return true, AlertSeverityCritical, "change-threshold-growth-critical"
+		}
+	}
+	if spec.WarningDelta > 0 && delta >= spec.WarningDelta {
+		if spec.WarningPercent <= 0 || percent >= spec.WarningPercent {
+			return true, AlertSeverityWarning, "change-threshold-growth-warning"
+		}
+	}
+
+	return false, "", "change-threshold-normal"
 }
 
 func metricTriggered(spec *MetricThresholdSpec, observed float64) bool {

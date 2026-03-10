@@ -180,6 +180,62 @@ func TestEvaluateSeverityThresholdEscalationAndRecovery(t *testing.T) {
 	}
 }
 
+func TestEvaluateChangeThresholdAbsoluteAndGrowth(t *testing.T) {
+	spec := ResourceAlertSpec{
+		ID:           "pmg-quarantine-spam",
+		ResourceID:   "pmg-1",
+		ResourceType: unifiedresources.ResourceTypePMG,
+		Kind:         AlertSpecKindChangeThreshold,
+		Severity:     AlertSeverityWarning,
+		ChangeThreshold: &ChangeThresholdSpec{
+			Metric:          "quarantine-spam",
+			ReferenceWindow: 2 * time.Hour,
+			WarningCurrent:  2000,
+			CriticalCurrent: 5000,
+			WarningDelta:    250,
+			CriticalDelta:   500,
+			WarningPercent:  25,
+			CriticalPercent: 50,
+		},
+	}
+
+	absolute, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 10, 0, 0, 0, time.UTC),
+		ChangeThreshold: &ChangeThresholdEvidence{
+			Metric:   "quarantine-spam",
+			Observed: 2500,
+		},
+	})
+	if err != nil {
+		t.Fatalf("absolute evaluation failed: %v", err)
+	}
+	if absolute.State.State != AlertStateFiring || absolute.State.Severity != AlertSeverityWarning {
+		t.Fatalf("absolute state = %+v, want firing warning", absolute.State)
+	}
+	if absolute.State.Reason != "change-threshold-current-warning" {
+		t.Fatalf("absolute reason = %q, want current warning", absolute.State.Reason)
+	}
+
+	previous := 1000.0
+	growth, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 10, 5, 0, 0, time.UTC),
+		ChangeThreshold: &ChangeThresholdEvidence{
+			Metric:           "quarantine-spam",
+			Observed:         1600,
+			PreviousObserved: &previous,
+		},
+	})
+	if err != nil {
+		t.Fatalf("growth evaluation failed: %v", err)
+	}
+	if growth.State.State != AlertStateFiring || growth.State.Severity != AlertSeverityCritical {
+		t.Fatalf("growth state = %+v, want firing critical", growth.State)
+	}
+	if growth.State.Reason != "change-threshold-growth-critical" {
+		t.Fatalf("growth reason = %q, want growth critical", growth.State.Reason)
+	}
+}
+
 func TestEvaluateConnectivityConfirmationAndRecovery(t *testing.T) {
 	spec := ResourceAlertSpec{
 		ID:           "node-pve1-connectivity",
