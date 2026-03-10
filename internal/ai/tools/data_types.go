@@ -55,6 +55,7 @@ type Prediction struct {
 // ActiveAlert represents an active alert
 type ActiveAlert struct {
 	ID           string    `json:"id"`
+	LegacyID     string    `json:"legacy_id,omitempty"`
 	ResourceID   string    `json:"resource_id"`
 	ResourceName string    `json:"resource_name"`
 	Type         string    `json:"type"` // "cpu", "memory", "disk", "offline"

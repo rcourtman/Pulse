@@ -216,12 +216,17 @@ func TestPollStorageWithNodesOptimizedRecordsMetricsAndAlerts(t *testing.T) {
 	alerts := monitor.alertManager.GetActiveAlerts()
 	found := false
 	for _, alert := range alerts {
-		if alert.ID == "inst1-node1-local-usage" {
+		if alert.Instance == "inst1" &&
+			alert.Node == "node1" &&
+			(alert.ResourceID == "inst1-node1-local" ||
+				alert.ResourceName == "local" ||
+				alert.ID == "inst1-node1-local-usage" ||
+				alert.LegacyID == "inst1-node1-local-usage") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected storage usage alert to be active")
+		t.Fatalf("expected storage usage alert to be active, alerts=%+v", alerts)
 	}
 }

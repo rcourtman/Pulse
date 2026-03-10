@@ -44,6 +44,7 @@ func (a *AlertManagerMCPAdapter) GetActiveAlerts() []ActiveAlert {
 	for _, alert := range activeAlerts {
 		result = append(result, ActiveAlert{
 			ID:           alert.ID,
+			LegacyID:     alert.LegacyID,
 			ResourceID:   alert.ResourceID,
 			ResourceName: alert.ResourceName,
 			Type:         alert.Type,

@@ -1024,7 +1024,7 @@ func TestMonitor_AI_Extra(t *testing.T) {
 func TestMonitor_PruneDockerAlerts_Extra(t *testing.T) {
 	m := &Monitor{
 		state:        models.NewState(),
-		alertManager: alerts.NewManager(),
+		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
 	}
 	defer m.alertManager.Stop()
 
@@ -1039,6 +1039,34 @@ func TestMonitor_PruneDockerAlerts_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_SyncAlertsToState_PreservesLegacyIDAndCanonicalID(t *testing.T) {
+	m := &Monitor{
+		state:        models.NewState(),
+		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
+	}
+	defer m.alertManager.Stop()
+
+	host := models.DockerHost{ID: "sync-host", DisplayName: "Sync Host", Hostname: "sync-host"}
+	m.state.UpsertDockerHost(host)
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+
+	m.syncAlertsToState()
+
+	snapshot := m.state.GetSnapshot()
+	if len(snapshot.ActiveAlerts) == 0 {
+		t.Fatal("expected active alert snapshot")
+	}
+	alert := snapshot.ActiveAlerts[0]
+	if !strings.HasPrefix(alert.ID, "docker:sync-host::") {
+		t.Fatalf("snapshot alert ID = %q, want canonical docker host alert ID", alert.ID)
+	}
+	if alert.LegacyID != "docker-host-offline-sync-host" {
+		t.Fatalf("snapshot alert LegacyID = %q, want legacy docker host alert ID", alert.LegacyID)
+	}
+}
+
 func TestMonitor_PruneDockerAlerts_UsesUnifiedReadState(t *testing.T) {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(models.StateSnapshot{
@@ -1049,7 +1077,7 @@ func TestMonitor_PruneDockerAlerts_UsesUnifiedReadState(t *testing.T) {
 
 	m := &Monitor{
 		state:         models.NewState(),
-		alertManager:  alerts.NewManager(),
+		alertManager:  alerts.NewManagerWithDataDir(t.TempDir()),
 		resourceStore: unifiedresources.NewMonitorAdapter(registry),
 	}
 	defer m.alertManager.Stop()

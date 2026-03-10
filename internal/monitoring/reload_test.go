@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,12 +43,9 @@ func TestReloadableMonitor_Lifecycle_Coverage(t *testing.T) {
 	state := rm.ReadSnapshot("default")
 	require.NotNil(t, state)
 
-	// Test ReadSnapshot (non-existent) - should auto-provision and return empty state
+	// Test ReadSnapshot (non-existent) - should not auto-provision an unprovisioned tenant
 	stateMissing := rm.ReadSnapshot("missing-org")
-	require.NotNil(t, stateMissing)
-	snapshot, ok := stateMissing.(models.StateSnapshot)
-	require.True(t, ok)
-	assert.Empty(t, snapshot.Nodes)
+	assert.Nil(t, stateMissing)
 
 	// Test ReadSnapshot with invalid OrgID (should fail persistence check)
 	// Assuming "../" or similar might be rejected by GetPersistence or underlying path logic

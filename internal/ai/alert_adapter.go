@@ -112,9 +112,10 @@ func (a *AlertManagerAdapter) GetAlertHistory(resourceID string, limit int) []Re
 
 // buildAlertInfo constructs an AlertInfo from pre-extracted field values.
 // This is the shared implementation used by both convertAlertFromManager and convertAlertFromModels.
-func buildAlertInfo(id, alertType, level, resourceID, resourceName, node, instance, message string, value, threshold float64, startTime time.Time, acknowledged bool, metadata map[string]interface{}) AlertInfo {
+func buildAlertInfo(id, legacyID, alertType, level, resourceID, resourceName, node, instance, message string, value, threshold float64, startTime time.Time, acknowledged bool, metadata map[string]interface{}) AlertInfo {
 	return AlertInfo{
 		ID:           id,
+		LegacyID:     legacyID,
 		Type:         alertType,
 		Level:        level,
 		ResourceID:   resourceID,
@@ -136,7 +137,7 @@ func convertAlertFromManager(alert *alerts.Alert) AlertInfo {
 	if alert == nil {
 		return AlertInfo{}
 	}
-	return buildAlertInfo(alert.ID, alert.Type, string(alert.Level), alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, alert.Metadata)
+	return buildAlertInfo(alert.ID, alert.LegacyID, alert.Type, string(alert.Level), alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, alert.Metadata)
 }
 
 // convertAlertFromModels converts a models.Alert to AI's AlertInfo
@@ -144,7 +145,7 @@ func convertAlertFromModels(alert *models.Alert) AlertInfo {
 	if alert == nil {
 		return AlertInfo{}
 	}
-	return buildAlertInfo(alert.ID, alert.Type, alert.Level, alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, nil)
+	return buildAlertInfo(alert.ID, alert.LegacyID, alert.Type, alert.Level, alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, nil)
 }
 
 // inferResourceType infers resource type from alert type

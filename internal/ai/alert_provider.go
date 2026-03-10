@@ -10,6 +10,7 @@ import (
 // AlertInfo contains information about an alert for AI context
 type AlertInfo struct {
 	ID           string    `json:"id"`
+	LegacyID     string    `json:"legacy_id,omitempty"`
 	Type         string    `json:"type"`          // cpu, memory, disk, offline, etc.
 	Level        string    `json:"level"`         // warning, critical
 	ResourceID   string    `json:"resource_id"`   // unique resource identifier

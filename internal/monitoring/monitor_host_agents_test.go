@@ -138,7 +138,7 @@ func TestEvaluateHostAgentsTriggersOfflineAlert(t *testing.T) {
 	alerts := monitor.alertManager.GetActiveAlerts()
 	found := false
 	for _, alert := range alerts {
-		if alert.ID == "host-offline-"+hostID {
+		if alert.Type == "host-offline" && alert.ResourceID == "agent:"+hostID {
 			found = true
 			break
 		}
