@@ -7231,7 +7231,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// guest agent call fails (prevents disk usage flickering 57% → 0% → 57%).
 	// Refs: #1319
 	prevDiskByGuestID := make(map[string]models.Disk, len(prevInstanceVMs))
+	prevVMByGuestID := make(map[string]models.VM, len(prevInstanceVMs))
 	for _, pvm := range prevInstanceVMs {
+		prevVMByGuestID[pvm.ID] = pvm
 		if pvm.Disk.Usage > 0 {
 			prevDiskByGuestID[pvm.ID] = pvm.Disk
 		}
@@ -7832,12 +7834,59 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				memUsed = memTotal
 			}
 
-			memFree := uint64(0)
-			if memTotal >= memUsed {
-				memFree = memTotal - memUsed
+			sampleTime := time.Now()
+			var memory models.Memory
+			snapshotNotes := []string(nil)
+			if prev, ok := prevVMByGuestID[guestID]; ok &&
+				shouldCarryForwardPreviousVMMemory(prev, res.Status, memorySource, memTotal, memUsed, sampleTime) {
+				fallbackSource := memorySource
+				memory = prev.Memory
+				if detailedStatus != nil && detailedStatus.Balloon > 0 {
+					memory.Balloon = int64(detailedStatus.Balloon)
+				}
+				memorySource = "previous-snapshot"
+				snapshotNotes = append(snapshotNotes, "preserved-previous-memory-after-low-trust-fallback")
+				log.Debug().
+					Str("instance", instanceName).
+					Str("vm", res.Name).
+					Int("vmid", res.VMID).
+					Str("previousSource", prev.MemorySource).
+					Str("fallbackSource", fallbackSource).
+					Float64("previousUsage", prev.Memory.Usage).
+					Float64("fallbackUsage", safePercentage(float64(memUsed), float64(memTotal))).
+					Msg("Preserving previous VM memory metrics after low-trust fallback")
+			} else {
+				memFree := uint64(0)
+				if memTotal >= memUsed {
+					memFree = memTotal - memUsed
+				}
+
+				memoryUsage := safePercentage(float64(memUsed), float64(memTotal))
+				memory = models.Memory{
+					Total: int64(memTotal),
+					Used:  int64(memUsed),
+					Free:  int64(memFree),
+					Usage: memoryUsage,
+				}
+				if memory.Free < 0 {
+					memory.Free = 0
+				}
+				if memory.Used > memory.Total {
+					memory.Used = memory.Total
+				}
+				// Derive reclaimable cache: the difference between "available" memory
+				// (what the OS can reclaim) and "truly free" memory (unused pages).
+				// This lets the frontend show a split bar: used | cache | free.
+				if memRawFree > 0 && memFree > memRawFree {
+					memory.Cache = int64(memFree - memRawFree)
+					// Adjust Free to reflect truly free pages, not available
+					memory.Free = int64(memRawFree)
+				}
+				if detailedStatus != nil && detailedStatus.Balloon > 0 {
+					memory.Balloon = int64(detailedStatus.Balloon)
+				}
 			}
 
-			sampleTime := time.Now()
 			currentMetrics := IOMetrics{
 				DiskRead:   diskReadBytes,
 				DiskWrite:  diskWriteBytes,
@@ -7846,31 +7895,6 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Timestamp:  sampleTime,
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
-
-			memoryUsage := safePercentage(float64(memUsed), float64(memTotal))
-			memory := models.Memory{
-				Total: int64(memTotal),
-				Used:  int64(memUsed),
-				Free:  int64(memFree),
-				Usage: memoryUsage,
-			}
-			if memory.Free < 0 {
-				memory.Free = 0
-			}
-			if memory.Used > memory.Total {
-				memory.Used = memory.Total
-			}
-			// Derive reclaimable cache: the difference between "available" memory
-			// (what the OS can reclaim) and "truly free" memory (unused pages).
-			// This lets the frontend show a split bar: used | cache | free.
-			if memRawFree > 0 && memFree > memRawFree {
-				memory.Cache = int64(memFree - memRawFree)
-				// Adjust Free to reflect truly free pages, not available
-				memory.Free = int64(memRawFree)
-			}
-			if detailedStatus != nil && detailedStatus.Balloon > 0 {
-				memory.Balloon = int64(detailedStatus.Balloon)
-			}
 
 			vm := models.VM{
 				ID:           guestID,
@@ -7936,6 +7960,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				MemorySource: memorySource,
 				Memory:       vm.Memory,
 				Raw:          guestRaw,
+				Notes:        snapshotNotes,
 			})
 
 			// For non-running VMs, zero out resource usage metrics to prevent false alerts
