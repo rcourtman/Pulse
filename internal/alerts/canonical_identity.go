@@ -62,6 +62,13 @@ func canonicalTrackingKeyForAlert(alert *Alert) string {
 	return alert.ID
 }
 
+func canonicalTrackingKeyOrFallback(alert *Alert, fallback string) string {
+	if key := canonicalTrackingKeyForAlert(alert); key != "" {
+		return key
+	}
+	return fallback
+}
+
 func (m *Manager) hasActiveAlertTrackingKeyNoLock(trackingKey string) bool {
 	if trackingKey == "" {
 		return false

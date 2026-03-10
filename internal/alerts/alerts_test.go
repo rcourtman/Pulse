@@ -115,6 +115,58 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 	}
 }
 
+func TestCheckMetricUsesCanonicalTrackingKeyForExistingAlertState(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.SuppressionWindow = 5
+	m.config.MinimumDelta = 0
+	m.mu.Unlock()
+
+	resourceID := "res1"
+	alertID := resourceID + "-cpu"
+	canonicalState := buildCanonicalStateID(resourceID, "metric-threshold:cpu")
+	lastSeen := time.Now().Add(-time.Minute)
+	alert := &Alert{
+		ID:              alertID,
+		Type:            "cpu",
+		Level:           AlertLevelWarning,
+		ResourceID:      resourceID,
+		ResourceName:    "Resource",
+		CanonicalSpecID: "metric-threshold:cpu",
+		CanonicalKind:   "metric_threshold",
+		CanonicalState:  canonicalState,
+		StartTime:       lastSeen,
+		LastSeen:        lastSeen,
+		Value:           81,
+		Threshold:       80,
+	}
+
+	m.mu.Lock()
+	m.setActiveAlertNoLock(canonicalState, alert)
+	m.suppressedUntil[canonicalState] = time.Now().Add(time.Hour)
+	m.mu.Unlock()
+
+	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.checkMetric(resourceID, "Resource", "node1", "inst1", "guest", "cpu", 95, threshold, nil)
+
+	m.mu.RLock()
+	updated, exists := testLookupActiveAlert(t, m, alertID)
+	_, hasLegacySuppression := m.suppressedUntil[alertID]
+	m.mu.RUnlock()
+
+	if !exists {
+		t.Fatalf("expected existing alert to remain active")
+	}
+	if !updated.LastSeen.Equal(lastSeen) {
+		t.Fatalf("expected canonical suppression to prevent update, lastSeen changed from %v to %v", lastSeen, updated.LastSeen)
+	}
+	if hasLegacySuppression {
+		t.Fatalf("expected suppression to remain keyed by canonical state, not legacy alert ID")
+	}
+}
+
 func TestCheckMetricClearsAlertWhenThresholdDisabled(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

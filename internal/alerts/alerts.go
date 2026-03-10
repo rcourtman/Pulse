@@ -6705,13 +6705,15 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	existingAlert, exists := m.activeAlerts[alertID]
+	existingAlert, exists := m.getActiveAlertNoLock(alertID)
+	trackingKey := canonicalTrackingKeyOrFallback(existingAlert, alertID)
 	monitorOnly := opts != nil && opts.MonitorOnly
 
 	// Check for suppression
-	if suppressUntil, suppressed := m.suppressedUntil[alertID]; suppressed && time.Now().Before(suppressUntil) {
+	if suppressUntil, suppressed := m.suppressedUntil[trackingKey]; suppressed && time.Now().Before(suppressUntil) {
 		log.Debug().
 			Str("alertID", alertID).
+			Str("trackingKey", trackingKey).
 			Time("suppressedUntil", suppressUntil).
 			Msg("Alert suppressed")
 		return
@@ -6728,11 +6730,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			// Check if we have a time threshold configured
 			if timeThreshold > 0 {
 				// Check if this threshold was already pending
-				if pendingTime, isPending := m.pendingAlerts[alertID]; isPending {
+				if pendingTime, isPending := m.pendingAlerts[trackingKey]; isPending {
 					// Check if enough time has passed
 					if time.Since(pendingTime) >= time.Duration(timeThreshold)*time.Second {
 						// Time threshold met, proceed with alert
-						delete(m.pendingAlerts, alertID)
+						delete(m.pendingAlerts, trackingKey)
 						if !pendingTime.IsZero() {
 							alertStartTime = pendingTime
 						}
@@ -6752,9 +6754,10 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					}
 				} else {
 					// First time exceeding threshold, start tracking
-					m.pendingAlerts[alertID] = alertStartTime
+					m.pendingAlerts[trackingKey] = alertStartTime
 					log.Debug().
 						Str("alertID", alertID).
+						Str("trackingKey", trackingKey).
 						Int("timeThreshold", timeThreshold).
 						Msg("Threshold exceeded, starting time threshold tracking")
 					return
@@ -6762,7 +6765,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Check for recent similar alert to prevent spam
-			if recent, hasRecent := m.recentAlerts[alertID]; hasRecent {
+			if recent, hasRecent := m.recentAlerts[trackingKey]; hasRecent {
 				// Check minimum delta
 				if m.config.MinimumDelta > 0 &&
 					time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
@@ -6776,7 +6779,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 						Msg("Alert suppressed due to minimum delta")
 
 					// Set suppression window
-					m.suppressedUntil[alertID] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
+					m.suppressedUntil[trackingKey] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
 					return
 				}
 			}
@@ -6845,9 +6848,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Msg("Creating new alert with start time")
 
 			m.preserveAlertState(alertID, alert)
-
-			m.activeAlerts[alertID] = alert
-			m.recentAlerts[alertID] = alert
+			trackingKey = canonicalTrackingKeyOrFallback(alert, alertID)
+			m.setActiveAlertNoLock(alertID, alert)
+			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
 
 			// Save active alerts after adding new one
@@ -6886,9 +6889,10 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Check rate limit (but don't remove alert from tracking)
-			if !m.checkRateLimit(alertID) {
+			if !m.checkRateLimit(trackingKey) {
 				log.Debug().
 					Str("alertID", alertID).
+					Str("trackingKey", trackingKey).
 					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 					Msg("Alert notification suppressed due to rate limit")
 				// Don't delete the alert, just suppress notifications
@@ -6979,10 +6983,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	} else {
 		// Value is below trigger threshold
 		// Clear any pending alert for this metric
-		if _, isPending := m.pendingAlerts[alertID]; isPending {
-			delete(m.pendingAlerts, alertID)
+		if _, isPending := m.pendingAlerts[trackingKey]; isPending {
+			delete(m.pendingAlerts, trackingKey)
 			log.Debug().
 				Str("alertID", alertID).
+				Str("trackingKey", trackingKey).
 				Msg("Value dropped below threshold, clearing pending alert")
 		}
 
