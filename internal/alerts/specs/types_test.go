@@ -320,6 +320,25 @@ func TestResourceAlertSpecValidateAllowsBackupSubjectMigrationBridgeType(t *test
 	}
 }
 
+func TestResourceAlertSpecValidateAllowsProxmoxDiskMigrationBridgeType(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "inst:node:disk:dev-sda-health",
+		ResourceID:   "inst:node:disk:dev-sda",
+		ResourceType: unifiedresources.ResourceType("proxmox-disk"),
+		Kind:         AlertSpecKindHealthAssessment,
+		Severity:     AlertSeverityCritical,
+		HealthAssessment: &HealthAssessmentSpec{
+			Signal: "proxmox-disk-health",
+		},
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestResourceAlertSpecValidateRejectsPayloadKindMismatch(t *testing.T) {
 	t.Parallel()
 

@@ -2988,6 +2988,12 @@ func TestCheckDiskHealthFailedDiskCreatesAlert(t *testing.T) {
 	if alert.Instance != "test-instance" {
 		t.Errorf("expected instance test-instance, got %s", alert.Instance)
 	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+		t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "test-instance:pve-node1:disk:dev-sdb-health" {
+		t.Fatalf("canonicalSpecID = %v, want test-instance:pve-node1:disk:dev-sdb-health", got)
+	}
 }
 
 func TestCheckDiskHealthRecoveryAlertCleared(t *testing.T) {
@@ -3063,6 +3069,12 @@ func TestCheckDiskHealthLowWearoutCreatesAlert(t *testing.T) {
 	}
 	if alert.Threshold != 10.0 {
 		t.Errorf("expected threshold 10.0, got %f", alert.Threshold)
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "test-instance:pve-node1:disk:dev-nvme1n1-wearout" {
+		t.Fatalf("canonicalSpecID = %v, want test-instance:pve-node1:disk:dev-nvme1n1-wearout", got)
 	}
 }
 
@@ -6633,6 +6645,12 @@ func TestHandleHostOffline(t *testing.T) {
 		}
 		if alert.ResourceName == "" {
 			t.Error("expected ResourceName to be set")
+		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
+			t.Fatalf("canonicalAlertKind = %v, want connectivity", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != hostResourceID(host.ID)+"-connectivity" {
+			t.Fatalf("canonicalSpecID = %v, want %s", got, hostResourceID(host.ID)+"-connectivity")
 		}
 	})
 }

@@ -130,7 +130,7 @@ func buildCanonicalServiceGapSpec(resourceID, title string, resourceType unified
 	return spec, spec.Validate()
 }
 
-func buildCanonicalSeverityThresholdSpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, warning, critical float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+func buildCanonicalSeverityThresholdSpecWithDirection(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, direction alertspecs.ThresholdDirection, warning, critical float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {
 	spec := alertspecs.ResourceAlertSpec{
 		ID:           specID,
 		ResourceID:   resourceID,
@@ -141,13 +141,17 @@ func buildCanonicalSeverityThresholdSpec(specID, resourceID, title string, resou
 		Disabled:     disabled,
 		SeverityThreshold: &alertspecs.SeverityThresholdSpec{
 			Metric:    metric,
-			Direction: alertspecs.ThresholdDirectionAbove,
+			Direction: direction,
 			Warning:   warning,
 			Critical:  critical,
 		},
 	}
 
 	return spec, spec.Validate()
+}
+
+func buildCanonicalSeverityThresholdSpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, warning, critical float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	return buildCanonicalSeverityThresholdSpecWithDirection(specID, resourceID, title, resourceType, metric, alertspecs.ThresholdDirectionAbove, warning, critical, disabled)
 }
 
 func buildCanonicalSeverityThresholdSpecWithRecovery(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, warning, critical float64, recovery *float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {

@@ -3378,78 +3378,34 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		return
 	}
 
-	m.mu.Lock()
-	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
-		alert.LastSeen = time.Now()
-		m.activeAlerts[alertID] = alert
-		m.mu.Unlock()
-		return
-	}
-
-	m.offlineConfirmations[resourceKey]++
-	const requiredConfirmations = 3
-	if confirmations := m.offlineConfirmations[resourceKey]; confirmations < requiredConfirmations {
-		m.mu.Unlock()
-		log.Debug().
+	spec, err := buildCanonicalConnectivitySpec(resourceKey, resourceName, unifiedresources.ResourceTypeAgent, AlertLevelCritical, 3, false)
+	if err != nil {
+		log.Warn().
+			Err(err).
 			Str("host", resourceName).
 			Str("hostID", host.ID).
-			Int("confirmations", confirmations).
-			Int("required", requiredConfirmations).
-			Msg("Host agent appears offline, awaiting confirmation")
+			Msg("Skipping invalid canonical host connectivity spec")
 		return
 	}
 
-	// Host is confirmed offline. Clear all resource metrics (CPU/Memory/Disk/RAID)
-	// before raising the offline alert, to avoid stale alerts persisting.
-	{
-		// Basic metrics
-		metricTypes := []string{"cpu", "memory"}
-		for _, mt := range metricTypes {
-			m.clearAlertNoLock(fmt.Sprintf("%s-%s", resourceKey, mt))
-		}
-
-		// Disks and RAID
-		// Note: Disks use ResourceID prefix, RAID uses AlertID prefix
-		diskResourcePrefixes := []string{
-			fmt.Sprintf("%s/disk:", resourceKey),
-		}
-		raidAlertPrefix := fmt.Sprintf("host-%s-raid-", host.ID)
-
-		// Collect alert IDs first, then clear (avoids modifying map during iteration)
-		var alertsToClear []string
-		for alertID, a := range m.activeAlerts {
-			if a == nil {
-				continue
-			}
-			matchesDiskPrefix := false
-			for _, diskResourcePrefix := range diskResourcePrefixes {
-				if strings.HasPrefix(a.ResourceID, diskResourcePrefix) {
-					matchesDiskPrefix = true
-					break
-				}
-			}
-			if matchesDiskPrefix || strings.HasPrefix(alertID, raidAlertPrefix) {
-				alertsToClear = append(alertsToClear, alertID)
-			}
-		}
-		for _, alertID := range alertsToClear {
-			m.clearAlertNoLock(alertID)
-		}
-	}
-
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "host-offline",
-		Level:        AlertLevelCritical,
+	result, ok := m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			Connectivity: &alertspecs.ConnectivityEvidence{
+				Signal:    "status",
+				Connected: false,
+			},
+		},
+		Tracking:     m.offlineConfirmations,
+		TrackingKey:  resourceKey,
+		AlertID:      alertID,
+		AlertType:    "host-offline",
 		ResourceID:   resourceKey,
 		ResourceName: resourceName,
 		Node:         nodeName,
 		Instance:     instanceName,
 		Message:      fmt.Sprintf("Host '%s' is offline", resourceName),
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
 			"resourceType": "agent",
 			"hostId":       host.ID,
@@ -3459,22 +3415,58 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 			"osName":       host.OSName,
 			"osVersion":    host.OSVersion,
 		},
+		AddToRecent:   true,
+		AddToHistory:  true,
+		RateLimit:     true,
+		DispatchAsync: false,
+	})
+	if !ok {
+		return
 	}
-
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-	if !m.checkRateLimit(alertID) {
-		m.mu.Unlock()
+	if result.State.State == alertspecs.AlertStatePending {
 		log.Debug().
-			Str("alertID", alertID).
-			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-			Msg("Host offline alert suppressed due to rate limit")
+			Str("host", resourceName).
+			Str("hostID", host.ID).
+			Int("confirmations", result.State.ConsecutiveMatches).
+			Int("required", 3).
+			Msg("Host agent appears offline, awaiting confirmation")
+		return
+	}
+	if result.Transition == nil || result.Transition.Kind != alertspecs.EvaluationTransitionActivated {
 		return
 	}
 
-	m.dispatchAlert(alert, false)
+	// Host is confirmed offline. Clear all host-scoped metrics and storage-health alerts
+	// so the connectivity alert becomes the only active signal for this agent.
+	m.mu.Lock()
+	metricTypes := []string{"cpu", "memory"}
+	for _, mt := range metricTypes {
+		m.clearAlertNoLock(fmt.Sprintf("%s-%s", resourceKey, mt))
+	}
+
+	diskResourcePrefixes := []string{
+		fmt.Sprintf("%s/disk:", resourceKey),
+	}
+	raidAlertPrefix := fmt.Sprintf("host-%s-raid-", host.ID)
+	var alertsToClear []string
+	for activeAlertID, a := range m.activeAlerts {
+		if a == nil {
+			continue
+		}
+		matchesDiskPrefix := false
+		for _, diskResourcePrefix := range diskResourcePrefixes {
+			if strings.HasPrefix(a.ResourceID, diskResourcePrefix) {
+				matchesDiskPrefix = true
+				break
+			}
+		}
+		if matchesDiskPrefix || strings.HasPrefix(activeAlertID, raidAlertPrefix) {
+			alertsToClear = append(alertsToClear, activeAlertID)
+		}
+	}
+	for _, staleAlertID := range alertsToClear {
+		m.clearAlertNoLock(staleAlertID)
+	}
 	m.mu.Unlock()
 
 	log.Error().
@@ -9277,6 +9269,20 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 	return result
 }
 
+func proxmoxDiskCanonicalResourceID(instance, node, devPath string) string {
+	return fmt.Sprintf("%s:%s:disk:%s", strings.TrimSpace(instance), strings.TrimSpace(node), sanitizeAlertKey(devPath))
+}
+
+func proxmoxDiskAlertMetadata(disk proxmox.Disk) map[string]interface{} {
+	return map[string]interface{}{
+		"disk_path":   disk.DevPath,
+		"disk_model":  disk.Model,
+		"disk_serial": disk.Serial,
+		"disk_type":   disk.Type,
+		"disk_size":   disk.Size,
+	}
+}
+
 // ensureHysteresisThreshold ensures a threshold has hysteresis configured
 func ensureHysteresisThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {
 	if threshold == nil {
@@ -10156,9 +10162,10 @@ func (m *Manager) cleanupStaleMaps() {
 func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Create unique alert ID for this disk
 	alertID := fmt.Sprintf("disk-health-%s-%s-%s", instance, node, disk.DevPath)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	resourceID := fmt.Sprintf("%s-%s", node, disk.DevPath)
+	resourceName := fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath)
+	canonicalResourceID := proxmoxDiskCanonicalResourceID(instance, node, disk.DevPath)
+	resourceType := unifiedresources.ResourceType("proxmox-disk")
 
 	// Check if disk health is not PASSED
 	normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
@@ -10176,44 +10183,43 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 			Msg("Skipping health alert for drive with known firmware bug - health status unreliable")
 
 		// Clear any existing health alert since we now recognize this is a false positive
-		m.clearAlertNoLock(alertID)
+		m.clearAlert(alertID)
 		healthCheckNeeded = false // Skip to wearout check
 	}
 
 	if healthCheckNeeded {
-		// Check if alert already exists
-		if _, exists := m.activeAlerts[alertID]; !exists {
-			// Create new health alert
-			alert := &Alert{
-				ID:           alertID,
-				Type:         "disk-health",
-				Level:        AlertLevelCritical,
-				ResourceID:   fmt.Sprintf("%s-%s", node, disk.DevPath),
-				ResourceName: fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath),
+		spec, err := buildCanonicalHealthAssessmentSpec(canonicalResourceID+"-health", canonicalResourceID, resourceName, resourceType, "proxmox-disk-health", nil, false)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("node", node).
+				Str("disk", disk.DevPath).
+				Msg("Skipping invalid canonical proxmox disk health spec")
+		} else {
+			metadata := proxmoxDiskAlertMetadata(disk)
+			metadata["disk_health"] = disk.Health
+
+			_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+				Spec: spec,
+				Evidence: alertspecs.AlertEvidence{
+					ObservedAt: time.Now(),
+					HealthAssessment: &alertspecs.HealthAssessmentEvidence{
+						Signal:   "proxmox-disk-health",
+						Severity: alertspecs.AlertSeverityCritical,
+						Codes:    []string{normalizedHealth},
+					},
+				},
+				AlertID:      alertID,
+				AlertType:    "disk-health",
+				ResourceID:   resourceID,
+				ResourceName: resourceName,
 				Node:         node,
 				Instance:     instance,
 				Message:      fmt.Sprintf("Disk health check failed: %s", disk.Health),
-				Value:        0, // Not applicable for health status
-				Threshold:    0,
-				StartTime:    time.Now(),
-				LastSeen:     time.Now(),
-				Metadata: map[string]interface{}{
-					"disk_path":   disk.DevPath,
-					"disk_model":  disk.Model,
-					"disk_serial": disk.Serial,
-					"disk_type":   disk.Type,
-					"disk_health": disk.Health,
-					"disk_size":   disk.Size,
-				},
-			}
-
-			m.preserveAlertState(alertID, alert)
-
-			m.activeAlerts[alertID] = alert
-			m.recentAlerts[alertID] = alert
-			m.historyManager.AddAlert(*alert)
-
-			m.dispatchAlert(alert, false)
+				Metadata:     metadata,
+				AddToRecent:  true,
+				AddToHistory: true,
+			})
 
 			log.Error().
 				Str("node", node).
@@ -10224,41 +10230,36 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		}
 	} else {
 		// Disk is healthy, clear alert if it exists
-		m.clearAlertNoLock(alertID)
+		m.clearAlert(alertID)
 	}
 
 	// Check for low wearout (SSD life remaining)
 	if disk.Wearout > 0 && disk.Wearout < 10 {
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
 		message := fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout)
-		resourceID := fmt.Sprintf("%s-%s", node, disk.DevPath)
-		resourceName := fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath)
-
-		if existing, exists := m.activeAlerts[wearoutAlertID]; exists {
-			// Refresh details so legacy alerts pick up updated wording and metadata
-			existing.LastSeen = time.Now()
-			existing.Value = float64(disk.Wearout)
-			existing.Message = message
-			existing.ResourceID = resourceID
-			existing.ResourceName = resourceName
-			existing.Node = node
-			existing.NodeDisplayName = m.resolveNodeDisplayName(node)
-			existing.Instance = instance
-			if existing.Metadata == nil {
-				existing.Metadata = map[string]interface{}{}
-			}
-			existing.Metadata["disk_path"] = disk.DevPath
-			existing.Metadata["disk_model"] = disk.Model
-			existing.Metadata["disk_serial"] = disk.Serial
-			existing.Metadata["disk_type"] = disk.Type
-			existing.Metadata["disk_wearout"] = disk.Wearout
-			delete(existing.Metadata, "disk_wearout_used")
+		spec, err := buildCanonicalSeverityThresholdSpecWithDirection(canonicalResourceID+"-wearout", canonicalResourceID, resourceName, resourceType, "wearout-remaining", alertspecs.ThresholdDirectionBelow, 10, 0, false)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("node", node).
+				Str("disk", disk.DevPath).
+				Msg("Skipping invalid canonical proxmox disk wearout spec")
 		} else {
-			// Create wearout alert
-			alert := &Alert{
-				ID:           wearoutAlertID,
-				Type:         "disk-wearout",
-				Level:        AlertLevelWarning,
+			metadata := proxmoxDiskAlertMetadata(disk)
+			metadata["disk_wearout"] = disk.Wearout
+
+			_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+				Spec: spec,
+				Evidence: alertspecs.AlertEvidence{
+					ObservedAt: time.Now(),
+					SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
+						Metric:    "wearout-remaining",
+						Direction: alertspecs.ThresholdDirectionBelow,
+						Observed:  float64(disk.Wearout),
+					},
+				},
+				AlertID:      wearoutAlertID,
+				AlertType:    "disk-wearout",
 				ResourceID:   resourceID,
 				ResourceName: resourceName,
 				Node:         node,
@@ -10266,24 +10267,10 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 				Message:      message,
 				Value:        float64(disk.Wearout),
 				Threshold:    10.0,
-				StartTime:    time.Now(),
-				LastSeen:     time.Now(),
-				Metadata: map[string]interface{}{
-					"disk_path":    disk.DevPath,
-					"disk_model":   disk.Model,
-					"disk_serial":  disk.Serial,
-					"disk_type":    disk.Type,
-					"disk_wearout": disk.Wearout,
-				},
-			}
-
-			m.preserveAlertState(wearoutAlertID, alert)
-
-			m.activeAlerts[wearoutAlertID] = alert
-			m.recentAlerts[wearoutAlertID] = alert
-			m.historyManager.AddAlert(*alert)
-
-			m.dispatchAlert(alert, false)
+				Metadata:     metadata,
+				AddToRecent:  true,
+				AddToHistory: true,
+			})
 
 			log.Warn().
 				Str("node", node).
@@ -10295,7 +10282,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	} else if disk.Wearout >= 10 {
 		// Wearout is acceptable, clear alert if it exists
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
-		m.clearAlertNoLock(wearoutAlertID)
+		m.clearAlert(wearoutAlertID)
 	}
 }
 
