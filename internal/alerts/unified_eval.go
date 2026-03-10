@@ -1,6 +1,10 @@
 package alerts
 
-import "github.com/rs/zerolog/log"
+import (
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rs/zerolog/log"
+)
 
 // Override Key Format by Resource Type
 //
@@ -39,6 +43,13 @@ type UnifiedResourceInput struct {
 	DiskWrite  *UnifiedResourceMetric
 	NetworkIn  *UnifiedResourceMetric
 	NetworkOut *UnifiedResourceMetric
+}
+
+type unifiedMetricCandidate struct {
+	Spec       alertspecs.ResourceAlertSpec
+	MetricType string
+	Value      float64
+	Threshold  *HysteresisThreshold
 }
 
 // unifiedAlertType maps a resource type key to the alert system's display type.
@@ -113,38 +124,199 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 	if input == nil {
 		return
 	}
-	resourceType := unifiedAlertType(input.Type)
 
-	if input.CPU != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "cpu", input.CPU.Percent, thresholds.CPU, opts)
+	for _, candidate := range buildUnifiedMetricCandidates(input, thresholds) {
+		m.checkMetric(
+			input.ID,
+			input.Name,
+			input.Node,
+			input.Instance,
+			unifiedAlertType(input.Type),
+			candidate.MetricType,
+			candidate.Value,
+			candidate.Threshold,
+			mergeMetricOptions(opts, map[string]interface{}{
+				"canonicalSpecID":    candidate.Spec.ID,
+				"canonicalAlertKind": string(candidate.Spec.Kind),
+			}),
+		)
 	}
-	if input.Memory != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "memory", input.Memory.Percent, thresholds.Memory, opts)
-	}
-	if input.Disk != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "disk", input.Disk.Percent, thresholds.Disk, opts)
+}
+
+func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds ThresholdConfig) []unifiedMetricCandidate {
+	if input == nil {
+		return nil
 	}
 
-	// I/O metrics — only for guest resource types
+	resourceType, ok := unifiedMetricResourceType(input.Type)
+	if !ok {
+		return nil
+	}
+
+	candidates := make([]unifiedMetricCandidate, 0, 8)
+	appendCandidate := func(metricType string, metric *UnifiedResourceMetric, value float64, threshold *HysteresisThreshold) {
+		if metric == nil {
+			return
+		}
+		spec := unifiedMetricSpec(input, resourceType, metricType, threshold)
+		if err := spec.Validate(); err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", input.ID).
+				Str("resourceType", input.Type).
+				Str("metricType", metricType).
+				Msg("Skipping invalid canonical unified metric spec")
+			return
+		}
+		candidates = append(candidates, unifiedMetricCandidate{
+			Spec:       spec,
+			MetricType: metricType,
+			Value:      value,
+			Threshold:  threshold,
+		})
+	}
+
+	appendCandidate("cpu", input.CPU, input.CPUValue(), thresholds.CPU)
+	appendCandidate("memory", input.Memory, input.MemoryValue(), thresholds.Memory)
+	appendCandidate("disk", input.Disk, input.DiskValue(), thresholds.Disk)
+
 	if isUnifiedGuestType(input.Type) {
-		if input.DiskRead != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskRead", input.DiskRead.Value, thresholds.DiskRead, opts)
-		}
-		if input.DiskWrite != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "diskWrite", input.DiskWrite.Value, thresholds.DiskWrite, opts)
-		}
-		if input.NetworkIn != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkIn", input.NetworkIn.Value, thresholds.NetworkIn, opts)
-		}
-		if input.NetworkOut != nil {
-			m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "networkOut", input.NetworkOut.Value, thresholds.NetworkOut, opts)
+		appendCandidate("diskRead", input.DiskRead, input.DiskReadValue(), thresholds.DiskRead)
+		appendCandidate("diskWrite", input.DiskWrite, input.DiskWriteValue(), thresholds.DiskWrite)
+		appendCandidate("networkIn", input.NetworkIn, input.NetworkInValue(), thresholds.NetworkIn)
+		appendCandidate("networkOut", input.NetworkOut, input.NetworkOutValue(), thresholds.NetworkOut)
+	}
+
+	if input.Type == "storage" && input.Disk != nil {
+		appendCandidate("usage", input.Disk, input.DiskValue(), thresholds.Usage)
+	}
+
+	return candidates
+}
+
+func unifiedMetricSpec(input *UnifiedResourceInput, resourceType unifiedresources.ResourceType, metricType string, threshold *HysteresisThreshold) alertspecs.ResourceAlertSpec {
+	spec := alertspecs.ResourceAlertSpec{
+		ID:           input.ID + "-" + metricType,
+		ResourceID:   input.ID,
+		ResourceType: resourceType,
+		Kind:         alertspecs.AlertSpecKindMetricThreshold,
+		Severity:     alertspecs.AlertSeverityWarning,
+		Title:        input.Name,
+		Disabled:     threshold == nil || threshold.Trigger <= 0,
+		MetricThreshold: &alertspecs.MetricThresholdSpec{
+			Metric:    metricType,
+			Direction: alertspecs.ThresholdDirectionAbove,
+			Trigger:   0,
+		},
+	}
+
+	if threshold != nil {
+		spec.MetricThreshold.Trigger = threshold.Trigger
+		if threshold.Clear > 0 && threshold.Clear < threshold.Trigger {
+			recovery := threshold.Clear
+			spec.MetricThreshold.Recovery = &recovery
 		}
 	}
 
-	// Storage-specific: usage metric
-	if input.Type == "storage" && input.Disk != nil {
-		m.checkMetric(input.ID, input.Name, input.Node, input.Instance, resourceType, "usage", input.Disk.Percent, thresholds.Usage, opts)
+	return spec
+}
+
+func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, bool) {
+	switch typeKey {
+	case "vm":
+		return unifiedresources.ResourceTypeVM, true
+	case "system-container":
+		return unifiedresources.ResourceTypeSystemContainer, true
+	case "app-container":
+		return unifiedresources.ResourceTypeAppContainer, true
+	case "agent":
+		return unifiedresources.ResourceTypeAgent, true
+	case "node":
+		return unifiedresources.ResourceType("node"), true
+	case "pbs":
+		return unifiedresources.ResourceTypePBS, true
+	case "storage":
+		return unifiedresources.ResourceTypeStorage, true
+	case "pmg":
+		return unifiedresources.ResourceTypePMG, true
+	default:
+		return "", false
 	}
+}
+
+func mergeMetricOptions(base *metricOptions, extra map[string]interface{}) *metricOptions {
+	if len(extra) == 0 {
+		return base
+	}
+
+	merged := &metricOptions{}
+	if base != nil {
+		*merged = *base
+	}
+	if len(extra) > 0 {
+		if merged.Metadata == nil {
+			merged.Metadata = make(map[string]interface{}, len(extra))
+		} else {
+			copied := make(map[string]interface{}, len(merged.Metadata)+len(extra))
+			for k, v := range merged.Metadata {
+				copied[k] = v
+			}
+			merged.Metadata = copied
+		}
+		for k, v := range extra {
+			merged.Metadata[k] = v
+		}
+	}
+	return merged
+}
+
+func (i *UnifiedResourceInput) CPUValue() float64 {
+	if i == nil || i.CPU == nil {
+		return 0
+	}
+	return i.CPU.Percent
+}
+
+func (i *UnifiedResourceInput) MemoryValue() float64 {
+	if i == nil || i.Memory == nil {
+		return 0
+	}
+	return i.Memory.Percent
+}
+
+func (i *UnifiedResourceInput) DiskValue() float64 {
+	if i == nil || i.Disk == nil {
+		return 0
+	}
+	return i.Disk.Percent
+}
+
+func (i *UnifiedResourceInput) DiskReadValue() float64 {
+	if i == nil || i.DiskRead == nil {
+		return 0
+	}
+	return i.DiskRead.Value
+}
+
+func (i *UnifiedResourceInput) DiskWriteValue() float64 {
+	if i == nil || i.DiskWrite == nil {
+		return 0
+	}
+	return i.DiskWrite.Value
+}
+
+func (i *UnifiedResourceInput) NetworkInValue() float64 {
+	if i == nil || i.NetworkIn == nil {
+		return 0
+	}
+	return i.NetworkIn.Value
+}
+
+func (i *UnifiedResourceInput) NetworkOutValue() float64 {
+	if i == nil || i.NetworkOut == nil {
+		return 0
+	}
+	return i.NetworkOut.Value
 }
 
 // CheckUnifiedResource evaluates threshold-based metric alerts for a unified resource.

@@ -228,3 +228,28 @@ func TestCheckUnifiedResourceDisabledThresholdsNoAlert(t *testing.T) {
 
 	assertAlertMissing(t, m, "vm-disabled-cpu")
 }
+
+func TestCheckUnifiedResourceAnnotatesMetricAlertsWithCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "vm-annotated",
+		Type: "vm",
+		Name: "vm-annotated",
+		CPU:  &UnifiedResourceMetric{Percent: 90},
+	})
+
+	m.mu.RLock()
+	alert := m.activeAlerts["vm-annotated-cpu"]
+	m.mu.RUnlock()
+	if alert == nil {
+		t.Fatal("expected vm-annotated-cpu alert")
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "vm-annotated-cpu" {
+		t.Fatalf("canonicalSpecID = %v, want vm-annotated-cpu", got)
+	}
+}

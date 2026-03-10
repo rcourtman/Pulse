@@ -152,6 +152,27 @@ func TestResourceAlertSpecValidateAllowsMetricThresholdWithoutRecovery(t *testin
 	}
 }
 
+func TestResourceAlertSpecValidateAllowsNodeMigrationBridgeType(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "node-pve1-cpu",
+		ResourceID:   "node/pve-1",
+		ResourceType: unifiedresources.ResourceType("node"),
+		Kind:         AlertSpecKindMetricThreshold,
+		Severity:     AlertSeverityWarning,
+		MetricThreshold: &MetricThresholdSpec{
+			Metric:    "cpu",
+			Direction: ThresholdDirectionAbove,
+			Trigger:   85,
+		},
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestResourceAlertSpecValidateRejectsPayloadKindMismatch(t *testing.T) {
 	t.Parallel()
 
