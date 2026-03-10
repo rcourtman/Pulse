@@ -107,12 +107,16 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   };
 
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
+  const [discoveryActivated, setDiscoveryActivated] = createSignal(false);
 
   // All tabs are always rendered (hidden via CSS) to avoid any DOM
   // mount/unmount during tab switches. Mounting new components inside
   // a <For>-rendered table row causes SolidJS to recreate the row,
   // which detaches the element and resets the scroll container.
   const switchTab = (tab: 'overview' | 'discovery') => {
+    if (tab === 'discovery') {
+      setDiscoveryActivated(true);
+    }
     setActiveTab(tab);
   };
 
@@ -558,33 +562,34 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         </div>
       </div>
 
-      {/* Always rendered, hidden via CSS. Wrapped in a local Suspense
-                     so DiscoveryTab's createResource loading state doesn't bubble
-                     up to the app-level Suspense and replace the entire page. */}
+      {/* Defer discovery initialization until the tab is first opened, then keep it
+                 mounted so subsequent tab switches don't churn the row. */}
       <div
         class={activeTab() === 'discovery' ? '' : 'hidden'}
         style={{ 'overflow-anchor': 'none' }}
       >
-        <Suspense
-          fallback={
-            <div class="flex items-center justify-center py-8">
-              <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-              <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">
-                Loading discovery...
-              </span>
-            </div>
-          }
-        >
-          <DiscoveryTab
-            resourceType={discoveryResourceType()}
-            hostId={props.guest.node}
-            resourceId={String(props.guest.vmid)}
-            hostname={props.guest.name}
-            guestId={guestId()}
-            customUrl={props.customUrl}
-            onCustomUrlChange={(url) => props.onCustomUrlChange?.(guestId(), url)}
-          />
-        </Suspense>
+        <Show when={discoveryActivated()}>
+          <Suspense
+            fallback={
+              <div class="flex items-center justify-center py-8">
+                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                  Loading discovery...
+                </span>
+              </div>
+            }
+          >
+            <DiscoveryTab
+              resourceType={discoveryResourceType()}
+              hostId={props.guest.node}
+              resourceId={String(props.guest.vmid)}
+              hostname={props.guest.name}
+              guestId={guestId()}
+              customUrl={props.customUrl}
+              onCustomUrlChange={(url) => props.onCustomUrlChange?.(guestId(), url)}
+            />
+          </Suspense>
+        </Show>
       </div>
     </div>
   );

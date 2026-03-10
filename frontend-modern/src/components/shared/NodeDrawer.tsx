@@ -17,6 +17,7 @@ interface NodeDrawerProps {
 
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
+  const [discoveryActivated, setDiscoveryActivated] = createSignal(false);
   const [historyRange, setHistoryRange] = useDrawerHistoryRange(
     `node:${props.node.id || props.node.name}`,
   );
@@ -49,6 +50,9 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   };
 
   const switchTab = (tab: 'overview' | 'discovery') => {
+    if (tab === 'discovery') {
+      setDiscoveryActivated(true);
+    }
     setActiveTab(tab);
   };
 
@@ -327,26 +331,28 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         class={activeTab() === 'discovery' ? '' : 'hidden'}
         style={{ 'overflow-anchor': 'none' }}
       >
-        <Suspense
-          fallback={
-            <div class="flex items-center justify-center py-8">
-              <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-              <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">
-                Loading discovery...
-              </span>
-            </div>
-          }
-        >
-          <DiscoveryTab
-            resourceType="host" /* Assuming 'host' type works for PVE nodes discovery, or if backend treats them same */
-            hostId={props.node.id || props.node.name}
-            resourceId={props.node.id || props.node.name}
-            hostname={props.node.name}
-            guestId={props.node.id || props.node.name}
-            customUrl={fetchedCustomUrl()}
-            onCustomUrlChange={handleCustomUrlChange}
-          />
-        </Suspense>
+        <Show when={discoveryActivated()}>
+          <Suspense
+            fallback={
+              <div class="flex items-center justify-center py-8">
+                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                  Loading discovery...
+                </span>
+              </div>
+            }
+          >
+            <DiscoveryTab
+              resourceType="host" /* Assuming 'host' type works for PVE nodes discovery, or if backend treats them same */
+              hostId={props.node.id || props.node.name}
+              resourceId={props.node.id || props.node.name}
+              hostname={props.node.name}
+              guestId={props.node.id || props.node.name}
+              customUrl={fetchedCustomUrl()}
+              onCustomUrlChange={handleCustomUrlChange}
+            />
+          </Suspense>
+        </Show>
       </div>
     </div>
   );

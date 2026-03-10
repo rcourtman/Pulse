@@ -17,6 +17,7 @@ interface HostDrawerProps {
 
 export const HostDrawer: Component<HostDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
+  const [discoveryActivated, setDiscoveryActivated] = createSignal(false);
   const [historyRange, setHistoryRange] = useDrawerHistoryRange(`host:${props.host.id}`);
   const [editingUrl, setEditingUrl] = createSignal(false);
   const [urlInput, setUrlInput] = createSignal('');
@@ -25,6 +26,9 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
   const metricsResource = { type: 'host' as ResourceType, id: props.host.id };
 
   const switchTab = (tab: 'overview' | 'discovery') => {
+    if (tab === 'discovery') {
+      setDiscoveryActivated(true);
+    }
     setActiveTab(tab);
   };
 
@@ -529,27 +533,29 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
         class={activeTab() === 'discovery' ? '' : 'hidden'}
         style={{ 'overflow-anchor': 'none' }}
       >
-        <Suspense
-          fallback={
-            <div class="flex items-center justify-center py-8">
-              <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-              <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">
-                Loading discovery...
-              </span>
-            </div>
-          }
-        >
-          <DiscoveryTab
-            resourceType="host"
-            hostId={props.host.id}
-            resourceId={props.host.id} /* For hosts, typically same as hostId */
-            hostname={props.host.hostname}
-            guestId={props.host.id}
-            customUrl={props.customUrl}
-            onCustomUrlChange={(url) => props.onCustomUrlChange?.(props.host.id, url)}
-            commandsEnabled={props.host.commandsEnabled}
-          />
-        </Suspense>
+        <Show when={discoveryActivated()}>
+          <Suspense
+            fallback={
+              <div class="flex items-center justify-center py-8">
+                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                  Loading discovery...
+                </span>
+              </div>
+            }
+          >
+            <DiscoveryTab
+              resourceType="host"
+              hostId={props.host.id}
+              resourceId={props.host.id} /* For hosts, typically same as hostId */
+              hostname={props.host.hostname}
+              guestId={props.host.id}
+              customUrl={props.customUrl}
+              onCustomUrlChange={(url) => props.onCustomUrlChange?.(props.host.id, url)}
+              commandsEnabled={props.host.commandsEnabled}
+            />
+          </Suspense>
+        </Show>
       </div>
     </div>
   );
