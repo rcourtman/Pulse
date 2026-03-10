@@ -531,13 +531,27 @@ func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
 	defer m.mu.RUnlock()
 
 	cpuAlertID := fmt.Sprintf("%s-cpu", hostResourceID(host.ID))
-	if _, exists := m.activeAlerts[cpuAlertID]; !exists {
+	cpuAlert, exists := m.activeAlerts[cpuAlertID]
+	if !exists {
 		t.Fatalf("expected CPU alert %q to be active", cpuAlertID)
+	}
+	if got := cpuAlert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("cpu canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := cpuAlert.Metadata["canonicalSpecID"]; got != cpuAlertID {
+		t.Fatalf("cpu canonicalSpecID = %v, want %s", got, cpuAlertID)
 	}
 
 	memAlertID := fmt.Sprintf("%s-memory", hostResourceID(host.ID))
-	if _, exists := m.activeAlerts[memAlertID]; !exists {
+	memAlert, exists := m.activeAlerts[memAlertID]
+	if !exists {
 		t.Fatalf("expected memory alert %q to be active", memAlertID)
+	}
+	if got := memAlert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("memory canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := memAlert.Metadata["canonicalSpecID"]; got != memAlertID {
+		t.Fatalf("memory canonicalSpecID = %v, want %s", got, memAlertID)
 	}
 
 	diskResourceID, _ := hostDiskResourceID(host, host.Disks[0])
@@ -2008,6 +2022,12 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 	}
 	if used, ok := alert.Metadata["writableLayerBytes"].(int64); !ok || used != int64(8*gib) {
 		t.Fatalf("expected writableLayerBytes metadata to be %d, got %v", int64(8*gib), alert.Metadata["writableLayerBytes"])
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != alertID {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, alertID)
 	}
 
 	// Drop usage below the clear threshold and ensure the alert resolves.

@@ -3047,7 +3047,16 @@ func (m *Manager) CheckHost(host models.Host) {
 		if host.CPUCount > 0 {
 			cpuMetadata["cpuCount"] = host.CPUCount
 		}
-		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "agent", "cpu", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+		spec, err := buildCanonicalMetricSpec(resourceID, resourceName, unifiedresources.ResourceTypeAgent, "cpu", thresholds.CPU)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", resourceID).
+				Str("host", resourceName).
+				Msg("Skipping invalid canonical host CPU metric spec")
+		} else {
+			m.checkMetricWithCanonicalSpec(spec, resourceName, nodeName, instanceName, "agent", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+		}
 	} else {
 		m.clearHostMetricAlerts(host.ID, "cpu")
 	}
@@ -3061,7 +3070,16 @@ func (m *Manager) CheckHost(host models.Host) {
 			memMetadata["memoryUsedBytes"] = host.Memory.Used
 			memMetadata["memoryFreeBytes"] = host.Memory.Free
 		}
-		m.checkMetric(resourceID, resourceName, nodeName, instanceName, "agent", "memory", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+		spec, err := buildCanonicalMetricSpec(resourceID, resourceName, unifiedresources.ResourceTypeAgent, "memory", thresholds.Memory)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", resourceID).
+				Str("host", resourceName).
+				Msg("Skipping invalid canonical host memory metric spec")
+		} else {
+			m.checkMetricWithCanonicalSpec(spec, resourceName, nodeName, instanceName, "agent", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+		}
 	} else {
 		m.clearHostMetricAlerts(host.ID, "memory")
 	}
@@ -4337,7 +4355,16 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 				"metric":        "cpu",
 				"cpuPercent":    container.CPUPercent,
 			}
-			m.checkMetric(resourceID, containerName, nodeName, instanceName, resourceType, "cpu", container.CPUPercent, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+			spec, err := buildCanonicalMetricSpec(resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "cpu", thresholds.CPU)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resourceID", resourceID).
+					Str("container", containerName).
+					Msg("Skipping invalid canonical docker container CPU metric spec")
+			} else {
+				m.checkMetricWithCanonicalSpec(spec, containerName, nodeName, instanceName, resourceType, container.CPUPercent, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+			}
 		}
 
 		if thresholds.Memory != nil {
@@ -4359,7 +4386,16 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 			if container.MemoryLimit > 0 {
 				memMetadata["memoryLimitBytes"] = container.MemoryLimit
 			}
-			m.checkMetric(resourceID, containerName, nodeName, instanceName, resourceType, "memory", container.MemoryPercent, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+			spec, err := buildCanonicalMetricSpec(resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "memory", thresholds.Memory)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resourceID", resourceID).
+					Str("container", containerName).
+					Msg("Skipping invalid canonical docker container memory metric spec")
+			} else {
+				m.checkMetricWithCanonicalSpec(spec, containerName, nodeName, instanceName, resourceType, container.MemoryPercent, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+			}
 		}
 
 		if thresholds.Disk != nil {
@@ -4388,7 +4424,16 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 					diskMetadata["blockIoReadBytes"] = container.BlockIO.ReadBytes
 					diskMetadata["blockIoWriteBytes"] = container.BlockIO.WriteBytes
 				}
-				m.checkMetric(resourceID, containerName, nodeName, instanceName, resourceType, "disk", diskPercent, thresholds.Disk, &metricOptions{Metadata: diskMetadata})
+				spec, err := buildCanonicalMetricSpec(resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "disk", thresholds.Disk)
+				if err != nil {
+					log.Warn().
+						Err(err).
+						Str("resourceID", resourceID).
+						Str("container", containerName).
+						Msg("Skipping invalid canonical docker container disk metric spec")
+				} else {
+					m.checkMetricWithCanonicalSpec(spec, containerName, nodeName, instanceName, resourceType, diskPercent, thresholds.Disk, &metricOptions{Metadata: diskMetadata})
+				}
 			} else {
 				m.clearDockerContainerMetricAlerts(resourceID, "disk")
 			}
