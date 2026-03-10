@@ -328,6 +328,8 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	trackingKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
+
 	var existing *Alert
 	if current, ok := m.activeAlerts[params.AlertID]; ok {
 		existing = current
@@ -388,7 +390,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		m.preserveAlertState(params.AlertID, alert)
 		m.activeAlerts[params.AlertID] = alert
 		if params.AddToRecent {
-			m.recentAlerts[params.AlertID] = alert
+			m.recentAlerts[trackingKey] = alert
 		}
 
 		if existing != nil {
@@ -399,9 +401,10 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			m.historyManager.AddAlert(*alert)
 		}
 
-		if params.RateLimit && !m.checkRateLimit(params.AlertID) {
+		if params.RateLimit && !m.checkRateLimit(trackingKey) {
 			log.Debug().
 				Str("alertID", params.AlertID).
+				Str("trackingKey", trackingKey).
 				Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 				Msg("Lifecycle alert notification suppressed due to rate limit")
 			return result, true
@@ -432,6 +435,8 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	trackingKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
 
 	var existing *Alert
 	if current, ok := m.activeAlerts[params.AlertID]; ok {
@@ -506,16 +511,17 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		m.preserveAlertState(params.AlertID, alert)
 		m.activeAlerts[params.AlertID] = alert
 		if params.AddToRecent {
-			m.recentAlerts[params.AlertID] = alert
+			m.recentAlerts[trackingKey] = alert
 		}
 
 		if existing == nil {
 			if params.AddToHistory {
 				m.historyManager.AddAlert(*alert)
 			}
-			if params.RateLimit && !m.checkRateLimit(params.AlertID) {
+			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				log.Debug().
 					Str("alertID", params.AlertID).
+					Str("trackingKey", trackingKey).
 					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 					Msg("Stateful alert notification suppressed due to rate limit")
 				return result, true
@@ -528,9 +534,10 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			if params.AddToHistoryOnSeverityChange {
 				m.historyManager.AddAlert(*alert)
 			}
-			if params.RateLimit && !m.checkRateLimit(params.AlertID) {
+			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				log.Debug().
 					Str("alertID", params.AlertID).
+					Str("trackingKey", trackingKey).
 					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 					Msg("Stateful escalation notification suppressed due to rate limit")
 				return result, true

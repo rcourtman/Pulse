@@ -1,5 +1,7 @@
 package alerts
 
+import alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+
 const canonicalStateSeparator = "::"
 
 func buildCanonicalStateID(resourceID, specID string) string {
@@ -40,4 +42,40 @@ func applyCanonicalIdentity(alert *Alert, specID, kind string) {
 	}
 	alert.Metadata["canonicalSpecID"] = specID
 	alert.Metadata["canonicalAlertKind"] = kind
+}
+
+func canonicalTrackingKeyForSpec(spec alertspecs.ResourceAlertSpec, fallback string) string {
+	if key := buildCanonicalStateID(spec.ResourceID, spec.ID); key != "" {
+		return key
+	}
+	return fallback
+}
+
+func canonicalTrackingKeyForAlert(alert *Alert) string {
+	if alert == nil {
+		return ""
+	}
+	backfillCanonicalIdentity(alert)
+	if alert.CanonicalState != "" {
+		return alert.CanonicalState
+	}
+	return alert.ID
+}
+
+func (m *Manager) hasActiveAlertTrackingKeyNoLock(trackingKey string) bool {
+	if trackingKey == "" {
+		return false
+	}
+	if _, exists := m.activeAlerts[trackingKey]; exists {
+		return true
+	}
+	for _, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		if canonicalTrackingKeyForAlert(alert) == trackingKey {
+			return true
+		}
+	}
+	return false
 }

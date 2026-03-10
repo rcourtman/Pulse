@@ -71,10 +71,11 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	}
 
 	alertID := spec.ID
+	trackingKey := canonicalTrackingKeyForSpec(spec, alertID)
 	metricType := spec.MetricThreshold.Metric
 	if spec.Disabled || spec.MetricThreshold.Trigger <= 0 {
 		m.mu.Lock()
-		delete(m.pendingAlerts, alertID)
+		delete(m.pendingAlerts, trackingKey)
 		m.mu.Unlock()
 		m.clearAlert(alertID)
 		return
@@ -88,9 +89,10 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	existingAlert, exists := m.activeAlerts[alertID]
 	monitorOnly := opts != nil && opts.MonitorOnly
 
-	if suppressUntil, suppressed := m.suppressedUntil[alertID]; suppressed && time.Now().Before(suppressUntil) {
+	if suppressUntil, suppressed := m.suppressedUntil[trackingKey]; suppressed && time.Now().Before(suppressUntil) {
 		log.Debug().
 			Str("alertID", alertID).
+			Str("trackingKey", trackingKey).
 			Time("suppressedUntil", suppressUntil).
 			Msg("Canonical metric alert suppressed")
 		return
@@ -101,9 +103,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	if !exists && triggered {
 		timeThreshold := m.getTimeThreshold(spec.ResourceID, resourceType, metricType)
 		if timeThreshold > 0 {
-			if pendingTime, isPending := m.pendingAlerts[alertID]; isPending {
+			if pendingTime, isPending := m.pendingAlerts[trackingKey]; isPending {
 				if time.Since(pendingTime) >= time.Duration(timeThreshold)*time.Second {
-					delete(m.pendingAlerts, alertID)
+					delete(m.pendingAlerts, trackingKey)
 					if !pendingTime.IsZero() {
 						alertStartTime = pendingTime
 					}
@@ -111,22 +113,22 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 					return
 				}
 			} else {
-				m.pendingAlerts[alertID] = alertStartTime
+				m.pendingAlerts[trackingKey] = alertStartTime
 				return
 			}
 		}
 
-		if recent, hasRecent := m.recentAlerts[alertID]; hasRecent &&
+		if recent, hasRecent := m.recentAlerts[trackingKey]; hasRecent &&
 			m.config.MinimumDelta > 0 &&
 			time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
 			abs(recent.Value-value) < m.config.MinimumDelta {
-			m.suppressedUntil[alertID] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
+			m.suppressedUntil[trackingKey] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
 			return
 		}
 	}
 
 	if !triggered {
-		delete(m.pendingAlerts, alertID)
+		delete(m.pendingAlerts, trackingKey)
 	}
 
 	result, err := alertspecs.Evaluate(spec, metricPreviousState(spec, existingAlert), alertspecs.AlertEvidence{
@@ -193,7 +195,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
 			m.preserveAlertState(alertID, alert)
 			m.activeAlerts[alertID] = alert
-			m.recentAlerts[alertID] = alert
+			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
 
 			asyncSaveActiveAlerts("canonical metric create", m.SaveActiveAlerts)
@@ -210,7 +212,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				}(alertCopy)
 			}
 
-			if !m.checkRateLimit(alertID) {
+			if !m.checkRateLimit(trackingKey) {
 				return
 			}
 

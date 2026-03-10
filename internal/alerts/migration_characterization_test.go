@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func characterizationBaseConfig() AlertConfig {
@@ -165,6 +167,60 @@ func TestAlertCharacterizationAcknowledgmentSurvivesAlertIDChangeForSameCanonica
 	}
 	if alert.CanonicalState != resourceID+"::"+newAlertID {
 		t.Fatalf("CanonicalState = %q, want %q", alert.CanonicalState, resourceID+"::"+newAlertID)
+	}
+}
+
+func TestAlertCharacterizationRecentSuppressionSurvivesAlertIDChangeForSameCanonicalState(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	oldAlertID := "legacy-" + resourceID + "-cpu"
+	newAlertID := resourceID + "-cpu"
+	clear := 75.0
+	critical := 90.0
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.mu.Lock()
+	m.config.MinimumDelta = 5
+	m.config.SuppressionWindow = 10
+	recent := &Alert{
+		ID:         oldAlertID,
+		Type:       "cpu",
+		Level:      AlertLevelWarning,
+		ResourceID: resourceID,
+		Value:      90,
+		StartTime:  time.Now().Add(-1 * time.Minute),
+		LastSeen:   time.Now().Add(-30 * time.Second),
+	}
+	applyCanonicalIdentity(recent, newAlertID, "metric-threshold")
+	m.recentAlerts[recent.CanonicalState] = recent
+	m.mu.Unlock()
+
+	spec := alertspecs.ResourceAlertSpec{
+		ID:           newAlertID,
+		ResourceID:   resourceID,
+		ResourceType: unifiedresources.ResourceTypeVM,
+		Kind:         alertspecs.AlertSpecKindMetricThreshold,
+		Severity:     alertspecs.AlertSeverityWarning,
+		MetricThreshold: &alertspecs.MetricThresholdSpec{
+			Metric:    "cpu",
+			Direction: alertspecs.ThresholdDirectionAbove,
+			Trigger:   80,
+			Recovery:  &clear,
+			Critical:  &critical,
+		},
+	}
+
+	m.evaluateCanonicalMetricAlert(spec, "app01", "node1", "pve1", "cpu", 91, &HysteresisThreshold{Trigger: 80, Clear: 75}, nil)
+
+	assertAlertMissing(t, m, newAlertID)
+
+	m.mu.RLock()
+	suppressedUntil, ok := m.suppressedUntil[resourceID+"::"+newAlertID]
+	m.mu.RUnlock()
+	if !ok {
+		t.Fatal("expected canonical suppression window to be recorded")
+	}
+	if time.Until(suppressedUntil) <= 0 {
+		t.Fatal("expected canonical suppression window to be in the future")
 	}
 }
 
@@ -343,6 +399,7 @@ func TestAlertCharacterizationAcknowledgmentSurvivesPoweredOffReappearance(t *te
 func TestAlertCharacterizationSuppressTagClearsMetricSuppressionIdentity(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
 	alertID := resourceID + "-cpu"
+	trackingKey := buildCanonicalStateID(resourceID, alertID)
 	cfg := characterizationBaseConfig()
 	cfg.SuppressionWindow = 30
 	cfg.MinimumDelta = 5
@@ -363,19 +420,19 @@ func TestAlertCharacterizationSuppressTagClearsMetricSuppressionIdentity(t *test
 	assertAlertMissing(t, m, alertID)
 
 	m.mu.RLock()
-	_, isSuppressed := m.suppressedUntil[alertID]
+	_, isSuppressed := m.suppressedUntil[trackingKey]
 	m.mu.RUnlock()
 	if !isSuppressed {
-		t.Fatalf("expected similar retrigger to be suppressed for %q", alertID)
+		t.Fatalf("expected similar retrigger to be suppressed for canonical tracking key %q", trackingKey)
 	}
 
 	m.CheckGuest(suppressedByTag, "pve1")
 
 	m.mu.RLock()
-	_, isSuppressed = m.suppressedUntil[alertID]
+	_, isSuppressed = m.suppressedUntil[trackingKey]
 	m.mu.RUnlock()
 	if isSuppressed {
-		t.Fatalf("expected pulse-no-alerts suppression to clear stale suppression state for %q", alertID)
+		t.Fatalf("expected pulse-no-alerts suppression to clear stale suppression state for %q", trackingKey)
 	}
 
 	m.CheckGuest(similarSpike, "pve1")

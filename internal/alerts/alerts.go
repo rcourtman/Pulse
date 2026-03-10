@@ -999,7 +999,7 @@ func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
 // checkFlappingLocked detects alert flapping and returns true if alert should be suppressed.
 // It modifies flappingHistory, flappingActive, and suppressedUntil maps.
 // IMPORTANT: Caller MUST hold m.mu before calling this function.
-func (m *Manager) checkFlappingLocked(alertID string) bool {
+func (m *Manager) checkFlappingLocked(trackingKey string) bool {
 	if !m.config.FlappingEnabled {
 		return false
 	}
@@ -1008,10 +1008,10 @@ func (m *Manager) checkFlappingLocked(alertID string) bool {
 	windowDuration := time.Duration(m.config.FlappingWindowSeconds) * time.Second
 
 	// Record this state change
-	m.flappingHistory[alertID] = append(m.flappingHistory[alertID], now)
+	m.flappingHistory[trackingKey] = append(m.flappingHistory[trackingKey], now)
 
 	// Remove state changes outside the window
-	history := m.flappingHistory[alertID]
+	history := m.flappingHistory[trackingKey]
 	validHistory := []time.Time{}
 	for _, t := range history {
 		if now.Sub(t) <= windowDuration {
@@ -1023,24 +1023,24 @@ func (m *Manager) checkFlappingLocked(alertID string) bool {
 	if len(validHistory) > maxFlappingHistory {
 		validHistory = validHistory[len(validHistory)-maxFlappingHistory:]
 	}
-	m.flappingHistory[alertID] = validHistory
+	m.flappingHistory[trackingKey] = validHistory
 
 	// Check if we've exceeded the threshold
 	if len(validHistory) >= m.config.FlappingThreshold {
 		// Mark as flapping
-		if !m.flappingActive[alertID] {
+		if !m.flappingActive[trackingKey] {
 			log.Warn().
-				Str("alertID", alertID).
+				Str("trackingKey", trackingKey).
 				Int("stateChanges", len(validHistory)).
 				Int("threshold", m.config.FlappingThreshold).
 				Int("windowSeconds", m.config.FlappingWindowSeconds).
 				Msg("Flapping detected - suppressing alert")
 
-			m.flappingActive[alertID] = true
+			m.flappingActive[trackingKey] = true
 
 			// Set cooldown period
 			cooldownDuration := time.Duration(m.config.FlappingCooldownMinutes) * time.Minute
-			m.suppressedUntil[alertID] = now.Add(cooldownDuration)
+			m.suppressedUntil[trackingKey] = now.Add(cooldownDuration)
 
 			// Record suppression metric
 			if recordAlertSuppressed != nil {
@@ -1068,10 +1068,13 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		return false
 	}
 
+	trackingKey := canonicalTrackingKeyForAlert(alert)
+
 	// Check for flapping (caller must hold m.mu)
-	if m.checkFlappingLocked(alert.ID) {
+	if m.checkFlappingLocked(trackingKey) {
 		log.Debug().
 			Str("alertID", alert.ID).
+			Str("trackingKey", trackingKey).
 			Msg("Alert suppressed due to flapping")
 		return false
 	}
@@ -8990,7 +8993,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	flappingCleanupAge := 1 * time.Hour
 	for alertID := range m.flappingHistory {
 		// If alert is no longer active and flapping cooldown has expired
-		if _, exists := m.activeAlerts[alertID]; !exists {
+		if !m.hasActiveAlertTrackingKeyNoLock(alertID) {
 			if suppressUntil, suppressed := m.suppressedUntil[alertID]; !suppressed || now.After(suppressUntil.Add(flappingCleanupAge)) {
 				delete(m.flappingHistory, alertID)
 				delete(m.flappingActive, alertID)
