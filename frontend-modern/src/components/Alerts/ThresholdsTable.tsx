@@ -41,12 +41,40 @@ import { BulkEditDialog } from './BulkEditDialog';
 import type { GroupHeaderMeta, Resource as TableResource } from './ResourceTable';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
+import {
+  AGENT_DISKS_EMPTY_STATE,
+  AGENT_DISKS_FILTER_EMPTY_STATE,
+  AGENT_THRESHOLDS_FILTER_EMPTY_STATE,
+  getAlertThresholdsHelpBanner,
+  getAlertThresholdsGuestFilterPresentation,
+  getAlertThresholdsHelpDismissLabel,
+  getAlertThresholdsBackupOrphanedPresentation,
+  getAlertThresholdsDockerServicePresentation,
+  getAlertThresholdsDockerIgnoredPrefixesPresentation,
+  getAlertThresholdsSearchPlaceholder,
+  getAlertThresholdsSectionTitles,
+  BACKUP_THRESHOLDS_EMPTY_STATE,
+  CONTAINERS_FILTER_EMPTY_STATE,
+  CONTAINER_RUNTIMES_FILTER_EMPTY_STATE,
+  GUEST_THRESHOLDS_EMPTY_STATE,
+  GUEST_THRESHOLDS_FILTER_EMPTY_STATE,
+  GUEST_FILTERING_EMPTY_STATE,
+  NODE_THRESHOLDS_FILTER_EMPTY_STATE,
+  PBS_THRESHOLDS_EMPTY_STATE,
+  PBS_THRESHOLDS_FILTER_EMPTY_STATE,
+  PMG_THRESHOLDS_EMPTY_STATE,
+  PMG_THRESHOLDS_FILTER_EMPTY_STATE,
+  SNAPSHOT_THRESHOLDS_EMPTY_STATE,
+  STORAGE_THRESHOLDS_EMPTY_STATE,
+  STORAGE_THRESHOLDS_FILTER_EMPTY_STATE,
+} from '@/utils/alertThresholdsPresentation';
 import type {
   OverrideType,
   OfflineState,
   Override,
   ThresholdsTableProps,
 } from '@/features/alerts/thresholds/types';
+import { matchesAlertIdentifier } from '@/features/alerts/identity';
 import {
   PMG_THRESHOLD_COLUMNS,
   PMG_NORMALIZED_TO_KEY,
@@ -70,6 +98,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const sectionTitles = getAlertThresholdsSectionTitles();
 
   const pd = (r: Resource): Record<string, unknown> | undefined =>
     r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
@@ -162,6 +191,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'pmg' | 'agents' | 'docker'>(
     'proxmox',
   );
+  const guestFilterPresentation = getAlertThresholdsGuestFilterPresentation();
+  const backupOrphanedPresentation = getAlertThresholdsBackupOrphanedPresentation();
+  const dockerServicePresentation = getAlertThresholdsDockerServicePresentation();
+  const dockerIgnoredPrefixesPresentation = getAlertThresholdsDockerIgnoredPrefixesPresentation();
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
     props.dockerIgnoredPrefixes().join('\n'),
   );
@@ -186,7 +219,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const warn = Number(props.dockerDefaults.serviceWarnGapPercent ?? 0);
     const crit = Number(props.dockerDefaults.serviceCriticalGapPercent ?? 0);
     if (crit > 0 && warn > crit) {
-      return 'Critical gap must be greater than or equal to the warning gap when enabled.';
+      return dockerServicePresentation.gapValidationMessage;
     }
     return '';
   });
@@ -2183,7 +2216,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         const offlineId = `pbs-offline-${resourceId}`;
         props.removeAlerts(
           (alert) =>
-            alert.resourceId === resourceId && (alert.id === offlineId || alert.type === 'offline'),
+            alert.resourceId === resourceId &&
+            (matchesAlertIdentifier(alert, offlineId) || alert.type === 'offline'),
         );
       } else if (resource.type === 'dockerContainer') {
         props.removeAlerts(
@@ -2310,7 +2344,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (props.removeAlerts && resource.type === 'dockerHost') {
       const offlineId = `docker-host-offline-${resourceId}`;
       const resourceKey = `docker:${resourceId}`;
-      props.removeAlerts((alert) => alert.id === offlineId || alert.resourceId === resourceKey);
+      props.removeAlerts(
+        (alert) => matchesAlertIdentifier(alert, offlineId) || alert.resourceId === resourceKey,
+      );
     }
   };
 
@@ -2452,7 +2488,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         <SearchInput
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder="Search resources..."
+          placeholder={getAlertThresholdsSearchPlaceholder()}
           class="w-full"
           onBeforeAutoFocus={() => Boolean(editingId())}
           focusOnShortcut
@@ -2468,8 +2504,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             type="button"
             onClick={dismissHelpBanner}
             class="absolute top-2 right-2 p-1 rounded-md text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Dismiss tips"
-            aria-label="Dismiss tips"
+            title={getAlertThresholdsHelpDismissLabel()}
+            aria-label={getAlertThresholdsHelpDismissLabel()}
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -2495,19 +2531,20 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               />
             </svg>
             <div class="text-sm text-blue-900 dark:text-blue-100">
-              <span class="font-medium">Quick tips:</span> Set any threshold to{' '}
+              <span class="font-medium">{getAlertThresholdsHelpBanner().title}</span> Set any
+              threshold to{' '}
               <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded text-xs font-mono">
-                0
+                {getAlertThresholdsHelpBanner().disableValue}
               </code>{' '}
               to disable alerts for that metric. Click on disabled thresholds showing{' '}
-              <span class="italic">Off</span> to re-enable them. Resources with custom settings show
-              a{' '}
+              <span class="italic">{getAlertThresholdsHelpBanner().reenableLabel}</span> to
+              re-enable them. Resources with custom settings show a{' '}
               <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
-                Custom
+                {getAlertThresholdsHelpBanner().customBadgeLabel}
               </span>{' '}
               badge.{' '}
               <span class="text-blue-600 dark:text-blue-400">
-                Click sections to collapse/expand.
+                {getAlertThresholdsHelpBanner().collapseHint}
               </span>
             </div>
           </div>
@@ -2580,13 +2617,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('nodes')}>
             <CollapsibleSection
               id="nodes"
-              title="Proxmox Nodes"
+              title={sectionTitles.nodes}
               resourceCount={nodesWithOverrides().length}
               collapsed={isCollapsed('nodes')}
               onToggle={() => toggleSection('nodes')}
               icon={<Server class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllNodes()}
-              emptyMessage="No nodes match the current filters."
+              emptyMessage={NODE_THRESHOLDS_FILTER_EMPTY_STATE}
             >
               <div ref={registerSection('nodes')} class="scroll-mt-24">
                 <ResourceTable
@@ -2594,7 +2631,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   resources={nodesWithOverrides()}
                   columns={['CPU %', 'Memory %', 'Disk %', 'Temp °C']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No nodes match the current filters."
+                  emptyMessage={NODE_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -2635,13 +2672,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('pbs')}>
             <CollapsibleSection
               id="pbs"
-              title="PBS Servers"
+              title={sectionTitles.pbs}
               resourceCount={pbsServersWithOverrides().length}
               collapsed={isCollapsed('pbs')}
               onToggle={() => toggleSection('pbs')}
               icon={<Database class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllPBS()}
-              emptyMessage="No PBS servers configured."
+              emptyMessage={PBS_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('pbs')} class="scroll-mt-24">
                 <ResourceTable
@@ -2649,7 +2686,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   resources={pbsServersWithOverrides()}
                   columns={['CPU %', 'Memory %']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No PBS servers match the current filters."
+                  emptyMessage={PBS_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -2697,13 +2734,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('guests')}>
             <CollapsibleSection
               id="guests"
-              title="VMs & Containers"
+              title={sectionTitles.guests}
               resourceCount={props.allGuests().length}
               collapsed={isCollapsed('guests')}
               onToggle={() => toggleSection('guests')}
               icon={<Monitor class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllGuests()}
-              emptyMessage="No VMs or containers found."
+              emptyMessage={GUEST_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('guests')} class="scroll-mt-24">
                 <ResourceTable
@@ -2722,7 +2759,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     'Net Out MB/s',
                   ]}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No VMs or containers match the current filters."
+                  emptyMessage={GUEST_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -2786,17 +2823,21 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={activeTab() === 'proxmox'}>
             <CollapsibleSection
               id="guest-filtering"
-              title="Guest Filtering"
+              title={sectionTitles.guestFiltering}
               collapsed={isCollapsed('guest-filtering')}
               onToggle={() => toggleSection('guest-filtering')}
               icon={<Monitor class="w-5 h-5" />}
-              emptyMessage="Configure guest filtering rules."
+              emptyMessage={GUEST_FILTERING_EMPTY_STATE}
             >
               <div class="grid grid-cols-1 gap-6 p-4 xl:grid-cols-3">
                 <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-base-content">Ignored Prefixes</h3>
-                    <p class="text-xs text-muted">Skip metrics for guests starting with:</p>
+                    <h3 class="text-sm font-semibold text-base-content">
+                      {guestFilterPresentation.ignoredPrefixes.title}
+                    </h3>
+                    <p class="text-xs text-muted">
+                      {guestFilterPresentation.ignoredPrefixes.description}
+                    </p>
                   </div>
                   <TagInput
                     tags={props.ignoredGuestPrefixes()}
@@ -2804,15 +2845,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       props.setIgnoredGuestPrefixes(tags);
                       props.setHasUnsavedChanges(true);
                     }}
-                    placeholder="dev-"
+                    placeholder={guestFilterPresentation.ignoredPrefixes.placeholder}
                   />
                 </Card>
                 <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-base-content">Tag Whitelist</h3>
+                    <h3 class="text-sm font-semibold text-base-content">
+                      {guestFilterPresentation.tagWhitelist.title}
+                    </h3>
                     <p class="text-xs text-muted">
-                      Only monitor guests with at least one of these tags (leave empty to disable
-                      whitelist):
+                      {guestFilterPresentation.tagWhitelist.description}
                     </p>
                   </div>
                   <TagInput
@@ -2821,13 +2863,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       props.setGuestTagWhitelist(tags);
                       props.setHasUnsavedChanges(true);
                     }}
-                    placeholder="production"
+                    placeholder={guestFilterPresentation.tagWhitelist.placeholder}
                   />
                 </Card>
                 <Card padding="md" tone="card">
                   <div class="mb-2">
-                    <h3 class="text-sm font-semibold text-base-content">Tag Blacklist</h3>
-                    <p class="text-xs text-muted">Ignore guests with any of these tags:</p>
+                    <h3 class="text-sm font-semibold text-base-content">
+                      {guestFilterPresentation.tagBlacklist.title}
+                    </h3>
+                    <p class="text-xs text-muted">
+                      {guestFilterPresentation.tagBlacklist.description}
+                    </p>
                   </div>
                   <TagInput
                     tags={props.guestTagBlacklist()}
@@ -2835,7 +2881,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       props.setGuestTagBlacklist(tags);
                       props.setHasUnsavedChanges(true);
                     }}
-                    placeholder="maintenance"
+                    placeholder={guestFilterPresentation.tagBlacklist.placeholder}
                   />
                 </Card>
               </div>
@@ -2845,12 +2891,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('backups')}>
             <CollapsibleSection
               id="backups"
-              title="Recovery"
+              title={sectionTitles.backups}
               collapsed={isCollapsed('backups')}
               onToggle={() => toggleSection('backups')}
               icon={<Archive class="w-5 h-5" />}
               isGloballyDisabled={!props.backupDefaults().enabled}
-              emptyMessage="Configure recovery alert thresholds."
+              emptyMessage={BACKUP_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('backups')} class="scroll-mt-24">
                 <ResourceTable
@@ -2943,9 +2989,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 <Card padding="md" tone="card" class="mt-6">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 class="text-sm font-semibold text-base-content">Orphaned backups</h3>
+                      <h3 class="text-sm font-semibold text-base-content">
+                        {backupOrphanedPresentation.title}
+                      </h3>
                       <p class="mt-1 text-xs text-muted">
-                        Alert when backups exist for VMIDs that are no longer in inventory.
+                        {backupOrphanedPresentation.description}
                       </p>
                     </div>
                     <Toggle
@@ -2956,10 +3004,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                           alertOrphaned: !(prev.alertOrphaned ?? true),
                         }))
                       }
-                      label={<span class="text-sm font-medium text-base-content">Alerts</span>}
+                      label={
+                        <span class="text-sm font-medium text-base-content">
+                          {backupOrphanedPresentation.toggleLabel}
+                        </span>
+                      }
                       description={
                         <span class="text-xs text-muted">
-                          Toggle orphaned VM/Container backup alerts
+                          {backupOrphanedPresentation.toggleDescription}
                         </span>
                       }
                       size="sm"
@@ -2967,10 +3019,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   </div>
                   <div class="mt-4">
                     <label class="text-xs font-medium uppercase tracking-wide text-muted">
-                      Ignore VMIDs
+                      {backupOrphanedPresentation.ignoreVmidsLabel}
                     </label>
                     <p class="mt-1 text-xs text-muted">
-                      One per line. Use a trailing * to match a prefix (example: 10*).
+                      {backupOrphanedPresentation.ignoreVmidsDescription}
                     </p>
                     <TagInput
                       tags={props.backupDefaults().ignoreVMIDs ?? []}
@@ -2978,7 +3030,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                         updateBackupDefaults((prev) => ({ ...prev, ignoreVMIDs: tags }));
                         props.setHasUnsavedChanges(true);
                       }}
-                      placeholder="100, 200, 10*"
+                      placeholder={backupOrphanedPresentation.ignoreVmidsPlaceholder}
                     />
                   </div>
                 </Card>
@@ -2989,12 +3041,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('snapshots')}>
             <CollapsibleSection
               id="snapshots"
-              title="Snapshot Age"
+              title={sectionTitles.snapshots}
               collapsed={isCollapsed('snapshots')}
               onToggle={() => toggleSection('snapshots')}
               icon={<Camera class="w-5 h-5" />}
               isGloballyDisabled={!props.snapshotDefaults().enabled}
-              emptyMessage="Configure snapshot age thresholds."
+              emptyMessage={SNAPSHOT_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('snapshots')} class="scroll-mt-24">
                 <ResourceTable
@@ -3084,13 +3136,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('storage')}>
             <CollapsibleSection
               id="storage"
-              title="Storage Devices"
+              title={sectionTitles.storage}
               resourceCount={props.storage.length}
               collapsed={isCollapsed('storage')}
               onToggle={() => toggleSection('storage')}
               icon={<HardDrive class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllStorage()}
-              emptyMessage="No storage devices found."
+              emptyMessage={STORAGE_THRESHOLDS_EMPTY_STATE}
             >
               <div ref={registerSection('storage')} class="scroll-mt-24">
                 <ResourceTable
@@ -3099,7 +3151,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   groupHeaderMeta={guestGroupHeaderMeta()}
                   columns={['Usage %']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No storage devices match the current filters."
+                  emptyMessage={STORAGE_THRESHOLDS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -3151,14 +3203,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             when={pmgServersWithOverrides().length > 0}
             fallback={
               <div class="rounded-md border border-border bg-surface p-6 text-sm text-muted">
-                No mail gateways configured yet. Add a PMG instance in Settings to manage
-                thresholds.
+                {PMG_THRESHOLDS_EMPTY_STATE}
               </div>
             }
           >
             <div ref={registerSection('pmg')} class="scroll-mt-24">
               <ResourceTable
-                title="Mail Gateway Thresholds"
+                title={sectionTitles.pmg}
                 resources={pmgServersWithOverrides()}
                 columns={[
                   'Queue Warn',
@@ -3179,7 +3230,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   'Growth Crit Min',
                 ]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No mail gateways match the current filters."
+                emptyMessage={PMG_THRESHOLDS_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3213,11 +3264,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('agents')}>
             <div ref={registerSection('agents')} class="scroll-mt-24">
               <ResourceTable
-                title="Agents"
+                title={sectionTitles.agents}
                 resources={agentsWithOverrides()}
                 columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No agents match the current filters."
+                emptyMessage={AGENT_THRESHOLDS_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3257,13 +3308,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('agentDisks')}>
             <CollapsibleSection
               id="agentDisks"
-              title="Agent Disks"
+              title={sectionTitles.agentDisks}
               resourceCount={agentDisksWithOverrides().length}
               collapsed={isCollapsed('agentDisks')}
               onToggle={() => toggleSection('agentDisks')}
               icon={<HardDrive class="w-5 h-5" />}
               isGloballyDisabled={props.disableAllAgents()}
-              emptyMessage="No agent disks found. Agents with mounted filesystems will appear here."
+              emptyMessage={AGENT_DISKS_EMPTY_STATE}
             >
               <div ref={registerSection('agentDisks')} class="scroll-mt-24">
                 <ResourceTable
@@ -3272,7 +3323,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   groupHeaderMeta={guestGroupHeaderMeta()}
                   columns={['Disk %']}
                   activeAlerts={props.activeAlerts}
-                  emptyMessage="No agent disks match the current filters."
+                  emptyMessage={AGENT_DISKS_FILTER_EMPTY_STATE}
                   onEdit={startEditing}
                   onSaveEdit={saveEdit}
                   onCancelEdit={cancelEdit}
@@ -3316,10 +3367,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Card padding="md" tone="card" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-base-content">Ignored container prefixes</h3>
+                <h3 class="text-sm font-semibold text-base-content">
+                  {dockerIgnoredPrefixesPresentation.title}
+                </h3>
                 <p class="mt-1 text-xs text-muted">
-                  Containers whose name or ID starts with any prefix below are skipped for container
-                  alerts. Enter one prefix per line; matching is case-insensitive.
+                  {dockerIgnoredPrefixesPresentation.description}
                 </p>
               </div>
               <Show when={(props.dockerIgnoredPrefixes().length ?? 0) > 0}>
@@ -3328,7 +3380,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   class="inline-flex items-center justify-center rounded-md border border-transparent px-3 py-1 text-xs font-medium transition hover:bg-surface-alt"
                   onClick={handleResetDockerIgnored}
                 >
-                  Reset
+                  {dockerIgnoredPrefixesPresentation.resetLabel}
                 </button>
               </Show>
             </div>
@@ -3342,7 +3394,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   event.stopPropagation();
                 }
               }}
-              placeholder="runner-"
+              placeholder={dockerIgnoredPrefixesPresentation.placeholder}
               rows={4}
               class="mt-4 w-full rounded-md border border-border bg-surface p-3 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
             />
@@ -3351,12 +3403,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Card padding="md" tone="card" class="mb-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 class="text-sm font-semibold text-base-content">Swarm service alerts</h3>
-                <p class="mt-1 text-xs text-muted">
-                  Pulse raises alerts when running replicas fall behind the desired count or a
-                  rollout gets stuck. Adjust the gap thresholds below or disable service alerts
-                  entirely.
-                </p>
+                <h3 class="text-sm font-semibold text-base-content">
+                  {dockerServicePresentation.title}
+                </h3>
+                <p class="mt-1 text-xs text-muted">{dockerServicePresentation.description}</p>
               </div>
               <Toggle
                 checked={!props.disableAllDockerServices()}
@@ -3364,9 +3414,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   props.setDisableAllDockerServices(!props.disableAllDockerServices());
                   props.setHasUnsavedChanges(true);
                 }}
-                label={<span class="text-sm font-medium text-base-content">Alerts</span>}
+                label={
+                  <span class="text-sm font-medium text-base-content">
+                    {dockerServicePresentation.toggleLabel}
+                  </span>
+                }
                 description={
-                  <span class="text-xs text-muted">Toggle Swarm service replica monitoring</span>
+                  <span class="text-xs text-muted">
+                    {dockerServicePresentation.toggleDescription}
+                  </span>
                 }
                 size="sm"
               />
@@ -3378,7 +3434,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   for={serviceWarnInputId}
                   class="text-xs font-medium uppercase tracking-wide text-muted"
                 >
-                  Warning gap %
+                  {dockerServicePresentation.warningGapLabel}
                 </label>
                 <input
                   type="number"
@@ -3400,7 +3456,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   class="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-muted">
-                  Convert to warning when at least this percentage of replicas are missing.
+                  {dockerServicePresentation.warningGapDescription}
                 </p>
               </div>
               <div>
@@ -3408,7 +3464,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   for={serviceCriticalInputId}
                   class="text-xs font-medium uppercase tracking-wide text-muted"
                 >
-                  Critical gap %
+                  {dockerServicePresentation.criticalGapLabel}
                 </label>
                 <input
                   type="number"
@@ -3430,7 +3486,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   class="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-muted">
-                  Raise a critical alert when the missing replica gap meets or exceeds this value.
+                  {dockerServicePresentation.criticalGapDescription}
                 </p>
               </div>
             </div>
@@ -3444,11 +3500,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">
               <ResourceTable
-                title="Container Runtimes"
+                title={sectionTitles.dockerHosts}
                 resources={dockerHostsWithOverrides()}
                 columns={[]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No container runtimes match the current filters."
+                emptyMessage={CONTAINER_RUNTIMES_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
@@ -3491,7 +3547,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('dockerContainers')}>
             <div ref={registerSection('dockerContainers')} class="scroll-mt-24">
               <ResourceTable
-                title="Containers"
+                title={sectionTitles.dockerContainers}
                 groupedResources={dockerContainersGroupedByHost()}
                 groupHeaderMeta={dockerHostGroupMeta()}
                 columns={[
@@ -3504,7 +3560,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   'Memory Critical %',
                 ]}
                 activeAlerts={props.activeAlerts}
-                emptyMessage="No containers match the current filters."
+                emptyMessage={CONTAINERS_FILTER_EMPTY_STATE}
                 onEdit={startEditing}
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}

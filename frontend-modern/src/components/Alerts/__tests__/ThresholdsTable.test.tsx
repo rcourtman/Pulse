@@ -25,6 +25,8 @@ vi.mock('../ResourceTable', () => ({
     resources?: any[];
     groupedResources?: Record<string, any[]>;
     formatMetricValue?: (metric: string, value: number | undefined) => string;
+    onToggleDisabled?: (id: string, forceState?: boolean) => void;
+    onToggleNodeConnectivity?: (id: string, forceState?: boolean) => void;
   }) => {
     const resources =
       props.resources ||
@@ -41,6 +43,22 @@ vi.mock('../ResourceTable', () => ({
                 ? props.formatMetricValue('cpu', r.thresholds.cpu)
                 : (r.thresholds?.cpu ?? '')}
             </div>
+            {props.onToggleDisabled ? (
+              <button
+                data-testid={`toggle-disabled-${r.id}`}
+                onClick={() => props.onToggleDisabled?.(r.id, true)}
+              >
+                Disable
+              </button>
+            ) : null}
+            {props.onToggleNodeConnectivity ? (
+              <button
+                data-testid={`toggle-connectivity-${r.id}`}
+                onClick={() => props.onToggleNodeConnectivity?.(r.id, true)}
+              >
+                Disable connectivity
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
@@ -471,5 +489,89 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     expect(
       screen.queryByTestId('resource-row-docker:resource:docker:parent1/container-hash-1'),
     ).not.toBeInTheDocument();
+  });
+
+  it('removes docker host offline alerts using legacy compatibility IDs', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const removeAlerts = vi.fn();
+    const dockerHost = {
+      id: 'docker-source-123',
+      type: 'dockerHost',
+      name: 'docker-v6',
+      displayName: 'Docker Host V6',
+      disableConnectivity: false,
+      disabled: false,
+      thresholds: {},
+    } as any;
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        dockerHosts={[dockerHost]}
+        removeAlerts={removeAlerts}
+      />
+    ));
+
+    await fireEvent.click(screen.getByTestId('toggle-connectivity-docker-source-123'));
+
+    expect(removeAlerts).toHaveBeenCalledTimes(1);
+    const predicate = removeAlerts.mock.calls[0][0] as (alert: Alert) => boolean;
+    expect(
+      predicate({
+        id: 'docker:docker-source-123::connectivity',
+        legacyId: 'docker-host-offline-docker-source-123',
+        type: 'offline',
+        level: 'critical',
+        resourceId: 'docker:docker-source-123',
+        resourceName: 'Docker Host V6',
+        node: '',
+        instance: '',
+        message: 'offline',
+        value: 0,
+        threshold: 0,
+        startTime: new Date().toISOString(),
+        acknowledged: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('removes PBS offline alerts using legacy compatibility IDs when disabled', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+    const removeAlerts = vi.fn();
+    const pbs = {
+      id: 'pbs-main',
+      type: 'pbs',
+      name: 'PBS Main',
+      displayName: 'PBS Main',
+      disableConnectivity: false,
+      disabled: false,
+      thresholds: {},
+    } as any;
+
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} pbsInstances={[pbs]} removeAlerts={removeAlerts} />
+    ));
+
+    await fireEvent.click(screen.getByTestId('toggle-disabled-pbs-main'));
+
+    expect(removeAlerts).toHaveBeenCalledTimes(1);
+    const predicate = removeAlerts.mock.calls[0][0] as (alert: Alert) => boolean;
+    expect(
+      predicate({
+        id: 'pbs:pbs-main::connectivity',
+        legacyId: 'pbs-offline-pbs-main',
+        type: 'offline',
+        level: 'critical',
+        resourceId: 'pbs-main',
+        resourceName: 'PBS Main',
+        node: '',
+        instance: '',
+        message: 'offline',
+        value: 0,
+        threshold: 0,
+        startTime: new Date().toISOString(),
+        acknowledged: false,
+      }),
+    ).toBe(true);
   });
 });
