@@ -4504,51 +4504,10 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 		percentMissing = (float64(missing) / float64(desired)) * 100.0
 	}
 
-	severity := AlertLevel("")
 	thresholdValue := 0.0
-	if critPct > 0 && percentMissing >= float64(critPct) {
-		severity = AlertLevelCritical
-		thresholdValue = float64(critPct)
-	} else if warnPct > 0 && percentMissing >= float64(warnPct) {
-		severity = AlertLevelWarning
-		thresholdValue = float64(warnPct)
-	}
-
-	updateState := ""
-	updateMessage := ""
-	if service.UpdateStatus != nil {
-		updateState = strings.ToLower(strings.TrimSpace(service.UpdateStatus.State))
-		updateMessage = strings.TrimSpace(service.UpdateStatus.Message)
-		if severity == "" {
-			switch updateState {
-			case "paused", "rollback_started", "rollback_paused":
-				severity = AlertLevelWarning
-			case "rollback_failed":
-				severity = AlertLevelCritical
-			}
-		}
-	}
-
-	if severity == "" {
-		m.clearDockerServiceAlert(resourceID)
-		return
-	}
-
 	serviceName := dockerServiceDisplayName(service)
 	instanceName := dockerInstanceName(host)
 	nodeName := strings.TrimSpace(host.Hostname)
-
-	message := ""
-	if missing > 0 {
-		message = fmt.Sprintf("Docker service '%s' is running %d of %d desired tasks", serviceName, service.RunningTasks, service.DesiredTasks)
-	} else if updateState != "" {
-		message = fmt.Sprintf("Docker service '%s' update state: %s", serviceName, service.UpdateStatus.State)
-	} else {
-		message = fmt.Sprintf("Docker service '%s' triggered a Swarm alert", serviceName)
-	}
-	if updateMessage != "" {
-		message = fmt.Sprintf("%s (%s)", message, updateMessage)
-	}
 
 	metadata := map[string]interface{}{
 		"resourceType":   "docker-service",
@@ -4565,82 +4524,117 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 		"missingTasks":   missing,
 		"percentMissing": percentMissing,
 	}
-	if updateState != "" {
-		metadata["updateState"] = service.UpdateStatus.State
-	}
-	if updateMessage != "" {
-		metadata["updateMessage"] = updateMessage
-	}
-	if service.UpdateStatus != nil && service.UpdateStatus.CompletedAt != nil && !service.UpdateStatus.CompletedAt.IsZero() {
-		metadata["updateCompletedAt"] = service.UpdateStatus.CompletedAt.UTC()
-	}
-
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "docker-service-health",
-		Level:        severity,
-		ResourceID:   resourceID,
-		ResourceName: serviceName,
-		Node:         nodeName,
-		Instance:     instanceName,
-		Message:      message,
-		Value:        percentMissing,
-		Threshold:    thresholdValue,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
-		Metadata:     metadata,
+
+	if critPct > 0 && percentMissing >= float64(critPct) {
+		thresholdValue = float64(critPct)
+	} else if warnPct > 0 && percentMissing >= float64(warnPct) {
+		thresholdValue = float64(warnPct)
 	}
 
-	m.mu.Lock()
-	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-		escalatedToCritical := existing.Level != AlertLevelCritical && alert.Level == AlertLevelCritical
-		m.preserveAlertState(alertID, alert)
-		m.activeAlerts[alertID] = alert
-		m.recentAlerts[alertID] = alert
-
-		if escalatedToCritical {
-			m.historyManager.AddAlert(*alert)
-			if m.checkRateLimit(alertID) {
-				m.dispatchAlert(alert, true)
-				log.Warn().
-					Str("service", serviceName).
-					Str("host", host.DisplayName).
-					Float64("percentMissing", percentMissing).
-					Str("fromLevel", string(existing.Level)).
-					Str("toLevel", string(alert.Level)).
-					Msg("Docker service alert escalated")
-			} else {
-				log.Debug().
-					Str("alertID", alertID).
-					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-					Msg("Docker service escalation notification suppressed due to rate limit")
-			}
+	updateState := ""
+	updateMessage := ""
+	updateSeverity := AlertLevel("")
+	if service.UpdateStatus != nil {
+		updateState = strings.ToLower(strings.TrimSpace(service.UpdateStatus.State))
+		updateMessage = strings.TrimSpace(service.UpdateStatus.Message)
+		switch updateState {
+		case "paused", "rollback_started", "rollback_paused":
+			updateSeverity = AlertLevelWarning
+		case "rollback_failed":
+			updateSeverity = AlertLevelCritical
 		}
-		m.mu.Unlock()
+		if service.UpdateStatus.CompletedAt != nil && !service.UpdateStatus.CompletedAt.IsZero() {
+			metadata["updateCompletedAt"] = service.UpdateStatus.CompletedAt.UTC()
+		}
+		if updateState != "" {
+			metadata["updateState"] = service.UpdateStatus.State
+		}
+		if updateMessage != "" {
+			metadata["updateMessage"] = updateMessage
+		}
+	}
+
+	if thresholdValue == 0 && updateSeverity != "" {
+		spec, err := buildCanonicalDiscreteStateSpec(resourceID, serviceName, unifiedresources.ResourceTypeDockerService, updateSeverity, 1, false, "update-state",
+			[]string{"paused", "rollback_started", "rollback_paused", "rollback_failed"})
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("service", serviceName).
+				Str("resourceID", resourceID).
+				Msg("Skipping invalid canonical docker service update-state spec")
+			return
+		}
+
+		message := fmt.Sprintf("Docker service '%s' update state: %s", serviceName, service.UpdateStatus.State)
+		if updateMessage != "" {
+			message = fmt.Sprintf("%s (%s)", message, updateMessage)
+		}
+
+		_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+			Spec:          spec,
+			Evidence:      alertspecs.AlertEvidence{ObservedAt: time.Now(), DiscreteState: &alertspecs.DiscreteStateEvidence{StateKey: "update-state", Observed: updateState}},
+			AlertID:       alertID,
+			AlertType:     "docker-service-health",
+			ResourceID:    resourceID,
+			ResourceName:  serviceName,
+			Node:          nodeName,
+			Instance:      instanceName,
+			Message:       message,
+			Value:         percentMissing,
+			Threshold:     0,
+			Metadata:      metadata,
+			AddToRecent:   true,
+			AddToHistory:  true,
+			RateLimit:     true,
+			DispatchAsync: true,
+		})
 		return
 	}
 
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-	if !m.checkRateLimit(alertID) {
-		m.mu.Unlock()
-		log.Debug().
-			Str("alertID", alertID).
-			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-			Msg("Docker service alert notification suppressed due to rate limit")
+	if thresholdValue == 0 {
+		m.clearDockerServiceAlert(resourceID)
 		return
 	}
-	m.dispatchAlert(alert, true)
-	m.mu.Unlock()
 
-	log.Warn().
-		Str("service", serviceName).
-		Str("host", host.DisplayName).
-		Float64("percentMissing", percentMissing).
-		Msg("Docker service alert raised")
+	spec, err := buildCanonicalServiceGapSpec(resourceID, serviceName, unifiedresources.ResourceTypeDockerService, serviceName, float64(warnPct), float64(critPct), false)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("service", serviceName).
+			Str("resourceID", resourceID).
+			Msg("Skipping invalid canonical docker service gap spec")
+		m.clearDockerServiceAlert(resourceID)
+		return
+	}
+
+	message := fmt.Sprintf("Docker service '%s' is running %d of %d desired tasks", serviceName, service.RunningTasks, service.DesiredTasks)
+	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			ServiceGap: &alertspecs.ServiceGapEvidence{
+				Service: serviceName,
+				Desired: desired,
+				Running: running,
+			},
+		},
+		AlertID:       alertID,
+		AlertType:     "docker-service-health",
+		ResourceID:    resourceID,
+		ResourceName:  serviceName,
+		Node:          nodeName,
+		Instance:      instanceName,
+		Message:       message,
+		Value:         percentMissing,
+		Threshold:     thresholdValue,
+		Metadata:      metadata,
+		AddToRecent:   true,
+		AddToHistory:  true,
+		RateLimit:     true,
+		DispatchAsync: true,
+	})
 }
 
 func (m *Manager) clearDockerServiceAlert(resourceID string) {

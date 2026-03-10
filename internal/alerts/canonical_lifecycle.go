@@ -27,6 +27,25 @@ type canonicalLifecycleAlertParams struct {
 	DispatchAsync bool
 }
 
+type canonicalStatefulAlertParams struct {
+	Spec          alertspecs.ResourceAlertSpec
+	Evidence      alertspecs.AlertEvidence
+	AlertID       string
+	AlertType     string
+	ResourceID    string
+	ResourceName  string
+	Node          string
+	Instance      string
+	Message       string
+	Value         float64
+	Threshold     float64
+	Metadata      map[string]interface{}
+	AddToRecent   bool
+	AddToHistory  bool
+	RateLimit     bool
+	DispatchAsync bool
+}
+
 func buildCanonicalConnectivitySpec(resourceID, title string, resourceType unifiedresources.ResourceType, severity AlertLevel, confirmations int, disabled bool) (alertspecs.ResourceAlertSpec, error) {
 	spec := alertspecs.ResourceAlertSpec{
 		ID:                    resourceID + "-connectivity",
@@ -77,6 +96,28 @@ func buildCanonicalDiscreteStateSpec(resourceID, title string, resourceType unif
 		DiscreteState: &alertspecs.DiscreteStateSpec{
 			StateKey:      stateKey,
 			TriggerStates: append([]string(nil), triggerStates...),
+		},
+	}
+
+	return spec, spec.Validate()
+}
+
+func buildCanonicalServiceGapSpec(resourceID, title string, resourceType unifiedresources.ResourceType, service string, warningPercent, criticalPercent float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	if criticalPercent > 0 && warningPercent > 0 && criticalPercent < warningPercent {
+		warningPercent = criticalPercent
+	}
+	spec := alertspecs.ResourceAlertSpec{
+		ID:           resourceID + "-service-gap",
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		Kind:         alertspecs.AlertSpecKindServiceGap,
+		Severity:     alertspecs.AlertSeverityWarning,
+		Title:        title,
+		Disabled:     disabled,
+		ServiceGap: &alertspecs.ServiceGapSpec{
+			Service:         service,
+			WarningPercent:  warningPercent,
+			CriticalPercent: criticalPercent,
 		},
 	}
 
@@ -212,6 +253,108 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 
 		m.dispatchAlert(alert, params.DispatchAsync)
+		return result, true
+	default:
+		if existing == nil {
+			return result, true
+		}
+
+		m.removeActiveAlertNoLock(params.AlertID)
+		resolvedAlert := &ResolvedAlert{
+			Alert:        existing,
+			ResolvedTime: params.Evidence.ObservedAt,
+		}
+		m.addRecentlyResolvedWithPrimaryLock(params.AlertID, resolvedAlert)
+		m.safeCallResolvedCallback(params.AlertID, true)
+		return result, true
+	}
+}
+
+func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertParams) (alertspecs.EvaluationResult, bool) {
+	if params.Evidence.ObservedAt.IsZero() {
+		params.Evidence.ObservedAt = time.Now()
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var existing *Alert
+	if current, ok := m.activeAlerts[params.AlertID]; ok {
+		existing = current
+	}
+
+	result, err := alertspecs.Evaluate(params.Spec, lifecyclePreviousState(params.Spec, existing, 0, params.Evidence.ObservedAt), params.Evidence)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("alertID", params.AlertID).
+			Str("resourceID", params.ResourceID).
+			Str("specID", params.Spec.ID).
+			Msg("Skipping invalid canonical stateful evaluation")
+		return alertspecs.EvaluationResult{}, false
+	}
+
+	switch result.State.State {
+	case alertspecs.AlertStateFiring:
+		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
+		if !ok {
+			level = AlertLevelWarning
+		}
+		alert := &Alert{
+			ID:           params.AlertID,
+			Type:         params.AlertType,
+			Level:        level,
+			ResourceID:   params.ResourceID,
+			ResourceName: params.ResourceName,
+			Node:         params.Node,
+			Instance:     params.Instance,
+			Message:      params.Message,
+			Value:        params.Value,
+			Threshold:    params.Threshold,
+			StartTime:    params.Evidence.ObservedAt,
+			LastSeen:     params.Evidence.ObservedAt,
+			Metadata:     cloneMetadata(params.Metadata),
+		}
+		if alert.Metadata == nil {
+			alert.Metadata = make(map[string]interface{}, 2)
+		}
+		alert.Metadata["canonicalSpecID"] = params.Spec.ID
+		alert.Metadata["canonicalAlertKind"] = string(params.Spec.Kind)
+
+		m.preserveAlertState(params.AlertID, alert)
+		m.activeAlerts[params.AlertID] = alert
+		if params.AddToRecent {
+			m.recentAlerts[params.AlertID] = alert
+		}
+
+		if existing == nil {
+			if params.AddToHistory {
+				m.historyManager.AddAlert(*alert)
+			}
+			if params.RateLimit && !m.checkRateLimit(params.AlertID) {
+				log.Debug().
+					Str("alertID", params.AlertID).
+					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+					Msg("Stateful alert notification suppressed due to rate limit")
+				return result, true
+			}
+			m.dispatchAlert(alert, params.DispatchAsync)
+			return result, true
+		}
+
+		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionSeverityChanged {
+			if params.AddToHistory {
+				m.historyManager.AddAlert(*alert)
+			}
+			if params.RateLimit && !m.checkRateLimit(params.AlertID) {
+				log.Debug().
+					Str("alertID", params.AlertID).
+					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+					Msg("Stateful escalation notification suppressed due to rate limit")
+				return result, true
+			}
+			m.dispatchAlert(alert, params.DispatchAsync)
+		}
 		return result, true
 	default:
 		if existing == nil {

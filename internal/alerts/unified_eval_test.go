@@ -3,6 +3,7 @@ package alerts
 import (
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -508,5 +509,72 @@ func TestCheckDockerContainerStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-runtime-state" {
 		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-runtime-state")
+	}
+}
+
+func TestCheckDockerServiceAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	host := models.DockerHost{
+		ID:          "host-1",
+		DisplayName: "Prod Swarm",
+		Hostname:    "swarm-prod",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-1",
+				Name:         "web",
+				DesiredTasks: 4,
+				RunningTasks: 2,
+				Mode:         "replicated",
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
+	alert := activeAlert(t, m, "docker-service-health-"+resourceID)
+	if got := alert.Metadata["canonicalAlertKind"]; got != "service-gap" {
+		t.Fatalf("canonicalAlertKind = %v, want service-gap", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-service-gap" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-service-gap")
+	}
+}
+
+func TestCheckDockerServiceUpdateStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	now := time.Now()
+	host := models.DockerHost{
+		ID:          "host-update",
+		DisplayName: "Swarm",
+		Hostname:    "swarm.local",
+		Services: []models.DockerService{
+			{
+				ID:           "svc-update",
+				Name:         "api",
+				DesiredTasks: 1,
+				RunningTasks: 1,
+				UpdateStatus: &models.DockerServiceUpdate{
+					State:       "rollback_failed",
+					Message:     "Rollback failed",
+					CompletedAt: &now,
+				},
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+
+	resourceID := dockerServiceResourceID(host.ID, "svc-update", "api")
+	alert := activeAlert(t, m, "docker-service-health-"+resourceID)
+	if got := alert.Metadata["canonicalAlertKind"]; got != "discrete-state" {
+		t.Fatalf("canonicalAlertKind = %v, want discrete-state", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-update-state" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-update-state")
 	}
 }
