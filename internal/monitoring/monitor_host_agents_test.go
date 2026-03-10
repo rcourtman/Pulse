@@ -179,6 +179,73 @@ func TestApplyHostReportPersistsAndRemoveHostAgentClearsRuntime(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportPreservesFreeBSDSMARTWhenNextReportOmitsIt(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	now := time.Now().UTC()
+	first := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-freebsd",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "machine-freebsd",
+			Hostname: "pfsense.local",
+			Platform: "freebsd",
+		},
+		Timestamp: now,
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 5.5,
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{
+					Device:      "ada0",
+					Model:       "Disk 0",
+					Temperature: 33,
+					Health:      "PASSED",
+				},
+			},
+		},
+	}
+
+	host, err := monitor.ApplyHostReport(first, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport first: %v", err)
+	}
+	if len(host.Sensors.SMART) != 1 {
+		t.Fatalf("expected initial SMART data, got %d entries", len(host.Sensors.SMART))
+	}
+
+	second := first
+	second.Timestamp = now.Add(30 * time.Second)
+	second.Sensors = agentshost.Sensors{}
+
+	host, err = monitor.ApplyHostReport(second, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport second: %v", err)
+	}
+	if len(host.Sensors.SMART) != 1 {
+		t.Fatalf("expected SMART data to be preserved, got %d entries", len(host.Sensors.SMART))
+	}
+	if host.Sensors.SMART[0].Device != "ada0" {
+		t.Fatalf("expected preserved SMART device ada0, got %q", host.Sensors.SMART[0].Device)
+	}
+	if host.Sensors.SMART[0].Temperature != 33 {
+		t.Fatalf("expected preserved SMART temperature 33, got %d", host.Sensors.SMART[0].Temperature)
+	}
+}
+
 func TestClearUnauthenticatedAgentsClearsPersistedHostRuntime(t *testing.T) {
 	dataDir := t.TempDir()
 	runtimeStore := config.NewHostRuntimeStore(dataDir, nil)

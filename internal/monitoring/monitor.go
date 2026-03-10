@@ -3071,6 +3071,15 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
 	}
 
+	smartSensors := convertAgentSMARTToModels(report.Sensors.SMART)
+	reportPlatform := strings.TrimSpace(strings.ToLower(report.Host.Platform))
+	if len(smartSensors) == 0 && hasPrevious && len(previous.Sensors.SMART) > 0 &&
+		(reportPlatform == "freebsd" || strings.EqualFold(previous.Platform, "freebsd")) {
+		// FreeBSD SMART collection can be intermittent; avoid wiping previously
+		// known disk temperatures on an otherwise healthy host report.
+		smartSensors = append([]models.HostDiskSMART(nil), previous.Sensors.SMART...)
+	}
+
 	disks := make([]models.Disk, 0, len(report.Disks))
 	for _, disk := range report.Disks {
 		// Filter virtual/system filesystems and read-only filesystems to avoid cluttering
@@ -3174,7 +3183,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
 			Additional:         cloneStringFloatMap(report.Sensors.Additional),
-			SMART:              convertAgentSMARTToModels(report.Sensors.SMART),
+			SMART:              smartSensors,
 		},
 		RAID:            raid,
 		Ceph:            cephData,
