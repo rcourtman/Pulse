@@ -132,7 +132,7 @@ describe('type column guardrails', () => {
     ]);
   });
 
-  it('limits direct type column contract imports to the shared helper and responsive schema', () => {
+  it('limits direct type column contract imports to the shared helper, responsive schema, and label presentation util', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
     );
@@ -147,6 +147,7 @@ describe('type column guardrails', () => {
     expect(directContractImportUsers).toEqual([
       '../../types/responsive.ts',
       '../../utils/typeColumnDefinition.ts',
+      '../../utils/typeColumnPresentation.ts',
     ]);
   });
 });
