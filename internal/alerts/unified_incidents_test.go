@@ -50,6 +50,15 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	if alert.Node != "truenas-main" {
 		t.Fatalf("node = %q, want truenas-main", alert.Node)
 	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "provider-incident" {
+		t.Fatalf("canonicalAlertKind = %v, want provider-incident", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got == nil || got == "" {
+		t.Fatalf("expected canonicalSpecID metadata, got %v", got)
+	}
+	if got := alert.Metadata["canonicalSuppressionKeys"]; got == nil {
+		t.Fatalf("expected canonicalSuppressionKeys metadata")
+	}
 
 	m.SyncUnifiedResourceIncidents(nil)
 	assertAlertMissing(t, m, alertID)

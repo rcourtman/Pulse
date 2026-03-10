@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -20,14 +21,28 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	}
 
 	desired := make(map[string]*Alert)
-	parentResources := make(map[string]unifiedresources.Resource, len(resources))
-	childrenByParent := make(map[string][]unifiedresources.Resource)
+	resourcesByID := make(map[string]unifiedresources.Resource, len(resources))
 	for _, resource := range resources {
-		parentResources[resource.ID] = resource
-		if resource.ParentID != nil && strings.TrimSpace(*resource.ParentID) != "" {
-			parentID := strings.TrimSpace(*resource.ParentID)
-			childrenByParent[parentID] = append(childrenByParent[parentID], resource)
+		canonical := resource
+		canonical.ID = unifiedresources.CanonicalResourceID(resource.ID)
+		canonical.Type = unifiedresources.CanonicalResourceType(resource.Type)
+		if canonical.ParentID != nil {
+			parentID := unifiedresources.CanonicalResourceID(strings.TrimSpace(*canonical.ParentID))
+			if parentID == "" {
+				canonical.ParentID = nil
+			} else {
+				canonical.ParentID = &parentID
+			}
 		}
+		resourcesByID[canonical.ID] = canonical
+	}
+	canonicalSpecs := alertspecs.BuildUnifiedResourceAlertSpecs(resources)
+	providerSpecsByResource := make(map[string][]alertspecs.ResourceAlertSpec, len(canonicalSpecs))
+	for _, spec := range canonicalSpecs {
+		if spec.Kind != alertspecs.AlertSpecKindProviderIncident {
+			continue
+		}
+		providerSpecsByResource[spec.ResourceID] = append(providerSpecsByResource[spec.ResourceID], spec)
 	}
 
 	m.mu.RLock()
@@ -38,27 +53,47 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 
 	if enabled {
 		now := time.Now()
-		for _, resource := range resources {
+		for _, spec := range canonicalSpecs {
+			if spec.Kind != alertspecs.AlertSpecKindProviderIncident {
+				continue
+			}
+
+			resource, ok := resourcesByID[spec.ResourceID]
+			if !ok {
+				continue
+			}
 			if !resourceSupportsUnifiedIncidentAlerts(resource) {
 				continue
 			}
 			if disableAllStorage {
 				continue
 			}
-			if override, exists := overrides[resource.ID]; exists && override.Disabled {
+			if override, exists := overrides[spec.ResourceID]; exists && override.Disabled {
 				continue
 			}
-			for _, incident := range resource.Incidents {
-				if shouldSuppressUnifiedIncidentAlert(resource, incident, parentResources, childrenByParent) {
-					continue
-				}
-				level, ok := alertLevelFromIncidentSeverity(incident.Severity)
-				if !ok {
-					continue
-				}
-				alert := unifiedIncidentAlert(resource, incident, level, now)
-				desired[alert.ID] = alert
+			if shouldSuppressCanonicalUnifiedIncidentSpec(spec, providerSpecsByResource) {
+				continue
 			}
+
+			incident, ok := incidentForProviderSpec(resource, spec)
+			if !ok {
+				continue
+			}
+			level, ok := alertLevelFromCanonicalSeverity(spec.Severity)
+			if !ok {
+				continue
+			}
+
+			alert := unifiedIncidentAlert(resource, incident, level, now)
+			if alert.Metadata == nil {
+				alert.Metadata = map[string]interface{}{}
+			}
+			alert.Metadata["canonicalSpecID"] = spec.ID
+			alert.Metadata["canonicalAlertKind"] = string(spec.Kind)
+			if len(spec.SuppressionKeys) > 0 {
+				alert.Metadata["canonicalSuppressionKeys"] = append([]string(nil), spec.SuppressionKeys...)
+			}
+			desired[alert.ID] = alert
 		}
 	}
 
@@ -97,60 +132,93 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	}
 }
 
-func shouldSuppressUnifiedIncidentAlert(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident, resourcesByID map[string]unifiedresources.Resource, childrenByParent map[string][]unifiedresources.Resource) bool {
-	key := unifiedIncidentKey(incident)
-	if key == "" {
+func shouldSuppressCanonicalUnifiedIncidentSpec(spec alertspecs.ResourceAlertSpec, providerSpecsByResource map[string][]alertspecs.ResourceAlertSpec) bool {
+	if len(spec.SuppressionKeys) == 0 {
 		return false
 	}
 
-	switch resource.Type {
+	switch spec.ResourceType {
 	case unifiedresources.ResourceTypeAgent:
-		for _, child := range childrenByParent[resource.ID] {
-			if child.Type != unifiedresources.ResourceTypeStorage {
-				continue
-			}
-			if resourceHasIncidentKey(child, key) {
-				return true
+		for _, childID := range spec.ChildResourceIDs {
+			for _, childSpec := range providerSpecsByResource[childID] {
+				if childSpec.ResourceType != unifiedresources.ResourceTypeStorage {
+					continue
+				}
+				if hasSharedSuppressionKey(spec.SuppressionKeys, childSpec.SuppressionKeys) {
+					return true
+				}
 			}
 		}
 	case unifiedresources.ResourceTypePhysicalDisk:
-		if resource.ParentID == nil || strings.TrimSpace(*resource.ParentID) == "" {
-			return false
+		for _, parentSpec := range providerSpecsByResource[spec.ParentResourceID] {
+			if parentSpec.ResourceType != unifiedresources.ResourceTypeStorage {
+				continue
+			}
+			if hasSharedSuppressionKey(spec.SuppressionKeys, parentSpec.SuppressionKeys) {
+				return true
+			}
 		}
-		parent, ok := resourcesByID[strings.TrimSpace(*resource.ParentID)]
-		if !ok || parent.Type != unifiedresources.ResourceTypeStorage {
-			return false
-		}
-		return resourceHasIncidentKey(parent, key)
 	case unifiedresources.ResourceTypeStorage:
-		if resource.ParentID == nil || strings.TrimSpace(*resource.ParentID) == "" {
-			return false
+		for _, parentSpec := range providerSpecsByResource[spec.ParentResourceID] {
+			if parentSpec.ResourceType != unifiedresources.ResourceTypePBS {
+				continue
+			}
+			if hasSharedSuppressionKey(spec.SuppressionKeys, parentSpec.SuppressionKeys) {
+				return true
+			}
 		}
-		parent, ok := resourcesByID[strings.TrimSpace(*resource.ParentID)]
-		if !ok || parent.Type != unifiedresources.ResourceTypePBS {
-			return false
-		}
-		return resourceHasIncidentKey(parent, key)
 	}
-
 	return false
 }
 
-func resourceHasIncidentKey(resource unifiedresources.Resource, key string) bool {
-	for _, incident := range resource.Incidents {
-		if unifiedIncidentKey(incident) == key {
+func hasSharedSuppressionKey(left, right []string) bool {
+	if len(left) == 0 || len(right) == 0 {
+		return false
+	}
+	keys := make(map[string]struct{}, len(left))
+	for _, key := range left {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			continue
+		}
+		keys[trimmed] = struct{}{}
+	}
+	for _, key := range right {
+		if _, ok := keys[strings.TrimSpace(key)]; ok {
 			return true
 		}
 	}
 	return false
 }
 
-func unifiedIncidentKey(incident unifiedresources.ResourceIncident) string {
-	key := strings.TrimSpace(incident.Provider) + "|" + strings.TrimSpace(incident.NativeID) + "|" + strings.TrimSpace(incident.Code)
-	if key == "||" {
-		return ""
+func incidentForProviderSpec(resource unifiedresources.Resource, spec alertspecs.ResourceAlertSpec) (unifiedresources.ResourceIncident, bool) {
+	if spec.ProviderIncident == nil {
+		return unifiedresources.ResourceIncident{}, false
 	}
-	return key
+
+	for _, incident := range resource.Incidents {
+		if strings.TrimSpace(incident.Provider) != strings.TrimSpace(spec.ProviderIncident.Provider) {
+			continue
+		}
+		if len(spec.ProviderIncident.Codes) > 0 && !containsCanonicalString(spec.ProviderIncident.Codes, incident.Code) {
+			continue
+		}
+		if len(spec.ProviderIncident.NativeIDs) > 0 && !containsCanonicalString(spec.ProviderIncident.NativeIDs, incident.NativeID) {
+			continue
+		}
+		return incident, true
+	}
+	return unifiedresources.ResourceIncident{}, false
+}
+
+func containsCanonicalString(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
 }
 
 func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) bool {
@@ -171,6 +239,17 @@ func alertLevelFromIncidentSeverity(level storagehealth.RiskLevel) (AlertLevel, 
 	case storagehealth.RiskCritical:
 		return AlertLevelCritical, true
 	case storagehealth.RiskWarning:
+		return AlertLevelWarning, true
+	default:
+		return "", false
+	}
+}
+
+func alertLevelFromCanonicalSeverity(level alertspecs.AlertSeverity) (AlertLevel, bool) {
+	switch level {
+	case alertspecs.AlertSeverityCritical:
+		return AlertLevelCritical, true
+	case alertspecs.AlertSeverityWarning:
 		return AlertLevelWarning, true
 	default:
 		return "", false
