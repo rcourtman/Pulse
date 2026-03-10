@@ -6006,6 +6006,46 @@ func TestUnacknowledgeAlertSuccess(t *testing.T) {
 	}
 }
 
+func TestUnacknowledgeAlertByCanonicalAlias(t *testing.T) {
+	m := newTestManager(t)
+
+	resourceID := "res1"
+	alertID := resourceID + "-cpu"
+	canonicalState := buildCanonicalStateID(resourceID, "metric-threshold:cpu")
+	now := time.Now()
+	alert := &Alert{
+		ID:              alertID,
+		Type:            "cpu",
+		ResourceID:      resourceID,
+		CanonicalSpecID: "metric-threshold:cpu",
+		CanonicalKind:   "metric_threshold",
+		CanonicalState:  canonicalState,
+		Acknowledged:    true,
+		AckTime:         &now,
+		AckUser:         "alice",
+	}
+
+	m.mu.Lock()
+	m.setActiveAlertNoLock(canonicalState, alert)
+	m.setAckRecordNoLock(alert, canonicalState, ackRecord{
+		acknowledged: true,
+		user:         "alice",
+		time:         now,
+	})
+	m.mu.Unlock()
+
+	if err := m.UnacknowledgeAlert(canonicalState); err != nil {
+		t.Fatalf("UnacknowledgeAlert(%q) returned error: %v", canonicalState, err)
+	}
+
+	m.mu.RLock()
+	updated := testRequireActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+	if updated.Acknowledged {
+		t.Fatalf("expected alert to be unacknowledged")
+	}
+}
+
 func TestClearActiveAlertsEmptyMaps(t *testing.T) {
 	// t.Parallel()
 	m := newTestManager(t)
@@ -14777,6 +14817,34 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		}
 	})
 
+	t.Run("DisableAllPBS clears canonical-keyed existing alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		cpuAlertID := "pbs1-cpu"
+		canonicalState := buildCanonicalStateID("pbs1", "metric-threshold:cpu")
+
+		m.mu.Lock()
+		m.config.DisableAllPBS = true
+		m.setActiveAlertNoLock(canonicalState, &Alert{
+			ID:              cpuAlertID,
+			Type:            "cpu",
+			ResourceID:      "pbs1",
+			CanonicalSpecID: "metric-threshold:cpu",
+			CanonicalKind:   "metric_threshold",
+			CanonicalState:  canonicalState,
+		})
+		m.mu.Unlock()
+
+		m.CheckPBS(models.PBSInstance{ID: "pbs1", Name: "testpbs"})
+
+		m.mu.RLock()
+		_, exists := testLookupActiveAlert(t, m, cpuAlertID)
+		m.mu.RUnlock()
+		if exists {
+			t.Fatal("expected canonical-keyed PBS alert to be cleared")
+		}
+	})
+
 	t.Run("override with Disabled clears alerts", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
@@ -15534,6 +15602,34 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		}
 		if offlineExists {
 			t.Error("expected offline alert to be cleared")
+		}
+	})
+
+	t.Run("DisableAllStorage clears canonical-keyed existing alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		usageAlertID := "storage1-usage"
+		canonicalState := buildCanonicalStateID("storage1", "metric-threshold:usage")
+
+		m.mu.Lock()
+		m.config.DisableAllStorage = true
+		m.setActiveAlertNoLock(canonicalState, &Alert{
+			ID:              usageAlertID,
+			Type:            "usage",
+			ResourceID:      "storage1",
+			CanonicalSpecID: "metric-threshold:usage",
+			CanonicalKind:   "metric_threshold",
+			CanonicalState:  canonicalState,
+		})
+		m.mu.Unlock()
+
+		m.CheckStorage(models.Storage{ID: "storage1", Name: "teststorage"})
+
+		m.mu.RLock()
+		_, exists := testLookupActiveAlert(t, m, usageAlertID)
+		m.mu.RUnlock()
+		if exists {
+			t.Fatal("expected canonical-keyed storage alert to be cleared")
 		}
 	})
 

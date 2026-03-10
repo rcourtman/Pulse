@@ -4029,8 +4029,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		delete(m.offlineConfirmations, pbs.ID)
 		// Clear CPU alert
 		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
-		if _, exists := m.activeAlerts[cpuAlertID]; exists {
-			m.clearAlertNoLock(cpuAlertID)
+		if m.clearActiveAlertIfPresentNoLock(cpuAlertID) {
 			log.Info().
 				Str("alertID", cpuAlertID).
 				Str("pbs", pbs.Name).
@@ -4038,8 +4037,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		}
 		// Clear Memory alert
 		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
-		if _, exists := m.activeAlerts[memAlertID]; exists {
-			m.clearAlertNoLock(memAlertID)
+		if m.clearActiveAlertIfPresentNoLock(memAlertID) {
 			log.Info().
 				Str("alertID", memAlertID).
 				Str("pbs", pbs.Name).
@@ -4047,8 +4045,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		}
 		// Clear offline alert
 		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			m.clearAlertNoLock(offlineAlertID)
+		if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
 			log.Info().
 				Str("alertID", offlineAlertID).
 				Str("pbs", pbs.Name).
@@ -4069,8 +4066,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		delete(m.offlineConfirmations, pbs.ID)
 		// Clear CPU alert
 		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
-		if _, exists := m.activeAlerts[cpuAlertID]; exists {
-			m.clearAlertNoLock(cpuAlertID)
+		if m.clearActiveAlertIfPresentNoLock(cpuAlertID) {
 			log.Debug().
 				Str("alertID", cpuAlertID).
 				Str("pbs", pbs.Name).
@@ -4078,8 +4074,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		}
 		// Clear Memory alert
 		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
-		if _, exists := m.activeAlerts[memAlertID]; exists {
-			m.clearAlertNoLock(memAlertID)
+		if m.clearActiveAlertIfPresentNoLock(memAlertID) {
 			log.Debug().
 				Str("alertID", memAlertID).
 				Str("pbs", pbs.Name).
@@ -4087,8 +4082,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		}
 		// Clear offline alert
 		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			m.clearAlertNoLock(offlineAlertID)
+		if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
 			log.Debug().
 				Str("alertID", offlineAlertID).
 				Str("pbs", pbs.Name).
@@ -5545,16 +5539,14 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		// Clear any existing storage alerts when all storage alerts are disabled
 		m.mu.Lock()
 		usageAlertID := fmt.Sprintf("%s-usage", storage.ID)
-		if _, exists := m.activeAlerts[usageAlertID]; exists {
-			m.clearAlertNoLock(usageAlertID)
+		if m.clearActiveAlertIfPresentNoLock(usageAlertID) {
 			log.Info().
 				Str("alertID", usageAlertID).
 				Str("storage", storage.Name).
 				Msg("Cleared usage alert - all storage alerts disabled")
 		}
 		offlineAlertID := fmt.Sprintf("storage-offline-%s", storage.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			m.clearAlertNoLock(offlineAlertID)
+		if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
 			log.Info().
 				Str("alertID", offlineAlertID).
 				Str("storage", storage.Name).
@@ -7151,15 +7143,18 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
-	alert := m.activeAlerts[key]
+	alert, ok := m.getActiveAlertNoLock(key)
+	if !ok || alert == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
 
 	alert.Acknowledged = true
 	now := time.Now()
 	alert.AckTime = &now
 	alert.AckUser = user
 
-	// Write the modified alert back to the map
-	m.activeAlerts[key] = alert
+	m.setActiveAlertNoLock(key, alert)
 	m.setAckRecordNoLock(alert, alertID, ackRecord{
 		acknowledged: true,
 		user:         user,
@@ -7188,14 +7183,17 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
-	alert := m.activeAlerts[key]
+	alert, ok := m.getActiveAlertNoLock(key)
+	if !ok || alert == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
 
 	alert.Acknowledged = false
 	alert.AckTime = nil
 	alert.AckUser = ""
 
-	// Write the modified alert back to the map
-	m.activeAlerts[key] = alert
+	m.setActiveAlertNoLock(key, alert)
 	m.deleteAckRecordNoLock(alert, alertID)
 
 	alertCopy := alert.Clone()
@@ -10299,6 +10297,14 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 	log.Info().
 		Str("alertID", publicID).
 		Msg("Alert cleared")
+}
+
+func (m *Manager) clearActiveAlertIfPresentNoLock(alertID string) bool {
+	if _, exists := m.getActiveAlertNoLock(alertID); !exists {
+		return false
+	}
+	m.clearAlertNoLock(alertID)
+	return true
 }
 
 func (m *Manager) clearSnapshotAlertsForInstance(instance string) {
