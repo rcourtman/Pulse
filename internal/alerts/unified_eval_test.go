@@ -430,3 +430,83 @@ func TestCheckStorageOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 		t.Fatalf("canonicalSpecID = %v, want %s", got, "storage-1-connectivity")
 	}
 }
+
+func TestCheckPMGOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.mu.Lock()
+	m.offlineConfirmations["pmg-1"] = 2
+	m.mu.Unlock()
+
+	m.CheckPMG(models.PMGInstance{
+		ID:               "pmg-1",
+		Name:             "pmg-main",
+		Host:             "pmg-host",
+		Status:           "online",
+		ConnectionHealth: "unhealthy",
+	})
+
+	alert := activeAlert(t, m, "pmg-offline-pmg-1")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
+		t.Fatalf("canonicalAlertKind = %v, want connectivity", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "pmg-1-connectivity" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, "pmg-1-connectivity")
+	}
+}
+
+func TestHandleDockerHostOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.mu.Lock()
+	m.dockerOfflineCount["docker1"] = 2
+	m.mu.Unlock()
+
+	m.HandleDockerHostOffline(models.DockerHost{
+		ID:          "docker1",
+		DisplayName: "Docker Host 1",
+		Hostname:    "docker.local",
+		AgentID:     "agent-123",
+	})
+
+	alert := activeAlert(t, m, "docker-host-offline-docker1")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
+		t.Fatalf("canonicalAlertKind = %v, want connectivity", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "docker:docker1-connectivity" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, "docker:docker1-connectivity")
+	}
+}
+
+func TestCheckDockerContainerStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	host := models.DockerHost{
+		ID:          "host-1",
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers: []models.DockerContainer{
+			{
+				ID:     "container-1",
+				Name:   "web",
+				State:  "exited",
+				Status: "Exited (1) seconds ago",
+			},
+		},
+	}
+
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	resourceID := dockerResourceID(host.ID, "container-1")
+	alert := activeAlert(t, m, "docker-container-state-"+resourceID)
+	if got := alert.Metadata["canonicalAlertKind"]; got != "discrete-state" {
+		t.Fatalf("canonicalAlertKind = %v, want discrete-state", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-runtime-state" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-runtime-state")
+	}
+}

@@ -4720,41 +4720,28 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 		return
 	}
 
-	m.mu.Lock()
-	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
-		alert.LastSeen = time.Now()
-		m.activeAlerts[alertID] = alert
-		m.mu.Unlock()
-		return
-	}
-
-	m.dockerOfflineCount[host.ID]++
-	confirmations := m.dockerOfflineCount[host.ID]
-	const requiredConfirmations = 3
-	if confirmations < requiredConfirmations {
-		m.mu.Unlock()
-		log.Debug().
+	spec, err := buildCanonicalConnectivitySpec(resourceID, host.DisplayName, unifiedresources.ResourceType("docker-host"), AlertLevelCritical, 3, false)
+	if err != nil {
+		log.Warn().
+			Err(err).
 			Str("dockerHost", host.DisplayName).
 			Str("hostID", host.ID).
-			Int("confirmations", confirmations).
-			Int("required", requiredConfirmations).
-			Msg("Docker host appears offline, awaiting confirmation")
+			Msg("Skipping invalid canonical docker host connectivity spec")
 		return
 	}
 
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "docker-host-offline",
-		Level:        AlertLevelCritical,
+	result, ok := m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
+		Tracking:     m.dockerOfflineCount,
+		TrackingKey:  host.ID,
+		AlertID:      alertID,
+		AlertType:    "docker-host-offline",
 		ResourceID:   resourceID,
 		ResourceName: host.DisplayName,
 		Node:         nodeName,
 		Instance:     instanceName,
 		Message:      fmt.Sprintf("Docker host '%s' is offline", host.DisplayName),
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
 			"resourceType": "docker-host",
 			"hostId":       host.ID,
@@ -4762,43 +4749,31 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 			"agentId":      host.AgentID,
 			"displayName":  host.DisplayName,
 		},
-	}
-
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-
-	// Trigger AI analysis callback unconditionally
-	if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
-		alertCopy := alert.Clone()
-		go func(a *Alert) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
-				}
-			}()
-			alertForAICallback(a)
-		}(alertCopy)
-	}
-
-	if !m.checkRateLimit(alertID) {
-		m.mu.Unlock()
-		log.Debug().
-			Str("alertID", alertID).
-			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-			Msg("Docker host offline alert suppressed due to rate limit")
+		AddToRecent:   true,
+		AddToHistory:  true,
+		RateLimit:     true,
+		DispatchAsync: false,
+	})
+	if !ok || result.Transition == nil || result.Transition.Kind != alertspecs.EvaluationTransitionActivated {
 		return
 	}
 
-	m.dispatchAlert(alert, false)
-	m.mu.Unlock()
-
-	log.Error().
-		Str("dockerHost", host.DisplayName).
-		Str("hostID", host.ID).
-		Str("hostname", host.Hostname).
-		Msg("CRITICAL: Docker host is offline")
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+	if alert != nil {
+		if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
+			alertCopy := alert.Clone()
+			go func(a *Alert) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
+					}
+				}()
+				alertForAICallback(a)
+			}(alertCopy)
+		}
+	}
 
 	m.clearDockerHostContainerAlerts(host)
 }
@@ -4832,49 +4807,40 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 		return
 	}
 
-	m.mu.Lock()
-	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
-		alert.LastSeen = time.Now()
-		alert.Level = severity
-		if alert.Metadata == nil {
-			alert.Metadata = make(map[string]interface{})
-		}
-		alert.Metadata["state"] = container.State
-		alert.Metadata["status"] = container.Status
-		m.activeAlerts[alertID] = alert
-		m.mu.Unlock()
-		return
+	observedState := strings.ToLower(strings.TrimSpace(container.State))
+	if observedState == "" {
+		observedState = "unknown"
 	}
 
-	m.dockerStateConfirm[stateKey]++
-	confirmations := m.dockerStateConfirm[stateKey]
-	const requiredConfirmations = 2
-	if confirmations < requiredConfirmations {
-		m.mu.Unlock()
-		log.Debug().
+	spec, err := buildCanonicalDiscreteStateSpec(resourceID, containerName, unifiedresources.ResourceTypeAppContainer, severity, 2, false, "runtime-state",
+		[]string{"created", "restarting", "removing", "paused", "exited", "dead", "unknown"})
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("resourceID", resourceID).
 			Str("container", containerName).
-			Str("host", host.DisplayName).
-			Str("state", container.State).
-			Int("confirmations", confirmations).
-			Int("required", requiredConfirmations).
-			Msg("Docker container state change detected, awaiting confirmation")
+			Msg("Skipping invalid canonical docker container state spec")
 		return
 	}
 
-	message := fmt.Sprintf("Docker container '%s' is %s", containerName, strings.TrimSpace(container.Status))
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "docker-container-state",
-		Level:        severity,
+	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			DiscreteState: &alertspecs.DiscreteStateEvidence{
+				StateKey: "runtime-state",
+				Observed: observedState,
+			},
+		},
+		Tracking:     m.dockerStateConfirm,
+		TrackingKey:  stateKey,
+		AlertID:      alertID,
+		AlertType:    "docker-container-state",
 		ResourceID:   resourceID,
 		ResourceName: containerName,
 		Node:         nodeName,
 		Instance:     instanceName,
-		Message:      message,
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		Message:      fmt.Sprintf("Docker container '%s' is %s", containerName, strings.TrimSpace(container.Status)),
 		Metadata: map[string]interface{}{
 			"resourceType":  "app-container",
 			"hostId":        host.ID,
@@ -4886,20 +4852,10 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 			"state":         container.State,
 			"status":        container.Status,
 		},
-	}
-
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-	m.dispatchAlert(alert, true)
-	m.mu.Unlock()
-
-	log.Warn().
-		Str("container", containerName).
-		Str("host", host.DisplayName).
-		Str("state", container.State).
-		Msg("Docker container state alert raised")
+		AddToRecent:   true,
+		AddToHistory:  true,
+		DispatchAsync: true,
+	})
 }
 
 func (m *Manager) clearDockerContainerStateAlert(resourceID string) {
@@ -7696,7 +7652,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		return
 	}
 
-	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
 		Tracking:     m.nodeOfflineCount,
@@ -7776,7 +7732,7 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 		return
 	}
 
-	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
 		Tracking:     m.offlineConfirmations,
@@ -7805,13 +7761,39 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 
 // checkPMGOffline creates an alert for offline PMG instances
 func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
-	m.checkResourceOffline(offlineCheckParams{
-		alertPrefix:  "pmg-offline",
-		resourceID:   pmg.ID,
-		resourceName: pmg.Name,
-		host:         pmg.Host,
-		alertType:    "offline",
-		resourceKind: "PMG",
+	m.mu.RLock()
+	override, hasOverride := m.config.Overrides[pmg.ID]
+	m.mu.RUnlock()
+	disabled := hasOverride && (override.Disabled || override.DisableConnectivity)
+	spec, err := buildCanonicalConnectivitySpec(pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, AlertLevelCritical, 3, disabled)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("pmg", pmg.Name).
+			Str("pmgID", pmg.ID).
+			Msg("Skipping invalid canonical PMG connectivity spec")
+		return
+	}
+
+	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
+		Tracking:     m.offlineConfirmations,
+		TrackingKey:  pmg.ID,
+		AlertID:      fmt.Sprintf("pmg-offline-%s", pmg.ID),
+		AlertType:    "offline",
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         pmg.Host,
+		Instance:     pmg.Name,
+		Message:      fmt.Sprintf("PMG instance %s is offline", pmg.Name),
+		Metadata: map[string]interface{}{
+			"resourceType":     "pmg",
+			"status":           pmg.Status,
+			"connectionHealth": pmg.ConnectionHealth,
+		},
+		RateLimit:     true,
+		DispatchAsync: true,
 	})
 }
 
@@ -8743,7 +8725,7 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 		return
 	}
 
-	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec:         spec,
 		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
 		Tracking:     m.offlineConfirmations,

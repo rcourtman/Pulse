@@ -194,6 +194,26 @@ func TestResourceAlertSpecValidateAllowsAgentDiskMigrationBridgeType(t *testing.
 	}
 }
 
+func TestResourceAlertSpecValidateAllowsDockerHostMigrationBridgeType(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "docker:host1-connectivity",
+		ResourceID:   "docker:host1",
+		ResourceType: unifiedresources.ResourceType("docker-host"),
+		Kind:         AlertSpecKindConnectivity,
+		Severity:     AlertSeverityCritical,
+		Connectivity: &ConnectivitySpec{
+			Signal:    "status",
+			LostAfter: time.Second,
+		},
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestResourceAlertSpecValidateRejectsPayloadKindMismatch(t *testing.T) {
 	t.Parallel()
 

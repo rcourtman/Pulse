@@ -64,6 +64,25 @@ func buildCanonicalPoweredStateSpec(resourceID, title string, resourceType unifi
 	return spec, spec.Validate()
 }
 
+func buildCanonicalDiscreteStateSpec(resourceID, title string, resourceType unifiedresources.ResourceType, severity AlertLevel, confirmations int, disabled bool, stateKey string, triggerStates []string) (alertspecs.ResourceAlertSpec, error) {
+	spec := alertspecs.ResourceAlertSpec{
+		ID:                    resourceID + "-" + stateKey,
+		ResourceID:            resourceID,
+		ResourceType:          resourceType,
+		Kind:                  alertspecs.AlertSpecKindDiscreteState,
+		Severity:              canonicalAlertSeverity(severity),
+		Title:                 title,
+		Disabled:              disabled,
+		ConfirmationsRequired: confirmations,
+		DiscreteState: &alertspecs.DiscreteStateSpec{
+			StateKey:      stateKey,
+			TriggerStates: append([]string(nil), triggerStates...),
+		},
+	}
+
+	return spec, spec.Validate()
+}
+
 func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	switch level {
 	case AlertLevelCritical:
@@ -104,7 +123,7 @@ func lifecyclePreviousState(spec alertspecs.ResourceAlertSpec, existing *Alert, 
 	}
 }
 
-func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlertParams) {
+func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlertParams) (alertspecs.EvaluationResult, bool) {
 	if params.Evidence.ObservedAt.IsZero() {
 		params.Evidence.ObservedAt = time.Now()
 	}
@@ -130,7 +149,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Str("resourceID", params.ResourceID).
 			Str("specID", params.Spec.ID).
 			Msg("Skipping invalid canonical lifecycle evaluation")
-		return
+		return alertspecs.EvaluationResult{}, false
 	}
 
 	if params.Tracking != nil {
@@ -143,7 +162,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 
 	switch result.State.State {
 	case alertspecs.AlertStatePending:
-		return
+		return result, true
 	case alertspecs.AlertStateFiring:
 		level, ok := alertLevelFromCanonicalSeverity(result.State.Severity)
 		if !ok {
@@ -177,7 +196,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 
 		if existing != nil {
-			return
+			return result, true
 		}
 
 		if params.AddToHistory {
@@ -189,14 +208,14 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 				Str("alertID", params.AlertID).
 				Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 				Msg("Lifecycle alert notification suppressed due to rate limit")
-			return
+			return result, true
 		}
 
 		m.dispatchAlert(alert, params.DispatchAsync)
-		return
+		return result, true
 	default:
 		if existing == nil {
-			return
+			return result, true
 		}
 
 		m.removeActiveAlertNoLock(params.AlertID)
@@ -206,5 +225,6 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 		m.addRecentlyResolvedWithPrimaryLock(params.AlertID, resolvedAlert)
 		m.safeCallResolvedCallback(params.AlertID, true)
+		return result, true
 	}
 }
