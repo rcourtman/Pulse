@@ -5748,7 +5748,7 @@ func TestSafeCallEscalateCallback(t *testing.T) {
 	})
 }
 
-func TestSafeCallResolvedCallback(t *testing.T) {
+func TestSafeCallResolvedAlertCallback(t *testing.T) {
 	// t.Parallel()
 
 	t.Run("calls callback with alert ID synchronously", func(t *testing.T) {
@@ -5760,7 +5760,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 			receivedID = alertID
 		})
 
-		m.safeCallResolvedCallback("test-alert-123", false)
+		m.safeCallResolvedAlertCallback(&Alert{ID: "test-alert-123"}, "test-alert-123", false)
 
 		if receivedID != "test-alert-123" {
 			t.Errorf("expected alert ID 'test-alert-123', got %q", receivedID)
@@ -5779,7 +5779,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 			close(done)
 		})
 
-		m.safeCallResolvedCallback("async-alert", true)
+		m.safeCallResolvedAlertCallback(&Alert{ID: "async-alert"}, "async-alert", true)
 
 		select {
 		case <-done:
@@ -5819,8 +5819,8 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 		// No callback set
 
 		// Should not panic
-		m.safeCallResolvedCallback("test-alert", false)
-		m.safeCallResolvedCallback("test-alert", true)
+		m.safeCallResolvedAlertCallback(&Alert{ID: "test-alert"}, "test-alert", false)
+		m.safeCallResolvedAlertCallback(&Alert{ID: "test-alert"}, "test-alert", true)
 	})
 
 	t.Run("recovers from panic in sync callback", func(t *testing.T) {
@@ -5832,7 +5832,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 		})
 
 		// Should not panic the caller
-		m.safeCallResolvedCallback("panic-test", false)
+		m.safeCallResolvedAlertCallback(&Alert{ID: "panic-test"}, "panic-test", false)
 	})
 
 	t.Run("recovers from panic in async callback", func(t *testing.T) {
@@ -5845,7 +5845,7 @@ func TestSafeCallResolvedCallback(t *testing.T) {
 			panic("async panic")
 		})
 
-		m.safeCallResolvedCallback("async-panic", true)
+		m.safeCallResolvedAlertCallback(&Alert{ID: "async-panic"}, "async-panic", true)
 
 		select {
 		case <-done:

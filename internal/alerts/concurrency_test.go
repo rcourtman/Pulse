@@ -96,7 +96,7 @@ func TestManagerCallbacksConcurrentSetAndUse(t *testing.T) {
 		defer wg.Done()
 		<-start
 		for i := 0; i < iterations; i++ {
-			manager.safeCallResolvedCallback("concurrency-alert", false)
+			manager.safeCallResolvedAlertCallback(&Alert{ID: "concurrency-alert"}, "concurrency-alert", false)
 			manager.safeCallAcknowledgedCallback(alert, "test-user")
 			manager.safeCallUnacknowledgedCallback(alert, "test-user")
 			manager.safeCallEscalateCallback(alert, 1)

@@ -914,11 +914,6 @@ func (m *Manager) getEscalateCallback() func(alert *Alert, level int) {
 	return cb
 }
 
-// safeCallResolvedCallback invokes onResolved with panic recovery
-func (m *Manager) safeCallResolvedCallback(alertID string, async bool) {
-	m.safeCallResolvedAlertCallback(&Alert{ID: alertID}, alertID, async)
-}
-
 // safeCallResolvedAlertCallback invokes onResolved with panic recovery while
 // preserving canonical state as the internal identity and emitting the public
 // alert ID to external callbacks for compatibility.
