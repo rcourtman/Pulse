@@ -458,7 +458,10 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 	}
 
 	query := r.URL.Query()
-	alertID := strings.TrimSpace(query.Get("alert_id"))
+	alertID := strings.TrimSpace(query.Get("alert_identifier"))
+	if alertID == "" {
+		alertID = strings.TrimSpace(query.Get("alert_id"))
+	}
 	resourceID := strings.TrimSpace(query.Get("resource_id"))
 	startedAtRaw := strings.TrimSpace(query.Get("started_at"))
 	if startedAtRaw == "" {
@@ -473,7 +476,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 
 	if alertID != "" {
 		if !validateAlertID(alertID) {
-			http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+			http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 			return
 		}
 		var startedAt time.Time
@@ -510,7 +513,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		return
 	}
 
-	http.Error(w, "Missing alert_id or resource_id", http.StatusBadRequest)
+	http.Error(w, "Missing alert_identifier or resource_id", http.StatusBadRequest)
 }
 
 // SaveAlertIncidentNote stores a user note in the incident timeline.
@@ -528,27 +531,34 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req struct {
-		AlertID    string `json:"alert_id"`
-		IncidentID string `json:"incident_id"`
-		Note       string `json:"note"`
-		User       string `json:"user,omitempty"`
+		AlertIdentifier string `json:"alertIdentifier"`
+		AlertID         string `json:"alert_id"`
+		IncidentID      string `json:"incident_id"`
+		Note            string `json:"note"`
+		User            string `json:"user,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	req.AlertIdentifier = strings.TrimSpace(req.AlertIdentifier)
 	req.AlertID = strings.TrimSpace(req.AlertID)
 	req.IncidentID = strings.TrimSpace(req.IncidentID)
 	req.Note = strings.TrimSpace(req.Note)
 	req.User = strings.TrimSpace(req.User)
 
-	if req.AlertID == "" && req.IncidentID == "" {
-		http.Error(w, "alert_id or incident_id is required", http.StatusBadRequest)
+	alertIdentifier := req.AlertIdentifier
+	if alertIdentifier == "" {
+		alertIdentifier = req.AlertID
+	}
+
+	if alertIdentifier == "" && req.IncidentID == "" {
+		http.Error(w, "alertIdentifier or incident_id is required", http.StatusBadRequest)
 		return
 	}
-	if req.AlertID != "" && !validateAlertID(req.AlertID) {
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if alertIdentifier != "" && !validateAlertID(alertIdentifier) {
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 	if req.Note == "" {
@@ -556,7 +566,7 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if ok := store.RecordNote(req.AlertID, req.IncidentID, req.Note, req.User); !ok {
+	if ok := store.RecordNote(alertIdentifier, req.IncidentID, req.Note, req.User); !ok {
 		http.Error(w, "Failed to save note", http.StatusBadRequest)
 		return
 	}
@@ -580,26 +590,55 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// alertIDRequest is used for endpoints that accept alert ID in request body
-// This avoids URL encoding issues with alert IDs containing special characters (/, :)
-type alertIDRequest struct {
-	ID string `json:"id"`
+// alertIdentifierRequest is used for endpoints that accept one alert identifier in the request body.
+// Canonical v6 clients should send `alertIdentifier`; `id` remains as a compatibility alias.
+type alertIdentifierRequest struct {
+	AlertIdentifier string `json:"alertIdentifier"`
+	ID              string `json:"id"`
+}
+
+func (r alertIdentifierRequest) identifier() string {
+	if identifier := strings.TrimSpace(r.AlertIdentifier); identifier != "" {
+		return identifier
+	}
+	return strings.TrimSpace(r.ID)
+}
+
+type alertIdentifiersRequest struct {
+	AlertIdentifiers []string `json:"alertIdentifiers"`
+	AlertIDs         []string `json:"alertIds"`
+	User             string   `json:"user,omitempty"`
+}
+
+func (r alertIdentifiersRequest) identifiers() []string {
+	raw := r.AlertIdentifiers
+	if len(raw) == 0 {
+		raw = r.AlertIDs
+	}
+	identifiers := make([]string, 0, len(raw))
+	for _, identifier := range raw {
+		trimmed := strings.TrimSpace(identifier)
+		if trimmed != "" {
+			identifiers = append(identifiers, trimmed)
+		}
+	}
+	return identifiers
 }
 
 // AcknowledgeAlertByBody acknowledges an alert using ID from request body
 // POST /api/alerts/acknowledge with {"id": "alert-id"}
 // This is the preferred method as it avoids URL encoding issues with reverse proxies
 func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
-	var req alertIDRequest
+	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode acknowledge request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	alertID := strings.TrimSpace(req.ID)
+	alertID := req.identifier()
 	if alertID == "" {
-		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		http.Error(w, "Alert identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -640,16 +679,16 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 // UnacknowledgeAlertByBody unacknowledges an alert using ID from request body
 // POST /api/alerts/unacknowledge with {"id": "alert-id"}
 func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
-	var req alertIDRequest
+	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode unacknowledge request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	alertID := strings.TrimSpace(req.ID)
+	alertID := req.identifier()
 	if alertID == "" {
-		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		http.Error(w, "Alert identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -684,16 +723,16 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 // ClearAlertByBody clears an alert using ID from request body
 // POST /api/alerts/clear with {"id": "alert-id"}
 func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request) {
-	var req alertIDRequest
+	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode clear request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	alertID := strings.TrimSpace(req.ID)
+	alertID := req.identifier()
 	if alertID == "" {
-		http.Error(w, "Alert ID is required", http.StatusBadRequest)
+		http.Error(w, "Alert identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -729,18 +768,16 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
-	var request struct {
-		AlertIDs []string `json:"alertIds"`
-		User     string   `json:"user,omitempty"`
-	}
+	var request alertIdentifiersRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if len(request.AlertIDs) == 0 {
-		http.Error(w, "No alert IDs provided", http.StatusBadRequest)
+	alertIdentifiers := request.identifiers()
+	if len(alertIdentifiers) == 0 {
+		http.Error(w, "No alert identifiers provided", http.StatusBadRequest)
 		return
 	}
 
@@ -754,10 +791,11 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		results    []map[string]interface{}
 		anySuccess bool
 	)
-	for _, alertID := range request.AlertIDs {
+	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
-			"alertId": alertID,
-			"success": true,
+			"alertIdentifier": alertID,
+			"alertId":         alertID,
+			"success":         true,
 		}
 		if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 			result["success"] = false
@@ -795,17 +833,16 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
-	var request struct {
-		AlertIDs []string `json:"alertIds"`
-	}
+	var request alertIdentifiersRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if len(request.AlertIDs) == 0 {
-		http.Error(w, "No alert IDs provided", http.StatusBadRequest)
+	alertIdentifiers := request.identifiers()
+	if len(alertIdentifiers) == 0 {
+		http.Error(w, "No alert identifiers provided", http.StatusBadRequest)
 		return
 	}
 
@@ -813,10 +850,11 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 		results    []map[string]interface{}
 		anySuccess bool
 	)
-	for _, alertID := range request.AlertIDs {
+	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
-			"alertId": alertID,
-			"success": true,
+			"alertIdentifier": alertID,
+			"alertId":         alertID,
+			"success":         true,
 		}
 		if h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {
 			anySuccess = true

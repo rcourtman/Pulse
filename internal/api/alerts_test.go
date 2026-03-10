@@ -468,6 +468,23 @@ func TestAcknowledgeAlertByBody_Success(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+func TestAcknowledgeAlertByBody_CanonicalIdentifierSuccess(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("AcknowledgeAlert", "canonical:a1", testifymock.Anything).Return(nil)
+
+	body := `{"alertIdentifier": "canonical:a1"}`
+	req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.AcknowledgeAlertByBody(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
 func TestUnacknowledgeAlertByBody_Success(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
@@ -485,6 +502,23 @@ func TestUnacknowledgeAlertByBody_Success(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+func TestUnacknowledgeAlertByBody_CanonicalIdentifierSuccess(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("UnacknowledgeAlert", "canonical:a1").Return(nil)
+
+	body := `{"alertIdentifier": "canonical:a1"}`
+	req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.UnacknowledgeAlertByBody(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
 func TestClearAlertByBody_Success(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
@@ -495,6 +529,23 @@ func TestClearAlertByBody_Success(t *testing.T) {
 	mockManager.On("ClearAlert", "a1").Return(true)
 
 	body := `{"id": "a1"}`
+	req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.ClearAlertByBody(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestClearAlertByBody_CanonicalIdentifierSuccess(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("ClearAlert", "canonical:a1").Return(true)
+
+	body := `{"alertIdentifier": "canonical:a1"}`
 	req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.ClearAlertByBody(w, req)
@@ -587,6 +638,15 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		assert.Equal(t, 400, w.Code)
 	})
 
+	t.Run("BulkAcknowledgeAlerts_CanonicalIdentifiers", func(t *testing.T) {
+		mockManager.On("AcknowledgeAlert", "canonical:a1", testifymock.Anything).Return(nil).Once()
+		mockMonitor.On("SyncAlertState").Return().Once()
+		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIdentifiers": ["canonical:a1"]}`))
+		w := httptest.NewRecorder()
+		h.BulkAcknowledgeAlerts(w, req)
+		assert.Equal(t, 200, w.Code)
+	})
+
 	t.Run("UnacknowledgeAlertByBody_InvalidJSON", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{invalid`))
 		w := httptest.NewRecorder()
@@ -627,6 +687,27 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 400, w.Code)
+	})
+
+	t.Run("SaveAlertIncidentNote_CanonicalIdentifier", func(t *testing.T) {
+		mockMonitor3 := new(MockAlertMonitor)
+		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+		mockMonitor3.On("GetIncidentStore").Return(mockStore)
+		h3 := NewAlertHandlers(nil, mockMonitor3, nil)
+		incidentAlert := &alerts.Alert{
+			ID:           "canonical:a1",
+			Type:         "cpu",
+			Level:        alerts.AlertLevelWarning,
+			ResourceID:   "resource-1",
+			ResourceName: "resource-1",
+			Message:      "test",
+			StartTime:    time.Now(),
+		}
+		mockStore.RecordAlertFired(incidentAlert)
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "canonical:a1", "note": "test"}`))
+		w := httptest.NewRecorder()
+		h3.SaveAlertIncidentNote(w, req)
+		assert.Equal(t, 200, w.Code)
 	})
 
 	t.Run("SaveAlertIncidentNote_InvalidAlertID", func(t *testing.T) {

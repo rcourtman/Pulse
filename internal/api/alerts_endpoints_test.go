@@ -240,7 +240,7 @@ func TestAlertsEndpoints(t *testing.T) {
 		}
 
 		// Test specific alert timeline
-		res2, err := http.Get(srv.server.URL + "/api/alerts/incidents?alert_id=test-alert")
+		res2, err := http.Get(srv.server.URL + "/api/alerts/incidents?alert_identifier=test-alert")
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}

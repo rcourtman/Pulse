@@ -30,7 +30,7 @@ export class AlertsAPI {
   }
 
   static async getIncidentTimeline(alertId: string, startedAt?: string): Promise<Incident | null> {
-    const query = new URLSearchParams({ alert_id: alertId });
+    const query = new URLSearchParams({ alert_identifier: alertId });
     if (startedAt) {
       query.set('started_at', startedAt);
     }
@@ -54,7 +54,7 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/incidents/note`, {
       method: 'POST',
       body: JSON.stringify({
-        alert_id: params.alertId,
+        alertIdentifier: params.alertId,
         incident_id: params.incidentId,
         note: params.note,
         user: params.user,
@@ -66,7 +66,7 @@ export class AlertsAPI {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
     return apiFetchJSON(`${this.baseUrl}/acknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ id: alertId, user }),
+      body: JSON.stringify({ alertIdentifier: alertId, user }),
     });
   }
 
@@ -74,7 +74,7 @@ export class AlertsAPI {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
     return apiFetchJSON(`${this.baseUrl}/unacknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ id: alertId }),
+      body: JSON.stringify({ alertIdentifier: alertId }),
     });
   }
 
@@ -108,7 +108,7 @@ export class AlertsAPI {
   ): Promise<{ results: Array<{ alertId: string; success: boolean; error?: string }> }> {
     return apiFetchJSON(`${this.baseUrl}/bulk/acknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ alertIds, user }),
+      body: JSON.stringify({ alertIdentifiers: alertIds, user }),
     });
   }
 }
