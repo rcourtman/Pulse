@@ -224,6 +224,27 @@ func TestAlertCharacterizationRecentSuppressionSurvivesAlertIDChangeForSameCanon
 	}
 }
 
+func TestAlertCharacterizationAcknowledgeByCanonicalStateAlias(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	alertID := resourceID + "-cpu"
+	canonicalState := buildCanonicalStateID(resourceID, alertID)
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.95), "pve1")
+
+	if err := m.AcknowledgeAlert(canonicalState, "alice"); err != nil {
+		t.Fatalf("AcknowledgeAlert(%q) error = %v", canonicalState, err)
+	}
+
+	alert := activeAlert(t, m, alertID)
+	if !alert.Acknowledged {
+		t.Fatal("expected alert to be acknowledged through canonical state alias")
+	}
+	if alert.AckUser != "alice" {
+		t.Fatalf("AckUser = %q, want alice", alert.AckUser)
+	}
+}
+
 func TestAlertCharacterizationGuestThresholdPrecedence(t *testing.T) {
 	overrideGuestID := BuildGuestKey("pve1", "node1", 101)
 	ruleGuestID := BuildGuestKey("pve1", "node1", 102)
@@ -437,4 +458,22 @@ func TestAlertCharacterizationSuppressTagClearsMetricSuppressionIdentity(t *test
 
 	m.CheckGuest(similarSpike, "pve1")
 	assertAlertPresent(t, m, alertID)
+}
+
+func TestAlertCharacterizationResolvedLookupByCanonicalStateAlias(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	alertID := resourceID + "-cpu"
+	canonicalState := buildCanonicalStateID(resourceID, alertID)
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.95), "pve1")
+	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.70), "pve1")
+
+	resolved := m.GetResolvedAlert(canonicalState)
+	if resolved == nil || resolved.Alert == nil {
+		t.Fatalf("expected resolved alert lookup by canonical state %q", canonicalState)
+	}
+	if resolved.Alert.ID != alertID {
+		t.Fatalf("resolved alert ID = %q, want %q", resolved.Alert.ID, alertID)
+	}
 }

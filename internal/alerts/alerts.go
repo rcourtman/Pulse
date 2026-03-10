@@ -531,6 +531,7 @@ type Manager struct {
 	alertsDir        string
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
+	activeAlertAlias map[string]string
 	historyManager   *HistoryManager
 	onAlert          func(alert *Alert)
 	onResolved       func(alertID string)
@@ -545,6 +546,7 @@ type Manager struct {
 	suppressedUntil map[string]time.Time // Track suppression windows
 	// Recently resolved alerts (kept for 5 minutes)
 	recentlyResolved map[string]*ResolvedAlert
+	resolvedAlias    map[string]string
 	resolvedMutex    sync.RWMutex // Secondary lock - see Lock Ordering Documentation above
 	// Time threshold tracking
 	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
@@ -620,12 +622,14 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 	m := &Manager{
 		alertsDir:                       alertsDir,
 		activeAlerts:                    make(map[string]*Alert),
+		activeAlertAlias:                make(map[string]string),
 		historyManager:                  NewHistoryManager(alertsDir),
 		escalationStop:                  make(chan struct{}),
 		alertRateLimit:                  make(map[string][]time.Time),
 		recentAlerts:                    make(map[string]*Alert),
 		suppressedUntil:                 make(map[string]time.Time),
 		recentlyResolved:                make(map[string]*ResolvedAlert),
+		resolvedAlias:                   make(map[string]string),
 		pendingAlerts:                   make(map[string]time.Time),
 		nodeOfflineCount:                make(map[string]int),
 		offlineConfirmations:            make(map[string]int),
@@ -806,6 +810,7 @@ func (m *Manager) SetLicenseChecker(checker func(feature string) bool) {
 func (m *Manager) addRecentlyResolvedUnlocked(alertID string, resolved *ResolvedAlert) {
 	m.resolvedMutex.Lock()
 	m.recentlyResolved[alertID] = resolved
+	m.registerResolvedAliasUnlocked(alertID, resolved)
 	m.resolvedMutex.Unlock()
 }
 
@@ -6404,7 +6409,7 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 // clearAlert removes an alert if it exists
 func (m *Manager) clearAlert(alertID string) {
 	m.mu.Lock()
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := m.getActiveAlertNoLock(alertID)
 	if exists {
 		m.removeActiveAlertNoLock(alertID)
 	}
@@ -7103,11 +7108,12 @@ func namespaceMatchesInstance(namespace, instance string) bool {
 func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	m.mu.Lock()
 
-	alert, exists := m.activeAlerts[alertID]
+	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
 	if !exists {
 		m.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
+	alert := m.activeAlerts[key]
 
 	alert.Acknowledged = true
 	now := time.Now()
@@ -7115,7 +7121,7 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	alert.AckUser = user
 
 	// Write the modified alert back to the map
-	m.activeAlerts[alertID] = alert
+	m.activeAlerts[key] = alert
 	m.ackState[alertID] = ackRecord{
 		acknowledged: true,
 		user:         user,
@@ -7146,18 +7152,19 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	m.mu.Lock()
 
-	alert, exists := m.activeAlerts[alertID]
+	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
 	if !exists {
 		m.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
+	alert := m.activeAlerts[key]
 
 	alert.Acknowledged = false
 	alert.AckTime = nil
 	alert.AckUser = ""
 
 	// Write the modified alert back to the map
-	m.activeAlerts[alertID] = alert
+	m.activeAlerts[key] = alert
 	delete(m.ackState, alertID)
 	if alert.CanonicalState != "" {
 		delete(m.ackStateByCanonical, alert.CanonicalState)
@@ -7188,7 +7195,7 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 		updated.NodeDisplayName = m.resolveNodeDisplayName(updated.Node)
 	}
 
-	existing, exists := m.activeAlerts[alertID]
+	existing, exists := m.getActiveAlertNoLock(alertID)
 	if exists && existing != nil {
 		// Preserve the original start time so duration calculations are correct
 		updated.StartTime = existing.StartTime
@@ -7244,12 +7251,16 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	// Before deleting, update the history entry with the alert's final LastSeen
 	// timestamp so the stored duration reflects how long the alert was actually active.
 	var canonicalState string
-	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
+	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
+	if alert, ok := m.getActiveAlertNoLock(alertID); exists && ok && alert != nil {
 		backfillCanonicalIdentity(alert)
 		canonicalState = alert.CanonicalState
 		m.historyManager.UpdateAlertLastSeen(alertID, alert.LastSeen)
+		m.unregisterActiveAlertAliasNoLock(key, alert)
 	}
-	delete(m.activeAlerts, alertID)
+	if exists {
+		delete(m.activeAlerts, key)
+	}
 	// NOTE: Don't delete ackState here - preserve it so if the same alert
 	// reappears (e.g., powered-off VM during backup), the acknowledgement
 	// is restored via preserveAlertState. ackState is cleaned up in Cleanup().
@@ -7516,7 +7527,7 @@ func (m *Manager) GetResolvedAlert(alertID string) *ResolvedAlert {
 	m.resolvedMutex.RLock()
 	defer m.resolvedMutex.RUnlock()
 
-	resolved, ok := m.recentlyResolved[alertID]
+	resolved, ok := m.getResolvedAlertNoLock(alertID)
 	if !ok || resolved == nil || resolved.Alert == nil {
 		return nil
 	}
@@ -8971,6 +8982,12 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	m.resolvedMutex.Lock()
 	for alertID, resolved := range m.recentlyResolved {
 		if resolved.ResolvedTime.Before(fiveMinutesAgo) {
+			if resolved != nil && resolved.Alert != nil {
+				backfillCanonicalIdentity(resolved.Alert)
+				if resolved.Alert.CanonicalState != "" && resolved.Alert.CanonicalState != alertID {
+					delete(m.resolvedAlias, resolved.Alert.CanonicalState)
+				}
+			}
 			delete(m.recentlyResolved, alertID)
 		}
 	}
@@ -9672,7 +9689,7 @@ func (m *Manager) LoadActiveAlerts() error {
 			continue
 		}
 
-		m.activeAlerts[alert.ID] = alert
+		m.setActiveAlertNoLock(alert.ID, alert)
 		if alert.Acknowledged {
 			ackTime := alert.StartTime
 			if alert.AckTime != nil {
@@ -9812,6 +9829,7 @@ func (m *Manager) ClearActiveAlerts() {
 		return
 	}
 	m.activeAlerts = make(map[string]*Alert)
+	m.activeAlertAlias = make(map[string]string)
 	m.pendingAlerts = make(map[string]time.Time)
 	m.recentAlerts = make(map[string]*Alert)
 	m.suppressedUntil = make(map[string]time.Time)
@@ -9830,6 +9848,7 @@ func (m *Manager) ClearActiveAlerts() {
 
 	m.resolvedMutex.Lock()
 	m.recentlyResolved = make(map[string]*ResolvedAlert)
+	m.resolvedAlias = make(map[string]string)
 	m.resolvedMutex.Unlock()
 
 	log.Info().Msg("cleared all active and pending alerts")
@@ -10235,7 +10254,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 
 // clearAlertNoLock clears an alert without locking (must be called with lock held)
 func (m *Manager) clearAlertNoLock(alertID string) {
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
 		return
 	}

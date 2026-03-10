@@ -110,7 +110,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	}
 
 	for alertID, alert := range desired {
-		if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+		if existing, exists := m.getActiveAlertNoLock(alertID); exists && existing != nil {
 			existing.LastSeen = alert.LastSeen
 			existing.Level = alert.Level
 			existing.ResourceID = alert.ResourceID
@@ -120,12 +120,14 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			existing.Instance = alert.Instance
 			existing.Message = alert.Message
 			existing.Metadata = alert.Metadata
+			applyCanonicalIdentity(existing, alert.CanonicalSpecID, alert.CanonicalKind)
+			m.setActiveAlertNoLock(alertID, existing)
 			continue
 		}
 
 		m.preserveAlertState(alertID, alert)
-		m.activeAlerts[alertID] = alert
-		m.recentAlerts[alertID] = alert
+		m.setActiveAlertNoLock(alertID, alert)
+		m.recentAlerts[canonicalTrackingKeyForAlert(alert)] = alert
 		m.historyManager.AddAlert(*alert)
 		m.dispatchAlert(alert, false)
 	}

@@ -331,7 +331,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	trackingKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
 
 	var existing *Alert
-	if current, ok := m.activeAlerts[params.AlertID]; ok {
+	if current, ok := m.getActiveAlertNoLock(params.AlertID); ok {
 		existing = current
 	}
 
@@ -388,7 +388,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 
 		m.preserveAlertState(params.AlertID, alert)
-		m.activeAlerts[params.AlertID] = alert
+		m.setActiveAlertNoLock(params.AlertID, alert)
 		if params.AddToRecent {
 			m.recentAlerts[trackingKey] = alert
 		}
@@ -439,7 +439,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 	trackingKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
 
 	var existing *Alert
-	if current, ok := m.activeAlerts[params.AlertID]; ok {
+	if current, ok := m.getActiveAlertNoLock(params.AlertID); ok {
 		existing = current
 	}
 
@@ -509,7 +509,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 
 		m.preserveAlertState(params.AlertID, alert)
-		m.activeAlerts[params.AlertID] = alert
+		m.setActiveAlertNoLock(params.AlertID, alert)
 		if params.AddToRecent {
 			m.recentAlerts[trackingKey] = alert
 		}
@@ -544,6 +544,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			}
 			m.dispatchAlert(alert, params.DispatchAsync)
 		}
+		m.setActiveAlertNoLock(params.AlertID, alert)
 		return result, true
 	default:
 		if existing == nil {
