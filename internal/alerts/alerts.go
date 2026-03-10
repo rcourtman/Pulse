@@ -807,12 +807,13 @@ func (m *Manager) SetLicenseChecker(checker func(feature string) bool) {
 }
 
 // addRecentlyResolvedUnlocked records a resolved alert assuming the caller does not hold m.mu.
-func (m *Manager) addRecentlyResolvedUnlocked(alertID string, resolved *ResolvedAlert) {
+func (m *Manager) addRecentlyResolvedUnlocked(resolved *ResolvedAlert) {
 	m.resolvedMutex.Lock()
-	storageKey := alertID
-	if resolved != nil && resolved.Alert != nil {
-		storageKey = activeAlertStorageKey(resolved.Alert, alertID)
+	if resolved == nil || resolved.Alert == nil {
+		m.resolvedMutex.Unlock()
+		return
 	}
+	storageKey := activeAlertStorageKey(resolved.Alert, resolved.Alert.ID)
 	m.recentlyResolved[storageKey] = resolved
 	m.registerResolvedAliasUnlocked(storageKey, resolved)
 	m.resolvedMutex.Unlock()
@@ -820,9 +821,9 @@ func (m *Manager) addRecentlyResolvedUnlocked(alertID string, resolved *Resolved
 
 // addRecentlyResolvedWithPrimaryLock records a resolved alert while preserving the caller's
 // ownership of m.mu. Callers must hold m.mu before invoking this helper.
-func (m *Manager) addRecentlyResolvedWithPrimaryLock(alertID string, resolved *ResolvedAlert) {
+func (m *Manager) addRecentlyResolvedWithPrimaryLock(resolved *ResolvedAlert) {
 	m.mu.Unlock()
-	m.addRecentlyResolvedUnlocked(alertID, resolved)
+	m.addRecentlyResolvedUnlocked(resolved)
 	m.mu.Lock()
 }
 
@@ -2079,7 +2080,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			m.removeActiveAlertNoLock(alertID)
 
 			// Add to recently resolved while respecting lock ordering
-			m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+			m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 			log.Info().
 				Str("alertID", alertID).
@@ -6446,7 +6447,7 @@ func (m *Manager) clearAlert(alertID string) {
 		ResolvedTime: time.Now(),
 	}
 
-	m.addRecentlyResolvedUnlocked(publicID, resolvedAlert)
+	m.addRecentlyResolvedUnlocked(resolvedAlert)
 
 	m.safeCallResolvedAlertCallback(alert, publicID, false)
 
@@ -7008,7 +7009,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				}()
 
 				// Add to recently resolved while preventing lock-order inversions
-				m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+				m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 				log.Info().
 					Str("alertID", alertID).
@@ -7599,7 +7600,7 @@ func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceNam
 		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
@@ -7681,7 +7682,7 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
@@ -8808,7 +8809,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
@@ -10279,7 +10280,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 		ResolvedTime: time.Now(),
 	}
 
-	m.addRecentlyResolvedWithPrimaryLock(publicID, resolvedAlert)
+	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 	m.safeCallResolvedAlertCallback(alert, publicID, true) // Make async to prevent deadlock
 

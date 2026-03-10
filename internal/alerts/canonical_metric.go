@@ -276,7 +276,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		}
 		m.removeActiveAlertNoLock(alertID)
 		asyncSaveActiveAlerts("canonical metric resolution", m.SaveActiveAlerts)
-		m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 		m.safeCallResolvedAlertCallback(existingAlert, alertID, true)
 	}
 }

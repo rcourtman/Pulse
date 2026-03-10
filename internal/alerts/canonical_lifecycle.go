@@ -422,7 +422,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Alert:        existing,
 			ResolvedTime: params.Evidence.ObservedAt,
 		}
-		m.addRecentlyResolvedWithPrimaryLock(params.AlertID, resolvedAlert)
+		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 		m.safeCallResolvedAlertCallback(existing, params.AlertID, true)
 		return result, true
 	}
@@ -556,7 +556,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			Alert:        existing,
 			ResolvedTime: params.Evidence.ObservedAt,
 		}
-		m.addRecentlyResolvedWithPrimaryLock(params.AlertID, resolvedAlert)
+		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 		m.safeCallResolvedAlertCallback(existing, params.AlertID, true)
 		return result, true
 	}

@@ -500,6 +500,45 @@ func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
 	}
 }
 
+func TestAddRecentlyResolvedUsesCanonicalStorageKey(t *testing.T) {
+	m := newTestManager(t)
+
+	resourceID := "res1"
+	alertID := "res1-cpu"
+	canonicalState := buildCanonicalStateID(resourceID, "metric-threshold:cpu")
+	resolved := &ResolvedAlert{
+		Alert: &Alert{
+			ID:              alertID,
+			Type:            "cpu",
+			ResourceID:      resourceID,
+			CanonicalSpecID: "metric-threshold:cpu",
+			CanonicalKind:   "metric_threshold",
+			CanonicalState:  canonicalState,
+		},
+		ResolvedTime: time.Now(),
+	}
+
+	m.addRecentlyResolvedUnlocked(resolved)
+
+	m.resolvedMutex.RLock()
+	_, storedByCanonicalState := m.recentlyResolved[canonicalState]
+	_, storedByPublicID := m.recentlyResolved[alertID]
+	m.resolvedMutex.RUnlock()
+	if !storedByCanonicalState {
+		t.Fatalf("expected recently resolved alert to be stored by canonical state")
+	}
+	if storedByPublicID {
+		t.Fatalf("expected recently resolved alert not to be stored by public ID")
+	}
+
+	if got := m.GetResolvedAlert(alertID); got == nil || got.Alert == nil || got.Alert.ID != alertID {
+		t.Fatalf("expected resolved lookup by public ID alias")
+	}
+	if got := m.GetResolvedAlert(canonicalState); got == nil || got.Alert == nil || got.Alert.CanonicalState != canonicalState {
+		t.Fatalf("expected resolved lookup by canonical state")
+	}
+}
+
 func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	m := newTestManager(t)
 	host := models.DockerHost{ID: "host1", DisplayName: "Host One", Hostname: "host-one"}
