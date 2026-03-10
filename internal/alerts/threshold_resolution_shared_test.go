@@ -188,3 +188,100 @@ func TestCheckNodeDisabledOverrideClearsExistingAlerts(t *testing.T) {
 		t.Fatalf("expected node offline tracking to be cleared for disabled node override")
 	}
 }
+
+func TestReevaluateActiveAlertsUsesSharedAgentOverrideResolution(t *testing.T) {
+	m := newTestManager(t)
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.AgentDefaults = ThresholdConfig{
+		CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+	}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"host1": {
+			Disabled: true,
+		},
+	}
+	m.activeAlerts["agent:host1-cpu"] = &Alert{
+		ID:        "agent:host1-cpu",
+		Type:      "cpu",
+		Value:     95,
+		Threshold: 80,
+		Metadata: map[string]interface{}{
+			"resourceType": "Agent",
+		},
+	}
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts["agent:host1-cpu"]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected reevaluation to resolve agent alert using raw host override key")
+	}
+}
+
+func TestReevaluateActiveAlertsUsesSharedStorageOverrideResolution(t *testing.T) {
+	m := newTestManager(t)
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.StorageDefault = HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"storage1": {
+			Disabled: true,
+		},
+	}
+	m.activeAlerts["storage1-usage"] = &Alert{
+		ID:        "storage1-usage",
+		Type:      "usage",
+		Value:     95,
+		Threshold: 85,
+		Instance:  "Storage",
+	}
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts["storage1-usage"]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected reevaluation to resolve storage alert when shared override disables storage alerting")
+	}
+}
+
+func TestCheckStorageOfflineUsesSharedThresholdResolution(t *testing.T) {
+	m := newTestManager(t)
+	storage := models.Storage{
+		ID:     "storage1",
+		Name:   "tank",
+		Status: "offline",
+	}
+
+	m.mu.Lock()
+	m.config.Overrides = map[string]ThresholdConfig{
+		storage.ID: {
+			DisableConnectivity: true,
+		},
+	}
+	m.activeAlerts["storage-offline-"+storage.ID] = &Alert{ID: "storage-offline-" + storage.ID}
+	m.offlineConfirmations[storage.ID] = 1
+	m.mu.Unlock()
+
+	m.checkStorageOffline(storage)
+
+	m.mu.RLock()
+	_, alertExists := m.activeAlerts["storage-offline-"+storage.ID]
+	_, confirmExists := m.offlineConfirmations[storage.ID]
+	m.mu.RUnlock()
+
+	if alertExists {
+		t.Fatalf("expected storage offline alert to clear when shared thresholds disable connectivity")
+	}
+	if confirmExists {
+		t.Fatalf("expected storage offline confirmations to clear when shared thresholds disable connectivity")
+	}
+}

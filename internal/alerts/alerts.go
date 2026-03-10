@@ -1865,16 +1865,13 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.config.AgentDefaults
 			// Overrides are keyed by raw host ID (without the "agent:" prefix
 			// that hostResourceID adds to the resource ID used in alert IDs).
 			rawHostID := stripHostResourcePrefix(resourceID)
-			if override, exists := m.config.Overrides[rawHostID]; exists {
-				if override.Disabled {
-					alertsToResolve = append(alertsToResolve, alertID)
-					continue
-				}
-				thresholds = m.applyThresholdOverride(thresholds, override)
+			thresholds := m.resolveResourceThresholds("agent", rawHostID)
+			if thresholds.Disabled {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
@@ -1942,9 +1939,10 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.config.NodeDefaults
-			if override, exists := m.config.Overrides[resourceID]; exists {
-				thresholds = m.applyThresholdOverride(thresholds, override)
+			thresholds := m.resolveResourceThresholds("node", resourceID)
+			if thresholds.Disabled {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
 		} else if threshold == nil && (alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
@@ -1954,11 +1952,12 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			if override, exists := m.config.Overrides[resourceID]; exists && override.Usage != nil {
-				threshold = override.Usage
-			} else {
-				threshold = &m.config.StorageDefault
+			thresholds := m.resolveResourceThresholds("storage", resourceID)
+			if thresholds.Disabled {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
 			}
+			threshold = getThresholdForMetric(thresholds, metricType)
 		} else if threshold == nil && alert.Instance == "PBS" {
 			// This is a PBS alert
 			// Check if all PBS alerts are disabled
@@ -1966,17 +1965,12 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.config.PBSDefaults
-			if override, exists := m.config.Overrides[resourceID]; exists {
-				if override.CPU != nil && metricType == "cpu" {
-					threshold = ensureHysteresisThreshold(override.CPU)
-				} else if override.Memory != nil && metricType == "memory" {
-					threshold = ensureHysteresisThreshold(override.Memory)
-				}
+			thresholds := m.resolveResourceThresholds("pbs", resourceID)
+			if thresholds.Disabled {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
 			}
-			if threshold == nil {
-				threshold = getThresholdForMetric(thresholds, metricType)
-			}
+			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
 		if threshold == nil {
@@ -1990,22 +1984,18 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			// For now, we'll mark these alerts for re-evaluation by the monitor.
 			// The next poll cycle will properly evaluate them with custom rules.
 
-			// Check if there's an override for this specific guest
-			if override, exists := m.config.Overrides[resourceID]; exists {
-				if override.Disabled {
-					// Alert is now disabled for this resource, resolve it
-					alertsToResolve = append(alertsToResolve, alertID)
-					continue
-				}
-				threshold = getThresholdForMetricFromConfig(override, metricType)
+			thresholds := m.resolveThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), resourceID)
+			if thresholds.Disabled {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
 			}
 
-			// If no override or override doesn't have this metric, use defaults
+			// If no custom rule context is available, reevaluation still uses the
+			// shared default+override resolution path and waits for the next poll
+			// to apply filter-driven guest rules.
 			// Note: This doesn't consider custom rules - those will be evaluated
 			// on the next poll cycle when we have the full guest object
-			if threshold == nil {
-				threshold = getThresholdForMetric(m.config.GuestDefaults, metricType)
-			}
+			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
 		// If no threshold found or threshold is disabled (trigger <= 0), resolve the alert
@@ -7489,14 +7479,15 @@ func (m *Manager) checkResourceOffline(p offlineCheckParams) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if offline alerts are disabled
-	if override, exists := m.config.Overrides[p.resourceID]; exists && (override.Disabled || override.DisableConnectivity) {
+	thresholds := m.resolveThresholdOverride(ThresholdConfig{}, p.resourceID)
+	if thresholds.Disabled || thresholds.DisableConnectivity {
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
 			m.clearAlertNoLock(alertID)
 			log.Debug().
 				Str(strings.ToLower(p.resourceKind), p.resourceName).
 				Msg(p.resourceKind + " offline alert cleared (connectivity alerts disabled)")
 		}
+		delete(m.offlineConfirmations, p.resourceID)
 		return
 	}
 
@@ -8684,8 +8675,8 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if storage offline alerts are disabled
-	if override, exists := m.config.Overrides[storage.ID]; exists && override.Disabled {
+	thresholds := m.resolveResourceThresholds("storage", storage.ID)
+	if thresholds.Disabled || thresholds.DisableConnectivity {
 		// Storage alerts are disabled, clear any existing alert and return
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
 			m.clearAlertNoLock(alertID)
@@ -8693,6 +8684,7 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 				Str("storage", storage.Name).
 				Msg("Storage offline alert cleared (alerts disabled)")
 		}
+		delete(m.offlineConfirmations, storage.ID)
 		return
 	}
 
