@@ -46,10 +46,9 @@ type UnifiedResourceInput struct {
 }
 
 type unifiedMetricCandidate struct {
-	Spec       alertspecs.ResourceAlertSpec
-	MetricType string
-	Value      float64
-	Threshold  *HysteresisThreshold
+	Spec      alertspecs.ResourceAlertSpec
+	Value     float64
+	Threshold *HysteresisThreshold
 }
 
 // unifiedAlertType maps a resource type key to the alert system's display type.
@@ -126,20 +125,7 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 	}
 
 	for _, candidate := range buildUnifiedMetricCandidates(input, thresholds) {
-		m.checkMetric(
-			input.ID,
-			input.Name,
-			input.Node,
-			input.Instance,
-			unifiedAlertType(input.Type),
-			candidate.MetricType,
-			candidate.Value,
-			candidate.Threshold,
-			mergeMetricOptions(opts, map[string]interface{}{
-				"canonicalSpecID":    candidate.Spec.ID,
-				"canonicalAlertKind": string(candidate.Spec.Kind),
-			}),
-		)
+		m.checkMetricWithCanonicalSpec(candidate.Spec, input.Name, input.Node, input.Instance, unifiedAlertType(input.Type), candidate.Value, candidate.Threshold, opts)
 	}
 }
 
@@ -158,8 +144,8 @@ func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds Thresh
 		if metric == nil {
 			return
 		}
-		spec := unifiedMetricSpec(input, resourceType, metricType, threshold)
-		if err := spec.Validate(); err != nil {
+		spec, err := buildCanonicalMetricSpec(input.ID, input.Name, resourceType, metricType, threshold)
+		if err != nil {
 			log.Warn().
 				Err(err).
 				Str("resourceID", input.ID).
@@ -169,10 +155,9 @@ func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds Thresh
 			return
 		}
 		candidates = append(candidates, unifiedMetricCandidate{
-			Spec:       spec,
-			MetricType: metricType,
-			Value:      value,
-			Threshold:  threshold,
+			Spec:      spec,
+			Value:     value,
+			Threshold: threshold,
 		})
 	}
 
@@ -194,14 +179,14 @@ func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds Thresh
 	return candidates
 }
 
-func unifiedMetricSpec(input *UnifiedResourceInput, resourceType unifiedresources.ResourceType, metricType string, threshold *HysteresisThreshold) alertspecs.ResourceAlertSpec {
+func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedresources.ResourceType, metricType string, threshold *HysteresisThreshold) (alertspecs.ResourceAlertSpec, error) {
 	spec := alertspecs.ResourceAlertSpec{
-		ID:           input.ID + "-" + metricType,
-		ResourceID:   input.ID,
+		ID:           resourceID + "-" + metricType,
+		ResourceID:   resourceID,
 		ResourceType: resourceType,
 		Kind:         alertspecs.AlertSpecKindMetricThreshold,
 		Severity:     alertspecs.AlertSeverityWarning,
-		Title:        input.Name,
+		Title:        title,
 		Disabled:     threshold == nil || threshold.Trigger <= 0,
 		MetricThreshold: &alertspecs.MetricThresholdSpec{
 			Metric:    metricType,
@@ -218,7 +203,27 @@ func unifiedMetricSpec(input *UnifiedResourceInput, resourceType unifiedresource
 		}
 	}
 
-	return spec
+	return spec, spec.Validate()
+}
+
+func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
+	if spec.MetricThreshold == nil {
+		return
+	}
+	m.checkMetric(
+		spec.ResourceID,
+		resourceName,
+		node,
+		instance,
+		resourceType,
+		spec.MetricThreshold.Metric,
+		value,
+		threshold,
+		mergeMetricOptions(opts, map[string]interface{}{
+			"canonicalSpecID":    spec.ID,
+			"canonicalAlertKind": string(spec.Kind),
+		}),
+	)
 }
 
 func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, bool) {

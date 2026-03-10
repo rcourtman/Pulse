@@ -2640,8 +2640,26 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				"diskIndex":  idx,
 				"label":      label,
 			}
+			resourceType, ok := unifiedMetricResourceType(snapshot.resourceType())
+			if !ok {
+				m.checkMetric(perDiskResourceID, name, node, instanceName, snapshot.resourceType(), "disk", disk.Usage, thresholds.Disk, &metricOptions{
+					Metadata:    metadata,
+					Message:     message,
+					MonitorOnly: monitorOnly,
+				})
+				continue
+			}
+			spec, err := buildCanonicalMetricSpec(perDiskResourceID, name, resourceType, "disk", thresholds.Disk)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resourceID", perDiskResourceID).
+					Str("guest", name).
+					Msg("Skipping invalid canonical guest disk metric spec")
+				continue
+			}
 
-			m.checkMetric(perDiskResourceID, name, node, instanceName, snapshot.resourceType(), "disk", disk.Usage, thresholds.Disk, &metricOptions{
+			m.checkMetricWithCanonicalSpec(spec, name, node, instanceName, snapshot.resourceType(), disk.Usage, thresholds.Disk, &metricOptions{
 				Metadata:    metadata,
 				Message:     message,
 				MonitorOnly: monitorOnly,
@@ -2761,7 +2779,16 @@ func (m *Manager) CheckNode(node models.Node) {
 						temp = node.Temperature.CPUMax
 					}
 				}
-				m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "node", "temperature", temp, thresholds.Temperature, nil)
+				spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), "temperature", thresholds.Temperature)
+				if err != nil {
+					log.Warn().
+						Err(err).
+						Str("resourceID", node.ID).
+						Str("node", node.Name).
+						Msg("Skipping invalid canonical node temperature metric spec")
+				} else {
+					m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", temp, thresholds.Temperature, nil)
+				}
 			}
 		}
 	}

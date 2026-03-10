@@ -3,6 +3,8 @@ package alerts
 import (
 	"sort"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func unifiedEvalBaseConfig() AlertConfig {
@@ -251,5 +253,79 @@ func TestCheckUnifiedResourceAnnotatesMetricAlertsWithCanonicalSpecMetadata(t *t
 	}
 	if got := alert.Metadata["canonicalSpecID"]; got != "vm-annotated-cpu" {
 		t.Fatalf("canonicalSpecID = %v, want vm-annotated-cpu", got)
+	}
+}
+
+func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	guestID := BuildGuestKey("pve1", "node1", 101)
+	m.CheckGuest(models.VM{
+		ID:       guestID,
+		VMID:     101,
+		Name:     "app01",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		CPU:      0.20,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Disks: []models.Disk{
+			{
+				Mountpoint: "/",
+				Device:     "scsi0",
+				Usage:      95,
+				Total:      100,
+				Used:       95,
+				Free:       5,
+			},
+		},
+	}, "pve1")
+
+	alertID := guestID + "-disk-scsi0-disk"
+	m.mu.RLock()
+	alert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+	if alert == nil {
+		t.Fatalf("expected guest disk alert %q", alertID)
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != alertID {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, alertID)
+	}
+}
+
+func TestCheckNodeTemperatureAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.CheckNode(models.Node{
+		ID:       "node/pve-1",
+		Name:     "pve-1",
+		Instance: "pve-1",
+		Status:   "online",
+		CPU:      0.20,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Temperature: &models.Temperature{
+			Available:  true,
+			CPUPackage: 90,
+		},
+	})
+
+	m.mu.RLock()
+	alert := m.activeAlerts["node/pve-1-temperature"]
+	m.mu.RUnlock()
+	if alert == nil {
+		t.Fatal("expected node temperature alert")
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "node/pve-1-temperature" {
+		t.Fatalf("canonicalSpecID = %v, want node/pve-1-temperature", got)
 	}
 }
