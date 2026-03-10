@@ -19,14 +19,33 @@ import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
-import Key from 'lucide-solid/icons/key';
-import Globe from 'lucide-solid/icons/globe';
 import Copy from 'lucide-solid/icons/copy';
 import ExternalLink from 'lucide-solid/icons/external-link';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
 import Eye from 'lucide-solid/icons/eye';
 import X from 'lucide-solid/icons/x';
+import { SSOProviderTypeIcon } from './SSOProviderTypeIcon';
+import {
+  getSSOProviderAddButtonLabel,
+  getSSOCertificatePresentation,
+  getSSOProviderCardClass,
+  getSSOProviderEmptyStateDescription,
+  getSSOProviderEmptyStateTitle,
+  getSSOProvidersLoadingState,
+  getSSOProviderModalTitle,
+  getSSOProviderSummary,
+  getSSOProviderTypeBadgeClass,
+  getSSOProviderTypeLabel,
+  getSSOTestResultPresentation,
+} from '@/utils/ssoProviderPresentation';
+import {
+  getUpgradeActionButtonClass,
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
+import { ALERT_EMAIL_REPLY_TO_PLACEHOLDER } from '@/utils/alertEmailPresentation';
 
 // Types
 interface SSOProvider {
@@ -462,6 +481,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     notificationStore.success(`${label} copied to clipboard`);
   };
 
+  const testResultPresentation = createMemo(() =>
+    testResult() ? getSSOTestResultPresentation(Boolean(testResult()?.success)) : null,
+  );
+
   // Test connection for current form configuration
   const testConnection = async () => {
     setTesting(true);
@@ -604,12 +627,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   href={getUpgradeActionUrlOrFallback('advanced_sso')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+                  class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
                   onClick={() =>
                     trackUpgradeClicked('settings_sso_providers_add_saml_gate', 'advanced_sso')
                   }
                 >
-                  Upgrade to Pro
+                  {UPGRADE_ACTION_LABEL}
                   <ExternalLink class="w-4 h-4" />
                 </a>
                 <Show when={canStartTrial()}>
@@ -617,9 +640,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     type="button"
                     onClick={handleStartTrial}
                     disabled={startingTrial()}
-                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                    class={UPGRADE_TRIAL_LINK_CLASS}
                   >
-                    Start free trial
+                    {UPGRADE_TRIAL_LABEL}
                   </button>
                 </Show>
               </div>
@@ -644,10 +667,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 href={getUpgradeActionUrlOrFallback('advanced_sso')}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
                 onClick={() => trackUpgradeClicked('settings_sso_providers_banner', 'advanced_sso')}
               >
-                Upgrade to Pro
+                {UPGRADE_ACTION_LABEL}
                 <ExternalLink class="w-4 h-4" />
               </a>
               <Show when={canStartTrial()}>
@@ -655,9 +678,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   type="button"
                   onClick={handleStartTrial}
                   disabled={startingTrial()}
-                  class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                  class={UPGRADE_TRIAL_LINK_CLASS}
                 >
-                  Start free trial
+                  {UPGRADE_TRIAL_LABEL}
                 </button>
               </Show>
             </div>
@@ -679,7 +702,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5"
             >
               <Plus class="w-4 h-4" />
-              Add OIDC
+              {getSSOProviderAddButtonLabel('oidc')}
             </button>
             <Show when={hasAdvancedSSO()}>
               <button
@@ -689,7 +712,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
-                Add SAML
+                {getSSOProviderAddButtonLabel('saml')}
               </button>
             </Show>
             <Show when={licenseLoaded() && !hasAdvancedSSO()}>
@@ -700,7 +723,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
               >
                 <Plus class="w-4 h-4" />
-                Add SAML (Pro)
+                {getSSOProviderAddButtonLabel('saml', true)}
               </button>
             </Show>
           </div>
@@ -718,15 +741,15 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         <Show when={loading()}>
           <div class="flex items-center gap-3 text-sm text-muted">
             <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            Loading SSO providers...
+            {getSSOProvidersLoadingState().text}
           </div>
         </Show>
 
         <Show when={!loading() && providers().length === 0}>
           <div class="text-center py-8 text-muted">
             <Shield class="w-12 h-12 mx-auto mb-3 opacity-40" />
-            <p class="text-sm">No SSO providers configured</p>
-            <p class="text-xs mt-1">Click "Add OIDC" or "Add SAML" to get started</p>
+            <p class="text-sm">{getSSOProviderEmptyStateTitle()}</p>
+            <p class="text-xs mt-1">{getSSOProviderEmptyStateDescription()}</p>
           </div>
         </Show>
 
@@ -735,30 +758,24 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             <For each={providers()}>
               {(provider) => (
                 <div
-                  class={`p-4 rounded-md border ${provider.enabled ? 'bg-surface border-border' : 'bg-surface-alt border-border opacity-60'}`}
+                  class={getSSOProviderCardClass(provider.enabled)}
                 >
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-3 min-w-0">
                       <div class="p-2 rounded-md bg-surface-hover">
-                        {provider.type === 'oidc' ? (
-                          <Globe class="w-5 h-5 text-muted" />
-                        ) : (
-                          <Key class="w-5 h-5 text-muted" />
-                        )}
+                        <SSOProviderTypeIcon type={provider.type} class="w-5 h-5 text-muted" />
                       </div>
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
                           <span class="font-medium text-base-content truncate">
                             {provider.name}
                           </span>
-                          <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-surface-hover">
-                            {provider.type.toUpperCase()}
+                          <span class={getSSOProviderTypeBadgeClass()}>
+                            {getSSOProviderTypeLabel(provider.type)}
                           </span>
                         </div>
                         <p class="text-xs text-muted truncate">
-                          {provider.type === 'oidc'
-                            ? provider.oidcIssuerUrl
-                            : provider.samlIdpEntityId || provider.samlMetadataUrl}
+                          {getSSOProviderSummary(provider)}
                         </p>
                       </div>
                     </div>
@@ -834,12 +851,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           isOpen={true}
           onClose={() => setShowModal(false)}
           panelClass="max-w-2xl"
-          ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${form.type.toUpperCase()} provider`}
+          ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${getSSOProviderTypeLabel(form.type)} provider`}
         >
           <div class="w-full max-h-[90vh] overflow-y-auto">
             <div class="sticky top-0 bg-surface px-6 py-4 border-b border-border z-10">
               <h3 class="text-lg font-semibold text-base-content">
-                {editingProvider() ? 'Edit' : 'Add'} {form.type.toUpperCase()} Provider
+                {getSSOProviderModalTitle(Boolean(editingProvider()), form.type)}
               </h3>
             </div>
 
@@ -1072,30 +1089,20 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               {/* Test result display */}
               <Show when={testResult()}>
                 <div
-                  class={`p-4 rounded-md border ${
-                    testResult()?.success
-                      ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'
-                      : 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
-                  }`}
+                  class={testResultPresentation()!.panelClass}
                 >
                   <div class="flex items-start gap-3">
                     {testResult()?.success ? (
-                      <CheckCircle class="w-5 h-5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <CheckCircle class={testResultPresentation()!.iconClass} />
                     ) : (
-                      <XCircle class="w-5 h-5 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                      <XCircle class={testResultPresentation()!.iconClass} />
                     )}
                     <div class="flex-1 min-w-0">
-                      <p
-                        class={`text-sm font-medium ${
-                          testResult()?.success
-                            ? 'text-green-800 dark:text-green-200'
-                            : 'text-red-800 dark:text-red-200'
-                        }`}
-                      >
+                      <p class={testResultPresentation()!.titleClass}>
                         {testResult()?.message}
                       </p>
                       <Show when={testResult()?.error}>
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">
+                        <p class={testResultPresentation()!.errorClass}>
                           {testResult()?.error}
                         </p>
                       </Show>
@@ -1135,9 +1142,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                               <dt class="text-muted mb-1">Certificates:</dt>
                               <dd class="space-y-1">
                                 <For each={testResult()?.details?.certificates}>
-                                  {(cert) => (
+                                  {(cert) => {
+                                    const certPresentation = getSSOCertificatePresentation(
+                                      cert.isExpired,
+                                    );
+
+                                    return (
                                     <div
-                                      class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}
+                                      class={certPresentation.containerClass}
                                     >
                                       <span class="font-medium">{cert.subject}</span>
                                       <span class="mx-1">•</span>
@@ -1145,12 +1157,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                                         Expires: {new Date(cert.notAfter).toLocaleDateString()}
                                       </span>
                                       <Show when={cert.isExpired}>
-                                        <span class="ml-1 text-red-600 dark:text-red-400 font-medium">
-                                          (Expired!)
+                                        <span class={certPresentation.expiredLabelClass}>
+                                          {certPresentation.expiredLabel}
                                         </span>
                                       </Show>
                                     </div>
-                                  )}
+                                    );
+                                  }}
                                 </For>
                               </dd>
                             </div>
@@ -1210,7 +1223,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           rows={2}
                           value={form.allowedEmails}
                           onInput={(e) => setForm('allowedEmails', e.currentTarget.value)}
-                          placeholder="admin@example.com"
+                          placeholder={ALERT_EMAIL_REPLY_TO_PLACEHOLDER}
                           class={controlClass('min-h-[60px]')}
                         />
                       </div>
@@ -1342,20 +1355,26 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     <dt class="text-muted text-xs uppercase tracking-wide mb-1">Certificates</dt>
                     <dd class="space-y-1">
                       <For each={metadataPreview()?.parsed.certificates}>
-                        {(cert) => (
+                        {(cert) => {
+                          const certPresentation = getSSOCertificatePresentation(
+                            Boolean(cert.isExpired),
+                          );
+
+                          return (
                           <div
-                            class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-surface-hover text-base-content'}`}
+                            class={certPresentation.containerClass}
                           >
                             <span class="font-medium">{cert.subject}</span>
                             <span class="mx-1">•</span>
                             <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
                             <Show when={cert.isExpired}>
-                              <span class="ml-1 text-red-600 dark:text-red-400 font-medium">
-                                (Expired!)
+                              <span class={certPresentation.expiredLabelClass}>
+                                {certPresentation.expiredLabel}
                               </span>
                             </Show>
                           </div>
-                        )}
+                          );
+                        }}
                       </For>
                     </dd>
                   </div>
