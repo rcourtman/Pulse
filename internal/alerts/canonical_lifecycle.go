@@ -28,22 +28,25 @@ type canonicalLifecycleAlertParams struct {
 }
 
 type canonicalStatefulAlertParams struct {
-	Spec          alertspecs.ResourceAlertSpec
-	Evidence      alertspecs.AlertEvidence
-	AlertID       string
-	AlertType     string
-	ResourceID    string
-	ResourceName  string
-	Node          string
-	Instance      string
-	Message       string
-	Value         float64
-	Threshold     float64
-	Metadata      map[string]interface{}
-	AddToRecent   bool
-	AddToHistory  bool
-	RateLimit     bool
-	DispatchAsync bool
+	Spec                         alertspecs.ResourceAlertSpec
+	Evidence                     alertspecs.AlertEvidence
+	AlertID                      string
+	AlertType                    string
+	ResourceID                   string
+	ResourceName                 string
+	Node                         string
+	Instance                     string
+	Message                      string
+	Value                        float64
+	Threshold                    float64
+	Metadata                     map[string]interface{}
+	AddToRecent                  bool
+	AddToHistory                 bool
+	MessageBuilder               func(alertspecs.EvaluationResult) (string, float64, float64)
+	RateLimit                    bool
+	NotifyOnSeverityChange       bool
+	AddToHistoryOnSeverityChange bool
+	DispatchAsync                bool
 }
 
 func buildCanonicalConnectivitySpec(resourceID, title string, resourceType unifiedresources.ResourceType, severity AlertLevel, confirmations int, disabled bool) (alertspecs.ResourceAlertSpec, error) {
@@ -118,6 +121,26 @@ func buildCanonicalServiceGapSpec(resourceID, title string, resourceType unified
 			Service:         service,
 			WarningPercent:  warningPercent,
 			CriticalPercent: criticalPercent,
+		},
+	}
+
+	return spec, spec.Validate()
+}
+
+func buildCanonicalSeverityThresholdSpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, warning, critical float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	spec := alertspecs.ResourceAlertSpec{
+		ID:           specID,
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		Kind:         alertspecs.AlertSpecKindSeverityThreshold,
+		Severity:     alertspecs.AlertSeverityWarning,
+		Title:        title,
+		Disabled:     disabled,
+		SeverityThreshold: &alertspecs.SeverityThresholdSpec{
+			Metric:    metric,
+			Direction: alertspecs.ThresholdDirectionAbove,
+			Warning:   warning,
+			Critical:  critical,
 		},
 	}
 
@@ -300,6 +323,12 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		if !ok {
 			level = AlertLevelWarning
 		}
+		message := params.Message
+		value := params.Value
+		threshold := params.Threshold
+		if params.MessageBuilder != nil {
+			message, value, threshold = params.MessageBuilder(result)
+		}
 		alert := &Alert{
 			ID:           params.AlertID,
 			Type:         params.AlertType,
@@ -308,9 +337,9 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			ResourceName: params.ResourceName,
 			Node:         params.Node,
 			Instance:     params.Instance,
-			Message:      params.Message,
-			Value:        params.Value,
-			Threshold:    params.Threshold,
+			Message:      message,
+			Value:        value,
+			Threshold:    threshold,
 			StartTime:    params.Evidence.ObservedAt,
 			LastSeen:     params.Evidence.ObservedAt,
 			Metadata:     cloneMetadata(params.Metadata),
@@ -342,8 +371,8 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			return result, true
 		}
 
-		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionSeverityChanged {
-			if params.AddToHistory {
+		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionSeverityChanged && params.NotifyOnSeverityChange {
+			if params.AddToHistoryOnSeverityChange {
 				m.historyManager.AddAlert(*alert)
 			}
 			if params.RateLimit && !m.checkRateLimit(params.AlertID) {

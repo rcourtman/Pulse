@@ -578,3 +578,79 @@ func TestCheckDockerServiceUpdateStateAnnotatesCanonicalSpecMetadata(t *testing.
 		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-update-state")
 	}
 }
+
+func TestCheckPMGQueueDepthAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	pmg := models.PMGInstance{
+		ID:   "pmg-1",
+		Name: "PMG 1",
+		Nodes: []models.PMGNodeStatus{
+			{Name: "node1", QueueStatus: &models.PMGQueueStatus{Total: 300}},
+			{Name: "node2", QueueStatus: &models.PMGQueueStatus{Total: 250}},
+		},
+	}
+
+	m.checkPMGQueueDepths(pmg, PMGThresholdConfig{
+		QueueTotalWarning:  500,
+		QueueTotalCritical: 1000,
+	})
+
+	alert := activeAlert(t, m, "pmg-1-queue-total")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "pmg-1-queue-total" {
+		t.Fatalf("canonicalSpecID = %v, want pmg-1-queue-total", got)
+	}
+}
+
+func TestCheckPMGOldestMessageAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	pmg := models.PMGInstance{
+		ID:   "pmg-1",
+		Name: "PMG 1",
+		Nodes: []models.PMGNodeStatus{
+			{Name: "node1", QueueStatus: &models.PMGQueueStatus{OldestAge: 2400}},
+		},
+	}
+
+	m.checkPMGOldestMessage(pmg, PMGThresholdConfig{
+		OldestMessageWarnMins: 30,
+		OldestMessageCritMins: 60,
+	})
+
+	alert := activeAlert(t, m, "pmg-1-oldest-message")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "pmg-1-oldest-message" {
+		t.Fatalf("canonicalSpecID = %v, want pmg-1-oldest-message", got)
+	}
+}
+
+func TestCheckPMGNodeQueueAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	pmg := models.PMGInstance{
+		ID:   "pmg-1",
+		Name: "PMG 1",
+		Nodes: []models.PMGNodeStatus{
+			{Name: "node-a", QueueStatus: &models.PMGQueueStatus{Total: 80}},
+		},
+	}
+
+	m.checkPMGNodeQueues(pmg, PMGThresholdConfig{
+		QueueTotalWarning:  100,
+		QueueTotalCritical: 200,
+	})
+
+	alert := activeAlert(t, m, "pmg-1-node-a-queue-total")
+	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "pmg-1-node-a-queue-total" {
+		t.Fatalf("canonicalSpecID = %v, want pmg-1-node-a-queue-total", got)
+	}
+}

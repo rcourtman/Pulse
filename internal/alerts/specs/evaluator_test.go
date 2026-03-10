@@ -110,6 +110,76 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 	}
 }
 
+func TestEvaluateSeverityThresholdEscalationAndRecovery(t *testing.T) {
+	spec := ResourceAlertSpec{
+		ID:           "pmg-queue-total",
+		ResourceID:   "pmg-1",
+		ResourceType: unifiedresources.ResourceTypePMG,
+		Kind:         AlertSpecKindSeverityThreshold,
+		Severity:     AlertSeverityWarning,
+		SeverityThreshold: &SeverityThresholdSpec{
+			Metric:    "queue-total",
+			Direction: ThresholdDirectionAbove,
+			Warning:   500,
+			Critical:  1000,
+		},
+	}
+
+	warning, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 9, 30, 0, 0, time.UTC),
+		SeverityThreshold: &SeverityThresholdEvidence{
+			Metric:    "queue-total",
+			Direction: ThresholdDirectionAbove,
+			Observed:  700,
+		},
+	})
+	if err != nil {
+		t.Fatalf("warning evaluation failed: %v", err)
+	}
+	if warning.State.State != AlertStateFiring || warning.State.Severity != AlertSeverityWarning {
+		t.Fatalf("warning state = %+v, want firing warning", warning.State)
+	}
+	if warning.Transition == nil || warning.Transition.Kind != EvaluationTransitionActivated {
+		t.Fatalf("warning transition = %+v, want activated", warning.Transition)
+	}
+
+	critical, err := Evaluate(spec, warning.State, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 9, 31, 0, 0, time.UTC),
+		SeverityThreshold: &SeverityThresholdEvidence{
+			Metric:    "queue-total",
+			Direction: ThresholdDirectionAbove,
+			Observed:  1200,
+		},
+	})
+	if err != nil {
+		t.Fatalf("critical evaluation failed: %v", err)
+	}
+	if critical.State.Severity != AlertSeverityCritical {
+		t.Fatalf("critical severity = %q, want critical", critical.State.Severity)
+	}
+	if critical.Transition == nil || critical.Transition.Kind != EvaluationTransitionSeverityChanged {
+		t.Fatalf("critical transition = %+v, want severity-changed", critical.Transition)
+	}
+
+	recovered, err := Evaluate(spec, critical.State, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 9, 32, 0, 0, time.UTC),
+		SeverityThreshold: &SeverityThresholdEvidence{
+			Metric:    "queue-total",
+			Direction: ThresholdDirectionAbove,
+			Observed:  200,
+		},
+	})
+	if err != nil {
+		t.Fatalf("recovery evaluation failed: %v", err)
+	}
+	if recovered.State.State != AlertStateClear {
+		t.Fatalf("recovered state = %q, want clear", recovered.State.State)
+	}
+	if recovered.Transition == nil || recovered.Transition.Kind != EvaluationTransitionRecovered {
+		t.Fatalf("recovered transition = %+v, want recovered", recovered.Transition)
+	}
+}
+
 func TestEvaluateConnectivityConfirmationAndRecovery(t *testing.T) {
 	spec := ResourceAlertSpec{
 		ID:           "node-pve1-connectivity",

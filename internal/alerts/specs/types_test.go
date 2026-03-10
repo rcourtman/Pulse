@@ -31,6 +31,22 @@ func TestResourceAlertSpecValidateAcceptsSupportedKinds(t *testing.T) {
 			},
 		},
 		{
+			name: "severity threshold",
+			spec: ResourceAlertSpec{
+				ID:           "pmg-01-queue-total",
+				ResourceID:   "pmg-01",
+				ResourceType: unifiedresources.ResourceTypePMG,
+				Kind:         AlertSpecKindSeverityThreshold,
+				Severity:     AlertSeverityWarning,
+				SeverityThreshold: &SeverityThresholdSpec{
+					Metric:    "queue-total",
+					Direction: ThresholdDirectionAbove,
+					Warning:   500,
+					Critical:  1000,
+				},
+			},
+		},
+		{
 			name: "connectivity",
 			spec: ResourceAlertSpec{
 				ID:           "agent-01-heartbeat-lost",
@@ -255,6 +271,25 @@ func TestMetricThresholdSpecValidateRejectsInvalidRecoveryDirection(t *testing.T
 		t.Fatal("expected validation error")
 	}
 	if !strings.Contains(err.Error(), "recovery must be below trigger") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSeverityThresholdSpecValidateRejectsInvertedAboveBands(t *testing.T) {
+	t.Parallel()
+
+	spec := SeverityThresholdSpec{
+		Metric:    "queue-total",
+		Direction: ThresholdDirectionAbove,
+		Warning:   500,
+		Critical:  400,
+	}
+
+	err := spec.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "critical must be greater than or equal to warning") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

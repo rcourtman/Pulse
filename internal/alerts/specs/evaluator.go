@@ -78,7 +78,8 @@ func Evaluate(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvi
 	switch spec.Kind {
 	case AlertSpecKindMetricThreshold:
 		return evaluateMetricThreshold(spec, previous, evidence, now, fingerprint), nil
-	case AlertSpecKindConnectivity,
+	case AlertSpecKindSeverityThreshold,
+		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
 		AlertSpecKindResourceIncidentRollup,
@@ -313,6 +314,11 @@ func terminalEvaluation(spec ResourceAlertSpec, previous EvaluatorState, evidenc
 
 func matches(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverity, string) {
 	switch spec.Kind {
+	case AlertSpecKindSeverityThreshold:
+		if evidence.SeverityThreshold == nil || spec.SeverityThreshold == nil {
+			return false, "", ""
+		}
+		return matchesSeverityThreshold(*spec.SeverityThreshold, *evidence.SeverityThreshold)
 	case AlertSpecKindConnectivity:
 		return evidence.Connectivity != nil && !evidence.Connectivity.Connected, spec.Severity, "connectivity-lost"
 	case AlertSpecKindPoweredState:
@@ -364,6 +370,35 @@ func matches(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverit
 			return false, "", ""
 		}
 		return evidence.ResourceIncidentRollup.IncidentCount > 0 && evidence.ResourceIncidentRollup.Code == spec.ResourceIncidentRollup.Code, spec.Severity, "resource-incident-rollup"
+	default:
+		return false, "", ""
+	}
+}
+
+func matchesSeverityThreshold(spec SeverityThresholdSpec, evidence SeverityThresholdEvidence) (bool, AlertSeverity, string) {
+	if evidence.Direction != spec.Direction || evidence.Metric != spec.Metric {
+		return false, "", ""
+	}
+
+	switch spec.Direction {
+	case ThresholdDirectionAbove:
+		switch {
+		case spec.Critical > 0 && evidence.Observed >= spec.Critical:
+			return true, AlertSeverityCritical, "severity-threshold-critical"
+		case spec.Warning > 0 && evidence.Observed >= spec.Warning:
+			return true, AlertSeverityWarning, "severity-threshold-warning"
+		default:
+			return false, "", "severity-threshold-normal"
+		}
+	case ThresholdDirectionBelow:
+		switch {
+		case spec.Critical > 0 && evidence.Observed <= spec.Critical:
+			return true, AlertSeverityCritical, "severity-threshold-critical"
+		case spec.Warning > 0 && evidence.Observed <= spec.Warning:
+			return true, AlertSeverityWarning, "severity-threshold-warning"
+		default:
+			return false, "", "severity-threshold-normal"
+		}
 	default:
 		return false, "", ""
 	}

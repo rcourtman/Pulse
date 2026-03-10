@@ -14,6 +14,7 @@ type AlertSpecKind string
 
 const (
 	AlertSpecKindMetricThreshold        AlertSpecKind = "metric-threshold"
+	AlertSpecKindSeverityThreshold      AlertSpecKind = "severity-threshold"
 	AlertSpecKindConnectivity           AlertSpecKind = "connectivity"
 	AlertSpecKindPoweredState           AlertSpecKind = "powered-state"
 	AlertSpecKindProviderIncident       AlertSpecKind = "provider-incident"
@@ -25,6 +26,7 @@ const (
 func (k AlertSpecKind) valid() bool {
 	switch k {
 	case AlertSpecKindMetricThreshold,
+		AlertSpecKindSeverityThreshold,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -122,6 +124,7 @@ type ResourceAlertSpec struct {
 	SuppressOnConnectivityLoss bool                          `json:"suppressOnConnectivityLoss,omitempty"`
 
 	MetricThreshold        *MetricThresholdSpec        `json:"metricThreshold,omitempty"`
+	SeverityThreshold      *SeverityThresholdSpec      `json:"severityThreshold,omitempty"`
 	Connectivity           *ConnectivitySpec           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateSpec           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentSpec       `json:"providerIncident,omitempty"`
@@ -154,6 +157,9 @@ func (s ResourceAlertSpec) Validate() error {
 	if s.MetricThreshold != nil {
 		payloads++
 	}
+	if s.SeverityThreshold != nil {
+		payloads++
+	}
 	if s.Connectivity != nil {
 		payloads++
 	}
@@ -182,6 +188,11 @@ func (s ResourceAlertSpec) Validate() error {
 			return fmt.Errorf("metric threshold payload is required")
 		}
 		return s.MetricThreshold.Validate()
+	case AlertSpecKindSeverityThreshold:
+		if s.SeverityThreshold == nil {
+			return fmt.Errorf("severity threshold payload is required")
+		}
+		return s.SeverityThreshold.Validate()
 	case AlertSpecKindConnectivity:
 		if s.Connectivity == nil {
 			return fmt.Errorf("connectivity payload is required")
@@ -252,6 +263,41 @@ func (s MetricThresholdSpec) Validate() error {
 	case ThresholdDirectionBelow:
 		if *s.Recovery <= s.Trigger {
 			return fmt.Errorf("recovery must be above trigger when direction is below")
+		}
+	}
+	return nil
+}
+
+type SeverityThresholdSpec struct {
+	Metric    string             `json:"metric"`
+	Direction ThresholdDirection `json:"direction"`
+	Warning   float64            `json:"warning,omitempty"`
+	Critical  float64            `json:"critical,omitempty"`
+}
+
+func (s SeverityThresholdSpec) Validate() error {
+	if strings.TrimSpace(s.Metric) == "" {
+		return fmt.Errorf("metric is required")
+	}
+	if !s.Direction.valid() {
+		return fmt.Errorf("threshold direction %q is invalid", s.Direction)
+	}
+	if !isFinite(s.Warning) || !isFinite(s.Critical) {
+		return fmt.Errorf("thresholds must be finite")
+	}
+	if s.Warning <= 0 && s.Critical <= 0 {
+		return fmt.Errorf("warning or critical threshold is required")
+	}
+	if s.Warning > 0 && s.Critical > 0 {
+		switch s.Direction {
+		case ThresholdDirectionAbove:
+			if s.Critical < s.Warning {
+				return fmt.Errorf("critical must be greater than or equal to warning when direction is above")
+			}
+		case ThresholdDirectionBelow:
+			if s.Critical > s.Warning {
+				return fmt.Errorf("critical must be less than or equal to warning when direction is below")
+			}
 		}
 	}
 	return nil
@@ -376,6 +422,7 @@ type AlertEvidence struct {
 	ParentConnected *bool             `json:"parentConnected,omitempty"`
 
 	MetricThreshold        *MetricThresholdEvidence        `json:"metricThreshold,omitempty"`
+	SeverityThreshold      *SeverityThresholdEvidence      `json:"severityThreshold,omitempty"`
 	Connectivity           *ConnectivityEvidence           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateEvidence           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentEvidence       `json:"providerIncident,omitempty"`
@@ -391,6 +438,9 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 
 	payloads := 0
 	if e.MetricThreshold != nil {
+		payloads++
+	}
+	if e.SeverityThreshold != nil {
 		payloads++
 	}
 	if e.Connectivity != nil {
@@ -421,6 +471,11 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 			return fmt.Errorf("metric threshold evidence is required")
 		}
 		return e.MetricThreshold.Validate()
+	case AlertSpecKindSeverityThreshold:
+		if e.SeverityThreshold == nil {
+			return fmt.Errorf("severity threshold evidence is required")
+		}
+		return e.SeverityThreshold.Validate()
 	case AlertSpecKindConnectivity:
 		if e.Connectivity == nil {
 			return fmt.Errorf("connectivity evidence is required")
@@ -470,6 +525,20 @@ func (e MetricThresholdEvidence) Validate() error {
 		Direction: e.Direction,
 		Trigger:   e.Trigger,
 		Recovery:  e.Recovery,
+	}.Validate()
+}
+
+type SeverityThresholdEvidence struct {
+	Metric    string             `json:"metric"`
+	Direction ThresholdDirection `json:"direction"`
+	Observed  float64            `json:"observed"`
+}
+
+func (e SeverityThresholdEvidence) Validate() error {
+	return SeverityThresholdSpec{
+		Metric:    e.Metric,
+		Direction: e.Direction,
+		Warning:   1,
 	}.Validate()
 }
 
