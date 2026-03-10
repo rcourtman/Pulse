@@ -26,4 +26,6 @@ export const createVisibleCanonicalTypeColumn = (): ColumnDef =>
 export const createHiddenCanonicalTypeColumn = (): ColumnDef =>
   createCanonicalTypeColumn({
     defaultHidden: true,
+    width: TYPE_COLUMN_WIDTH,
+    sortKey: TYPE_COLUMN_SORT_KEY,
   });

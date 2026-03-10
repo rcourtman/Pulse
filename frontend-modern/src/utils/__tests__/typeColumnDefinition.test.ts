@@ -29,6 +29,8 @@ describe('typeColumnDefinition', () => {
       label: 'Type',
       toggleable: true,
       defaultHidden: true,
+      width: TYPE_COLUMN_WIDTH,
+      sortKey: TYPE_COLUMN_SORT_KEY,
     });
   });
 
@@ -47,6 +49,8 @@ describe('typeColumnDefinition', () => {
       label: 'Type',
       toggleable: true,
       defaultHidden: true,
+      width: TYPE_COLUMN_WIDTH,
+      sortKey: TYPE_COLUMN_SORT_KEY,
     });
   });
 
