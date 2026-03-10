@@ -66,6 +66,9 @@ type Alert struct {
 	Type            string                 `json:"type"` // cpu, memory, disk, etc.
 	Level           AlertLevel             `json:"level"`
 	ResourceID      string                 `json:"resourceId"` // guest or node ID
+	CanonicalSpecID string                 `json:"canonicalSpecId,omitempty"`
+	CanonicalKind   string                 `json:"canonicalKind,omitempty"`
+	CanonicalState  string                 `json:"canonicalState,omitempty"`
 	ResourceName    string                 `json:"resourceName"`
 	Node            string                 `json:"node"`
 	NodeDisplayName string                 `json:"nodeDisplayName,omitempty"`
@@ -561,6 +564,9 @@ type Manager struct {
 	pmgAnomalyTrackers map[string]*pmgAnomalyTracker // Track mail metrics for anomaly detection per PMG instance
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
+	// Canonical acknowledgement state is keyed by resource_id + spec_id so later
+	// alert-ID migration can preserve user state across storage-key changes.
+	ackStateByCanonical map[string]ackRecord
 	// Flapping detection tracking
 	flappingHistory map[string][]time.Time // Track state change times for flapping detection
 	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
@@ -632,6 +638,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		pmgQuarantineHistory:            make(map[string][]pmgQuarantineSnapshot),
 		pmgAnomalyTrackers:              make(map[string]*pmgAnomalyTracker),
 		ackState:                        make(map[string]ackRecord),
+		ackStateByCanonical:             make(map[string]ackRecord),
 		flappingHistory:                 make(map[string][]time.Time),
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
@@ -7111,6 +7118,13 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 		user:         user,
 		time:         now,
 	}
+	if alert.CanonicalState != "" {
+		m.ackStateByCanonical[alert.CanonicalState] = ackRecord{
+			acknowledged: true,
+			user:         user,
+			time:         now,
+		}
+	}
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -7142,6 +7156,9 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	// Write the modified alert back to the map
 	m.activeAlerts[alertID] = alert
 	delete(m.ackState, alertID)
+	if alert.CanonicalState != "" {
+		delete(m.ackStateByCanonical, alert.CanonicalState)
+	}
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
@@ -7161,6 +7178,7 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 	if updated == nil {
 		return
 	}
+	backfillCanonicalIdentity(updated)
 
 	// Auto-resolve node display name if not already set.
 	if updated.NodeDisplayName == "" && updated.Node != "" {
@@ -7200,6 +7218,16 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 		return
 	}
 
+	if updated.CanonicalState != "" {
+		if record, ok := m.ackStateByCanonical[updated.CanonicalState]; ok && record.acknowledged {
+			updated.Acknowledged = true
+			updated.AckUser = record.user
+			t := record.time
+			updated.AckTime = &t
+			return
+		}
+	}
+
 	// Fall back to previously recorded acknowledgement state for this alert ID (e.g., flapping alerts)
 	if record, ok := m.ackState[alertID]; ok && record.acknowledged {
 		updated.Acknowledged = true
@@ -7212,7 +7240,10 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	// Before deleting, update the history entry with the alert's final LastSeen
 	// timestamp so the stored duration reflects how long the alert was actually active.
+	var canonicalState string
 	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
+		backfillCanonicalIdentity(alert)
+		canonicalState = alert.CanonicalState
 		m.historyManager.UpdateAlertLastSeen(alertID, alert.LastSeen)
 	}
 	delete(m.activeAlerts, alertID)
@@ -7223,6 +7254,12 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	if record, exists := m.ackState[alertID]; exists {
 		record.inactiveAt = time.Now()
 		m.ackState[alertID] = record
+	}
+	if canonicalState != "" {
+		if record, ok := m.ackStateByCanonical[canonicalState]; ok {
+			record.inactiveAt = time.Now()
+			m.ackStateByCanonical[canonicalState] = record
+		}
 	}
 }
 
@@ -8879,6 +8916,15 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 			}
 		}
 	}
+	for canonicalID, record := range m.ackStateByCanonical {
+		checkTime := record.inactiveAt
+		if checkTime.IsZero() {
+			checkTime = record.time
+		}
+		if now.Sub(checkTime) > ackStateTTL {
+			delete(m.ackStateByCanonical, canonicalID)
+		}
+	}
 
 	// Clean up recent alerts older than suppression window
 	suppressionWindow := time.Duration(m.config.SuppressionWindow) * time.Minute
@@ -9537,6 +9583,8 @@ func (m *Manager) LoadActiveAlerts() error {
 	seen := make(map[string]bool)
 
 	for _, alert := range alerts {
+		backfillCanonicalIdentity(alert)
+
 		// Migrate legacy guest alert IDs (instance-node-VMID -> instance-VMID)
 		// Check if this is a guest-related alert by looking at common alert types
 		isGuestAlert := strings.Contains(alert.Type, "cpu") || strings.Contains(alert.Type, "memory") ||
@@ -9611,6 +9659,13 @@ func (m *Manager) LoadActiveAlerts() error {
 				user:         alert.AckUser,
 				time:         ackTime,
 			}
+			if alert.CanonicalState != "" {
+				m.ackStateByCanonical[alert.CanonicalState] = ackRecord{
+					acknowledged: true,
+					user:         alert.AckUser,
+					time:         ackTime,
+				}
+			}
 			continue
 		}
 
@@ -9624,6 +9679,13 @@ func (m *Manager) LoadActiveAlerts() error {
 				acknowledged: true,
 				user:         alert.AckUser,
 				time:         ackTime,
+			}
+			if alert.CanonicalState != "" {
+				m.ackStateByCanonical[alert.CanonicalState] = ackRecord{
+					acknowledged: true,
+					user:         alert.AckUser,
+					time:         ackTime,
+				}
 			}
 		}
 		restoredCount++
@@ -9760,6 +9822,7 @@ func (m *Manager) ClearActiveAlerts() {
 	m.dockerUpdateFirstSeen = make(map[string]time.Time)
 	m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
 	m.ackState = make(map[string]ackRecord)
+	m.ackStateByCanonical = make(map[string]ackRecord)
 	m.mu.Unlock()
 
 	m.resolvedMutex.Lock()
@@ -9979,6 +10042,16 @@ func (m *Manager) cleanupStaleMaps() {
 				delete(m.ackState, alertID)
 				cleaned++
 			}
+		}
+	}
+	for canonicalID, record := range m.ackStateByCanonical {
+		checkTime := record.inactiveAt
+		if checkTime.IsZero() {
+			checkTime = record.time
+		}
+		if now.Sub(checkTime) > staleThreshold {
+			delete(m.ackStateByCanonical, canonicalID)
+			cleaned++
 		}
 	}
 

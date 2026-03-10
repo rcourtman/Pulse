@@ -159,11 +159,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 
 		message, unit := metricAlertMessage(resourceType, metricType, value, opts)
 		alertMetadata := map[string]interface{}{
-			"resourceType":       resourceType,
-			"clearThreshold":     metricClearThreshold(spec.MetricThreshold, threshold),
-			"monitorOnly":        monitorOnly,
-			"canonicalSpecID":    spec.ID,
-			"canonicalAlertKind": string(spec.Kind),
+			"resourceType":   resourceType,
+			"clearThreshold": metricClearThreshold(spec.MetricThreshold, threshold),
+			"monitorOnly":    monitorOnly,
 		}
 		if unit != "" {
 			alertMetadata["unit"] = unit
@@ -192,6 +190,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				Metadata:        alertMetadata,
 			}
 
+			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
 			m.preserveAlertState(alertID, alert)
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
@@ -246,6 +245,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		for k, v := range alertMetadata {
 			existingAlert.Metadata[k] = v
 		}
+		applyCanonicalIdentity(existingAlert, spec.ID, string(spec.Kind))
 
 		shouldRenotify := false
 		if existingAlert.Acknowledged {

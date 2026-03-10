@@ -255,6 +255,15 @@ func TestCheckUnifiedResourceAnnotatesMetricAlertsWithCanonicalSpecMetadata(t *t
 	if got := alert.Metadata["canonicalSpecID"]; got != "vm-annotated-cpu" {
 		t.Fatalf("canonicalSpecID = %v, want vm-annotated-cpu", got)
 	}
+	if alert.CanonicalSpecID != "vm-annotated-cpu" {
+		t.Fatalf("CanonicalSpecID = %q, want vm-annotated-cpu", alert.CanonicalSpecID)
+	}
+	if alert.CanonicalKind != "metric-threshold" {
+		t.Fatalf("CanonicalKind = %q, want metric-threshold", alert.CanonicalKind)
+	}
+	if alert.CanonicalState != "vm-annotated::vm-annotated-cpu" {
+		t.Fatalf("CanonicalState = %q, want vm-annotated::vm-annotated-cpu", alert.CanonicalState)
+	}
 }
 
 func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {

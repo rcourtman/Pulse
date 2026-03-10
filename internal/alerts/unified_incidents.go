@@ -85,12 +85,11 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			}
 
 			alert := unifiedIncidentAlert(resource, incident, level, now)
-			if alert.Metadata == nil {
-				alert.Metadata = map[string]interface{}{}
-			}
-			alert.Metadata["canonicalSpecID"] = spec.ID
-			alert.Metadata["canonicalAlertKind"] = string(spec.Kind)
+			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
 			if len(spec.SuppressionKeys) > 0 {
+				if alert.Metadata == nil {
+					alert.Metadata = map[string]interface{}{}
+				}
 				alert.Metadata["canonicalSuppressionKeys"] = append([]string(nil), spec.SuppressionKeys...)
 			}
 			desired[alert.ID] = alert

@@ -107,6 +107,65 @@ func TestAlertCharacterizationCanonicalGuestIdentityAcrossTypedAndUnifiedChecks(
 	if typedAlert.ID != alertID || unifiedAlert.ID != alertID {
 		t.Fatalf("expected stable alert ID %q, got typed=%q unified=%q", alertID, typedAlert.ID, unifiedAlert.ID)
 	}
+	if typedAlert.CanonicalSpecID != alertID || unifiedAlert.CanonicalSpecID != alertID {
+		t.Fatalf("expected canonical spec id %q, got typed=%q unified=%q", alertID, typedAlert.CanonicalSpecID, unifiedAlert.CanonicalSpecID)
+	}
+	if typedAlert.CanonicalState != resourceID+"::"+alertID || unifiedAlert.CanonicalState != resourceID+"::"+alertID {
+		t.Fatalf("expected canonical state %q, got typed=%q unified=%q", resourceID+"::"+alertID, typedAlert.CanonicalState, unifiedAlert.CanonicalState)
+	}
+}
+
+func TestAlertCharacterizationAcknowledgmentSurvivesAlertIDChangeForSameCanonicalState(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	oldAlertID := "legacy-" + resourceID + "-cpu"
+	newAlertID := resourceID + "-cpu"
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+
+	m.mu.Lock()
+	oldAlert := &Alert{
+		ID:         oldAlertID,
+		Type:       "cpu",
+		Level:      AlertLevelWarning,
+		ResourceID: resourceID,
+		Message:    "legacy alert",
+		StartTime:  time.Now().Add(-5 * time.Minute),
+		LastSeen:   time.Now().Add(-1 * time.Minute),
+	}
+	applyCanonicalIdentity(oldAlert, newAlertID, "metric-threshold")
+	m.activeAlerts[oldAlertID] = oldAlert
+	m.mu.Unlock()
+
+	if err := m.AcknowledgeAlert(oldAlertID, "alice"); err != nil {
+		t.Fatalf("AcknowledgeAlert() error = %v", err)
+	}
+
+	m.mu.Lock()
+	m.removeActiveAlertNoLock(oldAlertID)
+	replacement := &Alert{
+		ID:         newAlertID,
+		Type:       "cpu",
+		Level:      AlertLevelWarning,
+		ResourceID: resourceID,
+		Message:    "canonical alert",
+		StartTime:  time.Now(),
+		LastSeen:   time.Now(),
+	}
+	applyCanonicalIdentity(replacement, newAlertID, "metric-threshold")
+	m.preserveAlertState(newAlertID, replacement)
+	m.activeAlerts[newAlertID] = replacement
+	m.mu.Unlock()
+
+	alert := activeAlert(t, m, newAlertID)
+	if !alert.Acknowledged {
+		t.Fatal("expected acknowledgment to survive alert ID change")
+	}
+	if alert.AckUser != "alice" {
+		t.Fatalf("AckUser = %q, want alice", alert.AckUser)
+	}
+	if alert.CanonicalState != resourceID+"::"+newAlertID {
+		t.Fatalf("CanonicalState = %q, want %q", alert.CanonicalState, resourceID+"::"+newAlertID)
+	}
 }
 
 func TestAlertCharacterizationGuestThresholdPrecedence(t *testing.T) {

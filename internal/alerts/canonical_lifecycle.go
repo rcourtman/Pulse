@@ -383,8 +383,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		if alert.Metadata == nil {
 			alert.Metadata = make(map[string]interface{}, 2)
 		}
-		alert.Metadata["canonicalSpecID"] = params.Spec.ID
-		alert.Metadata["canonicalAlertKind"] = string(params.Spec.Kind)
+		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 
 		m.preserveAlertState(params.AlertID, alert)
 		m.activeAlerts[params.AlertID] = alert
@@ -502,8 +501,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		if alert.Metadata == nil {
 			alert.Metadata = make(map[string]interface{}, 2)
 		}
-		alert.Metadata["canonicalSpecID"] = params.Spec.ID
-		alert.Metadata["canonicalAlertKind"] = string(params.Spec.Kind)
+		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 
 		m.preserveAlertState(params.AlertID, alert)
 		m.activeAlerts[params.AlertID] = alert

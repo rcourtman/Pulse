@@ -56,6 +56,15 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	if got := alert.Metadata["canonicalSpecID"]; got == nil || got == "" {
 		t.Fatalf("expected canonicalSpecID metadata, got %v", got)
 	}
+	if alert.CanonicalSpecID == "" {
+		t.Fatal("expected CanonicalSpecID field to be populated")
+	}
+	if alert.CanonicalKind != "provider-incident" {
+		t.Fatalf("CanonicalKind = %q, want provider-incident", alert.CanonicalKind)
+	}
+	if alert.CanonicalState != resource.ID+"::"+alert.CanonicalSpecID {
+		t.Fatalf("CanonicalState = %q, want %q", alert.CanonicalState, resource.ID+"::"+alert.CanonicalSpecID)
+	}
 	if got := alert.Metadata["canonicalSuppressionKeys"]; got == nil {
 		t.Fatalf("expected canonicalSuppressionKeys metadata")
 	}
