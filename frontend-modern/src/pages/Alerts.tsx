@@ -67,12 +67,30 @@ import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentRe
 import {
   getAlertHistoryStatusPresentation,
   getAlertIncidentLevelBadgeClass,
+  getAlertResourceIncidentAcknowledgedByLabel,
+  getAlertResourceIncidentCountLabel,
+  getAlertResourceIncidentEmptyState,
+  getAlertResourceIncidentFilteredEventsEmptyState,
+  getAlertResourceIncidentLoadingState,
+  getAlertResourceIncidentNotePlaceholder,
+  getAlertResourceIncidentPanelTitle,
+  getAlertResourceIncidentRecentEventsSummary,
+  getAlertResourceIncidentRefreshLabel,
+  getAlertResourceIncidentSaveNoteLabel,
+  getAlertResourceIncidentToggleLabel,
   getAlertIncidentStatusPresentation,
 } from '@/utils/alertIncidentPresentation';
 import {
   getAlertHistoryResourceTypeBadgeClass,
   getAlertHistorySourcePresentation,
 } from '@/utils/alertHistoryPresentation';
+import {
+  getAlertAdministrationClearHistoryConfirmation,
+  getAlertAdministrationClearHistoryError,
+  getAlertAdministrationClearHistoryLabel,
+  getAlertAdministrationSectionDescription,
+  getAlertAdministrationSectionTitle,
+} from '@/utils/alertAdministrationPresentation';
 import { getAlertActivationPresentation } from '@/utils/alertActivationPresentation';
 import {
   getAlertFrequencyClearFilterButtonClass,
@@ -89,6 +107,58 @@ import {
   getAlertGroupingCheckboxClass,
 } from '@/utils/alertGroupingPresentation';
 import { getAlertQuietDayButtonClass } from '@/utils/alertSchedulePresentation';
+import {
+  getAlertDestinationsConfigLoadError,
+  getAlertDestinationsLoadErrorBanner,
+  getAlertDestinationsAppriseTargetsHelp,
+  getAlertDestinationsAppriseTestLabel,
+  getAlertDestinationsAppriseTestError,
+  getAlertDestinationsRetryLabel,
+  getAlertDestinationsStatusLabel,
+  getAlertDestinationsWebhookLoadError,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_HELP,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL,
+  ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_CLI_PATH_HELP,
+  ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL,
+  ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP,
+  ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_LABEL,
+  ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL,
+  ALERT_DESTINATIONS_APPRISE_MODE_HELP,
+  ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL,
+  ALERT_DESTINATIONS_APPRISE_MODE_LABEL,
+  ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION,
+  ALERT_DESTINATIONS_APPRISE_PANEL_TITLE,
+  ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP,
+  ALERT_DESTINATIONS_APPRISE_SERVER_URL_LABEL,
+  ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL,
+  ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER,
+  ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP,
+  ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL,
+  ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL,
+  ALERT_DESTINATIONS_APPRISE_TLS_HELP,
+  ALERT_DESTINATIONS_APPRISE_TLS_LABEL,
+  ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION,
+  ALERT_DESTINATIONS_EMAIL_PANEL_TITLE,
+} from '@/utils/alertDestinationsPresentation';
+import {
+  getAlertBucketCountLabel,
+  getAlertHistoryLoadingState,
+  getAlertHistoryEmptyState,
+  getAlertHistorySearchPlaceholder,
+  getAlertTimelineEmptyState,
+  getAlertTimelineFailureState,
+  getAlertTimelineFilterEmptyState,
+  getAlertTimelineLoadingState,
+  getAlertTimelineUnavailableState,
+} from '@/utils/alertOverviewPresentation';
+import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { filterIncidentEvents } from '@/features/alerts/types';
@@ -1126,9 +1196,7 @@ export function Alerts() {
         setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
       } catch (emailErr) {
         logger.error('Failed to load email configuration:', emailErr);
-        setDestConfigLoadError(
-          'Failed to load notification configuration. Your existing settings could not be retrieved.',
-        );
+        setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       }
 
       try {
@@ -1150,9 +1218,7 @@ export function Alerts() {
         });
       } catch (appriseErr) {
         logger.error('Failed to load Apprise configuration:', appriseErr);
-        setDestConfigLoadError(
-          'Failed to load notification configuration. Your existing settings could not be retrieved.',
-        );
+        setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       }
 
       if (options.notify) {
@@ -1162,9 +1228,7 @@ export function Alerts() {
       logger.error('Failed to load alert configuration:', err);
       // If the top-level config fetch failed, destination state may still hold
       // defaults from the reset above.  Re-flag so Save stays disabled.
-      setDestConfigLoadError(
-        'Failed to load notification configuration. Your existing settings could not be retrieved.',
-      );
+      setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       if (options.notify) {
         notificationStore.error('Failed to reload configuration');
       }
@@ -1232,9 +1296,7 @@ export function Alerts() {
           for (const reason of reasons) {
             logger.error('Failed to reload notification configuration:', reason);
           }
-          setDestConfigLoadError(
-            'Failed to load notification configuration. Your existing settings could not be retrieved.',
-          );
+          setDestConfigLoadError(getAlertDestinationsConfigLoadError());
         } else {
           setDestConfigLoadError(null);
         }
@@ -2450,7 +2512,7 @@ function DestinationsTab(props: DestinationsTabProps) {
       );
     } catch (err) {
       logger.error('Failed to load webhooks:', err);
-      setWebhookLoadError('Failed to load webhook configuration.');
+      setWebhookLoadError(getAlertDestinationsWebhookLoadError());
     } finally {
       setIsLoadingWebhooks(false);
     }
@@ -2485,12 +2547,12 @@ function DestinationsTab(props: DestinationsTabProps) {
       const config = buildAppriseRequestConfig();
 
       if (!config.enabled) {
-        throw new Error('Enable Apprise notifications before sending a test.');
+        throw new Error(getAlertDestinationsAppriseTestError('disabled'));
       }
 
       const targets = config.targets || [];
       if (config.mode === 'cli' && targets.length === 0) {
-        throw new Error('Add at least one Apprise target to test CLI delivery.');
+        throw new Error(getAlertDestinationsAppriseTestError('missingTargets'));
       }
       if (config.mode === 'http' && !config.serverUrl) {
         throw new Error('Enter an Apprise API server URL to test API delivery.');
@@ -2594,8 +2656,9 @@ function DestinationsTab(props: DestinationsTabProps) {
               <div class="flex items-center gap-2 text-red-800 dark:text-red-200">
                 <AlertTriangleIcon class="h-4 w-4 flex-shrink-0" />
                 <span class="text-sm font-medium">
-                  {props.configLoadError() || webhookLoadError()} Saving now may overwrite your
-                  existing settings with defaults.
+                  {getAlertDestinationsLoadErrorBanner(
+                    props.configLoadError() || webhookLoadError() || '',
+                  )}
                 </span>
               </div>
               <button
@@ -2603,15 +2666,15 @@ function DestinationsTab(props: DestinationsTabProps) {
                 disabled={props.isRetrying()}
                 onClick={handleRetry}
               >
-                {props.isRetrying() ? 'Retrying\u2026' : 'Retry'}
+                {getAlertDestinationsRetryLabel(props.isRetrying())}
               </button>
             </div>
           </Card>
         </Show>
 
         <SettingsPanel
-          title="Email notifications"
-          description="Configure SMTP delivery for alert emails."
+          title={ALERT_DESTINATIONS_EMAIL_PANEL_TITLE}
+          description={ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION}
           action={
             <Toggle
               checked={props.emailConfig().enabled}
@@ -2620,11 +2683,11 @@ function DestinationsTab(props: DestinationsTabProps) {
                 props.setHasUnsavedChanges(true);
               }}
               containerClass="sm:self-start"
-              label={
-                <span class="text-xs font-medium text-muted">
-                  {props.emailConfig().enabled ? 'Enabled' : 'Disabled'}
-                </span>
-              }
+                label={
+                  <span class="text-xs font-medium text-muted">
+                    {getAlertDestinationsStatusLabel(props.emailConfig().enabled)}
+                  </span>
+                }
             />
           }
           class="min-w-0"
@@ -2646,8 +2709,8 @@ function DestinationsTab(props: DestinationsTabProps) {
         </SettingsPanel>
 
         <SettingsPanel
-          title="Apprise notifications"
-          description="Relay grouped alerts through Apprise via CLI or remote API."
+          title={ALERT_DESTINATIONS_APPRISE_PANEL_TITLE}
+          description={ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION}
           action={
             <div class="flex items-center gap-3 sm:self-start">
               <Toggle
@@ -2659,7 +2722,7 @@ function DestinationsTab(props: DestinationsTabProps) {
                 containerClass=""
                 label={
                   <span class="text-xs font-medium text-muted">
-                    {appriseState().enabled ? 'Enabled' : 'Disabled'}
+                    {getAlertDestinationsStatusLabel(appriseState().enabled)}
                   </span>
                 }
               />
@@ -2668,7 +2731,7 @@ function DestinationsTab(props: DestinationsTabProps) {
                 disabled={!appriseState().enabled || testingApprise()}
                 onClick={testApprise}
               >
-                {testingApprise() ? 'Testing...' : 'Send test'}
+                {getAlertDestinationsAppriseTestLabel(testingApprise())}
               </button>
             </div>
           }
@@ -2677,7 +2740,9 @@ function DestinationsTab(props: DestinationsTabProps) {
         >
           <div class="space-y-4">
             <div class={formField}>
-              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Delivery mode</label>
+              <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                {ALERT_DESTINATIONS_APPRISE_MODE_LABEL}
+              </label>
               <select
                 class={formControl}
                 value={appriseState().mode}
@@ -2686,47 +2751,46 @@ function DestinationsTab(props: DestinationsTabProps) {
                   props.setHasUnsavedChanges(true);
                 }}
               >
-                <option value="cli">Local Apprise CLI</option>
-                <option value="http">Remote Apprise API</option>
+                <option value="cli">{ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL}</option>
+                <option value="http">{ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL}</option>
               </select>
-              <p class={formHelpText}>Choose how Pulse should execute Apprise notifications.</p>
+              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_MODE_HELP}</p>
             </div>
 
             <div class={formField}>
               <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                Delivery targets
+                {ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL}
               </label>
               <textarea
                 rows={4}
                 class={`${formControl} font-mono min-h-[120px]`}
                 value={appriseState().targetsText}
-                placeholder={`discord://token
-mailto://alerts@example.com`}
+                placeholder={ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER}
                 onInput={(e) => {
                   updateApprise({ targetsText: e.currentTarget.value });
                   props.setHasUnsavedChanges(true);
                 }}
               />
               <p class={formHelpText}>
-                {appriseState().mode === 'http'
-                  ? 'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.'
-                  : 'Enter one Apprise URL per line. Commas are also supported.'}
+                {getAlertDestinationsAppriseTargetsHelp(appriseState().mode)}
               </p>
             </div>
             <Show when={appriseState().mode === 'cli'}>
               <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>CLI path</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  {ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL}
+                </label>
                 <input
                   type="text"
                   value={appriseState().cliPath}
                   class={formControl}
-                  placeholder="apprise"
+                  placeholder={ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER}
                   onInput={(e) => {
                     updateApprise({ cliPath: e.currentTarget.value });
                     props.setHasUnsavedChanges(true);
                   }}
                 />
-                <p class={formHelpText}>Leave blank to use the default `apprise` executable.</p>
+                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CLI_PATH_HELP}</p>
               </div>
             </Show>
 
@@ -2734,75 +2798,71 @@ mailto://alerts@example.com`}
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div class={`${formField} sm:col-span-2`}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Server URL
+                    {ALERT_DESTINATIONS_APPRISE_SERVER_URL_LABEL}
                   </label>
                   <input
                     type="text"
                     value={appriseState().serverUrl}
                     class={formControl}
-                    placeholder="https://apprise-api.internal:8000"
+                    placeholder={ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER}
                     onInput={(e) => {
                       updateApprise({ serverUrl: e.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
-                  <p class={formHelpText}>
-                    Point to an Apprise API endpoint such as https://host:8000.
-                  </p>
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP}</p>
                 </div>
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Config key (optional)
+                    {ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_LABEL}
                   </label>
                   <input
                     type="text"
                     value={appriseState().configKey}
                     class={formControl}
-                    placeholder="default"
+                    placeholder={ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_PLACEHOLDER}
                     onInput={(e) => {
                       updateApprise({ configKey: e.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
-                  <p class={formHelpText}>
-                    Targets the /notify/&lt;key&gt; endpoint when provided.
-                  </p>
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP}</p>
                 </div>
                 <div class={formField}>
-                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>API key</label>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL}
+                  </label>
                   <input
                     type="password"
                     value={appriseState().apiKey}
                     class={formControl}
-                    placeholder="Optional API key"
+                    placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER}
                     onInput={(e) => {
                       updateApprise({ apiKey: e.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
-                  <p class={formHelpText}>
-                    Included with each request when your Apprise API requires authentication.
-                  </p>
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HELP}</p>
                 </div>
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    API key header
+                    {ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL}
                   </label>
                   <input
                     type="text"
                     value={appriseState().apiKeyHeader}
                     class={formControl}
-                    placeholder="X-API-KEY"
+                    placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER}
                     onInput={(e) => {
                       updateApprise({ apiKeyHeader: e.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
-                  <p class={formHelpText}>Defaults to X-API-KEY for Apprise API deployments.</p>
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP}</p>
                 </div>
                 <div class={`${formField} sm:col-span-2`}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    TLS verification
+                    {ALERT_DESTINATIONS_APPRISE_TLS_LABEL}
                   </label>
                   <label class="inline-flex items-center gap-2">
                     <input
@@ -2814,18 +2874,18 @@ mailto://alerts@example.com`}
                         props.setHasUnsavedChanges(true);
                       }}
                     />
-                    <span class="text-sm text-muted">Allow self-signed certificates</span>
+                    <span class="text-sm text-muted">
+                      {ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL}
+                    </span>
                   </label>
-                  <p class={formHelpText}>
-                    Enable only when the Apprise API uses a self-signed certificate.
-                  </p>
+                  <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TLS_HELP}</p>
                 </div>
               </div>
             </Show>
 
             <div class={formField}>
               <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                Timeout (seconds)
+                {ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL}
               </label>
               <input
                 type="number"
@@ -2840,7 +2900,7 @@ mailto://alerts@example.com`}
                   props.setHasUnsavedChanges(true);
                 }}
               />
-              <p class={formHelpText}>Maximum time to wait for Apprise to respond.</p>
+              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP}</p>
             </div>
           </div>
         </SettingsPanel>
@@ -4670,8 +4730,7 @@ function HistoryTab(props: {
                     trends.bucketSize % 24 === 0
                       ? `${trends.bucketSize / 24} day${trends.bucketSize / 24 === 1 ? '' : 's'}`
                       : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
-                  const countLabel =
-                    val === 0 ? 'No alerts' : `${val} alert${val === 1 ? '' : 's'}`;
+                  const countLabel = getAlertBucketCountLabel(val);
                   const tooltipContent = [
                     countLabel,
                     `${bucketDurationText} period`,
@@ -4759,7 +4818,7 @@ function HistoryTab(props: {
             <SearchInput
               value={searchTerm}
               onChange={setSearchTerm}
-              placeholder="Search alerts..."
+              placeholder={getAlertHistorySearchPlaceholder()}
               class="w-full"
               clearOnEscape
               history={{ storageKey: STORAGE_KEYS.ALERTS_SEARCH_HISTORY }}
@@ -4809,13 +4868,15 @@ function HistoryTab(props: {
             <Card padding="md">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h3 class="text-sm font-semibold text-base-content">Resource incidents</h3>
+                  <h3 class="text-sm font-semibold text-base-content">
+                    {getAlertResourceIncidentPanelTitle()}
+                  </h3>
                   <p class="text-xs text-muted">
                     {selection().resourceName}
                     <Show when={incidents().length > 0}>
                       <span>
                         {' '}
-                        · {incidents().length} incident{incidents().length === 1 ? '' : 's'}
+                        · {getAlertResourceIncidentCountLabel(incidents().length)}
                       </span>
                     </Show>
                   </p>
@@ -4829,7 +4890,7 @@ function HistoryTab(props: {
                       void refreshResourceIncidentPanel();
                     }}
                   >
-                    {isLoading() ? 'Refreshing...' : 'Refresh'}
+                    {getAlertResourceIncidentRefreshLabel(isLoading())}
                   </button>
                   <button
                     type="button"
@@ -4841,7 +4902,7 @@ function HistoryTab(props: {
                 </div>
               </div>
               <Show when={isLoading()}>
-                <p class="mt-2 text-xs text-muted">Loading incidents...</p>
+                <p class="mt-2 text-xs text-muted">{getAlertResourceIncidentLoadingState().text}</p>
               </Show>
               <Show when={!isLoading()}>
                 <Show when={incidents().length > 0}>
@@ -4856,7 +4917,7 @@ function HistoryTab(props: {
                   when={incidents().length > 0}
                   fallback={
                     <p class="mt-2 text-xs text-muted">
-                      No incidents recorded for this resource yet.
+                      {getAlertResourceIncidentEmptyState().text}
                     </p>
                   }
                 >
@@ -4909,7 +4970,7 @@ function HistoryTab(props: {
                             </Show>
                             <Show when={incident.acknowledged && incident.ackUser}>
                               <p class="mt-1 text-xs text-muted">
-                                Acknowledged by {incident.ackUser}
+                                {getAlertResourceIncidentAcknowledgedByLabel(incident.ackUser)}
                               </p>
                             </Show>
                             <Show when={events.length > 0}>
@@ -4927,7 +4988,7 @@ function HistoryTab(props: {
                                   class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
                                   onClick={() => toggleResourceIncidentDetails(incident.id)}
                                 >
-                                  {isExpanded ? 'Hide events' : `Events (${filteredLabel})`}
+                                  {getAlertResourceIncidentToggleLabel(isExpanded, filteredLabel)}
                                 </button>
                               </div>
                             </Show>
@@ -4937,7 +4998,7 @@ function HistoryTab(props: {
                                   when={filteredEvents.length > 0}
                                   fallback={
                                     <p class="text-[10px] text-muted">
-                                      No events match the selected filters.
+                                      {getAlertResourceIncidentFilteredEventsEmptyState().text}
                                     </p>
                                   }
                                 >
@@ -4989,7 +5050,9 @@ function HistoryTab(props: {
                                   </For>
                                   <Show when={filteredEvents.length > recentEvents.length}>
                                     <p class="text-[10px] text-muted">
-                                      Showing last {recentEvents.length} events
+                                      {getAlertResourceIncidentRecentEventsSummary(
+                                        recentEvents.length,
+                                      )}
                                     </p>
                                   </Show>
                                 </Show>
@@ -5015,8 +5078,8 @@ function HistoryTab(props: {
             when={alertData().length > 0}
             fallback={
               <div class="text-center py-12 text-muted">
-                <p class="text-sm">No alerts found</p>
-                <p class="text-xs mt-1">Try adjusting your filters or check back later</p>
+                <p class="text-sm">{getAlertHistoryEmptyState().title}</p>
+                <p class="text-xs mt-1">{getAlertHistoryEmptyState().description}</p>
               </div>
             }
           >
@@ -5036,7 +5099,7 @@ function HistoryTab(props: {
                         Resource
                       </TableHead>
                       <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-                        Type
+                        {getTypeColumnLabel()}
                       </TableHead>
                       <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Severity
@@ -5249,7 +5312,9 @@ function HistoryTab(props: {
                                     <TableRow class="bg-surface-alt border-b border-border">
                                       <TableCell colspan={11} class="p-3">
                                         <Show when={incidentLoading()[rowKey]}>
-                                          <p class="text-xs text-muted">Loading timeline...</p>
+                                          <p class="text-xs text-muted">
+                                            {getAlertTimelineLoadingState().text}
+                                          </p>
                                         </Show>
                                         <Show when={!incidentLoading()[rowKey]}>
                                           <Show when={incidentTimelines()[rowKey]}>
@@ -5385,13 +5450,12 @@ function HistoryTab(props: {
                                                         }
                                                       >
                                                         <p class="text-xs text-muted">
-                                                          No timeline events match the selected
-                                                          filters.
+                                                          {getAlertTimelineFilterEmptyState().text}
                                                         </p>
                                                       </Show>
                                                       <Show when={events.length === 0}>
                                                         <p class="text-xs text-muted">
-                                                          No timeline events yet.
+                                                          {getAlertTimelineEmptyState().text}
                                                         </p>
                                                       </Show>
                                                     </>
@@ -5401,7 +5465,7 @@ function HistoryTab(props: {
                                                   <textarea
                                                     class="w-full rounded border border-border bg-surface p-2 text-xs text-base-content"
                                                     rows={2}
-                                                    placeholder="Add a note for this incident..."
+                                                    placeholder={getAlertResourceIncidentNotePlaceholder()}
                                                     value={incidentNoteDrafts()[rowKey] || ''}
                                                     onInput={(e) => {
                                                       const value = e.currentTarget.value;
@@ -5426,9 +5490,9 @@ function HistoryTab(props: {
                                                         );
                                                       }}
                                                     >
-                                                      {incidentNoteSaving().has(rowKey)
-                                                        ? 'Saving...'
-                                                        : 'Save Note'}
+                                                      {getAlertResourceIncidentSaveNoteLabel(
+                                                        incidentNoteSaving().has(rowKey),
+                                                      )}
                                                     </button>
                                                   </div>
                                                 </div>
@@ -5440,13 +5504,13 @@ function HistoryTab(props: {
                                               when={incidentErrors()[rowKey]}
                                               fallback={
                                                 <p class="text-xs text-muted">
-                                                  No incident timeline available.
+                                                  {getAlertTimelineUnavailableState().text}
                                                 </p>
                                               }
                                             >
                                               <div class="flex items-center gap-2">
                                                 <p class="text-xs text-error">
-                                                  Failed to load timeline.
+                                                  {getAlertTimelineFailureState().text}
                                                 </p>
                                                 <button
                                                   class="text-xs text-primary hover:underline"
@@ -5458,7 +5522,7 @@ function HistoryTab(props: {
                                                     )
                                                   }
                                                 >
-                                                  Retry
+                                                  {getAlertTimelineFailureState().actionLabel}
                                                 </button>
                                               </div>
                                             </Show>
@@ -5482,45 +5546,38 @@ function HistoryTab(props: {
         }
       >
         <div class="text-center py-12 text-muted">
-          <p class="text-sm">Loading alert history...</p>
+          <p class="text-sm">{getAlertHistoryLoadingState().text}</p>
         </div>
       </Show>
 
-      {/* Administrative Actions - Only show if there's history to clear */}
+      {/* History actions */}
       <Show when={alertHistory().length > 0}>
         <div class="mt-8 pt-6 border-t border-border">
           <div class="bg-surface-alt rounded-md p-4">
             <div class="flex items-start justify-between">
               <div>
-                <h4 class="text-sm font-medium text-base-content mb-1">Administrative Actions</h4>
-                <p class="text-xs text-muted">
-                  Permanently clear all alert history. Use with caution - this action cannot be
-                  undone.
-                </p>
+                <h4 class="text-sm font-medium text-base-content mb-1">
+                  {getAlertAdministrationSectionTitle()}
+                </h4>
+                <p class="text-xs text-muted">{getAlertAdministrationSectionDescription()}</p>
               </div>
               <button
                 type="button"
                 onClick={async () => {
-                  if (
-                    confirm(
-                      'Are you sure you want to clear all alert history?\n\nThis will permanently delete all historical alert data and cannot be undone.\n\nThis is typically only used for system maintenance or when starting fresh with a new monitoring setup.',
-                    )
-                  ) {
+                  if (confirm(getAlertAdministrationClearHistoryConfirmation())) {
                     try {
                       await AlertsAPI.clearHistory();
                       setAlertHistory([]);
                       // Alert history cleared successfully
                     } catch (err) {
                       logger.error('Error clearing alert history:', err);
-                      notificationStore.error(
-                        'Error clearing alert history: Please check your connection and try again.',
-                      );
+                      notificationStore.error(getAlertAdministrationClearHistoryError());
                     }
                   }
                 }}
                 class="px-3 py-2 text-xs border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900 transition-colors flex-shrink-0"
               >
-                Clear All History
+                {getAlertAdministrationClearHistoryLabel()}
               </button>
             </div>
           </div>
