@@ -104,9 +104,9 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         // Always show the used segment
         segs.push({ type: 'Used', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) });
 
-        // Cache segment (reclaimable buff/cache) — shown as muted amber
+        // Reclaimable segment (buff/cache) — shown as muted amber
         if (cache > 0) {
-            segs.push({ type: 'Cache', bytes: cache, percent: cachePercent, color: MEMORY_COLORS.cache });
+            segs.push({ type: 'Reclaimable', bytes: cache, percent: cachePercent, color: MEMORY_COLORS.cache });
         }
 
         if (hasActiveBallooning) {
@@ -162,6 +162,13 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
     const handleMouseLeave = () => {
         setShowTooltip(false);
     };
+
+    // "Proxmox view" percentage: (used + cache) / total — what Proxmox would show
+    const proxmoxPercent = createMemo(() => {
+        const cache = props.cache || 0;
+        if (props.total <= 0) return 0;
+        return ((props.used + cache) / props.total) * 100;
+    });
 
     // Truly free memory (excludes cache; capped at balloon limit when active)
     const trulyFree = createMemo(() => {
@@ -266,7 +273,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
 
                                     <Show when={(props.cache || 0) > 0}>
                                         <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                                            <span class="text-amber-400">Cache</span>
+                                            <span class="text-amber-400">Reclaimable</span>
                                             <span class="whitespace-nowrap text-gray-300">
                                                 {formatBytes(props.cache || 0)}
                                             </span>
@@ -288,6 +295,16 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                             {formatBytes(trulyFree())}
                                         </span>
                                     </div>
+
+                                    {/* Proxmox reconciliation — only shown when cache data is available */}
+                                    <Show when={(props.cache || 0) > 0}>
+                                        <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
+                                            <span class="text-gray-500 italic">Proxmox view</span>
+                                            <span class="whitespace-nowrap text-gray-500 italic">
+                                                {formatPercent(proxmoxPercent())}
+                                            </span>
+                                        </div>
+                                    </Show>
 
                                     {/* Swap Section */}
                                     <Show when={hasSwap()}>
