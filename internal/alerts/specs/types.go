@@ -17,6 +17,7 @@ const (
 	AlertSpecKindSeverityThreshold      AlertSpecKind = "severity-threshold"
 	AlertSpecKindChangeThreshold        AlertSpecKind = "change-threshold"
 	AlertSpecKindBaselineAnomaly        AlertSpecKind = "baseline-anomaly"
+	AlertSpecKindHealthAssessment       AlertSpecKind = "health-assessment"
 	AlertSpecKindConnectivity           AlertSpecKind = "connectivity"
 	AlertSpecKindPoweredState           AlertSpecKind = "powered-state"
 	AlertSpecKindProviderIncident       AlertSpecKind = "provider-incident"
@@ -31,6 +32,7 @@ func (k AlertSpecKind) valid() bool {
 		AlertSpecKindSeverityThreshold,
 		AlertSpecKindChangeThreshold,
 		AlertSpecKindBaselineAnomaly,
+		AlertSpecKindHealthAssessment,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -131,6 +133,7 @@ type ResourceAlertSpec struct {
 	SeverityThreshold      *SeverityThresholdSpec      `json:"severityThreshold,omitempty"`
 	ChangeThreshold        *ChangeThresholdSpec        `json:"changeThreshold,omitempty"`
 	BaselineAnomaly        *BaselineAnomalySpec        `json:"baselineAnomaly,omitempty"`
+	HealthAssessment       *HealthAssessmentSpec       `json:"healthAssessment,omitempty"`
 	Connectivity           *ConnectivitySpec           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateSpec           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentSpec       `json:"providerIncident,omitempty"`
@@ -170,6 +173,9 @@ func (s ResourceAlertSpec) Validate() error {
 		payloads++
 	}
 	if s.BaselineAnomaly != nil {
+		payloads++
+	}
+	if s.HealthAssessment != nil {
 		payloads++
 	}
 	if s.Connectivity != nil {
@@ -215,6 +221,11 @@ func (s ResourceAlertSpec) Validate() error {
 			return fmt.Errorf("baseline anomaly payload is required")
 		}
 		return s.BaselineAnomaly.Validate()
+	case AlertSpecKindHealthAssessment:
+		if s.HealthAssessment == nil {
+			return fmt.Errorf("health assessment payload is required")
+		}
+		return s.HealthAssessment.Validate()
 	case AlertSpecKindConnectivity:
 		if s.Connectivity == nil {
 			return fmt.Errorf("connectivity payload is required")
@@ -409,6 +420,19 @@ func (s BaselineAnomalySpec) Validate() error {
 	return nil
 }
 
+type HealthAssessmentSpec struct {
+	Signal string   `json:"signal"`
+	Codes  []string `json:"codes,omitempty"`
+}
+
+func (s HealthAssessmentSpec) Validate() error {
+	if strings.TrimSpace(s.Signal) == "" {
+		return fmt.Errorf("signal is required")
+	}
+	s.Codes = canonicalStringSet(s.Codes)
+	return nil
+}
+
 type ConnectivitySpec struct {
 	Signal     string        `json:"signal"`
 	LostAfter  time.Duration `json:"lostAfter"`
@@ -531,6 +555,7 @@ type AlertEvidence struct {
 	SeverityThreshold      *SeverityThresholdEvidence      `json:"severityThreshold,omitempty"`
 	ChangeThreshold        *ChangeThresholdEvidence        `json:"changeThreshold,omitempty"`
 	BaselineAnomaly        *BaselineAnomalyEvidence        `json:"baselineAnomaly,omitempty"`
+	HealthAssessment       *HealthAssessmentEvidence       `json:"healthAssessment,omitempty"`
 	Connectivity           *ConnectivityEvidence           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateEvidence           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentEvidence       `json:"providerIncident,omitempty"`
@@ -555,6 +580,9 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 		payloads++
 	}
 	if e.BaselineAnomaly != nil {
+		payloads++
+	}
+	if e.HealthAssessment != nil {
 		payloads++
 	}
 	if e.Connectivity != nil {
@@ -600,6 +628,11 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 			return fmt.Errorf("baseline anomaly evidence is required")
 		}
 		return e.BaselineAnomaly.Validate()
+	case AlertSpecKindHealthAssessment:
+		if e.HealthAssessment == nil {
+			return fmt.Errorf("health assessment evidence is required")
+		}
+		return e.HealthAssessment.Validate()
 	case AlertSpecKindConnectivity:
 		if e.Connectivity == nil {
 			return fmt.Errorf("connectivity evidence is required")
@@ -700,6 +733,26 @@ func (e BaselineAnomalyEvidence) Validate() error {
 	}
 	if e.Baseline < 0 {
 		return fmt.Errorf("baseline must not be negative")
+	}
+	return nil
+}
+
+type HealthAssessmentEvidence struct {
+	Signal   string        `json:"signal"`
+	Severity AlertSeverity `json:"severity,omitempty"`
+	Codes    []string      `json:"codes,omitempty"`
+}
+
+func (e HealthAssessmentEvidence) Validate() error {
+	if strings.TrimSpace(e.Signal) == "" {
+		return fmt.Errorf("signal is required")
+	}
+	e.Codes = canonicalStringSet(e.Codes)
+	if e.Severity != "" && !e.Severity.valid() {
+		return fmt.Errorf("severity %q is invalid", e.Severity)
+	}
+	if len(e.Codes) > 0 && e.Severity == "" {
+		return fmt.Errorf("severity is required when codes are present")
 	}
 	return nil
 }

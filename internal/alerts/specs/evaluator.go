@@ -82,6 +82,7 @@ func Evaluate(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvi
 	case AlertSpecKindSeverityThreshold,
 		AlertSpecKindChangeThreshold,
 		AlertSpecKindBaselineAnomaly,
+		AlertSpecKindHealthAssessment,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -338,6 +339,11 @@ func matches(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverit
 			return false, "", ""
 		}
 		return matchesBaselineAnomaly(*spec.BaselineAnomaly, *evidence.BaselineAnomaly)
+	case AlertSpecKindHealthAssessment:
+		if evidence.HealthAssessment == nil || spec.HealthAssessment == nil {
+			return false, "", ""
+		}
+		return matchesHealthAssessment(*spec.HealthAssessment, *evidence.HealthAssessment)
 	case AlertSpecKindConnectivity:
 		return evidence.Connectivity != nil && !evidence.Connectivity.Connected, spec.Severity, "connectivity-lost"
 	case AlertSpecKindPoweredState:
@@ -492,6 +498,28 @@ func matchesBaselineAnomaly(spec BaselineAnomalySpec, evidence BaselineAnomalyEv
 	default:
 		return false, "", "baseline-anomaly-normal"
 	}
+}
+
+func matchesHealthAssessment(spec HealthAssessmentSpec, evidence HealthAssessmentEvidence) (bool, AlertSeverity, string) {
+	if evidence.Signal != spec.Signal {
+		return false, "", "health-assessment-signal-mismatch"
+	}
+	if len(evidence.Codes) == 0 || evidence.Severity == "" {
+		return false, "", "health-assessment-normal"
+	}
+	if len(spec.Codes) == 0 {
+		return true, evidence.Severity, "health-assessment-match"
+	}
+
+	expected := canonicalStringSet(spec.Codes)
+	observed := canonicalStringSet(evidence.Codes)
+	for _, code := range observed {
+		if slices.Contains(expected, code) {
+			return true, evidence.Severity, "health-assessment-match"
+		}
+	}
+
+	return false, "", "health-assessment-normal"
 }
 
 func metricTriggered(spec *MetricThresholdSpec, observed float64) bool {

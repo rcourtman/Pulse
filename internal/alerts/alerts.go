@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -3226,6 +3227,7 @@ func (m *Manager) CheckHost(host models.Host) {
 
 			raidResourceID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
 			raidName := fmt.Sprintf("%s - %s (%s)", resourceName, array.Device, array.Level)
+			raidSpecResourceID := fmt.Sprintf("%s/raid:%s", hostResourceID(host.ID), sanitizeRAIDDevice(array.Device))
 
 			raidMetadata := cloneMetadata(baseMetadata)
 			raidMetadata["metric"] = "raid"
@@ -3243,51 +3245,38 @@ func (m *Manager) CheckHost(host models.Host) {
 				raidMetadata["raidRebuildPercent"] = array.RebuildPercent
 			}
 
-			// Check for degraded or failed arrays
-			stateLower := strings.ToLower(array.State)
-			isDegraded := strings.Contains(stateLower, "degraded") || array.FailedDevices > 0
-
-			// A "check" state indicates data scrubbing (e.g., DSM scheduled scrub), not a rebuild.
-			// Only treat as rebuilding if state indicates actual recovery, not routine maintenance.
-			isChecking := strings.Contains(stateLower, "check")
-			isRebuilding := !isChecking && (strings.Contains(stateLower, "recover") ||
-				strings.Contains(stateLower, "resync") ||
-				(array.RebuildPercent > 0 && !strings.Contains(stateLower, "clean")))
-
 			alertID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
-
-			if isDegraded {
-				// Critical alert for degraded arrays
-				msg := fmt.Sprintf("RAID array %s is degraded", array.Device)
-				if array.FailedDevices > 0 {
-					msg = fmt.Sprintf("RAID array %s has %d failed device(s)", array.Device, array.FailedDevices)
-				}
-
-				m.mu.Lock()
-				if _, exists := m.activeAlerts[alertID]; !exists {
-					alert := &Alert{
-						ID:              alertID,
-						Type:            "raid",
-						Level:           AlertLevelCritical,
-						ResourceID:      raidResourceID,
-						ResourceName:    raidName,
-						Node:            nodeName,
-						NodeDisplayName: m.resolveNodeDisplayName(nodeName),
-						Instance:        instanceName,
-						Message:         msg,
-						Value:           float64(array.FailedDevices),
-						Threshold:       0,
-						StartTime:       time.Now(),
-						LastSeen:        time.Now(),
-						Metadata:        raidMetadata,
+			assessment := storagehealth.AssessHostRAIDArray(array)
+			result, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
+				SpecID:         raidSpecResourceID + "-health",
+				Signal:         "host-raid",
+				Codes:          raidAssessmentCodes,
+				Reasons:        assessment.Reasons,
+				AlertID:        alertID,
+				AlertType:      "raid",
+				SpecResourceID: raidSpecResourceID,
+				ResourceID:     raidResourceID,
+				ResourceName:   raidName,
+				ResourceType:   unifiedresources.ResourceTypeAgent,
+				Node:           nodeName,
+				Instance:       instanceName,
+				Metadata:       raidMetadata,
+				MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+					message := strings.Join(storageHealthReasonSummaries(assessment.Reasons), "; ")
+					switch result.State.Severity {
+					case alertspecs.AlertSeverityCritical:
+						return message, float64(array.FailedDevices), 0
+					case alertspecs.AlertSeverityWarning:
+						return message, array.RebuildPercent, 100
+					default:
+						return message, 0, 0
 					}
-					m.preserveAlertState(alertID, alert)
-					m.activeAlerts[alertID] = alert
-					m.recentAlerts[alertID] = alert
-					m.historyManager.AddAlert(*alert)
-					m.dispatchAlert(alert, false)
-					m.mu.Unlock()
+				},
+			})
 
+			if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+				switch result.State.Severity {
+				case alertspecs.AlertSeverityCritical:
 					log.Error().
 						Str("host", resourceName).
 						Str("hostID", host.ID).
@@ -3295,40 +3284,7 @@ func (m *Manager) CheckHost(host models.Host) {
 						Str("raidLevel", array.Level).
 						Int("failedDevices", array.FailedDevices).
 						Msg("CRITICAL: RAID array degraded")
-				} else {
-					m.mu.Unlock()
-				}
-			} else if isRebuilding {
-				// Warning alert for rebuilding arrays
-				msg := fmt.Sprintf("RAID array %s is rebuilding", array.Device)
-				if array.RebuildPercent > 0 {
-					msg = fmt.Sprintf("RAID array %s is rebuilding (%.1f%% complete)", array.Device, array.RebuildPercent)
-				}
-
-				m.mu.Lock()
-				if _, exists := m.activeAlerts[alertID]; !exists {
-					alert := &Alert{
-						ID:           alertID,
-						Type:         "raid",
-						Level:        AlertLevelWarning,
-						ResourceID:   raidResourceID,
-						ResourceName: raidName,
-						Node:         nodeName,
-						Instance:     instanceName,
-						Message:      msg,
-						Value:        array.RebuildPercent,
-						Threshold:    100,
-						StartTime:    time.Now(),
-						LastSeen:     time.Now(),
-						Metadata:     raidMetadata,
-					}
-					m.preserveAlertState(alertID, alert)
-					m.activeAlerts[alertID] = alert
-					m.recentAlerts[alertID] = alert
-					m.historyManager.AddAlert(*alert)
-					m.dispatchAlert(alert, false)
-					m.mu.Unlock()
-
+				case alertspecs.AlertSeverityWarning:
 					log.Warn().
 						Str("host", resourceName).
 						Str("hostID", host.ID).
@@ -3336,12 +3292,7 @@ func (m *Manager) CheckHost(host models.Host) {
 						Str("raidLevel", array.Level).
 						Float64("rebuildPercent", array.RebuildPercent).
 						Msg("WARNING: RAID array rebuilding")
-				} else {
-					m.mu.Unlock()
 				}
-			} else {
-				// Array is healthy, clear any existing alerts
-				m.clearAlert(alertID)
 			}
 		}
 	}
@@ -3642,27 +3593,140 @@ func splitSMARTAlertReasons(reasons []storagehealth.Reason) ([]storagehealth.Rea
 	return healthReasons, wearReasons
 }
 
-func (m *Manager) syncHostSMARTDiskAlert(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, alertType string, reasons []storagehealth.Reason) {
-	alertID := fmt.Sprintf("host-%s-%s-%s", host.ID, alertType, strings.TrimPrefix(resourceID, hostResourceID(host.ID)+"/disk:"))
-	if len(reasons) == 0 {
-		m.clearAlert(alertID)
-		return
+var (
+	smartHealthAssessmentCodes = []string{
+		"health_status",
+		"pending_sectors",
+		"offline_uncorrectable",
+		"media_errors",
+		"reallocated_sectors",
 	}
+	smartWearoutAssessmentCodes = []string{
+		"wearout_low",
+		"nvme_available_spare_low",
+		"nvme_percentage_used_high",
+	}
+	raidAssessmentCodes = []string{
+		"raid_degraded",
+		"raid_unavailable",
+		"raid_rebuilding",
+	}
+)
 
-	level := AlertLevelWarning
+type canonicalHealthAssessmentAlertParams struct {
+	SpecID         string
+	Signal         string
+	Codes          []string
+	Reasons        []storagehealth.Reason
+	AlertID        string
+	AlertType      string
+	SpecResourceID string
+	ResourceID     string
+	ResourceName   string
+	ResourceType   unifiedresources.ResourceType
+	Node           string
+	Instance       string
+	Metadata       map[string]interface{}
+	Disabled       bool
+	MessageBuilder func(alertspecs.EvaluationResult) (string, float64, float64)
+}
+
+func storageHealthReasonCodes(reasons []storagehealth.Reason) []string {
+	codes := make([]string, 0, len(reasons))
+	seen := make(map[string]struct{}, len(reasons))
 	for _, reason := range reasons {
-		if reason.Severity == storagehealth.RiskCritical {
-			level = AlertLevelCritical
-			break
+		code := strings.TrimSpace(reason.Code)
+		if code == "" {
+			continue
+		}
+		if _, ok := seen[code]; ok {
+			continue
+		}
+		seen[code] = struct{}{}
+		codes = append(codes, code)
+	}
+	slices.Sort(codes)
+	return codes
+}
+
+func storageHealthReasonSummaries(reasons []storagehealth.Reason) []string {
+	summaries := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		summary := strings.TrimSpace(reason.Summary)
+		if summary == "" {
+			continue
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries
+}
+
+func storageHealthAssessmentSeverity(reasons []storagehealth.Reason) alertspecs.AlertSeverity {
+	severity := alertspecs.AlertSeverity("")
+	for _, reason := range reasons {
+		switch reason.Severity {
+		case storagehealth.RiskCritical:
+			return alertspecs.AlertSeverityCritical
+		case storagehealth.RiskWarning:
+			severity = alertspecs.AlertSeverityWarning
 		}
 	}
+	return severity
+}
 
-	reasonCodes := make([]string, 0, len(reasons))
-	reasonSummaries := make([]string, 0, len(reasons))
-	for _, reason := range reasons {
-		reasonCodes = append(reasonCodes, reason.Code)
-		reasonSummaries = append(reasonSummaries, reason.Summary)
+func (m *Manager) syncCanonicalHealthAssessmentAlert(params canonicalHealthAssessmentAlertParams) (alertspecs.EvaluationResult, bool) {
+	if len(params.Reasons) == 0 {
+		m.clearAlert(params.AlertID)
+		return alertspecs.EvaluationResult{}, true
 	}
+
+	spec, err := buildCanonicalHealthAssessmentSpec(
+		params.SpecID,
+		params.SpecResourceID,
+		params.ResourceName,
+		params.ResourceType,
+		params.Signal,
+		params.Codes,
+		params.Disabled,
+	)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("alertID", params.AlertID).
+			Str("resourceID", params.SpecResourceID).
+			Msg("Skipping invalid canonical health assessment spec")
+		return alertspecs.EvaluationResult{}, false
+	}
+
+	now := time.Now()
+	return m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: now,
+			HealthAssessment: &alertspecs.HealthAssessmentEvidence{
+				Signal:   params.Signal,
+				Severity: storageHealthAssessmentSeverity(params.Reasons),
+				Codes:    storageHealthReasonCodes(params.Reasons),
+			},
+		},
+		AlertID:        params.AlertID,
+		AlertType:      params.AlertType,
+		ResourceID:     params.ResourceID,
+		ResourceName:   params.ResourceName,
+		Node:           params.Node,
+		Instance:       params.Instance,
+		Message:        strings.Join(storageHealthReasonSummaries(params.Reasons), "; "),
+		Metadata:       cloneMetadata(params.Metadata),
+		AddToRecent:    true,
+		AddToHistory:   true,
+		MessageBuilder: params.MessageBuilder,
+	})
+}
+
+func (m *Manager) syncHostSMARTDiskAlert(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, alertType string, reasons []storagehealth.Reason) {
+	alertID := fmt.Sprintf("host-%s-%s-%s", host.ID, alertType, strings.TrimPrefix(resourceID, hostResourceID(host.ID)+"/disk:"))
+	reasonCodes := storageHealthReasonCodes(reasons)
+	reasonSummaries := storageHealthReasonSummaries(reasons)
 
 	metadata := cloneMetadata(baseMetadata)
 	metadata["metric"] = alertType
@@ -3677,45 +3741,26 @@ func (m *Manager) syncHostSMARTDiskAlert(host models.Host, disk models.HostDiskS
 		metadata["temperature"] = disk.Temperature
 	}
 
-	now := time.Now()
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-		existing.LastSeen = now
-		existing.Level = level
-		existing.Message = strings.Join(reasonSummaries, "; ")
-		existing.ResourceID = resourceID
-		existing.ResourceName = resourceName
-		existing.Node = nodeName
-		existing.NodeDisplayName = m.resolveNodeDisplayName(nodeName)
-		existing.Instance = instanceName
-		existing.Metadata = metadata
-		return
+	specCodes := smartHealthAssessmentCodes
+	if alertType == "disk-wearout" {
+		specCodes = smartWearoutAssessmentCodes
 	}
 
-	alert := &Alert{
-		ID:              alertID,
-		Type:            alertType,
-		Level:           level,
-		ResourceID:      resourceID,
-		ResourceName:    resourceName,
-		Node:            nodeName,
-		NodeDisplayName: m.resolveNodeDisplayName(nodeName),
-		Instance:        instanceName,
-		Message:         strings.Join(reasonSummaries, "; "),
-		Value:           0,
-		Threshold:       0,
-		StartTime:       now,
-		LastSeen:        now,
-		Metadata:        metadata,
-	}
-
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-	m.dispatchAlert(alert, false)
+	_, _ = m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
+		SpecID:         resourceID + "-" + alertType,
+		Signal:         "host-smart",
+		Codes:          specCodes,
+		Reasons:        reasons,
+		AlertID:        alertID,
+		AlertType:      alertType,
+		SpecResourceID: resourceID,
+		ResourceID:     resourceID,
+		ResourceName:   resourceName,
+		ResourceType:   unifiedresources.ResourceTypeAgent,
+		Node:           nodeName,
+		Instance:       instanceName,
+		Metadata:       metadata,
+	})
 }
 
 func (m *Manager) clearHostRAIDAlerts(hostID string) {
@@ -3757,25 +3802,8 @@ func (m *Manager) syncHostUnraidStorageAlert(host models.Host, nodeName, instanc
 	}
 
 	alertID := fmt.Sprintf("host-%s-unraid-array", host.ID)
-	if len(reasons) == 0 {
-		m.clearAlert(alertID)
-		return
-	}
-
-	level := AlertLevelWarning
-	for _, reason := range reasons {
-		if reason.Severity == storagehealth.RiskCritical {
-			level = AlertLevelCritical
-			break
-		}
-	}
-
-	reasonCodes := make([]string, 0, len(reasons))
-	reasonSummaries := make([]string, 0, len(reasons))
-	for _, reason := range reasons {
-		reasonCodes = append(reasonCodes, reason.Code)
-		reasonSummaries = append(reasonSummaries, reason.Summary)
-	}
+	reasonCodes := storageHealthReasonCodes(reasons)
+	reasonSummaries := storageHealthReasonSummaries(reasons)
 
 	metadata := cloneMetadata(baseMetadata)
 	metadata["metric"] = "storageTopology"
@@ -3793,46 +3821,21 @@ func (m *Manager) syncHostUnraidStorageAlert(host models.Host, nodeName, instanc
 
 	resourceID := fmt.Sprintf("%s/storage:unraid-array", hostResourceID(host.ID))
 	resourceLabel := fmt.Sprintf("%s - Unraid Array", resourceName)
-	now := time.Now()
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-		existing.LastSeen = now
-		existing.Level = level
-		existing.Message = strings.Join(reasonSummaries, "; ")
-		existing.ResourceID = resourceID
-		existing.ResourceName = resourceLabel
-		existing.Node = nodeName
-		existing.NodeDisplayName = m.resolveNodeDisplayName(nodeName)
-		existing.Instance = instanceName
-		existing.Metadata = metadata
-		return
-	}
-
-	alert := &Alert{
-		ID:              alertID,
-		Type:            "storage-topology",
-		Level:           level,
-		ResourceID:      resourceID,
-		ResourceName:    resourceLabel,
-		Node:            nodeName,
-		NodeDisplayName: m.resolveNodeDisplayName(nodeName),
-		Instance:        instanceName,
-		Message:         strings.Join(reasonSummaries, "; "),
-		Value:           0,
-		Threshold:       0,
-		StartTime:       now,
-		LastSeen:        now,
-		Metadata:        metadata,
-	}
-
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-	m.dispatchAlert(alert, false)
+	_, _ = m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
+		SpecID:         resourceID + "-health",
+		Signal:         "unraid-storage",
+		Reasons:        reasons,
+		AlertID:        alertID,
+		AlertType:      "storage-topology",
+		SpecResourceID: resourceID,
+		ResourceID:     resourceID,
+		ResourceName:   resourceLabel,
+		ResourceType:   unifiedresources.ResourceTypeAgent,
+		Node:           nodeName,
+		Instance:       instanceName,
+		Metadata:       metadata,
+	})
 }
 
 func isPBSOffline(pbs models.PBSInstance) bool {

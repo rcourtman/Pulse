@@ -3261,6 +3261,46 @@ func TestCheckHostCreatesSMARTDiskWearoutAlertForAgentOnlyHost(t *testing.T) {
 	}
 }
 
+func TestCheckHostSMARTDiskHealthAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	pending := int64(2)
+
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{
+					Device: "/dev/sda",
+					Model:  "Seagate IronWolf",
+					Serial: "SERIAL-TOWER-1",
+					Health: "PASSED",
+					Attributes: &models.SMARTAttributes{
+						PendingSectors: &pending,
+					},
+				},
+			},
+		},
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	alert := m.activeAlerts["host-tower-host-disk-health-sda"]
+	m.mu.RUnlock()
+
+	if alert == nil {
+		t.Fatal("expected SMART disk-health alert")
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+		t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "agent:tower-host/disk:sda-disk-health" {
+		t.Fatalf("canonicalSpecID = %v, want agent:tower-host/disk:sda-disk-health", got)
+	}
+}
+
 func TestCheckHostSkipsSMARTDiskRiskAlertsWhenLinkedToProxmoxNode(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
@@ -3351,6 +3391,39 @@ func TestCheckHostClearsUnraidStorageTopologyAlertOnRecovery(t *testing.T) {
 	defer m.mu.RUnlock()
 	if _, exists := m.activeAlerts["host-tower-host-unraid-array"]; exists {
 		t.Fatalf("expected unraid storage-topology alert to clear on recovery")
+	}
+}
+
+func TestCheckHostUnraidStorageAnnotatesCanonicalSpecMetadata(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	host := models.Host{
+		ID:       "tower-host",
+		Hostname: "tower",
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			Disks: []models.HostUnraidDisk{
+				{Name: "parity", Role: "parity", Status: "disabled"},
+				{Name: "disk1", Role: "data", Status: "online"},
+			},
+		},
+	}
+
+	m.CheckHost(host)
+
+	m.mu.RLock()
+	alert := m.activeAlerts["host-tower-host-unraid-array"]
+	m.mu.RUnlock()
+
+	if alert == nil {
+		t.Fatal("expected unraid storage-topology alert")
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+		t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "agent:tower-host/storage:unraid-array-health" {
+		t.Fatalf("canonicalSpecID = %v, want agent:tower-host/storage:unraid-array-health", got)
 	}
 }
 
@@ -14348,6 +14421,42 @@ func TestCheckHostComprehensive(t *testing.T) {
 		// The alert should preserve its original start time
 		if !alert.StartTime.Equal(originalTime) {
 			t.Error("expected alert start time to be preserved")
+		}
+	})
+
+	t.Run("RAID annotates canonical spec metadata", func(t *testing.T) {
+		m := newTestManager(t)
+
+		host := models.Host{
+			ID:       "host1",
+			Hostname: "testhost",
+			RAID: []models.HostRAIDArray{
+				{
+					Device:         "/dev/md2",
+					Level:          "raid1",
+					State:          "recovering",
+					TotalDevices:   2,
+					ActiveDevices:  2,
+					FailedDevices:  0,
+					RebuildPercent: 50.0,
+				},
+			},
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts["host-host1-raid-md2"]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected RAID alert")
+		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+			t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != "agent:host1/raid:md2-health" {
+			t.Fatalf("canonicalSpecID = %v, want agent:host1/raid:md2-health", got)
 		}
 	})
 

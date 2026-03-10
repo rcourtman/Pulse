@@ -87,6 +87,20 @@ func TestResourceAlertSpecValidateAcceptsSupportedKinds(t *testing.T) {
 			},
 		},
 		{
+			name: "health assessment",
+			spec: ResourceAlertSpec{
+				ID:           "agent:host1/raid:md2-health",
+				ResourceID:   "agent:host1/raid:md2",
+				ResourceType: unifiedresources.ResourceTypeAgent,
+				Kind:         AlertSpecKindHealthAssessment,
+				Severity:     AlertSeverityWarning,
+				HealthAssessment: &HealthAssessmentSpec{
+					Signal: "host-raid",
+					Codes:  []string{"raid_degraded", "raid_rebuilding"},
+				},
+			},
+		},
+		{
 			name: "connectivity",
 			spec: ResourceAlertSpec{
 				ID:           "agent-01-heartbeat-lost",

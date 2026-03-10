@@ -198,6 +198,24 @@ func buildCanonicalBaselineAnomalySpec(specID, resourceID, title string, resourc
 	return spec, spec.Validate()
 }
 
+func buildCanonicalHealthAssessmentSpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, signal string, codes []string, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	spec := alertspecs.ResourceAlertSpec{
+		ID:           specID,
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		Kind:         alertspecs.AlertSpecKindHealthAssessment,
+		Severity:     alertspecs.AlertSeverityWarning,
+		Title:        title,
+		Disabled:     disabled,
+		HealthAssessment: &alertspecs.HealthAssessmentSpec{
+			Signal: signal,
+			Codes:  append([]string(nil), codes...),
+		},
+	}
+
+	return spec, spec.Validate()
+}
+
 func canonicalAlertSeverity(level AlertLevel) alertspecs.AlertSeverity {
 	switch level {
 	case AlertLevelCritical:

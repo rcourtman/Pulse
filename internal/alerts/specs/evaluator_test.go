@@ -568,3 +568,66 @@ func TestEvaluateDiscreteStatePreservesStableSpecIdentityAcrossMutableFields(t *
 		t.Fatalf("continued transition = %+v, want severity-changed", continued.Transition)
 	}
 }
+
+func TestEvaluateHealthAssessmentEscalationAndRecovery(t *testing.T) {
+	spec := ResourceAlertSpec{
+		ID:           "agent:host1/raid:md2-health",
+		ResourceID:   "agent:host1/raid:md2",
+		ResourceType: unifiedresources.ResourceTypeAgent,
+		Kind:         AlertSpecKindHealthAssessment,
+		Severity:     AlertSeverityWarning,
+		HealthAssessment: &HealthAssessmentSpec{
+			Signal: "host-raid",
+			Codes:  []string{"raid_degraded", "raid_rebuilding"},
+		},
+	}
+
+	warning, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 13, 10, 0, 0, time.UTC),
+		HealthAssessment: &HealthAssessmentEvidence{
+			Signal:   "host-raid",
+			Severity: AlertSeverityWarning,
+			Codes:    []string{"raid_rebuilding"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("warning evaluation failed: %v", err)
+	}
+	if warning.State.State != AlertStateFiring || warning.State.Severity != AlertSeverityWarning {
+		t.Fatalf("warning state = %+v, want firing warning", warning.State)
+	}
+
+	critical, err := Evaluate(spec, warning.State, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 13, 11, 0, 0, time.UTC),
+		HealthAssessment: &HealthAssessmentEvidence{
+			Signal:   "host-raid",
+			Severity: AlertSeverityCritical,
+			Codes:    []string{"raid_degraded"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("critical evaluation failed: %v", err)
+	}
+	if critical.State.Severity != AlertSeverityCritical {
+		t.Fatalf("critical severity = %q, want critical", critical.State.Severity)
+	}
+	if critical.Transition == nil || critical.Transition.Kind != EvaluationTransitionSeverityChanged {
+		t.Fatalf("critical transition = %+v, want severity-changed", critical.Transition)
+	}
+
+	recovered, err := Evaluate(spec, critical.State, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 13, 12, 0, 0, time.UTC),
+		HealthAssessment: &HealthAssessmentEvidence{
+			Signal: "host-raid",
+		},
+	})
+	if err != nil {
+		t.Fatalf("recovery evaluation failed: %v", err)
+	}
+	if recovered.State.State != AlertStateClear {
+		t.Fatalf("recovered state = %q, want clear", recovered.State.State)
+	}
+	if recovered.Transition == nil || recovered.Transition.Kind != EvaluationTransitionRecovered {
+		t.Fatalf("recovered transition = %+v, want recovered", recovered.Transition)
+	}
+}
