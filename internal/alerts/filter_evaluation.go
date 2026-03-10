@@ -192,8 +192,7 @@ func (m *Manager) evaluateFilterStack(guest any, stack FilterStack) bool {
 // getGuestThresholds returns the appropriate thresholds for a guest
 // Priority: Guest-specific overrides > Custom rules (by priority) > Global defaults
 func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig {
-	// Start with defaults
-	thresholds := m.config.GuestDefaults
+	thresholds := cloneThresholdConfig(m.config.GuestDefaults)
 
 	// Check custom rules (sorted by priority, highest first)
 	var applicableRule *CustomAlertRule
@@ -216,36 +215,7 @@ func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig 
 
 	// Apply custom rule thresholds if found
 	if applicableRule != nil {
-		if applicableRule.Thresholds.CPU != nil {
-			thresholds.CPU = ensureHysteresisThreshold(applicableRule.Thresholds.CPU)
-		}
-		if applicableRule.Thresholds.Memory != nil {
-			thresholds.Memory = ensureHysteresisThreshold(applicableRule.Thresholds.Memory)
-		}
-		if applicableRule.Thresholds.Disk != nil {
-			thresholds.Disk = ensureHysteresisThreshold(applicableRule.Thresholds.Disk)
-		}
-		if applicableRule.Thresholds.DiskRead != nil {
-			thresholds.DiskRead = ensureHysteresisThreshold(applicableRule.Thresholds.DiskRead)
-		}
-		if applicableRule.Thresholds.DiskWrite != nil {
-			thresholds.DiskWrite = ensureHysteresisThreshold(applicableRule.Thresholds.DiskWrite)
-		}
-		if applicableRule.Thresholds.NetworkIn != nil {
-			thresholds.NetworkIn = ensureHysteresisThreshold(applicableRule.Thresholds.NetworkIn)
-		}
-		if applicableRule.Thresholds.NetworkOut != nil {
-			thresholds.NetworkOut = ensureHysteresisThreshold(applicableRule.Thresholds.NetworkOut)
-		}
-		if applicableRule.Thresholds.DisableConnectivity {
-			thresholds.DisableConnectivity = true
-		}
-		if applicableRule.Thresholds.Backup != nil {
-			thresholds.Backup = applicableRule.Thresholds.Backup
-		}
-		if applicableRule.Thresholds.Snapshot != nil {
-			thresholds.Snapshot = applicableRule.Thresholds.Snapshot
-		}
+		thresholds = m.applyThresholdOverride(thresholds, applicableRule.Thresholds)
 
 		log.Debug().
 			Str("guest", guestID).
@@ -254,47 +224,5 @@ func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig 
 			Msg("Applied custom alert rule")
 	}
 
-	// Finally check guest-specific overrides (highest priority)
-	// First try the new stable ID format (instance-VMID)
-	override, exists := m.config.Overrides[guestID]
-
-	if exists {
-		// Apply the disabled flag if set
-		if override.Disabled {
-			thresholds.Disabled = true
-		}
-		if override.DisableConnectivity {
-			thresholds.DisableConnectivity = true
-		}
-
-		if override.CPU != nil {
-			thresholds.CPU = ensureHysteresisThreshold(override.CPU)
-		}
-		if override.Memory != nil {
-			thresholds.Memory = ensureHysteresisThreshold(override.Memory)
-		}
-		if override.Disk != nil {
-			thresholds.Disk = ensureHysteresisThreshold(override.Disk)
-		}
-		if override.DiskRead != nil {
-			thresholds.DiskRead = ensureHysteresisThreshold(override.DiskRead)
-		}
-		if override.DiskWrite != nil {
-			thresholds.DiskWrite = ensureHysteresisThreshold(override.DiskWrite)
-		}
-		if override.NetworkIn != nil {
-			thresholds.NetworkIn = ensureHysteresisThreshold(override.NetworkIn)
-		}
-		if override.NetworkOut != nil {
-			thresholds.NetworkOut = ensureHysteresisThreshold(override.NetworkOut)
-		}
-		if override.Backup != nil {
-			thresholds.Backup = override.Backup
-		}
-		if override.Snapshot != nil {
-			thresholds.Snapshot = override.Snapshot
-		}
-	}
-
-	return thresholds
+	return m.resolveThresholdOverride(thresholds, guestID)
 }

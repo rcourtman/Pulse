@@ -7,8 +7,7 @@ import "github.com/rs/zerolog/log"
 // The config.Overrides map is keyed by resource ID. Each resource type
 // uses the following canonical key format:
 //
-//	VM (Qemu):         "qemu-{VMID}"       e.g. "qemu-100"
-//	Container (LXC):   "lxc-{VMID}"        e.g. "lxc-200"
+//	VM / Container:    monitoring resource ID, e.g. "pve1:node1:100"
 //	Node:              node.ID             e.g. "node/pve-1"
 //	Agent:             host.ID             e.g. "host1" (without "agent:" prefix)
 //	Agent Disk:        "agent:{hostID}/disk:{mountpoint}" e.g. "agent:host1/disk:root"
@@ -17,11 +16,8 @@ import "github.com/rs/zerolog/log"
 //	PMG:               pmg.ID              e.g. "pmg-1"
 //	Docker Container:  "docker:{hostID}/{containerID}"
 //
-// Legacy guest formats ("qemu-{node}-{VMID}", "{node}-{VMID}") are
-// auto-migrated on access in getGuestThresholds (see filter_evaluation.go).
-//
-// CheckUnifiedResource looks up overrides by input.ID, which must match
-// the canonical key format for the resource type.
+// For guests, CheckUnifiedResource expects the same canonical resource ID the
+// monitoring pipeline already uses. It does not translate IDs.
 // UnifiedResourceMetric holds a single metric value for unified evaluation.
 type UnifiedResourceMetric struct {
 	Value   float64
@@ -79,8 +75,8 @@ func isUnifiedGuestType(typeKey string) bool {
 	}
 }
 
-// unifiedDefaultThresholds returns the default ThresholdConfig for a resource type key.
-func (m *Manager) unifiedDefaultThresholds(typeKey string) ThresholdConfig {
+// defaultThresholdsForResourceType returns the default ThresholdConfig for a resource type key.
+func (m *Manager) defaultThresholdsForResourceType(typeKey string) ThresholdConfig {
 	switch typeKey {
 	case "vm", "system-container", "app-container":
 		return cloneThresholdConfig(m.config.GuestDefaults)
@@ -95,6 +91,21 @@ func (m *Manager) unifiedDefaultThresholds(typeKey string) ThresholdConfig {
 	default:
 		return ThresholdConfig{}
 	}
+}
+
+// resolveThresholdOverride applies an override for a resource ID onto an existing base config.
+// Callers must hold m.mu when reading config through this helper.
+func (m *Manager) resolveThresholdOverride(base ThresholdConfig, resourceID string) ThresholdConfig {
+	if override, exists := m.config.Overrides[resourceID]; exists {
+		return m.applyThresholdOverride(base, override)
+	}
+	return base
+}
+
+// resolveResourceThresholds builds the effective thresholds for a resource type and ID.
+// Callers must hold m.mu when reading config through this helper.
+func (m *Manager) resolveResourceThresholds(typeKey, resourceID string) ThresholdConfig {
+	return m.resolveThresholdOverride(m.defaultThresholdsForResourceType(typeKey), resourceID)
 }
 
 // evaluateUnifiedMetrics runs the common metric dispatch path for unified resources.
@@ -151,10 +162,7 @@ func (m *Manager) CheckUnifiedResource(input *UnifiedResourceInput) {
 		return
 	}
 
-	thresholds := m.unifiedDefaultThresholds(input.Type)
-	if override, exists := m.config.Overrides[input.ID]; exists {
-		thresholds = m.applyThresholdOverride(thresholds, override)
-	}
+	thresholds := m.resolveResourceThresholds(input.Type, input.ID)
 	m.mu.RUnlock()
 
 	if thresholds.Disabled {

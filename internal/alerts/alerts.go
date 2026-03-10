@@ -2498,7 +2498,10 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				m.mu.Unlock()
 				m.clearAlert(fmt.Sprintf("guest-powered-off-%s", guestID))
 			} else {
-				m.checkGuestPoweredOff(guestID, name, node, instanceName, guestType, monitorOnly)
+				m.mu.RLock()
+				thresholds := m.getGuestThresholds(guest, guestID)
+				m.mu.RUnlock()
+				m.checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType, thresholds, monitorOnly)
 			}
 		} else {
 			// For paused/suspended, clear powered-off alert
@@ -2698,13 +2701,26 @@ func (m *Manager) CheckNode(node models.Node) {
 		return
 	}
 	disableNodesOffline := m.config.DisableAllNodesOffline
-	thresholds := m.config.NodeDefaults
-	if override, exists := m.config.Overrides[node.ID]; exists {
-		thresholds = m.applyThresholdOverride(thresholds, override)
-	}
+	thresholds := m.resolveResourceThresholds("node", node.ID)
 	m.mu.RUnlock()
 
-	if disableNodesOffline {
+	if thresholds.Disabled {
+		m.mu.Lock()
+		delete(m.nodeOfflineCount, node.ID)
+		m.mu.Unlock()
+		for _, alertID := range []string{
+			fmt.Sprintf("%s-cpu", node.ID),
+			fmt.Sprintf("%s-memory", node.ID),
+			fmt.Sprintf("%s-disk", node.ID),
+			fmt.Sprintf("%s-temperature", node.ID),
+			fmt.Sprintf("node-offline-%s", node.ID),
+		} {
+			m.clearAlert(alertID)
+		}
+		return
+	}
+
+	if disableNodesOffline || thresholds.DisableConnectivity {
 		// Clear tracking and any existing offline alerts when globally disabled
 		m.mu.Lock()
 		delete(m.nodeOfflineCount, node.ID)
@@ -2963,8 +2979,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
 	disableAllAgents := m.config.DisableAllAgents
-	thresholds := m.config.AgentDefaults
-	override, hasOverride := m.config.Overrides[host.ID]
+	thresholds := m.resolveResourceThresholds("agent", host.ID)
 	m.mu.RUnlock()
 
 	if !alertsEnabled {
@@ -2980,15 +2995,12 @@ func (m *Manager) CheckHost(host models.Host) {
 		return
 	}
 
-	if hasOverride {
-		thresholds = m.applyThresholdOverride(thresholds, override)
-		if thresholds.Disabled {
-			m.clearHostMetricAlerts(host.ID)
-			m.clearHostDiskAlerts(host.ID)
-			m.clearHostRAIDAlerts(host.ID)
-			m.clearHostUnraidAlerts(host.ID)
-			return
-		}
+	if thresholds.Disabled {
+		m.clearHostMetricAlerts(host.ID)
+		m.clearHostDiskAlerts(host.ID)
+		m.clearHostRAIDAlerts(host.ID)
+		m.clearHostUnraidAlerts(host.ID)
+		return
 	}
 
 	resourceID := hostResourceID(host.ID)
@@ -3342,6 +3354,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		return
 	}
 	disableHostsOffline := m.config.DisableAllAgentsOffline
+	thresholds := m.resolveResourceThresholds("agent", host.ID)
 	m.mu.RUnlock()
 
 	alertID := fmt.Sprintf("host-offline-%s", host.ID)
@@ -3358,14 +3371,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		return
 	}
 
-	var disableConnectivity bool
-	m.mu.RLock()
-	if override, exists := m.config.Overrides[host.ID]; exists {
-		disableConnectivity = override.DisableConnectivity || override.Disabled
-	}
-	m.mu.RUnlock()
-
-	if disableConnectivity {
+	if thresholds.Disabled || thresholds.DisableConnectivity {
 		m.clearAlert(alertID)
 		m.mu.Lock()
 		delete(m.offlineConfirmations, resourceKey)
@@ -3878,17 +3884,12 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		return
 	}
 
-	// Check if there's an override for this PBS instance
-	override, hasOverride := m.config.Overrides[pbs.ID]
-
-	// Use PBS defaults (CPU, Memory)
-	cpuThreshold := m.config.PBSDefaults.CPU
-	memoryThreshold := m.config.PBSDefaults.Memory
+	thresholds := m.resolveResourceThresholds("pbs", pbs.ID)
 	disablePBSOffline := m.config.DisableAllPBSOffline
 	m.mu.RUnlock()
 
 	// Check override disable BEFORE offline detection to prevent spurious notifications
-	if hasOverride && override.Disabled {
+	if thresholds.Disabled {
 		m.mu.Lock()
 		// Reset offline confirmation tracking
 		delete(m.offlineConfirmations, pbs.ID)
@@ -3925,7 +3926,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 
 	pbsOffline := isPBSOffline(pbs)
 
-	if disablePBSOffline {
+	if disablePBSOffline || thresholds.DisableConnectivity {
 		// Clear tracking and any existing offline alerts when globally disabled
 		m.mu.Lock()
 		delete(m.offlineConfirmations, pbs.ID)
@@ -3947,16 +3948,6 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		return
 	}
 
-	// Check if there are custom thresholds for this PBS instance
-	if hasOverride {
-		if override.CPU != nil {
-			cpuThreshold = override.CPU
-		}
-		if override.Memory != nil {
-			memoryThreshold = override.Memory
-		}
-	}
-
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:       pbs.ID,
 		Type:     "pbs",
@@ -3965,7 +3956,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		Instance: pbs.Name,
 		CPU:      &UnifiedResourceMetric{Percent: pbs.CPU},
 		Memory:   &UnifiedResourceMetric{Percent: pbs.Memory},
-	}, ThresholdConfig{CPU: cpuThreshold, Memory: memoryThreshold}, nil)
+	}, thresholds, nil)
 }
 
 // CheckPMG checks a Proxmox Mail Gateway instance against thresholds
@@ -5428,48 +5419,30 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		return
 	}
 
-	// Check if there's an override for this storage device
-	override, hasOverride := m.config.Overrides[storage.ID]
-	threshold := m.config.StorageDefault
-
-	// Apply override if it exists for usage threshold
-	if hasOverride && override.Usage != nil {
-		threshold = *override.Usage
-	}
+	thresholds := m.resolveResourceThresholds("storage", storage.ID)
 	m.mu.RUnlock()
+
+	if thresholds.Disabled {
+		m.mu.Lock()
+		delete(m.offlineConfirmations, storage.ID)
+		m.mu.Unlock()
+		m.clearAlert(fmt.Sprintf("%s-usage", storage.ID))
+		m.clearAlert(fmt.Sprintf("storage-offline-%s", storage.ID))
+		return
+	}
 
 	// Check if storage is truly offline/unavailable (not just inactive from other nodes)
 	// Note: In a cluster, local storage from other nodes shows as inactive which is normal
-	if storage.Status == "offline" || storage.Status == "unavailable" {
+	if thresholds.DisableConnectivity {
+		m.mu.Lock()
+		delete(m.offlineConfirmations, storage.ID)
+		m.mu.Unlock()
+		m.clearAlert(fmt.Sprintf("storage-offline-%s", storage.ID))
+	} else if storage.Status == "offline" || storage.Status == "unavailable" {
 		m.checkStorageOffline(storage)
 	} else {
 		// Clear any existing offline alert if storage is back online
 		m.clearStorageOfflineAlert(storage)
-	}
-
-	// If alerts are disabled for this storage device, clear any existing alerts and return
-	if hasOverride && override.Disabled {
-		m.mu.Lock()
-		// Clear usage alert
-		usageAlertID := fmt.Sprintf("%s-usage", storage.ID)
-		if _, exists := m.activeAlerts[usageAlertID]; exists {
-			m.clearAlertNoLock(usageAlertID)
-			log.Info().
-				Str("alertID", usageAlertID).
-				Str("storage", storage.Name).
-				Msg("Cleared usage alert - storage has alerts disabled")
-		}
-		// Clear offline alert
-		offlineAlertID := fmt.Sprintf("storage-offline-%s", storage.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			m.clearAlertNoLock(offlineAlertID)
-			log.Info().
-				Str("alertID", offlineAlertID).
-				Str("storage", storage.Name).
-				Msg("Cleared offline alert - storage has alerts disabled")
-		}
-		m.mu.Unlock()
-		return
 	}
 
 	// Check usage if storage has valid data (even if not currently active on this node)
@@ -5480,14 +5453,20 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		Str("id", storage.ID).
 		Float64("usage", storage.Usage).
 		Str("status", storage.Status).
-		Float64("trigger", threshold.Trigger).
-		Float64("clear", threshold.Clear).
-		Bool("hasOverride", hasOverride).
+		Float64("trigger", thresholds.Usage.Trigger).
+		Float64("clear", thresholds.Usage.Clear).
 		Msg("Checking storage thresholds")
 
 	// Check usage if storage is online - checkMetric will skip if threshold is nil or <= 0
 	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
-		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold, nil)
+		m.evaluateUnifiedMetrics(&UnifiedResourceInput{
+			ID:       storage.ID,
+			Type:     "storage",
+			Name:     storage.Name,
+			Node:     storage.Node,
+			Instance: storage.Instance,
+			Disk:     &UnifiedResourceMetric{Percent: storage.Usage},
+		}, thresholds, nil)
 	}
 
 	// Check ZFS pool status if this is ZFS storage
@@ -7625,8 +7604,8 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if node connectivity alerts are disabled
-	if override, exists := m.config.Overrides[node.ID]; exists && override.DisableConnectivity {
+	thresholds := m.resolveResourceThresholds("node", node.ID)
+	if thresholds.Disabled || thresholds.DisableConnectivity {
 		// Node connectivity alerts are disabled, clear any existing alert and return
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
 			m.clearAlertNoLock(alertID)
@@ -8782,18 +8761,17 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 
 // checkGuestPoweredOff creates an alert for powered-off guests
 func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestType string, monitorOnly bool) {
+	m.mu.RLock()
+	thresholds := m.resolveThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), guestID)
+	m.mu.RUnlock()
+	m.checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType, thresholds, monitorOnly)
+}
+
+func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool) {
 	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Get thresholds to check if powered-off alerts are disabled
-	var thresholds ThresholdConfig
-	if override, exists := m.config.Overrides[guestID]; exists {
-		thresholds = override
-	} else {
-		thresholds = m.config.GuestDefaults
-	}
 
 	severity := normalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
 
@@ -9190,6 +9168,29 @@ func cloneStringPtr(value *string) *string {
 	return &v
 }
 
+func cloneSnapshotConfig(cfg *SnapshotAlertConfig) *SnapshotAlertConfig {
+	if cfg == nil {
+		return nil
+	}
+	clone := *cfg
+	return &clone
+}
+
+func cloneBackupConfig(cfg *BackupAlertConfig) *BackupAlertConfig {
+	if cfg == nil {
+		return nil
+	}
+	clone := *cfg
+	if cfg.AlertOrphaned != nil {
+		value := *cfg.AlertOrphaned
+		clone.AlertOrphaned = &value
+	}
+	if len(cfg.IgnoreVMIDs) > 0 {
+		clone.IgnoreVMIDs = append([]string(nil), cfg.IgnoreVMIDs...)
+	}
+	return &clone
+}
+
 func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
 	clone := cfg
 	clone.CPU = cloneThreshold(cfg.CPU)
@@ -9202,6 +9203,8 @@ func cloneThresholdConfig(cfg ThresholdConfig) ThresholdConfig {
 	clone.Temperature = cloneThreshold(cfg.Temperature)
 	clone.DiskTemperature = cloneThreshold(cfg.DiskTemperature)
 	clone.Usage = cloneThreshold(cfg.Usage)
+	clone.Backup = cloneBackupConfig(cfg.Backup)
+	clone.Snapshot = cloneSnapshotConfig(cfg.Snapshot)
 	clone.Note = cloneStringPtr(cfg.Note)
 	return clone
 }
@@ -9214,6 +9217,9 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 	}
 	if override.DisableConnectivity {
 		result.DisableConnectivity = true
+	}
+	if override.PoweredOffSeverity != "" {
+		result.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
 	}
 
 	if override.CPU != nil {
@@ -9254,6 +9260,12 @@ func (m *Manager) applyThresholdOverride(base ThresholdConfig, override Threshol
 
 	if override.Usage != nil {
 		result.Usage = ensureHysteresisThreshold(cloneThreshold(override.Usage))
+	}
+	if override.Backup != nil {
+		result.Backup = cloneBackupConfig(override.Backup)
+	}
+	if override.Snapshot != nil {
+		result.Snapshot = cloneSnapshotConfig(override.Snapshot)
 	}
 
 	if override.Note != nil {
