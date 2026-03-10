@@ -297,7 +297,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 
 	alertID := "docker-container-update-" + newResourceID
 	m.mu.RLock()
-	alert, hasAlert := m.activeAlerts[alertID]
+	alert, hasAlert := testLookupActiveAlert(t, m, alertID)
 	resourceFirstSeen, hasResourceTracking := m.dockerUpdateFirstSeen[newResourceID]
 	identityFirstSeen, hasIdentityTracking := m.dockerUpdateFirstSeenByIdentity[dockerUpdateTrackingKey(newHost, container)]
 	m.mu.RUnlock()

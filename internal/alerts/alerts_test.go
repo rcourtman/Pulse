@@ -92,7 +92,7 @@ func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
 
 	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "usage", 90, threshold, nil)
-	if _, exists := m.activeAlerts["res1-usage"]; !exists {
+	if !testHasActiveAlert(t, m, "res1-usage") {
 		t.Fatalf("expected alert to be created")
 	}
 
@@ -129,7 +129,7 @@ func TestCheckMetricClearsAlertWhenThresholdDisabled(t *testing.T) {
 	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "memory", 90, threshold, nil)
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts["res1-memory"]
+	_, exists := testLookupActiveAlert(t, m, "res1-memory")
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected alert to be created")
@@ -140,7 +140,7 @@ func TestCheckMetricClearsAlertWhenThresholdDisabled(t *testing.T) {
 	m.checkMetric("res1", "Resource", "node1", "inst1", "guest", "memory", 90, disabledThreshold, nil)
 
 	m.mu.RLock()
-	_, stillExists := m.activeAlerts["res1-memory"]
+	_, stillExists := testLookupActiveAlert(t, m, "res1-memory")
 	m.mu.RUnlock()
 	if stillExists {
 		t.Errorf("expected alert to be cleared when threshold is disabled (Trigger=0)")
@@ -469,10 +469,10 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.activeAlerts[containerAlertID]; exists {
+	if testHasActiveAlert(t, m, containerAlertID) {
 		t.Fatalf("expected container alerts to be cleared")
 	}
-	if _, exists := m.activeAlerts[hostAlertID]; exists {
+	if testHasActiveAlert(t, m, hostAlertID) {
 		t.Fatalf("expected host offline alert to be cleared")
 	}
 	if _, exists := m.dockerOfflineCount[host.ID]; exists {
@@ -531,7 +531,7 @@ func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
 	defer m.mu.RUnlock()
 
 	cpuAlertID := fmt.Sprintf("%s-cpu", hostResourceID(host.ID))
-	cpuAlert, exists := m.activeAlerts[cpuAlertID]
+	cpuAlert, exists := testLookupActiveAlert(t, m, cpuAlertID)
 	if !exists {
 		t.Fatalf("expected CPU alert %q to be active", cpuAlertID)
 	}
@@ -543,7 +543,7 @@ func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
 	}
 
 	memAlertID := fmt.Sprintf("%s-memory", hostResourceID(host.ID))
-	memAlert, exists := m.activeAlerts[memAlertID]
+	memAlert, exists := testLookupActiveAlert(t, m, memAlertID)
 	if !exists {
 		t.Fatalf("expected memory alert %q to be active", memAlertID)
 	}
@@ -556,7 +556,7 @@ func TestCheckHostGeneratesMetricAlerts(t *testing.T) {
 
 	diskResourceID, _ := hostDiskResourceID(host, host.Disks[0])
 	diskAlertID := fmt.Sprintf("%s-disk", diskResourceID)
-	diskAlert, exists := m.activeAlerts[diskAlertID]
+	diskAlert, exists := testLookupActiveAlert(t, m, diskAlertID)
 	if !exists {
 		t.Fatalf("expected disk alert %q to be active", diskAlertID)
 	}
@@ -600,7 +600,7 @@ func TestCheckHostDiskTemperatureAnnotatesCanonicalSpecMetadata(t *testing.T) {
 
 	alertID := fmt.Sprintf("%s/disk_temp:%s-diskTemperature", hostResourceID(host.ID), sanitizeHostComponent("/dev/sda"))
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if alert == nil {
 		t.Fatalf("expected disk temperature alert %q", alertID)
@@ -622,7 +622,7 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 
 	m.HandleHostOffline(host)
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected no alert after first offline detection")
 	}
 	if count := m.offlineConfirmations[resourceKey]; count != 1 {
@@ -632,7 +632,7 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 
 	m.HandleHostOffline(host)
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected no alert after second offline detection")
 	}
 	if count := m.offlineConfirmations[resourceKey]; count != 2 {
@@ -642,14 +642,14 @@ func TestHandleHostOfflineRequiresConfirmations(t *testing.T) {
 
 	m.HandleHostOffline(host)
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[alertID]; !exists {
+	if !testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected alert %q after third offline detection", alertID)
 	}
 	m.mu.RUnlock()
 
 	m.HandleHostOnline(host)
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected offline alert %q to be cleared after host online", alertID)
 	}
 	if _, exists := m.offlineConfirmations[resourceKey]; exists {
@@ -754,7 +754,7 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
 
 	m.mu.RLock()
-	alert, exists := m.activeAlerts["snapshot-age-inst-node-100-weekly"]
+	alert, exists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-100-weekly")
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected snapshot age alert to be created")
@@ -818,7 +818,7 @@ func TestCheckSnapshotsRespectsOverrides(t *testing.T) {
 	// 1. Verify warning alert is created
 	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
 	m.mu.RLock()
-	alert, exists := m.activeAlerts["snapshot-age-inst:node:100:weekly"]
+	alert, exists := testLookupActiveAlert(t, m, "snapshot-age-inst:node:100:weekly")
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected snapshot warning alert")
@@ -885,7 +885,7 @@ func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
 	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
 
 	m.mu.RLock()
-	alert, exists := m.activeAlerts["snapshot-age-inst-node-200-sizey"]
+	alert, exists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-200-sizey")
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected snapshot size alert to be created")
@@ -965,7 +965,7 @@ func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
 	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
 
 	m.mu.RLock()
-	alert, exists := m.activeAlerts["snapshot-age-inst-node-300-combined"]
+	alert, exists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-300-combined")
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected combined snapshot alert to be created")
@@ -1039,7 +1039,7 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
-	alert, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	alert, exists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(key))
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected backup age alert to be created")
@@ -1115,7 +1115,7 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 	// 1. Verify warning alert is created with defaults
 	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 	m.mu.RLock()
-	alert, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
+	alert, exists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(key))
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected backup warning alert")
@@ -1206,7 +1206,8 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 
 	m.mu.RLock()
 	found := false
-	for id, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		id := effectiveAlertID(alert, storageKey)
 		if strings.HasPrefix(id, "backup-age-") {
 			found = true
 			if alert.Level != AlertLevelCritical {
@@ -1291,12 +1292,12 @@ func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
 
 	// Should find an alert keyed to the pve-nat instance (node2), not pve (node1)
 	expectedKey := "backup-age-pve-nat-node2-100"
-	alert, exists := m.activeAlerts[expectedKey]
+	alert, exists := testLookupActiveAlert(t, m, expectedKey)
 	if !exists {
 		// List what keys we do have for debugging
 		var keys []string
-		for k := range m.activeAlerts {
-			keys = append(keys, k)
+		for storageKey, active := range m.activeAlerts {
+			keys = append(keys, effectiveAlertID(active, storageKey))
 		}
 		t.Fatalf("expected alert with key %q not found; found keys: %v", expectedKey, keys)
 	}
@@ -1375,14 +1376,16 @@ func TestCheckBackupsVMIDCollisionNonMatchingNamespace(t *testing.T) {
 	defer m.mu.RUnlock()
 
 	// Should NOT have a guest-specific alert key
-	for key := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		key := effectiveAlertID(alert, storageKey)
 		if key == "backup-age-pve1-node1-100" || key == "backup-age-pve2-node2-100" {
 			t.Errorf("should not attribute ambiguous backup to a specific guest, but found key %q", key)
 		}
 	}
 
 	found := false
-	for id, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		id := effectiveAlertID(alert, storageKey)
 		if strings.HasPrefix(id, "backup-age-") {
 			found = true
 			if alert.Metadata == nil || alert.Metadata["rollupId"] != "ext:pbs-staging-100" {
@@ -1459,16 +1462,17 @@ func TestCheckBackupsVMIDCollisionNoNamespace(t *testing.T) {
 	defer m.mu.RUnlock()
 
 	// Should NOT have a guest-specific alert key
-	for key := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		key := effectiveAlertID(alert, storageKey)
 		if key == "backup-age-pve1-node1-100" || key == "backup-age-pve2-node2-100" {
 			t.Errorf("should not attribute ambiguous backup to a specific guest, but found key %q", key)
 		}
 	}
 
-	if _, exists := m.activeAlerts["backup-age-ext-pbs-nons-100"]; !exists {
+	if !testHasActiveAlert(t, m, "backup-age-ext-pbs-nons-100") {
 		var keys []string
-		for k := range m.activeAlerts {
-			keys = append(keys, k)
+		for storageKey, active := range m.activeAlerts {
+			keys = append(keys, effectiveAlertID(active, storageKey))
 		}
 		t.Fatalf("expected generic rollup-backed alert key %q, found keys: %v", "backup-age-ext-pbs-nons-100", keys)
 	}
@@ -1507,7 +1511,8 @@ func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 
 	m.mu.RLock()
 	found := false
-	for id, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		id := effectiveAlertID(alert, storageKey)
 		if strings.HasPrefix(id, "backup-age-") {
 			found = true
 			if alert.Level != AlertLevelCritical {
@@ -1559,7 +1564,8 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	for id := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		id := effectiveAlertID(alert, storageKey)
 		if strings.HasPrefix(id, "backup-age-") {
 			t.Fatalf("expected orphaned backup to be skipped, found alert %s", id)
 		}
@@ -1626,8 +1632,8 @@ func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
-	_, ignoredExists := m.activeAlerts["backup-age-"+sanitizeAlertKey(keyIgnored)]
-	_, allowedExists := m.activeAlerts["backup-age-"+sanitizeAlertKey(keyAllowed)]
+	_, ignoredExists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(keyIgnored))
+	_, allowedExists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(keyAllowed))
 	m.mu.RUnlock()
 
 	if ignoredExists {
@@ -1666,7 +1672,7 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected no state alert for ignored container")
 	}
 	if _, exists := m.dockerStateConfirm[resourceID]; exists {
@@ -1703,7 +1709,7 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 
 	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected service alert %s to be raised", alertID)
 	}
@@ -1718,7 +1724,7 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 	host.Services[0].RunningTasks = 4
 	m.CheckDockerHost(host)
 
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected service alert %s to be cleared when replicas restored", alertID)
 	}
 }
@@ -1800,7 +1806,7 @@ func TestDockerServiceAlertPreservesLastNotifiedWhenUnchanged(t *testing.T) {
 
 	resourceID := dockerServiceResourceID(host.ID, "svc-1", "web")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected service alert %s to be raised", alertID)
 	}
@@ -1811,7 +1817,7 @@ func TestDockerServiceAlertPreservesLastNotifiedWhenUnchanged(t *testing.T) {
 	// Same degraded state should keep LastNotified while refreshing state.
 	m.CheckDockerHost(host)
 
-	updated, exists := m.activeAlerts[alertID]
+	updated, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected service alert %s to remain active", alertID)
 	}
@@ -1910,7 +1916,7 @@ func TestDockerServiceUpdateStateAlert(t *testing.T) {
 
 	resourceID := dockerServiceResourceID(host.ID, "svc-update", "api")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected docker service alert %s to be raised", alertID)
 	}
@@ -1946,7 +1952,7 @@ func TestDockerContainerStateUsesDockerDefaults(t *testing.T) {
 
 	resourceID := dockerResourceID(host.ID, container.ID)
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected docker container state alert %s to be raised", alertID)
 	}
@@ -1979,7 +1985,7 @@ func TestDockerContainerStateRespectsDisableDefault(t *testing.T) {
 
 	resourceID := dockerResourceID(host.ID, container.ID)
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("did not expect docker container state alert when defaults disable connectivity")
 	}
 }
@@ -2009,7 +2015,7 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 
 	resourceID := dockerResourceID(hostID, containerID)
 	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected memory limit alert to be raised")
 	}
@@ -2038,7 +2044,7 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 
 	m.CheckDockerHost(hostLow)
 
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected memory limit alert to clear after usage dropped below hysteresis threshold")
 	}
 }
@@ -2078,7 +2084,7 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 
 	resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 	alertID := fmt.Sprintf("%s-%s", resourceID, "disk")
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected docker container disk alert %s to be raised", alertID)
 	}
@@ -2105,7 +2111,7 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 	host.Containers[0].WritableLayerBytes = int64(4 * gib)
 	m.CheckDockerHost(host)
 
-	if _, stillActive := m.activeAlerts[alertID]; stillActive {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected docker container disk alert %s to clear after usage dropped", alertID)
 	}
 }
@@ -2187,7 +2193,7 @@ func TestDockerServiceAlertUsesClampedCriticalGap(t *testing.T) {
 	resourceID := dockerServiceResourceID(host.ID, "svc-123", "api")
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
 
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
 		t.Fatalf("expected docker service alert %s to be raised", alertID)
 	}
@@ -2630,13 +2636,13 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if _, exists := m.activeAlerts[stateAlertID]; exists {
+	if testHasActiveAlert(t, m, stateAlertID) {
 		t.Fatalf("expected state alert cleared for ignored container")
 	}
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		t.Fatalf("expected health alert cleared for ignored container")
 	}
-	if _, exists := m.activeAlerts[restartAlertID]; exists {
+	if testHasActiveAlert(t, m, restartAlertID) {
 		t.Fatalf("expected restart alert cleared for ignored container")
 	}
 	if _, exists := m.dockerStateConfirm[resourceID]; exists {
@@ -2855,7 +2861,7 @@ func TestCheckDiskHealthSkipsSamsung980FalseAlerts(t *testing.T) {
 
 	m.mu.RLock()
 	healthAlertID := "disk-health-test-instance-pve-node1-/dev/nvme0n1"
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		m.mu.RUnlock()
 		t.Fatalf("expected no health alert for Samsung 980 with known firmware bug")
 	}
@@ -2867,7 +2873,7 @@ func TestCheckDiskHealthSkipsSamsung980FalseAlerts(t *testing.T) {
 
 	m.mu.RLock()
 	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/nvme0n1"
-	if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
+	if !testHasActiveAlert(t, m, wearoutAlertID) {
 		m.mu.RUnlock()
 		t.Fatalf("expected wearout alert to still work for Samsung 980")
 	}
@@ -2909,7 +2915,7 @@ func TestCheckDiskHealthClearsExistingSamsung980Alerts(t *testing.T) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, exists := m.activeAlerts[alertID]; exists {
+	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected existing Samsung 990 health alert to be cleared")
 	}
 }
@@ -2933,7 +2939,7 @@ func TestCheckDiskHealthHealthyDiskNoAlert(t *testing.T) {
 
 	m.mu.RLock()
 	healthAlertID := "disk-health-test-instance-pve-node1-/dev/sda"
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		m.mu.RUnlock()
 		t.Fatalf("expected no health alert for healthy disk with PASSED status")
 	}
@@ -2945,7 +2951,7 @@ func TestCheckDiskHealthHealthyDiskNoAlert(t *testing.T) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		t.Fatalf("expected no health alert for healthy disk with OK status")
 	}
 }
@@ -2971,7 +2977,7 @@ func TestCheckDiskHealthFailedDiskCreatesAlert(t *testing.T) {
 	defer m.mu.RUnlock()
 
 	healthAlertID := "disk-health-test-instance-pve-node1-/dev/sdb"
-	alert, exists := m.activeAlerts[healthAlertID]
+	alert, exists := testLookupActiveAlert(t, m, healthAlertID)
 	if !exists {
 		t.Fatalf("expected health alert to be created for failed disk")
 	}
@@ -3015,7 +3021,7 @@ func TestCheckDiskHealthRecoveryAlertCleared(t *testing.T) {
 
 	healthAlertID := "disk-health-test-instance-pve-node1-/dev/sdc"
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[healthAlertID]; !exists {
+	if !testHasActiveAlert(t, m, healthAlertID) {
 		m.mu.RUnlock()
 		t.Fatalf("expected health alert to be created")
 	}
@@ -3027,7 +3033,7 @@ func TestCheckDiskHealthRecoveryAlertCleared(t *testing.T) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		t.Fatalf("expected health alert to be cleared after recovery")
 	}
 }
@@ -3053,7 +3059,7 @@ func TestCheckDiskHealthLowWearoutCreatesAlert(t *testing.T) {
 	defer m.mu.RUnlock()
 
 	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/nvme1n1"
-	alert, exists := m.activeAlerts[wearoutAlertID]
+	alert, exists := testLookupActiveAlert(t, m, wearoutAlertID)
 	if !exists {
 		t.Fatalf("expected wearout alert to be created for disk with low life remaining")
 	}
@@ -3097,7 +3103,7 @@ func TestCheckDiskHealthWearoutAlertUpdatesOnSubsequentChecks(t *testing.T) {
 
 	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/nvme2n1"
 	m.mu.RLock()
-	alert, exists := m.activeAlerts[wearoutAlertID]
+	alert, exists := testLookupActiveAlert(t, m, wearoutAlertID)
 	if !exists {
 		m.mu.RUnlock()
 		t.Fatalf("expected wearout alert to be created")
@@ -3115,7 +3121,7 @@ func TestCheckDiskHealthWearoutAlertUpdatesOnSubsequentChecks(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	alert, exists = m.activeAlerts[wearoutAlertID]
+	alert, exists = testLookupActiveAlert(t, m, wearoutAlertID)
 	if !exists {
 		t.Fatalf("expected wearout alert to still exist")
 	}
@@ -3147,7 +3153,7 @@ func TestCheckDiskHealthWearoutRecoveryAlertCleared(t *testing.T) {
 
 	wearoutAlertID := "disk-wearout-test-instance-pve-node1-/dev/sdd"
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
+	if !testHasActiveAlert(t, m, wearoutAlertID) {
 		m.mu.RUnlock()
 		t.Fatalf("expected wearout alert to be created")
 	}
@@ -3159,7 +3165,7 @@ func TestCheckDiskHealthWearoutRecoveryAlertCleared(t *testing.T) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, exists := m.activeAlerts[wearoutAlertID]; exists {
+	if testHasActiveAlert(t, m, wearoutAlertID) {
 		t.Fatalf("expected wearout alert to be cleared after recovery")
 	}
 }
@@ -3184,7 +3190,7 @@ func TestCheckDiskHealthEmptyOrUnknownHealthNoAlert(t *testing.T) {
 	m.CheckDiskHealth("test-instance", "pve-node1", disk)
 
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		m.mu.RUnlock()
 		t.Fatalf("expected no health alert for disk with empty health status")
 	}
@@ -3195,7 +3201,7 @@ func TestCheckDiskHealthEmptyOrUnknownHealthNoAlert(t *testing.T) {
 	m.CheckDiskHealth("test-instance", "pve-node1", disk)
 
 	m.mu.RLock()
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		m.mu.RUnlock()
 		t.Fatalf("expected no health alert for disk with UNKNOWN health status")
 	}
@@ -3207,7 +3213,7 @@ func TestCheckDiskHealthEmptyOrUnknownHealthNoAlert(t *testing.T) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, exists := m.activeAlerts[healthAlertID]; exists {
+	if testHasActiveAlert(t, m, healthAlertID) {
 		t.Fatalf("expected no health alert for disk with lowercase unknown health status")
 	}
 }
@@ -3240,7 +3246,7 @@ func TestCheckHostCreatesSMARTDiskHealthAlertForAgentOnlyHost(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	alert, exists := m.activeAlerts["host-tower-host-disk-health-sda"]
+	alert, exists := testLookupActiveAlert(t, m, "host-tower-host-disk-health-sda")
 	if !exists {
 		t.Fatalf("expected SMART disk-health alert")
 	}
@@ -3280,7 +3286,7 @@ func TestCheckHostCreatesSMARTDiskWearoutAlertForAgentOnlyHost(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	alert, exists := m.activeAlerts["host-tower-host-disk-wearout-nvme0n1"]
+	alert, exists := testLookupActiveAlert(t, m, "host-tower-host-disk-wearout-nvme0n1")
 	if !exists {
 		t.Fatalf("expected SMART disk-wearout alert")
 	}
@@ -3318,7 +3324,7 @@ func TestCheckHostSMARTDiskHealthAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.CheckHost(host)
 
 	m.mu.RLock()
-	alert := m.activeAlerts["host-tower-host-disk-health-sda"]
+	alert := testRequireActiveAlert(t, m, "host-tower-host-disk-health-sda")
 	m.mu.RUnlock()
 
 	if alert == nil {
@@ -3360,7 +3366,7 @@ func TestCheckHostSkipsSMARTDiskRiskAlertsWhenLinkedToProxmoxNode(t *testing.T) 
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, exists := m.activeAlerts["host-tower-host-disk-health-sda"]; exists {
+	if testHasActiveAlert(t, m, "host-tower-host-disk-health-sda") {
 		t.Fatalf("expected no SMART disk-health alert for linked Proxmox host")
 	}
 }
@@ -3386,7 +3392,7 @@ func TestCheckHostCreatesUnraidStorageTopologyAlert(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	alert, exists := m.activeAlerts["host-tower-host-unraid-array"]
+	alert, exists := testLookupActiveAlert(t, m, "host-tower-host-unraid-array")
 	if !exists {
 		t.Fatalf("expected unraid storage-topology alert")
 	}
@@ -3420,7 +3426,7 @@ func TestCheckHostClearsUnraidStorageTopologyAlertOnRecovery(t *testing.T) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, exists := m.activeAlerts["host-tower-host-unraid-array"]; exists {
+	if testHasActiveAlert(t, m, "host-tower-host-unraid-array") {
 		t.Fatalf("expected unraid storage-topology alert to clear on recovery")
 	}
 }
@@ -3444,7 +3450,7 @@ func TestCheckHostUnraidStorageAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.CheckHost(host)
 
 	m.mu.RLock()
-	alert := m.activeAlerts["host-tower-host-unraid-array"]
+	alert := testRequireActiveAlert(t, m, "host-tower-host-unraid-array")
 	m.mu.RUnlock()
 
 	if alert == nil {
@@ -3638,7 +3644,7 @@ func TestReevaluateClearsDockerContainerAlertWhenOverrideDisabled(t *testing.T) 
 	}
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if exists {
 		t.Fatalf("expected docker container alert to be cleared when override is disabled")
@@ -3689,7 +3695,7 @@ func TestReevaluateClearsDockerContainerAlertWhenIgnoredPrefixAdded(t *testing.T
 	}
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if exists {
 		t.Fatalf("expected docker container alert to be cleared when ignored prefix is configured")
@@ -4934,7 +4940,7 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 		m.clearStorageOfflineAlert(storage)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts[alertID]
+		_, alertExists := testLookupActiveAlert(t, m, alertID)
 		_, confirmExists := m.offlineConfirmations[storage.ID]
 		m.mu.RUnlock()
 
@@ -5023,9 +5029,9 @@ func TestClearHostMetricAlerts(t *testing.T) {
 		m.clearHostMetricAlerts(hostID, "cpu", "disk")
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts[fmt.Sprintf("%s-cpu", resourceID)]
-		_, memExists := m.activeAlerts[fmt.Sprintf("%s-memory", resourceID)]
-		_, diskExists := m.activeAlerts[fmt.Sprintf("%s-disk", resourceID)]
+		_, cpuExists := testLookupActiveAlert(t, m, fmt.Sprintf("%s-cpu", resourceID))
+		_, memExists := testLookupActiveAlert(t, m, fmt.Sprintf("%s-memory", resourceID))
+		_, diskExists := testLookupActiveAlert(t, m, fmt.Sprintf("%s-disk", resourceID))
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -5056,9 +5062,9 @@ func TestClearHostMetricAlerts(t *testing.T) {
 		m.clearHostMetricAlerts(hostID) // No metrics specified
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts[fmt.Sprintf("%s-cpu", resourceID)]
-		_, memExists := m.activeAlerts[fmt.Sprintf("%s-memory", resourceID)]
-		_, diskExists := m.activeAlerts[fmt.Sprintf("%s-disk", resourceID)]
+		_, cpuExists := testLookupActiveAlert(t, m, fmt.Sprintf("%s-cpu", resourceID))
+		_, memExists := testLookupActiveAlert(t, m, fmt.Sprintf("%s-memory", resourceID))
+		_, diskExists := testLookupActiveAlert(t, m, fmt.Sprintf("%s-disk", resourceID))
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -5084,7 +5090,7 @@ func TestClearHostMetricAlerts(t *testing.T) {
 		m.clearHostMetricAlerts("", "cpu")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["agent:unknown-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "agent:unknown-cpu")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -5122,9 +5128,9 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m.clearHostDiskAlerts(hostID)
 
 		m.mu.RLock()
-		_, disk1Exists := m.activeAlerts["disk1-alert"]
-		_, disk2Exists := m.activeAlerts["disk2-alert"]
-		_, cpuExists := m.activeAlerts["cpu-alert"]
+		_, disk1Exists := testLookupActiveAlert(t, m, "disk1-alert")
+		_, disk2Exists := testLookupActiveAlert(t, m, "disk2-alert")
+		_, cpuExists := testLookupActiveAlert(t, m, "cpu-alert")
 		m.mu.RUnlock()
 
 		if disk1Exists {
@@ -5153,7 +5159,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m.clearHostDiskAlerts("")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["disk-alert"]
+		_, exists := testLookupActiveAlert(t, m, "disk-alert")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -5180,7 +5186,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m.clearHostDiskAlerts(hostID)
 
 		m.mu.RLock()
-		_, realExists := m.activeAlerts["real-alert"]
+		_, realExists := testLookupActiveAlert(t, m, "real-alert")
 		m.mu.RUnlock()
 
 		if realExists {
@@ -5202,7 +5208,7 @@ func TestClearHostDiskAlerts(t *testing.T) {
 		m.clearHostDiskAlerts("my-host")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["other-alert"]
+		_, exists := testLookupActiveAlert(t, m, "other-alert")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -5246,9 +5252,9 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m.cleanupHostDiskAlerts(host, seen)
 
 		m.mu.RLock()
-		_, sdaExists := m.activeAlerts["disk-sda"]
-		_, sdbExists := m.activeAlerts["disk-sdb"]
-		_, sdcExists := m.activeAlerts["disk-sdc"]
+		_, sdaExists := testLookupActiveAlert(t, m, "disk-sda")
+		_, sdbExists := testLookupActiveAlert(t, m, "disk-sdb")
+		_, sdcExists := testLookupActiveAlert(t, m, "disk-sdc")
 		m.mu.RUnlock()
 
 		if !sdaExists {
@@ -5277,7 +5283,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m.cleanupHostDiskAlerts(host, nil)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["disk-alert"]
+		_, exists := testLookupActiveAlert(t, m, "disk-alert")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -5306,7 +5312,7 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m.cleanupHostDiskAlerts(host, seen)
 
 		m.mu.RLock()
-		_, realExists := m.activeAlerts["real-alert"]
+		_, realExists := testLookupActiveAlert(t, m, "real-alert")
 		m.mu.RUnlock()
 
 		if realExists {
@@ -5337,8 +5343,8 @@ func TestCleanupHostDiskAlerts(t *testing.T) {
 		m.cleanupHostDiskAlerts(host, seen)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["cpu-alert"]
-		_, diskExists := m.activeAlerts["disk-alert"]
+		_, cpuExists := testLookupActiveAlert(t, m, "cpu-alert")
+		_, diskExists := testLookupActiveAlert(t, m, "disk-alert")
 		m.mu.RUnlock()
 
 		if !cpuExists {
@@ -5365,7 +5371,7 @@ func TestHandleDockerHostRemovedEmptyID(t *testing.T) {
 	m.HandleDockerHostRemoved(host)
 
 	m.mu.RLock()
-	_, alertExists := m.activeAlerts["docker-host-offline-host1"]
+	_, alertExists := testLookupActiveAlert(t, m, "docker-host-offline-host1")
 	_, countExists := m.dockerOfflineCount["host1"]
 	m.mu.RUnlock()
 
@@ -5396,7 +5402,7 @@ func TestHandleDockerHostOnline(t *testing.T) {
 		m.HandleDockerHostOnline(host)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts[alertID]
+		_, alertExists := testLookupActiveAlert(t, m, alertID)
 		_, countExists := m.dockerOfflineCount[host.ID]
 		m.mu.RUnlock()
 
@@ -5444,7 +5450,7 @@ func TestHandleDockerHostOnline(t *testing.T) {
 		m.HandleDockerHostOnline(host)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["docker-host-offline-other"]
+		_, alertExists := testLookupActiveAlert(t, m, "docker-host-offline-other")
 		_, countExists := m.dockerOfflineCount["other"]
 		m.mu.RUnlock()
 
@@ -5495,9 +5501,9 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 		m.cleanupDockerContainerAlerts(host, seen)
 
 		m.mu.RLock()
-		_, c1Exists := m.activeAlerts["container1-alert"]
-		_, c2Exists := m.activeAlerts["container2-alert"]
-		_, c3Exists := m.activeAlerts["container3-alert"]
+		_, c1Exists := testLookupActiveAlert(t, m, "container1-alert")
+		_, c2Exists := testLookupActiveAlert(t, m, "container2-alert")
+		_, c3Exists := testLookupActiveAlert(t, m, "container3-alert")
 		_, s1Exists := m.dockerStateConfirm[prefix+"container1"]
 		_, s2Exists := m.dockerStateConfirm[prefix+"container2"]
 		_, s3Exists := m.dockerStateConfirm[prefix+"container3"]
@@ -5542,7 +5548,7 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 		m.cleanupDockerContainerAlerts(host, seen)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["other-host-alert"]
+		_, exists := testLookupActiveAlert(t, m, "other-host-alert")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -5568,7 +5574,7 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 		m.cleanupDockerContainerAlerts(host, map[string]struct{}{})
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["to-clear"]
+		_, alertExists := testLookupActiveAlert(t, m, "to-clear")
 		_, stateExists := m.dockerStateConfirm[prefix+"container1"]
 		m.mu.RUnlock()
 
@@ -5796,7 +5802,7 @@ func TestHandleHostOnline(t *testing.T) {
 		m.HandleHostOnline(host)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts[alertID]
+		_, alertExists := testLookupActiveAlert(t, m, alertID)
 		_, confirmExists := m.offlineConfirmations[resourceKey]
 		m.mu.RUnlock()
 
@@ -5845,7 +5851,7 @@ func TestHandleHostOnline(t *testing.T) {
 		m.HandleHostOnline(host)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["host-offline-other"]
+		_, alertExists := testLookupActiveAlert(t, m, "host-offline-other")
 		_, confirmExists := m.offlineConfirmations[hostResourceID("other")]
 		m.mu.RUnlock()
 
@@ -5909,7 +5915,7 @@ func TestUnacknowledgeAlertSuccess(t *testing.T) {
 	}
 
 	// Verify alert state was updated
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	if alert.Acknowledged {
 		t.Error("expected Acknowledged to be false")
 	}
@@ -6052,13 +6058,13 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 		if len(m.activeAlerts) != 1 {
 			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
 		}
-		if _, exists := m.activeAlerts["cpu-alert-1"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert-1") {
 			t.Error("expected cpu-alert-1 to remain")
 		}
-		if _, exists := m.activeAlerts["backup-alert-1"]; exists {
+		if testHasActiveAlert(t, m, "backup-alert-1") {
 			t.Error("expected backup-alert-1 to be cleared")
 		}
-		if _, exists := m.activeAlerts["backup-alert-2"]; exists {
+		if testHasActiveAlert(t, m, "backup-alert-2") {
 			t.Error("expected backup-alert-2 to be cleared")
 		}
 	})
@@ -6084,7 +6090,7 @@ func TestClearBackupAlertsLocked(t *testing.T) {
 			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
 		}
 		// Nil entry should remain
-		if _, exists := m.activeAlerts["nil-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "nil-alert") {
 			t.Error("expected nil-alert entry to remain (nil check should skip it)")
 		}
 	})
@@ -6125,7 +6131,7 @@ func TestClearBackupAlerts(t *testing.T) {
 	if len(m.activeAlerts) != 1 {
 		t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
 	}
-	if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+	if !testHasActiveAlert(t, m, "cpu-alert") {
 		t.Error("expected cpu-alert to remain")
 	}
 }
@@ -6162,10 +6168,10 @@ func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
 		if len(m.activeAlerts) != 2 {
 			t.Errorf("expected 2 alerts remaining, got %d", len(m.activeAlerts))
 		}
-		if _, exists := m.activeAlerts["snap-inst1"]; exists {
+		if testHasActiveAlert(t, m, "snap-inst1") {
 			t.Error("expected snap-inst1 to be cleared")
 		}
-		if _, exists := m.activeAlerts["snap-inst2"]; !exists {
+		if !testHasActiveAlert(t, m, "snap-inst2") {
 			t.Error("expected snap-inst2 to remain")
 		}
 	})
@@ -6199,7 +6205,7 @@ func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
 		if len(m.activeAlerts) != 1 {
 			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
 		}
-		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
 	})
@@ -6224,7 +6230,7 @@ func TestClearSnapshotAlertsForInstanceLocked(t *testing.T) {
 		if len(m.activeAlerts) != 1 {
 			t.Errorf("expected 1 alert remaining, got %d", len(m.activeAlerts))
 		}
-		if _, exists := m.activeAlerts["nil-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "nil-alert") {
 			t.Error("expected nil-alert entry to remain")
 		}
 	})
@@ -6272,14 +6278,14 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Node alerts should be cleared
-		if _, exists := m.activeAlerts["node-offline-node1"]; exists {
+		if testHasActiveAlert(t, m, "node-offline-node1") {
 			t.Error("expected node-offline-node1 to be cleared")
 		}
-		if _, exists := m.activeAlerts["node-offline-node2"]; exists {
+		if testHasActiveAlert(t, m, "node-offline-node2") {
 			t.Error("expected node-offline-node2 to be cleared")
 		}
 		// Non-node alert should remain
-		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
 		// nodeOfflineCount should be reset
@@ -6306,11 +6312,11 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// PBS alert should be cleared
-		if _, exists := m.activeAlerts["pbs-offline-pbs1"]; exists {
+		if testHasActiveAlert(t, m, "pbs-offline-pbs1") {
 			t.Error("expected pbs-offline-pbs1 to be cleared")
 		}
 		// Non-PBS alert should remain
-		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
 		// offlineConfirmations for PBS should be removed
@@ -6337,11 +6343,11 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Guest alert should be cleared
-		if _, exists := m.activeAlerts["guest-powered-off-vm1"]; exists {
+		if testHasActiveAlert(t, m, "guest-powered-off-vm1") {
 			t.Error("expected guest-powered-off-vm1 to be cleared")
 		}
 		// Non-guest alert should remain
-		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
 		// offlineConfirmations for guest should be removed
@@ -6368,11 +6374,11 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Docker host alert should be cleared
-		if _, exists := m.activeAlerts["docker-host-offline-host1"]; exists {
+		if testHasActiveAlert(t, m, "docker-host-offline-host1") {
 			t.Error("expected docker-host-offline-host1 to be cleared")
 		}
 		// Non-docker host alert should remain
-		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
 		// dockerOfflineCount should be reset
@@ -6402,14 +6408,14 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Docker container alerts should be cleared
-		if _, exists := m.activeAlerts["docker-container-unhealthy-c1"]; exists {
+		if testHasActiveAlert(t, m, "docker-container-unhealthy-c1") {
 			t.Error("expected docker-container-unhealthy-c1 to be cleared")
 		}
-		if _, exists := m.activeAlerts["docker-container-exited-c2"]; exists {
+		if testHasActiveAlert(t, m, "docker-container-exited-c2") {
 			t.Error("expected docker-container-exited-c2 to be cleared")
 		}
 		// Non-container alert should remain
-		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
 		// Tracking state should be reset
@@ -6440,11 +6446,11 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Docker service alert should be cleared
-		if _, exists := m.activeAlerts["docker-service-unhealthy-svc1"]; exists {
+		if testHasActiveAlert(t, m, "docker-service-unhealthy-svc1") {
 			t.Error("expected docker-service-unhealthy-svc1 to be cleared")
 		}
 		// Non-service alert should remain
-		if _, exists := m.activeAlerts["cpu-alert"]; !exists {
+		if !testHasActiveAlert(t, m, "cpu-alert") {
 			t.Error("expected cpu-alert to remain")
 		}
 	})
@@ -6517,7 +6523,7 @@ func TestHandleHostOffline(t *testing.T) {
 		m.HandleHostOffline(host)
 
 		// Alert should be cleared and confirmations removed
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Error("expected alert to be cleared")
 		}
 		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
@@ -6542,7 +6548,7 @@ func TestHandleHostOffline(t *testing.T) {
 		m.HandleHostOffline(host)
 
 		// Alert should be cleared and confirmations removed
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Error("expected alert to be cleared")
 		}
 		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
@@ -6580,7 +6586,7 @@ func TestHandleHostOffline(t *testing.T) {
 		m.HandleHostOffline(host)
 
 		// LastSeen should be updated
-		alert := m.activeAlerts[alertID]
+		alert := testRequireActiveAlert(t, m, alertID)
 		if alert.LastSeen.Before(time.Now().Add(-1 * time.Minute)) {
 			t.Errorf("expected LastSeen to be updated to recent time, got %v", alert.LastSeen)
 		}
@@ -6633,7 +6639,7 @@ func TestHandleHostOffline(t *testing.T) {
 
 		// Alert should now be created
 		alertID := "host-offline-host1"
-		alert, exists := m.activeAlerts[alertID]
+		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected alert to be created after 3 confirmations")
 		}
@@ -6683,7 +6689,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Alert should remain (skipped due to ID format)
-		if _, exists := m.activeAlerts["singlepart"]; !exists {
+		if !testHasActiveAlert(t, m, "singlepart") {
 			t.Error("expected singlepart alert to remain")
 		}
 	})
@@ -6705,7 +6711,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// PMG alert should be resolved
-		if _, exists := m.activeAlerts["pmg-queue-cpu"]; exists {
+		if testHasActiveAlert(t, m, "pmg-queue-cpu") {
 			t.Error("expected PMG alert to be resolved")
 		}
 	})
@@ -6731,7 +6737,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Agent alert should be resolved
-		if _, exists := m.activeAlerts["host-1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "host-1-cpu") {
 			t.Error("expected Agent alert to be resolved")
 		}
 	})
@@ -6751,7 +6757,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Docker host offline alert should remain (skipped)
-		if _, exists := m.activeAlerts["docker-host-1-offline"]; !exists {
+		if !testHasActiveAlert(t, m, "docker-host-1-offline") {
 			t.Error("expected docker-host-offline alert to remain")
 		}
 	})
@@ -6777,7 +6783,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Dockerhost alert should be resolved
-		if _, exists := m.activeAlerts["docker-host-1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "docker-host-1-cpu") {
 			t.Error("expected dockerhost alert to be resolved")
 		}
 	})
@@ -6801,7 +6807,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Node alert should be resolved
-		if _, exists := m.activeAlerts["node1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "node1-cpu") {
 			t.Error("expected Node alert to be resolved")
 		}
 	})
@@ -6825,7 +6831,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Storage alert should be resolved
-		if _, exists := m.activeAlerts["storage1-usage"]; exists {
+		if testHasActiveAlert(t, m, "storage1-usage") {
 			t.Error("expected Storage alert to be resolved")
 		}
 	})
@@ -6849,7 +6855,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// PBS alert should be resolved
-		if _, exists := m.activeAlerts["pbs1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "pbs1-cpu") {
 			t.Error("expected PBS alert to be resolved")
 		}
 	})
@@ -6875,7 +6881,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Guest alert should be resolved
-		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "guest1-cpu") {
 			t.Error("expected Guest alert to be resolved")
 		}
 	})
@@ -6901,7 +6907,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Alert should be resolved due to disabled override
-		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "guest1-cpu") {
 			t.Error("expected alert with disabled override to be resolved")
 		}
 	})
@@ -6926,7 +6932,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Alert should be resolved (value 70 < clear 75)
-		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "guest1-cpu") {
 			t.Error("expected alert below clear threshold to be resolved")
 		}
 	})
@@ -6951,7 +6957,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		m.mu.Unlock()
 
 		// Alert should be resolved (value 85 < trigger 90)
-		if _, exists := m.activeAlerts["guest1-cpu"]; exists {
+		if testHasActiveAlert(t, m, "guest1-cpu") {
 			t.Error("expected alert between thresholds to be resolved")
 		}
 	})
@@ -6972,7 +6978,7 @@ func TestHandleHostRemoved(t *testing.T) {
 
 		// Alert should still exist
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host-offline-host1"]
+		_, exists := testLookupActiveAlert(t, m, "host-offline-host1")
 		m.mu.RUnlock()
 		if !exists {
 			t.Error("expected alert to remain when empty host ID passed")
@@ -6994,7 +7000,7 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["host-offline-host1"]
+		_, alertExists := testLookupActiveAlert(t, m, "host-offline-host1")
 		_, confirmExists := m.offlineConfirmations[hostResourceID("host1")]
 		m.mu.RUnlock()
 
@@ -7025,8 +7031,8 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["agent:host1-cpu"]
-		_, memExists := m.activeAlerts["agent:host1-memory"]
+		_, cpuExists := testLookupActiveAlert(t, m, "agent:host1-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "agent:host1-memory")
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -7056,8 +7062,8 @@ func TestHandleHostRemoved(t *testing.T) {
 		m.HandleHostRemoved(models.Host{ID: "host1", Hostname: "testhost"})
 
 		m.mu.RLock()
-		_, sda := m.activeAlerts["agent:host1/disk:sda-usage"]
-		_, sdb := m.activeAlerts["agent:host1/disk:sdb-usage"]
+		_, sda := testLookupActiveAlert(t, m, "agent:host1/disk:sda-usage")
+		_, sdb := testLookupActiveAlert(t, m, "agent:host1/disk:sdb-usage")
 		m.mu.RUnlock()
 
 		if sda {
@@ -7140,7 +7146,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "guest1-cpu")
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected alert to be cleared when threshold is nil")
@@ -7163,7 +7169,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest1-memory"]
+		_, exists := testLookupActiveAlert(t, m, "guest1-memory")
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected alert to be cleared when trigger is 0")
@@ -7186,7 +7192,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "guest1-cpu")
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected alert to be cleared when value below clear threshold")
@@ -7209,7 +7215,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest1-disk"]
+		_, exists := testLookupActiveAlert(t, m, "guest1-disk")
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected alert to be cleared when value below trigger")
@@ -7232,7 +7238,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "guest1-cpu")
 		m.mu.RUnlock()
 		if !exists {
 			t.Error("expected alert to remain when value above thresholds")
@@ -7290,7 +7296,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["guest1-cpu"]
+		_, alertExists := testLookupActiveAlert(t, m, "guest1-cpu")
 		_, pendingExists := m.pendingAlerts["guest1-cpu"]
 		m.mu.RUnlock()
 		if alertExists {
@@ -7318,7 +7324,7 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "guest1-cpu")
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected alert to be cleared when value below trigger (used as clear)")
@@ -7347,8 +7353,8 @@ func TestReevaluateGuestAlert(t *testing.T) {
 		m.ReevaluateGuestAlert(nil, "guest1")
 
 		m.mu.RLock()
-		_, guest1Exists := m.activeAlerts["guest1-cpu"]
-		_, guest2Exists := m.activeAlerts["guest2-cpu"]
+		_, guest1Exists := testLookupActiveAlert(t, m, "guest1-cpu")
+		_, guest2Exists := testLookupActiveAlert(t, m, "guest2-cpu")
 		m.mu.RUnlock()
 
 		if guest1Exists {
@@ -7391,7 +7397,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["docker-host-offline-docker1"]
+		_, exists := testLookupActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if exists {
 			t.Error("expected no alert when alerts are disabled")
@@ -7411,7 +7417,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["docker-host-offline-docker1"]
+		_, alertExists := testLookupActiveAlert(t, m, "docker-host-offline-docker1")
 		_, countExists := m.dockerOfflineCount["docker1"]
 		m.mu.RUnlock()
 		if alertExists {
@@ -7437,7 +7443,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["docker-host-offline-docker1"]
+		_, alertExists := testLookupActiveAlert(t, m, "docker-host-offline-docker1")
 		_, countExists := m.dockerOfflineCount["docker1"]
 		m.mu.RUnlock()
 		if alertExists {
@@ -7463,7 +7469,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(models.DockerHost{ID: "docker1", DisplayName: "Docker Host 1"})
 
 		m.mu.RLock()
-		alert := m.activeAlerts["docker-host-offline-docker1"]
+		alert := testRequireActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if alert == nil {
 			t.Fatal("expected alert to exist")
@@ -7486,7 +7492,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(host)
 		m.mu.RLock()
 		count1 := m.dockerOfflineCount["docker1"]
-		alert1 := m.activeAlerts["docker-host-offline-docker1"]
+		alert1, _ := testLookupActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if count1 != 1 {
 			t.Errorf("expected count 1, got %d", count1)
@@ -7499,7 +7505,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(host)
 		m.mu.RLock()
 		count2 := m.dockerOfflineCount["docker1"]
-		alert2 := m.activeAlerts["docker-host-offline-docker1"]
+		alert2, _ := testLookupActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if count2 != 2 {
 			t.Errorf("expected count 2, got %d", count2)
@@ -7512,7 +7518,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(host)
 		m.mu.RLock()
 		count3 := m.dockerOfflineCount["docker1"]
-		alert3 := m.activeAlerts["docker-host-offline-docker1"]
+		alert3 := testRequireActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 		if count3 != 3 {
 			t.Errorf("expected count 3, got %d", count3)
@@ -7546,7 +7552,7 @@ func TestHandleDockerHostOffline(t *testing.T) {
 		m.HandleDockerHostOffline(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["docker-host-offline-docker1"]
+		alert := testRequireActiveAlert(t, m, "docker-host-offline-docker1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -7891,7 +7897,7 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 		m.clearNodeOfflineAlert(node)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, alertExists := testLookupActiveAlert(t, m, "node-offline-node1")
 		_, countExists := m.nodeOfflineCount["node1"]
 		m.mu.RUnlock()
 
@@ -8092,7 +8098,7 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 		m.clearPBSOfflineAlert(pbs)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		_, countExists := m.offlineConfirmations["pbs1"]
 		m.mu.RUnlock()
 
@@ -8175,7 +8181,7 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		m.clearPMGOfflineAlert(pmg)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		_, countExists := m.offlineConfirmations["pmg1"]
 		m.mu.RUnlock()
 
@@ -8219,7 +8225,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		m.checkNodeOffline(node)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, alertExists := testLookupActiveAlert(t, m, "node-offline-node1")
 		_, countExists := m.nodeOfflineCount["node1"]
 		m.mu.RUnlock()
 
@@ -8247,7 +8253,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		m.checkNodeOffline(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node-offline-node1"]
+		alert := testRequireActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8271,7 +8277,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		m.checkNodeOffline(node)
 		m.mu.RLock()
 		count1 := m.nodeOfflineCount["node1"]
-		alert1 := m.activeAlerts["node-offline-node1"]
+		alert1, _ := testLookupActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 		if count1 != 1 {
 			t.Errorf("expected count 1, got %d", count1)
@@ -8284,7 +8290,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		m.checkNodeOffline(node)
 		m.mu.RLock()
 		count2 := m.nodeOfflineCount["node1"]
-		alert2 := m.activeAlerts["node-offline-node1"]
+		alert2, _ := testLookupActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 		if count2 != 2 {
 			t.Errorf("expected count 2, got %d", count2)
@@ -8312,7 +8318,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		m.checkNodeOffline(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node-offline-node1"]
+		alert := testRequireActiveAlert(t, m, "node-offline-node1")
 		count := m.nodeOfflineCount["node1"]
 		m.mu.RUnlock()
 
@@ -8375,7 +8381,7 @@ func TestCheckPBSOffline(t *testing.T) {
 		m.checkPBSOffline(pbs)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -8397,7 +8403,7 @@ func TestCheckPBSOffline(t *testing.T) {
 		m.checkPBSOffline(pbs)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -8417,7 +8423,7 @@ func TestCheckPBSOffline(t *testing.T) {
 
 		m.mu.RLock()
 		count := m.offlineConfirmations["pbs1"]
-		_, alertExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if count != 2 {
@@ -8439,7 +8445,7 @@ func TestCheckPBSOffline(t *testing.T) {
 		m.checkPBSOffline(pbs)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pbs-offline-pbs1"]
+		alert := testRequireActiveAlert(t, m, "pbs-offline-pbs1")
 		count := m.offlineConfirmations["pbs1"]
 		m.mu.RUnlock()
 
@@ -8473,7 +8479,7 @@ func TestCheckPBSOffline(t *testing.T) {
 		m.checkPBSOffline(pbs)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pbs-offline-pbs1"]
+		alert := testRequireActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8502,7 +8508,7 @@ func TestCheckPMGOffline(t *testing.T) {
 		m.checkPMGOffline(pmg)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -8524,7 +8530,7 @@ func TestCheckPMGOffline(t *testing.T) {
 		m.checkPMGOffline(pmg)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -8544,7 +8550,7 @@ func TestCheckPMGOffline(t *testing.T) {
 
 		m.mu.RLock()
 		count := m.offlineConfirmations["pmg1"]
-		_, alertExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, alertExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if count != 2 {
@@ -8566,7 +8572,7 @@ func TestCheckPMGOffline(t *testing.T) {
 		m.checkPMGOffline(pmg)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg-offline-pmg1"]
+		alert := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
 		count := m.offlineConfirmations["pmg1"]
 		m.mu.RUnlock()
 
@@ -8600,7 +8606,7 @@ func TestCheckPMGOffline(t *testing.T) {
 		m.checkPMGOffline(pmg)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg-offline-pmg1"]
+		alert := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8810,7 +8816,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-queue-total"]
+		alert := testRequireActiveAlert(t, m, "pmg1-queue-total")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8844,7 +8850,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-queue-total"]
+		alert := testRequireActiveAlert(t, m, "pmg1-queue-total")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8878,7 +8884,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-queue-deferred"]
+		alert := testRequireActiveAlert(t, m, "pmg1-queue-deferred")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8912,7 +8918,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-queue-deferred"]
+		alert := testRequireActiveAlert(t, m, "pmg1-queue-deferred")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8943,7 +8949,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-queue-hold"]
+		alert := testRequireActiveAlert(t, m, "pmg1-queue-hold")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -8977,7 +8983,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-queue-hold"]
+		alert := testRequireActiveAlert(t, m, "pmg1-queue-hold")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9017,7 +9023,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-queue-total"]
+		alert := testRequireActiveAlert(t, m, "pmg1-queue-total")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9057,7 +9063,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pmg1-queue-total"]
+		_, exists := testLookupActiveAlert(t, m, "pmg1-queue-total")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9085,7 +9091,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 		m.checkPMGQueueDepths(pmg, defaults)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pmg1-queue-total"]
+		_, exists := testLookupActiveAlert(t, m, "pmg1-queue-total")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9113,7 +9119,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pmg1-oldest-message"]
+		_, exists := testLookupActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9144,7 +9150,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pmg1-oldest-message"]
+		_, exists := testLookupActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9172,7 +9178,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-oldest-message"]
+		alert := testRequireActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9208,7 +9214,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-oldest-message"]
+		alert := testRequireActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9245,7 +9251,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pmg1-oldest-message"]
+		_, exists := testLookupActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9274,7 +9280,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-oldest-message"]
+		alert := testRequireActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9314,7 +9320,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-oldest-message"]
+		alert := testRequireActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9351,7 +9357,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		m.checkPMGOldestMessage(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-oldest-message"]
+		alert := testRequireActiveAlert(t, m, "pmg1-oldest-message")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9380,7 +9386,7 @@ func TestCheckStorageOffline(t *testing.T) {
 
 		m.mu.RLock()
 		confirmCount := m.offlineConfirmations["local-lvm"]
-		_, alertExists := m.activeAlerts["storage-offline-local-lvm"]
+		_, alertExists := testLookupActiveAlert(t, m, "storage-offline-local-lvm")
 		m.mu.RUnlock()
 
 		if confirmCount != 1 {
@@ -9408,7 +9414,7 @@ func TestCheckStorageOffline(t *testing.T) {
 		m.checkStorageOffline(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["storage-offline-local-lvm"]
+		alert := testRequireActiveAlert(t, m, "storage-offline-local-lvm")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9450,7 +9456,7 @@ func TestCheckStorageOffline(t *testing.T) {
 		m.checkStorageOffline(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["storage-offline-local-lvm"]
+		alert := testRequireActiveAlert(t, m, "storage-offline-local-lvm")
 		m.mu.RUnlock()
 
 		if !alert.LastSeen.After(oldTime) {
@@ -9479,7 +9485,7 @@ func TestCheckStorageOffline(t *testing.T) {
 		m.checkStorageOffline(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["storage-offline-local-lvm"]
+		_, exists := testLookupActiveAlert(t, m, "storage-offline-local-lvm")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9509,7 +9515,7 @@ func TestCheckStorageOffline(t *testing.T) {
 		m.checkStorageOffline(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["storage-offline-local-lvm"]
+		_, exists := testLookupActiveAlert(t, m, "storage-offline-local-lvm")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9529,7 +9535,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 
 		m.mu.RLock()
 		confirmCount := m.offlineConfirmations["vm100"]
-		_, alertExists := m.activeAlerts["guest-powered-off-vm100"]
+		_, alertExists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if confirmCount != 1 {
@@ -9550,7 +9556,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["guest-powered-off-vm100"]
+		alert := testRequireActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9583,7 +9589,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["guest-powered-off-vm100"]
+		alert := testRequireActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if !alert.LastSeen.After(oldTime) {
@@ -9601,7 +9607,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", true)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["guest-powered-off-vm100"]
+		alert := testRequireActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9631,7 +9637,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["guest-powered-off-vm100"]
+		_, alertExists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
 		_, confirmExists := m.offlineConfirmations["vm100"]
 		m.mu.RUnlock()
 
@@ -9658,7 +9664,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest-powered-off-vm100"]
+		_, exists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9682,7 +9688,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["guest-powered-off-vm100"]
+		alert := testRequireActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9707,7 +9713,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("vm100", "TestVM", "pve-node1", "pve-instance", "VM", false)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["guest-powered-off-vm100"]
+		alert := testRequireActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9728,7 +9734,7 @@ func TestCheckGuestPoweredOff(t *testing.T) {
 		m.checkGuestPoweredOff("ct200", "TestContainer", "pve-node1", "pve-instance", "Container", false)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["guest-powered-off-ct200"]
+		alert := testRequireActiveAlert(t, m, "guest-powered-off-ct200")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9763,7 +9769,7 @@ func TestCleanup(t *testing.T) {
 		m.Cleanup(1 * time.Hour)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["old-alert"]
+		alert := testRequireActiveAlert(t, m, "old-alert")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -9794,7 +9800,7 @@ func TestCleanup(t *testing.T) {
 		m.Cleanup(1 * time.Hour)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["ack-alert"]
+		_, exists := testLookupActiveAlert(t, m, "ack-alert")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9820,7 +9826,7 @@ func TestCleanup(t *testing.T) {
 		m.Cleanup(1 * time.Hour)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["old-unack-alert"]
+		_, exists := testLookupActiveAlert(t, m, "old-unack-alert")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9844,7 +9850,7 @@ func TestCleanup(t *testing.T) {
 		m.Cleanup(1 * time.Hour)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["ack-fallback"]
+		_, exists := testLookupActiveAlert(t, m, "ack-fallback")
 		m.mu.RUnlock()
 
 		if exists {
@@ -9871,7 +9877,7 @@ func TestCleanup(t *testing.T) {
 		m.Cleanup(1 * time.Hour)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["ack-active"]
+		_, exists := testLookupActiveAlert(t, m, "ack-active")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -10139,7 +10145,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["test-alert"]
+		alert := testRequireActiveAlert(t, m, "test-alert")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 0 {
@@ -10168,7 +10174,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["global-disabled-alert"]
+		alert := testRequireActiveAlert(t, m, "global-disabled-alert")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 0 {
@@ -10197,7 +10203,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pending-alert"]
+		alert := testRequireActiveAlert(t, m, "pending-alert")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 0 {
@@ -10226,7 +10232,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["snoozed-alert"]
+		alert := testRequireActiveAlert(t, m, "snoozed-alert")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 0 {
@@ -10256,7 +10262,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["ack-alert"]
+		alert := testRequireActiveAlert(t, m, "ack-alert")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 0 {
@@ -10286,7 +10292,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["escalate-alert"]
+		alert := testRequireActiveAlert(t, m, "escalate-alert")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 1 {
@@ -10319,7 +10325,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["multi-escalate"]
+		alert := testRequireActiveAlert(t, m, "multi-escalate")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 2 {
@@ -10352,7 +10358,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["already-escalated"]
+		alert := testRequireActiveAlert(t, m, "already-escalated")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 1 {
@@ -10384,7 +10390,7 @@ func TestCheckEscalations(t *testing.T) {
 		m.checkEscalations()
 
 		m.mu.RLock()
-		alert := m.activeAlerts["recent-alert"]
+		alert := testRequireActiveAlert(t, m, "recent-alert")
 		m.mu.RUnlock()
 
 		if alert.LastEscalation != 0 {
@@ -10421,8 +10427,8 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		m.mu.RLock()
-		_, oldExists := m.activeAlerts["alert-old-node"]
-		_, validExists := m.activeAlerts["alert-valid-node"]
+		_, oldExists := testLookupActiveAlert(t, m, "alert-old-node")
+		_, validExists := testLookupActiveAlert(t, m, "alert-valid-node")
 		m.mu.RUnlock()
 
 		if oldExists {
@@ -10455,8 +10461,8 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 		m.CleanupAlertsForNodes(existingNodes)
 
 		m.mu.RLock()
-		_, dockerExists := m.activeAlerts["docker-container-state"]
-		_, dockerResourceExists := m.activeAlerts["alert-with-docker-resource"]
+		_, dockerExists := testLookupActiveAlert(t, m, "docker-container-state")
+		_, dockerResourceExists := testLookupActiveAlert(t, m, "alert-with-docker-resource")
 		m.mu.RUnlock()
 
 		if !dockerExists {
@@ -10488,8 +10494,8 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 		m.CleanupAlertsForNodes(existingNodes)
 
 		m.mu.RLock()
-		_, pbsExists := m.activeAlerts["pbs-offline-test"]
-		_, pbsTypeExists := m.activeAlerts["pbs-backup-alert"]
+		_, pbsExists := testLookupActiveAlert(t, m, "pbs-offline-test")
+		_, pbsTypeExists := testLookupActiveAlert(t, m, "pbs-backup-alert")
 		m.mu.RUnlock()
 
 		if !pbsExists {
@@ -10520,7 +10526,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["empty-node-alert"]
+		_, exists := testLookupActiveAlert(t, m, "empty-node-alert")
 		m.mu.RUnlock()
 
 		if exists {
@@ -10548,7 +10554,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 		m.CleanupAlertsForNodes(existingNodes)
 
 		m.mu.RLock()
-		_, validExists := m.activeAlerts["valid-alert"]
+		_, validExists := testLookupActiveAlert(t, m, "valid-alert")
 		m.mu.RUnlock()
 
 		if !validExists {
@@ -10627,7 +10633,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["zfs-pool-state-local-zfs"]
+		_, exists := testLookupActiveAlert(t, m, "zfs-pool-state-local-zfs")
 		m.mu.RUnlock()
 
 		if exists {
@@ -10653,7 +10659,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-pool-state-local-zfs"]
+		alert := testRequireActiveAlert(t, m, "zfs-pool-state-local-zfs")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -10684,7 +10690,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-pool-state-local-zfs"]
+		alert := testRequireActiveAlert(t, m, "zfs-pool-state-local-zfs")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -10718,7 +10724,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-pool-state-local-zfs"]
+		alert := testRequireActiveAlert(t, m, "zfs-pool-state-local-zfs")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -10754,7 +10760,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["zfs-pool-state-local-zfs"]
+		_, exists := testLookupActiveAlert(t, m, "zfs-pool-state-local-zfs")
 		m.mu.RUnlock()
 
 		if exists {
@@ -10782,7 +10788,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		alert := testRequireActiveAlert(t, m, "zfs-pool-errors-local-zfs")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -10831,7 +10837,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		alert := testRequireActiveAlert(t, m, "zfs-pool-errors-local-zfs")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -10883,7 +10889,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		alert := testRequireActiveAlert(t, m, "zfs-pool-errors-local-zfs")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -10923,7 +10929,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["zfs-pool-errors-local-zfs"]
+		_, exists := testLookupActiveAlert(t, m, "zfs-pool-errors-local-zfs")
 		m.mu.RUnlock()
 
 		if exists {
@@ -10951,7 +10957,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-device-local-zfs-sda"]
+		alert := testRequireActiveAlert(t, m, "zfs-device-local-zfs-sda")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -10982,7 +10988,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["zfs-device-local-zfs-sda"]
+		alert := testRequireActiveAlert(t, m, "zfs-device-local-zfs-sda")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11025,7 +11031,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["zfs-device-local-zfs-sda"]
+		_, exists := testLookupActiveAlert(t, m, "zfs-device-local-zfs-sda")
 		m.mu.RUnlock()
 
 		if exists {
@@ -11053,7 +11059,7 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		m.checkZFSPoolHealth(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["zfs-device-local-zfs-sdb"]
+		_, exists := testLookupActiveAlert(t, m, "zfs-device-local-zfs-sdb")
 		m.mu.RUnlock()
 
 		if exists {
@@ -11138,7 +11144,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-node1-queue-total"]
+		alert := testRequireActiveAlert(t, m, "pmg1-node1-queue-total")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11172,7 +11178,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-node1-queue-total"]
+		alert := testRequireActiveAlert(t, m, "pmg1-node1-queue-total")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11203,7 +11209,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-node1-queue-deferred"]
+		alert := testRequireActiveAlert(t, m, "pmg1-node1-queue-deferred")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11234,7 +11240,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-node1-queue-hold"]
+		alert := testRequireActiveAlert(t, m, "pmg1-node1-queue-hold")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11265,7 +11271,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-node1-oldest-message"]
+		alert := testRequireActiveAlert(t, m, "pmg1-node1-oldest-message")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11304,7 +11310,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pmg1-node1-queue-total"]
+		_, exists := testLookupActiveAlert(t, m, "pmg1-node1-queue-total")
 		m.mu.RUnlock()
 
 		if exists {
@@ -11334,7 +11340,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-node3-queue-total"]
+		alert := testRequireActiveAlert(t, m, "pmg1-node3-queue-total")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11401,7 +11407,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		m.checkPMGNodeQueues(pmg, defaults)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-node1-queue-total"]
+		alert := testRequireActiveAlert(t, m, "pmg1-node1-queue-total")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -11442,7 +11448,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for healthy container")
 		}
 	})
@@ -11469,7 +11475,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with empty health")
 		}
 	})
@@ -11496,7 +11502,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with none health")
 		}
 	})
@@ -11523,7 +11529,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for starting container")
 		}
 	})
@@ -11550,7 +11556,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-		alert, exists := m.activeAlerts[alertID]
+		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected health alert for unhealthy container")
 		}
@@ -11590,7 +11596,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-		alert, exists := m.activeAlerts[alertID]
+		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected health alert for degraded container")
 		}
@@ -11625,7 +11631,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; !exists {
+		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected health alert to be raised")
 		}
 
@@ -11647,7 +11653,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostHealthy)
 
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected health alert to be cleared when container became healthy")
 		}
 	})
@@ -11676,7 +11682,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for running container")
 		}
 	})
@@ -11703,7 +11709,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for container with exit code 1")
 		}
 	})
@@ -11732,7 +11738,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
-		alert, exists := m.activeAlerts[alertID]
+		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected OOM alert for container with exit code 137")
 		}
@@ -11772,7 +11778,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
-		alert, exists := m.activeAlerts[alertID]
+		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected OOM alert for dead container with exit code 137")
 		}
@@ -11807,7 +11813,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
-		alert1, exists := m.activeAlerts[alertID]
+		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected OOM alert on first check")
 		}
@@ -11816,7 +11822,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		// Second check with same exit code - should not create new alert
 		m.CheckDockerHost(host)
 
-		alert2, exists := m.activeAlerts[alertID]
+		alert2, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected OOM alert to still exist on second check")
 		}
@@ -11851,7 +11857,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; !exists {
+		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
 		}
 
@@ -11873,7 +11879,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostRunning)
 
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be cleared when container started running")
 		}
 	})
@@ -11904,7 +11910,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; !exists {
+		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
 		}
 
@@ -11926,7 +11932,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostNormalExit)
 
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be cleared when container exited with different code")
 		}
 	})
@@ -11955,7 +11961,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert on first check (just initializes tracking)")
 		}
 
@@ -12003,7 +12009,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert for stable container")
 		}
 	})
@@ -12044,7 +12050,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert when restarts <= threshold")
 		}
 
@@ -12090,7 +12096,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
-		alert, exists := m.activeAlerts[alertID]
+		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected restart loop alert when restarts > threshold")
 		}
@@ -12155,7 +12161,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		m.CheckDockerHost(host)
 
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
-		if _, exists := m.activeAlerts[alertID]; !exists {
+		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected restart loop alert to be raised initially")
 		}
 
@@ -12173,7 +12179,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// Check again with same restart count - old restarts should be cleaned up
 		m.CheckDockerHost(host)
 
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected restart loop alert to be cleared after window passes")
 		}
 	})
@@ -12210,21 +12216,21 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// Restart 1
 		host.Containers[0].RestartCount = 1
 		m.CheckDockerHost(host)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no alert after 1 restart")
 		}
 
 		// Restart 2
 		host.Containers[0].RestartCount = 2
 		m.CheckDockerHost(host)
-		if _, exists := m.activeAlerts[alertID]; exists {
+		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no alert after 2 restarts (threshold is >2)")
 		}
 
 		// Restart 3 - exceeds threshold
 		host.Containers[0].RestartCount = 3
 		m.CheckDockerHost(host)
-		if _, exists := m.activeAlerts[alertID]; !exists {
+		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected alert after 3 restarts (>2 threshold)")
 		}
 	})
@@ -12259,7 +12265,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		resourceID := dockerResourceID(hostID, containerID)
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
-		alert1, exists := m.activeAlerts[alertID]
+		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected alert to be raised")
 		}
@@ -12270,7 +12276,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 7
 		m.CheckDockerHost(host)
 
-		alert2, exists := m.activeAlerts[alertID]
+		alert2, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
 			t.Fatal("expected alert to still exist")
 		}
@@ -12486,7 +12492,7 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		if _, exists := m.activeAlerts["vm100-cpu"]; exists {
+		if testHasActiveAlert(t, m, "vm100-cpu") {
 			t.Error("expected alert to be cleared from activeAlerts")
 		}
 		m.mu.RUnlock()
@@ -12509,7 +12515,7 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		if _, exists := m.activeAlerts["vm100/disk1-disk"]; exists {
+		if testHasActiveAlert(t, m, "vm100/disk1-disk") {
 			t.Error("expected alert with prefix match to be cleared")
 		}
 		m.mu.RUnlock()
@@ -12540,7 +12546,7 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 
-		if _, exists := m.activeAlerts["vm100-cpu"]; exists {
+		if testHasActiveAlert(t, m, "vm100-cpu") {
 			t.Error("expected activeAlerts to be cleared")
 		}
 		if _, exists := m.pendingAlerts["vm100-memory"]; exists {
@@ -12595,16 +12601,16 @@ func TestSuppressGuestAlerts(t *testing.T) {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 
-		if _, exists := m.activeAlerts["vm100-cpu"]; exists {
+		if testHasActiveAlert(t, m, "vm100-cpu") {
 			t.Error("expected vm100-cpu to be cleared")
 		}
-		if _, exists := m.activeAlerts["vm100-memory"]; exists {
+		if testHasActiveAlert(t, m, "vm100-memory") {
 			t.Error("expected vm100-memory to be cleared")
 		}
-		if _, exists := m.activeAlerts["vm100/disk0-disk"]; exists {
+		if testHasActiveAlert(t, m, "vm100/disk0-disk") {
 			t.Error("expected vm100/disk0-disk to be cleared")
 		}
-		if _, exists := m.activeAlerts["vm200-cpu"]; !exists {
+		if !testHasActiveAlert(t, m, "vm200-cpu") {
 			t.Error("expected vm200-cpu to NOT be cleared")
 		}
 	})
@@ -12806,11 +12812,11 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["node1-cpu"]
-		_, memExists := m.activeAlerts["node1-memory"]
-		_, diskExists := m.activeAlerts["node1-disk"]
-		_, tempExists := m.activeAlerts["node1-temperature"]
-		_, offlineExists := m.activeAlerts["node-offline-node1"]
+		_, cpuExists := testLookupActiveAlert(t, m, "node1-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "node1-memory")
+		_, diskExists := testLookupActiveAlert(t, m, "node1-disk")
+		_, tempExists := testLookupActiveAlert(t, m, "node1-temperature")
+		_, offlineExists := testLookupActiveAlert(t, m, "node-offline-node1")
 		_, countExists := m.nodeOfflineCount["node1"]
 		m.mu.RUnlock()
 
@@ -12849,7 +12855,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, alertExists := testLookupActiveAlert(t, m, "node-offline-node1")
 		_, countExists := m.nodeOfflineCount["node1"]
 		m.mu.RUnlock()
 
@@ -12879,7 +12885,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node-offline-node1"]
+		alert := testRequireActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -12908,7 +12914,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node-offline-node1"]
+		alert := testRequireActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -12934,7 +12940,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node-offline-node1"]
+		alert := testRequireActiveAlert(t, m, "node-offline-node1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -12966,7 +12972,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["node-offline-node1"]
+		_, alertExists := testLookupActiveAlert(t, m, "node-offline-node1")
 		_, countExists := m.nodeOfflineCount["node1"]
 		m.mu.RUnlock()
 
@@ -13000,7 +13006,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node1-cpu"]
+		alert := testRequireActiveAlert(t, m, "node1-cpu")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13030,7 +13036,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["node1-cpu"]
+		_, cpuExists := testLookupActiveAlert(t, m, "node1-cpu")
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -13063,7 +13069,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["node1-cpu"]
+		_, cpuExists := testLookupActiveAlert(t, m, "node1-cpu")
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -13096,7 +13102,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node1-temperature"]
+		alert := testRequireActiveAlert(t, m, "node1-temperature")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13129,7 +13135,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node1-temperature"]
+		alert := testRequireActiveAlert(t, m, "node1-temperature")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13160,7 +13166,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, tempExists := m.activeAlerts["node1-temperature"]
+		_, tempExists := testLookupActiveAlert(t, m, "node1-temperature")
 		m.mu.RUnlock()
 
 		if tempExists {
@@ -13188,7 +13194,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, tempExists := m.activeAlerts["node1-temperature"]
+		_, tempExists := testLookupActiveAlert(t, m, "node1-temperature")
 		m.mu.RUnlock()
 
 		if tempExists {
@@ -13220,7 +13226,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		_, tempExists := m.activeAlerts["node1-temperature"]
+		_, tempExists := testLookupActiveAlert(t, m, "node1-temperature")
 		m.mu.RUnlock()
 
 		if tempExists {
@@ -13251,7 +13257,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node1-memory"]
+		alert := testRequireActiveAlert(t, m, "node1-memory")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13282,7 +13288,7 @@ func TestCheckNode(t *testing.T) {
 		m.CheckNode(node)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["node1-disk"]
+		alert := testRequireActiveAlert(t, m, "node1-disk")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13367,7 +13373,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["vm100-cpu"]
+		alert := testRequireActiveAlert(t, m, "vm100-cpu")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13396,7 +13402,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(ct, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["ct101-cpu"]
+		alert := testRequireActiveAlert(t, m, "ct101-cpu")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13445,7 +13451,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["vm100-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "vm100-cpu")
 		m.mu.RUnlock()
 
 		if exists {
@@ -13472,7 +13478,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["guest-powered-off-vm100"]
+		alert := testRequireActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13504,7 +13510,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["guest-powered-off-vm100"]
+		_, alertExists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
 		_, countExists := m.offlineConfirmations["vm100"]
 		m.mu.RUnlock()
 
@@ -13538,7 +13544,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest-powered-off-vm100"]
+		_, exists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if exists {
@@ -13573,8 +13579,8 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["vm100-cpu"]
-		_, memExists := m.activeAlerts["vm100-memory"]
+		_, cpuExists := testLookupActiveAlert(t, m, "vm100-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "vm100-memory")
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -13608,7 +13614,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["guest-powered-off-vm100"]
+		_, exists := testLookupActiveAlert(t, m, "guest-powered-off-vm100")
 		m.mu.RUnlock()
 
 		if exists {
@@ -13641,7 +13647,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["vm100-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "vm100-cpu")
 		m.mu.RUnlock()
 
 		if exists {
@@ -13670,7 +13676,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["vm100-memory"]
+		alert := testRequireActiveAlert(t, m, "vm100-memory")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13699,7 +13705,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["vm100-disk"]
+		alert := testRequireActiveAlert(t, m, "vm100-disk")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13841,7 +13847,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["vm100-diskRead"]
+		alert := testRequireActiveAlert(t, m, "vm100-diskRead")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13870,7 +13876,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["vm100-diskWrite"]
+		alert := testRequireActiveAlert(t, m, "vm100-diskWrite")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13899,7 +13905,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["vm100-networkIn"]
+		alert := testRequireActiveAlert(t, m, "vm100-networkIn")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13928,7 +13934,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		alert := m.activeAlerts["vm100-networkOut"]
+		alert := testRequireActiveAlert(t, m, "vm100-networkOut")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -13959,7 +13965,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["vm100-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "vm100-cpu")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14112,8 +14118,8 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["agent:host1-cpu"]
-		_, memExists := m.activeAlerts["agent:host1-memory"]
+		_, cpuExists := testLookupActiveAlert(t, m, "agent:host1-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "agent:host1-memory")
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -14143,7 +14149,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["agent:host1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "agent:host1-cpu")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14170,7 +14176,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["agent:host1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "agent:host1-cpu")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14199,7 +14205,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["agent:host1-memory"]
+		_, exists := testLookupActiveAlert(t, m, "agent:host1-memory")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14230,7 +14236,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts[alertID]
+		_, exists := testLookupActiveAlert(t, m, alertID)
 		m.mu.RUnlock()
 
 		if exists {
@@ -14260,7 +14266,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md2"]
+		alert := testRequireActiveAlert(t, m, "host-host1-raid-md2")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14294,7 +14300,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md2"]
+		alert := testRequireActiveAlert(t, m, "host-host1-raid-md2")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14335,7 +14341,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["host-host1-raid-md2"]
+		_, exists := testLookupActiveAlert(t, m, "host-host1-raid-md2")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14365,7 +14371,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md2"]
+		alert := testRequireActiveAlert(t, m, "host-host1-raid-md2")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14398,7 +14404,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md2"]
+		alert := testRequireActiveAlert(t, m, "host-host1-raid-md2")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14441,7 +14447,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md2"]
+		alert := testRequireActiveAlert(t, m, "host-host1-raid-md2")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14475,7 +14481,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["host-host1-raid-md2"]
+		alert := testRequireActiveAlert(t, m, "host-host1-raid-md2")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14514,7 +14520,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["agent:host1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "agent:host1-cpu")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14579,7 +14585,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 		m.CheckHost(host)
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["host-offline-host1"]
+		_, alertExists := testLookupActiveAlert(t, m, "host-offline-host1")
 		_, countExists := m.offlineConfirmations[resourceKey]
 		m.mu.RUnlock()
 
@@ -14613,7 +14619,7 @@ func TestCheckHostComprehensive(t *testing.T) {
 
 		cpuAlertID := fmt.Sprintf("%s-cpu", hostResourceID(host.ID))
 		m.mu.RLock()
-		alert := m.activeAlerts[cpuAlertID]
+		alert := testRequireActiveAlert(t, m, cpuAlertID)
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14677,9 +14683,9 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["pbs1-cpu"]
-		_, memExists := m.activeAlerts["pbs1-memory"]
-		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, cpuExists := testLookupActiveAlert(t, m, "pbs1-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "pbs1-memory")
+		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		_, confirmExists := m.offlineConfirmations["pbs1"]
 		m.mu.RUnlock()
 
@@ -14719,9 +14725,9 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["pbs1-cpu"]
-		_, memExists := m.activeAlerts["pbs1-memory"]
-		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, cpuExists := testLookupActiveAlert(t, m, "pbs1-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "pbs1-memory")
+		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		_, confirmExists := m.offlineConfirmations["pbs1"]
 		m.mu.RUnlock()
 
@@ -14758,7 +14764,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		_, confirmExists := m.offlineConfirmations["pbs1"]
 		m.mu.RUnlock()
 
@@ -14792,7 +14798,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pbs1-cpu"]
+		alert := testRequireActiveAlert(t, m, "pbs1-cpu")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14822,7 +14828,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pbs1-memory"]
+		alert := testRequireActiveAlert(t, m, "pbs1-memory")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14853,8 +14859,8 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["pbs1-cpu"]
-		_, memExists := m.activeAlerts["pbs1-memory"]
+		_, cpuExists := testLookupActiveAlert(t, m, "pbs1-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "pbs1-memory")
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -14891,7 +14897,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pbs1-cpu"]
+		_, exists := testLookupActiveAlert(t, m, "pbs1-cpu")
 		m.mu.RUnlock()
 
 		if exists {
@@ -14917,7 +14923,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pbs-offline-pbs1"]
+		alert := testRequireActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14947,7 +14953,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pbs-offline-pbs1"]
+		alert := testRequireActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -14974,7 +14980,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pbs-offline-pbs1"]
+		alert := testRequireActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -15005,9 +15011,9 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		_, cpuExists := m.activeAlerts["pbs1-cpu"]
-		_, memExists := m.activeAlerts["pbs1-memory"]
-		offline := m.activeAlerts["pbs-offline-pbs1"]
+		_, cpuExists := testLookupActiveAlert(t, m, "pbs1-cpu")
+		_, memExists := testLookupActiveAlert(t, m, "pbs1-memory")
+		offline := testRequireActiveAlert(t, m, "pbs-offline-pbs1")
 		m.mu.RUnlock()
 
 		if cpuExists {
@@ -15040,7 +15046,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		m.CheckPBS(pbs)
 
 		m.mu.RLock()
-		_, offlineExists := m.activeAlerts["pbs-offline-pbs1"]
+		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		_, confirmExists := m.offlineConfirmations["pbs1"]
 		m.mu.RUnlock()
 
@@ -15102,11 +15108,11 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		_, queueTotalExists := m.activeAlerts["pmg1-queue-total"]
-		_, queueDeferredExists := m.activeAlerts["pmg1-queue-deferred"]
-		_, queueHoldExists := m.activeAlerts["pmg1-queue-hold"]
-		_, oldestMsgExists := m.activeAlerts["pmg1-oldest-message"]
-		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, queueTotalExists := testLookupActiveAlert(t, m, "pmg1-queue-total")
+		_, queueDeferredExists := testLookupActiveAlert(t, m, "pmg1-queue-deferred")
+		_, queueHoldExists := testLookupActiveAlert(t, m, "pmg1-queue-hold")
+		_, oldestMsgExists := testLookupActiveAlert(t, m, "pmg1-oldest-message")
+		_, offlineExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		_, confirmExists := m.offlineConfirmations["pmg1"]
 		m.mu.RUnlock()
 
@@ -15152,9 +15158,9 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		_, queueExists := m.activeAlerts["pmg1-queue-total"]
-		_, oldestExists := m.activeAlerts["pmg1-oldest-message"]
-		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, queueExists := testLookupActiveAlert(t, m, "pmg1-queue-total")
+		_, oldestExists := testLookupActiveAlert(t, m, "pmg1-oldest-message")
+		_, offlineExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		_, confirmExists := m.offlineConfirmations["pmg1"]
 		m.mu.RUnlock()
 
@@ -15191,7 +15197,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, offlineExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		_, confirmExists := m.offlineConfirmations["pmg1"]
 		m.mu.RUnlock()
 
@@ -15221,7 +15227,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg-offline-pmg1"]
+		alert := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -15251,7 +15257,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg-offline-pmg1"]
+		alert := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -15278,7 +15284,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg-offline-pmg1"]
+		alert := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -15319,10 +15325,10 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		_, queueExists := m.activeAlerts["pmg1-queue-total"]
-		_, anomalyExists := m.activeAlerts["pmg1-anomaly-spamIn"]
-		_, nodeQueueExists := m.activeAlerts["pmg1-node1-queue-hold"]
-		offline := m.activeAlerts["pmg-offline-pmg1"]
+		_, queueExists := testLookupActiveAlert(t, m, "pmg1-queue-total")
+		_, anomalyExists := testLookupActiveAlert(t, m, "pmg1-anomaly-spamIn")
+		_, nodeQueueExists := testLookupActiveAlert(t, m, "pmg1-node1-queue-hold")
+		offline := testRequireActiveAlert(t, m, "pmg-offline-pmg1")
 		m.mu.RUnlock()
 
 		if queueExists {
@@ -15358,7 +15364,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		m.CheckPMG(pmg)
 
 		m.mu.RLock()
-		_, offlineExists := m.activeAlerts["pmg-offline-pmg1"]
+		_, offlineExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		_, confirmExists := m.offlineConfirmations["pmg1"]
 		m.mu.RUnlock()
 
@@ -15445,8 +15451,8 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		_, usageExists := m.activeAlerts["storage1-usage"]
-		_, offlineExists := m.activeAlerts["storage-offline-storage1"]
+		_, usageExists := testLookupActiveAlert(t, m, "storage1-usage")
+		_, offlineExists := testLookupActiveAlert(t, m, "storage-offline-storage1")
 		m.mu.RUnlock()
 
 		if usageExists {
@@ -15478,8 +15484,8 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		_, usageExists := m.activeAlerts["storage1-usage"]
-		_, offlineExists := m.activeAlerts["storage-offline-storage1"]
+		_, usageExists := testLookupActiveAlert(t, m, "storage1-usage")
+		_, offlineExists := testLookupActiveAlert(t, m, "storage-offline-storage1")
 		m.mu.RUnlock()
 
 		if usageExists {
@@ -15510,7 +15516,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["storage1-usage"]
+		alert := testRequireActiveAlert(t, m, "storage1-usage")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -15541,7 +15547,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["storage1-usage"]
+		_, exists := testLookupActiveAlert(t, m, "storage1-usage")
 		m.mu.RUnlock()
 
 		if exists {
@@ -15568,7 +15574,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["storage1-usage"]
+		_, exists := testLookupActiveAlert(t, m, "storage1-usage")
 		m.mu.RUnlock()
 
 		if exists {
@@ -15595,7 +15601,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["storage1-usage"]
+		_, exists := testLookupActiveAlert(t, m, "storage1-usage")
 		m.mu.RUnlock()
 
 		if exists {
@@ -15621,7 +15627,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["storage-offline-storage1"]
+		alert := testRequireActiveAlert(t, m, "storage-offline-storage1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -15647,7 +15653,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		alert := m.activeAlerts["storage-offline-storage1"]
+		alert := testRequireActiveAlert(t, m, "storage-offline-storage1")
 		m.mu.RUnlock()
 
 		if alert == nil {
@@ -15673,7 +15679,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		_, offlineExists := m.activeAlerts["storage-offline-storage1"]
+		_, offlineExists := testLookupActiveAlert(t, m, "storage-offline-storage1")
 		_, confirmExists := m.offlineConfirmations["storage1"]
 		m.mu.RUnlock()
 
@@ -15704,7 +15710,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.CheckStorage(storage)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["storage1-usage"]
+		_, exists := testLookupActiveAlert(t, m, "storage1-usage")
 		m.mu.RUnlock()
 
 		if exists {
@@ -16070,8 +16076,8 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		m.checkPMGQuarantineBacklog(pmg, PMGThresholdConfig{})
 
 		m.mu.RLock()
-		_, spamExists := m.activeAlerts["pmg1-quarantine-spam"]
-		_, virusExists := m.activeAlerts["pmg1-quarantine-virus"]
+		_, spamExists := testLookupActiveAlert(t, m, "pmg1-quarantine-spam")
+		_, virusExists := testLookupActiveAlert(t, m, "pmg1-quarantine-virus")
 		m.mu.RUnlock()
 
 		if spamExists {
@@ -16110,7 +16116,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		m.checkPMGQuarantineBacklog(pmg, thresholds)
 
 		m.mu.RLock()
-		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		alert, exists := testLookupActiveAlert(t, m, "pmg1-quarantine-spam")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -16149,7 +16155,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		m.checkPMGQuarantineBacklog(pmg, thresholds)
 
 		m.mu.RLock()
-		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		alert, exists := testLookupActiveAlert(t, m, "pmg1-quarantine-spam")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -16190,7 +16196,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		m.checkPMGQuarantineBacklog(pmg, thresholds)
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		_, exists := testLookupActiveAlert(t, m, "pmg1-quarantine-spam")
 		m.mu.RUnlock()
 
 		if exists {
@@ -16237,7 +16243,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		m.checkPMGQuarantineBacklog(pmg, thresholds)
 
 		m.mu.RLock()
-		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		alert, exists := testLookupActiveAlert(t, m, "pmg1-quarantine-spam")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -16282,7 +16288,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		m.checkPMGQuarantineBacklog(pmg, thresholds)
 
 		m.mu.RLock()
-		alert, exists := m.activeAlerts["pmg1-quarantine-spam"]
+		alert, exists := testLookupActiveAlert(t, m, "pmg1-quarantine-spam")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -16321,7 +16327,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		m.checkPMGQuarantineBacklog(pmg, thresholds)
 
 		m.mu.RLock()
-		alert, exists := m.activeAlerts["pmg1-quarantine-virus"]
+		alert, exists := testLookupActiveAlert(t, m, "pmg1-quarantine-virus")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -16371,7 +16377,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 		m.checkPMGAnomalies(first, PMGThresholdConfig{})
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, alertExists := testLookupActiveAlert(t, m, "pmg1-anomaly-spamIn")
 		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
 		m.mu.RUnlock()
 
@@ -16393,7 +16399,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 		m.checkPMGAnomalies(second, PMGThresholdConfig{})
 
 		m.mu.RLock()
-		alert := m.activeAlerts["pmg1-anomaly-spamIn"]
+		alert := testRequireActiveAlert(t, m, "pmg1-anomaly-spamIn")
 		_, pendingExists = m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
 		m.mu.RUnlock()
 
@@ -16435,7 +16441,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 		}, PMGThresholdConfig{})
 
 		m.mu.RLock()
-		_, alertExists := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, alertExists := testLookupActiveAlert(t, m, "pmg1-anomaly-spamIn")
 		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
 		m.mu.RUnlock()
 
@@ -16466,7 +16472,7 @@ func TestCheckPMGAnomalies(t *testing.T) {
 
 		m.mu.RLock()
 		tracker := m.pmgAnomalyTrackers["pmg1"]
-		_, alertExists := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, alertExists := testLookupActiveAlert(t, m, "pmg1-anomaly-spamIn")
 		_, pendingExists := m.pendingAlerts["pmg-anomaly-pmg1-spamIn"]
 		m.mu.RUnlock()
 
@@ -16531,7 +16537,7 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		loaded, exists := m.activeAlerts["test-load-alert"]
+		loaded, exists := testLookupActiveAlert(t, m, "test-load-alert")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -16583,8 +16589,8 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		_, oldExists := m.activeAlerts["pve1-node1-100-cpu"]
-		migrated, migratedExists := m.activeAlerts["pve1-100-cpu"]
+		_, oldExists := testLookupActiveAlert(t, m, "pve1-node1-100-cpu")
+		migrated, migratedExists := testLookupActiveAlert(t, m, "pve1-100-cpu")
 		m.mu.RUnlock()
 
 		if oldExists {
@@ -16631,7 +16637,7 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["old-alert"]
+		_, exists := testLookupActiveAlert(t, m, "old-alert")
 		m.mu.RUnlock()
 
 		if exists {
@@ -16676,7 +16682,7 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		_, exists := m.activeAlerts["old-ack-alert"]
+		_, exists := testLookupActiveAlert(t, m, "old-ack-alert")
 		ackRecord, ackExists := m.ackState["old-ack-alert"]
 		m.mu.RUnlock()
 
@@ -16734,7 +16740,7 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		loaded, exists := m.activeAlerts["ack-alert"]
+		loaded, exists := testLookupActiveAlert(t, m, "ack-alert")
 		ackRecord, hasAckRecord := m.ackState["ack-alert"]
 		m.mu.RUnlock()
 
@@ -16834,7 +16840,7 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 
 		m.mu.RLock()
-		alert, exists := m.activeAlerts["dup-alert"]
+		alert, exists := testLookupActiveAlert(t, m, "dup-alert")
 		m.mu.RUnlock()
 
 		if !exists {
@@ -16938,8 +16944,8 @@ func TestSaveAndLoadActiveAlerts_UsesManagerDataDirAndSecurePermissions(t *testi
 	}
 
 	m.mu.RLock()
-	_, tenantLoaded := m.activeAlerts["tenant-alert"]
-	_, globalLoaded := m.activeAlerts["global-alert"]
+	_, tenantLoaded := testLookupActiveAlert(t, m, "tenant-alert")
+	_, globalLoaded := testLookupActiveAlert(t, m, "global-alert")
 	m.mu.RUnlock()
 
 	if !tenantLoaded {

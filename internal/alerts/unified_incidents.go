@@ -99,7 +99,8 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for alertID := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if !strings.HasPrefix(alertID, unifiedIncidentAlertPrefix) {
 			continue
 		}

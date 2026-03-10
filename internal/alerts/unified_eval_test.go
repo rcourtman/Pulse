@@ -62,8 +62,8 @@ func alertKeys(m *Manager) []string {
 	defer m.mu.RUnlock()
 
 	keys := make([]string, 0, len(m.activeAlerts))
-	for id := range m.activeAlerts {
-		keys = append(keys, id)
+	for storageKey, alert := range m.activeAlerts {
+		keys = append(keys, effectiveAlertID(alert, storageKey))
 	}
 	sort.Strings(keys)
 	return keys
@@ -73,7 +73,7 @@ func assertAlertPresent(t *testing.T, m *Manager, alertID string) {
 	t.Helper()
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected alert %q to exist, active alerts: %v", alertID, alertKeys(m))
@@ -84,7 +84,7 @@ func assertAlertMissing(t *testing.T, m *Manager, alertID string) {
 	t.Helper()
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if exists {
 		t.Fatalf("expected alert %q to be absent, active alerts: %v", alertID, alertKeys(m))
@@ -244,7 +244,7 @@ func TestCheckUnifiedResourceAnnotatesMetricAlertsWithCanonicalSpecMetadata(t *t
 	})
 
 	m.mu.RLock()
-	alert := m.activeAlerts["vm-annotated-cpu"]
+	alert := testRequireActiveAlert(t, m, "vm-annotated-cpu")
 	m.mu.RUnlock()
 	if alert == nil {
 		t.Fatal("expected vm-annotated-cpu alert")
@@ -295,7 +295,7 @@ func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
 
 	alertID := guestID + "-disk-scsi0-disk"
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if alert == nil {
 		t.Fatalf("expected guest disk alert %q", alertID)
@@ -327,7 +327,7 @@ func TestCheckNodeTemperatureAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	})
 
 	m.mu.RLock()
-	alert := m.activeAlerts["node/pve-1-temperature"]
+	alert := testRequireActiveAlert(t, m, "node/pve-1-temperature")
 	m.mu.RUnlock()
 	if alert == nil {
 		t.Fatal("expected node temperature alert")

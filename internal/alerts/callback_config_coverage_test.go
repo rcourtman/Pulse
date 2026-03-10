@@ -65,7 +65,7 @@ func TestAcknowledgeAlertInvokesCallback(t *testing.T) {
 	}
 
 	m.mu.RLock()
-	stored := m.activeAlerts[alertID]
+	stored := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if gotAlert == stored {
 		t.Fatal("expected callback to receive a cloned alert")
@@ -119,7 +119,7 @@ func TestUnacknowledgeAlertInvokesCallback(t *testing.T) {
 	}
 
 	m.mu.RLock()
-	stored := m.activeAlerts[alertID]
+	stored := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if gotAlert == stored {
 		t.Fatal("expected callback to receive a cloned alert")
@@ -198,7 +198,7 @@ func TestCheckMetricInvokesAICallbackWhenNotificationsSuppressed(t *testing.T) {
 	}
 
 	m.mu.RLock()
-	stored := m.activeAlerts["ai-resource-cpu"]
+	stored := testRequireActiveAlert(t, m, "ai-resource-cpu")
 	m.mu.RUnlock()
 
 	if stored == nil {

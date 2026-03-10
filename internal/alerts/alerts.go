@@ -809,8 +809,12 @@ func (m *Manager) SetLicenseChecker(checker func(feature string) bool) {
 // addRecentlyResolvedUnlocked records a resolved alert assuming the caller does not hold m.mu.
 func (m *Manager) addRecentlyResolvedUnlocked(alertID string, resolved *ResolvedAlert) {
 	m.resolvedMutex.Lock()
-	m.recentlyResolved[alertID] = resolved
-	m.registerResolvedAliasUnlocked(alertID, resolved)
+	storageKey := alertID
+	if resolved != nil && resolved.Alert != nil {
+		storageKey = activeAlertStorageKey(resolved.Alert, alertID)
+	}
+	m.recentlyResolved[storageKey] = resolved
+	m.registerResolvedAliasUnlocked(storageKey, resolved)
 	m.resolvedMutex.Unlock()
 }
 
@@ -1742,9 +1746,10 @@ func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
 func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	if m.config.DisableAllNodesOffline {
 		var nodeAlerts []string
-		for alertID := range m.activeAlerts {
-			if strings.HasPrefix(alertID, "node-offline-") {
-				nodeAlerts = append(nodeAlerts, alertID)
+		for storageKey, alert := range m.activeAlerts {
+			id := effectiveAlertID(alert, storageKey)
+			if strings.HasPrefix(id, "node-offline-") {
+				nodeAlerts = append(nodeAlerts, id)
 			}
 		}
 		for _, alertID := range nodeAlerts {
@@ -1755,9 +1760,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 
 	if m.config.DisableAllPBSOffline {
 		var pbsAlerts []string
-		for alertID, alert := range m.activeAlerts {
-			if strings.HasPrefix(alertID, "pbs-offline-") {
-				pbsAlerts = append(pbsAlerts, alertID)
+		for storageKey, alert := range m.activeAlerts {
+			id := effectiveAlertID(alert, storageKey)
+			if strings.HasPrefix(id, "pbs-offline-") {
+				pbsAlerts = append(pbsAlerts, id)
 				delete(m.offlineConfirmations, alert.ResourceID)
 			}
 		}
@@ -1768,9 +1774,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 
 	if m.config.DisableAllGuestsOffline {
 		var guestAlerts []string
-		for alertID, alert := range m.activeAlerts {
-			if strings.HasPrefix(alertID, "guest-powered-off-") {
-				guestAlerts = append(guestAlerts, alertID)
+		for storageKey, alert := range m.activeAlerts {
+			id := effectiveAlertID(alert, storageKey)
+			if strings.HasPrefix(id, "guest-powered-off-") {
+				guestAlerts = append(guestAlerts, id)
 				delete(m.offlineConfirmations, alert.ResourceID)
 			}
 		}
@@ -1781,9 +1788,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 
 	if m.config.DisableAllDockerHostsOffline {
 		var hostAlerts []string
-		for alertID := range m.activeAlerts {
-			if strings.HasPrefix(alertID, "docker-host-offline-") {
-				hostAlerts = append(hostAlerts, alertID)
+		for storageKey, alert := range m.activeAlerts {
+			id := effectiveAlertID(alert, storageKey)
+			if strings.HasPrefix(id, "docker-host-offline-") {
+				hostAlerts = append(hostAlerts, id)
 			}
 		}
 		for _, alertID := range hostAlerts {
@@ -1794,9 +1802,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 
 	if m.config.DisableAllDockerContainers {
 		var containerAlerts []string
-		for alertID := range m.activeAlerts {
-			if strings.HasPrefix(alertID, "docker-container-") {
-				containerAlerts = append(containerAlerts, alertID)
+		for storageKey, alert := range m.activeAlerts {
+			id := effectiveAlertID(alert, storageKey)
+			if strings.HasPrefix(id, "docker-container-") {
+				containerAlerts = append(containerAlerts, id)
 			}
 		}
 		for _, alertID := range containerAlerts {
@@ -1810,9 +1819,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	}
 	if m.config.DisableAllDockerServices {
 		var serviceAlerts []string
-		for alertID := range m.activeAlerts {
-			if strings.HasPrefix(alertID, "docker-service-") {
-				serviceAlerts = append(serviceAlerts, alertID)
+		for storageKey, alert := range m.activeAlerts {
+			id := effectiveAlertID(alert, storageKey)
+			if strings.HasPrefix(id, "docker-service-") {
+				serviceAlerts = append(serviceAlerts, id)
 			}
 		}
 		for _, alertID := range serviceAlerts {
@@ -1831,7 +1841,8 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 	// Track alerts that should be resolved
 	alertsToResolve := make([]string, 0)
 
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		// Parse the alert ID to extract resource ID and metric type
 		// Alert ID format: {resourceID}-{metricType}
 		parts := strings.Split(alertID, "-")
@@ -2043,15 +2054,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 
 	// Resolve all alerts that should be cleared
 	for _, alertID := range alertsToResolve {
-		if alert, exists := m.activeAlerts[alertID]; exists {
+		if alert, exists := m.getActiveAlertNoLock(alertID); exists {
 			resolvedAlert := &ResolvedAlert{
 				Alert:        alert,
 				ResolvedTime: time.Now(),
 			}
 
 			// Remove any pending notification tracking for this alert since it's no longer valid.
-			if _, isPending := m.pendingAlerts[alertID]; isPending {
-				delete(m.pendingAlerts, alertID)
+			trackingKey := canonicalTrackingKeyForAlert(alert)
+			if _, isPending := m.pendingAlerts[trackingKey]; isPending {
+				delete(m.pendingAlerts, trackingKey)
 				log.Debug().
 					Str("alertID", alertID).
 					Msg("Cleared pending alert after configuration update")
@@ -2100,7 +2112,7 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 
 	for _, metricType := range metricTypes {
 		alertID := fmt.Sprintf("%s-%s", guestID, metricType)
-		alert, exists := m.activeAlerts[alertID]
+		alert, exists := m.getActiveAlertNoLock(alertID)
 		if !exists {
 			continue
 		}
@@ -2128,8 +2140,9 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 		if threshold == nil || threshold.Trigger <= 0 {
 			m.clearAlertNoLock(alertID)
 			// Also clear any pending alert for this metric
-			if _, isPending := m.pendingAlerts[alertID]; isPending {
-				delete(m.pendingAlerts, alertID)
+			trackingKey := canonicalTrackingKeyForAlert(alert)
+			if _, isPending := m.pendingAlerts[trackingKey]; isPending {
+				delete(m.pendingAlerts, trackingKey)
 				log.Debug().
 					Str("alertID", alertID).
 					Msg("Cleared pending alert - threshold disabled")
@@ -2510,7 +2523,8 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		// Clear all resource metric alerts (cpu, memory, disk, etc.) for non-running guests
 		m.mu.Lock()
 		alertsCleared := 0
-		for alertID, alert := range m.activeAlerts {
+		for storageKey, alert := range m.activeAlerts {
+			alertID := effectiveAlertID(alert, storageKey)
 			// Only clear resource metric alerts, not powered-off alerts
 			if alert.ResourceID == guestID && alert.Type != "powered-off" {
 				m.clearAlertNoLock(alertID)
@@ -2553,7 +2567,8 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	// If alerts are disabled for this guest, clear any existing alerts and return
 	if thresholds.Disabled {
 		m.mu.Lock()
-		for alertID, alert := range m.activeAlerts {
+		for storageKey, alert := range m.activeAlerts {
+			alertID := effectiveAlertID(alert, storageKey)
 			if alert.ResourceID == guestID {
 				m.clearAlertNoLock(alertID)
 				log.Info().
@@ -2697,7 +2712,7 @@ func (m *Manager) CheckNode(node models.Node) {
 		alertTypes := []string{"cpu", "memory", "disk", "temperature"}
 		for _, alertType := range alertTypes {
 			alertID := fmt.Sprintf("%s-%s", node.ID, alertType)
-			if _, exists := m.activeAlerts[alertID]; exists {
+			if m.hasActiveAlertNoLock(alertID) {
 				m.clearAlertNoLock(alertID)
 				log.Info().
 					Str("alertID", alertID).
@@ -2707,7 +2722,7 @@ func (m *Manager) CheckNode(node models.Node) {
 		}
 		// Clear offline alert
 		offlineAlertID := fmt.Sprintf("node-offline-%s", node.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+		if m.hasActiveAlertNoLock(offlineAlertID) {
 			m.clearAlertNoLock(offlineAlertID)
 			log.Info().
 				Str("alertID", offlineAlertID).
@@ -3324,7 +3339,7 @@ func (m *Manager) HandleHostOnline(host models.Host) {
 
 	m.mu.Lock()
 	delete(m.offlineConfirmations, resourceKey)
-	_, exists := m.activeAlerts[alertID]
+	exists := m.hasActiveAlertNoLock(alertID)
 	m.mu.Unlock()
 
 	if exists {
@@ -3520,7 +3535,8 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil {
 			continue
 		}
@@ -3550,7 +3566,8 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil {
 			continue
 		}
@@ -3695,7 +3712,7 @@ func (m *Manager) activeAlertValue(alertID string) (float64, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	alert, ok := m.activeAlerts[alertID]
+	alert, ok := m.getActiveAlertNoLock(alertID)
 	if !ok || alert == nil {
 		return 0, false
 	}
@@ -3866,7 +3883,8 @@ func (m *Manager) clearHostRAIDAlerts(hostID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for alertID := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if strings.HasPrefix(alertID, prefix) {
 			m.clearAlertNoLock(alertID)
 		}
@@ -3963,7 +3981,8 @@ func (m *Manager) clearPMGMetricAlerts(pmgID string) {
 
 	m.mu.RLock()
 	alertIDs := make([]string, 0)
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alertID == offlineAlertID {
 			continue
 		}
@@ -4744,7 +4763,7 @@ func (m *Manager) HandleDockerHostOnline(host models.DockerHost) {
 
 	m.mu.Lock()
 	delete(m.dockerOfflineCount, host.ID)
-	_, exists := m.activeAlerts[alertID]
+	exists := m.hasActiveAlertNoLock(alertID)
 	m.mu.Unlock()
 
 	if exists {
@@ -4845,7 +4864,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	}
 
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert, _ := m.getActiveAlertNoLock(alertID)
 	m.mu.RUnlock()
 	if alert != nil {
 		if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
@@ -5417,7 +5436,8 @@ func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHos
 
 	m.mu.Lock()
 	toClear := make([]string, 0)
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if !strings.HasPrefix(alert.ResourceID, prefix) {
 			continue
 		}
@@ -5464,7 +5484,8 @@ func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
 
 	m.mu.Lock()
 	toClear := make([]string, 0)
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if strings.HasPrefix(alert.ResourceID, prefix) {
 			toClear = append(toClear, alertID)
 		}
@@ -5904,7 +5925,8 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 	}
 
 	m.mu.Lock()
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil || alert.Type != "snapshot-age" {
 			continue
 		}
@@ -6236,7 +6258,8 @@ func (m *Manager) CheckBackups(
 	}
 
 	m.mu.Lock()
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil || alert.Type != "backup-age" {
 			continue
 		}
@@ -6419,17 +6442,18 @@ func (m *Manager) clearAlert(alertID string) {
 		return
 	}
 
+	publicID := effectiveAlertID(alert, alertID)
 	resolvedAlert := &ResolvedAlert{
 		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
 
-	m.addRecentlyResolvedUnlocked(alertID, resolvedAlert)
+	m.addRecentlyResolvedUnlocked(publicID, resolvedAlert)
 
-	m.safeCallResolvedCallback(alertID, false)
+	m.safeCallResolvedCallback(publicID, false)
 
 	log.Info().
-		Str("alertID", alertID).
+		Str("alertID", publicID).
 		Msg("Alert cleared")
 }
 
@@ -7251,11 +7275,13 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	// Before deleting, update the history entry with the alert's final LastSeen
 	// timestamp so the stored duration reflects how long the alert was actually active.
 	var canonicalState string
+	publicID := alertID
 	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
 	if alert, ok := m.getActiveAlertNoLock(alertID); exists && ok && alert != nil {
 		backfillCanonicalIdentity(alert)
 		canonicalState = alert.CanonicalState
-		m.historyManager.UpdateAlertLastSeen(alertID, alert.LastSeen)
+		publicID = effectiveAlertID(alert, alertID)
+		m.historyManager.UpdateAlertLastSeen(publicID, alert.LastSeen)
 		m.unregisterActiveAlertAliasNoLock(key, alert)
 	}
 	if exists {
@@ -7265,9 +7291,9 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	// reappears (e.g., powered-off VM during backup), the acknowledgement
 	// is restored via preserveAlertState. ackState is cleaned up in Cleanup().
 	// Update inactiveAt so the cleanup TTL is measured from removal time, not ack time.
-	if record, exists := m.ackState[alertID]; exists {
+	if record, exists := m.ackState[publicID]; exists {
 		record.inactiveAt = time.Now()
-		m.ackState[alertID] = record
+		m.ackState[publicID] = record
 	}
 	if canonicalState != "" {
 		if record, ok := m.ackStateByCanonical[canonicalState]; ok {
@@ -7480,7 +7506,7 @@ func (m *Manager) NotifyExistingAlert(alertID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
 		return
 	}
@@ -7582,7 +7608,7 @@ func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceNam
 	}
 
 	// Check if offline alert exists
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
 		return
 	}
@@ -7664,7 +7690,7 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	}
 
 	// Check if offline alert exists
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
 		return
 	}
@@ -8790,7 +8816,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	}
 
 	// Check if powered-off alert exists
-	alert, exists := m.activeAlerts[alertID]
+	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
 		return
 	}
@@ -8819,7 +8845,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 // ClearAlert removes an alert from active alerts (but keeps in history)
 func (m *Manager) ClearAlert(alertID string) bool {
 	m.mu.Lock()
-	if _, exists := m.activeAlerts[alertID]; !exists {
+	if !m.hasActiveAlertNoLock(alertID) {
 		m.mu.Unlock()
 		return false
 	}
@@ -9286,16 +9312,18 @@ func (m *Manager) suppressGuestAlerts(guestID string) bool {
 
 	cleared := false
 
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
+		trackingKey := canonicalTrackingKeyForAlert(alert)
 		if alert == nil {
 			continue
 		}
 		if alert.ResourceID == guestID || strings.HasPrefix(alert.ResourceID, guestID+"/") || strings.HasPrefix(alertID, guestID) {
 			m.clearAlertNoLock(alertID)
-			delete(m.recentAlerts, alertID)
-			delete(m.pendingAlerts, alertID)
-			delete(m.suppressedUntil, alertID)
-			delete(m.alertRateLimit, alertID)
+			delete(m.recentAlerts, trackingKey)
+			delete(m.pendingAlerts, trackingKey)
+			delete(m.suppressedUntil, trackingKey)
+			delete(m.alertRateLimit, trackingKey)
 			cleared = true
 		}
 	}
@@ -9778,7 +9806,8 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 		Msg("Starting alert cleanup for non-existent nodes")
 
 	removedCount := 0
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil {
 			continue
 		}
@@ -9912,7 +9941,7 @@ func (m *Manager) cleanupStaleMaps() {
 
 	// Clean up flapping history for resources without active alerts
 	for alertID, history := range m.flappingHistory {
-		if _, hasAlert := m.activeAlerts[alertID]; !hasAlert {
+		if !m.hasActiveAlertNoLock(alertID) {
 			// Check if history is stale (last entry older than threshold)
 			if len(history) == 0 || now.Sub(history[len(history)-1]) > staleThreshold {
 				delete(m.flappingHistory, alertID)
@@ -9932,7 +9961,7 @@ func (m *Manager) cleanupStaleMaps() {
 
 	// Clean up pending alerts older than threshold without active alerts
 	for alertID, pendingTime := range m.pendingAlerts {
-		if _, hasAlert := m.activeAlerts[alertID]; !hasAlert {
+		if !m.hasActiveAlertNoLock(alertID) {
 			if now.Sub(pendingTime) > staleThreshold {
 				delete(m.pendingAlerts, alertID)
 				cleaned++
@@ -9943,7 +9972,8 @@ func (m *Manager) cleanupStaleMaps() {
 	// Clean up offline confirmation counts for resources without active alerts
 	for resourceID := range m.offlineConfirmations {
 		hasRelatedAlert := false
-		for alertID := range m.activeAlerts {
+		for storageKey, alert := range m.activeAlerts {
+			alertID := effectiveAlertID(alert, storageKey)
 			if strings.Contains(alertID, resourceID) {
 				hasRelatedAlert = true
 				break
@@ -9958,7 +9988,8 @@ func (m *Manager) cleanupStaleMaps() {
 	// Clean up node offline counts (legacy)
 	for nodeID := range m.nodeOfflineCount {
 		hasRelatedAlert := false
-		for alertID := range m.activeAlerts {
+		for storageKey, alert := range m.activeAlerts {
+			alertID := effectiveAlertID(alert, storageKey)
 			if strings.Contains(alertID, nodeID) {
 				hasRelatedAlert = true
 				break
@@ -9973,7 +10004,8 @@ func (m *Manager) cleanupStaleMaps() {
 	// Clean up Docker tracking maps
 	for containerID := range m.dockerStateConfirm {
 		hasRelatedAlert := false
-		for alertID := range m.activeAlerts {
+		for storageKey, alert := range m.activeAlerts {
+			alertID := effectiveAlertID(alert, storageKey)
 			if strings.Contains(alertID, containerID) {
 				hasRelatedAlert = true
 				break
@@ -9987,7 +10019,8 @@ func (m *Manager) cleanupStaleMaps() {
 
 	for hostID := range m.dockerOfflineCount {
 		hasRelatedAlert := false
-		for alertID := range m.activeAlerts {
+		for storageKey, alert := range m.activeAlerts {
+			alertID := effectiveAlertID(alert, storageKey)
 			if strings.Contains(alertID, hostID) {
 				hasRelatedAlert = true
 				break
@@ -10054,7 +10087,7 @@ func (m *Manager) cleanupStaleMaps() {
 
 	// Clean up ackState for alerts that no longer exist and are older than threshold
 	for alertID, record := range m.ackState {
-		if _, hasAlert := m.activeAlerts[alertID]; !hasAlert {
+		if !m.hasActiveAlertNoLock(alertID) {
 			// Use inactiveAt (when alert was removed) for TTL, not ack time
 			checkTime := record.inactiveAt
 			if checkTime.IsZero() {
@@ -10081,14 +10114,18 @@ func (m *Manager) cleanupStaleMaps() {
 	// This handles cases where a resource (e.g., Docker container, storage) stops being
 	// monitored but its alert remains active. Without this, alerts would persist indefinitely.
 	staleAlerts := make([]string, 0)
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert != nil && now.Sub(alert.LastSeen) > staleThreshold {
 			staleAlerts = append(staleAlerts, alertID)
 		}
 	}
 	staleResolved := 0
 	for _, alertID := range staleAlerts {
-		alert := m.activeAlerts[alertID]
+		alert, exists := m.getActiveAlertNoLock(alertID)
+		if !exists || alert == nil {
+			continue
+		}
 		log.Info().
 			Str("alertID", alertID).
 			Str("resourceName", alert.ResourceName).
@@ -10258,6 +10295,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 	if !exists {
 		return
 	}
+	publicID := effectiveAlertID(alert, alertID)
 
 	// Record metric for resolved alert
 	if recordAlertResolved != nil {
@@ -10270,12 +10308,12 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 		ResolvedTime: time.Now(),
 	}
 
-	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+	m.addRecentlyResolvedWithPrimaryLock(publicID, resolvedAlert)
 
-	m.safeCallResolvedCallback(alertID, true) // Make async to prevent deadlock
+	m.safeCallResolvedCallback(publicID, true) // Make async to prevent deadlock
 
 	log.Info().
-		Str("alertID", alertID).
+		Str("alertID", publicID).
 		Msg("Alert cleared")
 }
 
@@ -10286,7 +10324,8 @@ func (m *Manager) clearSnapshotAlertsForInstance(instance string) {
 }
 
 func (m *Manager) clearSnapshotAlertsForInstanceLocked(instance string) {
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil || alert.Type != "snapshot-age" {
 			continue
 		}
@@ -10304,7 +10343,8 @@ func (m *Manager) clearBackupAlerts() {
 }
 
 func (m *Manager) clearBackupAlertsLocked() {
-	for alertID, alert := range m.activeAlerts {
+	for storageKey, alert := range m.activeAlerts {
+		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil || alert.Type != "backup-age" {
 			continue
 		}

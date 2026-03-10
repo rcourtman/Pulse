@@ -58,7 +58,7 @@ func activeAlert(t *testing.T, m *Manager, alertID string) *Alert {
 	t.Helper()
 
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if alert != nil {
 		return alert.Clone()
@@ -343,7 +343,7 @@ func TestAlertCharacterizationReevaluatesAlertsWhenConfigChanges(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 
 	m.resolvedMutex.RLock()
-	_, wasResolved := m.recentlyResolved[alertID]
+	_, wasResolved := testLookupResolvedAlert(t, m, alertID)
 	m.resolvedMutex.RUnlock()
 	if !wasResolved {
 		t.Fatalf("expected %q in recently resolved after config change", alertID)

@@ -38,7 +38,7 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if alert.Type != "zfs-pool-state" {
@@ -106,7 +106,7 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	wantMessage := "Storage local-lvm is running low on free space. Affects 3 dependent resources: app01, media01, and 1 more"
@@ -179,7 +179,7 @@ func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if alert.Type != "backup-storage-incident" {
@@ -258,7 +258,7 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if alert.Type != "backup-posture-incident" {
@@ -472,7 +472,7 @@ func TestSyncUnifiedResourceIncidentsIncludesProtectionAndRebuildSemantics(t *te
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()
-	alert := m.activeAlerts[alertID]
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if got := alert.Metadata["protectionReduced"]; got != true {

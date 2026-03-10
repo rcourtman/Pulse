@@ -142,9 +142,7 @@ func TestCheckUnifiedResourceUsesCanonicalGuestOverrideKey(t *testing.T) {
 		CPU:      &UnifiedResourceMetric{Percent: 65},
 	})
 
-	m.mu.RLock()
-	_, exists := m.activeAlerts[resourceID+"-cpu"]
-	m.mu.RUnlock()
+	exists := testHasActiveAlert(t, m, resourceID+"-cpu")
 
 	if !exists {
 		t.Fatalf("expected canonical resource ID %q to be used for override lookup and alert IDs", resourceID)

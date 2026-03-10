@@ -1,5 +1,28 @@
 package alerts
 
+func activeAlertStorageKey(alert *Alert, fallback string) string {
+	if fallback == "" && alert == nil {
+		return ""
+	}
+	if alert != nil {
+		backfillCanonicalIdentity(alert)
+		if alert.CanonicalState != "" {
+			return alert.CanonicalState
+		}
+		if alert.ID != "" {
+			return alert.ID
+		}
+	}
+	return fallback
+}
+
+func effectiveAlertID(alert *Alert, fallback string) string {
+	if alert != nil && alert.ID != "" {
+		return alert.ID
+	}
+	return fallback
+}
+
 func (m *Manager) registerActiveAlertAliasNoLock(storageKey string, alert *Alert) {
 	if m == nil || alert == nil || storageKey == "" {
 		return
@@ -8,6 +31,9 @@ func (m *Manager) registerActiveAlertAliasNoLock(storageKey string, alert *Alert
 		m.activeAlertAlias = make(map[string]string)
 	}
 	backfillCanonicalIdentity(alert)
+	if alert.ID != "" && alert.ID != storageKey {
+		m.activeAlertAlias[alert.ID] = storageKey
+	}
 	if alert.CanonicalState != "" && alert.CanonicalState != storageKey {
 		m.activeAlertAlias[alert.CanonicalState] = storageKey
 	}
@@ -41,11 +67,27 @@ func (m *Manager) getActiveAlertNoLock(id string) (*Alert, bool) {
 	return alert, true
 }
 
+func (m *Manager) hasActiveAlertNoLock(id string) bool {
+	_, ok := m.resolveActiveAlertKeyNoLock(id)
+	return ok
+}
+
 func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) {
 	if storageKey == "" || alert == nil {
 		return
 	}
 	backfillCanonicalIdentity(alert)
+	requestedKey := storageKey
+	storageKey = activeAlertStorageKey(alert, storageKey)
+	for _, staleKey := range []string{requestedKey, alert.ID, alert.CanonicalState} {
+		if staleKey == "" || staleKey == storageKey {
+			continue
+		}
+		if existing, ok := m.activeAlerts[staleKey]; ok {
+			delete(m.activeAlerts, staleKey)
+			m.unregisterActiveAlertAliasNoLock(staleKey, existing)
+		}
+	}
 	m.activeAlerts[storageKey] = alert
 	m.registerActiveAlertAliasNoLock(storageKey, alert)
 }
@@ -56,6 +98,9 @@ func (m *Manager) unregisterActiveAlertAliasNoLock(storageKey string, alert *Ale
 	}
 	if alert != nil {
 		backfillCanonicalIdentity(alert)
+		if alert.ID != "" && alert.ID != storageKey {
+			delete(m.activeAlertAlias, alert.ID)
+		}
 		if alert.CanonicalState != "" && alert.CanonicalState != storageKey {
 			delete(m.activeAlertAlias, alert.CanonicalState)
 		}
@@ -70,6 +115,9 @@ func (m *Manager) registerResolvedAliasUnlocked(storageKey string, resolved *Res
 		m.resolvedAlias = make(map[string]string)
 	}
 	backfillCanonicalIdentity(resolved.Alert)
+	if resolved.Alert.ID != "" && resolved.Alert.ID != storageKey {
+		m.resolvedAlias[resolved.Alert.ID] = storageKey
+	}
 	if resolved.Alert.CanonicalState != "" && resolved.Alert.CanonicalState != storageKey {
 		m.resolvedAlias[resolved.Alert.CanonicalState] = storageKey
 	}

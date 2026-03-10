@@ -108,7 +108,7 @@ func TestSynologyRAIDClearing(t *testing.T) {
 	m.CheckHost(host)
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if exists {
@@ -144,7 +144,7 @@ func TestHostDisableClearsRAID(t *testing.T) {
 
 	alertID := "host-host-raid-raid-md2"
 	m.mu.RLock()
-	_, exists := m.activeAlerts[alertID]
+	_, exists := testLookupActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 
 	if !exists {
