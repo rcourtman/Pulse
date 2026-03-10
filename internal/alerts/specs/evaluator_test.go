@@ -180,6 +180,78 @@ func TestEvaluateSeverityThresholdEscalationAndRecovery(t *testing.T) {
 	}
 }
 
+func TestEvaluateSeverityThresholdHysteresisLatch(t *testing.T) {
+	recovery := 85.0
+	spec := ResourceAlertSpec{
+		ID:           "docker:host/container-memory-limit",
+		ResourceID:   "docker:host/container",
+		ResourceType: unifiedresources.ResourceTypeAppContainer,
+		Kind:         AlertSpecKindSeverityThreshold,
+		Severity:     AlertSeverityWarning,
+		SeverityThreshold: &SeverityThresholdSpec{
+			Metric:    "memory-limit-percent",
+			Direction: ThresholdDirectionAbove,
+			Warning:   90,
+			Critical:  95,
+			Recovery:  &recovery,
+		},
+	}
+
+	critical, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 9, 40, 0, 0, time.UTC),
+		SeverityThreshold: &SeverityThresholdEvidence{
+			Metric:    "memory-limit-percent",
+			Direction: ThresholdDirectionAbove,
+			Observed:  96,
+		},
+	})
+	if err != nil {
+		t.Fatalf("critical evaluation failed: %v", err)
+	}
+	if critical.State.Severity != AlertSeverityCritical {
+		t.Fatalf("critical severity = %q, want critical", critical.State.Severity)
+	}
+
+	latched, err := Evaluate(spec, critical.State, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 9, 41, 0, 0, time.UTC),
+		SeverityThreshold: &SeverityThresholdEvidence{
+			Metric:    "memory-limit-percent",
+			Direction: ThresholdDirectionAbove,
+			Observed:  88,
+		},
+	})
+	if err != nil {
+		t.Fatalf("latched evaluation failed: %v", err)
+	}
+	if latched.State.State != AlertStateFiring {
+		t.Fatalf("latched state = %q, want firing", latched.State.State)
+	}
+	if latched.State.Severity != AlertSeverityCritical {
+		t.Fatalf("latched severity = %q, want critical", latched.State.Severity)
+	}
+	if latched.Transition != nil {
+		t.Fatalf("latched transition = %+v, want nil", latched.Transition)
+	}
+
+	cleared, err := Evaluate(spec, latched.State, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 9, 42, 0, 0, time.UTC),
+		SeverityThreshold: &SeverityThresholdEvidence{
+			Metric:    "memory-limit-percent",
+			Direction: ThresholdDirectionAbove,
+			Observed:  84,
+		},
+	})
+	if err != nil {
+		t.Fatalf("clear evaluation failed: %v", err)
+	}
+	if cleared.State.State != AlertStateClear {
+		t.Fatalf("cleared state = %q, want clear", cleared.State.State)
+	}
+	if cleared.Transition == nil || cleared.Transition.Kind != EvaluationTransitionRecovered {
+		t.Fatalf("cleared transition = %+v, want recovered", cleared.Transition)
+	}
+}
+
 func TestEvaluateChangeThresholdAbsoluteAndGrowth(t *testing.T) {
 	spec := ResourceAlertSpec{
 		ID:           "pmg-quarantine-spam",

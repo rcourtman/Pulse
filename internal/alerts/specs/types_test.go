@@ -384,6 +384,44 @@ func TestSeverityThresholdSpecValidateRejectsInvertedAboveBands(t *testing.T) {
 	}
 }
 
+func TestSeverityThresholdSpecValidateAcceptsRecoveryBelowWarning(t *testing.T) {
+	t.Parallel()
+
+	recovery := 85.0
+	spec := SeverityThresholdSpec{
+		Metric:    "memory-limit-percent",
+		Direction: ThresholdDirectionAbove,
+		Warning:   90,
+		Critical:  95,
+		Recovery:  &recovery,
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestSeverityThresholdSpecValidateRejectsRecoveryAtOrAboveWarning(t *testing.T) {
+	t.Parallel()
+
+	recovery := 90.0
+	spec := SeverityThresholdSpec{
+		Metric:    "memory-limit-percent",
+		Direction: ThresholdDirectionAbove,
+		Warning:   90,
+		Critical:  95,
+		Recovery:  &recovery,
+	}
+
+	err := spec.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "recovery must be below the lowest active threshold") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestChangeThresholdSpecValidateRejectsPercentWithoutDelta(t *testing.T) {
 	t.Parallel()
 

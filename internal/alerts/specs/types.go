@@ -317,6 +317,7 @@ type SeverityThresholdSpec struct {
 	Direction ThresholdDirection `json:"direction"`
 	Warning   float64            `json:"warning,omitempty"`
 	Critical  float64            `json:"critical,omitempty"`
+	Recovery  *float64           `json:"recovery,omitempty"`
 }
 
 func (s SeverityThresholdSpec) Validate() error {
@@ -342,6 +343,27 @@ func (s SeverityThresholdSpec) Validate() error {
 			if s.Critical > s.Warning {
 				return fmt.Errorf("critical must be less than or equal to warning when direction is below")
 			}
+		}
+	}
+	if s.Recovery == nil {
+		return nil
+	}
+	if !isFinite(*s.Recovery) {
+		return fmt.Errorf("recovery must be finite")
+	}
+
+	activation := s.Warning
+	if activation <= 0 {
+		activation = s.Critical
+	}
+	switch s.Direction {
+	case ThresholdDirectionAbove:
+		if *s.Recovery >= activation {
+			return fmt.Errorf("recovery must be below the lowest active threshold when direction is above")
+		}
+	case ThresholdDirectionBelow:
+		if *s.Recovery <= activation {
+			return fmt.Errorf("recovery must be above the highest active threshold when direction is below")
 		}
 	}
 	return nil

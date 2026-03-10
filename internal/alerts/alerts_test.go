@@ -2009,8 +2009,15 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 
 	resourceID := dockerResourceID(hostID, containerID)
 	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
-	if _, exists := m.activeAlerts[alertID]; !exists {
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
 		t.Fatalf("expected memory limit alert to be raised")
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-memory-limit" {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-memory-limit")
 	}
 
 	hostLow := models.DockerHost{
@@ -11630,6 +11637,12 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 		if alert.Type != "docker-container-health" {
 			t.Fatalf("expected alert type docker-container-health, got %s", alert.Type)
 		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+			t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-health" {
+			t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-health")
+		}
 	})
 
 	t.Run("container with other health status - warning alert", func(t *testing.T) {
@@ -11805,6 +11818,12 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		}
 		if alert.Type != "docker-container-oom-kill" {
 			t.Fatalf("expected alert type docker-container-oom-kill, got %s", alert.Type)
+		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+			t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-oom-kill" {
+			t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-oom-kill")
 		}
 	})
 
@@ -12165,6 +12184,12 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		}
 		if alert.Metadata["recentRestarts"] != 4 {
 			t.Fatalf("expected recentRestarts=4 in metadata, got %v", alert.Metadata["recentRestarts"])
+		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+			t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-restart-loop" {
+			t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-restart-loop")
 		}
 	})
 

@@ -79,8 +79,9 @@ func Evaluate(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvi
 	switch spec.Kind {
 	case AlertSpecKindMetricThreshold:
 		return evaluateMetricThreshold(spec, previous, evidence, now, fingerprint), nil
-	case AlertSpecKindSeverityThreshold,
-		AlertSpecKindChangeThreshold,
+	case AlertSpecKindSeverityThreshold:
+		return evaluateSeverityThreshold(spec, previous, evidence, now, fingerprint), nil
+	case AlertSpecKindChangeThreshold,
 		AlertSpecKindBaselineAnomaly,
 		AlertSpecKindHealthAssessment,
 		AlertSpecKindPostureThreshold,
@@ -94,6 +95,100 @@ func Evaluate(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvi
 	default:
 		return EvaluationResult{}, fmt.Errorf("unsupported spec kind %q", spec.Kind)
 	}
+}
+
+func evaluateSeverityThreshold(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvidence, now time.Time, fingerprint string) EvaluationResult {
+	result := EvaluationResult{Previous: previous}
+	next := previous
+	next.SpecID = spec.ID
+	next.SpecFingerprint = fingerprint
+	next.LastObservedAt = now
+
+	metric := evidence.SeverityThreshold
+	if metric == nil || spec.SeverityThreshold == nil {
+		return result
+	}
+
+	matched, severity, reason := matchesSeverityThreshold(*spec.SeverityThreshold, *metric)
+	if matched {
+		next.State = AlertStateFiring
+		next.Severity = severity
+		next.Reason = reason
+		next.ConsecutiveMatches = 1
+		if next.FirstMatchedAt.IsZero() {
+			next.FirstMatchedAt = now
+		}
+		if next.ActiveSince.IsZero() {
+			next.ActiveSince = now
+		}
+		result.State = next
+
+		switch {
+		case previous.State != AlertStateFiring:
+			result.Transition = &EvaluationTransition{
+				Kind:       EvaluationTransitionActivated,
+				SpecID:     spec.ID,
+				ResourceID: spec.ResourceID,
+				From:       previous.State,
+				To:         AlertStateFiring,
+				At:         now,
+				Severity:   severity,
+				Reason:     reason,
+				Evidence:   evidence,
+			}
+		case previous.Severity != "" && previous.Severity != severity:
+			result.Transition = &EvaluationTransition{
+				Kind:             EvaluationTransitionSeverityChanged,
+				SpecID:           spec.ID,
+				ResourceID:       spec.ResourceID,
+				From:             AlertStateFiring,
+				To:               AlertStateFiring,
+				At:               now,
+				PreviousSeverity: previous.Severity,
+				Severity:         severity,
+				Reason:           reason,
+				Evidence:         evidence,
+			}
+		}
+		return result
+	}
+
+	if previous.State == AlertStateFiring && severityThresholdStillLatched(*spec.SeverityThreshold, *metric) {
+		next.State = AlertStateFiring
+		next.Severity = previous.Severity
+		next.Reason = "severity-threshold-latched"
+		if next.FirstMatchedAt.IsZero() {
+			next.FirstMatchedAt = previous.FirstMatchedAt
+		}
+		if next.ActiveSince.IsZero() {
+			next.ActiveSince = previous.ActiveSince
+		}
+		result.State = next
+		return result
+	}
+
+	next.State = AlertStateClear
+	next.Severity = ""
+	next.Reason = ""
+	next.ConsecutiveMatches = 0
+	next.FirstMatchedAt = time.Time{}
+	next.ActiveSince = time.Time{}
+	result.State = next
+
+	if previous.State == AlertStateFiring || previous.State == AlertStatePending || previous.State == AlertStateSuppressed {
+		result.Transition = &EvaluationTransition{
+			Kind:             EvaluationTransitionRecovered,
+			SpecID:           spec.ID,
+			ResourceID:       spec.ResourceID,
+			From:             previous.State,
+			To:               AlertStateClear,
+			At:               now,
+			PreviousSeverity: previous.Severity,
+			Reason:           reason,
+			Evidence:         evidence,
+		}
+	}
+	return result
 }
 
 func evaluateMetricThreshold(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvidence, now time.Time, fingerprint string) EvaluationResult {
@@ -432,6 +527,24 @@ func matchesSeverityThreshold(spec SeverityThresholdSpec, evidence SeverityThres
 		}
 	default:
 		return false, "", ""
+	}
+}
+
+func severityThresholdStillLatched(spec SeverityThresholdSpec, evidence SeverityThresholdEvidence) bool {
+	if spec.Recovery == nil {
+		return false
+	}
+	if evidence.Direction != spec.Direction || evidence.Metric != spec.Metric {
+		return false
+	}
+
+	switch spec.Direction {
+	case ThresholdDirectionAbove:
+		return evidence.Observed >= *spec.Recovery
+	case ThresholdDirectionBelow:
+		return evidence.Observed <= *spec.Recovery
+	default:
+		return false
 	}
 }
 

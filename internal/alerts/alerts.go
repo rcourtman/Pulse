@@ -4945,6 +4945,20 @@ func (m *Manager) clearDockerContainerStateAlert(resourceID string) {
 	m.clearAlert(alertID)
 }
 
+func dockerContainerAlertMetadata(host models.DockerHost, container models.DockerContainer, containerName string) map[string]interface{} {
+	return map[string]interface{}{
+		"resourceType":  "app-container",
+		"hostId":        host.ID,
+		"hostName":      host.DisplayName,
+		"hostHostname":  host.Hostname,
+		"containerId":   container.ID,
+		"containerName": containerName,
+		"image":         container.Image,
+		"state":         container.State,
+		"status":        container.Status,
+	}
+}
+
 func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
 	health := strings.ToLower(strings.TrimSpace(container.Health))
 	if health == "" || health == "none" || health == "healthy" || health == "starting" {
@@ -4952,49 +4966,49 @@ func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container m
 		return
 	}
 
-	level := AlertLevelWarning
-	if health == "unhealthy" {
-		level = AlertLevelCritical
-	}
-
 	alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "docker-container-health",
-		Level:        level,
-		ResourceID:   resourceID,
-		ResourceName: containerName,
-		Node:         nodeName,
-		Instance:     instanceName,
-		Message:      fmt.Sprintf("Docker container '%s' health is %s", containerName, container.Health),
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
-		Metadata: map[string]interface{}{
-			"resourceType":  "app-container",
-			"hostId":        host.ID,
-			"hostName":      host.DisplayName,
-			"hostHostname":  host.Hostname,
-			"containerId":   container.ID,
-			"containerName": containerName,
-			"image":         container.Image,
-			"state":         container.State,
-			"status":        container.Status,
-			"health":        container.Health,
-		},
+	spec, err := buildCanonicalHealthAssessmentSpec(resourceID+"-health", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "docker-container-health", nil, false)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("resourceID", resourceID).
+			Str("container", containerName).
+			Msg("Skipping invalid canonical docker container health spec")
+		return
 	}
 
-	m.mu.Lock()
-	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-		alert.StartTime = existing.StartTime
+	severity := alertspecs.AlertSeverityWarning
+	if health == "unhealthy" {
+		severity = alertspecs.AlertSeverityCritical
 	}
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-	m.dispatchAlert(alert, false)
-	m.mu.Unlock()
+
+	metadata := dockerContainerAlertMetadata(host, container, containerName)
+	metadata["health"] = container.Health
+
+	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			HealthAssessment: &alertspecs.HealthAssessmentEvidence{
+				Signal:   "docker-container-health",
+				Severity: severity,
+				Codes:    []string{health},
+			},
+		},
+		AlertID:                      alertID,
+		AlertType:                    "docker-container-health",
+		ResourceID:                   resourceID,
+		ResourceName:                 containerName,
+		Node:                         nodeName,
+		Instance:                     instanceName,
+		Message:                      fmt.Sprintf("Docker container '%s' health is %s", containerName, container.Health),
+		Metadata:                     metadata,
+		AddToRecent:                  true,
+		AddToHistory:                 true,
+		DispatchAsync:                false,
+		NotifyOnSeverityChange:       true,
+		AddToHistoryOnSeverityChange: true,
+	})
 
 	log.Warn().
 		Str("container", containerName).
@@ -5063,42 +5077,41 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 
 	// Check if we have a restart loop
 	if recentCount > restartThreshold {
-		level := AlertLevelCritical
+		spec, err := buildCanonicalSeverityThresholdSpec(resourceID+"-restart-loop", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "restart-count-window", 0, float64(restartThreshold+1), false)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", resourceID).
+				Str("container", containerName).
+				Msg("Skipping invalid canonical docker container restart loop spec")
+			return
+		}
 
-		alert := &Alert{
-			ID:           alertID,
-			Type:         "docker-container-restart-loop",
-			Level:        level,
+		metadata := dockerContainerAlertMetadata(host, container, containerName)
+		metadata["restartCount"] = container.RestartCount
+		metadata["recentRestarts"] = recentCount
+
+		_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+			Spec: spec,
+			Evidence: alertspecs.AlertEvidence{
+				ObservedAt: now,
+				SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
+					Metric:    "restart-count-window",
+					Direction: alertspecs.ThresholdDirectionAbove,
+					Observed:  float64(recentCount),
+				},
+			},
+			AlertID:      alertID,
+			AlertType:    "docker-container-restart-loop",
 			ResourceID:   resourceID,
 			ResourceName: containerName,
 			Node:         nodeName,
 			Instance:     instanceName,
 			Message:      fmt.Sprintf("Docker container '%s' has restarted %d times in the last %d minutes (restart loop detected)", containerName, recentCount, timeWindow/60),
-			StartTime:    now,
-			LastSeen:     now,
-			Metadata: map[string]interface{}{
-				"hostId":         host.ID,
-				"hostName":       host.DisplayName,
-				"containerId":    container.ID,
-				"containerName":  containerName,
-				"image":          container.Image,
-				"state":          container.State,
-				"status":         container.Status,
-				"restartCount":   container.RestartCount,
-				"recentRestarts": recentCount,
-			},
-		}
-
-		m.mu.Lock()
-		if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-			alert.StartTime = existing.StartTime
-		}
-		m.preserveAlertState(alertID, alert)
-		m.activeAlerts[alertID] = alert
-		m.recentAlerts[alertID] = alert
-		m.historyManager.AddAlert(*alert)
-		m.dispatchAlert(alert, false)
-		m.mu.Unlock()
+			Metadata:     metadata,
+			AddToRecent:  true,
+			AddToHistory: true,
+		})
 
 		log.Warn().
 			Str("container", containerName).
@@ -5120,60 +5133,52 @@ func (m *Manager) checkDockerContainerOOMKill(host models.DockerHost, container 
 	state := strings.ToLower(strings.TrimSpace(container.State))
 	if (state == "exited" || state == "dead") && container.ExitCode == 137 {
 		m.mu.Lock()
-		lastExitCode, tracked := m.dockerLastExitCode[resourceID]
+		m.dockerLastExitCode[resourceID] = 137
+		m.mu.Unlock()
 
-		// Only alert if this is a new OOM kill (exit code changed to 137)
-		if !tracked || lastExitCode != 137 {
-			m.dockerLastExitCode[resourceID] = 137
-			m.mu.Unlock()
-
-			level := AlertLevelCritical
-
-			alert := &Alert{
-				ID:           alertID,
-				Type:         "docker-container-oom-kill",
-				Level:        level,
-				ResourceID:   resourceID,
-				ResourceName: containerName,
-				Node:         nodeName,
-				Instance:     instanceName,
-				Message:      fmt.Sprintf("Docker container '%s' was killed due to out of memory (OOM)", containerName),
-				StartTime:    time.Now(),
-				LastSeen:     time.Now(),
-				Metadata: map[string]interface{}{
-					"hostId":           host.ID,
-					"hostName":         host.DisplayName,
-					"containerId":      container.ID,
-					"containerName":    containerName,
-					"image":            container.Image,
-					"state":            container.State,
-					"status":           container.Status,
-					"exitCode":         container.ExitCode,
-					"memoryUsageBytes": container.MemoryUsage,
-					"memoryLimitBytes": container.MemoryLimit,
-				},
-			}
-
-			m.mu.Lock()
-			if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-				alert.StartTime = existing.StartTime
-			}
-			m.preserveAlertState(alertID, alert)
-			m.activeAlerts[alertID] = alert
-			m.recentAlerts[alertID] = alert
-			m.historyManager.AddAlert(*alert)
-			m.dispatchAlert(alert, false)
-			m.mu.Unlock()
-
-			log.Error().
+		spec, err := buildCanonicalHealthAssessmentSpec(resourceID+"-oom-kill", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "docker-container-exit", []string{"oom-kill"}, false)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", resourceID).
 				Str("container", containerName).
-				Str("host", host.DisplayName).
-				Int64("memoryUsage", container.MemoryUsage).
-				Int64("memoryLimit", container.MemoryLimit).
-				Msg("Docker container OOM killed")
-		} else {
-			m.mu.Unlock()
+				Msg("Skipping invalid canonical docker container OOM spec")
+			return
 		}
+
+		metadata := dockerContainerAlertMetadata(host, container, containerName)
+		metadata["exitCode"] = container.ExitCode
+		metadata["memoryUsageBytes"] = container.MemoryUsage
+		metadata["memoryLimitBytes"] = container.MemoryLimit
+
+		_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+			Spec: spec,
+			Evidence: alertspecs.AlertEvidence{
+				ObservedAt: time.Now(),
+				HealthAssessment: &alertspecs.HealthAssessmentEvidence{
+					Signal:   "docker-container-exit",
+					Severity: alertspecs.AlertSeverityCritical,
+					Codes:    []string{"oom-kill"},
+				},
+			},
+			AlertID:      alertID,
+			AlertType:    "docker-container-oom-kill",
+			ResourceID:   resourceID,
+			ResourceName: containerName,
+			Node:         nodeName,
+			Instance:     instanceName,
+			Message:      fmt.Sprintf("Docker container '%s' was killed due to out of memory (OOM)", containerName),
+			Metadata:     metadata,
+			AddToRecent:  true,
+			AddToHistory: true,
+		})
+
+		log.Error().
+			Str("container", containerName).
+			Str("host", host.DisplayName).
+			Int64("memoryUsage", container.MemoryUsage).
+			Int64("memoryLimit", container.MemoryLimit).
+			Msg("Docker container OOM killed")
 	} else {
 		// Update last exit code if it changed
 		if container.ExitCode != 0 {
@@ -5209,63 +5214,51 @@ func (m *Manager) checkDockerContainerMemoryLimit(host models.DockerHost, contai
 	// Calculate percentage of limit used
 	limitPercent := (float64(container.MemoryUsage) / float64(container.MemoryLimit)) * 100
 
-	if limitPercent >= warnThreshold {
-		level := AlertLevelWarning
-		if limitPercent >= criticalThreshold {
-			level = AlertLevelCritical
-		}
+	clearThreshold := warnThreshold - 5
+	recovery := clearThreshold
+	spec, err := buildCanonicalSeverityThresholdSpecWithRecovery(resourceID+"-memory-limit", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "memory-limit-percent", warnThreshold, criticalThreshold, &recovery, false)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("resourceID", resourceID).
+			Str("container", containerName).
+			Msg("Skipping invalid canonical docker container memory limit spec")
+		return
+	}
 
-		alert := &Alert{
-			ID:           alertID,
-			Type:         "docker-container-memory-limit",
-			Level:        level,
-			ResourceID:   resourceID,
-			ResourceName: containerName,
-			Node:         nodeName,
-			Instance:     instanceName,
-			Message:      fmt.Sprintf("Docker container '%s' is using %.1f%% of its memory limit (%d MB / %d MB)", containerName, limitPercent, container.MemoryUsage/(1024*1024), container.MemoryLimit/(1024*1024)),
-			StartTime:    time.Now(),
-			LastSeen:     time.Now(),
-			Metadata: map[string]interface{}{
-				"hostId":           host.ID,
-				"hostName":         host.DisplayName,
-				"containerId":      container.ID,
-				"containerName":    containerName,
-				"image":            container.Image,
-				"memoryUsageBytes": container.MemoryUsage,
-				"memoryLimitBytes": container.MemoryLimit,
-				"limitPercent":     limitPercent,
+	metadata := dockerContainerAlertMetadata(host, container, containerName)
+	metadata["memoryUsageBytes"] = container.MemoryUsage
+	metadata["memoryLimitBytes"] = container.MemoryLimit
+	metadata["limitPercent"] = limitPercent
+
+	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
+				Metric:    "memory-limit-percent",
+				Direction: alertspecs.ThresholdDirectionAbove,
+				Observed:  limitPercent,
 			},
-		}
+		},
+		AlertID:      alertID,
+		AlertType:    "docker-container-memory-limit",
+		ResourceID:   resourceID,
+		ResourceName: containerName,
+		Node:         nodeName,
+		Instance:     instanceName,
+		Message:      fmt.Sprintf("Docker container '%s' is using %.1f%% of its memory limit (%d MB / %d MB)", containerName, limitPercent, container.MemoryUsage/(1024*1024), container.MemoryLimit/(1024*1024)),
+		Metadata:     metadata,
+		AddToRecent:  true,
+		AddToHistory: true,
+	})
 
-		m.mu.Lock()
-		if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-			alert.StartTime = existing.StartTime
-			existing.LastSeen = time.Now()
-			existing.Level = level
-			existing.Message = alert.Message
-			existing.Metadata = alert.Metadata
-			m.mu.Unlock()
-			return
-		}
-		m.preserveAlertState(alertID, alert)
-		m.activeAlerts[alertID] = alert
-		m.recentAlerts[alertID] = alert
-		m.historyManager.AddAlert(*alert)
-		m.dispatchAlert(alert, false)
-		m.mu.Unlock()
-
+	if limitPercent >= warnThreshold {
 		log.Warn().
 			Str("container", containerName).
 			Str("host", host.DisplayName).
 			Float64("limitPercent", limitPercent).
 			Msg("Docker container approaching memory limit")
-	} else {
-		// Clear alert if below warning threshold minus 5% (hysteresis)
-		clearThreshold := warnThreshold - 5
-		if limitPercent < clearThreshold {
-			m.clearAlert(alertID)
-		}
 	}
 }
 
@@ -5358,51 +5351,46 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 
 	// Create or update the alert
 	pendingHours := int(pendingDuration.Hours())
-	message := fmt.Sprintf("Docker container '%s' has an image update available for %d hours", containerName, pendingHours)
-
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "docker-container-update",
-		Level:        AlertLevelWarning,
-		ResourceID:   resourceID,
-		ResourceName: containerName,
-		Node:         nodeName,
-		Instance:     instanceName,
-		Message:      message,
-		StartTime:    firstSeen,
-		LastSeen:     time.Now(),
-		Metadata: map[string]interface{}{
-			"resourceType":   "app-container",
-			"hostId":         host.ID,
-			"hostName":       host.DisplayName,
-			"hostHostname":   host.Hostname,
-			"containerId":    container.ID,
-			"containerName":  containerName,
-			"image":          container.Image,
-			"currentDigest":  container.UpdateStatus.CurrentDigest,
-			"latestDigest":   container.UpdateStatus.LatestDigest,
-			"lastChecked":    container.UpdateStatus.LastChecked,
-			"firstSeen":      firstSeen,
-			"pendingHours":   pendingHours,
-			"thresholdHours": delayHours,
-		},
-	}
-
-	m.mu.Lock()
-	if existing, ok := m.activeAlerts[alertID]; ok && existing != nil {
-		// Update existing alert
-		existing.LastSeen = time.Now()
-		existing.Message = message
-		existing.Metadata = alert.Metadata
-		m.mu.Unlock()
+	spec, err := buildCanonicalSeverityThresholdSpec(resourceID+"-image-update", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "image-update-hours", float64(delayHours), 0, false)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("resourceID", resourceID).
+			Str("container", containerName).
+			Msg("Skipping invalid canonical docker container update spec")
 		return
 	}
-	m.preserveAlertState(alertID, alert)
-	m.activeAlerts[alertID] = alert
-	m.recentAlerts[alertID] = alert
-	m.historyManager.AddAlert(*alert)
-	m.dispatchAlert(alert, false)
-	m.mu.Unlock()
+
+	metadata := dockerContainerAlertMetadata(host, container, containerName)
+	metadata["currentDigest"] = container.UpdateStatus.CurrentDigest
+	metadata["latestDigest"] = container.UpdateStatus.LatestDigest
+	metadata["lastChecked"] = container.UpdateStatus.LastChecked
+	metadata["firstSeen"] = firstSeen
+	metadata["pendingHours"] = pendingHours
+	metadata["thresholdHours"] = delayHours
+
+	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
+				Metric:    "image-update-hours",
+				Direction: alertspecs.ThresholdDirectionAbove,
+				Observed:  pendingDuration.Hours(),
+			},
+		},
+		AlertID:           alertID,
+		AlertType:         "docker-container-update",
+		ResourceID:        resourceID,
+		ResourceName:      containerName,
+		Node:              nodeName,
+		Instance:          instanceName,
+		Message:           fmt.Sprintf("Docker container '%s' has an image update available for %d hours", containerName, pendingHours),
+		StartTimeOverride: firstSeen,
+		Metadata:          metadata,
+		AddToRecent:       true,
+		AddToHistory:      true,
+	})
 
 	log.Warn().
 		Str("container", containerName).

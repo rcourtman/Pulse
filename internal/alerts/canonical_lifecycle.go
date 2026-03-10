@@ -150,6 +150,15 @@ func buildCanonicalSeverityThresholdSpec(specID, resourceID, title string, resou
 	return spec, spec.Validate()
 }
 
+func buildCanonicalSeverityThresholdSpecWithRecovery(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, warning, critical float64, recovery *float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	spec, err := buildCanonicalSeverityThresholdSpec(specID, resourceID, title, resourceType, metric, warning, critical, disabled)
+	if err != nil {
+		return spec, err
+	}
+	spec.SeverityThreshold.Recovery = recovery
+	return spec, spec.Validate()
+}
+
 func buildCanonicalChangeThresholdSpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, metric string, warningCurrent, criticalCurrent, warningDelta, criticalDelta, warningPercent, criticalPercent float64, window time.Duration, disabled bool) (alertspecs.ResourceAlertSpec, error) {
 	spec := alertspecs.ResourceAlertSpec{
 		ID:           specID,

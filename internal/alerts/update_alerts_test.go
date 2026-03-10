@@ -159,6 +159,12 @@ func TestCheckDockerContainerImageUpdate(t *testing.T) {
 				if a.Level != AlertLevelWarning {
 					t.Errorf("Expected level %q, got %q", AlertLevelWarning, a.Level)
 				}
+				if got := a.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
+					t.Errorf("canonicalAlertKind = %v, want severity-threshold", got)
+				}
+				if got := a.Metadata["canonicalSpecID"]; got != testResourceID+"-image-update" {
+					t.Errorf("canonicalSpecID = %v, want %s", got, testResourceID+"-image-update")
+				}
 				break
 			}
 		}
