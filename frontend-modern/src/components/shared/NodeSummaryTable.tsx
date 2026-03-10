@@ -655,6 +655,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                 <StackedMemoryBar
                                   used={node!.memory?.used || 0}
                                   total={node!.memory?.total || 0}
+                                  cache={node!.memory?.cache || 0}
                                   balloon={node!.memory?.balloon || 0}
                                   swapUsed={node!.memory?.swapUsed || 0}
                                   swapTotal={node!.memory?.swapTotal || 0}

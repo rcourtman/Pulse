@@ -9,6 +9,7 @@ import type { AnomalyReport } from '@/types/aiIntelligence';
 interface StackedMemoryBarProps {
     used: number;
     total: number;
+    cache?: number;      // Reclaimable buff/cache; used + cache + free ≈ total
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;
@@ -27,7 +28,8 @@ const anomalySeverityClass: Record<string, string> = {
 // Colors for memory segments
 const MEMORY_COLORS = {
     active: 'rgba(34, 197, 94, 0.6)',   // green (base, overridden by threshold)
-    balloon: 'rgba(59, 130, 246, 0.6)',  // yellow to blue
+    cache: 'rgba(251, 191, 36, 0.45)',   // amber, muted
+    balloon: 'rgba(59, 130, 246, 0.6)',  // blue
     swap: 'rgba(168, 85, 247, 0.6)',    // purple
 };
 
@@ -83,6 +85,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         if (props.total <= 0) return [];
 
         const balloon = props.balloon || 0;
+        const cache = props.cache || 0;
 
         // Proxmox balloon semantics:
         // - balloon = 0: ballooning not enabled/configured
@@ -92,37 +95,36 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         // Only show balloon segment when actual ballooning is in effect
         const hasActiveBallooning = balloon > 0 && balloon < props.total;
 
-        // Used memory is what the guest is actually consuming
+        // Used memory is what the guest is actually consuming (excludes reclaimable cache)
         const usedPercent = (props.used / props.total) * 100;
+        const cachePercent = (cache / props.total) * 100;
+
+        const segs: Array<{ type: string; bytes: number; percent: number; color: string }> = [];
+
+        // Always show the used segment
+        segs.push({ type: 'Used', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) });
+
+        // Cache segment (reclaimable buff/cache) — shown as muted amber
+        if (cache > 0) {
+            segs.push({ type: 'Cache', bytes: cache, percent: cachePercent, color: MEMORY_COLORS.cache });
+        }
 
         if (hasActiveBallooning) {
-            // With active ballooning:
-            // - Green: actual used memory
-            // - Yellow: balloon limit marker (shows where the guest is capped)
-            // The balloon limit shows as a segment from used to balloon
-            const balloonLimitPercent = Math.max(0, (balloon / props.total) * 100 - usedPercent);
+            // With active ballooning, show balloon limit marker after used+cache
+            const usedPlusCache = props.used + cache;
+            const balloonLimitPercent = Math.max(0, (balloon / props.total) * 100 - (usedPlusCache / props.total) * 100);
 
-            const segs = [
-                { type: 'Active', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) },
-            ];
-
-            // Only show balloon segment if there's room between used and balloon limit
-            if (balloonLimitPercent > 0 && balloon > props.used) {
+            if (balloonLimitPercent > 0 && balloon > usedPlusCache) {
                 segs.push({
                     type: 'Balloon',
-                    bytes: balloon - props.used,
+                    bytes: balloon - usedPlusCache,
                     percent: balloonLimitPercent,
                     color: MEMORY_COLORS.balloon,
                 });
             }
-
-            return segs.filter(s => s.bytes > 0);
         }
 
-        // No active ballooning - show used memory with threshold-based coloring
-        return [
-            { type: 'Active', bytes: props.used, percent: usedPercent, color: getMemoryColor(usedPercent) },
-        ].filter(s => s.bytes > 0);
+        return segs.filter(s => s.bytes > 0);
     });
 
     const swapPercent = createMemo(() => {
@@ -160,6 +162,17 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
     const handleMouseLeave = () => {
         setShowTooltip(false);
     };
+
+    // Truly free memory (excludes cache; capped at balloon limit when active)
+    const trulyFree = createMemo(() => {
+        const cache = props.cache || 0;
+        const balloon = props.balloon || 0;
+        const hasActiveBallooning = balloon > 0 && balloon < props.total;
+        // When ballooning is active, the guest can only use up to 'balloon' bytes,
+        // so free = balloon - used - cache (not total - used - cache).
+        const ceiling = hasActiveBallooning ? balloon : props.total;
+        return Math.max(0, ceiling - props.used - cache);
+    });
 
     return (
         <Show
@@ -251,6 +264,15 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                         </span>
                                     </div>
 
+                                    <Show when={(props.cache || 0) > 0}>
+                                        <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
+                                            <span class="text-amber-400">Cache</span>
+                                            <span class="whitespace-nowrap text-gray-300">
+                                                {formatBytes(props.cache || 0)}
+                                            </span>
+                                        </div>
+                                    </Show>
+
                                     <Show when={(props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
                                         <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
                                             <span class="text-blue-400">Balloon Limit</span>
@@ -263,7 +285,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                                     <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
                                         <span class="text-gray-400">Free</span>
                                         <span class="whitespace-nowrap text-gray-300">
-                                            {formatBytes(props.total - props.used)}
+                                            {formatBytes(trulyFree())}
                                         </span>
                                     </div>
 

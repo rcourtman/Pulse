@@ -297,6 +297,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 				memTotal := vm.MaxMem
 				var vmStatus *proxmox.VMStatus
 				memAvailable := uint64(0)
+				memRawFree := uint64(0) // Truly free memory (MemFree), for cache segment calculation
 				memInfoTotalMinusUsed := uint64(0)
 				rrdUsed := uint64(0)
 				agentEnabled := vm.Agent > 0
@@ -325,6 +326,10 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							guestRaw.MemInfoCached = status.MemInfo.Cached
 							guestRaw.MemInfoShared = status.MemInfo.Shared
 
+							if status.MemInfo.Free > 0 {
+								memRawFree = status.MemInfo.Free
+							}
+
 							selection := selectVMAvailableFromMemInfo(status.MemInfo)
 							memInfoTotalMinusUsed = selection.TotalMinusUsed
 							guestRaw.MemInfoTotalMinusUsed = memInfoTotalMinusUsed
@@ -333,6 +338,11 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								memorySource = selection.Source
 							}
 						}
+						// Note: do NOT fall back to vmStatus.FreeMem for memRawFree.
+						// FreeMem is relative to the balloon allocation (guest-visible total),
+						// while memFree is derived from MaxMem. Mixing reference frames would
+						// inflate the cache segment by the balloon gap. Only MemInfo.Free is
+						// safe because it shares the same reference frame as MemInfo.Available.
 						// Note: We intentionally do NOT override memTotal with balloon.
 						// The balloon value is tracked separately in memory.balloon for
 						// visualization purposes. Using balloon as total causes user
@@ -815,6 +825,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					Used:  memUsedBytes,
 					Free:  memFreeBytes,
 					Usage: safePercentage(float64(memUsed), float64(memTotal)),
+				}
+				// Derive reclaimable cache: the difference between "available" memory
+				// (what the OS can reclaim) and "truly free" memory (unused pages).
+				if memRawFree > 0 && memFreeBytes > clampToInt64(memRawFree) {
+					memory.Cache = memFreeBytes - clampToInt64(memRawFree)
+					memory.Free = clampToInt64(memRawFree)
 				}
 				if guestRaw.Balloon > 0 {
 					memory.Balloon = clampToInt64(guestRaw.Balloon)

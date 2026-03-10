@@ -1468,6 +1468,7 @@ const HostRow: Component<HostRowProps> = (props) => {
               <StackedMemoryBar
                 used={props.host.memory?.used || 0}
                 total={props.host.memory?.total || 0}
+                cache={props.host.memory?.cache || 0}
                 balloon={props.host.memory?.balloon || 0}
                 swapUsed={props.host.memory?.swapUsed || 0}
                 swapTotal={props.host.memory?.swapTotal || 0}

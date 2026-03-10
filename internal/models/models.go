@@ -1052,6 +1052,7 @@ type Memory struct {
 	Used      int64   `json:"used"`
 	Free      int64   `json:"free"`
 	Usage     float64 `json:"usage"`
+	Cache     int64   `json:"cache,omitempty"`     // Reclaimable buff/cache (Available - Free); used + cache + free ≈ total
 	Balloon   int64   `json:"balloon,omitempty"`
 	SwapUsed  int64   `json:"swapUsed,omitempty"`
 	SwapTotal int64   `json:"swapTotal,omitempty"`

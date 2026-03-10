@@ -881,6 +881,7 @@ export interface Memory {
   used: number;
   free: number;
   usage: number;
+  cache?: number;    // Reclaimable buff/cache; used + cache + free ≈ total
   balloon?: number;
   swapUsed?: number;
   swapTotal?: number;

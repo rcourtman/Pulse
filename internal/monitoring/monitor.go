@@ -7269,6 +7269,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			}
 			var detailedStatus *proxmox.VMStatus
 			memAvailable := uint64(0)
+			memRawFree := uint64(0) // Truly free memory (MemFree), for cache segment calculation
 			memInfoTotalMinusUsed := uint64(0)
 			rrdUsed := uint64(0)
 			agentEnabled := false
@@ -7318,6 +7319,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						guestRaw.MemInfoCached = detailedStatus.MemInfo.Cached
 						guestRaw.MemInfoShared = detailedStatus.MemInfo.Shared
 
+						if detailedStatus.MemInfo.Free > 0 {
+							memRawFree = detailedStatus.MemInfo.Free
+						}
+
 						selection := selectVMAvailableFromMemInfo(detailedStatus.MemInfo)
 						memInfoTotalMinusUsed = selection.TotalMinusUsed
 						guestRaw.MemInfoTotalMinusUsed = memInfoTotalMinusUsed
@@ -7342,6 +7347,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					if detailedStatus.MaxMem > 0 {
 						memTotal = detailedStatus.MaxMem
 					}
+					// Note: do NOT fall back to detailedStatus.FreeMem for memRawFree.
+					// FreeMem is relative to the balloon allocation (guest-visible total),
+					// while memFree is derived from MaxMem. Mixing reference frames would
+					// inflate the cache segment by the balloon gap. Only MemInfo.Free is
+					// safe because it shares the same reference frame as MemInfo.Available.
 				} else {
 					// No vmStatus available - keep cluster/resources data
 					log.Debug().
@@ -7840,6 +7850,14 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			}
 			if memory.Used > memory.Total {
 				memory.Used = memory.Total
+			}
+			// Derive reclaimable cache: the difference between "available" memory
+			// (what the OS can reclaim) and "truly free" memory (unused pages).
+			// This lets the frontend show a split bar: used | cache | free.
+			if memRawFree > 0 && memFree > memRawFree {
+				memory.Cache = int64(memFree - memRawFree)
+				// Adjust Free to reflect truly free pages, not available
+				memory.Free = int64(memRawFree)
 			}
 			if detailedStatus != nil && detailedStatus.Balloon > 0 {
 				memory.Balloon = int64(detailedStatus.Balloon)
