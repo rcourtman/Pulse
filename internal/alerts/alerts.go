@@ -63,6 +63,7 @@ func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
 // Alert represents an active alert
 type Alert struct {
 	ID              string                 `json:"id"`
+	LegacyID        string                 `json:"legacyId,omitempty"`
 	Type            string                 `json:"type"` // cpu, memory, disk, etc.
 	Level           AlertLevel             `json:"level"`
 	ResourceID      string                 `json:"resourceId"` // guest or node ID
@@ -924,7 +925,7 @@ func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string,
 		return
 	}
 
-	publicID := effectiveAlertID(alert, fallbackID)
+	publicID := exportedAlertID(alert, fallbackID)
 	trackingKey := canonicalTrackingKeyForAlert(alert)
 
 	callbackFunc := func() {
@@ -954,7 +955,7 @@ func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
 		return
 	}
 
-	alertCopy := alert.Clone()
+	alertCopy := cloneAlertForOutput(alert)
 	go func(a *Alert, u string) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -975,7 +976,7 @@ func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
 		return
 	}
 
-	alertCopy := alert.Clone()
+	alertCopy := cloneAlertForOutput(alert)
 	go func(a *Alert, u string) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -997,7 +998,7 @@ func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
 	}
 
 	// Clone alert to prevent concurrent modification
-	alertCopy := alert.Clone()
+	alertCopy := cloneAlertForOutput(alert)
 	go func(a *Alert, lvl int) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -1128,7 +1129,7 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		recordAlertFired(alert)
 	}
 
-	alertCopy := alert.Clone()
+	alertCopy := cloneAlertForOutput(alert)
 	if async {
 		go func(a *Alert) {
 			defer func() {
@@ -4869,7 +4870,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	m.mu.RUnlock()
 	if alert != nil {
 		if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
-			alertCopy := alert.Clone()
+			alertCopy := cloneAlertForOutput(alert)
 			go func(a *Alert) {
 				defer func() {
 					if r := recover(); r != nil {
@@ -6865,7 +6866,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 			// Trigger AI analysis callback unconditionally (bypasses notification suppression)
 			if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
-				alertCopy := alert.Clone()
+				alertCopy := cloneAlertForOutput(alert)
 				go func(a *Alert) {
 					defer func() {
 						if r := recover(); r != nil {
@@ -7294,7 +7295,7 @@ func (m *Manager) GetActiveAlerts() []Alert {
 
 	alerts := make([]Alert, 0, len(m.activeAlerts))
 	for _, alert := range m.activeAlerts {
-		a := *alert
+		a := *cloneAlertForOutput(alert)
 		// Ensure display name is current (handles upgrades, renames, and
 		// alerts created before the cache was populated).
 		if dn := m.resolveNodeDisplayName(a.Node); dn != "" {
@@ -7507,20 +7508,22 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 
 	resolved := make([]models.ResolvedAlert, 0, len(m.recentlyResolved))
 	for _, alert := range m.recentlyResolved {
+		exported := cloneAlertForOutput(alert.Alert)
 		resolved = append(resolved, models.ResolvedAlert{
 			Alert: models.Alert{
-				ID:           alert.ID,
-				Type:         alert.Type,
-				Level:        string(alert.Level),
-				ResourceID:   alert.ResourceID,
-				ResourceName: alert.ResourceName,
-				Node:         alert.Node,
-				Instance:     alert.Instance,
-				Message:      alert.Message,
-				Value:        alert.Value,
-				Threshold:    alert.Threshold,
-				StartTime:    alert.StartTime,
-				Acknowledged: alert.Acknowledged,
+				ID:           exported.ID,
+				LegacyID:     exported.LegacyID,
+				Type:         exported.Type,
+				Level:        string(exported.Level),
+				ResourceID:   exported.ResourceID,
+				ResourceName: exported.ResourceName,
+				Node:         exported.Node,
+				Instance:     exported.Instance,
+				Message:      exported.Message,
+				Value:        exported.Value,
+				Threshold:    exported.Threshold,
+				StartTime:    exported.StartTime,
+				Acknowledged: exported.Acknowledged,
 			},
 			ResolvedTime: alert.ResolvedTime,
 		})
@@ -7539,14 +7542,14 @@ func (m *Manager) GetResolvedAlert(alertID string) *ResolvedAlert {
 	}
 
 	return &ResolvedAlert{
-		Alert:        resolved.Alert.Clone(),
+		Alert:        cloneAlertForOutput(resolved.Alert),
 		ResolvedTime: resolved.ResolvedTime,
 	}
 }
 
 // GetAlertHistory returns alert history
 func (m *Manager) GetAlertHistory(limit int) []Alert {
-	return m.historyManager.GetAllHistory(limit)
+	return canonicalizeAlertHistoryForOutput(m.historyManager.GetAllHistory(limit))
 }
 
 // GetAlertHistorySince returns alert history entries created after the provided time.
@@ -7555,7 +7558,7 @@ func (m *Manager) GetAlertHistorySince(since time.Time, limit int) []Alert {
 		return m.GetAlertHistory(limit)
 	}
 
-	return m.historyManager.GetHistory(since, limit)
+	return canonicalizeAlertHistoryForOutput(m.historyManager.GetHistory(since, limit))
 }
 
 // ClearAlertHistory clears all alert history

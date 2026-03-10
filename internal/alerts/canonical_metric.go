@@ -201,7 +201,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			asyncSaveActiveAlerts("canonical metric create", m.SaveActiveAlerts)
 
 			if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
-				alertCopy := alert.Clone()
+				alertCopy := cloneAlertForOutput(alert)
 				go func(a *Alert) {
 					defer func() {
 						if r := recover(); r != nil {

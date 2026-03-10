@@ -17,8 +17,14 @@ func activeAlertStorageKey(alert *Alert, fallback string) string {
 }
 
 func effectiveAlertID(alert *Alert, fallback string) string {
-	if alert != nil && alert.ID != "" {
-		return alert.ID
+	if alert != nil {
+		backfillCanonicalIdentity(alert)
+		if alert.LegacyID != "" {
+			return alert.LegacyID
+		}
+		if alert.ID != "" {
+			return alert.ID
+		}
 	}
 	return fallback
 }
@@ -31,8 +37,8 @@ func (m *Manager) registerActiveAlertAliasNoLock(storageKey string, alert *Alert
 		m.activeAlertAlias = make(map[string]string)
 	}
 	backfillCanonicalIdentity(alert)
-	if alert.ID != "" && alert.ID != storageKey {
-		m.activeAlertAlias[alert.ID] = storageKey
+	if alias := effectiveAlertID(alert, ""); alias != "" && alias != storageKey {
+		m.activeAlertAlias[alias] = storageKey
 	}
 	if alert.CanonicalState != "" && alert.CanonicalState != storageKey {
 		m.activeAlertAlias[alert.CanonicalState] = storageKey
@@ -98,8 +104,8 @@ func (m *Manager) unregisterActiveAlertAliasNoLock(storageKey string, alert *Ale
 	}
 	if alert != nil {
 		backfillCanonicalIdentity(alert)
-		if alert.ID != "" && alert.ID != storageKey {
-			delete(m.activeAlertAlias, alert.ID)
+		if alias := effectiveAlertID(alert, ""); alias != "" && alias != storageKey {
+			delete(m.activeAlertAlias, alias)
 		}
 		if alert.CanonicalState != "" && alert.CanonicalState != storageKey {
 			delete(m.activeAlertAlias, alert.CanonicalState)
@@ -115,8 +121,8 @@ func (m *Manager) registerResolvedAliasUnlocked(storageKey string, resolved *Res
 		m.resolvedAlias = make(map[string]string)
 	}
 	backfillCanonicalIdentity(resolved.Alert)
-	if resolved.Alert.ID != "" && resolved.Alert.ID != storageKey {
-		m.resolvedAlias[resolved.Alert.ID] = storageKey
+	if alias := effectiveAlertID(resolved.Alert, ""); alias != "" && alias != storageKey {
+		m.resolvedAlias[alias] = storageKey
 	}
 	if resolved.Alert.CanonicalState != "" && resolved.Alert.CanonicalState != storageKey {
 		m.resolvedAlias[resolved.Alert.CanonicalState] = storageKey
@@ -129,8 +135,8 @@ func (m *Manager) unregisterResolvedAliasUnlocked(storageKey string, resolved *R
 	}
 	if resolved != nil && resolved.Alert != nil {
 		backfillCanonicalIdentity(resolved.Alert)
-		if resolved.Alert.ID != "" && resolved.Alert.ID != storageKey {
-			delete(m.resolvedAlias, resolved.Alert.ID)
+		if alias := effectiveAlertID(resolved.Alert, ""); alias != "" && alias != storageKey {
+			delete(m.resolvedAlias, alias)
 		}
 		if resolved.Alert.CanonicalState != "" && resolved.Alert.CanonicalState != storageKey {
 			delete(m.resolvedAlias, resolved.Alert.CanonicalState)

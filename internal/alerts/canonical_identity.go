@@ -15,6 +15,11 @@ func backfillCanonicalIdentity(alert *Alert) {
 	if alert == nil {
 		return
 	}
+	if alert.LegacyID == "" && alert.Metadata != nil {
+		if legacyID, ok := alert.Metadata["legacyAlertID"].(string); ok {
+			alert.LegacyID = legacyID
+		}
+	}
 	if alert.CanonicalSpecID == "" && alert.Metadata != nil {
 		if specID, ok := alert.Metadata["canonicalSpecID"].(string); ok {
 			alert.CanonicalSpecID = specID
@@ -28,6 +33,13 @@ func backfillCanonicalIdentity(alert *Alert) {
 	if alert.CanonicalState == "" {
 		alert.CanonicalState = buildCanonicalStateID(alert.ResourceID, alert.CanonicalSpecID)
 	}
+	if alert.CanonicalState != "" && alert.LegacyID == "" && alert.ID != "" && alert.ID != alert.CanonicalState {
+		alert.LegacyID = alert.ID
+		if alert.Metadata == nil {
+			alert.Metadata = make(map[string]interface{}, 1)
+		}
+		alert.Metadata["legacyAlertID"] = alert.LegacyID
+	}
 }
 
 func applyCanonicalIdentity(alert *Alert, specID, kind string) {
@@ -38,10 +50,58 @@ func applyCanonicalIdentity(alert *Alert, specID, kind string) {
 	alert.CanonicalKind = kind
 	alert.CanonicalState = buildCanonicalStateID(alert.ResourceID, specID)
 	if alert.Metadata == nil {
-		alert.Metadata = make(map[string]interface{}, 2)
+		alert.Metadata = make(map[string]interface{}, 3)
 	}
 	alert.Metadata["canonicalSpecID"] = specID
 	alert.Metadata["canonicalAlertKind"] = kind
+	if alert.ID != "" && alert.CanonicalState != "" && alert.ID != alert.CanonicalState {
+		alert.LegacyID = alert.ID
+		alert.Metadata["legacyAlertID"] = alert.ID
+	}
+}
+
+func exportedAlertID(alert *Alert, fallback string) string {
+	if alert != nil {
+		backfillCanonicalIdentity(alert)
+		if alert.CanonicalState != "" {
+			return alert.CanonicalState
+		}
+		if alert.ID != "" {
+			return alert.ID
+		}
+	}
+	return fallback
+}
+
+func cloneAlertForOutput(alert *Alert) *Alert {
+	if alert == nil {
+		return nil
+	}
+	clone := alert.Clone()
+	backfillCanonicalIdentity(clone)
+	publicID := exportedAlertID(clone, clone.ID)
+	legacyID := effectiveAlertID(clone, "")
+	if legacyID == publicID {
+		legacyID = ""
+	}
+	clone.ID = publicID
+	clone.LegacyID = legacyID
+	return clone
+}
+
+func canonicalizeAlertHistoryForOutput(history []Alert) []Alert {
+	if len(history) == 0 {
+		return history
+	}
+	exported := make([]Alert, 0, len(history))
+	for _, alert := range history {
+		exportedAlert := cloneAlertForOutput(&alert)
+		if exportedAlert == nil {
+			continue
+		}
+		exported = append(exported, *exportedAlert)
+	}
+	return exported
 }
 
 func canonicalTrackingKeyForSpec(spec alertspecs.ResourceAlertSpec, fallback string) string {

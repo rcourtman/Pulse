@@ -117,6 +117,26 @@ func TestAlertCharacterizationCanonicalGuestIdentityAcrossTypedAndUnifiedChecks(
 	}
 }
 
+func TestAlertCharacterizationGetActiveAlertsExportsCanonicalIdentity(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	legacyAlertID := resourceID + "-cpu"
+	canonicalState := buildCanonicalStateID(resourceID, legacyAlertID)
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.85), "pve1")
+
+	alerts := m.GetActiveAlerts()
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 active alert, got %d", len(alerts))
+	}
+	if alerts[0].ID != canonicalState {
+		t.Fatalf("GetActiveAlerts() ID = %q, want canonical ID %q", alerts[0].ID, canonicalState)
+	}
+	if alerts[0].LegacyID != legacyAlertID {
+		t.Fatalf("GetActiveAlerts() LegacyID = %q, want %q", alerts[0].LegacyID, legacyAlertID)
+	}
+}
+
 func TestAlertCharacterizationAcknowledgmentSurvivesAlertIDChangeForSameCanonicalState(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
 	oldAlertID := "legacy-" + resourceID + "-cpu"
@@ -206,8 +226,12 @@ func TestAlertCharacterizationHistoryUpdateUsesCanonicalStateAcrossAlertIDChange
 	if !history[0].LastSeen.Equal(lastSeen) {
 		t.Fatalf("LastSeen = %v, want %v", history[0].LastSeen, lastSeen)
 	}
-	if history[0].ID != oldAlertID {
-		t.Fatalf("history alert ID = %q, want legacy ID %q preserved", history[0].ID, oldAlertID)
+	expectedCanonicalState := buildCanonicalStateID(resourceID, newAlertID)
+	if history[0].ID != expectedCanonicalState {
+		t.Fatalf("history alert ID = %q, want canonical ID %q", history[0].ID, expectedCanonicalState)
+	}
+	if history[0].LegacyID != oldAlertID {
+		t.Fatalf("history alert LegacyID = %q, want legacy ID %q preserved", history[0].LegacyID, oldAlertID)
 	}
 }
 
@@ -385,8 +409,9 @@ func TestAlertCharacterizationReevaluatesAlertsWhenConfigChanges(t *testing.T) {
 
 	select {
 	case got := <-resolved:
-		if got != alertID {
-			t.Fatalf("resolved callback = %q, want %q", got, alertID)
+		expectedResolvedID := buildCanonicalStateID(resourceID, alertID)
+		if got != expectedResolvedID {
+			t.Fatalf("resolved callback = %q, want %q", got, expectedResolvedID)
 		}
 	case <-time.After(250 * time.Millisecond):
 		t.Fatalf("expected alert %q to resolve after config change", alertID)
@@ -525,8 +550,11 @@ func TestAlertCharacterizationResolvedLookupByCanonicalStateAlias(t *testing.T) 
 	if resolved == nil || resolved.Alert == nil {
 		t.Fatalf("expected resolved alert lookup by canonical state %q", canonicalState)
 	}
-	if resolved.Alert.ID != alertID {
-		t.Fatalf("resolved alert ID = %q, want %q", resolved.Alert.ID, alertID)
+	if resolved.Alert.ID != canonicalState {
+		t.Fatalf("resolved alert ID = %q, want canonical ID %q", resolved.Alert.ID, canonicalState)
+	}
+	if resolved.Alert.LegacyID != alertID {
+		t.Fatalf("resolved alert legacy ID = %q, want %q", resolved.Alert.LegacyID, alertID)
 	}
 }
 
@@ -559,7 +587,7 @@ func TestAlertCharacterizationManualClearRemovesCanonicalTrackingState(t *testin
 	}
 }
 
-func TestAlertCharacterizationResolvedCallbackUsesPublicIDForCanonicalAliasClear(t *testing.T) {
+func TestAlertCharacterizationResolvedCallbackUsesCanonicalIDForCanonicalAliasClear(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
 	alertID := resourceID + "-cpu"
 	canonicalState := buildCanonicalStateID(resourceID, alertID)
@@ -593,8 +621,8 @@ func TestAlertCharacterizationResolvedCallbackUsesPublicIDForCanonicalAliasClear
 
 	select {
 	case got := <-resolved:
-		if got != alertID {
-			t.Fatalf("resolved callback = %q, want %q", got, alertID)
+		if got != canonicalState {
+			t.Fatalf("resolved callback = %q, want %q", got, canonicalState)
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("expected resolved callback for %q", alertID)

@@ -331,8 +331,9 @@ func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatalf("expected resolved callback to fire after disabling metric")
 	}
-	if len(resolved) != 1 || resolved[0] != fmt.Sprintf("%s-cpu", vmID) {
-		t.Fatalf("expected resolved callback for %s-cpu, got %v", vmID, resolved)
+	expectedResolvedID := buildCanonicalStateID(vmID, fmt.Sprintf("%s-cpu", vmID))
+	if len(resolved) != 1 || resolved[0] != expectedResolvedID {
+		t.Fatalf("expected resolved callback for %s, got %v", expectedResolvedID, resolved)
 	}
 
 	m.mu.RLock()
@@ -531,7 +532,7 @@ func TestAddRecentlyResolvedUsesCanonicalStorageKey(t *testing.T) {
 		t.Fatalf("expected recently resolved alert not to be stored by public ID")
 	}
 
-	if got := m.GetResolvedAlert(alertID); got == nil || got.Alert == nil || got.Alert.ID != alertID {
+	if got := m.GetResolvedAlert(alertID); got == nil || got.Alert == nil || got.Alert.ID != canonicalState || got.Alert.LegacyID != alertID {
 		t.Fatalf("expected resolved lookup by public ID alias")
 	}
 	if got := m.GetResolvedAlert(canonicalState); got == nil || got.Alert == nil || got.Alert.CanonicalState != canonicalState {
@@ -3656,8 +3657,9 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 		t.Fatalf("expected resolved callback to fire after disabling all storage")
 	}
 	expectedAlertID := fmt.Sprintf("%s-usage", storageID)
-	if len(resolved) != 1 || resolved[0] != expectedAlertID {
-		t.Fatalf("expected resolved callback for %s, got %v", expectedAlertID, resolved)
+	expectedResolvedID := buildCanonicalStateID(storageID, expectedAlertID)
+	if len(resolved) != 1 || resolved[0] != expectedResolvedID {
+		t.Fatalf("expected resolved callback for %s, got %v", expectedResolvedID, resolved)
 	}
 
 	// Pending alert should be cleared
@@ -5830,7 +5832,7 @@ func TestSafeCallResolvedAlertCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("uses public alert ID when resolving a canonical alert object", func(t *testing.T) {
+	t.Run("uses canonical alert ID when resolving a canonical alert object", func(t *testing.T) {
 		m := newTestManager(t)
 
 		var receivedID string
@@ -5847,8 +5849,8 @@ func TestSafeCallResolvedAlertCallback(t *testing.T) {
 
 		m.safeCallResolvedAlertCallback(alert, alert.CanonicalState, false)
 
-		if receivedID != alert.ID {
-			t.Errorf("expected public alert ID %q, got %q", alert.ID, receivedID)
+		if receivedID != alert.CanonicalState {
+			t.Errorf("expected canonical alert ID %q, got %q", alert.CanonicalState, receivedID)
 		}
 	})
 
@@ -8506,7 +8508,7 @@ func TestCheckNodeOffline(t *testing.T) {
 		history := m.GetAlertHistory(10)
 		found := false
 		for _, h := range history {
-			if h.ID == "node-offline-node1" {
+			if h.LegacyID == "node-offline-node1" {
 				found = true
 				break
 			}
