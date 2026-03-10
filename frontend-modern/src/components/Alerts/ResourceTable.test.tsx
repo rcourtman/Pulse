@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
 
 // --- Mocks (must be before component import) ---
 const mockIsMobile = vi.fn(() => false);
@@ -819,7 +820,7 @@ describe('ResourceTable', () => {
       expect(screen.getByText('Bulk Edit Settings')).toBeInTheDocument();
 
       // Click clear selection
-      fireEvent.click(screen.getByLabelText('Clear selection'));
+      fireEvent.click(screen.getByLabelText(ALERT_BULK_EDIT_CLEAR_LABEL));
       expect(screen.queryByText('Bulk Edit Settings')).not.toBeInTheDocument();
     });
   });
@@ -1014,6 +1015,17 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       expect(screen.getByText('No resources available.')).toBeInTheDocument();
+    });
+
+    it('shows canonical no-results message in table view', () => {
+      mockIsMobile.mockReturnValue(false);
+      const props = makeProps({
+        resources: [],
+        globalDefaults: { cpu: 80 },
+      });
+      render(() => <ResourceTable {...props} title="Guests" />);
+
+      expect(screen.getByText('No guests found')).toBeInTheDocument();
     });
 
     it('renders global defaults card when provided', () => {

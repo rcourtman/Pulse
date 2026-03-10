@@ -17,6 +17,14 @@ import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
 import { logger } from '@/utils/logger';
+import {
+  getAlertResourceTableEmptyState,
+  getAlertResourceTableNoResultsState,
+} from '@/utils/alertResourceTablePresentation';
+import {
+  ALERT_BULK_EDIT_CLEAR_LABEL,
+  getAlertBulkEditOpenLabel,
+} from '@/utils/alertBulkEditPresentation';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'cpu %': 'Percent CPU utilization allowed before an alert fires.',
@@ -896,7 +904,7 @@ export function ResourceTable(props: ResourceTableProps) {
       </For>
       <Show when={!hasRows()}>
         <div class="text-center p-8 text-slate-500 text-sm italic bg-surface-alt rounded-md">
-          {props.emptyMessage || 'No resources available.'}
+          {getAlertResourceTableEmptyState(props.emptyMessage)}
         </div>
       </Show>
     </div>
@@ -2261,7 +2269,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       colspan={totalColumnCount()}
                       class="px-4 py-8 text-center text-sm text-muted"
                     >
-                      No {props.title.toLowerCase()} found
+                      {getAlertResourceTableNoResultsState(props.title)}
                     </TableCell>
                   </TableRow>
                 </Show>
@@ -2272,7 +2280,7 @@ export function ResourceTable(props: ResourceTableProps) {
                     colspan={totalColumnCount()}
                     class="px-4 py-6 text-sm text-center text-muted"
                   >
-                    {props.emptyMessage || 'No resources available.'}
+                    {getAlertResourceTableEmptyState(props.emptyMessage)}
                   </TableCell>
                 </TableRow>
               </Show>
@@ -2297,14 +2305,14 @@ export function ResourceTable(props: ResourceTableProps) {
                 }
               }}
             >
-              Bulk Edit Settings
+              {getAlertBulkEditOpenLabel()}
             </button>
             <button
               type="button"
               class="text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5 transition-colors focus:outline-none"
               onClick={() => setSelectedIds(new Set<string>())}
-              aria-label="Clear selection"
-              title="Clear selection"
+              aria-label={ALERT_BULK_EDIT_CLEAR_LABEL}
+              title={ALERT_BULK_EDIT_CLEAR_LABEL}
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
