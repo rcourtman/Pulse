@@ -10751,6 +10751,12 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		if alert.Level != AlertLevelCritical {
 			t.Errorf("expected critical level, got %s", alert.Level)
 		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+			t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != "local-zfs/zfs-pool:rpool-state" {
+			t.Fatalf("canonicalSpecID = %v, want local-zfs/zfs-pool:rpool-state", got)
+		}
 	})
 
 	t.Run("UNAVAIL pool creates critical alert", func(t *testing.T) {
@@ -10985,6 +10991,12 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		}
 		if alert.Level != AlertLevelCritical {
 			t.Errorf("expected critical level for FAULTED device, got %s", alert.Level)
+		}
+		if got := alert.Metadata["canonicalAlertKind"]; got != "health-assessment" {
+			t.Fatalf("canonicalAlertKind = %v, want health-assessment", got)
+		}
+		if got := alert.Metadata["canonicalSpecID"]; got != "local-zfs/zfs-pool:rpool/device:sda-health" {
+			t.Fatalf("canonicalSpecID = %v, want local-zfs/zfs-pool:rpool/device:sda-health", got)
 		}
 	})
 

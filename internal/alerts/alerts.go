@@ -3611,6 +3611,13 @@ var (
 		"raid_unavailable",
 		"raid_rebuilding",
 	}
+	zfsPoolAssessmentCodes = []string{
+		"zfs_pool_state",
+	}
+	zfsDeviceAssessmentCodes = []string{
+		"zfs_device_state",
+		"zfs_device_errors",
+	}
 )
 
 type canonicalHealthAssessmentAlertParams struct {
@@ -3672,6 +3679,71 @@ func storageHealthAssessmentSeverity(reasons []storagehealth.Reason) alertspecs.
 		}
 	}
 	return severity
+}
+
+func filterStorageHealthReasonsByCodes(reasons []storagehealth.Reason, codes []string) []storagehealth.Reason {
+	if len(reasons) == 0 || len(codes) == 0 {
+		return nil
+	}
+
+	allowed := make(map[string]struct{}, len(codes))
+	for _, code := range codes {
+		code = strings.TrimSpace(code)
+		if code == "" {
+			continue
+		}
+		allowed[code] = struct{}{}
+	}
+
+	filtered := make([]storagehealth.Reason, 0, len(reasons))
+	for _, reason := range reasons {
+		if _, ok := allowed[strings.TrimSpace(reason.Code)]; ok {
+			filtered = append(filtered, reason)
+		}
+	}
+	return filtered
+}
+
+func zfsDeviceAssessment(device models.ZFSDevice) storagehealth.Assessment {
+	assessment := storagehealth.Assessment{Level: storagehealth.RiskHealthy}
+	addReason := func(code string, severity storagehealth.RiskLevel, summary string) {
+		if strings.TrimSpace(summary) == "" {
+			return
+		}
+		assessment.Reasons = append(assessment.Reasons, storagehealth.Reason{
+			Code:     code,
+			Severity: severity,
+			Summary:  summary,
+		})
+		switch severity {
+		case storagehealth.RiskCritical:
+			assessment.Level = storagehealth.RiskCritical
+		case storagehealth.RiskWarning:
+			if assessment.Level != storagehealth.RiskCritical {
+				assessment.Level = storagehealth.RiskWarning
+			}
+		}
+	}
+
+	state := strings.ToUpper(strings.TrimSpace(device.State))
+	switch state {
+	case "", "ONLINE", "SPARE":
+	case "DEGRADED":
+		addReason("zfs_device_state", storagehealth.RiskWarning, fmt.Sprintf("ZFS device %s is DEGRADED", device.Name))
+	default:
+		addReason("zfs_device_state", storagehealth.RiskCritical, fmt.Sprintf("ZFS device %s is %s", device.Name, state))
+	}
+
+	errors := device.ReadErrors + device.WriteErrors + device.ChecksumErrors
+	if errors > 0 {
+		addReason(
+			"zfs_device_errors",
+			storagehealth.RiskWarning,
+			fmt.Sprintf("ZFS device %s has errors: %d read, %d write, %d checksum", device.Name, device.ReadErrors, device.WriteErrors, device.ChecksumErrors),
+		)
+	}
+
+	return assessment
 }
 
 func (m *Manager) syncCanonicalHealthAssessmentAlert(params canonicalHealthAssessmentAlertParams) (alertspecs.EvaluationResult, bool) {
@@ -6205,53 +6277,37 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 		return
 	}
 
+	poolResourceName := fmt.Sprintf("%s (%s)", storage.Name, pool.Name)
+	poolAssessment := storagehealth.AssessZFSPool(*pool)
+
 	// Check pool state (DEGRADED, FAULTED, etc.)
 	stateAlertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
-	if pool.State != "ONLINE" {
-		level := AlertLevelWarning
-		if pool.State == "FAULTED" || pool.State == "UNAVAIL" {
-			level = AlertLevelCritical
-		}
-
-		m.mu.Lock()
-		if _, exists := m.activeAlerts[stateAlertID]; !exists {
-			alert := &Alert{
-				ID:           stateAlertID,
-				Type:         "zfs-pool-state",
-				Level:        level,
-				ResourceID:   storage.ID,
-				ResourceName: fmt.Sprintf("%s (%s)", storage.Name, pool.Name),
-				Node:         storage.Node,
-				Instance:     storage.Instance,
-				Message:      fmt.Sprintf("ZFS pool '%s' is %s", pool.Name, pool.State),
-				Value:        0,
-				Threshold:    0,
-				StartTime:    time.Now(),
-				LastSeen:     time.Now(),
-				Metadata: map[string]interface{}{
-					"pool_name":  pool.Name,
-					"pool_state": pool.State,
-				},
-			}
-
-			m.preserveAlertState(stateAlertID, alert)
-
-			m.activeAlerts[stateAlertID] = alert
-			m.recentAlerts[stateAlertID] = alert
-			m.historyManager.AddAlert(*alert)
-
-			m.dispatchAlert(alert, false)
-
-			log.Warn().
-				Str("pool", pool.Name).
-				Str("state", pool.State).
-				Str("node", storage.Node).
-				Msg("ZFS pool is not healthy")
-		}
-		m.mu.Unlock()
-	} else {
-		// Clear state alert if pool is back online
-		m.clearAlert(stateAlertID)
+	stateMetadata := map[string]interface{}{
+		"pool_name":  pool.Name,
+		"pool_state": pool.State,
+	}
+	stateReasons := filterStorageHealthReasonsByCodes(poolAssessment.Reasons, zfsPoolAssessmentCodes)
+	stateResult, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
+		SpecID:         storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name) + "-state",
+		Signal:         "zfs-pool",
+		Codes:          zfsPoolAssessmentCodes,
+		Reasons:        stateReasons,
+		AlertID:        stateAlertID,
+		AlertType:      "zfs-pool-state",
+		SpecResourceID: storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name),
+		ResourceID:     storage.ID,
+		ResourceName:   poolResourceName,
+		ResourceType:   unifiedresources.ResourceTypeStorage,
+		Node:           storage.Node,
+		Instance:       storage.Instance,
+		Metadata:       stateMetadata,
+	})
+	if stateResult.Transition != nil && stateResult.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+		log.Warn().
+			Str("pool", pool.Name).
+			Str("state", pool.State).
+			Str("node", storage.Node).
+			Msg("ZFS pool is not healthy")
 	}
 
 	// Check for read/write/checksum errors
@@ -6268,7 +6324,7 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				Type:         "zfs-pool-errors",
 				Level:        AlertLevelWarning,
 				ResourceID:   storage.ID,
-				ResourceName: fmt.Sprintf("%s (%s)", storage.Name, pool.Name),
+				ResourceName: poolResourceName,
 				Node:         storage.Node,
 				Instance:     storage.Instance,
 				Message: fmt.Sprintf("ZFS pool '%s' has errors: %d read, %d write, %d checksum",
@@ -6312,72 +6368,45 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 	}
 
 	// Check individual devices for errors
-	m.mu.Lock()
 	for _, device := range pool.Devices {
 		alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
-
-		// Skip SPARE devices unless they have actual errors
-		if (device.State != "ONLINE" && device.State != "SPARE") || device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
-			if _, exists := m.activeAlerts[alertID]; !exists {
-				level := AlertLevelWarning
-				if device.State == "FAULTED" || device.State == "UNAVAIL" {
-					level = AlertLevelCritical
-				}
-
-				message := fmt.Sprintf("ZFS device '%s' in pool '%s'", device.Name, pool.Name)
-				if device.State != "ONLINE" {
-					message += fmt.Sprintf(" is %s", device.State)
-				}
-				if device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
-					message += fmt.Sprintf(" has errors: %d read, %d write, %d checksum",
-						device.ReadErrors, device.WriteErrors, device.ChecksumErrors)
-				}
-
-				alert := &Alert{
-					ID:           alertID,
-					Type:         "zfs-device",
-					Level:        level,
-					ResourceID:   storage.ID,
-					ResourceName: fmt.Sprintf("%s (%s/%s)", storage.Name, pool.Name, device.Name),
-					Node:         storage.Node,
-					Instance:     storage.Instance,
-					Message:      message,
-					Value:        float64(device.ReadErrors + device.WriteErrors + device.ChecksumErrors),
-					Threshold:    0,
-					StartTime:    time.Now(),
-					LastSeen:     time.Now(),
-					Metadata: map[string]interface{}{
-						"pool_name":       pool.Name,
-						"device_name":     device.Name,
-						"device_state":    device.State,
-						"read_errors":     device.ReadErrors,
-						"write_errors":    device.WriteErrors,
-						"checksum_errors": device.ChecksumErrors,
-					},
-				}
-
-				m.preserveAlertState(alertID, alert)
-
-				m.activeAlerts[alertID] = alert
-				m.recentAlerts[alertID] = alert
-				m.historyManager.AddAlert(*alert)
-
-				m.dispatchAlert(alert, false)
-
-				log.Warn().
-					Str("pool", pool.Name).
-					Str("device", device.Name).
-					Str("state", device.State).
-					Int64("errors", device.ReadErrors+device.WriteErrors+device.ChecksumErrors).
-					Str("node", storage.Node).
-					Msg("ZFS device has issues")
-			}
-		} else {
-			// Clear device alert if it's back to normal
-			m.clearAlertNoLock(alertID)
+		deviceAssessment := zfsDeviceAssessment(device)
+		metadata := map[string]interface{}{
+			"pool_name":       pool.Name,
+			"device_name":     device.Name,
+			"device_state":    device.State,
+			"read_errors":     device.ReadErrors,
+			"write_errors":    device.WriteErrors,
+			"checksum_errors": device.ChecksumErrors,
+		}
+		result, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
+			SpecID:         storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name) + "/device:" + sanitizeHostComponent(device.Name) + "-health",
+			Signal:         "zfs-device",
+			Codes:          zfsDeviceAssessmentCodes,
+			Reasons:        deviceAssessment.Reasons,
+			AlertID:        alertID,
+			AlertType:      "zfs-device",
+			SpecResourceID: storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name) + "/device:" + sanitizeHostComponent(device.Name),
+			ResourceID:     storage.ID,
+			ResourceName:   fmt.Sprintf("%s (%s/%s)", storage.Name, pool.Name, device.Name),
+			ResourceType:   unifiedresources.ResourceTypeStorage,
+			Node:           storage.Node,
+			Instance:       storage.Instance,
+			Metadata:       metadata,
+			MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+				return strings.Join(storageHealthReasonSummaries(deviceAssessment.Reasons), "; "), float64(device.ReadErrors + device.WriteErrors + device.ChecksumErrors), 0
+			},
+		})
+		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+			log.Warn().
+				Str("pool", pool.Name).
+				Str("device", device.Name).
+				Str("state", device.State).
+				Int64("errors", device.ReadErrors+device.WriteErrors+device.ChecksumErrors).
+				Str("node", storage.Node).
+				Msg("ZFS device has issues")
 		}
 	}
-	m.mu.Unlock()
 }
 
 // clearAlert removes an alert if it exists
