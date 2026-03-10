@@ -480,6 +480,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Password:   node.Password,
 			TokenName:  node.TokenName,
 			TokenValue: node.TokenValue,
+			Fingerprint: node.Fingerprint,
 			VerifySSL:  node.VerifySSL,
 		}
 

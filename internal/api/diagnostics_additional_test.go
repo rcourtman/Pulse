@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 type stubAIPersistence struct {
@@ -151,6 +152,61 @@ func TestComputeDiagnostics_Basic(t *testing.T) {
 	}
 	if diag.AIChat == nil {
 		t.Fatalf("expected ai chat diagnostics")
+	}
+}
+
+func TestComputeDiagnostics_PVEUsesFingerprint(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			_, _ = w.Write([]byte(`{"data":[{"node":"pve1","status":"online"}]}`))
+		case "/api2/json/nodes/pve1/status":
+			_, _ = w.Write([]byte(`{"data":{"pveversion":"pve-manager/8.4.1"}}`))
+		case "/api2/json/cluster/status":
+			_, _ = w.Write([]byte(`{"data":[{"type":"cluster"},{"type":"node"}]}`))
+		case "/api2/json/nodes/pve1/qemu":
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		case "/api2/json/nodes/pve1/disks/list":
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	fingerprint, err := tlsutil.FetchFingerprint(server.URL)
+	if err != nil {
+		t.Fatalf("FetchFingerprint: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "pve1",
+				Host:        server.URL,
+				TokenName:   "user@pam!token",
+				TokenValue:  "secret",
+				VerifySSL:   true,
+				Fingerprint: fingerprint,
+			},
+		},
+	}
+	monitor := newMonitorForDiagnostics(t, cfg)
+
+	router := &Router{config: cfg, monitor: monitor}
+	diag := router.computeDiagnostics(context.Background())
+
+	if len(diag.Nodes) != 1 {
+		t.Fatalf("node count = %d, want 1", len(diag.Nodes))
+	}
+	if !diag.Nodes[0].Connected {
+		t.Fatalf("expected fingerprint-pinned PVE diagnostics probe to succeed, got error: %q", diag.Nodes[0].Error)
+	}
+	if diag.Nodes[0].Error != "" {
+		t.Fatalf("unexpected diagnostics error: %q", diag.Nodes[0].Error)
 	}
 }
 
