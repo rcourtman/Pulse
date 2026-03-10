@@ -18,6 +18,7 @@ const (
 	AlertSpecKindChangeThreshold        AlertSpecKind = "change-threshold"
 	AlertSpecKindBaselineAnomaly        AlertSpecKind = "baseline-anomaly"
 	AlertSpecKindHealthAssessment       AlertSpecKind = "health-assessment"
+	AlertSpecKindPostureThreshold       AlertSpecKind = "posture-threshold"
 	AlertSpecKindConnectivity           AlertSpecKind = "connectivity"
 	AlertSpecKindPoweredState           AlertSpecKind = "powered-state"
 	AlertSpecKindProviderIncident       AlertSpecKind = "provider-incident"
@@ -33,6 +34,7 @@ func (k AlertSpecKind) valid() bool {
 		AlertSpecKindChangeThreshold,
 		AlertSpecKindBaselineAnomaly,
 		AlertSpecKindHealthAssessment,
+		AlertSpecKindPostureThreshold,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -134,6 +136,7 @@ type ResourceAlertSpec struct {
 	ChangeThreshold        *ChangeThresholdSpec        `json:"changeThreshold,omitempty"`
 	BaselineAnomaly        *BaselineAnomalySpec        `json:"baselineAnomaly,omitempty"`
 	HealthAssessment       *HealthAssessmentSpec       `json:"healthAssessment,omitempty"`
+	PostureThreshold       *PostureThresholdSpec       `json:"postureThreshold,omitempty"`
 	Connectivity           *ConnectivitySpec           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateSpec           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentSpec       `json:"providerIncident,omitempty"`
@@ -176,6 +179,9 @@ func (s ResourceAlertSpec) Validate() error {
 		payloads++
 	}
 	if s.HealthAssessment != nil {
+		payloads++
+	}
+	if s.PostureThreshold != nil {
 		payloads++
 	}
 	if s.Connectivity != nil {
@@ -226,6 +232,11 @@ func (s ResourceAlertSpec) Validate() error {
 			return fmt.Errorf("health assessment payload is required")
 		}
 		return s.HealthAssessment.Validate()
+	case AlertSpecKindPostureThreshold:
+		if s.PostureThreshold == nil {
+			return fmt.Errorf("posture threshold payload is required")
+		}
+		return s.PostureThreshold.Validate()
 	case AlertSpecKindConnectivity:
 		if s.Connectivity == nil {
 			return fmt.Errorf("connectivity payload is required")
@@ -433,6 +444,40 @@ func (s HealthAssessmentSpec) Validate() error {
 	return nil
 }
 
+type PostureThresholdSpec struct {
+	AgeMetric    string  `json:"ageMetric,omitempty"`
+	WarningAge   float64 `json:"warningAge,omitempty"`
+	CriticalAge  float64 `json:"criticalAge,omitempty"`
+	SizeMetric   string  `json:"sizeMetric,omitempty"`
+	WarningSize  float64 `json:"warningSize,omitempty"`
+	CriticalSize float64 `json:"criticalSize,omitempty"`
+}
+
+func (s PostureThresholdSpec) Validate() error {
+	if !isFinite(s.WarningAge) || !isFinite(s.CriticalAge) || !isFinite(s.WarningSize) || !isFinite(s.CriticalSize) {
+		return fmt.Errorf("thresholds must be finite")
+	}
+	if s.WarningAge < 0 || s.CriticalAge < 0 || s.WarningSize < 0 || s.CriticalSize < 0 {
+		return fmt.Errorf("thresholds must not be negative")
+	}
+	if s.WarningAge <= 0 && s.CriticalAge <= 0 && s.WarningSize <= 0 && s.CriticalSize <= 0 {
+		return fmt.Errorf("at least one age or size threshold is required")
+	}
+	if (s.WarningAge > 0 || s.CriticalAge > 0) && strings.TrimSpace(s.AgeMetric) == "" {
+		return fmt.Errorf("age metric is required when age thresholds are set")
+	}
+	if (s.WarningSize > 0 || s.CriticalSize > 0) && strings.TrimSpace(s.SizeMetric) == "" {
+		return fmt.Errorf("size metric is required when size thresholds are set")
+	}
+	if s.WarningAge > 0 && s.CriticalAge > 0 && s.CriticalAge < s.WarningAge {
+		return fmt.Errorf("critical age must be greater than or equal to warning age")
+	}
+	if s.WarningSize > 0 && s.CriticalSize > 0 && s.CriticalSize < s.WarningSize {
+		return fmt.Errorf("critical size must be greater than or equal to warning size")
+	}
+	return nil
+}
+
 type ConnectivitySpec struct {
 	Signal     string        `json:"signal"`
 	LostAfter  time.Duration `json:"lostAfter"`
@@ -556,6 +601,7 @@ type AlertEvidence struct {
 	ChangeThreshold        *ChangeThresholdEvidence        `json:"changeThreshold,omitempty"`
 	BaselineAnomaly        *BaselineAnomalyEvidence        `json:"baselineAnomaly,omitempty"`
 	HealthAssessment       *HealthAssessmentEvidence       `json:"healthAssessment,omitempty"`
+	PostureThreshold       *PostureThresholdEvidence       `json:"postureThreshold,omitempty"`
 	Connectivity           *ConnectivityEvidence           `json:"connectivity,omitempty"`
 	PoweredState           *PoweredStateEvidence           `json:"poweredState,omitempty"`
 	ProviderIncident       *ProviderIncidentEvidence       `json:"providerIncident,omitempty"`
@@ -583,6 +629,9 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 		payloads++
 	}
 	if e.HealthAssessment != nil {
+		payloads++
+	}
+	if e.PostureThreshold != nil {
 		payloads++
 	}
 	if e.Connectivity != nil {
@@ -633,6 +682,11 @@ func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 			return fmt.Errorf("health assessment evidence is required")
 		}
 		return e.HealthAssessment.Validate()
+	case AlertSpecKindPostureThreshold:
+		if e.PostureThreshold == nil {
+			return fmt.Errorf("posture threshold evidence is required")
+		}
+		return e.PostureThreshold.Validate()
 	case AlertSpecKindConnectivity:
 		if e.Connectivity == nil {
 			return fmt.Errorf("connectivity evidence is required")
@@ -753,6 +807,37 @@ func (e HealthAssessmentEvidence) Validate() error {
 	}
 	if len(e.Codes) > 0 && e.Severity == "" {
 		return fmt.Errorf("severity is required when codes are present")
+	}
+	return nil
+}
+
+type PostureThresholdEvidence struct {
+	AgeMetric  string   `json:"ageMetric,omitempty"`
+	AgeValue   float64  `json:"ageValue,omitempty"`
+	SizeMetric string   `json:"sizeMetric,omitempty"`
+	SizeValue  *float64 `json:"sizeValue,omitempty"`
+}
+
+func (e PostureThresholdEvidence) Validate() error {
+	if strings.TrimSpace(e.AgeMetric) == "" && strings.TrimSpace(e.SizeMetric) == "" {
+		return fmt.Errorf("age or size metric is required")
+	}
+	if strings.TrimSpace(e.AgeMetric) != "" && !isFinite(e.AgeValue) {
+		return fmt.Errorf("age value must be finite")
+	}
+	if e.AgeValue < 0 {
+		return fmt.Errorf("age value must not be negative")
+	}
+	if strings.TrimSpace(e.SizeMetric) != "" && e.SizeValue == nil {
+		return fmt.Errorf("size value is required when size metric is set")
+	}
+	if e.SizeValue != nil {
+		if !isFinite(*e.SizeValue) {
+			return fmt.Errorf("size value must be finite")
+		}
+		if *e.SizeValue < 0 {
+			return fmt.Errorf("size value must not be negative")
+		}
 	}
 	return nil
 }
@@ -953,11 +1038,12 @@ func isKnownResourceType(rt unifiedresources.ResourceType) bool {
 	if rt == "" {
 		return false
 	}
-	// "node", "agent-disk", and "docker-host" remain migration bridges while live alerts are
+	// "node", "agent-disk", "docker-host", and "backup-subject" remain migration bridges while live alerts are
 	// still keyed separately from the canonical unified resource graph.
 	if rt != unifiedresources.ResourceType("node") &&
 		rt != unifiedresources.ResourceType("agent-disk") &&
 		rt != unifiedresources.ResourceType("docker-host") &&
+		rt != unifiedresources.ResourceType("backup-subject") &&
 		unifiedresources.CanonicalResourceType(rt) != rt {
 		return false
 	}
@@ -966,6 +1052,7 @@ func isKnownResourceType(rt unifiedresources.ResourceType) bool {
 		unifiedresources.ResourceType("node"),
 		unifiedresources.ResourceType("agent-disk"),
 		unifiedresources.ResourceType("docker-host"),
+		unifiedresources.ResourceType("backup-subject"),
 		unifiedresources.ResourceTypeVM,
 		unifiedresources.ResourceTypeSystemContainer,
 		unifiedresources.ResourceTypeAppContainer,

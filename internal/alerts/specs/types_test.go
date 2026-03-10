@@ -101,6 +101,21 @@ func TestResourceAlertSpecValidateAcceptsSupportedKinds(t *testing.T) {
 			},
 		},
 		{
+			name: "posture threshold",
+			spec: ResourceAlertSpec{
+				ID:           "inst:node:100-backup-age",
+				ResourceID:   "inst:node:100",
+				ResourceType: unifiedresources.ResourceTypeVM,
+				Kind:         AlertSpecKindPostureThreshold,
+				Severity:     AlertSeverityWarning,
+				PostureThreshold: &PostureThresholdSpec{
+					AgeMetric:   "backup-age-days",
+					WarningAge:  7,
+					CriticalAge: 14,
+				},
+			},
+		},
+		{
 			name: "connectivity",
 			spec: ResourceAlertSpec{
 				ID:           "agent-01-heartbeat-lost",
@@ -276,6 +291,27 @@ func TestResourceAlertSpecValidateAllowsDockerHostMigrationBridgeType(t *testing
 		Connectivity: &ConnectivitySpec{
 			Signal:    "status",
 			LostAfter: time.Second,
+		},
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestResourceAlertSpecValidateAllowsBackupSubjectMigrationBridgeType(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "backup-subject:ext-pbs-100-backup-age",
+		ResourceID:   "backup-subject:ext-pbs-100",
+		ResourceType: unifiedresources.ResourceType("backup-subject"),
+		Kind:         AlertSpecKindPostureThreshold,
+		Severity:     AlertSeverityWarning,
+		PostureThreshold: &PostureThresholdSpec{
+			AgeMetric:   "backup-age-days",
+			WarningAge:  3,
+			CriticalAge: 5,
 		},
 	}
 

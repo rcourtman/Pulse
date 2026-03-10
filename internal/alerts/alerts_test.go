@@ -765,6 +765,12 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 	if alert.ResourceName != "app-server snapshot 'weekly'" {
 		t.Fatalf("unexpected resource name: %s", alert.ResourceName)
 	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "posture-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want posture-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "inst:node:100/snapshot:inst-node-100-weekly" {
+		t.Fatalf("canonicalSpecID = %v, want inst:node:100/snapshot:inst-node-100-weekly", got)
+	}
 
 	m.CheckSnapshotsForInstance("inst", nil, guestNames)
 
@@ -1040,6 +1046,12 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 	}
 	if alert.Level != AlertLevelCritical {
 		t.Fatalf("expected critical backup alert, got %s", alert.Level)
+	}
+	if got := alert.Metadata["canonicalAlertKind"]; got != "posture-threshold" {
+		t.Fatalf("canonicalAlertKind = %v, want posture-threshold", got)
+	}
+	if got := alert.Metadata["canonicalSpecID"]; got != "inst:node:100-backup-age" {
+		t.Fatalf("canonicalSpecID = %v, want inst:node:100-backup-age", got)
 	}
 
 	// Recent backup clears alert

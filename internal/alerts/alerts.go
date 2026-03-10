@@ -5605,6 +5605,60 @@ func BuildGuestKey(instance, node string, vmID int) string {
 	return fmt.Sprintf("%s:%s:%d", instance, node, vmID)
 }
 
+type backupRecord struct {
+	key          string
+	vmID         string
+	lookup       GuestLookup
+	fallbackName string
+	instance     string
+	node         string
+	source       string
+	rollupID     string
+	providers    []recovery.Provider
+	lastTime     time.Time
+}
+
+func canonicalGuestResourceType(guestType string) unifiedresources.ResourceType {
+	switch strings.ToLower(strings.TrimSpace(guestType)) {
+	case "lxc":
+		return unifiedresources.ResourceTypeSystemContainer
+	default:
+		return unifiedresources.ResourceTypeVM
+	}
+}
+
+func canonicalBackupSubjectResourceType(record backupRecord) unifiedresources.ResourceType {
+	if record.lookup.Type != "" {
+		return canonicalGuestResourceType(record.lookup.Type)
+	}
+	if strings.TrimSpace(record.vmID) != "" {
+		return unifiedresources.ResourceTypeVM
+	}
+	return unifiedresources.ResourceType("backup-subject")
+}
+
+func canonicalBackupSubjectResourceID(alertKey string, record backupRecord) string {
+	if record.instance != "" && record.node != "" && record.vmID != "" {
+		if vmid, err := strconv.Atoi(record.vmID); err == nil && vmid > 0 {
+			return BuildGuestKey(record.instance, record.node, vmid)
+		}
+	}
+	return "backup-subject:" + sanitizeAlertKey(alertKey)
+}
+
+func asyncSaveActiveAlerts(reason string, save func() error) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("panic", r).Str("reason", reason).Msg("panic in SaveActiveAlerts goroutine")
+			}
+		}()
+		if err := save(); err != nil {
+			log.Error().Err(err).Str("reason", reason).Msg("failed to save active alerts")
+		}
+	}()
+}
+
 // CheckSnapshotsForInstance evaluates guest snapshots for age-based alerts.
 func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []models.GuestSnapshot, guestNames map[string]string) {
 	m.mu.RLock()
@@ -5692,16 +5746,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		}
 
 		if ageLevel == "" && sizeLevel == "" {
-			continue
-		}
-
-		var level AlertLevel
-		switch {
-		case ageLevel == AlertLevelCritical || sizeLevel == AlertLevelCritical:
-			level = AlertLevelCritical
-		case ageLevel == AlertLevelWarning || sizeLevel == AlertLevelWarning:
-			level = AlertLevelWarning
-		default:
 			continue
 		}
 
@@ -5795,85 +5839,73 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		}
 
 		resourceName := fmt.Sprintf("%s snapshot '%s'", guestName, snapshotName)
-
-		m.mu.Lock()
-		if existing, exists := m.activeAlerts[alertID]; exists {
-			existing.LastSeen = now
-			existing.Level = level
-			existing.Value = alertValue
-			existing.Threshold = alertThreshold
-			existing.Message = message
-			existing.ResourceName = resourceName
-			if existing.Metadata == nil {
-				existing.Metadata = make(map[string]interface{})
-			}
-			for k, v := range metadata {
-				existing.Metadata[k] = v
-			}
-			m.mu.Unlock()
-			continue
+		guestResourceType := canonicalGuestResourceType(snapshot.Type)
+		guestResourceID := guestKey
+		sizeMetric := ""
+		var sizeValue *float64
+		if currentSnapshotCfg.WarningSizeGiB > 0 || currentSnapshotCfg.CriticalSizeGiB > 0 {
+			sizeMetric = "snapshot-size-gib"
+			sizeValue = &sizeGiB
+		}
+		ageMetric := ""
+		if currentSnapshotCfg.WarningDays > 0 || currentSnapshotCfg.CriticalDays > 0 {
+			ageMetric = "snapshot-age-days"
 		}
 
-		alert := &Alert{
-			ID:           alertID,
-			Type:         "snapshot-age",
-			Level:        level,
-			ResourceID:   snapshot.ID,
-			ResourceName: resourceName,
-			Node:         snapshot.Node,
-			Instance:     snapshot.Instance,
-			Message:      message,
-			Value:        alertValue,
-			Threshold:    alertThreshold,
-			StartTime:    thresholdTime,
-			LastSeen:     now,
-			Metadata:     metadata,
-		}
-
-		m.preserveAlertState(alertID, alert)
-
-		m.activeAlerts[alertID] = alert
-		m.recentAlerts[alertID] = alert
-		m.historyManager.AddAlert(*alert)
-
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (snapshot)")
-				}
-			}()
-			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("failed to save active alerts after snapshot alert creation")
-			}
-		}()
-
-		if !m.checkRateLimit(alertID) {
-			m.mu.Unlock()
-			log.Debug().
-				Str("alertID", alertID).
-				Str("guest", guestName).
-				Msg("Snapshot alert suppressed due to rate limit")
-			continue
-		}
-
-		if m.getAlertCallback() != nil {
-			nowCopy := now
-			alert.LastNotified = &nowCopy
-			if m.dispatchAlert(alert, true) {
-				log.Info().
-					Str("alertID", alertID).
-					Str("guest", guestName).
-					Msg("Snapshot age alert dispatched")
-			} else {
-				alert.LastNotified = nil
-			}
-		} else {
+		spec, err := buildCanonicalPostureThresholdSpec(
+			guestResourceID+"/snapshot:"+snapshot.ID,
+			guestResourceID,
+			resourceName,
+			guestResourceType,
+			ageMetric,
+			float64(currentSnapshotCfg.WarningDays),
+			float64(currentSnapshotCfg.CriticalDays),
+			sizeMetric,
+			currentSnapshotCfg.WarningSizeGiB,
+			currentSnapshotCfg.CriticalSizeGiB,
+			false,
+		)
+		if err != nil {
 			log.Warn().
-				Str("alertID", alertID).
-				Msg("Snapshot age alert created but no onAlert callback set")
+				Err(err).
+				Str("snapshotID", snapshot.ID).
+				Str("resourceID", guestResourceID).
+				Msg("Skipping invalid canonical snapshot posture spec")
+			continue
 		}
 
-		m.mu.Unlock()
+		result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+			Spec: spec,
+			Evidence: alertspecs.AlertEvidence{
+				ObservedAt: now,
+				PostureThreshold: &alertspecs.PostureThresholdEvidence{
+					AgeMetric:  ageMetric,
+					AgeValue:   ageDays,
+					SizeMetric: sizeMetric,
+					SizeValue:  sizeValue,
+				},
+			},
+			AlertID:           alertID,
+			AlertType:         "snapshot-age",
+			ResourceID:        snapshot.ID,
+			ResourceName:      resourceName,
+			Node:              snapshot.Node,
+			Instance:          snapshot.Instance,
+			Value:             alertValue,
+			Threshold:         alertThreshold,
+			StartTimeOverride: thresholdTime,
+			Metadata:          metadata,
+			AddToRecent:       true,
+			AddToHistory:      true,
+			RateLimit:         true,
+			DispatchAsync:     true,
+			MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+				return message, alertValue, alertThreshold
+			},
+		})
+		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+			asyncSaveActiveAlerts("snapshot", m.SaveActiveAlerts)
+		}
 	}
 
 	m.mu.Lock()
@@ -5916,19 +5948,6 @@ func (m *Manager) CheckBackups(
 	if backupCfg.WarningDays <= 0 && backupCfg.CriticalDays <= 0 {
 		m.clearBackupAlerts()
 		return
-	}
-
-	type backupRecord struct {
-		key          string
-		vmID         string
-		lookup       GuestLookup
-		fallbackName string
-		instance     string
-		node         string
-		source       string
-		rollupID     string
-		providers    []recovery.Provider
-		lastTime     time.Time
 	}
 
 	records := make(map[string]*backupRecord)
@@ -6099,14 +6118,11 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 
-		var level AlertLevel
 		var threshold int
 		switch {
 		case currentBackupCfg.CriticalDays > 0 && ageDays >= float64(currentBackupCfg.CriticalDays):
-			level = AlertLevelCritical
 			threshold = currentBackupCfg.CriticalDays
 		case currentBackupCfg.WarningDays > 0 && ageDays >= float64(currentBackupCfg.WarningDays):
-			level = AlertLevelWarning
 			threshold = currentBackupCfg.WarningDays
 		default:
 			continue
@@ -6168,79 +6184,60 @@ func (m *Manager) CheckBackups(
 			"ageDays":        ageDays,
 			"thresholdDays":  threshold,
 		}
-
-		m.mu.Lock()
-		if existing, exists := m.activeAlerts[alertID]; exists {
-			existing.LastSeen = now
-			existing.Level = level
-			existing.Value = ageDays
-			existing.Threshold = float64(threshold)
-			existing.Message = message
-			if existing.Metadata == nil {
-				existing.Metadata = make(map[string]interface{})
-			}
-			for k, v := range metadata {
-				existing.Metadata[k] = v
-			}
-			m.mu.Unlock()
-			continue
-		}
-
-		alert := &Alert{
-			ID:           alertID,
-			Type:         "backup-age",
-			Level:        level,
-			ResourceID:   alertKey,
-			ResourceName: fmt.Sprintf("%s backup", displayName),
-			Node:         node,
-			Instance:     instance,
-			Message:      message,
-			Value:        ageDays,
-			Threshold:    float64(threshold),
-			StartTime:    thresholdTime,
-			LastSeen:     now,
-			Metadata:     metadata,
-		}
-
-		m.preserveAlertState(alertID, alert)
-
-		m.activeAlerts[alertID] = alert
-		m.recentAlerts[alertID] = alert
-		m.historyManager.AddAlert(*alert)
-
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (backup)")
-				}
-			}()
-			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("failed to save active alerts after backup alert creation")
-			}
-		}()
-
-		if !m.checkRateLimit(alertID) {
-			m.mu.Unlock()
-			log.Debug().
+		specResourceID := canonicalBackupSubjectResourceID(alertKey, *record)
+		specResourceType := canonicalBackupSubjectResourceType(*record)
+		spec, err := buildCanonicalPostureThresholdSpec(
+			specResourceID+"-backup-age",
+			specResourceID,
+			displayName+" backup",
+			specResourceType,
+			"backup-age-days",
+			float64(currentBackupCfg.WarningDays),
+			float64(currentBackupCfg.CriticalDays),
+			"",
+			0,
+			0,
+			false,
+		)
+		if err != nil {
+			log.Warn().
+				Err(err).
 				Str("alertID", alertID).
-				Str("resource", displayName).
-				Msg("Backup alert suppressed due to rate limit")
+				Str("resourceID", specResourceID).
+				Msg("Skipping invalid canonical backup posture spec")
 			continue
 		}
 
-		if m.getAlertCallback() != nil {
-			notified := now
-			alert.LastNotified = &notified
-			if m.dispatchAlert(alert, true) {
-				log.Info().
-					Str("alertID", alertID).
-					Str("resource", displayName).
-					Msg("Backup age alert dispatched")
-			} else {
-				alert.LastNotified = nil
-			}
+		result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+			Spec: spec,
+			Evidence: alertspecs.AlertEvidence{
+				ObservedAt: now,
+				PostureThreshold: &alertspecs.PostureThresholdEvidence{
+					AgeMetric: "backup-age-days",
+					AgeValue:  ageDays,
+				},
+			},
+			AlertID:           alertID,
+			AlertType:         "backup-age",
+			ResourceID:        alertKey,
+			ResourceName:      fmt.Sprintf("%s backup", displayName),
+			Node:              node,
+			Instance:          instance,
+			Value:             ageDays,
+			Threshold:         float64(threshold),
+			StartTimeOverride: thresholdTime,
+			Metadata:          metadata,
+			AddToRecent:       true,
+			AddToHistory:      true,
+			RateLimit:         true,
+			DispatchAsync:     true,
+			MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+				return message, ageDays, float64(threshold)
+			},
+		})
+		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
+			asyncSaveActiveAlerts("backup", m.SaveActiveAlerts)
 		}
-		m.mu.Unlock()
 	}
 
 	m.mu.Lock()

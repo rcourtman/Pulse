@@ -631,3 +631,60 @@ func TestEvaluateHealthAssessmentEscalationAndRecovery(t *testing.T) {
 		t.Fatalf("recovered transition = %+v, want recovered", recovered.Transition)
 	}
 }
+
+func TestEvaluatePostureThresholdAgeAndSize(t *testing.T) {
+	spec := ResourceAlertSpec{
+		ID:           "inst:node:100-snapshot-weekly",
+		ResourceID:   "inst:node:100",
+		ResourceType: unifiedresources.ResourceTypeVM,
+		Kind:         AlertSpecKindPostureThreshold,
+		Severity:     AlertSeverityWarning,
+		PostureThreshold: &PostureThresholdSpec{
+			AgeMetric:    "snapshot-age-days",
+			WarningAge:   7,
+			CriticalAge:  14,
+			SizeMetric:   "snapshot-size-gib",
+			WarningSize:  50,
+			CriticalSize: 100,
+		},
+	}
+
+	size := 120.0
+	critical, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 13, 20, 0, 0, time.UTC),
+		PostureThreshold: &PostureThresholdEvidence{
+			AgeMetric:  "snapshot-age-days",
+			AgeValue:   2,
+			SizeMetric: "snapshot-size-gib",
+			SizeValue:  &size,
+		},
+	})
+	if err != nil {
+		t.Fatalf("critical evaluation failed: %v", err)
+	}
+	if critical.State.State != AlertStateFiring || critical.State.Severity != AlertSeverityCritical {
+		t.Fatalf("critical state = %+v, want firing critical", critical.State)
+	}
+	if critical.State.Reason != "posture-threshold-size-critical" {
+		t.Fatalf("critical reason = %q, want size critical", critical.State.Reason)
+	}
+
+	warning, err := Evaluate(spec, EvaluatorState{}, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 13, 21, 0, 0, time.UTC),
+		PostureThreshold: &PostureThresholdEvidence{
+			AgeMetric:  "snapshot-age-days",
+			AgeValue:   10,
+			SizeMetric: "snapshot-size-gib",
+			SizeValue:  &[]float64{20}[0],
+		},
+	})
+	if err != nil {
+		t.Fatalf("warning evaluation failed: %v", err)
+	}
+	if warning.State.State != AlertStateFiring || warning.State.Severity != AlertSeverityWarning {
+		t.Fatalf("warning state = %+v, want firing warning", warning.State)
+	}
+	if warning.State.Reason != "posture-threshold-age-warning" {
+		t.Fatalf("warning reason = %q, want age warning", warning.State.Reason)
+	}
+}

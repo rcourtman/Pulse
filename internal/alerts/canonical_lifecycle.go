@@ -41,6 +41,7 @@ type canonicalStatefulAlertParams struct {
 	Message                      string
 	Value                        float64
 	Threshold                    float64
+	StartTimeOverride            time.Time
 	Metadata                     map[string]interface{}
 	AddToRecent                  bool
 	AddToHistory                 bool
@@ -210,6 +211,28 @@ func buildCanonicalHealthAssessmentSpec(specID, resourceID, title string, resour
 		HealthAssessment: &alertspecs.HealthAssessmentSpec{
 			Signal: signal,
 			Codes:  append([]string(nil), codes...),
+		},
+	}
+
+	return spec, spec.Validate()
+}
+
+func buildCanonicalPostureThresholdSpec(specID, resourceID, title string, resourceType unifiedresources.ResourceType, ageMetric string, warningAge, criticalAge float64, sizeMetric string, warningSize, criticalSize float64, disabled bool) (alertspecs.ResourceAlertSpec, error) {
+	spec := alertspecs.ResourceAlertSpec{
+		ID:           specID,
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		Kind:         alertspecs.AlertSpecKindPostureThreshold,
+		Severity:     alertspecs.AlertSeverityWarning,
+		Title:        title,
+		Disabled:     disabled,
+		PostureThreshold: &alertspecs.PostureThresholdSpec{
+			AgeMetric:    ageMetric,
+			WarningAge:   warningAge,
+			CriticalAge:  criticalAge,
+			SizeMetric:   sizeMetric,
+			WarningSize:  warningSize,
+			CriticalSize: criticalSize,
 		},
 	}
 
@@ -444,6 +467,10 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		if params.MessageBuilder != nil {
 			message, value, threshold = params.MessageBuilder(result)
 		}
+		startTime := params.Evidence.ObservedAt
+		if !params.StartTimeOverride.IsZero() {
+			startTime = params.StartTimeOverride
+		}
 		alert := &Alert{
 			ID:           params.AlertID,
 			Type:         params.AlertType,
@@ -455,7 +482,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			Message:      message,
 			Value:        value,
 			Threshold:    threshold,
-			StartTime:    params.Evidence.ObservedAt,
+			StartTime:    startTime,
 			LastSeen:     params.Evidence.ObservedAt,
 			Metadata:     cloneMetadata(params.Metadata),
 		}

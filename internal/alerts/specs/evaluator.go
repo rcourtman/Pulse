@@ -83,6 +83,7 @@ func Evaluate(spec ResourceAlertSpec, previous EvaluatorState, evidence AlertEvi
 		AlertSpecKindChangeThreshold,
 		AlertSpecKindBaselineAnomaly,
 		AlertSpecKindHealthAssessment,
+		AlertSpecKindPostureThreshold,
 		AlertSpecKindConnectivity,
 		AlertSpecKindPoweredState,
 		AlertSpecKindProviderIncident,
@@ -344,6 +345,11 @@ func matches(spec ResourceAlertSpec, evidence AlertEvidence) (bool, AlertSeverit
 			return false, "", ""
 		}
 		return matchesHealthAssessment(*spec.HealthAssessment, *evidence.HealthAssessment)
+	case AlertSpecKindPostureThreshold:
+		if evidence.PostureThreshold == nil || spec.PostureThreshold == nil {
+			return false, "", ""
+		}
+		return matchesPostureThreshold(*spec.PostureThreshold, *evidence.PostureThreshold)
 	case AlertSpecKindConnectivity:
 		return evidence.Connectivity != nil && !evidence.Connectivity.Connected, spec.Severity, "connectivity-lost"
 	case AlertSpecKindPoweredState:
@@ -520,6 +526,49 @@ func matchesHealthAssessment(spec HealthAssessmentSpec, evidence HealthAssessmen
 	}
 
 	return false, "", "health-assessment-normal"
+}
+
+func matchesPostureThreshold(spec PostureThresholdSpec, evidence PostureThresholdEvidence) (bool, AlertSeverity, string) {
+	ageCritical := false
+	ageWarning := false
+	sizeCritical := false
+	sizeWarning := false
+
+	if spec.AgeMetric != "" {
+		if evidence.AgeMetric != spec.AgeMetric {
+			return false, "", "posture-threshold-age-metric-mismatch"
+		}
+		ageCritical = spec.CriticalAge > 0 && evidence.AgeValue >= spec.CriticalAge
+		ageWarning = !ageCritical && spec.WarningAge > 0 && evidence.AgeValue >= spec.WarningAge
+	}
+
+	if spec.SizeMetric != "" {
+		if evidence.SizeMetric != spec.SizeMetric {
+			return false, "", "posture-threshold-size-metric-mismatch"
+		}
+		if evidence.SizeValue == nil {
+			return false, "", "posture-threshold-size-missing"
+		}
+		sizeCritical = spec.CriticalSize > 0 && *evidence.SizeValue >= spec.CriticalSize
+		sizeWarning = !sizeCritical && spec.WarningSize > 0 && *evidence.SizeValue >= spec.WarningSize
+	}
+
+	switch {
+	case ageCritical && sizeCritical:
+		return true, AlertSeverityCritical, "posture-threshold-critical"
+	case ageCritical:
+		return true, AlertSeverityCritical, "posture-threshold-age-critical"
+	case sizeCritical:
+		return true, AlertSeverityCritical, "posture-threshold-size-critical"
+	case ageWarning && sizeWarning:
+		return true, AlertSeverityWarning, "posture-threshold-warning"
+	case ageWarning:
+		return true, AlertSeverityWarning, "posture-threshold-age-warning"
+	case sizeWarning:
+		return true, AlertSeverityWarning, "posture-threshold-size-warning"
+	default:
+		return false, "", "posture-threshold-normal"
+	}
 }
 
 func metricTriggered(spec *MetricThresholdSpec, observed float64) bool {
