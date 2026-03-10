@@ -201,6 +201,8 @@ func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedreso
 			recovery := threshold.Clear
 			spec.MetricThreshold.Recovery = &recovery
 		}
+		critical := threshold.Trigger + 10
+		spec.MetricThreshold.Critical = &critical
 	}
 
 	return spec, spec.Validate()
@@ -210,20 +212,7 @@ func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec
 	if spec.MetricThreshold == nil {
 		return
 	}
-	m.checkMetric(
-		spec.ResourceID,
-		resourceName,
-		node,
-		instance,
-		resourceType,
-		spec.MetricThreshold.Metric,
-		value,
-		threshold,
-		mergeMetricOptions(opts, map[string]interface{}{
-			"canonicalSpecID":    spec.ID,
-			"canonicalAlertKind": string(spec.Kind),
-		}),
-	)
+	m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
 }
 
 func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, bool) {

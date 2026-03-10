@@ -205,8 +205,9 @@ func evaluateMetricThreshold(spec ResourceAlertSpec, previous EvaluatorState, ev
 
 	triggered := metricTriggered(spec.MetricThreshold, metric.Observed)
 	if triggered {
+		severity := metricThresholdSeverity(spec.MetricThreshold, metric.Observed)
 		next.State = AlertStateFiring
-		next.Severity = spec.Severity
+		next.Severity = severity
 		next.Reason = "threshold-exceeded"
 		next.ConsecutiveMatches = 1
 		if next.ActiveSince.IsZero() {
@@ -224,9 +225,22 @@ func evaluateMetricThreshold(spec ResourceAlertSpec, previous EvaluatorState, ev
 				From:       previous.State,
 				To:         AlertStateFiring,
 				At:         now,
-				Severity:   spec.Severity,
+				Severity:   severity,
 				Reason:     "threshold-exceeded",
 				Evidence:   evidence,
+			}
+		} else if previous.Severity != "" && previous.Severity != severity {
+			result.Transition = &EvaluationTransition{
+				Kind:             EvaluationTransitionSeverityChanged,
+				SpecID:           spec.ID,
+				ResourceID:       spec.ResourceID,
+				From:             AlertStateFiring,
+				To:               AlertStateFiring,
+				At:               now,
+				PreviousSeverity: previous.Severity,
+				Severity:         severity,
+				Reason:           "threshold-exceeded",
+				Evidence:         evidence,
 			}
 		}
 		return result
@@ -713,6 +727,22 @@ func metricStillLatched(spec *MetricThresholdSpec, observed float64) bool {
 	default:
 		return false
 	}
+}
+
+func metricThresholdSeverity(spec *MetricThresholdSpec, observed float64) AlertSeverity {
+	if spec != nil && spec.Critical != nil {
+		switch spec.Direction {
+		case ThresholdDirectionAbove:
+			if observed >= *spec.Critical {
+				return AlertSeverityCritical
+			}
+		case ThresholdDirectionBelow:
+			if observed <= *spec.Critical {
+				return AlertSeverityCritical
+			}
+		}
+	}
+	return AlertSeverityWarning
 }
 
 func defaultConfirmations(spec ResourceAlertSpec) int {

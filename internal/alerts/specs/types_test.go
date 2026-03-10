@@ -384,6 +384,26 @@ func TestMetricThresholdSpecValidateRejectsInvalidRecoveryDirection(t *testing.T
 	}
 }
 
+func TestMetricThresholdSpecValidateRejectsInvalidCriticalDirection(t *testing.T) {
+	t.Parallel()
+
+	critical := 80.0
+	spec := MetricThresholdSpec{
+		Metric:    "cpu",
+		Direction: ThresholdDirectionAbove,
+		Trigger:   90,
+		Critical:  &critical,
+	}
+
+	err := spec.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "critical must be above trigger") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestSeverityThresholdSpecValidateRejectsInvertedAboveBands(t *testing.T) {
 	t.Parallel()
 

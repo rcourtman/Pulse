@@ -13,6 +13,7 @@ func boolPtr(v bool) *bool {
 
 func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 	recovery := 75.0
+	critical := 90.0
 	spec := ResourceAlertSpec{
 		ID:           "vm-101-cpu",
 		ResourceID:   "pve1:node1:101",
@@ -24,6 +25,7 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 			Direction: ThresholdDirectionAbove,
 			Trigger:   80,
 			Recovery:  &recovery,
+			Critical:  &critical,
 		},
 	}
 
@@ -35,6 +37,7 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 			Observed:  85,
 			Trigger:   80,
 			Recovery:  &recovery,
+			Critical:  &critical,
 		},
 	})
 	if err != nil {
@@ -43,11 +46,35 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 	if triggered.State.State != AlertStateFiring {
 		t.Fatalf("triggered state = %q, want firing", triggered.State.State)
 	}
+	if triggered.State.Severity != AlertSeverityWarning {
+		t.Fatalf("triggered severity = %q, want warning", triggered.State.Severity)
+	}
 	if triggered.Transition == nil || triggered.Transition.Kind != EvaluationTransitionActivated {
 		t.Fatalf("trigger transition = %+v, want activated", triggered.Transition)
 	}
 
-	latched, err := Evaluate(spec, triggered.State, AlertEvidence{
+	escalated, err := Evaluate(spec, triggered.State, AlertEvidence{
+		ObservedAt: time.Date(2026, 3, 10, 9, 0, 3, 0, time.UTC),
+		MetricThreshold: &MetricThresholdEvidence{
+			Metric:    "cpu",
+			Direction: ThresholdDirectionAbove,
+			Observed:  95,
+			Trigger:   80,
+			Recovery:  &recovery,
+			Critical:  &critical,
+		},
+	})
+	if err != nil {
+		t.Fatalf("escalation evaluation failed: %v", err)
+	}
+	if escalated.State.Severity != AlertSeverityCritical {
+		t.Fatalf("escalated severity = %q, want critical", escalated.State.Severity)
+	}
+	if escalated.Transition == nil || escalated.Transition.Kind != EvaluationTransitionSeverityChanged {
+		t.Fatalf("escalated transition = %+v, want severity-changed", escalated.Transition)
+	}
+
+	latched, err := Evaluate(spec, escalated.State, AlertEvidence{
 		ObservedAt: time.Date(2026, 3, 10, 9, 0, 5, 0, time.UTC),
 		MetricThreshold: &MetricThresholdEvidence{
 			Metric:    "cpu",
@@ -55,6 +82,7 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 			Observed:  77,
 			Trigger:   80,
 			Recovery:  &recovery,
+			Critical:  &critical,
 		},
 	})
 	if err != nil {
@@ -62,6 +90,9 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 	}
 	if latched.State.State != AlertStateFiring {
 		t.Fatalf("latched state = %q, want firing", latched.State.State)
+	}
+	if latched.State.Severity != AlertSeverityCritical {
+		t.Fatalf("latched severity = %q, want critical", latched.State.Severity)
 	}
 	if latched.Transition != nil {
 		t.Fatalf("latched transition = %+v, want nil", latched.Transition)
@@ -75,6 +106,7 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 			Observed:  74,
 			Trigger:   80,
 			Recovery:  &recovery,
+			Critical:  &critical,
 		},
 	})
 	if err != nil {
@@ -89,6 +121,8 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 
 	updated := spec
 	updated.MetricThreshold.Trigger = 90
+	updatedCritical := 100.0
+	updated.MetricThreshold.Critical = &updatedCritical
 	revaluated, err := Evaluate(updated, triggered.State, AlertEvidence{
 		ObservedAt: time.Date(2026, 3, 10, 9, 0, 15, 0, time.UTC),
 		MetricThreshold: &MetricThresholdEvidence{
@@ -97,6 +131,7 @@ func TestEvaluateMetricThresholdTriggerClearAndReevaluation(t *testing.T) {
 			Observed:  85,
 			Trigger:   90,
 			Recovery:  &recovery,
+			Critical:  &updatedCritical,
 		},
 	})
 	if err != nil {

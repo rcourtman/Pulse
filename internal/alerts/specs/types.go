@@ -277,6 +277,7 @@ type MetricThresholdSpec struct {
 	Direction ThresholdDirection `json:"direction"`
 	Trigger   float64            `json:"trigger"`
 	Recovery  *float64           `json:"recovery,omitempty"`
+	Critical  *float64           `json:"critical,omitempty"`
 	Window    time.Duration      `json:"window,omitempty"`
 }
 
@@ -294,7 +295,7 @@ func (s MetricThresholdSpec) Validate() error {
 		return fmt.Errorf("window must be zero or positive")
 	}
 	if s.Recovery == nil {
-		return nil
+		goto validateCritical
 	}
 	if !isFinite(*s.Recovery) {
 		return fmt.Errorf("recovery must be finite")
@@ -307,6 +308,23 @@ func (s MetricThresholdSpec) Validate() error {
 	case ThresholdDirectionBelow:
 		if *s.Recovery <= s.Trigger {
 			return fmt.Errorf("recovery must be above trigger when direction is below")
+		}
+	}
+validateCritical:
+	if s.Critical == nil {
+		return nil
+	}
+	if !isFinite(*s.Critical) {
+		return fmt.Errorf("critical must be finite")
+	}
+	switch s.Direction {
+	case ThresholdDirectionAbove:
+		if *s.Critical <= s.Trigger {
+			return fmt.Errorf("critical must be above trigger when direction is above")
+		}
+	case ThresholdDirectionBelow:
+		if *s.Critical >= s.Trigger {
+			return fmt.Errorf("critical must be below trigger when direction is below")
 		}
 	}
 	return nil
@@ -750,6 +768,7 @@ type MetricThresholdEvidence struct {
 	Observed  float64            `json:"observed"`
 	Trigger   float64            `json:"trigger"`
 	Recovery  *float64           `json:"recovery,omitempty"`
+	Critical  *float64           `json:"critical,omitempty"`
 }
 
 func (e MetricThresholdEvidence) Validate() error {
@@ -758,6 +777,7 @@ func (e MetricThresholdEvidence) Validate() error {
 		Direction: e.Direction,
 		Trigger:   e.Trigger,
 		Recovery:  e.Recovery,
+		Critical:  e.Critical,
 	}.Validate()
 }
 
