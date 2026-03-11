@@ -1,9 +1,10 @@
-import { createSignal, createEffect, For, Show, JSX } from 'solid-js';
+import { createSignal, createEffect, Show, JSX } from 'solid-js';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { formField, formLabel, formHelpText, formControl } from '@/components/shared/Form';
+import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { apiFetch } from '@/utils/apiClient';
 import { ResourcePicker, type SelectedResource } from './ResourcePicker';
@@ -17,10 +18,7 @@ import {
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { toReportingResourceType } from '@/utils/reportingResourceTypes';
-import {
-  getReportingToggleButtonClass,
-  REPORTING_RANGE_OPTIONS,
-} from '@/utils/reportingPresentation';
+import { REPORTING_RANGE_OPTIONS, type ReportingRangeOption } from '@/utils/reportingPresentation';
 import {
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
@@ -30,6 +28,20 @@ import {
   UPGRADE_TRIAL_LABEL,
   UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
+
+type ReportingRangeValue = ReportingRangeOption['value'];
+
+const REPORTING_RANGE_FILTER_OPTIONS: FilterOption<ReportingRangeValue>[] = REPORTING_RANGE_OPTIONS.map(
+  (option) => ({
+    label: option.label,
+    value: option.value,
+  }),
+);
+
+const REPORTING_FORMAT_FILTER_OPTIONS: FilterOption<'pdf' | 'csv'>[] = [
+  { value: 'pdf', label: 'PDF Report', icon: FileText },
+  { value: 'csv', label: 'CSV Data', icon: BarChart },
+];
 
 interface FormFieldProps {
   label: string;
@@ -51,7 +63,7 @@ export function ReportingPanel() {
   const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
   const [metricType, setMetricType] = createSignal('');
   const [format, setFormat] = createSignal<'pdf' | 'csv'>('pdf');
-  const [range, setRange] = createSignal('24h');
+  const [range, setRange] = createSignal<ReportingRangeValue>('24h');
   const [generating, setGenerating] = createSignal(false);
   const [title, setTitle] = createSignal('');
   const [startingTrial, setStartingTrial] = createSignal(false);
@@ -258,37 +270,23 @@ export function ReportingPanel() {
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField label="Time Range">
-                <div class="grid grid-cols-1 sm:flex gap-2">
-                  <For each={REPORTING_RANGE_OPTIONS}>
-                    {(option) => (
-                      <button
-                        class={getReportingToggleButtonClass(range() === option.value)}
-                        onClick={() => setRange(option.value)}
-                      >
-                        {option.label}
-                      </button>
-                    )}
-                  </For>
-                </div>
+                <FilterButtonGroup
+                  class="sm:grid-cols-3"
+                  options={REPORTING_RANGE_FILTER_OPTIONS}
+                  value={range()}
+                  onChange={setRange}
+                  variant="prominent"
+                />
               </FormField>
 
               <FormField label="Export Format">
-                <div class="grid grid-cols-1 sm:flex gap-2">
-                  <button
-                    class={`${getReportingToggleButtonClass(format() === 'pdf')} flex items-center justify-center gap-2`}
-                    onClick={() => setFormat('pdf')}
-                  >
-                    <FileText size={16} />
-                    PDF Report
-                  </button>
-                  <button
-                    class={`${getReportingToggleButtonClass(format() === 'csv')} flex items-center justify-center gap-2`}
-                    onClick={() => setFormat('csv')}
-                  >
-                    <BarChart size={16} />
-                    CSV Data
-                  </button>
-                </div>
+                <FilterButtonGroup
+                  class="sm:grid-cols-2"
+                  options={REPORTING_FORMAT_FILTER_OPTIONS}
+                  value={format()}
+                  onChange={setFormat}
+                  variant="prominent"
+                />
               </FormField>
             </div>
           </div>

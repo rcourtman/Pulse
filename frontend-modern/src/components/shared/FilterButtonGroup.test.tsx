@@ -55,4 +55,26 @@ describe('FilterButtonGroup', () => {
     expect(inactiveButton.className).toContain('text-muted');
     expect(inactiveButton.className).not.toContain('border-transparent');
   });
+
+  it('supports the prominent variant for full-width segmented controls', () => {
+    render(() => (
+      <FilterButtonGroup
+        options={[
+          { value: '24h', label: 'Last 24 Hours' },
+          { value: '7d', label: 'Last 7 Days' },
+        ]}
+        value="24h"
+        onChange={() => undefined}
+        variant="prominent"
+      />
+    ));
+
+    const activeButton = screen.getByRole('button', { name: /last 24 hours/i });
+    const inactiveButton = screen.getByRole('button', { name: /last 7 days/i });
+
+    expect(activeButton.className).toContain('bg-blue-50');
+    expect(activeButton.className).toContain('border-blue-500');
+    expect(inactiveButton.className).toContain('border-border');
+    expect(inactiveButton.className).not.toContain('text-muted');
+  });
 });

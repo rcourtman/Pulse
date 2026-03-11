@@ -62,3 +62,8 @@ General settings segmented selectors for theme preference and temperature unit
 must now also route through the shared `FilterButtonGroup` primitive instead of
 maintaining local button-group styling forks inside
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`.
+
+Reporting time-range/export selectors and General settings Proxmox VE polling
+presets must now also route through the shared `FilterButtonGroup` prominent
+variant instead of maintaining local blue segmented-control styling forks in
+feature components.

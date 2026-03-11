@@ -363,7 +363,8 @@ describe('agent model guardrails', () => {
       'export function getAgentProfileSuggestionRiskHints',
     );
     expect(reportingPanelSource).toContain('REPORTING_RANGE_OPTIONS');
-    expect(reportingPanelSource).toContain('getReportingToggleButtonClass');
+    expect(reportingPanelSource).toContain('FilterButtonGroup');
+    expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
     expect(reportingPanelSource).toContain('UPGRADE_ACTION_LABEL');
@@ -372,9 +373,7 @@ describe('agent model guardrails', () => {
     expect(reportingPanelSource).not.toContain('>Start free trial<');
     expect(reportingPanelSource).not.toContain("<For each={['24h', '7d', '30d']}>");
     expect(reportingPresentationSource).toContain('export const REPORTING_RANGE_OPTIONS');
-    expect(reportingPresentationSource).toContain(
-      'export function getReportingToggleButtonClass',
-    );
+    expect(reportingPresentationSource).not.toContain('getReportingToggleButtonClass');
     expect(aiIntelligenceSource).toContain('buildPatrolScheduleOptions');
     expect(aiIntelligenceSource).toContain('PATROL_NO_ISSUES_LABEL');
     expect(aiIntelligenceSource).not.toContain('No issues found');
@@ -688,6 +687,8 @@ describe('agent model guardrails', () => {
       "notificationStore.error('Failed to start update. Please try again.')",
     );
     expect(generalSettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
+    expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
+    expect(generalSettingsPanelSource).toContain('variant="prominent"');
     expect(generalSettingsPanelSource).not.toContain('const PVE_POLLING_PRESETS =');
     expect(recoverySettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
     expect(recoverySettingsPanelSource).not.toContain('const BACKUP_INTERVAL_OPTIONS =');

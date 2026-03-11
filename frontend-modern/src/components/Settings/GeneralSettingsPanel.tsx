@@ -1,4 +1,4 @@
-import { Component, Show, For, Accessor, Setter } from 'solid-js';
+import { Component, Show, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
@@ -25,6 +25,14 @@ const THEME_PREFERENCE_OPTIONS: FilterOption<'light' | 'dark' | 'system'>[] = [
 const TEMPERATURE_UNIT_OPTIONS: FilterOption<'celsius' | 'fahrenheit'>[] = [
   { value: 'celsius', label: 'Celsius' },
   { value: 'fahrenheit', label: 'Fahrenheit' },
+];
+
+const PVE_POLLING_OPTIONS: FilterOption<number | 'custom'>[] = [
+  ...PVE_POLLING_PRESETS.map((option) => ({
+    label: option.label,
+    value: option.value,
+  })),
+  { value: 'custom', label: 'Custom' },
 ];
 
 interface GeneralSettingsPanelProps {
@@ -57,6 +65,16 @@ interface GeneralSettingsPanelProps {
 }
 
 export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props) => {
+  const handlePVEPollingSelection = (value: number | 'custom') => {
+    if (props.pvePollingEnvLocked()) return;
+
+    props.setPVEPollingSelection(value);
+    props.setPVEPollingInterval(
+      value === 'custom' ? props.pvePollingCustomSeconds() : value,
+    );
+    props.setHasUnsavedChanges(true);
+  };
+
   return (
     <div class="space-y-6">
       {/* Appearance Card */}
@@ -245,38 +263,14 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
             <div class="space-y-4 pt-2">
               {/* Preset buttons */}
-              <div class="grid gap-2 sm:grid-cols-4">
-                <For each={PVE_POLLING_PRESETS}>
-                  {(option) => (
-                    <button
-                      type="button"
-                      class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === option.value ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover'} ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      disabled={props.pvePollingEnvLocked()}
-                      onClick={() => {
-                        if (props.pvePollingEnvLocked()) return;
-                        props.setPVEPollingSelection(option.value);
-                        props.setPVEPollingInterval(option.value);
-                        props.setHasUnsavedChanges(true);
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  )}
-                </For>
-                <button
-                  type="button"
-                  class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === 'custom' ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200' : 'border-border bg-surface text-base-content hover:border-border hover:bg-surface-hover'} ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  disabled={props.pvePollingEnvLocked()}
-                  onClick={() => {
-                    if (props.pvePollingEnvLocked()) return;
-                    props.setPVEPollingSelection('custom');
-                    props.setPVEPollingInterval(props.pvePollingCustomSeconds());
-                    props.setHasUnsavedChanges(true);
-                  }}
-                >
-                  Custom
-                </button>
-              </div>
+              <FilterButtonGroup
+                class="sm:grid-cols-2 xl:grid-cols-5"
+                options={PVE_POLLING_OPTIONS}
+                value={props.pvePollingSelection()}
+                onChange={handlePVEPollingSelection}
+                variant="prominent"
+                disabled={props.pvePollingEnvLocked()}
+              />
 
               {/* Custom interval input */}
               <Show when={props.pvePollingSelection() === 'custom'}>
