@@ -51,11 +51,14 @@ describe('API error-status guardrails', () => {
     expect(aiSource).toContain('promoteLegacyAlertIdentifier(');
     expect(aiSource).not.toContain("message.includes('402')");
     expect(aiSource).not.toContain('JSON.parse(');
+    expect(aiSource).not.toContain('private static encodeSegment(');
+    expect(aiSource).not.toContain('private static isPaymentRequiredError(');
     expect(aiSource).not.toContain('} catch {\n      return null;');
     expect(aiSource).not.toContain('normalizeUnifiedFinding(');
 
     expect(aiChatSource).toContain('parseJSONTextSafe<StreamEvent>(');
     expect(aiChatSource).not.toContain('JSON.parse(');
+    expect(aiChatSource).not.toContain('private static encodeSegment(');
 
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 402)');
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 404)');
@@ -146,7 +149,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, and duplicate legacy alert_identifier promotion', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, and no-op AI helper aliases', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -186,6 +189,11 @@ describe('API error-status guardrails', () => {
     );
     const duplicateAlertIdentifierPattern =
       /(?:normalizeUnifiedFinding\(|normalizePatrolRunRecord\(|alert_identifier:\s*_alertIdentifier|const\s+alertIdentifier\s*=\s*.+alert_identifier)/;
+    const governedAiAliasEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:ai|aiChat)\.ts$/.test(path),
+    );
+    const noOpAiAliasPattern =
+      /(?:private\s+static\s+encodeSegment\(|private\s+static\s+isPaymentRequiredError\()/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -242,6 +250,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const noOpAiAliasOffenders = governedAiAliasEntries
+      .filter(([, source]) => noOpAiAliasPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -252,5 +265,6 @@ describe('API error-status guardrails', () => {
     expect(timestampCoercionOffenders).toEqual([]);
     expect(noOpWrapperOffenders).toEqual([]);
     expect(duplicateAlertIdentifierOffenders).toEqual([]);
+    expect(noOpAiAliasOffenders).toEqual([]);
   });
 });

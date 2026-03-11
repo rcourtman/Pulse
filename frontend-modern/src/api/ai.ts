@@ -20,13 +20,6 @@ import type { AnomaliesResponse, LearningStatusResponse } from '@/types/aiIntell
 
 export class AIAPI {
   private static baseUrl = '/api';
-  private static encodeSegment(value: string): string {
-    return encodeURIComponent(value);
-  }
-
-  private static isPaymentRequiredError(error: unknown): boolean {
-    return isAPIErrorStatus(error, 402);
-  }
 
   // Get AI settings
   static async getSettings(): Promise<AISettings> {
@@ -52,7 +45,7 @@ export class AIAPI {
   static async testProvider(
     provider: string,
   ): Promise<{ success: boolean; message: string; provider: string }> {
-    return apiFetchJSON(`${this.baseUrl}/ai/test/${this.encodeSegment(provider)}`, {
+    return apiFetchJSON(`${this.baseUrl}/ai/test/${encodeURIComponent(provider)}`, {
       method: 'POST',
     }) as Promise<{ success: boolean; message: string; provider: string }>;
   }
@@ -289,7 +282,7 @@ export class AIAPI {
       };
       return { plans: objectArrayFieldOrEmpty<RemediationPlan>(data, 'plans') };
     } catch (error) {
-      if (this.isPaymentRequiredError(error)) {
+      if (isAPIErrorStatus(error, 402)) {
         return { plans: [] };
       }
       throw error;
@@ -343,7 +336,7 @@ export class AIAPI {
       };
       return objectArrayFieldOrEmpty<ApprovalRequest>(response, 'approvals');
     } catch (error) {
-      if (this.isPaymentRequiredError(error)) {
+      if (isAPIErrorStatus(error, 402)) {
         return [];
       }
       throw error;
@@ -352,24 +345,30 @@ export class AIAPI {
 
   // Approve and execute an investigation fix
   static async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult> {
-    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${this.encodeSegment(approvalId)}/approve`, {
-      method: 'POST',
-    }) as Promise<ApprovalExecutionResult>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/approve`,
+      {
+        method: 'POST',
+      },
+    ) as Promise<ApprovalExecutionResult>;
   }
 
   // Deny an investigation fix
   static async denyInvestigationFix(approvalId: string, reason?: string): Promise<ApprovalRequest> {
-    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${this.encodeSegment(approvalId)}/deny`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: reason || 'User declined' }),
-    }) as Promise<ApprovalRequest>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/deny`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason || 'User declined' }),
+      },
+    ) as Promise<ApprovalRequest>;
   }
 
   // Get investigation details for a finding (includes proposed fix)
   static async getInvestigation(findingId: string): Promise<InvestigationSession | null> {
     try {
       return (await apiFetchJSON(
-        `${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/investigation`,
+        `${this.baseUrl}/ai/findings/${encodeURIComponent(findingId)}/investigation`,
       )) as InvestigationSession;
     } catch (error) {
       if (isAPIErrorStatus(error, 404)) {
@@ -384,9 +383,12 @@ export class AIAPI {
   static async reapproveInvestigationFix(
     findingId: string,
   ): Promise<{ approval_id: string; message: string }> {
-    return apiFetchJSON(`${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/reapprove`, {
-      method: 'POST',
-    }) as Promise<{ approval_id: string; message: string }>;
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/findings/${encodeURIComponent(findingId)}/reapprove`,
+      {
+        method: 'POST',
+      },
+    ) as Promise<{ approval_id: string; message: string }>;
   }
 }
 
