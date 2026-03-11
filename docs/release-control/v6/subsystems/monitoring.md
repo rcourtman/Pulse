@@ -71,3 +71,9 @@ Physical-disk refresh/merge logic now derives physical disks, nodes, and linked
 host-agent context from canonical `ReadState` before applying NVMe temperature
 and SMART merges, so skipped or background disk refresh no longer treats the
 snapshot as internal truth for that path.
+
+Backup polling and recovery guest identity assembly now derive workload node,
+name, and type context from canonical `ReadState` instead of from
+snapshot-owned VM/container arrays, so storage backup polling, guest snapshot
+polling, timeout sizing, PBS recovery candidate assembly, and Proxmox recovery
+ingest all follow unified runtime truth when a live resource registry exists.

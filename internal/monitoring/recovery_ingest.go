@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -88,39 +87,93 @@ func (m *Monitor) purgeStalePVEPBSBackupsBestEffort(ctx context.Context) {
 	}
 }
 
-func buildProxmoxGuestInfoIndex(snapshot models.StateSnapshot) map[string]proxmoxmapper.GuestInfo {
-	out := make(map[string]proxmoxmapper.GuestInfo, len(snapshot.VMs)+len(snapshot.Containers))
+func buildProxmoxGuestInfoIndex(readState unifiedresources.ReadState) map[string]proxmoxmapper.GuestInfo {
+	if readState == nil {
+		return map[string]proxmoxmapper.GuestInfo{}
+	}
+	vmViews := readState.VMs()
+	containerViews := readState.Containers()
+	out := make(map[string]proxmoxmapper.GuestInfo, len(vmViews)+len(containerViews))
 
-	for _, vm := range snapshot.VMs {
-		if vm.Template {
+	for _, vm := range vmViews {
+		if vm == nil || vm.Template() {
 			continue
 		}
-		key := proxmoxmapperKey(vm.Instance, vm.Node, vm.VMID)
-		sourceID := strings.TrimSpace(vm.ID)
+		key := proxmoxmapperKey(vm.Instance(), vm.Node(), vm.VMID())
+		sourceID := strings.TrimSpace(vm.ID())
 		if sourceID == "" {
-			sourceID = makeGuestID(vm.Instance, vm.Node, vm.VMID)
+			sourceID = makeGuestID(vm.Instance(), vm.Node(), vm.VMID())
 		}
 		out[key] = proxmoxmapper.GuestInfo{
 			SourceID:     sourceID,
 			ResourceType: unifiedresources.ResourceTypeVM,
-			Name:         strings.TrimSpace(vm.Name),
+			Name:         strings.TrimSpace(vm.Name()),
 		}
 	}
 
-	for _, ct := range snapshot.Containers {
-		if ct.Template {
+	for _, ct := range containerViews {
+		if ct == nil || ct.Template() {
 			continue
 		}
-		key := proxmoxmapperKey(ct.Instance, ct.Node, ct.VMID)
-		sourceID := strings.TrimSpace(ct.ID)
+		key := proxmoxmapperKey(ct.Instance(), ct.Node(), ct.VMID())
+		sourceID := strings.TrimSpace(ct.ID())
 		if sourceID == "" {
-			sourceID = makeGuestID(ct.Instance, ct.Node, ct.VMID)
+			sourceID = makeGuestID(ct.Instance(), ct.Node(), ct.VMID())
 		}
 		out[key] = proxmoxmapper.GuestInfo{
 			SourceID:     sourceID,
 			ResourceType: unifiedresources.ResourceTypeSystemContainer,
-			Name:         strings.TrimSpace(ct.Name),
+			Name:         strings.TrimSpace(ct.Name()),
 		}
+	}
+
+	return out
+}
+
+func buildPBSGuestCandidates(readState unifiedresources.ReadState) map[string][]proxmoxmapper.GuestCandidate {
+	if readState == nil {
+		return map[string][]proxmoxmapper.GuestCandidate{}
+	}
+	vmViews := readState.VMs()
+	containerViews := readState.Containers()
+	out := make(map[string][]proxmoxmapper.GuestCandidate, len(vmViews)+len(containerViews))
+
+	for _, vm := range vmViews {
+		if vm == nil || vm.Template() || vm.VMID() <= 0 {
+			continue
+		}
+		key := "vm:" + fmt.Sprintf("%d", vm.VMID())
+		sourceID := strings.TrimSpace(vm.ID())
+		if sourceID == "" {
+			sourceID = makeGuestID(vm.Instance(), vm.Node(), vm.VMID())
+		}
+		out[key] = append(out[key], proxmoxmapper.GuestCandidate{
+			SourceID:     sourceID,
+			ResourceType: unifiedresources.ResourceTypeVM,
+			DisplayName:  strings.TrimSpace(vm.Name()),
+			InstanceName: strings.TrimSpace(vm.Instance()),
+			NodeName:     strings.TrimSpace(vm.Node()),
+			VMID:         vm.VMID(),
+		})
+	}
+
+	for _, ct := range containerViews {
+		if ct == nil || ct.Template() || ct.VMID() <= 0 {
+			continue
+		}
+		key := "ct:" + fmt.Sprintf("%d", ct.VMID())
+		sourceID := strings.TrimSpace(ct.ID())
+		if sourceID == "" {
+			sourceID = makeGuestID(ct.Instance(), ct.Node(), ct.VMID())
+		}
+		out[key] = append(out[key], proxmoxmapper.GuestCandidate{
+			SourceID:     sourceID,
+			ResourceType: unifiedresources.ResourceTypeSystemContainer,
+			DisplayName:  strings.TrimSpace(ct.Name()),
+			InstanceName: strings.TrimSpace(ct.Instance()),
+			NodeName:     strings.TrimSpace(ct.Node()),
+			VMID:         ct.VMID(),
+		})
 	}
 
 	return out

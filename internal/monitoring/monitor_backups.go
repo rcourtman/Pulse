@@ -33,20 +33,12 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	hadPermissionError := false         // Track if any permission errors occurred this cycle
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
+	readState := m.GetUnifiedReadStateOrSnapshot()
 
 	// Build guest lookup map to find actual node for each VMID
 	snapshot := m.state.GetSnapshot()
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
-	for _, vm := range snapshot.VMs {
-		if vm.Instance == instanceName {
-			guestNodeMap[vm.VMID] = vm.Node
-		}
-	}
-	for _, ct := range snapshot.Containers {
-		if ct.Instance == instanceName {
-			guestNodeMap[ct.VMID] = ct.Node
-		}
-	}
+	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
@@ -263,7 +255,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	guestInfo := buildProxmoxGuestInfoIndex(snapshot)
+	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEStorageBackups(allBackups, guestInfo))
 
 	// Sync backup times to VMs/Containers for backup status indicators
@@ -452,6 +444,24 @@ func buildGuestLookupsFromReadState(readState unifiedresources.ReadState, metada
 	return byKey, byVMID
 }
 
+func populateGuestNodeMapFromReadState(readState unifiedresources.ReadState, instanceName string, guestNodeMap map[int]string) {
+	if readState == nil {
+		return
+	}
+	for _, vm := range readState.VMs() {
+		if vm == nil || vm.Instance() != instanceName {
+			continue
+		}
+		guestNodeMap[vm.VMID()] = vm.Node()
+	}
+	for _, ct := range readState.Containers() {
+		if ct == nil || ct.Instance() != instanceName {
+			continue
+		}
+		guestNodeMap[ct.VMID()] = ct.Node()
+	}
+}
+
 func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
@@ -546,16 +556,16 @@ func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Dura
 	)
 
 	timeout := minTimeout
-	snapshot := m.state.GetSnapshot()
+	readState := m.GetUnifiedReadStateOrSnapshot()
 
 	guestCount := 0
-	for _, vm := range snapshot.VMs {
-		if vm.Instance == instanceName && !vm.Template {
+	for _, vm := range readState.VMs() {
+		if vm != nil && vm.Instance() == instanceName && !vm.Template() {
 			guestCount++
 		}
 	}
-	for _, ct := range snapshot.Containers {
-		if ct.Instance == instanceName && !ct.Template {
+	for _, ct := range readState.Containers() {
+		if ct != nil && ct.Instance() == instanceName && !ct.Template() {
 			guestCount++
 		}
 	}
@@ -578,21 +588,20 @@ func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Dura
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
-	// Get current VMs and containers from a properly-locked state snapshot.
-	// Using GetSnapshot() ensures we read a consistent view of VMs/containers
-	// with the State's internal mutex, avoiding data races.
-	snapshot := m.state.GetSnapshot()
+	readState := m.GetUnifiedReadStateOrSnapshot()
 	var vms []models.VM
-	for _, vm := range snapshot.VMs {
-		if vm.Instance == instanceName {
-			vms = append(vms, vm)
+	for _, vm := range readState.VMs() {
+		if vm == nil || vm.Instance() != instanceName {
+			continue
 		}
+		vms = append(vms, vmFromReadStateView(vm))
 	}
 	var containers []models.Container
-	for _, ct := range snapshot.Containers {
-		if ct.Instance == instanceName {
-			containers = append(containers, ct)
+	for _, ct := range readState.Containers() {
+		if ct == nil || ct.Instance() != instanceName {
+			continue
 		}
+		containers = append(containers, containerFromReadStateView(ct))
 	}
 
 	guestKey := func(instance, node string, vmid int) string {
@@ -793,7 +802,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	guestInfo := buildProxmoxGuestInfoIndex(snapshot)
+	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEGuestSnapshots(allSnapshots, guestInfo))
 
 	if m.alertManager != nil {
@@ -1259,44 +1268,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	m.state.UpdatePBSBackups(instanceName, allBackups)
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	snapshot := m.state.GetSnapshot()
-	candidates := make(map[string][]proxmoxrecoverymapper.GuestCandidate)
-	for _, vm := range snapshot.VMs {
-		if vm.Template || vm.VMID <= 0 {
-			continue
-		}
-		key := "vm:" + strconv.Itoa(vm.VMID)
-		sourceID := strings.TrimSpace(vm.ID)
-		if sourceID == "" {
-			sourceID = makeGuestID(vm.Instance, vm.Node, vm.VMID)
-		}
-		candidates[key] = append(candidates[key], proxmoxrecoverymapper.GuestCandidate{
-			SourceID:     sourceID,
-			ResourceType: unifiedresources.ResourceTypeVM,
-			DisplayName:  strings.TrimSpace(vm.Name),
-			InstanceName: strings.TrimSpace(vm.Instance),
-			NodeName:     strings.TrimSpace(vm.Node),
-			VMID:         vm.VMID,
-		})
-	}
-	for _, ct := range snapshot.Containers {
-		if ct.Template || ct.VMID <= 0 {
-			continue
-		}
-		key := "ct:" + strconv.Itoa(ct.VMID)
-		sourceID := strings.TrimSpace(ct.ID)
-		if sourceID == "" {
-			sourceID = makeGuestID(ct.Instance, ct.Node, ct.VMID)
-		}
-		candidates[key] = append(candidates[key], proxmoxrecoverymapper.GuestCandidate{
-			SourceID:     sourceID,
-			ResourceType: unifiedresources.ResourceTypeSystemContainer,
-			DisplayName:  strings.TrimSpace(ct.Name),
-			InstanceName: strings.TrimSpace(ct.Instance),
-			NodeName:     strings.TrimSpace(ct.Node),
-			VMID:         ct.VMID,
-		})
-	}
+	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPBSBackups(allBackups, candidates))
 
 	// Sync backup times to VMs/Containers for backup status indicators
@@ -1559,8 +1531,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	snapshot := m.state.GetSnapshot()
-	guestInfo := buildProxmoxGuestInfoIndex(snapshot)
+	guestInfo := buildProxmoxGuestInfoIndex(m.GetUnifiedReadStateOrSnapshot())
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEBackupTasks(backupTasks, guestInfo))
 }
 
