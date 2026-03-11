@@ -262,6 +262,38 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('normalizes legacy node metrics targets at the API load boundary', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            metricsTarget: {
+              resourceType: 'node',
+              resourceId: 'pve-node-1',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].metricsTarget).toEqual({
+      resourceType: 'agent',
+      resourceId: 'pve-node-1',
+    });
+
+    dispose();
+  });
+
   it('derives normalized platformId through the shared identity helper precedence', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

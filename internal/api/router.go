@@ -7536,20 +7536,27 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
 		case "agent":
 			host := findHost(resourceID)
-			if host == nil {
+			if host != nil {
+				points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
+				points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: host.Memory.Usage}
+				diskPercent := float64(0)
+				if len(host.Disks) > 0 {
+					diskPercent = host.Disks[0].Usage
+				}
+				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
+				// Note: We intentionally don't include netin/netout here because the host model
+				// only has cumulative RXBytes/TXBytes (total since boot), not rates.
+				// The RateTracker in ApplyHostReport calculates rates and stores them in metrics history.
+				// Showing cumulative bytes as if they were rates would be misleading (showing GB instead of KB/s).
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
-			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: host.Memory.Usage}
-			diskPercent := float64(0)
-			if len(host.Disks) > 0 {
-				diskPercent = host.Disks[0].Usage
+			node := findNode(resourceID)
+			if node == nil {
+				return points
 			}
-			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
-			// Note: We intentionally don't include netin/netout here because the host model
-			// only has cumulative RXBytes/TXBytes (total since boot), not rates.
-			// The RateTracker in ApplyHostReport calculates rates and stores them in metrics history.
-			// Showing cumulative bytes as if they were rates would be misleading (showing GB instead of KB/s).
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU * 100}
+			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
+			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
 		case "app-container":
 			container := findDockerContainer(resourceID)
 			if container == nil {
@@ -7659,6 +7666,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics := monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
 			points := metrics[metricType]
 			if len(points) == 0 {
+				points = monitor.GetNodeMetrics(resourceID, metricType, duration)
+			}
+			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 				if live, ok := livePoints[metricType]; ok {
 					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
@@ -7720,6 +7730,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
 		case "agent":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("agent:%s", resourceID), duration)
+			if len(metrics) == 0 {
+				metrics = map[string][]monitoring.MetricPoint{
+					"cpu":    monitor.GetNodeMetrics(resourceID, "cpu", duration),
+					"memory": monitor.GetNodeMetrics(resourceID, "memory", duration),
+					"disk":   monitor.GetNodeMetrics(resourceID, "disk", duration),
+				}
+			}
 		case "app-container":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 		case "storage":
@@ -8010,7 +8027,7 @@ func normalizeMetricsHistoryResourceType(input string) (responseType string, run
 	case "storage":
 		return "storage", "storage", []string{"storage"}, nil
 	case "agent":
-		return "agent", "agent", []string{"agent"}, nil
+		return "agent", "agent", []string{"agent", "node"}, nil
 	case "disk":
 		return "disk", "disk", []string{"disk"}, nil
 	case "k8s":

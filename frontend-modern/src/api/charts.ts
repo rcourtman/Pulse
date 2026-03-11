@@ -226,6 +226,9 @@ export function canonicalizeMetricsHistoryTargetType(
   unifiedType?: string,
 ): ResourceType | null {
   const normalized = metricsType.trim().toLowerCase();
+  if (normalized === 'node') {
+    return 'agent';
+  }
   if (normalized === 'k8s') {
     switch (unifiedType) {
       case 'k8s-cluster':

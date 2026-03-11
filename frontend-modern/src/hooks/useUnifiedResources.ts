@@ -1,11 +1,13 @@
 import { batch, createEffect, createSignal, onCleanup } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { canonicalizeMetricsHistoryTargetType } from '@/api/charts';
 import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch, getOrgID } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
   ResourceDiscoveryTarget,
+  ResourceMetricsTarget,
   ResourceStatus,
   ResourceType,
 } from '@/types/resource';
@@ -490,6 +492,19 @@ const resolveDiscoveryResourceType = (
   }
 };
 
+const resolveMetricsTarget = (
+  resourceType: string | undefined,
+  metricsTarget?: { resourceType?: string; resourceId?: string },
+): ResourceMetricsTarget | undefined => {
+  const canonicalType = metricsTarget?.resourceType
+    ? canonicalizeMetricsHistoryTargetType(metricsTarget.resourceType, resourceType)
+    : null;
+  const resourceID = asTrimmedString(metricsTarget?.resourceId);
+  return canonicalType && resourceID
+    ? { resourceType: canonicalType, resourceId: resourceID }
+    : undefined;
+};
+
 const metricToResourceMetric = (metric?: APIMetricValue) => {
   if (!metric) return undefined;
   const used = metric.used ?? undefined;
@@ -525,10 +540,7 @@ const toResource = (v2: APIResource): Resource => {
         }
       : undefined;
 
-  const metricsTarget =
-    v2.metricsTarget?.resourceType && v2.metricsTarget?.resourceId
-      ? { resourceType: v2.metricsTarget.resourceType, resourceId: v2.metricsTarget.resourceId }
-      : undefined;
+  const metricsTarget = resolveMetricsTarget(v2.type, v2.metricsTarget);
 
   return {
     id: v2.id,

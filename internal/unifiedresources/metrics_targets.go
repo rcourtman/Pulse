@@ -15,7 +15,7 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 	switch CanonicalResourceType(resource.Type) {
 	case ResourceTypeAgent:
 		if st, ok := bySource[SourceProxmox]; ok {
-			return &MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
+			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[SourceAgent]; ok {
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
@@ -77,11 +77,11 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		}
 	case ResourceTypePBS:
 		if st, ok := bySource[SourcePBS]; ok {
-			return &MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
+			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 	case ResourceTypePMG:
 		if st, ok := bySource[SourcePMG]; ok {
-			return &MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
+			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 	}
 

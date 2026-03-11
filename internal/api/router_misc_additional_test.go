@@ -120,6 +120,22 @@ func TestNormalizeMetricsHistoryResourceType_DockerHostCanonicalType(t *testing.
 	}
 }
 
+func TestNormalizeMetricsHistoryResourceType_AgentQueriesNodeHistoryAsFallback(t *testing.T) {
+	responseType, runtimeType, storeTypes, err := normalizeMetricsHistoryResourceType("agent")
+	if err != nil {
+		t.Fatalf("normalizeMetricsHistoryResourceType(agent) error = %v", err)
+	}
+	if responseType != "agent" {
+		t.Fatalf("responseType = %q, want %q", responseType, "agent")
+	}
+	if runtimeType != "agent" {
+		t.Fatalf("runtimeType = %q, want %q", runtimeType, "agent")
+	}
+	if len(storeTypes) != 2 || storeTypes[0] != "agent" || storeTypes[1] != "node" {
+		t.Fatalf("storeTypes = %v, want [agent node]", storeTypes)
+	}
+}
+
 func TestNormalizeMetricsHistoryResourceType_RejectsLegacyAliases(t *testing.T) {
 	legacyTypes := []string{"host", "guest", "docker", "dockerhost", "dockercontainer", "system_container"}
 	for _, legacyType := range legacyTypes {

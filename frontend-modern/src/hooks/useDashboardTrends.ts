@@ -1,19 +1,12 @@
 import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import {
-  asMetricsHistoryResourceType,
-  canonicalizeMetricsHistoryTargetType,
   ChartsAPI as ChartService,
   type AggregatedMetricPoint,
   type HistoryTimeRange,
   type ResourceType as HistoryResourceType,
-  mapUnifiedTypeToHistoryResourceType,
 } from '@/api/charts';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
-import {
-  isStorage,
-  type Resource,
-  type ResourceType as UnifiedResourceType,
-} from '@/types/resource';
+import { isStorage, type Resource, type ResourceMetricsTarget } from '@/types/resource';
 
 export type TrendPoint = {
   timestamp: number;
@@ -109,29 +102,15 @@ function dedupeValues(values: string[]): string[] {
 
 function buildHistoryTargets(
   ids: string[],
-  unifiedTypeById: Map<string, UnifiedResourceType>,
-  metricsTargetById: Map<string, { resourceType: string; resourceId: string }>,
+  metricsTargetById: Map<string, ResourceMetricsTarget>,
 ): HistoryTarget[] {
   const uniqueIds = dedupeValues(ids);
   const targets: HistoryTarget[] = [];
 
   for (const id of uniqueIds) {
-    const unifiedType = unifiedTypeById.get(id);
     const mt = metricsTargetById.get(id);
-    if (mt) {
-      const historyType = canonicalizeMetricsHistoryTargetType(mt.resourceType, unifiedType);
-      if (historyType) {
-        targets.push({ id: mt.resourceId, resourceType: historyType, originalId: id });
-        continue;
-      }
-    }
-    // Fallback: derive from unified type
-    if (!unifiedType) continue;
-    const mappedType = mapUnifiedTypeToHistoryResourceType(unifiedType);
-    if (!mappedType) continue;
-    const historyType = asMetricsHistoryResourceType(mappedType);
-    if (!historyType) continue;
-    targets.push({ id, resourceType: historyType, originalId: id });
+    if (!mt) continue;
+    targets.push({ id: mt.resourceId, resourceType: mt.resourceType, originalId: id });
   }
 
   return targets;
@@ -298,10 +277,7 @@ export function useDashboardTrends(
   const trendRequest = createMemo<DashboardTrendRequest>(() => {
     const currentOverview = overview();
     const currentResources = resources();
-    const unifiedTypeById = new Map(
-      currentResources.map((resource) => [resource.id, resource.type] as const),
-    );
-    const metricsTargetById = new Map<string, { resourceType: string; resourceId: string }>();
+    const metricsTargetById = new Map<string, ResourceMetricsTarget>();
     for (const resource of currentResources) {
       if (resource.metricsTarget) {
         metricsTargetById.set(resource.id, resource.metricsTarget);
@@ -310,12 +286,10 @@ export function useDashboardTrends(
 
     const cpuTargets = buildHistoryTargets(
       currentOverview.infrastructure.topCPU.map((item) => item.id),
-      unifiedTypeById,
       metricsTargetById,
     );
     const memoryTargets = buildHistoryTargets(
       currentOverview.infrastructure.topMemory.map((item) => item.id),
-      unifiedTypeById,
       metricsTargetById,
     );
     const storageTargets = dedupeValues(

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { mapUnifiedTypeToHistoryResourceType } from '@/api/charts';
 import { computeTrendDelta, extractTrendData, type TrendPoint } from '@/hooks/useDashboardTrends';
 
 function createPoints(values: number[]): TrendPoint[] {
@@ -41,25 +40,6 @@ describe('computeTrendDelta', () => {
     const delta = computeTrendDelta(createPoints([10, 20]));
     expect(delta).not.toBeNull();
     expect(delta ?? 0).toBeCloseTo(100, 6);
-  });
-});
-
-describe('mapUnifiedTypeToHistoryResourceType', () => {
-  it('maps all supported unified types', () => {
-    expect(mapUnifiedTypeToHistoryResourceType('agent')).toBe('agent');
-    expect(mapUnifiedTypeToHistoryResourceType('docker-host')).toBe('docker-host');
-    expect(mapUnifiedTypeToHistoryResourceType('k8s-node')).toBe('k8s-node');
-    expect(mapUnifiedTypeToHistoryResourceType('k8s-cluster')).toBe('k8s-cluster');
-    expect(mapUnifiedTypeToHistoryResourceType('truenas')).toBe('agent');
-    expect(mapUnifiedTypeToHistoryResourceType('vm')).toBe('vm');
-    expect(mapUnifiedTypeToHistoryResourceType('system-container')).toBe('system-container');
-    expect(mapUnifiedTypeToHistoryResourceType('oci-container')).toBe('oci-container');
-    expect(mapUnifiedTypeToHistoryResourceType('app-container')).toBe('app-container');
-    expect(mapUnifiedTypeToHistoryResourceType('pod')).toBe('pod');
-  });
-
-  it('returns null for unmapped unified types', () => {
-    expect(mapUnifiedTypeToHistoryResourceType('container')).toBeNull();
   });
 });
 

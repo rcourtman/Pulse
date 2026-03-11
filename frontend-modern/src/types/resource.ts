@@ -120,6 +120,24 @@ export interface ResourceCanonicalIdentity {
   aliases?: string[];
 }
 
+export type MetricsHistoryTargetResourceType =
+  | 'agent'
+  | 'vm'
+  | 'system-container'
+  | 'oci-container'
+  | 'app-container'
+  | 'storage'
+  | 'docker-host'
+  | 'k8s-cluster'
+  | 'k8s-node'
+  | 'pod'
+  | 'disk';
+
+export interface ResourceMetricsTarget {
+  resourceType: MetricsHistoryTargetResourceType;
+  resourceId: string;
+}
+
 export interface ResourceStorageConsumer {
   resourceId?: string;
   resourceType: ResourceType | string;
@@ -358,7 +376,7 @@ export interface Resource {
   discoveryTarget?: ResourceDiscoveryTarget;
 
   // Metrics history query coordinates from backend
-  metricsTarget?: { resourceType: string; resourceId: string };
+  metricsTarget?: ResourceMetricsTarget;
 
   // Backend-provided canonical identity contract for labels and stable aliases
   canonicalIdentity?: ResourceCanonicalIdentity;

@@ -122,6 +122,7 @@ describe('ChartsAPI', () => {
     expect(mapUnifiedTypeToHistoryResourceType('pod')).toBe('pod');
     expect(mapUnifiedTypeToHistoryResourceType('container')).toBeNull();
 
+    expect(canonicalizeMetricsHistoryTargetType('node', 'agent')).toBe('agent');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'k8s-node')).toBe('k8s-node');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'pod')).toBe('pod');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'agent')).toBeNull();
