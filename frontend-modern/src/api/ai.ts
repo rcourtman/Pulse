@@ -381,8 +381,12 @@ export class AIAPI {
       return (await apiFetchJSON(
         `${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/investigation`,
       )) as InvestigationSession;
-    } catch {
-      return null;
+    } catch (error) {
+      if (isAPIErrorStatus(error, 404)) {
+        return null;
+      }
+
+      throw error;
     }
   }
 

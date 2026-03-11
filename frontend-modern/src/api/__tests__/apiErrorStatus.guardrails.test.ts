@@ -33,9 +33,11 @@ describe('API error-status guardrails', () => {
 
   it('routes canonical status and JSON parsing through responseUtils', () => {
     expect(aiSource).toContain('isAPIErrorStatus(error, 402)');
+    expect(aiSource).toContain('isAPIErrorStatus(error, 404)');
     expect(aiSource).toContain('parseJSONTextSafe<AIStreamEvent>(');
     expect(aiSource).not.toContain("message.includes('402')");
     expect(aiSource).not.toContain('JSON.parse(');
+    expect(aiSource).not.toContain('} catch {\n      return null;');
 
     expect(aiChatSource).toContain('parseJSONTextSafe<StreamEvent>(');
     expect(aiChatSource).not.toContain('JSON.parse(');

@@ -139,6 +139,20 @@ describe('AIAPI', () => {
     await expect(AIAPI.getRemediationPlans()).resolves.toEqual({ plans: [] });
   });
 
+  it('returns null only for canonical not-found investigation lookups', async () => {
+    apiFetchJSONMock.mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }));
+
+    await expect(AIAPI.getInvestigation('finding-1')).resolves.toBeNull();
+  });
+
+  it('does not swallow non-404 investigation lookup failures', async () => {
+    apiFetchJSONMock.mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
+    await expect(AIAPI.getInvestigation('finding-2')).rejects.toThrow('Payment Required');
+
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('backend down'));
+    await expect(AIAPI.getInvestigation('finding-3')).rejects.toThrow('backend down');
+  });
+
   it('sanitizes runCommand payload consistently', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ output: 'ok', success: true } as any);
     await AIAPI.runCommand({

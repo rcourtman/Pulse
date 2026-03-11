@@ -49,6 +49,7 @@ Own canonical runtime payload shapes between backend and frontend.
 5. Frontend API clients branching on raw `response.status` checks for governed status handling instead of the shared response-status helpers
 6. Frontend API clients parsing governed success or stream payloads with raw `response.json()`, ad hoc `response.text()` + `JSON.parse(...)`, or per-module `JSON.parse(...)` stream decoding instead of the shared response parsing helpers
 7. Frontend API clients normalizing nullable or legacy collection payloads with module-local `|| []`, `?? []`, or ad hoc `Array.isArray(...)` fallbacks instead of shared collection helpers
+8. Frontend API clients swallowing non-not-found API failures behind broad `catch { return null; }` fallbacks instead of routing only canonical `404` cases through explicit status checks
 
 ## Completion Obligations
 
@@ -90,3 +91,6 @@ Nullable or legacy collection payloads in governed frontend API clients must
 now also route through shared collection-normalization helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through module-local
 `|| []`, `?? []`, or `Array.isArray(...)` fallback branches.
+Not-found detail lookups in governed frontend API clients must now also route
+through explicit status-based `404` handling rather than through broad
+catch-all `null` fallbacks that hide real backend failures.
