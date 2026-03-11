@@ -5,6 +5,25 @@ import { apiFetchJSON } from '@/utils/apiClient';
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
 
+  private static normalizeAlertResult(result: {
+    alertIdentifier?: string;
+    alertId?: string;
+    success: boolean;
+    error?: string;
+  }): {
+    alertIdentifier?: string;
+    alertId?: string;
+    success: boolean;
+    error?: string;
+  } {
+    const alertIdentifier = result.alertIdentifier ?? result.alertId;
+    return {
+      ...result,
+      ...(alertIdentifier ? { alertIdentifier } : {}),
+      ...(result.alertId ?? alertIdentifier ? { alertId: result.alertId ?? alertIdentifier } : {}),
+    };
+  }
+
   private static normalizeIncident(incident: Incident | null): Incident | null {
     if (!incident) {
       return null;
@@ -125,10 +144,23 @@ export class AlertsAPI {
   static async bulkAcknowledge(
     alertIds: string[],
     user?: string,
-  ): Promise<{ results: Array<{ alertId: string; success: boolean; error?: string }> }> {
-    return apiFetchJSON(`${this.baseUrl}/bulk/acknowledge`, {
+  ): Promise<{
+    results: Array<{ alertIdentifier?: string; alertId?: string; success: boolean; error?: string }>;
+  }> {
+    const response = (await apiFetchJSON(`${this.baseUrl}/bulk/acknowledge`, {
       method: 'POST',
       body: JSON.stringify({ alertIdentifiers: alertIds, user }),
-    });
+    })) as {
+      results?: Array<{
+        alertIdentifier?: string;
+        alertId?: string;
+        success: boolean;
+        error?: string;
+      }>;
+    };
+    return {
+      ...response,
+      results: (response.results || []).map((result) => this.normalizeAlertResult(result)),
+    };
   }
 }

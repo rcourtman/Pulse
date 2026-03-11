@@ -165,8 +165,8 @@ describe('AlertsAPI', () => {
     it('acknowledges multiple alerts', async () => {
       const results = {
         results: [
-          { alertId: 'alert-1', success: true },
-          { alertId: 'alert-2', success: true },
+          { alertIdentifier: 'canonical:alert-1', alertId: 'alert-1', success: true },
+          { alertIdentifier: 'canonical:alert-2', alertId: 'alert-2', success: true },
         ],
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(results);
@@ -181,6 +181,24 @@ describe('AlertsAPI', () => {
         }),
       );
       expect(result).toEqual(results);
+    });
+
+    it('normalizes bulk acknowledge results when only compatibility alertId is present', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        results: [{ alertId: 'legacy-alert-1', success: true }],
+      });
+
+      const result = await AlertsAPI.bulkAcknowledge(['legacy-alert-1']);
+
+      expect(result).toEqual({
+        results: [
+          {
+            alertIdentifier: 'legacy-alert-1',
+            alertId: 'legacy-alert-1',
+            success: true,
+          },
+        ],
+      });
     });
   });
 
