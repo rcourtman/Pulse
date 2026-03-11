@@ -638,6 +638,8 @@ func TestStatusJSONResolvedDecisionsAreTypedRecords(t *testing.T) {
 func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 	hook := readRepoFile(t, ".husky/pre-commit")
 	assertContainsAll(t, ".husky/pre-commit", hook, []string{
+		"governance_stage_guard.py",
+		"Running governance stage guard...",
 		"canonical_completion_guard.py",
 		"Running canonical completion guard...",
 		"Running status audit...",
@@ -651,6 +653,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"canonical_completion_guard_test.py",
 		"contract_audit_test.py",
 		"format_staged_go_test.py",
+		"governance_stage_guard_test.py",
 		"registry_audit_test.py",
 		"status_audit_test.py",
 		"subsystem_lookup_test.py",
@@ -717,6 +720,18 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"--files-from-stdin",
 		"subsystem_matches_path",
 	})
+
+	stageGuard := readRepoFile(t, "scripts/release_control/governance_stage_guard.py")
+	assertContainsAll(t, "scripts/release_control/governance_stage_guard.py", stageGuard, []string{
+		"WORKTREE_SENSITIVE_PREFIXES",
+		"WORKTREE_SENSITIVE_EXACT_FILES",
+		"docs/release-control/v6/",
+		"internal/repoctl/",
+		"scripts/release_control/",
+		".husky/pre-commit",
+		".github/workflows/canonical-governance.yml",
+		"partially_staged_governance_paths",
+	})
 }
 
 func TestCanonicalGovernanceRunsInCI(t *testing.T) {
@@ -736,6 +751,7 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
 		"python3 scripts/release_control/contract_audit_test.py",
+		"python3 scripts/release_control/governance_stage_guard_test.py",
 		"python3 scripts/release_control/registry_audit_test.py",
 		"python3 scripts/release_control/status_audit_test.py",
 		"python3 scripts/release_control/subsystem_lookup_test.py",

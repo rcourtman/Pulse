@@ -17,6 +17,7 @@ Use:
 6. `python3 scripts/release_control/registry_audit.py --check` if you need a machine-derived subsystem registry audit
 7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit, including explicit cross-subsystem dependency checks and exact registry-derived shared-boundary wording
    Local pre-commit runs the v6 machine audits against staged control-file content so partial staging cannot hide governance drift.
+   Local pre-commit also blocks partial staging for hook-sensitive governance files under `docs/release-control/v6/`, `scripts/release_control/`, `internal/repoctl/`, `.husky/pre-commit`, and `.github/workflows/canonical-governance.yml`, because those checks still execute or structurally read the working-tree versions locally.
 8. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations for a change
 
 For governed runtime changes, a staged subsystem contract only counts if its

@@ -22,6 +22,7 @@ Useful helper tools:
 - `python3 scripts/release_control/contract_audit.py --check` for structured subsystem contract metadata, explicit cross-subsystem dependency declarations, shared-boundary declarations, required sections, and canonical path references
   Shared-boundary entries must match the exact registry-derived sentence shape, not freeform prose.
   Local pre-commit runs the v6 machine audits with staged control-file content so validation is based on the actual index content being committed.
+  Local pre-commit also blocks partial staging for hook-sensitive governance files under `docs/release-control/v6/`, `scripts/release_control/`, `internal/repoctl/`, `.husky/pre-commit`, and `.github/workflows/canonical-governance.yml`, because those checks still execute or structurally read working-tree content locally.
 - `python3 scripts/release_control/status_audit.py --check`
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations

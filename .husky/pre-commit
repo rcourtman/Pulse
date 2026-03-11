@@ -57,6 +57,10 @@ else
 fi
 echo "Sensitivity check passed."
 
+# Block partially staged governance files that the local hook reads from the working tree
+echo "Running governance stage guard..."
+python3 scripts/release_control/governance_stage_guard.py
+
 # Enforce canonical subsystem completion discipline
 echo "Running canonical completion guard..."
 python3 scripts/release_control/canonical_completion_guard.py
@@ -81,6 +85,7 @@ echo "Running release-control helper unit tests..."
 python3 scripts/release_control/canonical_completion_guard_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/format_staged_go_test.py
+python3 scripts/release_control/governance_stage_guard_test.py
 python3 scripts/release_control/registry_audit_test.py
 python3 scripts/release_control/repo_file_io_test.py
 python3 scripts/release_control/status_audit_test.py
