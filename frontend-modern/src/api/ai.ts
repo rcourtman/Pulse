@@ -155,7 +155,7 @@ export class AIAPI {
   // Investigate an alert with AI (one-click investigation)
   static async investigateAlert(
     request: {
-      alert_id: string;
+      alertIdentifier: string;
       resource_id: string;
       resource_name: string;
       resource_type: string;

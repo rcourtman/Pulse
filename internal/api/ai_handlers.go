@@ -3979,18 +3979,26 @@ func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *h
 
 // AIInvestigateAlertRequest is the request body for POST /api/ai/investigate-alert
 type AIInvestigateAlertRequest struct {
-	AlertID      string  `json:"alert_id"`
-	ResourceID   string  `json:"resource_id"`
-	ResourceName string  `json:"resource_name"`
-	ResourceType string  `json:"resource_type"` // canonical v6 resource type
-	AlertType    string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
-	Level        string  `json:"level"`         // warning, critical
-	Value        float64 `json:"value"`
-	Threshold    float64 `json:"threshold"`
-	Message      string  `json:"message"`
-	Duration     string  `json:"duration"` // How long the alert has been active
-	Node         string  `json:"node,omitempty"`
-	VMID         int     `json:"vmid,omitempty"`
+	AlertIdentifier string  `json:"alertIdentifier"`
+	LegacyAlertID   string  `json:"alert_id"`
+	ResourceID      string  `json:"resource_id"`
+	ResourceName    string  `json:"resource_name"`
+	ResourceType    string  `json:"resource_type"` // canonical v6 resource type
+	AlertType       string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
+	Level           string  `json:"level"`         // warning, critical
+	Value           float64 `json:"value"`
+	Threshold       float64 `json:"threshold"`
+	Message         string  `json:"message"`
+	Duration        string  `json:"duration"` // How long the alert has been active
+	Node            string  `json:"node,omitempty"`
+	VMID            int     `json:"vmid,omitempty"`
+}
+
+func (r AIInvestigateAlertRequest) alertIdentifier() string {
+	if id := strings.TrimSpace(r.AlertIdentifier); id != "" {
+		return id
+	}
+	return strings.TrimSpace(r.LegacyAlertID)
 }
 
 func normalizeInvestigateAlertTargetType(raw string) (string, error) {
@@ -4045,8 +4053,9 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	}
 
 	// Build investigation prompt
+	alertIdentifier := req.alertIdentifier()
 	investigationPrompt := ai.GenerateAlertInvestigationPrompt(ai.AlertInvestigationRequest{
-		AlertID:      req.AlertID,
+		AlertID:      alertIdentifier,
 		ResourceID:   req.ResourceID,
 		ResourceName: req.ResourceName,
 		ResourceType: req.ResourceType,
@@ -4061,7 +4070,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	})
 
 	log.Info().
-		Str("alert_id", req.AlertID).
+		Str("alert_identifier", alertIdentifier).
 		Str("resource", req.ResourceName).
 		Str("type", req.AlertType).
 		Msg("AI alert investigation started")
@@ -4177,12 +4186,13 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		TargetType: targetType,
 		TargetID:   targetID,
 		Context: map[string]interface{}{
-			"alertId":      req.AlertID,
-			"alertType":    req.AlertType,
-			"alertLevel":   req.Level,
-			"alertMessage": req.Message,
-			"guestName":    req.ResourceName,
-			"node":         req.Node,
+			"alertIdentifier": alertIdentifier,
+			"alertId":         alertIdentifier,
+			"alertType":       req.AlertType,
+			"alertLevel":      req.Level,
+			"alertMessage":    req.Message,
+			"guestName":       req.ResourceName,
+			"node":            req.Node,
 		},
 	}, callback)
 
@@ -4211,8 +4221,8 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	data, _ := json.Marshal(finalEvent)
 	safeWrite([]byte("data: " + string(data) + "\n\n"))
 
-	if req.AlertID != "" {
-		h.GetAIService(r.Context()).RecordIncidentAnalysis(req.AlertID, "Pulse Assistant alert investigation completed", map[string]interface{}{
+	if alertIdentifier != "" {
+		h.GetAIService(r.Context()).RecordIncidentAnalysis(alertIdentifier, "Pulse Assistant alert investigation completed", map[string]interface{}{
 			"model":         resp.Model,
 			"tool_calls":    len(resp.ToolCalls),
 			"input_tokens":  resp.InputTokens,
@@ -4221,13 +4231,13 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	}
 
 	log.Info().
-		Str("alert_id", req.AlertID).
+		Str("alert_identifier", alertIdentifier).
 		Str("model", resp.Model).
 		Int("tool_calls", len(resp.ToolCalls)).
 		Msg("AI alert investigation completed")
 
-	if req.AlertID != "" {
-		h.GetAIService(r.Context()).RecordIncidentAnalysis(req.AlertID, "Pulse Assistant investigation completed", map[string]interface{}{
+	if alertIdentifier != "" {
+		h.GetAIService(r.Context()).RecordIncidentAnalysis(alertIdentifier, "Pulse Assistant investigation completed", map[string]interface{}{
 			"model":         resp.Model,
 			"input_tokens":  resp.InputTokens,
 			"output_tokens": resp.OutputTokens,

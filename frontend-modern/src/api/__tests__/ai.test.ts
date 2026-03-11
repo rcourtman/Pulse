@@ -106,7 +106,7 @@ describe('AIAPI', () => {
     await expect(
       AIAPI.investigateAlert(
         {
-          alert_id: 'a1',
+          alertIdentifier: 'a1',
           resource_id: 'r1',
           resource_name: 'res',
           resource_type: 'vm',
@@ -127,7 +127,7 @@ describe('AIAPI', () => {
     await expect(
       AIAPI.investigateAlert(
         {
-          alert_id: 'a1',
+          alertIdentifier: 'a1',
           resource_id: 'r1',
           resource_name: 'res',
           resource_type: 'vm',
@@ -157,7 +157,7 @@ describe('AIAPI', () => {
 
     await AIAPI.investigateAlert(
       {
-        alert_id: 'a1',
+        alertIdentifier: 'a1',
         resource_id: 'r1',
         resource_name: 'res',
         resource_type: 'vm',
@@ -175,5 +175,46 @@ describe('AIAPI', () => {
     expect(releaseLock).toHaveBeenCalledTimes(1);
     expect(clearTimeoutSpy).toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
+  });
+
+  it('sends canonical alertIdentifier for investigateAlert', async () => {
+    apiFetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    await expect(
+      AIAPI.investigateAlert(
+        {
+          alertIdentifier: 'instance:node:100::metric/cpu',
+          resource_id: 'r1',
+          resource_name: 'res',
+          resource_type: 'vm',
+          alert_type: 'cpu',
+          level: 'warning',
+          value: 1,
+          threshold: 2,
+          message: 'msg',
+          duration: '1m',
+        },
+        () => undefined,
+      ),
+    ).rejects.toThrow('No response body');
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ai/investigate-alert',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          alertIdentifier: 'instance:node:100::metric/cpu',
+          resource_id: 'r1',
+          resource_name: 'res',
+          resource_type: 'vm',
+          alert_type: 'cpu',
+          level: 'warning',
+          value: 1,
+          threshold: 2,
+          message: 'msg',
+          duration: '1m',
+        }),
+      }),
+    );
   });
 });
