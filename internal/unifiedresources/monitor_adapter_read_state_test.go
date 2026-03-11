@@ -51,6 +51,30 @@ func TestMonitorAdapterReadStateForwardsToRegistry(t *testing.T) {
 				},
 			},
 		},
+		{
+			SourceID: "disk-serial-1",
+			Resource: Resource{
+				ID:       "disk-serial-1",
+				Type:     ResourceTypePhysicalDisk,
+				Name:     "disk-serial-1",
+				Status:   StatusOnline,
+				ParentID: &nodeID,
+				MetricsTarget: &MetricsTarget{
+					ResourceType: "disk",
+					ResourceID:   "SERIAL-1",
+				},
+				PhysicalDisk: &PhysicalDiskMeta{
+					DevPath:     "/dev/sda",
+					Model:       "disk-serial-1",
+					Serial:      "SERIAL-1",
+					Temperature: 35,
+				},
+				Proxmox: &ProxmoxData{
+					NodeName: "node-1",
+					Instance: "lab",
+				},
+			},
+		},
 	})
 
 	if got := len(adapter.Nodes()); got != 1 {
@@ -61,6 +85,9 @@ func TestMonitorAdapterReadStateForwardsToRegistry(t *testing.T) {
 	}
 	if got := len(adapter.StoragePools()); got != 1 {
 		t.Fatalf("expected 1 storage pool view, got %d", got)
+	}
+	if got := len(adapter.PhysicalDisks()); got != 1 {
+		t.Fatalf("expected 1 physical disk view, got %d", got)
 	}
 	if got := len(adapter.Workloads()); got == 0 {
 		t.Fatal("expected workload views from registry-backed adapter")

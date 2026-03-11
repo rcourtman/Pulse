@@ -4,7 +4,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -162,7 +161,11 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		return nil
 	}
 
-	state := m.GetState()
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+	metricsTargetStore := m.currentMetricsTargetStore()
 
 	// Phase 1: Collect disk metadata and resource IDs.
 	type diskMeta struct {
@@ -173,24 +176,32 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		temperature int
 	}
 	var disks []diskMeta
-	for _, disk := range state.PhysicalDisks {
-		if disk.Temperature <= 0 {
+	for _, disk := range readState.PhysicalDisks() {
+		if disk == nil || disk.Temperature() <= 0 {
 			continue
 		}
-		resourceID := unifiedresources.PhysicalDiskMetricID(disk)
+		resourceID := ""
+		if metricsTargetStore != nil {
+			if target := metricsTargetStore.MetricsTargetForResource(disk.ID()); target != nil {
+				resourceID = strings.TrimSpace(target.ResourceID)
+			}
+		}
+		if resourceID == "" {
+			resourceID = strings.TrimSpace(disk.MetricResourceID())
+		}
 		if resourceID == "" {
 			continue
 		}
-		name := disk.Model
+		name := strings.TrimSpace(disk.Model())
 		if name == "" {
-			name = disk.DevPath
+			name = strings.TrimSpace(disk.DevPath())
 		}
 		disks = append(disks, diskMeta{
 			resourceID:  resourceID,
 			name:        name,
-			node:        disk.Node,
-			instance:    disk.Instance,
-			temperature: disk.Temperature,
+			node:        strings.TrimSpace(disk.Node()),
+			instance:    strings.TrimSpace(disk.Instance()),
+			temperature: disk.Temperature(),
 		})
 	}
 
@@ -235,6 +246,21 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 	}
 
 	return result
+}
+
+func (m *Monitor) currentMetricsTargetStore() MetricsTargetResourceStore {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	store, ok := m.resourceStore.(MetricsTargetResourceStore)
+	if !ok {
+		return nil
+	}
+	return store
 }
 
 // queryStoreBatchMetricMapWithGapFill queries metrics for multiple resource IDs

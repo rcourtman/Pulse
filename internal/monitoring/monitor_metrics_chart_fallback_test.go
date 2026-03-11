@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -138,6 +140,54 @@ func TestGetStorageMetricsForChart_ShortRangeFallsBackToStoreWhenInMemoryCoverag
 	result := monitor.GetStorageMetricsForChart("storage-1", duration)
 	if got, wantMin := chartMapCoverageSpan(result), 45*time.Minute; got < wantMin {
 		t.Fatalf("expected store-backed storage coverage >= %s, got %s", wantMin, got)
+	}
+}
+
+func TestGetPhysicalDiskTemperatureCharts_UsesUnifiedReadStateDiskViews(t *testing.T) {
+	t.Parallel()
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "disk-1",
+				Node:        "node-a",
+				Instance:    "lab-a",
+				DevPath:     "/dev/nvme0n1",
+				Model:       "Samsung PM9A3",
+				Serial:      "SERIAL-DISK-1",
+				Temperature: 42,
+				LastChecked: time.Now().UTC(),
+			},
+		},
+	})
+
+	monitor := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+	}
+
+	charts := monitor.GetPhysicalDiskTemperatureCharts(30 * time.Minute)
+	entry, ok := charts["SERIAL-DISK-1"]
+	if !ok {
+		t.Fatalf("expected chart entry for canonical disk metric ID, got %#v", charts)
+	}
+	if entry.Name != "Samsung PM9A3" {
+		t.Fatalf("chart name = %q, want Samsung PM9A3", entry.Name)
+	}
+	if entry.Node != "node-a" {
+		t.Fatalf("chart node = %q, want node-a", entry.Node)
+	}
+	if entry.Instance != "lab-a" {
+		t.Fatalf("chart instance = %q, want lab-a", entry.Instance)
+	}
+	if len(entry.Temperature) != 2 {
+		t.Fatalf("expected padded 2-point sparkline series, got %d", len(entry.Temperature))
+	}
+	for _, point := range entry.Temperature {
+		if point.Value != 42 {
+			t.Fatalf("expected canonical disk temperature 42 in padded series, got %.2f", point.Value)
+		}
 	}
 }
 

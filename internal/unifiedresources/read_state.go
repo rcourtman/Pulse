@@ -23,6 +23,7 @@ type ReadState interface {
 
 	// Storage
 	StoragePools() []*StoragePoolView
+	PhysicalDisks() []*PhysicalDiskView
 
 	// Backup & mail
 	PBSInstances() []*PBSInstanceView

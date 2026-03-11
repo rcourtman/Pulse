@@ -1464,6 +1464,102 @@ func (v StoragePoolView) IsZFS() bool {
 	return v.r.Storage.IsZFS
 }
 
+// PhysicalDiskView wraps a physical disk resource.
+type PhysicalDiskView struct{ r *Resource }
+
+func NewPhysicalDiskView(r *Resource) PhysicalDiskView { return PhysicalDiskView{r: r} }
+
+func (v PhysicalDiskView) String() string {
+	return fmt.Sprintf("PhysicalDiskView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v PhysicalDiskView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v PhysicalDiskView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v PhysicalDiskView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v PhysicalDiskView) DevPath() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.DevPath
+}
+
+func (v PhysicalDiskView) Model() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Model
+}
+
+func (v PhysicalDiskView) Node() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.NodeName
+}
+
+func (v PhysicalDiskView) Instance() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.Instance
+}
+
+func (v PhysicalDiskView) Temperature() int {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.Temperature
+}
+
+func (v PhysicalDiskView) MetricResourceID() string {
+	if v.r == nil {
+		return ""
+	}
+	if v.r.MetricsTarget != nil {
+		return v.r.MetricsTarget.ResourceID
+	}
+	return PhysicalDiskMetaMetricID(v.r.PhysicalDisk, v.r.ID)
+}
+
+func (v PhysicalDiskView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v PhysicalDiskView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+func (v PhysicalDiskView) ParentName() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ParentName
+}
+
 func (v StoragePoolView) ZFSPoolState() string {
 	if v.r == nil || v.r.Storage == nil {
 		return ""

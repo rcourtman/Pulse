@@ -1225,7 +1225,12 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 		UpdatedAt:    time.Now().UTC(),
 		Metrics:      metricsFromPhysicalDisk(disk),
 		PhysicalDisk: pdMeta,
-		Tags:         physicalDiskTags(disk),
+		Proxmox: &ProxmoxData{
+			SourceID: disk.ID,
+			NodeName: disk.Node,
+			Instance: disk.Instance,
+		},
+		Tags: physicalDiskTags(disk),
 	}
 
 	identity := ResourceIdentity{

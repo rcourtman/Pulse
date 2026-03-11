@@ -1410,6 +1410,9 @@ func TestView_ReadStateInterfaceUsage(t *testing.T) {
 		Storage: []models.Storage{
 			{ID: "storage-iface-1", Name: "iface-store", Node: "pve-i", Instance: "lab", Type: "dir", Status: "available", Content: "images", Shared: false, Total: 100, Used: 10, Free: 90, Usage: 10},
 		},
+		PhysicalDisks: []models.PhysicalDisk{
+			{ID: "disk-iface-1", Node: "pve-i", Instance: "lab", DevPath: "/dev/nvme0n1", Model: "iface-disk", Serial: "SERIAL-IFACE-1", Temperature: 37, LastChecked: now},
+		},
 		PBSInstances: []models.PBSInstance{
 			{ID: "pbs-iface-1", Name: "iface-pbs", Host: "https://pbs-iface.example:8007", Status: "online", Version: "3.2", LastSeen: now},
 		},
@@ -1440,6 +1443,9 @@ func TestView_ReadStateInterfaceUsage(t *testing.T) {
 	}
 	if got := rs.StoragePools(); len(got) != 1 || got[0].Name() != "iface-store" {
 		t.Fatalf("expected 1 storage pool via ReadState, got %d", len(got))
+	}
+	if got := rs.PhysicalDisks(); len(got) != 1 || got[0].Name() != "iface-disk" {
+		t.Fatalf("expected 1 physical disk via ReadState, got %d", len(got))
 	}
 	if got := rs.PBSInstances(); len(got) != 1 || got[0].Name() != "iface-pbs" {
 		t.Fatalf("expected 1 PBS instance via ReadState, got %d", len(got))

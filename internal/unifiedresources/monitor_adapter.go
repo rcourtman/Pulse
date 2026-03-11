@@ -326,6 +326,15 @@ func (a *MonitorAdapter) StoragePools() []*StoragePoolView {
 	return registry.StoragePools()
 }
 
+// PhysicalDisks returns cached physical disk views for AI/read-state consumers.
+func (a *MonitorAdapter) PhysicalDisks() []*PhysicalDiskView {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return nil
+	}
+	return registry.PhysicalDisks()
+}
+
 // PBSInstances returns cached PBS instance views for AI/read-state consumers.
 func (a *MonitorAdapter) PBSInstances() []*PBSInstanceView {
 	registry := a.currentRegistry()

@@ -55,6 +55,7 @@ type ResourceRegistry struct {
 	cachedDocker           []*DockerHostView
 	cachedDockerContainers []*DockerContainerView
 	cachedStorage          []*StoragePoolView
+	cachedPhysicalDisks    []*PhysicalDiskView
 	cachedPBS              []*PBSInstanceView
 	cachedPMG              []*PMGInstanceView
 	cachedK8s              []*K8sClusterView
@@ -1617,6 +1618,7 @@ func (rr *ResourceRegistry) rebuildViews() {
 	rr.cachedDocker = nil
 	rr.cachedDockerContainers = nil
 	rr.cachedStorage = nil
+	rr.cachedPhysicalDisks = nil
 	rr.cachedPBS = nil
 	rr.cachedPMG = nil
 	rr.cachedK8s = nil
@@ -1660,6 +1662,9 @@ func (rr *ResourceRegistry) rebuildViews() {
 		case ResourceTypeStorage:
 			v := NewStoragePoolView(viewResource)
 			rr.cachedStorage = append(rr.cachedStorage, &v)
+		case ResourceTypePhysicalDisk:
+			v := NewPhysicalDiskView(viewResource)
+			rr.cachedPhysicalDisks = append(rr.cachedPhysicalDisks, &v)
 		case ResourceTypePBS:
 			v := NewPBSInstanceView(viewResource)
 			rr.cachedPBS = append(rr.cachedPBS, &v)
@@ -1689,6 +1694,7 @@ func (rr *ResourceRegistry) rebuildViews() {
 	sort.Slice(rr.cachedDocker, func(i, j int) bool { return rr.cachedDocker[i].Name() < rr.cachedDocker[j].Name() })
 	sort.Slice(rr.cachedDockerContainers, func(i, j int) bool { return rr.cachedDockerContainers[i].Name() < rr.cachedDockerContainers[j].Name() })
 	sort.Slice(rr.cachedStorage, func(i, j int) bool { return rr.cachedStorage[i].Name() < rr.cachedStorage[j].Name() })
+	sort.Slice(rr.cachedPhysicalDisks, func(i, j int) bool { return rr.cachedPhysicalDisks[i].Name() < rr.cachedPhysicalDisks[j].Name() })
 	sort.Slice(rr.cachedPBS, func(i, j int) bool { return rr.cachedPBS[i].Name() < rr.cachedPBS[j].Name() })
 	sort.Slice(rr.cachedPMG, func(i, j int) bool { return rr.cachedPMG[i].Name() < rr.cachedPMG[j].Name() })
 	sort.Slice(rr.cachedK8s, func(i, j int) bool { return rr.cachedK8s[i].Name() < rr.cachedK8s[j].Name() })
@@ -1736,6 +1742,11 @@ func (rr *ResourceRegistry) DockerContainers() []*DockerContainerView {
 // StoragePools returns cached storage pool views sorted by name.
 func (rr *ResourceRegistry) StoragePools() []*StoragePoolView {
 	return withViewCache(rr, func() []*StoragePoolView { return rr.cachedStorage })
+}
+
+// PhysicalDisks returns cached physical disk views sorted by name.
+func (rr *ResourceRegistry) PhysicalDisks() []*PhysicalDiskView {
+	return withViewCache(rr, func() []*PhysicalDiskView { return rr.cachedPhysicalDisks })
 }
 
 // PBSInstances returns cached PBS instance views sorted by name.
