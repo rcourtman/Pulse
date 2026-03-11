@@ -74,6 +74,47 @@ func statusJSON(t *testing.T) map[string]any {
 	return payload
 }
 
+func statusLaneIDs(t *testing.T, status map[string]any) map[string]struct{} {
+	t.Helper()
+
+	rawLanes, ok := status["lanes"].([]any)
+	if !ok {
+		t.Fatalf("status.json missing lanes list")
+	}
+
+	ids := make(map[string]struct{}, len(rawLanes))
+	for _, rawLane := range rawLanes {
+		lane, ok := rawLane.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json lanes contains non-object entry")
+		}
+		id, ok := lane["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("status.json lane missing id")
+		}
+		ids[id] = struct{}{}
+	}
+	return ids
+}
+
+func repoRootForEvidence(t *testing.T, repo string) string {
+	t.Helper()
+
+	envKey := "PULSE_REPO_ROOT_" + strings.ToUpper(strings.ReplaceAll(repo, "-", "_"))
+	if value := os.Getenv(envKey); value != "" {
+		return value
+	}
+
+	currentRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("failed to resolve pulse repo root: %v", err)
+	}
+	if repo == "pulse" {
+		return currentRoot
+	}
+	return filepath.Join(filepath.Dir(currentRoot), repo)
+}
+
 func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 	rel := "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md"
 	content := readRepoFile(t, rel)
@@ -190,7 +231,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"## Development Governance",
 		"## Source Domains",
 		"It is not a live progress dashboard.",
-		"Current lane scores, evidence references, and open operational decisions live",
+		"Current lane scores, evidence references, and typed operational decision",
 	})
 	assertContainsNone(t, rel, content, []string{
 		"## Priority Engine",
@@ -213,6 +254,36 @@ func TestStatusJSONStaysInSyncWithSourceOfTruth(t *testing.T) {
 	}
 	if updatedAt != sourceUpdated {
 		t.Fatalf("status.json updated_at = %q, want %q", updatedAt, sourceUpdated)
+	}
+}
+
+func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
+	status := statusJSON(t)
+
+	requiredStringFields := map[string]string{
+		"version":              "6.0",
+		"updated_at":           sourceOfTruthLastUpdated(t, readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")),
+		"execution_model":      "direct-repo-sessions",
+		"source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+	}
+	for field, want := range requiredStringFields {
+		got, ok := status[field].(string)
+		if !ok {
+			t.Fatalf("status.json missing string %s", field)
+		}
+		if got != want {
+			t.Fatalf("status.json %s = %q, want %q", field, got, want)
+		}
+	}
+
+	if _, ok := status["priority_engine"].(map[string]any); !ok {
+		t.Fatalf("status.json missing priority_engine object")
+	}
+	if _, ok := status["open_decisions"].([]any); !ok {
+		t.Fatalf("status.json missing open_decisions list")
+	}
+	if _, ok := status["resolved_decisions"].([]any); !ok {
+		t.Fatalf("status.json missing resolved_decisions list")
 	}
 }
 
@@ -320,6 +391,26 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 		if !ok || len(rawEvidence) == 0 {
 			t.Fatalf("status.json lane %q missing evidence list", laneID)
 		}
+		if _, ok := lane["name"].(string); !ok {
+			t.Fatalf("status.json lane %q missing string name", laneID)
+		}
+		targetScore, ok := lane["target_score"].(float64)
+		if !ok {
+			t.Fatalf("status.json lane %q missing numeric target_score", laneID)
+		}
+		currentScore, ok := lane["current_score"].(float64)
+		if !ok {
+			t.Fatalf("status.json lane %q missing numeric current_score", laneID)
+		}
+		if targetScore < 0 || targetScore > 10 || currentScore < 0 || currentScore > 10 {
+			t.Fatalf("status.json lane %q score out of range", laneID)
+		}
+		if currentScore > targetScore {
+			t.Fatalf("status.json lane %q current_score %.0f exceeds target_score %.0f", laneID, currentScore, targetScore)
+		}
+		if statusValue, ok := lane["status"].(string); !ok || !slices.Contains([]string{"not-started", "partial", "target-met", "blocked"}, statusValue) {
+			t.Fatalf("status.json lane %q has invalid status %#v", laneID, lane["status"])
+		}
 
 		for _, rawEvidenceRef := range rawEvidence {
 			ref, ok := rawEvidenceRef.(map[string]any)
@@ -355,24 +446,133 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 				t.Fatalf("status.json lane %q evidence kind %#v not allowed", laneID, ref["kind"])
 			}
 
-			if repo != "pulse" {
-				continue
+			repoRoot := repoRootForEvidence(t, repo)
+			if info, err := os.Stat(repoRoot); err != nil || !info.IsDir() {
+				t.Fatalf("status.json lane %q evidence repo root for %q missing at %q (set %s to override): %v", laneID, repo, repoRoot, "PULSE_REPO_ROOT_"+strings.ToUpper(strings.ReplaceAll(repo, "-", "_")), err)
 			}
 
-			fullPath := filepath.Join("..", "..", path)
+			fullPath := filepath.Join(repoRoot, path)
 			info, err := os.Stat(fullPath)
 			if err != nil {
-				t.Fatalf("status.json lane %q evidence path %q missing in pulse repo: %v", laneID, path, err)
+				t.Fatalf("status.json lane %q evidence path %q missing in repo %q: %v", laneID, path, repo, err)
 			}
 			switch kind {
 			case "file":
 				if !info.Mode().IsRegular() {
-					t.Fatalf("status.json lane %q evidence path %q should be file", laneID, path)
+					t.Fatalf("status.json lane %q evidence path %q in repo %q should be file", laneID, path, repo)
 				}
 			case "dir":
 				if !info.IsDir() {
-					t.Fatalf("status.json lane %q evidence path %q should be dir", laneID, path)
+					t.Fatalf("status.json lane %q evidence path %q in repo %q should be dir", laneID, path, repo)
 				}
+			}
+		}
+	}
+}
+
+func TestStatusJSONOpenDecisionsAreTypedRecords(t *testing.T) {
+	status := statusJSON(t)
+	laneIDs := statusLaneIDs(t, status)
+
+	rawDecisions, ok := status["open_decisions"].([]any)
+	if !ok || len(rawDecisions) == 0 {
+		t.Fatalf("status.json missing open_decisions list")
+	}
+
+	seenIDs := make(map[string]struct{}, len(rawDecisions))
+	dateRe := regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
+	for _, rawDecision := range rawDecisions {
+		decision, ok := rawDecision.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json open_decisions contains non-object entry")
+		}
+
+		id, ok := decision["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("status.json open_decision missing id")
+		}
+		if _, exists := seenIDs[id]; exists {
+			t.Fatalf("status.json open_decision id %q duplicated", id)
+		}
+		seenIDs[id] = struct{}{}
+
+		if summary, ok := decision["summary"].(string); !ok || strings.TrimSpace(summary) == "" {
+			t.Fatalf("status.json open_decision %q missing summary", id)
+		}
+		if owner, ok := decision["owner"].(string); !ok || strings.TrimSpace(owner) == "" {
+			t.Fatalf("status.json open_decision %q missing owner", id)
+		}
+		if statusValue, ok := decision["status"].(string); !ok || !slices.Contains([]string{"open", "blocked", "owner-action"}, statusValue) {
+			t.Fatalf("status.json open_decision %q has invalid status %#v", id, decision["status"])
+		}
+		openedAt, ok := decision["opened_at"].(string)
+		if !ok || !dateRe.MatchString(openedAt) {
+			t.Fatalf("status.json open_decision %q missing valid opened_at date", id)
+		}
+		rawLaneIDs, ok := decision["lane_ids"].([]any)
+		if !ok || len(rawLaneIDs) == 0 {
+			t.Fatalf("status.json open_decision %q missing lane_ids", id)
+		}
+		for _, rawLaneID := range rawLaneIDs {
+			laneID, ok := rawLaneID.(string)
+			if !ok || laneID == "" {
+				t.Fatalf("status.json open_decision %q lane_ids contains invalid entry", id)
+			}
+			if _, ok := laneIDs[laneID]; !ok {
+				t.Fatalf("status.json open_decision %q references unknown lane_id %q", id, laneID)
+			}
+		}
+	}
+}
+
+func TestStatusJSONResolvedDecisionsAreTypedRecords(t *testing.T) {
+	status := statusJSON(t)
+	laneIDs := statusLaneIDs(t, status)
+
+	rawDecisions, ok := status["resolved_decisions"].([]any)
+	if !ok || len(rawDecisions) == 0 {
+		t.Fatalf("status.json missing resolved_decisions list")
+	}
+
+	seenIDs := make(map[string]struct{}, len(rawDecisions))
+	dateRe := regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
+	validKinds := []string{"architecture", "contract", "governance", "migration", "pricing", "release-policy"}
+	for _, rawDecision := range rawDecisions {
+		decision, ok := rawDecision.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json resolved_decisions contains non-object entry")
+		}
+
+		id, ok := decision["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("status.json resolved_decision missing id")
+		}
+		if _, exists := seenIDs[id]; exists {
+			t.Fatalf("status.json resolved_decision id %q duplicated", id)
+		}
+		seenIDs[id] = struct{}{}
+
+		if summary, ok := decision["summary"].(string); !ok || strings.TrimSpace(summary) == "" {
+			t.Fatalf("status.json resolved_decision %q missing summary", id)
+		}
+		if kind, ok := decision["kind"].(string); !ok || !slices.Contains(validKinds, kind) {
+			t.Fatalf("status.json resolved_decision %q has invalid kind %#v", id, decision["kind"])
+		}
+		decidedAt, ok := decision["decided_at"].(string)
+		if !ok || !dateRe.MatchString(decidedAt) {
+			t.Fatalf("status.json resolved_decision %q missing valid decided_at date", id)
+		}
+		rawLaneIDs, ok := decision["lane_ids"].([]any)
+		if !ok || len(rawLaneIDs) == 0 {
+			t.Fatalf("status.json resolved_decision %q missing lane_ids", id)
+		}
+		for _, rawLaneID := range rawLaneIDs {
+			laneID, ok := rawLaneID.(string)
+			if !ok || laneID == "" {
+				t.Fatalf("status.json resolved_decision %q lane_ids contains invalid entry", id)
+			}
+			if _, ok := laneIDs[laneID]; !ok {
+				t.Fatalf("status.json resolved_decision %q references unknown lane_id %q", id, laneID)
 			}
 		}
 	}
@@ -383,8 +583,13 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 	assertContainsAll(t, ".husky/pre-commit", hook, []string{
 		"canonical_completion_guard.py",
 		"Running canonical completion guard...",
+		"Running status audit...",
+		"status_audit.py --check",
 		"Running governance guardrail tests...",
 		"go test ./internal/repoctl -count=1",
+		"canonical_completion_guard_test.py",
+		"status_audit_test.py",
+		"subsystem_lookup_test.py",
 	})
 
 	script := readRepoFile(t, "scripts/release_control/canonical_completion_guard.py")
@@ -398,15 +603,43 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"test_prefixes",
 		"docs/release-control/v6/subsystems/",
 	})
+
+	statusAudit := readRepoFile(t, "scripts/release_control/status_audit.py")
+	assertContainsAll(t, "scripts/release_control/status_audit.py", statusAudit, []string{
+		"STATUS_PATH",
+		"repo_root_for_name",
+		"audit_status_payload",
+		"open_decisions",
+		"resolved_decisions",
+		"derived_status",
+		"--check",
+	})
+
+	lookup := readRepoFile(t, "scripts/release_control/subsystem_lookup.py")
+	assertContainsAll(t, "scripts/release_control/subsystem_lookup.py", lookup, []string{
+		"lookup_paths",
+		"verification_requirement",
+		"--files-from-stdin",
+		"subsystem_matches_path",
+	})
 }
 
 func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 	workflow := readRepoFile(t, ".github/workflows/canonical-governance.yml")
 	assertContainsAll(t, ".github/workflows/canonical-governance.yml", workflow, []string{
 		"name: Canonical Governance",
+		"repository: rcourtman/pulse-pro",
+		"repository: rcourtman/pulse-enterprise",
+		"repository: rcourtman/pulse-mobile",
+		"PULSE_REPO_ROOT_PULSE_PRO",
+		"PULSE_REPO_ROOT_PULSE_ENTERPRISE",
+		"PULSE_REPO_ROOT_PULSE_MOBILE",
 		"python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin",
+		"python3 scripts/release_control/status_audit.py --check",
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
+		"python3 scripts/release_control/status_audit_test.py",
+		"python3 scripts/release_control/subsystem_lookup_test.py",
 	})
 }
 

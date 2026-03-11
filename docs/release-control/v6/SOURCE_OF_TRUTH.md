@@ -6,8 +6,8 @@ Status: ACTIVE
 This file is the stable human governance layer for Pulse v6.
 It is not a live progress dashboard.
 
-Current lane scores, evidence references, and open operational decisions live
-only in `docs/release-control/v6/status.json`.
+Current lane scores, evidence references, and typed operational decision
+records live only in `docs/release-control/v6/status.json`.
 
 ## Purpose
 
@@ -26,7 +26,7 @@ This file must not contain:
 
 1. `docs/release-control/v6/status.json`
    Live lane state, structured evidence references, and open operational
-   decisions.
+   decision records.
 2. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
    Repo-wide change rules for canonical work.
 3. `docs/release-control/v6/subsystems/registry.json`
@@ -104,7 +104,7 @@ For canonical subsystem work:
 4. Then read the relevant subsystem contract under
    `docs/release-control/v6/subsystems/`.
 5. Update `status.json` when live lane state, evidence references, or open
-   operational decisions change.
+   operational decision records change.
 6. Update this file only when stable governance, scope, or locked decisions
    change.
 7. When a canonical path replaces an old path, add or tighten a guardrail so
@@ -118,7 +118,7 @@ If conflicts appear, resolve by domain:
    `docs/release-control/v6/subsystems/registry.json`, and the relevant
    subsystem contract own implementation rules.
 2. `docs/release-control/v6/status.json` owns live lane state, structured
-   evidence references, and open operational decisions.
+   evidence references, and typed operational decision records.
 3. This file owns stable governance, repo scope, release gates, and locked
    decisions.
 4. Supporting architecture and release docs are evidence only. They do not

@@ -61,9 +61,18 @@ echo "Sensitivity check passed."
 echo "Running canonical completion guard..."
 python3 scripts/release_control/canonical_completion_guard.py
 
+# Enforce machine-readable lane/evidence integrity
+echo "Running status audit..."
+python3 scripts/release_control/status_audit.py --check
+
 # Enforce release-control and governance file integrity locally too
 echo "Running governance guardrail tests..."
 go test ./internal/repoctl -count=1
+
+echo "Running release-control helper unit tests..."
+python3 scripts/release_control/canonical_completion_guard_test.py
+python3 scripts/release_control/status_audit_test.py
+python3 scripts/release_control/subsystem_lookup_test.py
 
 
 # Run Go formatting

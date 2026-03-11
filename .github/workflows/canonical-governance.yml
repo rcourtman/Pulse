@@ -18,6 +18,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout pulse-pro evidence repo
+        uses: actions/checkout@v4
+        with:
+          repository: rcourtman/pulse-pro
+          fetch-depth: 1
+          path: .governance/repos/pulse-pro
+
+      - name: Checkout pulse-enterprise evidence repo
+        uses: actions/checkout@v4
+        with:
+          repository: rcourtman/pulse-enterprise
+          fetch-depth: 1
+          path: .governance/repos/pulse-enterprise
+
+      - name: Checkout pulse-mobile evidence repo
+        uses: actions/checkout@v4
+        with:
+          repository: rcourtman/pulse-mobile
+          fetch-depth: 1
+          path: .governance/repos/pulse-mobile
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -51,8 +72,27 @@ jobs:
             printf '' | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
           fi
 
+      - name: Run status audit
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+        run: python3 scripts/release_control/status_audit.py --check
+
       - name: Run canonical completion guard unit tests
         run: python3 scripts/release_control/canonical_completion_guard_test.py
 
+      - name: Run status audit unit tests
+        run: python3 scripts/release_control/status_audit_test.py
+
+      - name: Run subsystem lookup unit tests
+        run: python3 scripts/release_control/subsystem_lookup_test.py
+
       - name: Run repo governance guardrail tests
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
         run: go test ./internal/repoctl -count=1

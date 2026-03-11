@@ -5,7 +5,7 @@ This folder is the canonical execution control layer for Pulse v6.
 ## Start With These Two Files
 
 1. `SOURCE_OF_TRUTH.md` (stable human governance and locked decisions)
-2. `status.json` (live lane state, structured evidence references, and open operational decisions)
+2. `status.json` (live lane state, structured evidence references, and typed operational decision records)
 
 Supporting governance file:
 
@@ -13,6 +13,11 @@ Supporting governance file:
 - `RETIREMENT_AUDIT_2026-02-27.md` (file-by-file audited retirement decisions)
 - `CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
 - `subsystems/*.md` (per-subsystem contracts: truth, extension points, forbidden paths, completion obligations)
+
+Useful helper tools:
+
+- `python3 scripts/release_control/status_audit.py --check`
+- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]`
 
 The old release-control orchestrator and loop tooling are retired. Direct,
 repo-aware sessions are now the only supported v6 execution path.

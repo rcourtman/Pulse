@@ -351,21 +351,139 @@
     }
   ],
   "open_decisions": [
-    "Create Cloud/MSP Stripe prices in Stripe and record concrete price_* IDs.",
-    "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings."
+    {
+      "id": "cloud-msp-stripe-prices",
+      "summary": "Create Cloud/MSP Stripe prices in Stripe and record concrete price_* IDs.",
+      "owner": "project-owner",
+      "status": "open",
+      "opened_at": "2026-02-27",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4"
+      ]
+    },
+    {
+      "id": "cloud-msp-price-id-propagation",
+      "summary": "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings.",
+      "owner": "project-owner",
+      "status": "open",
+      "opened_at": "2026-02-27",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4"
+      ]
+    }
   ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
-    "2026-02-27: staged release policy locked; L4 Hosted MSP full portal is post-GA and not a GA floor gate.",
-    "2026-02-27: MSP pricing locked at Starter/Growth/Scale = $149/$249/$399 monthly (10/25/50 workspace breakpoints).",
-    "2026-02-27: Cloud/MSP Stripe mapping contract locked; concrete price IDs are operational fill-in tasks.",
-    "2026-03-05: host-type migration audit completed; release can proceed because remaining host references are compatibility boundaries, internal shims, or non-resource terminology.",
-    "2026-03-06: v5-to-v6 license migration bridge landed; persisted v5 Pro/Lifetime licenses auto-exchange on upgrade startup, valid v5 Pro/Lifetime keys are accepted as migration input in activation, and public migration guidance is now aligned without requiring a public CHANGELOG.md.",
-    "2026-03-06: trial authority for v6 is SaaS-controlled; /api/license/trial/start initiates hosted signup only and local runtime may redeem signed trial activations but must not mint local trial state directly.",
-    "2026-03-07: v5 commercial migration truth table is now owned by v6 release-control, unresolved paid-license migration states persist in v6 billing/entitlements, and the migration suite covers startup failure classes that must block trial start while preserving downgrade safety.",
-    "2026-03-07: browser-level proof exists for unresolved v5 commercial migration states via tests/integration/tests/12-v5-commercial-migration.spec.ts against an upgraded fixture.",
-    "2026-03-07: embedded frontend drift protection landed; frontend-modern build now syncs internal/api/frontend-modern/dist, internal/api/frontend_embed_sync_test.go enforces parity, and the disposable CT now proves migration UI states on native embedded assets without PULSE_FRONTEND_DIR.",
-    "2026-03-11: v6 release-control orchestration tooling was retired; direct repo-aware sessions plus governance files and commit/CI guardrails are now the only supported execution path.",
-    "2026-03-11: SOURCE_OF_TRUTH.md now owns only stable human governance and locked decisions; live lane state and evidence references live only in status.json."
+    {
+      "id": "ga-floor-policy",
+      "summary": "Staged release policy locked; L4 Hosted MSP full portal is post-GA and not a GA floor gate.",
+      "kind": "release-policy",
+      "decided_at": "2026-02-27",
+      "lane_ids": [
+        "L4"
+      ]
+    },
+    {
+      "id": "msp-pricing-band-lock",
+      "summary": "MSP pricing locked at Starter/Growth/Scale = $149/$249/$399 monthly with 10/25/50 workspace breakpoints.",
+      "kind": "pricing",
+      "decided_at": "2026-02-27",
+      "lane_ids": [
+        "L2",
+        "L4"
+      ]
+    },
+    {
+      "id": "stripe-mapping-contract-lock",
+      "summary": "Cloud/MSP Stripe mapping contract is locked; concrete price IDs remain operational fill-in tasks.",
+      "kind": "contract",
+      "decided_at": "2026-02-27",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4"
+      ]
+    },
+    {
+      "id": "host-type-migration-boundary-audit",
+      "summary": "Host-type migration audit completed; remaining host references are compatibility boundaries, internal shims, or non-resource terminology.",
+      "kind": "architecture",
+      "decided_at": "2026-03-05",
+      "lane_ids": [
+        "L6",
+        "L11"
+      ]
+    },
+    {
+      "id": "v5-license-bridge-landed",
+      "summary": "The v5-to-v6 license migration bridge landed, including upgrade exchange, activation input acceptance, and aligned public migration guidance.",
+      "kind": "migration",
+      "decided_at": "2026-03-06",
+      "lane_ids": [
+        "L11"
+      ]
+    },
+    {
+      "id": "trial-authority-saas-controlled",
+      "summary": "Trial authority for v6 is SaaS-controlled; hosted signup initiates trial start and local runtime may only redeem signed trial activations.",
+      "kind": "contract",
+      "decided_at": "2026-03-06",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L11"
+      ]
+    },
+    {
+      "id": "commercial-migration-truth-table-owned",
+      "summary": "The v5 commercial migration truth table is owned by v6 release-control and unresolved paid-license states must remain preserved through migration.",
+      "kind": "migration",
+      "decided_at": "2026-03-07",
+      "lane_ids": [
+        "L11"
+      ]
+    },
+    {
+      "id": "browser-proof-commercial-migration",
+      "summary": "Browser-level proof exists for unresolved v5 commercial migration states via the upgraded-fixture commercial migration spec.",
+      "kind": "migration",
+      "decided_at": "2026-03-07",
+      "lane_ids": [
+        "L11"
+      ]
+    },
+    {
+      "id": "embedded-frontend-drift-protection",
+      "summary": "Embedded frontend drift protection landed through synced dist assets, embed parity tests, and native embedded migration UI proof.",
+      "kind": "governance",
+      "decided_at": "2026-03-07",
+      "lane_ids": [
+        "L11"
+      ]
+    },
+    {
+      "id": "orchestrator-retired",
+      "summary": "The v6 release-control orchestrator was retired; direct repo-aware sessions and governance guardrails are the only supported execution path.",
+      "kind": "governance",
+      "decided_at": "2026-03-11",
+      "lane_ids": [
+        "L6",
+        "L9"
+      ]
+    },
+    {
+      "id": "top-level-governance-split",
+      "summary": "SOURCE_OF_TRUTH.md now owns only stable governance and locked decisions; live lane state and evidence references live only in status.json.",
+      "kind": "governance",
+      "decided_at": "2026-03-11",
+      "lane_ids": [
+        "L6",
+        "L9"
+      ]
+    }
   ]
 }

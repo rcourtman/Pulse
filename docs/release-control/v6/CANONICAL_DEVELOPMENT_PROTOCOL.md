@@ -24,13 +24,18 @@ For v6 work, agents must treat these files as the execution entry point:
 3. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
 4. `docs/release-control/v6/subsystems/registry.json`
 5. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
+6. `scripts/release_control/subsystem_lookup.py` when ownership or proof routing is not obvious
 
 The first two files answer release priority and current lane state.
 `SOURCE_OF_TRUTH.md` owns stable governance, scope, and locked decisions.
-`status.json` owns live lane state, structured evidence references, and open
-operational decisions.
+`status.json` owns live lane state, structured evidence references, and typed
+operational decision records.
 The protocol, subsystem registry, and subsystem contracts answer how work must
 be done.
+
+`scripts/release_control/status_audit.py --check` is the machine audit entry
+point for validating live lane evidence references, typed decision records, and
+derived evidence health.
 
 ## Subsystem Contracts
 
@@ -65,7 +70,7 @@ Every substantial task must finish by checking these questions:
 
 1. Did I change a canonical contract?
    If yes: update the relevant subsystem contract.
-2. Did I change live lane state, evidence references, or open operational decisions?
+2. Did I change live lane state, evidence references, or typed operational decision records?
    If yes: update `status.json`.
 3. Did I change stable governance, scope, or lock a new architectural/release decision?
    If yes: update `SOURCE_OF_TRUTH.md`.
@@ -138,6 +143,10 @@ Before adding new behavior, the author must answer:
 
 If those answers are not obvious in under a minute, the subsystem still needs
 architectural hardening.
+
+Use `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]`
+to ask the repo which subsystem, contract, and proof route applies to a file
+set before editing.
 
 ## Boundary Rule
 

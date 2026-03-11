@@ -206,6 +206,10 @@ scripts/release_control/
 scripts/release_control/*
 !scripts/release_control/canonical_completion_guard.py
 !scripts/release_control/canonical_completion_guard_test.py
+!scripts/release_control/status_audit.py
+!scripts/release_control/status_audit_test.py
+!scripts/release_control/subsystem_lookup.py
+!scripts/release_control/subsystem_lookup_test.py
 .agent/
 
 # Pulse Pro landing page (private)
