@@ -429,6 +429,24 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	assert.Len(t, resp.Results, 2)
 }
 
+func TestBulkAcknowledgeAlerts_AcceptsLegacyAlertIDsCompatibilityField(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("SyncAlertState").Return()
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
+	mockManager.On("AcknowledgeAlert", "a2", testifymock.Anything).Return(nil)
+
+	body := `{"legacyAlertIds": ["a1", "a2"], "user": "admin"}`
+	req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.BulkAcknowledgeAlerts(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
 func TestHandleAlerts(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
@@ -716,6 +734,15 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		mockManager.On("AcknowledgeAlert", "canonical:a1", testifymock.Anything).Return(nil).Once()
 		mockMonitor.On("SyncAlertState").Return().Once()
 		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIdentifiers": ["canonical:a1"]}`))
+		w := httptest.NewRecorder()
+		h.BulkAcknowledgeAlerts(w, req)
+		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("BulkAcknowledgeAlerts_LegacyCompatibilityIdentifiers", func(t *testing.T) {
+		mockManager.On("AcknowledgeAlert", "legacy:a1", testifymock.Anything).Return(nil).Once()
+		mockMonitor.On("SyncAlertState").Return().Once()
+		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"legacyAlertIds": ["legacy:a1"]}`))
 		w := httptest.NewRecorder()
 		h.BulkAcknowledgeAlerts(w, req)
 		assert.Equal(t, 200, w.Code)

@@ -695,12 +695,16 @@ func (r alertIdentifierRequest) identifier() string {
 
 type alertIdentifiersRequest struct {
 	AlertIdentifiers []string `json:"alertIdentifiers"`
+	LegacyAlertIDs   []string `json:"legacyAlertIds"`
 	AlertIDs         []string `json:"alertIds"`
 	User             string   `json:"user,omitempty"`
 }
 
 func (r alertIdentifiersRequest) identifiers() []string {
 	raw := r.AlertIdentifiers
+	if len(raw) == 0 {
+		raw = r.LegacyAlertIDs
+	}
 	if len(raw) == 0 {
 		raw = r.AlertIDs
 	}
