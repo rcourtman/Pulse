@@ -23,6 +23,7 @@ import (
 //   - Query(1000 pts):     ~400µs → SLO 5ms
 //   - QueryAll(4×500 pts): ~1.8ms → SLO 15ms
 //   - QueryAllBatch(50×4×100): ~18ms → SLO 40ms
+//   - QueryAllBatch downsampled (50×4×100, 60s): ~15ms → SLO 35ms
 //   - rollupTier(50×2×20): ~2.1ms → SLO 15ms
 //   - Query under write contention: ~400µs → SLO 5ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
@@ -42,6 +43,11 @@ const (
 	// SLOQueryAllBatchP95 is the p95 target for QueryAllBatch (50 resources ×
 	// 4 metric types × 100 points each) — the batched dashboard chart path.
 	SLOQueryAllBatchP95 = 40 * time.Millisecond
+
+	// SLOQueryAllBatchDownsampledP95 is the p95 target for QueryAllBatch with
+	// 60-second downsampling (50 resources × 4 metrics × 100 raw points). This
+	// matches the grouped long-range dashboard path that relies on bucketed SQL.
+	SLOQueryAllBatchDownsampledP95 = 35 * time.Millisecond
 
 	// SLOQueryManyResourcesP95 is the p95 target for Query with 100 resources
 	// in the table — validates that index isolation prevents full table scans.
@@ -349,6 +355,70 @@ func TestSLO_QueryAllBatch(t *testing.T) {
 
 	if p95 > SLOQueryAllBatchP95 {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOQueryAllBatchP95)
+	}
+}
+
+// TestSLO_QueryAllBatchDownsampled validates the grouped QueryAllBatch path
+// used for longer-range dashboard windows where bucketed SQL is required.
+func TestSLO_QueryAllBatchDownsampled(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newSLOStore(t)
+	base := time.Now().Add(-2 * time.Hour)
+
+	const numResources = 50
+	const pointsPerMetric = 100
+	metricTypes := []string{"cpu", "memory", "disk_read", "disk_write"}
+
+	batch := make([]WriteMetric, 0, numResources*len(metricTypes)*pointsPerMetric)
+	resourceIDs := make([]string, numResources)
+	for r := 0; r < numResources; r++ {
+		resourceIDs[r] = fmt.Sprintf("vm-batch-ds-%d", r)
+		for _, mt := range metricTypes {
+			for p := 0; p < pointsPerMetric; p++ {
+				batch = append(batch, WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   resourceIDs[r],
+					MetricType:   mt,
+					Value:        float64((r + p) % 100),
+					Timestamp:    base.Add(time.Duration(p) * 72 * time.Second),
+					Tier:         TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+
+	start := base.Add(-time.Second)
+	end := base.Add(time.Duration(pointsPerMetric) * 72 * time.Second)
+
+	result, err := store.QueryAllBatch("vm", resourceIDs, start, end, 60)
+	if err != nil {
+		t.Fatalf("sanity QueryAllBatch downsampled: %v", err)
+	}
+	if len(result) != numResources {
+		t.Fatalf("sanity: expected %d resources, got %d", numResources, len(result))
+	}
+	for _, id := range resourceIDs {
+		if len(result[id]) != len(metricTypes) {
+			t.Fatalf("sanity: expected %d metric types for %s, got %d", len(metricTypes), id, len(result[id]))
+		}
+	}
+
+	latencies := measureLatencies(t, func() {
+		_, err := store.QueryAllBatch("vm", resourceIDs, start, end, 60)
+		if err != nil {
+			t.Fatalf("QueryAllBatch downsampled: %v", err)
+		}
+	})
+
+	p95 := pct(latencies, 0.95)
+	t.Logf("QueryAllBatchDownsampled(50x4x100,60s) p50=%v p95=%v p99=%v SLO=%v",
+		pct(latencies, 0.50), p95, pct(latencies, 0.99), SLOQueryAllBatchDownsampledP95)
+
+	if p95 > SLOQueryAllBatchDownsampledP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOQueryAllBatchDownsampledP95)
 	}
 }
 

@@ -493,6 +493,30 @@ func BenchmarkQueryAllBatch(b *testing.B) {
 			}
 		})
 	}
+
+	b.Run("50-resources-downsample-60s", func(b *testing.B) {
+		ids := make([]string, 50)
+		for i := range ids {
+			ids[i] = fmt.Sprintf("vm-%d", i)
+		}
+
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			result, err := store.QueryAllBatch("vm", ids, start, end, 60)
+			if err != nil {
+				b.Fatalf("QueryAllBatch: %v", err)
+			}
+			if len(result) != len(ids) {
+				b.Fatalf("expected %d resources, got %d", len(ids), len(result))
+			}
+			for _, id := range ids {
+				resMetrics := result[id]
+				if len(resMetrics) != len(metricTypes) {
+					b.Fatalf("resource %s: expected %d metric types, got %d", id, len(metricTypes), len(resMetrics))
+				}
+			}
+		}
+	})
 }
 
 // BenchmarkQueryManyResources measures query latency when the metrics table
