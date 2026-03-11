@@ -219,6 +219,32 @@ describe('MonitoringAPI', () => {
       expect(typeof result?.agent?.lastSeen).toBe('number');
     });
 
+    it('falls back to the current time for invalid lookup timestamps', async () => {
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1234567890);
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            agent: {
+              id: 'agent-5',
+              hostname: 'agent-5.local',
+              status: 'online',
+              connected: true,
+              lastSeen: 'not-a-date',
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+
+      try {
+        const result = await MonitoringAPI.lookupAgent({ id: 'agent-5' });
+        expect(result?.agent?.lastSeen).toBe(1234567890);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
     it('returns null for empty lookup responses', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce(new Response('', { status: 200 }));
 

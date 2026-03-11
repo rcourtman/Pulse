@@ -121,6 +121,22 @@ export function finiteNumberOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+export function coerceTimestampMillis(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  const normalized = optionalTrimmedString(value);
+  if (normalized) {
+    const parsed = Date.parse(normalized);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+}
+
 export function stringArray(value: unknown): string[] {
   return arrayOrEmpty<unknown>(value).filter((item): item is string => typeof item === 'string');
 }

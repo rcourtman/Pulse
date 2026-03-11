@@ -7,6 +7,7 @@ import type {
 } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
+  coerceTimestampMillis,
   isAPIResponseStatus,
   parseOptionalJSON,
   readAPIErrorMessage,
@@ -320,16 +321,7 @@ export class MonitoringAPI {
       return null;
     }
 
-    const lastSeen = identity.lastSeen as unknown;
-    if (typeof lastSeen === 'string') {
-      const parsed = Date.parse(lastSeen);
-      identity.lastSeen = Number.isFinite(parsed) ? parsed : Date.now();
-    } else if (typeof lastSeen === 'number') {
-      // assume already a timestamp
-      identity.lastSeen = lastSeen;
-    } else {
-      identity.lastSeen = Date.now();
-    }
+    identity.lastSeen = coerceTimestampMillis(identity.lastSeen, Date.now());
 
     data.agent = identity;
     return data;

@@ -100,6 +100,9 @@ Notifications email config parsing and node cluster endpoint normalization must
 now also route through shared scalar coercion helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through per-module
 string/boolean/number helper stacks.
+The same shared scalar coercion rule now also applies to monitoring agent
+lookup timestamps so `lastSeen` normalization does not live as a module-local
+`typeof`/`Date.parse(...)` branch in `frontend-modern/src/api/monitoring.ts`.
 Hosted signup and magic-link error payload normalization must now also route
 through shared structured error normalization helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through module-local

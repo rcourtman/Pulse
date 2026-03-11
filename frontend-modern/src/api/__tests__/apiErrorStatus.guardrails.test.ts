@@ -34,6 +34,7 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function strictString');
     expect(responseUtilsSource).toContain('export function strictBoolean');
     expect(responseUtilsSource).toContain('export function finiteNumberOrUndefined');
+    expect(responseUtilsSource).toContain('export function coerceTimestampMillis');
     expect(responseUtilsSource).toContain('export function stringArray');
     expect(responseUtilsSource).toContain('export function stringRecordOrUndefined');
     expect(responseUtilsSource).toContain('export function normalizeStructuredAPIError');
@@ -65,11 +66,14 @@ describe('API error-status guardrails', () => {
 
     expect(monitoringSource).toContain('isAPIResponseStatus(response, 404)');
     expect(monitoringSource).toContain('parseOptionalJSON<AgentLookupResponse | null>(');
+    expect(monitoringSource).toContain('coerceTimestampMillis(identity.lastSeen, Date.now())');
     expect(monitoringSource).toContain("'Failed to parse agent lookup response'");
     expect(discoverySource).toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).toContain('parseRequiredJSON(response,');
     expect(monitoringSource).not.toContain('response.status === 404');
     expect(monitoringSource).not.toContain('JSON.parse(');
+    expect(monitoringSource).not.toContain("typeof lastSeen === 'string'");
+    expect(monitoringSource).not.toContain('Date.parse(lastSeen)');
     expect(discoverySource).not.toContain('response.status === 404');
     expect(discoverySource).not.toContain('return response.json()');
 
@@ -130,7 +134,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, and module-local structured error normalization', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, and module-local timestamp coercion', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -156,6 +160,11 @@ describe('API error-status guardrails', () => {
     );
     const rawStructuredErrorPattern =
       /(?:function\s+normalizeHostedError\(|typeof\s+obj\.code\s*===\s*'string'|typeof\s+obj\.message\s*===\s*'string')/;
+    const governedTimestampEntries = runtimeEntries.filter(([path]) =>
+      /\/monitoring\.ts$/.test(path),
+    );
+    const rawTimestampCoercionPattern =
+      /(?:typeof\s+lastSeen\s*===\s*'string'|Date\.parse\(lastSeen\)|typeof\s+lastSeen\s*===\s*'number')/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -195,6 +204,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const timestampCoercionOffenders = governedTimestampEntries
+      .filter(([, source]) => rawTimestampCoercionPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -202,5 +216,6 @@ describe('API error-status guardrails', () => {
     expect(arrayFallbackOffenders).toEqual([]);
     expect(scalarHelperOffenders).toEqual([]);
     expect(structuredErrorOffenders).toEqual([]);
+    expect(timestampCoercionOffenders).toEqual([]);
   });
 });

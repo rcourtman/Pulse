@@ -3,6 +3,7 @@ import {
   arrayOrEmpty,
   apiErrorStatus,
   apiResponseStatus,
+  coerceTimestampMillis,
   finiteNumberOrUndefined,
   isAPIErrorStatus,
   isAPIResponseStatus,
@@ -238,6 +239,20 @@ describe('finiteNumberOrUndefined', () => {
     expect(finiteNumberOrUndefined(1.5)).toBe(1.5);
     expect(finiteNumberOrUndefined('1')).toBeUndefined();
     expect(finiteNumberOrUndefined(Number.NaN)).toBeUndefined();
+  });
+});
+
+describe('coerceTimestampMillis', () => {
+  it('keeps finite numbers and parses valid timestamp strings', () => {
+    expect(coerceTimestampMillis(1234, 9999)).toBe(1234);
+    expect(coerceTimestampMillis(' 2026-01-01T00:00:00Z ', 9999)).toBe(
+      Date.parse('2026-01-01T00:00:00Z'),
+    );
+  });
+
+  it('falls back for invalid timestamp values', () => {
+    expect(coerceTimestampMillis('not-a-date', 9999)).toBe(9999);
+    expect(coerceTimestampMillis(null, 9999)).toBe(9999);
   });
 });
 
