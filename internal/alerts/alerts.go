@@ -63,7 +63,6 @@ func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
 // Alert represents an active alert
 type Alert struct {
 	ID              string                 `json:"id"`
-	LegacyID        string                 `json:"legacyId,omitempty"`
 	Type            string                 `json:"type"` // cpu, memory, disk, etc.
 	Level           AlertLevel             `json:"level"`
 	ResourceID      string                 `json:"resourceId"` // guest or node ID
@@ -1755,9 +1754,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	if m.config.DisableAllNodesOffline {
 		var nodeAlerts []string
 		for storageKey, alert := range m.activeAlerts {
-			id := effectiveAlertID(alert, storageKey)
-			if strings.HasPrefix(id, "node-offline-") {
-				nodeAlerts = append(nodeAlerts, id)
+			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) {
+				if resourceType, _ := alert.Metadata["resourceType"].(string); resourceType == "node" {
+					nodeAlerts = append(nodeAlerts, storageKey)
+				}
 			}
 		}
 		for _, alertID := range nodeAlerts {
@@ -1769,9 +1769,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	if m.config.DisableAllPBSOffline {
 		var pbsAlerts []string
 		for storageKey, alert := range m.activeAlerts {
-			id := effectiveAlertID(alert, storageKey)
-			if strings.HasPrefix(id, "pbs-offline-") {
-				pbsAlerts = append(pbsAlerts, id)
+			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) {
+				if resourceType, _ := alert.Metadata["resourceType"].(string); resourceType == "pbs" {
+					pbsAlerts = append(pbsAlerts, storageKey)
+				}
 				delete(m.offlineConfirmations, alert.ResourceID)
 			}
 		}
@@ -1783,9 +1784,8 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	if m.config.DisableAllGuestsOffline {
 		var guestAlerts []string
 		for storageKey, alert := range m.activeAlerts {
-			id := effectiveAlertID(alert, storageKey)
-			if strings.HasPrefix(id, "guest-powered-off-") {
-				guestAlerts = append(guestAlerts, id)
+			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindPoweredState) {
+				guestAlerts = append(guestAlerts, storageKey)
 				delete(m.offlineConfirmations, alert.ResourceID)
 			}
 		}
@@ -1797,9 +1797,10 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	if m.config.DisableAllDockerHostsOffline {
 		var hostAlerts []string
 		for storageKey, alert := range m.activeAlerts {
-			id := effectiveAlertID(alert, storageKey)
-			if strings.HasPrefix(id, "docker-host-offline-") {
-				hostAlerts = append(hostAlerts, id)
+			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) {
+				if resourceType, _ := alert.Metadata["resourceType"].(string); resourceType == "docker-host" {
+					hostAlerts = append(hostAlerts, storageKey)
+				}
 			}
 		}
 		for _, alertID := range hostAlerts {
@@ -1851,15 +1852,17 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 
 	for storageKey, alert := range m.activeAlerts {
 		alertID := effectiveAlertID(alert, storageKey)
-		// Parse the alert ID to extract resource ID and metric type
-		// Alert ID format: {resourceID}-{metricType}
-		parts := strings.Split(alertID, "-")
-		if len(parts) < 2 {
-			continue
+		backfillCanonicalIdentity(alert)
+		resourceID := alert.ResourceID
+		metricType := alert.Type
+		if resourceID == "" || metricType == "" {
+			parts := strings.Split(alertID, "-")
+			if len(parts) < 2 {
+				continue
+			}
+			metricType = parts[len(parts)-1]
+			resourceID = strings.Join(parts[:len(parts)-1], "-")
 		}
-
-		metricType := parts[len(parts)-1]
-		resourceID := strings.Join(parts[:len(parts)-1], "-")
 
 		// Get the appropriate threshold based on resource type and ID
 		var threshold *HysteresisThreshold
@@ -1905,11 +1908,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		}
 
 		if alert.Type == "docker-host-offline" ||
-			strings.HasPrefix(alertID, "docker-container-health-") ||
-			strings.HasPrefix(alertID, "docker-container-state-") ||
-			strings.HasPrefix(alertID, "docker-container-restart-loop-") ||
-			strings.HasPrefix(alertID, "docker-container-oom-") ||
-			strings.HasPrefix(alertID, "docker-container-memory-limit-") {
+			alert.Type == "docker-container-health" ||
+			alert.Type == "docker-container-state" ||
+			alert.Type == "docker-container-restart-loop" ||
+			alert.Type == "docker-container-oom-kill" ||
+			alert.Type == "docker-container-memory-limit" {
 			// Non-metric Docker alerts are not governed by thresholds
 			continue
 		}
@@ -2119,10 +2122,17 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 	metricTypes := []string{"cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut"}
 
 	for _, metricType := range metricTypes {
-		alertID := fmt.Sprintf("%s-%s", guestID, metricType)
+		alertID := canonicalMetricStateID(guestID, metricType)
 		alert, exists := m.getActiveAlertNoLock(alertID)
 		if !exists {
+			alert, exists = m.getActiveAlertNoLock(fmt.Sprintf("%s-%s", guestID, metricType))
+		}
+		if !exists {
 			continue
+		}
+		trackingKey := canonicalTrackingKeyForAlert(alert)
+		if trackingKey == "" {
+			trackingKey = alertID
 		}
 
 		// Get the threshold for this metric
@@ -2146,9 +2156,8 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 
 		// If threshold is disabled or doesn't exist, clear the alert
 		if threshold == nil || threshold.Trigger <= 0 {
-			m.clearAlertNoLock(alertID)
+			m.clearAlertNoLock(trackingKey)
 			// Also clear any pending alert for this metric
-			trackingKey := canonicalTrackingKeyForAlert(alert)
 			if _, isPending := m.pendingAlerts[trackingKey]; isPending {
 				delete(m.pendingAlerts, trackingKey)
 				log.Debug().
@@ -2169,7 +2178,7 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 		}
 
 		if alert.Value <= clearThreshold || alert.Value < threshold.Trigger {
-			m.clearAlertNoLock(alertID)
+			m.clearAlertNoLock(trackingKey)
 			log.Info().
 				Str("alertID", alertID).
 				Str("metric", metricType).
@@ -2516,7 +2525,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				m.mu.Lock()
 				delete(m.offlineConfirmations, guestID)
 				m.mu.Unlock()
-				m.clearAlert(fmt.Sprintf("guest-powered-off-%s", guestID))
+				m.clearAlert(canonicalPoweredStateStateID(guestID))
 			} else {
 				m.mu.RLock()
 				thresholds := m.getGuestThresholds(guest, guestID)
@@ -2719,7 +2728,7 @@ func (m *Manager) CheckNode(node models.Node) {
 		// Clear all possible node alert types
 		alertTypes := []string{"cpu", "memory", "disk", "temperature"}
 		for _, alertType := range alertTypes {
-			alertID := fmt.Sprintf("%s-%s", node.ID, alertType)
+			alertID := canonicalMetricStateID(node.ID, alertType)
 			if m.hasActiveAlertNoLock(alertID) {
 				m.clearAlertNoLock(alertID)
 				log.Info().
@@ -2729,7 +2738,7 @@ func (m *Manager) CheckNode(node models.Node) {
 			}
 		}
 		// Clear offline alert
-		offlineAlertID := fmt.Sprintf("node-offline-%s", node.ID)
+		offlineAlertID := canonicalConnectivityStateID(node.ID)
 		if m.hasActiveAlertNoLock(offlineAlertID) {
 			m.clearAlertNoLock(offlineAlertID)
 			log.Info().
@@ -2749,11 +2758,11 @@ func (m *Manager) CheckNode(node models.Node) {
 		delete(m.nodeOfflineCount, node.ID)
 		m.mu.Unlock()
 		for _, alertID := range []string{
-			fmt.Sprintf("%s-cpu", node.ID),
-			fmt.Sprintf("%s-memory", node.ID),
-			fmt.Sprintf("%s-disk", node.ID),
-			fmt.Sprintf("%s-temperature", node.ID),
-			fmt.Sprintf("node-offline-%s", node.ID),
+			canonicalMetricStateID(node.ID, "cpu"),
+			canonicalMetricStateID(node.ID, "memory"),
+			canonicalMetricStateID(node.ID, "disk"),
+			canonicalMetricStateID(node.ID, "temperature"),
+			canonicalConnectivityStateID(node.ID),
 		} {
 			m.clearAlert(alertID)
 		}
@@ -2765,7 +2774,7 @@ func (m *Manager) CheckNode(node models.Node) {
 		m.mu.Lock()
 		delete(m.nodeOfflineCount, node.ID)
 		m.mu.Unlock()
-		m.clearAlert(fmt.Sprintf("node-offline-%s", node.ID))
+		m.clearAlert(canonicalConnectivityStateID(node.ID))
 	} else {
 		// CRITICAL: Check if node is offline first
 		if node.Status == "offline" || node.ConnectionHealth == "error" || node.ConnectionHealth == "failed" {
@@ -2775,7 +2784,7 @@ func (m *Manager) CheckNode(node models.Node) {
 			// This prevents stale alerts from persisting when we can't get new data.
 			metrics := []string{"cpu", "memory", "disk", "temperature"}
 			for _, metric := range metrics {
-				m.clearAlert(fmt.Sprintf("%s-%s", node.ID, metric))
+				m.clearAlert(canonicalMetricStateID(node.ID, metric))
 			}
 		} else {
 			// Clear any existing offline alert if node is back online
@@ -3179,7 +3188,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if hasDiskOverride {
 			// If disk is disabled via override, skip alerting
 			if diskOverride.Disabled {
-				m.clearAlert(fmt.Sprintf("host-%s-disk-%s", host.ID, sanitizeHostComponent(disk.Mountpoint)))
+				m.clearAlert(canonicalMetricStateID(diskResourceID, "disk"))
 				continue
 			}
 			// Use disk-specific threshold if set
@@ -3232,7 +3241,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			diskResourceID, _ := hostDiskResourceID(host, disk)
 			_, hasDiskOverride := m.config.Overrides[diskResourceID]
 			if !hasDiskOverride {
-				disksToClear = append(disksToClear, fmt.Sprintf("host-%s-disk-%s", host.ID, sanitizeHostComponent(disk.Mountpoint)))
+				disksToClear = append(disksToClear, canonicalMetricStateID(diskResourceID, "disk"))
 			}
 		}
 		m.mu.RUnlock()
@@ -3258,8 +3267,8 @@ func (m *Manager) CheckHost(host models.Host) {
 			deviceLower := strings.ToLower(strings.TrimPrefix(array.Device, "/dev/"))
 			if deviceLower == "md0" || deviceLower == "md1" {
 				// Still clear any existing alerts for these devices
-				alertID := fmt.Sprintf("host-%s-raid-%s", host.ID, sanitizeRAIDDevice(array.Device))
-				m.clearAlert(alertID)
+				raidSpecResourceID := fmt.Sprintf("%s/raid:%s", hostResourceID(host.ID), sanitizeRAIDDevice(array.Device))
+				m.clearAlert(buildCanonicalStateID(raidSpecResourceID, raidSpecResourceID+"-health"))
 				continue
 			}
 
@@ -3342,8 +3351,8 @@ func (m *Manager) HandleHostOnline(host models.Host) {
 		return
 	}
 
-	alertID := fmt.Sprintf("host-offline-%s", host.ID)
 	resourceKey := hostResourceID(host.ID)
+	alertID := canonicalConnectivityStateID(resourceKey)
 
 	m.mu.Lock()
 	delete(m.offlineConfirmations, resourceKey)
@@ -3394,8 +3403,8 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 	thresholds := m.resolveResourceThresholds("agent", host.ID)
 	m.mu.RUnlock()
 
-	alertID := fmt.Sprintf("host-offline-%s", host.ID)
 	resourceKey := hostResourceID(host.ID)
+	alertID := canonicalConnectivityStateID(resourceKey)
 	resourceName := hostDisplayName(host)
 	nodeName := strings.TrimSpace(host.Hostname)
 	instanceName := hostInstanceName(host)
@@ -3477,9 +3486,8 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 	// Host is confirmed offline. Clear all host-scoped metrics and storage-health alerts
 	// so the connectivity alert becomes the only active signal for this agent.
 	m.mu.Lock()
-	metricTypes := []string{"cpu", "memory"}
-	for _, mt := range metricTypes {
-		m.clearAlertNoLock(fmt.Sprintf("%s-%s", resourceKey, mt))
+	for _, mt := range []string{"cpu", "memory"} {
+		m.clearAlertNoLock(canonicalMetricStateID(resourceKey, mt))
 	}
 
 	diskResourcePrefixes := []string{
@@ -3526,7 +3534,7 @@ func (m *Manager) clearHostMetricAlerts(hostID string, metrics ...string) {
 	}
 	for _, resourceID := range resourceIDs {
 		for _, metric := range metrics {
-			m.clearAlert(fmt.Sprintf("%s-%s", resourceID, metric))
+			m.clearAlert(canonicalMetricStateID(resourceID, metric))
 		}
 	}
 }
@@ -3794,7 +3802,7 @@ func zfsDeviceAssessment(device models.ZFSDevice) storagehealth.Assessment {
 
 func (m *Manager) syncCanonicalHealthAssessmentAlert(params canonicalHealthAssessmentAlertParams) (alertspecs.EvaluationResult, bool) {
 	if len(params.Reasons) == 0 {
-		m.clearAlert(params.AlertID)
+		m.clearAlert(buildCanonicalStateID(params.SpecResourceID, params.SpecID))
 		return alertspecs.EvaluationResult{}, true
 	}
 
@@ -3886,15 +3894,17 @@ func (m *Manager) clearHostRAIDAlerts(hostID string) {
 		return
 	}
 
-	prefix := fmt.Sprintf("host-%s-raid-", hostID)
+	resourcePrefix := hostResourceID(hostID) + "/raid:"
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for storageKey, alert := range m.activeAlerts {
-		alertID := effectiveAlertID(alert, storageKey)
-		if strings.HasPrefix(alertID, prefix) {
-			m.clearAlertNoLock(alertID)
+		if alert == nil || alert.Type != "raid" {
+			continue
+		}
+		if strings.HasPrefix(alert.ResourceID, resourcePrefix) || strings.HasPrefix(alert.CanonicalSpecID, resourcePrefix) {
+			m.clearAlertNoLock(storageKey)
 		}
 	}
 }
@@ -3903,7 +3913,8 @@ func (m *Manager) clearHostUnraidAlerts(hostID string) {
 	if hostID == "" {
 		return
 	}
-	m.clearAlert(fmt.Sprintf("host-%s-unraid-array", hostID))
+	resourceID := fmt.Sprintf("%s/storage:unraid-array", hostResourceID(hostID))
+	m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-health"))
 }
 
 func (m *Manager) syncHostUnraidStorageAlert(host models.Host, nodeName, instanceName, resourceName string, baseMetadata map[string]interface{}) {
@@ -3968,8 +3979,8 @@ func (m *Manager) clearPBSMetricAlerts(pbsID string) {
 		return
 	}
 
-	m.clearAlert(fmt.Sprintf("%s-cpu", pbsID))
-	m.clearAlert(fmt.Sprintf("%s-memory", pbsID))
+	m.clearAlert(canonicalMetricStateID(pbsID, "cpu"))
+	m.clearAlert(canonicalMetricStateID(pbsID, "memory"))
 }
 
 func isPMGOffline(pmg models.PMGInstance) bool {
@@ -3984,22 +3995,15 @@ func (m *Manager) clearPMGMetricAlerts(pmgID string) {
 		return
 	}
 
-	offlineAlertID := fmt.Sprintf("pmg-offline-%s", pmgID)
-	alertPrefix := fmt.Sprintf("%s-", pmgID)
+	offlineAlertID := canonicalConnectivityStateID(pmgID)
 
 	m.mu.RLock()
 	alertIDs := make([]string, 0)
 	for storageKey, alert := range m.activeAlerts {
-		alertID := effectiveAlertID(alert, storageKey)
+		alertID := storageKey
 		if alertID == offlineAlertID {
 			continue
 		}
-
-		if strings.HasPrefix(alertID, alertPrefix) {
-			alertIDs = append(alertIDs, alertID)
-			continue
-		}
-
 		if alert != nil && alert.ResourceID == pmgID {
 			alertIDs = append(alertIDs, alertID)
 		}
@@ -4025,7 +4029,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		// Reset offline confirmation tracking
 		delete(m.offlineConfirmations, pbs.ID)
 		// Clear CPU alert
-		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
+		cpuAlertID := canonicalMetricStateID(pbs.ID, "cpu")
 		if m.clearActiveAlertIfPresentNoLock(cpuAlertID) {
 			log.Info().
 				Str("alertID", cpuAlertID).
@@ -4033,7 +4037,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 				Msg("Cleared CPU alert - all PBS alerts disabled")
 		}
 		// Clear Memory alert
-		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
+		memAlertID := canonicalMetricStateID(pbs.ID, "memory")
 		if m.clearActiveAlertIfPresentNoLock(memAlertID) {
 			log.Info().
 				Str("alertID", memAlertID).
@@ -4041,7 +4045,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 				Msg("Cleared Memory alert - all PBS alerts disabled")
 		}
 		// Clear offline alert
-		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
+		offlineAlertID := canonicalConnectivityStateID(pbs.ID)
 		if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
 			log.Info().
 				Str("alertID", offlineAlertID).
@@ -4062,7 +4066,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		// Reset offline confirmation tracking
 		delete(m.offlineConfirmations, pbs.ID)
 		// Clear CPU alert
-		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
+		cpuAlertID := canonicalMetricStateID(pbs.ID, "cpu")
 		if m.clearActiveAlertIfPresentNoLock(cpuAlertID) {
 			log.Debug().
 				Str("alertID", cpuAlertID).
@@ -4070,7 +4074,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 				Msg("Cleared CPU alert - PBS has alerts disabled")
 		}
 		// Clear Memory alert
-		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
+		memAlertID := canonicalMetricStateID(pbs.ID, "memory")
 		if m.clearActiveAlertIfPresentNoLock(memAlertID) {
 			log.Debug().
 				Str("alertID", memAlertID).
@@ -4078,7 +4082,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 				Msg("Cleared Memory alert - PBS has alerts disabled")
 		}
 		// Clear offline alert
-		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
+		offlineAlertID := canonicalConnectivityStateID(pbs.ID)
 		if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
 			log.Debug().
 				Str("alertID", offlineAlertID).
@@ -4096,7 +4100,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		m.mu.Lock()
 		delete(m.offlineConfirmations, pbs.ID)
 		m.mu.Unlock()
-		m.clearAlert(fmt.Sprintf("pbs-offline-%s", pbs.ID))
+		m.clearAlert(canonicalConnectivityStateID(pbs.ID))
 	} else {
 		// Check if PBS is offline first (similar to nodes)
 		if pbsOffline {
@@ -4138,7 +4142,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 		delete(m.offlineConfirmations, pmg.ID)
 		m.mu.Unlock()
 		m.clearPMGMetricAlerts(pmg.ID)
-		m.clearAlert(fmt.Sprintf("pmg-offline-%s", pmg.ID))
+		m.clearAlert(canonicalConnectivityStateID(pmg.ID))
 		return
 	}
 
@@ -4154,7 +4158,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 		delete(m.offlineConfirmations, pmg.ID)
 		m.mu.Unlock()
 		m.clearPMGMetricAlerts(pmg.ID)
-		m.clearAlert(fmt.Sprintf("pmg-offline-%s", pmg.ID))
+		m.clearAlert(canonicalConnectivityStateID(pmg.ID))
 		return
 	}
 
@@ -4166,7 +4170,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 		m.mu.Lock()
 		delete(m.offlineConfirmations, pmg.ID)
 		m.mu.Unlock()
-		m.clearAlert(fmt.Sprintf("pmg-offline-%s", pmg.ID))
+		m.clearAlert(canonicalConnectivityStateID(pmg.ID))
 	} else {
 		// Check if PMG is offline (similar to PBS/nodes)
 		if pmgOffline {
@@ -4751,8 +4755,8 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 }
 
 func (m *Manager) clearDockerServiceAlert(resourceID string) {
-	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
-	m.clearAlert(alertID)
+	m.clearAlert(canonicalServiceGapStateID(resourceID))
+	m.clearAlert(canonicalDiscreteStateStateID(resourceID, "update-state"))
 }
 
 // HandleDockerHostOnline clears offline tracking and alerts for a Docker host.
@@ -4761,7 +4765,7 @@ func (m *Manager) HandleDockerHostOnline(host models.DockerHost) {
 		return
 	}
 
-	alertID := fmt.Sprintf("docker-host-offline-%s", host.ID)
+	alertID := canonicalConnectivityStateID(fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID)))
 
 	m.mu.Lock()
 	delete(m.dockerOfflineCount, host.ID)
@@ -4799,8 +4803,8 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	disableDockerHostsOffline := m.config.DisableAllDockerHostsOffline
 	m.mu.RUnlock()
 
-	alertID := fmt.Sprintf("docker-host-offline-%s", host.ID)
 	resourceID := fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID))
+	alertID := canonicalConnectivityStateID(resourceID)
 	instanceName := dockerInstanceName(host)
 	nodeName := strings.TrimSpace(host.Hostname)
 
@@ -4966,11 +4970,10 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 }
 
 func (m *Manager) clearDockerContainerStateAlert(resourceID string) {
-	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	m.mu.Lock()
 	delete(m.dockerStateConfirm, resourceID)
 	m.mu.Unlock()
-	m.clearAlert(alertID)
+	m.clearAlert(canonicalDiscreteStateStateID(resourceID, "runtime-state"))
 }
 
 func dockerContainerAlertMetadata(host models.DockerHost, container models.DockerContainer, containerName string) map[string]interface{} {
@@ -5046,8 +5049,7 @@ func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container m
 }
 
 func (m *Manager) clearDockerContainerHealthAlert(resourceID string) {
-	alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
-	m.clearAlert(alertID)
+	m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-health"))
 }
 
 // checkDockerContainerRestartLoop detects containers stuck in a restart loop
@@ -5148,7 +5150,7 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 			Msg("Docker container restart loop detected")
 	} else {
 		// Clear alert if restart loop has stopped
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-restart-loop"))
 	}
 }
 
@@ -5215,7 +5217,7 @@ func (m *Manager) checkDockerContainerOOMKill(host models.DockerHost, container 
 			m.mu.Unlock()
 		}
 		// Clear OOM alert if container is running or exited with different code
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-oom-kill"))
 	}
 }
 
@@ -5295,8 +5297,7 @@ func (m *Manager) clearDockerContainerMetricAlerts(resourceID string, metrics ..
 		metrics = []string{"cpu", "memory", "disk"}
 	}
 	for _, metric := range metrics {
-		alertID := fmt.Sprintf("%s-%s", resourceID, metric)
-		m.clearAlert(alertID)
+		m.clearAlert(canonicalMetricStateID(resourceID, metric))
 	}
 }
 
@@ -5321,7 +5322,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 
 	// Negative value means disabled
 	if delayHours < 0 {
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
 		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
@@ -5329,7 +5330,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	// Check if this container has an update status reported
 	if container.UpdateStatus == nil {
 		// No update status - clear any tracking and alerts
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
 		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
@@ -5337,14 +5338,14 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	// Check for errors in update detection (don't alert on errors)
 	if container.UpdateStatus.Error != "" {
 		// Update check failed - clear alert but keep tracking
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
 		return
 	}
 
 	// Check if an update is available
 	if !container.UpdateStatus.UpdateAvailable {
 		// No update available - clear tracking and alert
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
 		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
@@ -5535,14 +5536,14 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		m.mu.RUnlock()
 		// Clear any existing storage alerts when all storage alerts are disabled
 		m.mu.Lock()
-		usageAlertID := fmt.Sprintf("%s-usage", storage.ID)
+		usageAlertID := canonicalMetricStateID(storage.ID, "usage")
 		if m.clearActiveAlertIfPresentNoLock(usageAlertID) {
 			log.Info().
 				Str("alertID", usageAlertID).
 				Str("storage", storage.Name).
 				Msg("Cleared usage alert - all storage alerts disabled")
 		}
-		offlineAlertID := fmt.Sprintf("storage-offline-%s", storage.ID)
+		offlineAlertID := canonicalConnectivityStateID(storage.ID)
 		if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
 			log.Info().
 				Str("alertID", offlineAlertID).
@@ -5560,8 +5561,8 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		m.mu.Lock()
 		delete(m.offlineConfirmations, storage.ID)
 		m.mu.Unlock()
-		m.clearAlert(fmt.Sprintf("%s-usage", storage.ID))
-		m.clearAlert(fmt.Sprintf("storage-offline-%s", storage.ID))
+		m.clearAlert(canonicalMetricStateID(storage.ID, "usage"))
+		m.clearAlert(canonicalConnectivityStateID(storage.ID))
 		return
 	}
 
@@ -5571,7 +5572,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		m.mu.Lock()
 		delete(m.offlineConfirmations, storage.ID)
 		m.mu.Unlock()
-		m.clearAlert(fmt.Sprintf("storage-offline-%s", storage.ID))
+		m.clearAlert(canonicalConnectivityStateID(storage.ID))
 	} else if storage.Status == "offline" || storage.Status == "unavailable" {
 		m.checkStorageOffline(storage)
 	} else {
@@ -5773,7 +5774,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		}
 
 		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
-		validAlerts[alertID] = struct{}{}
 
 		guestKey := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
 		guestName := strings.TrimSpace(guestNames[guestKey])
@@ -5889,6 +5889,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 				Msg("Skipping invalid canonical snapshot posture spec")
 			continue
 		}
+		validAlerts[canonicalTrackingKeyForSpec(spec, alertID)] = struct{}{}
 
 		result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 			Spec: spec,
@@ -5903,7 +5904,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			},
 			AlertID:           alertID,
 			AlertType:         "snapshot-age",
-			ResourceID:        snapshot.ID,
+			ResourceID:        spec.ResourceID,
 			ResourceName:      resourceName,
 			Node:              snapshot.Node,
 			Instance:          snapshot.Instance,
@@ -5926,17 +5927,16 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 
 	m.mu.Lock()
 	for storageKey, alert := range m.activeAlerts {
-		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil || alert.Type != "snapshot-age" {
 			continue
 		}
 		if instanceName != "" && alert.Instance != instanceName {
 			continue
 		}
-		if _, ok := validAlerts[alertID]; ok {
+		if _, ok := validAlerts[storageKey]; ok {
 			continue
 		}
-		m.clearAlertNoLock(alertID)
+		m.clearAlertNoLock(storageKey)
 	}
 	m.mu.Unlock()
 }
@@ -6147,7 +6147,6 @@ func (m *Manager) CheckBackups(
 
 		alertKey := sanitizeAlertKey(key)
 		alertID := fmt.Sprintf("backup-age-%s", alertKey)
-		validAlerts[alertID] = struct{}{}
 
 		displayName := record.lookup.Name
 		if displayName == "" {
@@ -6224,6 +6223,7 @@ func (m *Manager) CheckBackups(
 				Msg("Skipping invalid canonical backup posture spec")
 			continue
 		}
+		validAlerts[canonicalTrackingKeyForSpec(spec, alertID)] = struct{}{}
 
 		result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 			Spec: spec,
@@ -6236,7 +6236,7 @@ func (m *Manager) CheckBackups(
 			},
 			AlertID:           alertID,
 			AlertType:         "backup-age",
-			ResourceID:        alertKey,
+			ResourceID:        spec.ResourceID,
 			ResourceName:      fmt.Sprintf("%s backup", displayName),
 			Node:              node,
 			Instance:          instance,
@@ -6259,14 +6259,13 @@ func (m *Manager) CheckBackups(
 
 	m.mu.Lock()
 	for storageKey, alert := range m.activeAlerts {
-		alertID := effectiveAlertID(alert, storageKey)
 		if alert == nil || alert.Type != "backup-age" {
 			continue
 		}
-		if _, ok := validAlerts[alertID]; ok {
+		if _, ok := validAlerts[storageKey]; ok {
 			continue
 		}
-		m.clearAlertNoLock(alertID)
+		m.clearAlertNoLock(storageKey)
 	}
 	m.mu.Unlock()
 }
@@ -6342,8 +6341,10 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 	// Check for read/write/checksum errors
 	totalErrors := pool.ReadErrors + pool.WriteErrors + pool.ChecksumErrors
 	errorsAlertID := fmt.Sprintf("zfs-pool-errors-%s", storage.ID)
+	errorsSpecResourceID := storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name)
+	errorsSpecID := errorsSpecResourceID + "-errors"
 	if totalErrors > 0 {
-		existingValue, exists := m.activeAlertValue(errorsAlertID)
+		existingValue, exists := m.activeAlertValue(buildCanonicalStateID(errorsSpecResourceID, errorsSpecID))
 		if !exists || float64(totalErrors) > existingValue {
 			errorMetadata := map[string]interface{}{
 				"pool_name":       pool.Name,
@@ -6353,13 +6354,13 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 			}
 			errorReasons := filterStorageHealthReasonsByCodes(poolAssessment.Reasons, zfsPoolErrorAssessmentCodes)
 			result, _ := m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
-				SpecID:         storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name) + "-errors",
+				SpecID:         errorsSpecID,
 				Signal:         "zfs-pool-errors",
 				Codes:          zfsPoolErrorAssessmentCodes,
 				Reasons:        errorReasons,
 				AlertID:        errorsAlertID,
 				AlertType:      "zfs-pool-errors",
-				SpecResourceID: storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name),
+				SpecResourceID: errorsSpecResourceID,
 				ResourceID:     storage.ID,
 				ResourceName:   poolResourceName,
 				ResourceType:   unifiedresources.ResourceTypeStorage,
@@ -6384,7 +6385,7 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 			}
 		}
 	} else {
-		m.clearAlert(errorsAlertID)
+		m.clearAlert(buildCanonicalStateID(errorsSpecResourceID, errorsSpecID))
 	}
 
 	// Check individual devices for errors
@@ -6674,8 +6675,12 @@ type metricOptions struct {
 }
 
 func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
+	alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
+	canonicalSpecID := "metric-threshold:" + metricType
+	canonicalStateID := buildCanonicalStateID(resourceID, canonicalSpecID)
+
 	if threshold == nil || threshold.Trigger <= 0 {
-		alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
+		m.clearAlert(canonicalStateID)
 		m.clearAlert(alertID)
 		return
 	}
@@ -6689,13 +6694,17 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		Bool("exceeds", value >= threshold.Trigger).
 		Msg("Checking metric threshold")
 
-	alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	existingAlert, exists := m.getActiveAlertNoLock(alertID)
-	trackingKey := canonicalTrackingKeyOrFallback(existingAlert, alertID)
+	if !exists && canonicalStateID != "" {
+		existingAlert, exists = m.getActiveAlertNoLock(canonicalStateID)
+	}
+	trackingKey := canonicalTrackingKeyOrFallback(existingAlert, canonicalStateID)
+	if trackingKey == "" {
+		trackingKey = canonicalStateID
+	}
 	monitorOnly := opts != nil && opts.MonitorOnly
 
 	// Check for suppression
@@ -6823,6 +6832,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				LastSeen:        time.Now(),
 				Metadata:        alertMetadata,
 			}
+			applyCanonicalIdentity(alert, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold))
 
 			// Set level based on how much over threshold
 			if value >= threshold.Trigger+10 {
@@ -6836,9 +6846,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Dur("initialDuration", time.Since(alertStartTime)).
 				Msg("Creating new alert with start time")
 
-			m.preserveAlertState(alertID, alert)
-			trackingKey = canonicalTrackingKeyOrFallback(alert, alertID)
-			m.setActiveAlertNoLock(alertID, alert)
+			m.preserveAlertState(canonicalStateID, alert)
+			trackingKey = canonicalTrackingKeyOrFallback(alert, canonicalStateID)
+			m.setActiveAlertNoLock(canonicalStateID, alert)
 			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
 
@@ -6902,6 +6912,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 		} else {
 			// Update existing alert
+			applyCanonicalIdentity(existingAlert, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold))
+			m.setActiveAlertNoLock(canonicalStateID, existingAlert)
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
 			// Keep display name current (handles upgrades and renames).
@@ -7265,6 +7277,9 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	publicID := alertID
 	var currentAlert *Alert
 	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
+	if !exists {
+		key, exists = m.resolveActiveAlertKeyByCanonicalStateNoLock(alertID)
+	}
 	if alert, ok := m.getActiveAlertNoLock(alertID); exists && ok && alert != nil {
 		currentAlert = alert
 		backfillCanonicalIdentity(alert)
@@ -7512,7 +7527,6 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 		resolved = append(resolved, models.ResolvedAlert{
 			Alert: models.Alert{
 				ID:           exported.ID,
-				LegacyID:     exported.LegacyID,
 				Type:         exported.Type,
 				Level:        string(exported.Level),
 				ResourceID:   exported.ResourceID,
@@ -7576,7 +7590,7 @@ func (m *Manager) OnAlertHistory(cb AlertCallback) {
 
 // clearResourceOfflineAlert removes an offline alert when a resource comes back online.
 func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceName, host, resourceKind string) {
-	alertID := fmt.Sprintf("%s-%s", alertPrefix, resourceID)
+	alertID := canonicalConnectivityStateID(resourceID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -7658,7 +7672,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 
 // clearNodeOfflineAlert removes offline alert when node comes back online
 func (m *Manager) clearNodeOfflineAlert(node models.Node) {
-	alertID := fmt.Sprintf("node-offline-%s", node.ID)
+	alertID := canonicalConnectivityStateID(node.ID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -7941,7 +7955,8 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 
 	if oldestAge == 0 {
 		// No messages in queue, clear any existing alert
-		m.clearAlert(fmt.Sprintf("%s-oldest-message", pmg.ID))
+		alertID := fmt.Sprintf("%s-oldest-message", pmg.ID)
+		m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
 		return
 	}
 
@@ -8039,7 +8054,7 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 			total := node.QueueStatus.Total
 			alertID := fmt.Sprintf("%s-%s-queue-total", pmg.ID, node.Name)
 			if (scaledQueueCrit <= 0 || total < scaledQueueCrit) && (scaledQueueWarn <= 0 || total < scaledQueueWarn) {
-				m.clearAlert(alertID)
+				m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
 				continue
 			}
 
@@ -8083,7 +8098,7 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 			deferred := node.QueueStatus.Deferred
 			alertID := fmt.Sprintf("%s-%s-queue-deferred", pmg.ID, node.Name)
 			if (scaledDeferredCrit <= 0 || deferred < scaledDeferredCrit) && (scaledDeferredWarn <= 0 || deferred < scaledDeferredWarn) {
-				m.clearAlert(alertID)
+				m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
 				continue
 			}
 
@@ -8128,7 +8143,7 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 			hold := node.QueueStatus.Hold
 			alertID := fmt.Sprintf("%s-%s-queue-hold", pmg.ID, node.Name)
 			if (scaledHoldCrit <= 0 || hold < scaledHoldCrit) && (scaledHoldWarn <= 0 || hold < scaledHoldWarn) {
-				m.clearAlert(alertID)
+				m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
 				continue
 			}
 
@@ -8175,7 +8190,7 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 				oldestMinutes := oldestAge / 60
 				alertID := fmt.Sprintf("%s-%s-oldest-message", pmg.ID, node.Name)
 				if (scaledAgeCrit <= 0 || oldestMinutes < int64(scaledAgeCrit)) && (scaledAgeWarn <= 0 || oldestMinutes < int64(scaledAgeWarn)) {
-					m.clearAlert(alertID)
+					m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
 					continue
 				}
 
@@ -8261,8 +8276,8 @@ func calculateMedianInt(values []int) int {
 // checkPMGQuarantineBacklog checks quarantine backlog and growth rates
 func (m *Manager) checkPMGQuarantineBacklog(pmg models.PMGInstance, defaults PMGThresholdConfig) {
 	if pmg.Quarantine == nil {
-		m.clearAlert(fmt.Sprintf("%s-quarantine-spam", pmg.ID))
-		m.clearAlert(fmt.Sprintf("%s-quarantine-virus", pmg.ID))
+		m.clearAlert(buildCanonicalStateID(pmg.ID, fmt.Sprintf("%s-quarantine-spam", pmg.ID)))
+		m.clearAlert(buildCanonicalStateID(pmg.ID, fmt.Sprintf("%s-quarantine-virus", pmg.ID)))
 		return
 	}
 
@@ -8346,7 +8361,7 @@ func (m *Manager) checkQuarantineMetric(pmg models.PMGInstance, metricType strin
 
 	if absoluteWarn <= 0 && absoluteCrit <= 0 &&
 		defaults.QuarantineGrowthWarnMin <= 0 && defaults.QuarantineGrowthCritMin <= 0 {
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
 		return
 	}
 
@@ -8784,7 +8799,7 @@ func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instan
 
 // clearGuestPoweredOffAlert removes powered-off alert when guest starts running
 func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
-	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
+	alertID := canonicalPoweredStateStateID(guestID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -8816,7 +8831,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedAlertCallback(alert, alertID, true)
+	m.safeCallResolvedAlertCallback(alert, effectiveAlertID(alert, alertID), true)
 
 	// Log recovery
 	log.Info().
@@ -9796,6 +9811,14 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 		if strings.HasPrefix(alertID, "pbs-") || alert.Type == "pbs-offline" {
 			continue
 		}
+		if alert.Metadata != nil {
+			if resourceType, _ := alert.Metadata["resourceType"].(string); resourceType == "pbs" {
+				continue
+			}
+		}
+		if alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) && strings.HasPrefix(alert.ResourceID, "pbs") {
+			continue
+		}
 		// Use the Node field from the alert itself, which is more reliable
 		node := alert.Node
 
@@ -10161,7 +10184,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 			Msg("Skipping health alert for drive with known firmware bug - health status unreliable")
 
 		// Clear any existing health alert since we now recognize this is a false positive
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-health"))
 		healthCheckNeeded = false // Skip to wearout check
 	}
 
@@ -10208,7 +10231,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		}
 	} else {
 		// Disk is healthy, clear alert if it exists
-		m.clearAlert(alertID)
+		m.clearAlert(buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-health"))
 	}
 
 	// Check for low wearout (SSD life remaining)
@@ -10259,8 +10282,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		}
 	} else if disk.Wearout >= 10 {
 		// Wearout is acceptable, clear alert if it exists
-		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
-		m.clearAlert(wearoutAlertID)
+		m.clearAlert(buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-wearout"))
 	}
 }
 
