@@ -18,6 +18,7 @@ from canonical_completion_guard import (
     path_policy_matches,
     subsystem_matches_path,
 )
+from repo_file_io import load_repo_json
 from status_audit import load_status_payload
 
 
@@ -26,12 +27,12 @@ REGISTRY_SCHEMA_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "subsyste
 LANE_RE = re.compile(r"^L[0-9]+$")
 
 
-def load_registry_payload() -> dict[str, Any]:
-    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+def load_registry_payload(*, staged: bool = False) -> dict[str, Any]:
+    return load_repo_json(REGISTRY_PATH, staged=staged)
 
 
-def load_registry_schema() -> dict[str, Any]:
-    return json.loads(REGISTRY_SCHEMA_PATH.read_text(encoding="utf-8"))
+def load_registry_schema(*, staged: bool = False) -> dict[str, Any]:
+    return load_repo_json(REGISTRY_SCHEMA_PATH, staged=staged)
 
 
 def schema_required(schema: dict[str, Any], definition: str | None = None) -> set[str]:
@@ -39,12 +40,19 @@ def schema_required(schema: dict[str, Any], definition: str | None = None) -> se
     return set(target["required"])
 
 
-REGISTRY_SCHEMA = load_registry_schema()
-REQUIRED_TOP_LEVEL_FIELDS = schema_required(REGISTRY_SCHEMA)
-REQUIRED_SUBSYSTEM_FIELDS = schema_required(REGISTRY_SCHEMA, "subsystem")
-REQUIRED_VERIFICATION_FIELDS = schema_required(REGISTRY_SCHEMA, "verification")
-REQUIRED_PATH_POLICY_FIELDS = schema_required(REGISTRY_SCHEMA, "path_policy")
-REQUIRED_SHARED_OWNERSHIP_FIELDS = schema_required(REGISTRY_SCHEMA, "shared_ownership")
+def registry_schema_contract(*, staged: bool = False) -> dict[str, Any]:
+    schema = load_registry_schema(staged=staged)
+    return {
+        "schema": schema,
+        "required_top_level_fields": schema_required(schema),
+        "required_subsystem_fields": schema_required(schema, "subsystem"),
+        "required_verification_fields": schema_required(schema, "verification"),
+        "required_path_policy_fields": schema_required(schema, "path_policy"),
+        "required_shared_ownership_fields": schema_required(schema, "shared_ownership"),
+    }
+
+
+DEFAULT_REGISTRY_SCHEMA_CONTRACT = registry_schema_contract()
 
 
 def sorted_casefold(values: list[str]) -> list[str]:
@@ -117,17 +125,25 @@ def audit_registry_payload(
     *,
     tracked_files: set[str],
     status_lane_ids: set[str],
+    schema_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    contract = schema_contract or DEFAULT_REGISTRY_SCHEMA_CONTRACT
+    schema = contract["schema"]
+    required_top_level_fields = set(contract["required_top_level_fields"])
+    required_subsystem_fields = set(contract["required_subsystem_fields"])
+    required_verification_fields = set(contract["required_verification_fields"])
+    required_path_policy_fields = set(contract["required_path_policy_fields"])
+    required_shared_ownership_fields = set(contract["required_shared_ownership_fields"])
     errors: list[str] = []
     warnings: list[str] = []
 
-    for field in sorted(REQUIRED_TOP_LEVEL_FIELDS):
+    for field in sorted(required_top_level_fields):
         if field not in payload:
             errors.append(f"registry.json missing required field {field}")
 
     version = payload.get("version")
-    if version != REGISTRY_SCHEMA["properties"]["version"]["const"]:
-        errors.append(f"registry.json version must be {REGISTRY_SCHEMA['properties']['version']['const']}")
+    if version != schema["properties"]["version"]["const"]:
+        errors.append(f"registry.json version must be {schema['properties']['version']['const']}")
 
     raw_subsystems = payload.get("subsystems")
     if not isinstance(raw_subsystems, list) or not raw_subsystems:
@@ -150,7 +166,7 @@ def audit_registry_payload(
             errors.append(f"{context} must be an object")
             continue
 
-        for field in sorted(REQUIRED_SUBSYSTEM_FIELDS):
+        for field in sorted(required_subsystem_fields):
             if field not in raw_subsystem:
                 errors.append(f"{context} missing required field {field}")
 
@@ -227,7 +243,7 @@ def audit_registry_payload(
         if not isinstance(verification, dict):
             errors.append(f"{context}.verification must be an object")
             continue
-        for field in sorted(REQUIRED_VERIFICATION_FIELDS):
+        for field in sorted(required_verification_fields):
             if field not in verification:
                 errors.append(f"{context}.verification missing required field {field}")
 
@@ -291,7 +307,7 @@ def audit_registry_payload(
                 errors.append(f"{policy_context} must be an object")
                 continue
 
-            for field in sorted(REQUIRED_PATH_POLICY_FIELDS):
+            for field in sorted(required_path_policy_fields):
                 if field not in raw_policy:
                     errors.append(f"{policy_context} missing required field {field}")
 
@@ -459,7 +475,7 @@ def audit_registry_payload(
         if not isinstance(raw_shared, dict):
             errors.append(f"{context} must be an object")
             continue
-        for field in sorted(REQUIRED_SHARED_OWNERSHIP_FIELDS):
+        for field in sorted(required_shared_ownership_fields):
             if field not in raw_shared:
                 errors.append(f"{context} missing required field {field}")
 
@@ -547,6 +563,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Print a concise human-readable summary instead of JSON.",
     )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Read registry control files from the git index instead of the working tree.",
+    )
     return parser.parse_args(argv)
 
 
@@ -580,16 +601,17 @@ def render_pretty(report: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or []))
-    status_payload = load_status_payload()
+    status_payload = load_status_payload(staged=args.staged)
     lane_ids = {
         lane.get("id")
         for lane in status_payload.get("lanes", [])
         if isinstance(lane, dict) and isinstance(lane.get("id"), str)
     }
     report = audit_registry_payload(
-        load_registry_payload(),
+        load_registry_payload(staged=args.staged),
         tracked_files=tracked_repo_files(),
         status_lane_ids=lane_ids,
+        schema_contract=registry_schema_contract(staged=args.staged),
     )
     output = render_pretty(report) if args.pretty else json.dumps(report, indent=2, sort_keys=True)
     print(output)

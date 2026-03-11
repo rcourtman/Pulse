@@ -63,11 +63,11 @@ python3 scripts/release_control/canonical_completion_guard.py
 
 # Enforce machine-readable lane/evidence integrity
 echo "Running status audit..."
-python3 scripts/release_control/status_audit.py --check
+python3 scripts/release_control/status_audit.py --check --staged
 
 # Enforce machine-readable subsystem ownership/proof integrity
 echo "Running registry audit..."
-python3 scripts/release_control/registry_audit.py --check
+python3 scripts/release_control/registry_audit.py --check --staged
 
 # Enforce structured subsystem contract integrity
 echo "Running contract audit..."
@@ -81,6 +81,7 @@ echo "Running release-control helper unit tests..."
 python3 scripts/release_control/canonical_completion_guard_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/registry_audit_test.py
+python3 scripts/release_control/repo_file_io_test.py
 python3 scripts/release_control/status_audit_test.py
 python3 scripts/release_control/subsystem_contracts_test.py
 python3 scripts/release_control/subsystem_lookup_test.py

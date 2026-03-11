@@ -16,6 +16,7 @@ import sys
 from typing import Any
 
 from canonical_completion_guard import load_subsystem_rules
+from repo_file_io import load_repo_json
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -50,8 +51,8 @@ def _decision_sort_key(value: tuple[str, str]) -> tuple[str, str]:
     return (date_value, decision_id.casefold())
 
 
-def load_status_schema() -> dict[str, Any]:
-    return json.loads(STATUS_SCHEMA_PATH.read_text(encoding="utf-8"))
+def load_status_schema(*, staged: bool = False) -> dict[str, Any]:
+    return load_repo_json(STATUS_SCHEMA_PATH, staged=staged)
 
 
 def schema_enum(schema: dict[str, Any], definition: str, property_name: str) -> set[str]:
@@ -64,11 +65,18 @@ def schema_required(schema: dict[str, Any], definition: str | None = None) -> se
     return set(target["required"])
 
 
-STATUS_SCHEMA = load_status_schema()
-VALID_LANE_STATUSES = schema_enum(STATUS_SCHEMA, "lane", "status")
-VALID_OPEN_DECISION_STATUSES = schema_enum(STATUS_SCHEMA, "open_decision", "status")
-VALID_RESOLVED_DECISION_KINDS = schema_enum(STATUS_SCHEMA, "resolved_decision", "kind")
-REQUIRED_TOP_LEVEL_FIELDS = schema_required(STATUS_SCHEMA)
+def status_schema_contract(*, staged: bool = False) -> dict[str, Any]:
+    schema = load_status_schema(staged=staged)
+    return {
+        "schema": schema,
+        "valid_lane_statuses": schema_enum(schema, "lane", "status"),
+        "valid_open_decision_statuses": schema_enum(schema, "open_decision", "status"),
+        "valid_resolved_decision_kinds": schema_enum(schema, "resolved_decision", "kind"),
+        "required_top_level_fields": schema_required(schema),
+    }
+
+
+DEFAULT_STATUS_SCHEMA_CONTRACT = status_schema_contract()
 
 
 def env_key_for_repo(repo_name: str) -> str:
@@ -84,8 +92,8 @@ def repo_root_for_name(repo_name: str) -> Path:
     return (REPO_ROOT.parent / repo_name).resolve()
 
 
-def load_status_payload() -> dict[str, Any]:
-    return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+def load_status_payload(*, staged: bool = False) -> dict[str, Any]:
+    return load_repo_json(STATUS_PATH, staged=staged)
 
 
 def _require_string(obj: dict[str, Any], key: str, errors: list[str], *, context: str) -> str | None:
@@ -261,6 +269,7 @@ def audit_lanes(
     *,
     active_repos: set[str],
     allowed_kinds: set[str],
+    valid_lane_statuses: set[str],
     errors: list[str],
     warnings: list[str],
 ) -> tuple[list[dict[str, Any]], set[str]]:
@@ -296,7 +305,7 @@ def audit_lanes(
             errors.append(f"{context} score values must stay within 0-10")
         if current > target:
             errors.append(f"{context} current_score {current:g} exceeds target_score {target:g}")
-        if status not in VALID_LANE_STATUSES:
+        if status not in valid_lane_statuses:
             errors.append(f"{context} has invalid status {status!r}")
         subsystems = _require_string_list(raw_lane, "subsystems", errors, context=context)
         if len(subsystems) != len(set(subsystems)):
@@ -396,8 +405,13 @@ def audit_lanes(
     return lane_reports, lane_ids
 
 
-def validate_lane_subsystem_bindings(lane_reports: list[dict[str, Any]], errors: list[str]) -> None:
-    expected_by_lane = lane_subsystem_map()
+def validate_lane_subsystem_bindings(
+    lane_reports: list[dict[str, Any]],
+    errors: list[str],
+    *,
+    use_staged_registry: bool = False,
+) -> None:
+    expected_by_lane = lane_subsystem_map(use_staged_registry=use_staged_registry)
 
     lane_ids = {lane["id"] for lane in lane_reports}
     for lane_id in expected_by_lane:
@@ -419,17 +433,17 @@ def validate_lane_subsystem_bindings(lane_reports: list[dict[str, Any]], errors:
             )
 
 
-def subsystem_lane_map() -> dict[str, str]:
+def subsystem_lane_map(*, use_staged_registry: bool = False) -> dict[str, str]:
     return {
         str(rule["id"]).strip(): str(rule["lane"]).strip()
-        for rule in load_subsystem_rules()
+        for rule in load_subsystem_rules(staged=use_staged_registry)
         if str(rule.get("id", "")).strip() and str(rule.get("lane", "")).strip()
     }
 
 
-def lane_subsystem_map() -> dict[str, list[str]]:
+def lane_subsystem_map(*, use_staged_registry: bool = False) -> dict[str, list[str]]:
     expected_by_lane: dict[str, list[str]] = {}
-    for subsystem_id, lane_id in subsystem_lane_map().items():
+    for subsystem_id, lane_id in subsystem_lane_map(use_staged_registry=use_staged_registry).items():
         expected_by_lane.setdefault(lane_id, []).append(subsystem_id)
     for lane_id in list(expected_by_lane):
         expected_by_lane[lane_id] = sorted(expected_by_lane[lane_id])
@@ -465,6 +479,7 @@ def validate_open_decisions(
     *,
     lane_ids: set[str],
     subsystem_to_lane: dict[str, str],
+    valid_open_decision_statuses: set[str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
     decisions = _require_object_list(payload, "open_decisions", errors, context="status.json")
@@ -487,7 +502,7 @@ def validate_open_decisions(
 
         if opened_at:
             _validate_date(opened_at, errors, context=f"{context}.opened_at")
-        if status and status not in VALID_OPEN_DECISION_STATUSES:
+        if status and status not in valid_open_decision_statuses:
             errors.append(f"{context} has invalid status {status!r}")
         if len(lane_refs) != len(set(lane_refs)):
             errors.append(f"{context}.lane_ids must not contain duplicates")
@@ -529,6 +544,7 @@ def validate_resolved_decisions(
     *,
     lane_ids: set[str],
     subsystem_to_lane: dict[str, str],
+    valid_resolved_decision_kinds: set[str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
     decisions = _require_object_list(payload, "resolved_decisions", errors, context="status.json")
@@ -548,7 +564,7 @@ def validate_resolved_decisions(
         lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
         subsystem_refs = _require_string_list(raw, "subsystem_ids", errors, context=context)
 
-        if kind and kind not in VALID_RESOLVED_DECISION_KINDS:
+        if kind and kind not in valid_resolved_decision_kinds:
             errors.append(f"{context} has invalid kind {kind!r}")
         if decided_at:
             _validate_date(decided_at, errors, context=f"{context}.decided_at")
@@ -586,11 +602,21 @@ def validate_resolved_decisions(
     return records
 
 
-def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def audit_status_payload(
+    payload: dict[str, Any],
+    *,
+    schema_contract: dict[str, Any] | None = None,
+    use_staged_registry: bool = False,
+) -> dict[str, Any]:
+    contract = schema_contract or DEFAULT_STATUS_SCHEMA_CONTRACT
+    required_top_level_fields = set(contract["required_top_level_fields"])
+    valid_lane_statuses = set(contract["valid_lane_statuses"])
+    valid_open_decision_statuses = set(contract["valid_open_decision_statuses"])
+    valid_resolved_decision_kinds = set(contract["valid_resolved_decision_kinds"])
     errors: list[str] = []
     warnings: list[str] = []
 
-    for field in sorted(REQUIRED_TOP_LEVEL_FIELDS):
+    for field in sorted(required_top_level_fields):
         if field not in payload:
             errors.append(f"status.json missing required field {field}")
 
@@ -628,11 +654,16 @@ def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
         payload,
         active_repos=active_repo_set,
         allowed_kinds=allowed_kinds,
+        valid_lane_statuses=valid_lane_statuses,
         errors=errors,
         warnings=warnings,
     )
-    subsystem_to_lane = subsystem_lane_map()
-    validate_lane_subsystem_bindings(lane_reports, errors)
+    subsystem_to_lane = subsystem_lane_map(use_staged_registry=use_staged_registry)
+    validate_lane_subsystem_bindings(
+        lane_reports,
+        errors,
+        use_staged_registry=use_staged_registry,
+    )
     for lane_id in release_critical_lanes:
         if lane_id not in lane_ids:
             errors.append(f"priority_engine.floor_rule.release_critical_lanes references unknown lane_id {lane_id!r}")
@@ -640,12 +671,14 @@ def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
         payload,
         lane_ids=lane_ids,
         subsystem_to_lane=subsystem_to_lane,
+        valid_open_decision_statuses=valid_open_decision_statuses,
         errors=errors,
     )
     resolved_decisions = validate_resolved_decisions(
         payload,
         lane_ids=lane_ids,
         subsystem_to_lane=subsystem_to_lane,
+        valid_resolved_decision_kinds=valid_resolved_decision_kinds,
         errors=errors,
     )
 
@@ -677,6 +710,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--pretty",
         action="store_true",
         help="Print a concise human-readable summary instead of JSON.",
+    )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Read status control files from the git index instead of the working tree.",
     )
     return parser.parse_args(argv)
 
@@ -714,7 +752,11 @@ def render_pretty(report: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or []))
-    report = audit_status_payload(load_status_payload())
+    report = audit_status_payload(
+        load_status_payload(staged=args.staged),
+        schema_contract=status_schema_contract(staged=args.staged),
+        use_staged_registry=args.staged,
+    )
     output = render_pretty(report) if args.pretty else json.dumps(report, indent=2, sort_keys=True)
     print(output)
     if args.check and report["errors"]:

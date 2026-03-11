@@ -119,8 +119,8 @@ This is the minimum update set for canonical work:
 This protocol is enforced locally at commit time by the canonical completion
 guard in `scripts/release_control/canonical_completion_guard.py` and by the
 governance guardrail tests in `internal/repoctl`.
-Local pre-commit governance checks must evaluate staged contract content rather
-than unstaged working-tree noise.
+Local pre-commit governance checks must evaluate staged v6 control-file content
+rather than unstaged working-tree noise.
 
 For runtime subsystem changes, the same commit must now include:
 

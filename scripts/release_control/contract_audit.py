@@ -11,6 +11,7 @@ import sys
 from typing import Any
 
 from canonical_completion_guard import REPO_ROOT, subsystem_matches_path
+from repo_file_io import load_repo_json
 from subsystem_contracts import tracked_contract_files
 
 
@@ -70,12 +71,12 @@ def sorted_casefold(values: list[str]) -> list[str]:
     return sorted(values, key=lambda value: value.casefold())
 
 
-def load_registry_payload() -> dict[str, Any]:
-    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+def load_registry_payload(*, staged: bool = False) -> dict[str, Any]:
+    return load_repo_json(REGISTRY_PATH, staged=staged)
 
 
-def load_status_payload() -> dict[str, Any]:
-    return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+def load_status_payload(*, staged: bool = False) -> dict[str, Any]:
+    return load_repo_json(STATUS_PATH, staged=staged)
 
 def section_body(lines: list[str], heading: str) -> list[str]:
     start = next(index for index, line in enumerate(lines) if line == heading) + 1
@@ -521,8 +522,8 @@ def render_pretty(report: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or []))
     report = audit_contract_payload(
-        registry_payload=load_registry_payload(),
-        status_payload=load_status_payload(),
+        registry_payload=load_registry_payload(staged=args.staged),
+        status_payload=load_status_payload(staged=args.staged),
         contract_texts=tracked_contract_files(staged=args.staged),
     )
     output = render_pretty(report) if args.pretty else json.dumps(report, indent=2, sort_keys=True)

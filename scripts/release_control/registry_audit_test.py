@@ -1,9 +1,14 @@
 import unittest
 
-from registry_audit import audit_registry_payload
+from registry_audit import audit_registry_payload, parse_args
 
 
 class RegistryAuditTest(unittest.TestCase):
+    def test_parse_args_accepts_staged_flag(self) -> None:
+        args = parse_args(["--check", "--staged"])
+        self.assertTrue(args.check)
+        self.assertTrue(args.staged)
+
     def test_audit_registry_payload_accepts_valid_minimal_registry(self) -> None:
         payload = {
             "version": 11,

@@ -15,6 +15,7 @@ import subprocess
 import sys
 from typing import Dict, List, Sequence, Set
 
+from repo_file_io import load_repo_json
 from subsystem_contracts import load_contract_graph, referenced_contracts_for_path
 
 
@@ -57,9 +58,8 @@ def validate_verification_policy(
             raise ValueError(f"subsystem {subsystem_id} {context} missing {field}")
 
 
-def load_subsystem_rules() -> List[dict]:
-    with SUBSYSTEM_REGISTRY.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
+def load_subsystem_rules(*, staged: bool = False) -> List[dict]:
+    payload = load_repo_json(SUBSYSTEM_REGISTRY, staged=staged)
     rules = list(payload.get("subsystems", []))
     for rule in rules:
         subsystem_id = str(rule.get("id"))
@@ -212,9 +212,13 @@ def build_verification_requirements(rule: dict, touched_runtime_files: Sequence[
     return requirements
 
 
-def infer_impacted_subsystems(staged_files: Sequence[str]) -> Dict[str, dict]:
+def infer_impacted_subsystems(
+    staged_files: Sequence[str],
+    *,
+    use_staged_registry: bool = False,
+) -> Dict[str, dict]:
     impacted: Dict[str, dict] = {}
-    rules = load_subsystem_rules()
+    rules = load_subsystem_rules(staged=use_staged_registry)
     rules_by_id = {str(rule["id"]): rule for rule in rules}
 
     for path in staged_files:
@@ -449,7 +453,7 @@ def format_missing_requirements(
 
 def check_staged_contracts(staged_files: Sequence[str]) -> int:
     staged_set: Set[str] = set(staged_files)
-    impacted = infer_impacted_subsystems(staged_files)
+    impacted = infer_impacted_subsystems(staged_files, use_staged_registry=True)
     required_contracts = required_contract_updates(
         staged_files,
         impacted,
