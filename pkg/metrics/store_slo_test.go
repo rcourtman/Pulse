@@ -24,6 +24,7 @@ import (
 //   - QueryAll(4×500 pts): ~1.8ms → SLO 15ms
 //   - QueryAllBatch(50×4×100): ~18ms → SLO 40ms
 //   - rollupTier(50×2×20): ~2.1ms → SLO 15ms
+//   - Query under write contention: ~400µs → SLO 5ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
 const (
 	// SLOWriteBatchP95 is the p95 target for WriteBatchSync with 100 metrics —
@@ -50,6 +51,11 @@ const (
 	// rollupTier path (50 resources × 2 metrics × 20 raw points), which must
 	// stay fast enough to prevent periodic aggregation from becoming a backlog.
 	SLORollupTierBatchedP95 = 15 * time.Millisecond
+
+	// SLOConcurrentReadWriteP95 is the p95 target for single-resource Query
+	// while a background writer continuously appends batches on the same SQLite
+	// connection pool. This guards dashboard read latency under live ingestion.
+	SLOConcurrentReadWriteP95 = 5 * time.Millisecond
 )
 
 const sloIterations = 200
@@ -465,5 +471,98 @@ func TestSLO_RollupTierBatched(t *testing.T) {
 
 	if p95 > SLORollupTierBatchedP95 {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLORollupTierBatchedP95)
+	}
+}
+
+// TestSLO_ConcurrentReadWrite validates query latency under continuous write
+// contention on the single SQLite connection pool used in production.
+func TestSLO_ConcurrentReadWrite(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newSLOStore(t)
+	base := time.Now().Add(-time.Hour)
+
+	const seedPoints = 500
+	seed := make([]WriteMetric, seedPoints)
+	for i := range seed {
+		seed[i] = WriteMetric{
+			ResourceType: "vm",
+			ResourceID:   "vm-crw",
+			MetricType:   "cpu",
+			Value:        float64(i % 100),
+			Timestamp:    base.Add(time.Duration(i) * 7 * time.Second),
+			Tier:         TierRaw,
+		}
+	}
+	store.WriteBatchSync(seed)
+
+	start := base.Add(-time.Second)
+	end := base.Add(time.Duration(seedPoints) * 7 * time.Second)
+
+	pts, err := store.Query("vm", "vm-crw", "cpu", start, end, 0)
+	if err != nil {
+		t.Fatalf("sanity Query: %v", err)
+	}
+	if len(pts) != seedPoints {
+		t.Fatalf("sanity: expected %d points, got %d", seedPoints, len(pts))
+	}
+
+	stop := make(chan struct{})
+	writerDone := make(chan struct{})
+	started := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		writeBase := end
+		tick := 0
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+
+			batch := make([]WriteMetric, 10)
+			for j := range batch {
+				batch[j] = WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   fmt.Sprintf("vm-crw-live-%d", tick%50),
+					MetricType:   "cpu",
+					Value:        float64((tick + j) % 100),
+					Timestamp:    writeBase.Add(time.Duration(tick*10+j) * 2 * time.Second),
+					Tier:         TierRaw,
+				}
+			}
+
+			store.WriteBatchSync(batch)
+			if tick == 0 {
+				close(started)
+			}
+			tick++
+		}
+	}()
+
+	<-started
+	t.Cleanup(func() {
+		close(stop)
+		<-writerDone
+	})
+
+	latencies := measureLatencies(t, func() {
+		pts, err := store.Query("vm", "vm-crw", "cpu", start, end, 0)
+		if err != nil {
+			t.Fatalf("Query: %v", err)
+		}
+		if len(pts) < seedPoints {
+			t.Fatalf("expected at least %d points, got %d", seedPoints, len(pts))
+		}
+	})
+
+	p95 := pct(latencies, 0.95)
+	t.Logf("ConcurrentReadWrite p50=%v p95=%v p99=%v SLO=%v",
+		pct(latencies, 0.50), p95, pct(latencies, 0.99), SLOConcurrentReadWriteP95)
+
+	if p95 > SLOConcurrentReadWriteP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOConcurrentReadWriteP95)
 	}
 }
