@@ -1,4 +1,6 @@
 import { Component, Accessor, Show } from 'solid-js';
+import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
+import { ENVIRONMENT_LOCK_BUTTON_TITLE } from '@/utils/environmentLockPresentation';
 
 interface DockerRuntimeSettingsCardProps {
   disableDockerUpdateActions: Accessor<boolean>;
@@ -20,25 +22,24 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium text-base-content">Hide update buttons</span>
             <Show when={props.disableDockerUpdateActionsLocked()}>
-              <span
-                class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"
-              >
-                <svg
-                  class="w-3 h-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
-                </svg>
-                ENV
-              </span>
+              <EnvironmentLockBadge
+                envVar="PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"
+                icon={(props) => (
+                  <svg
+                    class={props.class}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                )}
+              />
             </Show>
           </div>
           <p class="text-xs text-muted">
@@ -65,9 +66,7 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
             role="switch"
             aria-checked={props.disableDockerUpdateActions()}
             title={
-              props.disableDockerUpdateActionsLocked()
-                ? 'Locked by environment variable'
-                : undefined
+              props.disableDockerUpdateActionsLocked() ? ENVIRONMENT_LOCK_BUTTON_TITLE : undefined
             }
           >
             <span

@@ -43,9 +43,28 @@ import {
 } from '@/utils/agentCapabilityPresentation';
 import {
   ALLOW_RECONNECT_LABEL,
+  getUnifiedAgentLookupStatusPresentation,
   getUnifiedAgentStatusPresentation,
   MONITORING_STOPPED_STATUS_LABEL,
 } from '@/utils/unifiedAgentStatusPresentation';
+import {
+  getUnifiedAgentAllowReconnectErrorMessage,
+  getUnifiedAgentAllowReconnectSuccessMessage,
+  getUnifiedAgentClipboardCopyErrorMessage,
+  getUnifiedAgentClipboardCopySuccessMessage,
+  getUnifiedAgentCommandsUnavailableMessage,
+  getUnifiedAgentConfigUpdateErrorMessage,
+  getUnifiedAgentConfigUpdateSuccessMessage,
+  getInventorySubjectLabel,
+  getMonitoringStoppedEmptyState,
+  getRemovedUnifiedAgentItemLabel,
+  getUnifiedAgentStopMonitoringErrorMessage,
+  getUnifiedAgentStopMonitoringSuccessMessage,
+  getUnifiedAgentStopMonitoringUnavailableMessage,
+  getUnifiedAgentLastSeenLabel,
+  getUnifiedAgentUninstallCommandCopiedMessage,
+  getUnifiedAgentUpgradeCommandCopiedMessage,
+} from '@/utils/unifiedAgentInventoryPresentation';
 import {
   trackAgentInstallCommandCopied,
   trackAgentInstallProfileSelected,
@@ -108,21 +127,6 @@ type UnifiedAgentRow = {
     context?: string;
     tokenName?: string;
   };
-};
-
-const getInventorySubjectLabel = (name?: string, fallback?: string) =>
-  name || fallback || 'this host';
-const getRemovedItemLabel = (row: UnifiedAgentRow) => {
-  if (row.capabilities.includes('kubernetes') && !row.capabilities.includes('agent')) {
-    return 'Kubernetes cluster';
-  }
-  if (row.capabilities.includes('docker')) {
-    return 'Docker runtime';
-  }
-  if (row.capabilities.includes('proxmox')) {
-    return 'Proxmox node';
-  }
-  return 'Host agent';
 };
 
 const INSTALL_PROFILE_OPTIONS: {
@@ -1098,15 +1102,13 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
       }
       if (removed) {
         reconcileRemovedAgent(ids, capabilities);
-        notificationStore.success(
-          `Monitoring stopped for ${subject}. Pulse will ignore future reports until reconnect is allowed.`,
-        );
+        notificationStore.success(getUnifiedAgentStopMonitoringSuccessMessage(subject));
       } else {
-        notificationStore.error('No host identifiers are available to stop monitoring.');
+        notificationStore.error(getUnifiedAgentStopMonitoringUnavailableMessage());
       }
     } catch (err) {
       logger.error('Failed to stop monitoring host', err);
-      notificationStore.error(`Failed to stop monitoring ${subject}.`);
+      notificationStore.error(getUnifiedAgentStopMonitoringErrorMessage(subject));
     }
   };
 
@@ -1114,12 +1116,10 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     const subject = getInventorySubjectLabel(hostname, agentId);
     try {
       await MonitoringAPI.allowDockerRuntimeReenroll(agentId);
-      notificationStore.success(
-        `Reconnect allowed for ${subject}. Pulse will accept reports from it again.`,
-      );
+      notificationStore.success(getUnifiedAgentAllowReconnectSuccessMessage(subject));
     } catch (err) {
       logger.error('Failed to allow reconnect for host', err);
-      notificationStore.error(`Failed to allow reconnect for ${subject}.`);
+      notificationStore.error(getUnifiedAgentAllowReconnectErrorMessage(subject));
     }
   };
 
@@ -1135,12 +1135,10 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     try {
       await MonitoringAPI.deleteKubernetesCluster(clusterId);
       reconcileRemovedKubernetesCluster(clusterId);
-      notificationStore.success(
-        `Monitoring stopped for ${subject}. Pulse will ignore future reports until reconnect is allowed.`,
-      );
+      notificationStore.success(getUnifiedAgentStopMonitoringSuccessMessage(subject));
     } catch (err) {
       logger.error('Failed to stop monitoring kubernetes cluster', err);
-      notificationStore.error(`Failed to stop monitoring ${subject}.`);
+      notificationStore.error(getUnifiedAgentStopMonitoringErrorMessage(subject));
     }
   };
 
@@ -1148,18 +1146,16 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     const subject = getInventorySubjectLabel(name, clusterId);
     try {
       await MonitoringAPI.allowKubernetesClusterReenroll(clusterId);
-      notificationStore.success(
-        `Reconnect allowed for ${subject}. Pulse will accept reports from it again.`,
-      );
+      notificationStore.success(getUnifiedAgentAllowReconnectSuccessMessage(subject));
     } catch (err) {
       logger.error('Failed to allow reconnect for kubernetes cluster', err);
-      notificationStore.error(`Failed to allow reconnect for ${subject}.`);
+      notificationStore.error(getUnifiedAgentAllowReconnectErrorMessage(subject));
     }
   };
 
   const handleToggleCommands = async (agentId: string | undefined, enabled: boolean) => {
     if (!agentId) {
-      notificationStore.error('Agent ID unavailable for command configuration');
+      notificationStore.error(getUnifiedAgentCommandsUnavailableMessage());
       return;
     }
     // Set optimistic/pending state immediately with timestamp
@@ -1170,9 +1166,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
 
     try {
       await MonitoringAPI.updateAgentConfig(agentId, { commandsEnabled: enabled });
-      notificationStore.success(
-        `Pulse command execution ${enabled ? 'enabled' : 'disabled'}. Syncing with agent...`,
-      );
+      notificationStore.success(getUnifiedAgentConfigUpdateSuccessMessage(enabled));
     } catch (err) {
       // On error, clear the pending state so toggle reverts
       setPendingCommandConfig((prev) => {
@@ -1181,7 +1175,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
         return next;
       });
       logger.error('Failed to toggle AI commands', err);
-      notificationStore.error('Failed to update agent configuration');
+      notificationStore.error(getUnifiedAgentConfigUpdateErrorMessage());
     }
   };
 
@@ -1567,9 +1561,13 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                                             UNIFIED_AGENT_TELEMETRY_SURFACE,
                                             commandTelemetryCapability(),
                                           );
-                                          notificationStore.success('Copied to clipboard');
+                                          notificationStore.success(
+                                            getUnifiedAgentClipboardCopySuccessMessage(),
+                                          );
                                         } else {
-                                          notificationStore.error('Failed to copy');
+                                          notificationStore.error(
+                                            getUnifiedAgentClipboardCopyErrorMessage(),
+                                          );
                                         }
                                       }}
                                       class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 transition-colors hover:text-slate-200"
@@ -1654,10 +1652,8 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                   <Show when={lookupResult()}>
                     {(result) => {
                       const agent = () => result().agent!;
-                      const statusBadgeClasses = () =>
-                        agent().connected
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+                      const lookupStatusPresentation = () =>
+                        getUnifiedAgentLookupStatusPresentation(agent().connected);
                       return (
                         <div class="space-y-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
                           <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -1666,9 +1662,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                             </div>
                             <div class="flex items-center gap-2">
                               <span
-                                class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}
+                                class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${lookupStatusPresentation().badgeClass}`}
                               >
-                                {agent().connected ? 'Connected' : 'Not reporting yet'}
+                                {lookupStatusPresentation().label}
                               </span>
                               <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
                                 {agent().status || 'unknown'}
@@ -1746,9 +1742,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                       onClick={async () => {
                         const success = await copyToClipboard(getUninstallCommand());
                         if (success) {
-                          notificationStore.success('Copied to clipboard');
+                          notificationStore.success(getUnifiedAgentClipboardCopySuccessMessage());
                         } else {
-                          notificationStore.error('Failed to copy');
+                          notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
                         }
                       }}
                       class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
@@ -1797,9 +1793,9 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                       onClick={async () => {
                         const success = await copyToClipboard(getWindowsUninstallCommand());
                         if (success) {
-                          notificationStore.success('Copied to clipboard');
+                          notificationStore.success(getUnifiedAgentClipboardCopySuccessMessage());
                         } else {
-                          notificationStore.error('Failed to copy');
+                          notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
                         }
                       }}
                       class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
@@ -2219,18 +2215,11 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                   {
                     key: 'lastSeen',
                     label: 'Last Seen',
-                    render: (row: UnifiedAgentRow) => {
-                      const isRemoved = () => row.status === 'removed';
-                      const lastSeenLabel = () => {
-                        if (isRemoved()) {
-                          return row.removedAt
-                            ? `Monitoring stopped ${formatRelativeTime(row.removedAt)}`
-                            : MONITORING_STOPPED_STATUS_LABEL;
-                        }
-                        return row.lastSeen ? formatRelativeTime(row.lastSeen) : '—';
-                      };
-                      return <span class="text-xs text-muted">{lastSeenLabel()}</span>;
-                    },
+                    render: (row: UnifiedAgentRow) => (
+                      <span class="text-xs text-muted">
+                        {getUnifiedAgentLastSeenLabel(row, MONITORING_STOPPED_STATUS_LABEL)}
+                      </span>
+                    ),
                   },
                   {
                     key: 'version',
@@ -2486,9 +2475,13 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                                   const cmd = getUninstallCommand();
                                   const success = await copyToClipboard(cmd);
                                   if (success) {
-                                    notificationStore.success('Uninstall command copied');
+                                    notificationStore.success(
+                                      getUnifiedAgentUninstallCommandCopiedMessage(),
+                                    );
                                   } else {
-                                    notificationStore.error('Failed to copy');
+                                    notificationStore.error(
+                                      getUnifiedAgentClipboardCopyErrorMessage(),
+                                    );
                                   }
                                 }}
                                 class="text-xs text-slate-600 hover:text-base-content text-left"
@@ -2504,9 +2497,13 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                                     getUpgradeCommand(row.hostname || ''),
                                   );
                                   if (success) {
-                                    notificationStore.success('Upgrade command copied');
+                                    notificationStore.success(
+                                      getUnifiedAgentUpgradeCommandCopiedMessage(),
+                                    );
                                   } else {
-                                    notificationStore.error('Failed to copy');
+                                    notificationStore.error(
+                                      getUnifiedAgentClipboardCopyErrorMessage(),
+                                    );
                                   }
                                 }}
                                 class="text-xs text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 text-left"
@@ -2535,9 +2532,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                 when={filteredMonitoringStoppedRows().length > 0}
                 fallback={
                   <div class="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted">
-                    {hasFilters()
-                      ? 'No monitoring-stopped items match the current filters.'
-                      : 'No infrastructure currently has monitoring stopped.'}
+                    {getMonitoringStoppedEmptyState(hasFilters())}
                   </div>
                 }
               >
@@ -2556,7 +2551,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
                                 {row.name}
                               </h4>
                               <span class="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
-                                {getRemovedItemLabel(row)}
+                                {getRemovedUnifiedAgentItemLabel(row)}
                               </span>
                             </div>
                             <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">

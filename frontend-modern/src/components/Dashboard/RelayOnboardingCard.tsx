@@ -15,6 +15,15 @@ import { showError, showSuccess } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
+import {
+  RELAY_ONBOARDING_DESCRIPTION,
+  RELAY_ONBOARDING_DISCONNECTED_LABEL,
+  RELAY_ONBOARDING_SETUP_LABEL,
+  RELAY_ONBOARDING_TITLE,
+  RELAY_ONBOARDING_TRIAL_LABEL,
+  RELAY_ONBOARDING_TRIAL_STARTING_LABEL,
+  RELAY_ONBOARDING_UPGRADE_LABEL,
+} from '@/utils/relayPresentation';
 
 const SNOOZE_KEY = 'pulse_relay_onboarding_snoozed';
 const RELAY_SETTINGS_PATH = '/settings/system-relay';
@@ -159,10 +168,9 @@ export const RelayOnboardingCard: Component = () => {
           </div>
 
           <div class="min-w-0 flex-1">
-            <h2 class="text-base font-semibold text-base-content">Pair Your Mobile Device</h2>
+            <h2 class="text-base font-semibold text-base-content">{RELAY_ONBOARDING_TITLE}</h2>
             <p class="mt-1 text-sm text-muted">
-              Pulse Relay lets your phone securely connect to this Pulse instance for remote
-              monitoring.
+              {RELAY_ONBOARDING_DESCRIPTION}
             </p>
 
             <div class="mt-4 flex flex-wrap items-center gap-2">
@@ -177,7 +185,7 @@ export const RelayOnboardingCard: Component = () => {
                       rel="noopener noreferrer"
                       onClick={() => trackUpgradeClicked('dashboard_onboarding', 'relay')}
                     >
-                      Get Relay &mdash; $49/yr
+                      {RELAY_ONBOARDING_UPGRADE_LABEL}
                     </a>
                     <button
                       type="button"
@@ -185,7 +193,9 @@ export const RelayOnboardingCard: Component = () => {
                       onClick={() => void handleStartTrial()}
                       disabled={trialStarting()}
                     >
-                      {trialStarting() ? 'Starting trial...' : 'or start a Pro trial'}
+                      {trialStarting()
+                        ? RELAY_ONBOARDING_TRIAL_STARTING_LABEL
+                        : RELAY_ONBOARDING_TRIAL_LABEL}
                     </button>
                   </>
                 }
@@ -195,12 +205,12 @@ export const RelayOnboardingCard: Component = () => {
                   class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
                   onClick={handleSetupRelay}
                 >
-                  Set Up Relay
+                  {RELAY_ONBOARDING_SETUP_LABEL}
                 </button>
               </Show>
 
               <Show when={hasRelay() && statusLoaded() && status()?.connected === false}>
-                <span class="text-xs text-muted">Relay is currently disconnected.</span>
+                <span class="text-xs text-muted">{RELAY_ONBOARDING_DISCONNECTED_LABEL}</span>
               </Show>
             </div>
           </div>

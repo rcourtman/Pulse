@@ -9,6 +9,19 @@ describe('segmentedButtonClass', () => {
     expect(result).toContain('ring-1');
   });
 
+  it('returns accent selected classes when tone is accent', () => {
+    const result = segmentedButtonClass(true, false, 'accent');
+    expect(result).toContain('bg-blue-600');
+    expect(result).toContain('text-white');
+  });
+
+  it('returns warning selected classes when tone is warning', () => {
+    const result = segmentedButtonClass(true, false, 'warning');
+    expect(result).toContain('bg-amber-50');
+    expect(result).toContain('text-amber-700');
+    expect(result).toContain('border-amber-300');
+  });
+
   it('returns unselected classes when selected is false', () => {
     const result = segmentedButtonClass(false);
     expect(result).toContain('hover:text-base-content');

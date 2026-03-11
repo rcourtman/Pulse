@@ -38,6 +38,11 @@ import {
   parseInfrastructureLinkSearch,
 } from '@/routing/resourceLinks';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
+import {
+  getInfrastructureEmptyState,
+  getInfrastructureFilterEmptyState,
+  getInfrastructureLoadFailureState,
+} from '@/utils/infrastructureEmptyStatePresentation';
 
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
@@ -57,6 +62,9 @@ export function Infrastructure() {
   const hasResources = createMemo(() => resources().length > 0);
   // Only show "no resources" after initial load completes with zero results
   const showNoResources = createMemo(() => initialLoadComplete() && !hasResources() && !error());
+  const infrastructureEmptyState = createMemo(() => getInfrastructureEmptyState());
+  const infrastructureFilterEmptyState = createMemo(() => getInfrastructureFilterEmptyState());
+  const infrastructureLoadFailureState = createMemo(() => getInfrastructureLoadFailureState());
   const [selectedSource, setSelectedSource] = createSignal('');
   const [selectedStatus, setSelectedStatus] = createSignal('');
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -291,8 +299,8 @@ export function Infrastructure() {
             <Card class="p-6">
               <EmptyState
                 icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
-                title="Unable to load infrastructure"
-                description="We couldn’t fetch unified resources. Check connectivity or retry."
+                title={infrastructureLoadFailureState().title}
+                description={infrastructureLoadFailureState().description}
                 actions={
                   <button
                     type="button"
@@ -300,7 +308,7 @@ export function Infrastructure() {
                     class="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:"
                   >
                     <RefreshCwIcon class="h-3.5 w-3.5" />
-                    Retry
+                    {infrastructureLoadFailureState().actionLabel}
                   </button>
                 }
               />
@@ -313,8 +321,8 @@ export function Infrastructure() {
               <Card class="p-6">
                 <EmptyState
                   icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
-                  title="No infrastructure resources yet"
-                  description="Add Proxmox VE nodes or install the Pulse agent on your infrastructure to start monitoring."
+                  title={infrastructureEmptyState().title}
+                  description={infrastructureEmptyState().description}
                   actions={
                     <button
                       type="button"
@@ -322,7 +330,7 @@ export function Infrastructure() {
                       class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                     >
                       <SettingsIcon class="h-3.5 w-3.5" />
-                      Add Infrastructure
+                      {infrastructureEmptyState().actionLabel}
                     </button>
                   }
                 />
@@ -484,8 +492,8 @@ export function Infrastructure() {
                   <Card class="p-6">
                     <EmptyState
                       icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
-                      title="No resources match filters"
-                      description="Try adjusting the search, source, or status filters."
+                      title={infrastructureFilterEmptyState().title}
+                      description={infrastructureFilterEmptyState().description}
                       actions={
                         <Show when={hasActiveFilters()}>
                           <button
@@ -493,7 +501,7 @@ export function Infrastructure() {
                             onClick={clearFilters}
                             class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                           >
-                            Clear filters
+                            {infrastructureFilterEmptyState().actionLabel}
                           </button>
                         </Show>
                       }

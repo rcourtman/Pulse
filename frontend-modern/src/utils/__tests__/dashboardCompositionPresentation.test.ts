@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getDashboardCompositionLabel } from '@/utils/dashboardCompositionPresentation';
+import {
+  DASHBOARD_COMPOSITION_EMPTY_STATE,
+  getDashboardCompositionIcon,
+  getDashboardCompositionLabel,
+} from '@/utils/dashboardCompositionPresentation';
 
 describe('dashboardCompositionPresentation', () => {
   it('returns composition-specific labels for known dashboard buckets', () => {
@@ -14,5 +18,16 @@ describe('dashboardCompositionPresentation', () => {
     expect(getDashboardCompositionLabel('storage')).toBe('Storage');
     expect(getDashboardCompositionLabel('custom-backend')).toBe('Custom Backend');
     expect(getDashboardCompositionLabel('')).toBe('Unknown');
+  });
+
+  it('returns canonical composition icons', () => {
+    expect(getDashboardCompositionIcon('vm')).toBeTruthy();
+    expect(getDashboardCompositionIcon('system-container')).toBeTruthy();
+    expect(getDashboardCompositionIcon('database')).toBeTruthy();
+    expect(getDashboardCompositionIcon('')).toBeTruthy();
+  });
+
+  it('exports canonical dashboard composition empty-state copy', () => {
+    expect(DASHBOARD_COMPOSITION_EMPTY_STATE).toBe('No resources detected');
   });
 });

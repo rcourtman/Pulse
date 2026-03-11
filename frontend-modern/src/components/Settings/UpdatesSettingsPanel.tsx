@@ -1,4 +1,4 @@
-import { Component, Show, Accessor, Setter } from 'solid-js';
+import { Component, Show, For, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
@@ -8,6 +8,12 @@ import Package from 'lucide-solid/icons/package';
 import Download from 'lucide-solid/icons/download';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
 import { buildDockerImageTag, buildLinuxAmd64DownloadCommand } from '@/components/updateVersion';
+import {
+  getUpdateAvailabilityHeading,
+  getUpdateBuildBadges,
+  getUpdateCheckModeLabel,
+  getUpdatePrimaryStatusLabel,
+} from '@/utils/updatesPresentation';
 
 interface UpdatesSettingsPanelProps {
   versionInfo: Accessor<VersionInfo | null>;
@@ -65,21 +71,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         {props.versionInfo()?.version || 'Loading...'}
                       </p>
                       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <Show when={props.versionInfo()?.isDevelopment}>
-                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                            Development
-                          </span>
-                        </Show>
-                        <Show when={props.versionInfo()?.isDocker}>
-                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                            Docker
-                          </span>
-                        </Show>
-                        <Show when={props.versionInfo()?.isSourceBuild}>
-                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-surface-alt text-base-content">
-                            Source
-                          </span>
-                        </Show>
+                        <For each={getUpdateBuildBadges(props.versionInfo())}>
+                          {(badge) => <span class={badge.className}>{badge.label}</span>}
+                        </For>
                       </div>
                     </div>
                   </div>
@@ -93,7 +87,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         <ArrowRight class="w-5 h-5" />
                       </div>
                       <span class="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wide">
-                        Update Ready
+                        {getUpdatePrimaryStatusLabel(true)}
                       </span>
                     </div>
                   </div>
@@ -124,12 +118,14 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     </div>
                     <div class="flex-1 min-w-0">
                       <p class="text-xs font-medium uppercase tracking-wide text-muted">
-                        {props.updateInfo()?.available ? 'Available' : 'Status'}
+                        {getUpdateAvailabilityHeading(Boolean(props.updateInfo()?.available))}
                       </p>
                       <Show
                         when={props.updateInfo()?.available}
                         fallback={
-                          <p class="mt-1 text-lg font-bold text-base-content">Up to date</p>
+                          <p class="mt-1 text-lg font-bold text-base-content">
+                            {getUpdatePrimaryStatusLabel(false)}
+                          </p>
                         }
                       >
                         <p class="mt-1 text-lg font-bold text-green-700 dark:text-green-300">
@@ -149,10 +145,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
               {/* Check for updates button */}
               <div class="bg-surface border-t border-border px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-xs text-muted">
-                  <Show when={props.autoUpdateEnabled()}>Auto-check enabled</Show>
-                  <Show when={!props.autoUpdateEnabled()}>Manual checks only</Show>
-                </p>
+                <p class="text-xs text-muted">{getUpdateCheckModeLabel(props.autoUpdateEnabled())}</p>
                 <button
                   type="button"
                   onClick={props.checkForUpdates}

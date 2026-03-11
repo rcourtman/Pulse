@@ -19,6 +19,10 @@ export const RECOVERY_GROUP_HEADER_TEXT_CLASS =
 export const RECOVERY_ADVANCED_FILTER_LABEL_CLASS = 'text-[11px] font-medium text-muted';
 export const RECOVERY_ADVANCED_FILTER_FIELD_CLASS =
   'min-h-[2.25rem] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content outline-none focus:border-blue-500';
+export const RECOVERY_GROUP_NO_TIMESTAMP_LABEL = 'No Timestamp';
+export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...';
+export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
+export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
 
 const titleize = (value: string): string =>
   (value || '')
@@ -37,6 +41,22 @@ export function getRecoveryEventTimeTextClass(
   if (ageMs <= 7 * 24 * 60 * 60 * 1000) return 'text-amber-600 dark:text-amber-400 font-medium';
   if (ageMs <= 30 * 24 * 60 * 60 * 1000) return 'text-orange-600 dark:text-orange-400';
   return 'text-muted';
+}
+
+export function getRecoveryGroupNoTimestampLabel(): string {
+  return RECOVERY_GROUP_NO_TIMESTAMP_LABEL;
+}
+
+export function getRecoveryProtectedSearchPlaceholder(): string {
+  return RECOVERY_PROTECTED_SEARCH_PLACEHOLDER;
+}
+
+export function getRecoveryHistorySearchPlaceholder(): string {
+  return RECOVERY_HISTORY_SEARCH_PLACEHOLDER;
+}
+
+export function getRecoverySearchHistoryEmptyMessage(): string {
+  return RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE;
 }
 
 const normalizeRecoverySubjectTypeKey = (value: string): string =>

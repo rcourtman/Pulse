@@ -1,30 +1,20 @@
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Card } from '@/components/shared/Card';
-import Server from 'lucide-solid/icons/server';
-import AppWindow from 'lucide-solid/icons/app-window';
-import Database from 'lucide-solid/icons/database';
-import Box from 'lucide-solid/icons/box';
-import Container from 'lucide-solid/icons/container';
-import { getDashboardCompositionLabel } from '@/utils/dashboardCompositionPresentation';
+import {
+  DASHBOARD_COMPOSITION_EMPTY_STATE,
+  getDashboardCompositionIcon,
+  getDashboardCompositionLabel,
+} from '@/utils/dashboardCompositionPresentation';
 
 interface CompositionPanelProps {
   infrastructureByType: Record<string, number>;
   workloadsByType: Record<string, number>;
 }
 
-const TYPE_ICONS: Record<string, any> = {
-  vm: Server,
-  'system-container': Box,
-  'app-container': Container,
-  pod: AppWindow,
-  database: Database,
-  unknown: Server,
-};
-
 function DistributionItem(props: { type: string; count: number; total: number }) {
   const percent = () => Math.round((props.count / props.total) * 100);
-  const Icon = () => TYPE_ICONS[props.type] ?? Server;
+  const Icon = () => getDashboardCompositionIcon(props.type);
 
   return (
     <div class="space-y-1">
@@ -99,7 +89,9 @@ export function CompositionPanel(props: CompositionPanelProps) {
         </Show>
 
         <Show when={totalInfra() === 0 && totalWorkloads() === 0}>
-          <p class="text-xs text-muted py-2 text-center italic">No resources detected</p>
+          <p class="text-xs text-muted py-2 text-center italic">
+            {DASHBOARD_COMPOSITION_EMPTY_STATE}
+          </p>
         </Show>
       </div>
     </Card>

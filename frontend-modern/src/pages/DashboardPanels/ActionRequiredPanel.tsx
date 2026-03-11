@@ -4,15 +4,15 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { AlertsAPI } from '@/api/alerts';
-import {
-  investigationOutcomeLabels,
-  investigationOutcomeColors,
-  type InvestigationOutcome,
-} from '@/api/patrol';
 import { hasFeature } from '@/stores/license';
 import { formatRelativeTime } from '@/utils/format';
 import { getAlertSeverityBadgeClass } from '@/utils/alertSeverityPresentation';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
+import {
+  getFindingSeverityCompactLabel,
+  getInvestigationOutcomeBadgeClasses,
+  getInvestigationOutcomeLabel,
+} from '@/utils/aiFindingPresentation';
 import { ALERTS_OVERVIEW_PATH, AI_PATROL_PATH } from '@/routing/resourceLinks';
 import type { Alert } from '@/types/api';
 import type { ApprovalRequest } from '@/api/ai';
@@ -268,11 +268,7 @@ function FindingsAttentionRows(props: { findings: UnifiedFinding[] }) {
           {(finding) => (
             <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
               <span class={getAlertSeverityBadgeClass(finding.severity)}>
-                {finding.severity === 'critical'
-                  ? 'CRIT'
-                  : finding.severity === 'warning'
-                    ? 'WARN'
-                    : finding.severity.toUpperCase()}
+                {getFindingSeverityCompactLabel(finding.severity)}
               </span>
               <p
                 class="min-w-0 text-xs font-medium text-base-content truncate flex-1"
@@ -282,15 +278,9 @@ function FindingsAttentionRows(props: { findings: UnifiedFinding[] }) {
               </p>
               <Show when={finding.investigationOutcome}>
                 <span
-                  class={`shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${
-                    investigationOutcomeColors[
-                      finding.investigationOutcome as InvestigationOutcome
-                    ] || ''
-                  }`}
+                  class={`shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getInvestigationOutcomeBadgeClasses(finding.investigationOutcome)}`}
                 >
-                  {investigationOutcomeLabels[
-                    finding.investigationOutcome as InvestigationOutcome
-                  ] || finding.investigationOutcome}
+                  {getInvestigationOutcomeLabel(finding.investigationOutcome)}
                 </span>
               </Show>
               <div class="shrink-0 flex items-center gap-1">

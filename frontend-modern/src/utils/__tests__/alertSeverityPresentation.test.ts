@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   getAlertSeverityBadgeClass,
+  getAlertSeverityCompactLabel,
+  getAlertSeverityDotClass,
   getAlertSeverityTextClass,
 } from '@/utils/alertSeverityPresentation';
 
@@ -23,5 +25,17 @@ describe('alertSeverityPresentation', () => {
 
   it('maps warning count text to warning styling', () => {
     expect(getAlertSeverityTextClass('warning')).toContain('text-amber-600');
+  });
+
+  it('maps severity dots to canonical colors', () => {
+    expect(getAlertSeverityDotClass('critical')).toBe('h-2 w-2 rounded-full bg-red-500');
+    expect(getAlertSeverityDotClass('warning')).toBe('h-2 w-2 rounded-full bg-yellow-500');
+    expect(getAlertSeverityDotClass('info')).toBe('h-2 w-2 rounded-full bg-blue-500');
+  });
+
+  it('maps compact severity labels canonically', () => {
+    expect(getAlertSeverityCompactLabel('critical')).toBe('CRIT');
+    expect(getAlertSeverityCompactLabel('warning')).toBe('WARN');
+    expect(getAlertSeverityCompactLabel('info')).toBe('INFO');
   });
 });

@@ -14,6 +14,16 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import {
+  formatSwarmClusterId,
+  formatSwarmClusterSummary,
+  formatSwarmControlLabel,
+  formatSwarmRoleLabel,
+  formatSwarmStateLabel,
+  getSwarmDrawerPresentation,
+  getSwarmServicesEmptyState,
+  getSwarmServicesLoadingState,
+} from '@/utils/swarmPresentation';
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 20;
@@ -134,6 +144,7 @@ const formatPorts = (ports?: DockerServicePort[]) => {
 
 export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo }> = (props) => {
   const [search, setSearch] = createSignal('');
+  const drawerPresentation = getSwarmDrawerPresentation();
 
   const clusterKey = createMemo(() => normalize(props.cluster));
 
@@ -175,9 +186,9 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-base-content">Swarm</div>
+            <div class="text-sm font-semibold text-base-content">{drawerPresentation.title}</div>
             <div class="text-xs text-muted truncate" title={clusterName()}>
-              {clusterName() ? `Cluster: ${clusterName()}` : 'No Swarm cluster detected'}
+              {formatSwarmClusterSummary(clusterName())}
             </div>
           </div>
 
@@ -185,7 +196,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             <SearchField
               value={search()}
               onChange={setSearch}
-              placeholder="Search services..."
+              placeholder={drawerPresentation.searchPlaceholder}
               class="w-[12rem]"
               inputClass="py-1 text-xs font-medium shadow-sm"
             />
@@ -194,7 +205,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
 
         <Show when={clusterId()}>
           <div class="mt-2 text-[10px] text-muted truncate" title={clusterId()}>
-            Cluster ID: {clusterId()}
+            {formatSwarmClusterId(clusterId())}
           </div>
         </Show>
 
@@ -208,17 +219,17 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
           <div class="mt-2 flex flex-wrap gap-2 text-[11px]">
             <Show when={normalize(swarm()?.nodeRole)}>
               <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
-                Role: {normalize(swarm()?.nodeRole)}
+                {formatSwarmRoleLabel(normalize(swarm()?.nodeRole))}
               </span>
             </Show>
             <Show when={normalize(swarm()?.localState)}>
               <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
-                State: {normalize(swarm()?.localState)}
+                {formatSwarmStateLabel(normalize(swarm()?.localState))}
               </span>
             </Show>
             <Show when={typeof swarm()?.controlAvailable === 'boolean'}>
               <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
-                Control: {swarm()?.controlAvailable ? 'available' : 'unavailable'}
+                {formatSwarmControlLabel(swarm()?.controlAvailable)}
               </span>
             </Show>
           </div>
@@ -238,18 +249,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             when={filteredServices().length > 0}
             fallback={
               <Card padding="lg">
-                <EmptyState
-                  title={
-                    services().length > 0
-                      ? 'No services match your filters'
-                      : 'No Swarm services found'
-                  }
-                  description={
-                    services().length > 0
-                      ? 'Try clearing the search.'
-                      : 'Enable Swarm service collection in the container runtime agent (includeServices) and wait for the next report.'
-                  }
-                />
+                <EmptyState {...getSwarmServicesEmptyState(services().length > 0)} />
               </Card>
             }
           >
@@ -258,14 +258,30 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                 <Table class="w-full min-w-[900px] border-collapse text-xs">
                   <TableHeader class="bg-surface-alt text-muted border-b border-border">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">Service</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Stack</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Image</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Mode</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Desired</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Running</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Update</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Ports</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.serviceColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.stackColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.imageColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.modeColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.desiredColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.runningColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.updateColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.portsColumnLabel}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody class="divide-y divide-border-subtle">
@@ -327,7 +343,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         }
       >
         <Card padding="lg">
-          <div class="text-xs text-muted">Loading Swarm services...</div>
+          <div class="text-xs text-muted">{getSwarmServicesLoadingState().text}</div>
         </Card>
       </Show>
     </div>

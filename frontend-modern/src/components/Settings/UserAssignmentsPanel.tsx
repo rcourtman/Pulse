@@ -21,6 +21,21 @@ import X from 'lucide-solid/icons/x';
 import Pencil from 'lucide-solid/icons/pencil';
 import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import {
+  getRBACFeatureGateCopy,
+  getUserAssignmentsEmptyStateCopy,
+  getUserAssignmentsLoadErrorMessage,
+  getUserAssignmentsUpdateErrorMessage,
+} from '@/utils/rbacPresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getUpgradeActionButtonClass,
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
 
 export const UserAssignmentsPanel: Component = () => {
   const [assignments, setAssignments] = createSignal<UserRoleAssignment[]>([]);
@@ -33,6 +48,8 @@ export const UserAssignmentsPanel: Component = () => {
   const [userPermissions, setUserPermissions] = createSignal<Permission[]>([]);
   const [loadingPermissions, setLoadingPermissions] = createSignal(false);
   const [startingTrial, setStartingTrial] = createSignal(false);
+  const featureGateCopy = () => getRBACFeatureGateCopy('user-assignments');
+  const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
 
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
@@ -45,13 +62,15 @@ export const UserAssignmentsPanel: Component = () => {
         window.location.href = result.actionUrl;
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
+        );
       }
     } finally {
       setStartingTrial(false);
@@ -82,7 +101,7 @@ export const UserAssignmentsPanel: Component = () => {
         return;
       }
       logger.error('Failed to load user assignments', err);
-      notificationStore.error('Failed to load user assignments');
+      notificationStore.error(getUserAssignmentsLoadErrorMessage());
     } finally {
       setLoading(false);
     }
@@ -159,7 +178,7 @@ export const UserAssignmentsPanel: Component = () => {
       await loadData();
     } catch (err) {
       logger.error('Failed to update user roles', err);
-      notificationStore.error('Failed to update user roles');
+      notificationStore.error(getUserAssignmentsUpdateErrorMessage());
     } finally {
       setSaving(false);
     }
@@ -201,11 +220,9 @@ export const UserAssignmentsPanel: Component = () => {
           <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
             <div class="flex flex-col sm:flex-row items-center gap-4">
               <div class="flex-1 text-center sm:text-left">
-                <h4 class="text-base font-semibold text-base-content">
-                  Centralized Access Control (Pro)
-                </h4>
+                <h4 class="text-base font-semibold text-base-content">{featureGateCopy().title}</h4>
                 <p class="text-sm text-muted mt-1">
-                  Assign multi-tier roles to users and manage infrastructure-wide security policies.
+                  {featureGateCopy().body}
                 </p>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
@@ -213,19 +230,19 @@ export const UserAssignmentsPanel: Component = () => {
                   href={getUpgradeActionUrlOrFallback('rbac')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  class={getUpgradeActionButtonClass()}
                   onClick={() => trackUpgradeClicked('settings_user_assignments_panel', 'rbac')}
                 >
-                  Upgrade to Pro
+                  {UPGRADE_ACTION_LABEL}
                 </a>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"
                     onClick={handleStartTrial}
                     disabled={startingTrial()}
-                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                    class={UPGRADE_TRIAL_LINK_CLASS}
                   >
-                    Start free trial
+                    {UPGRADE_TRIAL_LABEL}
                   </button>
                 </Show>
               </div>
@@ -242,18 +259,17 @@ export const UserAssignmentsPanel: Component = () => {
         <Show when={!loading() && rbacEnabled() && filteredAssignments().length === 0}>
           <div class="text-center py-12 px-6">
             <Users class="w-12 h-12 mx-auto text-slate-300 mb-4" />
-            <h4 class="text-base font-medium text-base-content mb-2">No users yet</h4>
+            <h4 class="text-base font-medium text-base-content mb-2">{emptyStateCopy().title}</h4>
             <p class="text-sm text-muted max-w-md mx-auto">
-              Users appear here automatically when they sign in via SSO (OIDC/SAML) or proxy
-              authentication. Once they've logged in, you can assign roles to control their access.
+              {emptyStateCopy().body}
             </p>
             <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-muted">
               <span class="flex items-center gap-1.5">
                 <Shield class="w-3.5 h-3.5" />
-                Configure SSO in Security settings
+                {emptyStateCopy().ssoHint}
               </span>
               <span class="hidden sm:inline">•</span>
-              <span>Users sync on first login</span>
+              <span>{emptyStateCopy().syncHint}</span>
             </div>
           </div>
         </Show>
@@ -306,7 +322,7 @@ export const UserAssignmentsPanel: Component = () => {
                 },
               ]}
               keyExtractor={(assignment) => assignment.username}
-              emptyState="No users yet"
+              emptyState={emptyStateCopy().title}
               desktopMinWidth="620px"
               class="border-x-0 sm:border-x"
             />

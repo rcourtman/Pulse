@@ -18,12 +18,15 @@ import {
 import {
   getInvestigation,
   reinvestigateFinding,
-  investigationStatusLabels,
-  investigationOutcomeLabels,
-  investigationOutcomeColors,
   formatTimestamp,
 } from '@/api/patrol';
-import { getInvestigationStatusBadgeClasses } from '@/utils/aiFindingPresentation';
+import {
+  getInvestigationOutcomeBadgeClasses,
+  getInvestigationOutcomeLabel,
+  getInvestigationStatusLabel,
+  getInvestigationStatusBadgeClasses,
+} from '@/utils/aiFindingPresentation';
+import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
 import { InvestigationMessages } from './InvestigationMessages';
 import { notificationStore } from '@/stores/notifications';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
@@ -111,15 +114,15 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 <span
                   class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationStatusBadgeClasses(investigation()!.status)}`}
                 >
-                  {investigationStatusLabels[investigation()!.status] || investigation()!.status}
+                  {getInvestigationStatusLabel(investigation()!.status)}
                 </span>
               </Show>
             }
           >
             <span
-              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${investigationOutcomeColors[investigation()!.outcome!] || investigationOutcomeColors.needs_attention}`}
+              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationOutcomeBadgeClasses(investigation()!.outcome!)}`}
             >
-              {investigationOutcomeLabels[investigation()!.outcome!] || investigation()!.outcome}
+              {getInvestigationOutcomeLabel(investigation()!.outcome!)}
             </span>
           </Show>
           <Show when={props.investigationAttempts && props.investigationAttempts > 1}>
@@ -143,17 +146,22 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       </div>
 
       {/* Loading */}
-      <Show when={investigation.loading}>
+      <Show
+        when={
+          !getInvestigationSectionState(investigation.loading, !!investigation()).empty &&
+          getInvestigationSectionState(investigation.loading, !!investigation()).text
+        }
+      >
         <div class="flex items-center gap-2 text-xs text-muted py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          Loading investigation...
+          {getInvestigationSectionState(investigation.loading, !!investigation()).text}
         </div>
       </Show>
 
       {/* No investigation data */}
-      <Show when={!investigation.loading && !investigation()}>
+      <Show when={getInvestigationSectionState(investigation.loading, !!investigation()).empty}>
         <p class="text-xs text-muted py-1">
-          No investigation data available. Enable patrol autonomy to investigate findings.
+          {getInvestigationSectionState(investigation.loading, !!investigation()).text}
         </p>
       </Show>
 

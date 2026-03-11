@@ -7,7 +7,11 @@
 
 import { Component, createSignal, createResource, Show, For } from 'solid-js';
 import { getPatrolRunHistoryWithToolCalls, type ToolCallRecord } from '@/api/patrol';
-import { getToolCallResultBadgeClass } from '@/utils/patrolRunPresentation';
+import {
+  getToolCallResultBadgeClass,
+  getToolCallsLoadingState,
+  getToolCallsUnavailableState,
+} from '@/utils/patrolRunPresentation';
 
 interface RunToolCallTraceProps {
   runId: string;
@@ -69,7 +73,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
           <Show when={toolCalls.loading}>
             <div class="flex items-center gap-2 text-xs text-muted py-2 mt-2">
               <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              Loading tool calls...
+              {getToolCallsLoadingState()}
             </div>
           </Show>
 
@@ -128,7 +132,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
           </Show>
 
           <Show when={!toolCalls.loading && (!toolCalls() || toolCalls()!.length === 0)}>
-            <p class="text-xs text-muted mt-2">Tool call details not available for this run.</p>
+            <p class="text-xs text-muted mt-2">{getToolCallsUnavailableState()}</p>
           </Show>
         </Show>
       </div>

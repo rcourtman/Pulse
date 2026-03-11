@@ -7,6 +7,14 @@ export type ResourcePickerTypeFilter =
   | 'storage'
   | 'recovery';
 
+const RESOURCE_PICKER_TYPE_FILTER_LABELS: Record<ResourcePickerTypeFilter, string> = {
+  all: 'All',
+  infrastructure: 'Infrastructure',
+  workloads: 'Workloads',
+  storage: 'Storage',
+  recovery: 'Recovery',
+};
+
 export const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
   'agent',
   'docker-host',
@@ -85,3 +93,24 @@ export const matchesReportableResourceTypeFilter = (
 
 export const reportableResourceTypeSortOrder = (type: ResourceType): number =>
   SORT_ORDER[normalizeReportableResourceType(type)] ?? 13;
+
+export const getResourcePickerTypeFilterLabel = (filter: ResourcePickerTypeFilter): string =>
+  RESOURCE_PICKER_TYPE_FILTER_LABELS[filter];
+
+export const getResourcePickerEmptyState = (hasResources: boolean) =>
+  hasResources
+    ? {
+        title: 'No resources match your filters',
+      }
+    : {
+        title: 'No resources available',
+        description: 'Resources appear as Pulse collects infrastructure and workload metrics',
+      };
+
+export const RESOURCE_PICKER_TYPE_FILTERS: ResourcePickerTypeFilter[] = [
+  'all',
+  'infrastructure',
+  'workloads',
+  'storage',
+  'recovery',
+];

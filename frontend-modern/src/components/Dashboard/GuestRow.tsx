@@ -32,6 +32,12 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { getWorkloadDockerHostId } from './workloadSelectors';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
+import {
+  getDashboardGuestBackupStatusPresentation,
+  getDashboardGuestBackupTooltip,
+  getDashboardGuestDiskStatusMessage,
+  getDashboardGuestNetworkEmptyState,
+} from '@/utils/dashboardGuestPresentation';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
@@ -114,29 +120,6 @@ const isVM = (guest: Guest): guest is VM => {
   return resolveWorkloadType(guest) === 'vm';
 };
 
-// Backup status indicator colors and icons
-const BACKUP_STATUS_CONFIG: Record<
-  BackupStatus,
-  { color: string; bgColor: string; icon: 'check' | 'warning' | 'x' }
-> = {
-  fresh: {
-    color: 'text-green-600 dark:text-green-400',
-    bgColor: 'bg-green-100 dark:bg-green-900',
-    icon: 'check',
-  },
-  stale: {
-    color: 'text-yellow-600 dark:text-yellow-400',
-    bgColor: 'bg-yellow-100 dark:bg-yellow-900',
-    icon: 'warning',
-  },
-  critical: {
-    color: 'text-red-600 dark:text-red-400',
-    bgColor: 'bg-red-100 dark:bg-red-900',
-    icon: 'x',
-  },
-  never: { color: 'text-muted', bgColor: 'bg-surface-alt', icon: 'x' },
-};
-
 function BackupIndicator(props: {
   lastBackup: string | number | null | undefined;
   isTemplate: boolean;
@@ -148,7 +131,7 @@ function BackupIndicator(props: {
   const backupInfo = createMemo(() =>
     getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
   );
-  const config = createMemo(() => BACKUP_STATUS_CONFIG[backupInfo().status]);
+  const config = createMemo(() => getDashboardGuestBackupStatusPresentation(backupInfo().status));
 
   // Only show when there's a problem (stale, critical, or never)
   const shouldShow = createMemo(() => {
@@ -158,10 +141,7 @@ function BackupIndicator(props: {
 
   const tooltipText = createMemo(() => {
     const info = backupInfo();
-    if (info.status === 'never') {
-      return 'No backup found';
-    }
-    return `Last backup: ${info.ageFormatted}`;
+    return getDashboardGuestBackupTooltip(info.status, info.ageFormatted);
   });
 
   return (
@@ -273,7 +253,9 @@ function NetworkInfoCell(props: {
                     </div>
                   </Show>
                   <Show when={!iface.addresses || iface.addresses.length === 0}>
-                    <span class="text-slate-500 text-[9px]">No IP assigned</span>
+                    <span class="text-slate-500 text-[9px]">
+                      {getDashboardGuestNetworkEmptyState()}
+                    </span>
                   </Show>
                   <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
                     <div class="mt-0.5 text-[9px] text-slate-500">
@@ -415,7 +397,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   const info = createMemo(() =>
     getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
   );
-  const config = createMemo(() => BACKUP_STATUS_CONFIG[info().status]);
+  const config = createMemo(() => getDashboardGuestBackupStatusPresentation(info().status));
 
   return (
     <>
@@ -981,28 +963,7 @@ export function GuestRow(props: GuestRowProps) {
     if (!isVM(props.guest)) return 'Disk stats unavailable';
 
     const vm = props.guest as VM;
-    const reason = vm.diskStatusReason;
-
-    switch (reason) {
-      case 'agent-not-running':
-        return 'Guest agent not running. Install and start qemu-guest-agent in the VM.';
-      case 'agent-timeout':
-        return 'Guest agent timeout. Agent may need to be restarted.';
-      case 'permission-denied':
-        return 'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).';
-      case 'agent-disabled':
-        return 'Guest agent is disabled in VM configuration. Enable it in VM Options.';
-      case 'no-filesystems':
-        return 'No filesystems found. VM may be booting or using a Live ISO.';
-      case 'special-filesystems-only':
-        return 'Only special filesystems detected (ISO/squashfs). This is normal for Live systems.';
-      case 'agent-error':
-        return 'Error communicating with guest agent.';
-      case 'no-data':
-        return 'No disk data available from Proxmox API.';
-      default:
-        return 'Disk stats unavailable. Guest agent may not be installed.';
-    }
+    return getDashboardGuestDiskStatusMessage(vm.diskStatusReason);
   };
 
   const hasUnacknowledgedAlert = createMemo(() => !!props.alertStyles?.hasUnacknowledgedAlert);

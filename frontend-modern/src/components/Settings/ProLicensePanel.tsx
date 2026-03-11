@@ -11,18 +11,26 @@ import {
   loadLicenseStatus,
   startProTrial,
 } from '@/stores/license';
-import { LicenseAPI, type CommercialMigrationStatus } from '@/api/license';
+import { LicenseAPI } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getTrialTryAgainLaterMessage,
+} from '@/utils/upgradePresentation';
+import {
+  formatLicensePlanVersion,
+  getCommercialMigrationNotice,
   getLicenseFeatureLabel,
+  getLicenseStatusLoadingState,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
+  getNoActiveProLicenseState,
+  getTrialActivationNotice,
 } from '@/utils/licensePresentation';
-
-const formatTitleCase = (value: string) =>
-  value.replace(/[_-]/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Not available';
@@ -36,85 +44,6 @@ const formatUnixDate = (value?: number) => {
   const date = new Date(value * 1000);
   if (Number.isNaN(date.getTime())) return 'Not available';
   return date.toLocaleDateString();
-};
-
-type InlineNotice = {
-  tone: string;
-  title: string;
-  body: string;
-};
-
-const commercialMigrationActionText = (action?: string) => {
-  switch (action) {
-    case 'retry_activation':
-      return 'Retry activation from this instance.';
-    case 'use_v6_activation_key':
-      return 'Use the current v6 activation key for this purchase.';
-    case 'enter_supported_v5_key':
-      return 'Retry with the original v5 Pro/Lifetime key from this instance.';
-    default:
-      return 'Review the activation state from this instance before trying again.';
-  }
-};
-
-const commercialMigrationNoticeFor = (
-  migration?: CommercialMigrationStatus,
-): InlineNotice | null => {
-  if (!migration?.state) return null;
-
-  const actionText = commercialMigrationActionText(migration.recommended_action);
-  const blockedText = 'A new Pro trial stays blocked until this is resolved.';
-
-  if (migration.state === 'pending') {
-    let body =
-      'Pulse detected a paid v5 license, but the automatic v6 exchange did not complete yet.';
-    switch (migration.reason) {
-      case 'exchange_rate_limited':
-        body = 'Pulse detected a paid v5 license, but the v6 exchange is rate-limited right now.';
-        break;
-      case 'exchange_conflict':
-        body =
-          'Pulse detected a paid v5 license, but another v6 activation handoff is still settling.';
-        break;
-      case 'exchange_unavailable':
-      default:
-        break;
-    }
-
-    return {
-      tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-      title: 'v5 license migration pending',
-      body: `${body} ${actionText} ${blockedText}`,
-    };
-  }
-
-  let body = 'Pulse detected a paid v5 license, but it could not be migrated automatically.';
-  switch (migration.reason) {
-    case 'exchange_invalid':
-      body = 'Pulse detected a paid v5 license, but that key was rejected during v6 migration.';
-      break;
-    case 'exchange_malformed':
-      body = 'Pulse detected a v5-looking key, but it is malformed and cannot be migrated.';
-      break;
-    case 'exchange_revoked':
-      body =
-        'Pulse detected a paid v5 license, but that key is no longer eligible for automatic migration.';
-      break;
-    case 'exchange_non_migratable':
-      body = 'Pulse detected a paid v5 license, but it is not eligible for automatic v6 migration.';
-      break;
-    case 'exchange_unsupported':
-      body = 'Pulse detected a key that is not a supported v5 Pro/Lifetime migration input.';
-      break;
-    default:
-      break;
-  }
-
-  return {
-    tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-    title: 'v5 license migration needs attention',
-    body: `${body} ${actionText} ${blockedText}`,
-  };
 };
 
 export const ProLicensePanel: Component = () => {
@@ -162,16 +91,20 @@ export const ProLicensePanel: Component = () => {
         return;
       }
       // trial_started event is emitted by the backend handler (HandleStartTrial).
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const error = err as { status?: number; code?: string; message?: string } | null;
       const statusCode = error?.status;
       if (statusCode === 409 && error?.code === 'trial_already_used') {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else if (statusCode === 429) {
-        notificationStore.error('Try again later');
+        notificationStore.error(getTrialTryAgainLaterMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
+            branded: true,
+          }),
+        );
       }
     } finally {
       setStartingTrial(false);
@@ -200,9 +133,7 @@ export const ProLicensePanel: Component = () => {
   });
 
   const formattedPlanTerms = createMemo(() => {
-    const planVersion = entitlements()?.plan_version?.trim();
-    if (!planVersion) return null;
-    return formatTitleCase(planVersion);
+    return formatLicensePlanVersion(entitlements()?.plan_version);
   });
 
   const formattedFeatures = createMemo(() => {
@@ -262,44 +193,11 @@ export const ProLicensePanel: Component = () => {
   });
 
   const trialActivationNotice = createMemo(() => {
-    switch (trialActivationResult()) {
-      case 'activated':
-        return {
-          tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-          title: 'Trial activated',
-          body: 'Pulse activated the Pro trial for this instance. The entitlement state below is live.',
-        };
-      case 'invalid':
-        return {
-          tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-          title: 'Activation link invalid',
-          body: 'That activation handoff is invalid or expired. Start the hosted checkout flow again from this Pulse instance.',
-        };
-      case 'replayed':
-        return {
-          tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-          title: 'Activation link already used',
-          body: 'This checkout handoff was already redeemed. Use the current entitlement state below or start a new checkout if needed.',
-        };
-      case 'unavailable':
-        return {
-          tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-          title: 'Activation unavailable',
-          body: 'Pulse could not finish activation right now. Retry the return link from checkout or start the flow again from this instance.',
-        };
-      case 'ineligible':
-        return {
-          tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-          title: 'Trial not available',
-          body: 'This organization is not eligible for another Pro trial. Review the current license state below or upgrade instead.',
-        };
-      default:
-        return null;
-    }
+    return getTrialActivationNotice(trialActivationResult());
   });
 
   const commercialMigrationNotice = createMemo(() => {
-    return commercialMigrationNoticeFor(entitlements()?.commercial_migration);
+    return getCommercialMigrationNotice(entitlements()?.commercial_migration);
   });
 
   const hasPaidFeatures = createMemo(() => {
@@ -487,7 +385,10 @@ export const ProLicensePanel: Component = () => {
           </div>
         </Show>
         <Show when={!licenseLoadError()}>
-          <Show when={!loading()} fallback={<p class="text-sm ">Loading license status...</p>}>
+          <Show
+            when={!loading()}
+            fallback={<p class="text-sm ">{getLicenseStatusLoadingState().text}</p>}
+          >
             <div class="flex flex-wrap items-center gap-2">
               <span
                 class={`px-2 py-1 text-xs font-medium rounded-full ${statusPresentation().badgeClass}`}
@@ -503,7 +404,7 @@ export const ProLicensePanel: Component = () => {
 
             <Show
               when={hasLicenseDetails()}
-              fallback={<div class="text-sm text-muted">No Pro license is active.</div>}
+              fallback={<div class="text-sm text-muted">{getNoActiveProLicenseState().text}</div>}
             >
               <div class="grid gap-4 sm:grid-cols-2">
                 <div>

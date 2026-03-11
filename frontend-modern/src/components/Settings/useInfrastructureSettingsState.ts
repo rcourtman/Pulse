@@ -20,6 +20,18 @@ import type { ClusterEndpoint, NodeConfig, NodeConfigWithStatus } from '@/types/
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { SettingsTab } from './settingsTypes';
 import { settingsAgentNodeLabel } from './settingsRouting';
+import {
+  getDiscoveryScanStartErrorMessage,
+  getDiscoverySettingUpdateErrorMessage,
+  getDiscoverySubnetInvalidFormatMessage,
+  getDiscoverySubnetInvalidValuesMessage,
+  getDiscoverySubnetRequiredMessage,
+  getDiscoverySubnetUpdateErrorMessage,
+  getDiscoverySubnetValidEntryRequiredMessage,
+  getDiscoverySubnetValuesRequiredMessage,
+  getNodeDeleteErrorMessage,
+  getNodeTemperatureMonitoringUpdateErrorMessage,
+} from '@/utils/infrastructureSettingsPresentation';
 
 export interface DiscoveredServer {
   ip: string;
@@ -395,7 +407,7 @@ export function useInfrastructureSettingsState({
       }
     } catch (error) {
       logger.error('Failed to start discovery scan', error);
-      notificationStore.error('Failed to start discovery scan');
+      notificationStore.error(getDiscoveryScanStartErrorMessage());
       setDiscoveryScanStatus((prev) => ({
         ...prev,
         scanning: false,
@@ -416,15 +428,13 @@ export function useInfrastructureSettingsState({
       if (discoveryMode() === 'custom') {
         const trimmedDraft = discoverySubnetDraft().trim();
         if (!trimmedDraft) {
-          setDiscoverySubnetError('Enter at least one subnet before enabling discovery');
-          notificationStore.error('Enter at least one subnet before enabling discovery');
+          setDiscoverySubnetError(getDiscoverySubnetValuesRequiredMessage());
+          notificationStore.error(getDiscoverySubnetValuesRequiredMessage());
           return false;
         }
         if (!isValidCIDR(trimmedDraft)) {
-          setDiscoverySubnetError(
-            'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
-          );
-          notificationStore.error('Enter valid CIDR subnet values before enabling discovery');
+          setDiscoverySubnetError(getDiscoverySubnetInvalidFormatMessage());
+          notificationStore.error(getDiscoverySubnetInvalidValuesMessage());
           return false;
         }
         const normalizedDraft = normalizeSubnetList(trimmedDraft);
@@ -464,7 +474,7 @@ export function useInfrastructureSettingsState({
       return true;
     } catch (error) {
       logger.error('Failed to update discovery setting', error);
-      notificationStore.error('Failed to update discovery setting');
+      notificationStore.error(getDiscoverySettingUpdateErrorMessage());
       setDiscoveryEnabled(previousEnabled);
       applySavedDiscoverySubnet(previousSubnet);
       return false;
@@ -481,19 +491,17 @@ export function useInfrastructureSettingsState({
 
     const value = rawValue.trim();
     if (!value) {
-      setDiscoverySubnetError('Enter at least one subnet in CIDR format (e.g., 192.168.1.0/24)');
+      setDiscoverySubnetError(getDiscoverySubnetRequiredMessage());
       return false;
     }
     if (!isValidCIDR(value)) {
-      setDiscoverySubnetError(
-        'Use CIDR format such as 192.168.1.0/24 (comma-separated for multiple)',
-      );
+      setDiscoverySubnetError(getDiscoverySubnetInvalidFormatMessage());
       return false;
     }
 
     const normalizedValue = normalizeSubnetList(value);
     if (!normalizedValue) {
-      setDiscoverySubnetError('Enter at least one valid subnet in CIDR format');
+      setDiscoverySubnetError(getDiscoverySubnetValidEntryRequiredMessage());
       return false;
     }
 
@@ -527,7 +535,7 @@ export function useInfrastructureSettingsState({
       return true;
     } catch (error) {
       logger.error('Failed to update discovery subnet', error);
-      notificationStore.error('Failed to update discovery subnet');
+      notificationStore.error(getDiscoverySubnetUpdateErrorMessage());
       applySavedDiscoverySubnet(previousSubnet);
       setDiscoverySubnetDraft(previousSubnet === 'auto' ? '' : normalizeSubnetList(previousSubnet));
       return false;
@@ -574,7 +582,9 @@ export function useInfrastructureSettingsState({
     } catch (error) {
       logger.error('Failed to update node temperature monitoring setting', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update temperature monitoring setting',
+        getNodeTemperatureMonitoringUpdateErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
       );
       setNodes(
         nodes().map((n) =>
@@ -618,7 +628,7 @@ export function useInfrastructureSettingsState({
         );
       } catch (error) {
         logger.error('Failed to update discovery subnet', error);
-        notificationStore.error('Failed to update discovery subnet');
+        notificationStore.error(getDiscoverySubnetUpdateErrorMessage());
         applySavedDiscoverySubnet(previousSubnet);
       } finally {
         setSavingDiscoverySettings(false);
@@ -683,7 +693,9 @@ export function useInfrastructureSettingsState({
       const label = getPreferredConfiguredNodeLabel(pending);
       notificationStore.success(`${label} removed successfully`);
     } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to delete node');
+      notificationStore.error(
+        getNodeDeleteErrorMessage(error instanceof Error ? error.message : undefined),
+      );
     } finally {
       setDeleteNodeLoading(false);
       setShowDeleteNodeModal(false);

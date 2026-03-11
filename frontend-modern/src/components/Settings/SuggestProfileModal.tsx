@@ -18,6 +18,15 @@ import { Dialog } from '@/components/shared/Dialog';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
+import {
+  AGENT_PROFILE_SUGGESTION_EXAMPLE_PROMPTS,
+  formatAgentProfileSuggestionValue,
+  getAgentProfileSuggestionLoadingState,
+  getAgentProfileSuggestionKeyLabel,
+  getAgentProfileSuggestionRiskHints,
+  getAgentProfileSuggestionValueBadgeClass,
+  hasAgentProfileSuggestionValue,
+} from '@/utils/agentProfileSuggestionPresentation';
 import { KNOWN_SETTINGS_BY_KEY } from './agentProfileSettings';
 import Lightbulb from 'lucide-solid/icons/lightbulb';
 import AlertCircle from 'lucide-solid/icons/alert-circle';
@@ -48,32 +57,6 @@ interface SettingPreviewItem {
 
 const createHistoryId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-const toTitleCase = (value: string) =>
-  value
-    .split('_')
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-
-const formatDisplayValue = (value: unknown) => {
-  if (value === null || value === undefined) return 'unset';
-  if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled';
-  if (typeof value === 'string') return value === '' ? '(empty)' : value;
-  if (typeof value === 'number') return String(value);
-  return JSON.stringify(value);
-};
-
-const formatValueBadgeClass = (value: unknown) => {
-  if (typeof value === 'boolean') {
-    return value
-      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-      : 'bg-surface-alt text-base-content';
-  }
-  return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
-};
-
-const hasValue = (value: unknown) => value !== null && value !== undefined;
-
 export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) => {
   const [prompt, setPrompt] = createSignal('');
   const [loading, setLoading] = createSignal(false);
@@ -86,14 +69,6 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
   const [history, setHistory] = createSignal<SuggestionHistoryItem[]>([]);
   const [activeHistoryId, setActiveHistoryId] = createSignal<string | null>(null);
   const [showDefaults, setShowDefaults] = createSignal(false);
-
-  // Example prompts for inspiration
-  const examplePrompts = [
-    'Create a profile for production servers with minimal logging',
-    'Profile for Docker or Podman runtimes that need container monitoring',
-    'Kubernetes monitoring profile with all pods visible',
-    'Development environment profile with debug logging',
-  ];
 
   const schemaByKey = createMemo(() => new Map(schema().map((def) => [def.key, def])));
 
@@ -113,7 +88,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
       const definition = schemaByKey().get(key);
       return {
         key,
-        label: known?.label ?? toTitleCase(key),
+        label: known?.label ?? getAgentProfileSuggestionKeyLabel(key),
         description: known?.description ?? definition?.description ?? 'No description available.',
         value,
         defaultValue: definition?.defaultValue,
@@ -132,32 +107,15 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
     const current = suggestion();
     if (!current || schema().length === 0) return [];
     const presentKeys = new Set(Object.keys(current.config || {}));
-    return schema().filter((def) => !presentKeys.has(def.key) && hasValue(def.defaultValue));
+    return schema().filter(
+      (def) => !presentKeys.has(def.key) && hasAgentProfileSuggestionValue(def.defaultValue),
+    );
   });
 
   const riskHints = createMemo(() => {
     const current = suggestion();
     if (!current) return [];
-    const config = current.config || {};
-    const hints: string[] = [];
-
-    if (config.disable_auto_update === true) {
-      hints.push('Auto updates are disabled. Plan manual patching for agents.');
-    }
-    if (config.disable_docker_update_checks === true) {
-      hints.push('Docker update checks are disabled. Update visibility will be limited.');
-    }
-    if (config.enable_host === false) {
-      hints.push('Agent monitoring is disabled. Agent metrics and command execution will stop.');
-    }
-    if (config.enable_docker === false) {
-      hints.push('Docker monitoring is disabled. Container metrics and update tracking will stop.');
-    }
-    if (config.disable_ceph === true) {
-      hints.push('Ceph monitoring is disabled. Cluster health checks will be skipped.');
-    }
-
-    return hints;
+    return getAgentProfileSuggestionRiskHints(current.config || {});
   });
 
   onMount(async () => {
@@ -312,7 +270,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
             <div class="space-y-2">
               <span class="text-xs text-muted">Examples:</span>
               <div class="flex flex-wrap gap-2">
-                <For each={examplePrompts}>
+                <For each={AGENT_PROFILE_SUGGESTION_EXAMPLE_PROMPTS}>
                   {(example) => (
                     <button
                       type="button"
@@ -340,7 +298,9 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
           <Show when={loading()}>
             <div class="flex items-center justify-center py-4">
               <Loader2 class="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
-              <span class="ml-3 text-sm text-muted">Generating suggestion...</span>
+              <span class="ml-3 text-sm text-muted">
+                {getAgentProfileSuggestionLoadingState().text}
+              </span>
             </div>
           </Show>
 
@@ -478,15 +438,15 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                     </div>
                                     <div class="text-right shrink-0">
                                       <span
-                                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${formatValueBadgeClass(setting.value)}`}
+                                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getAgentProfileSuggestionValueBadgeClass(setting.value)}`}
                                       >
-                                        {formatDisplayValue(setting.value)}
+                                        {formatAgentProfileSuggestionValue(setting.value)}
                                       </span>
                                       <Show when={schema().length > 0}>
                                         <div class="text-[11px] text-muted mt-1">
                                           Default{' '}
-                                          {hasValue(setting.defaultValue)
-                                            ? formatDisplayValue(setting.defaultValue)
+                                          {hasAgentProfileSuggestionValue(setting.defaultValue)
+                                            ? formatAgentProfileSuggestionValue(setting.defaultValue)
                                             : 'n/a'}
                                         </div>
                                       </Show>
@@ -528,7 +488,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                     {(def) => (
                                       <div class="flex items-center justify-between text-xs text-muted">
                                         <span class="font-mono">{def.key}</span>
-                                        <span>{formatDisplayValue(def.defaultValue)}</span>
+                                        <span>{formatAgentProfileSuggestionValue(def.defaultValue)}</span>
                                       </div>
                                     )}
                                   </For>

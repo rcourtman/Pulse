@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   getPatrolRunStatusPresentation,
+  getRunHistoryLoadingState,
+  getToolCallsLoadingState,
+  getToolCallsUnavailableState,
   getToolCallResultBadgeClass,
   getToolCallResultTextClass,
 } from '@/utils/patrolRunPresentation';
@@ -32,5 +35,11 @@ describe('patrolRunPresentation', () => {
     expect(getToolCallResultBadgeClass(false)).toContain('red-100');
     expect(getToolCallResultTextClass(true)).toContain('text-emerald-600');
     expect(getToolCallResultTextClass(false)).toContain('text-red-600');
+  });
+
+  it('returns canonical patrol run loading and unavailable copy', () => {
+    expect(getRunHistoryLoadingState()).toBe('Loading run history…');
+    expect(getToolCallsLoadingState()).toBe('Loading tool calls...');
+    expect(getToolCallsUnavailableState()).toBe('Tool call details not available for this run.');
   });
 });

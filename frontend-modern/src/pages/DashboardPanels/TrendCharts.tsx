@@ -11,7 +11,11 @@ import {
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
 import type { HistoryTimeRange, MetricPoint } from '@/api/charts';
-import { RESOURCE_COLORS } from './resourceColors';
+import {
+  getDashboardTrendColor,
+  getDashboardTrendErrorState,
+} from '@/utils/dashboardTrendPresentation';
+import { segmentedButtonClass } from '@/utils/segmentedButton';
 import TrendingUpIcon from 'lucide-solid/icons/trending-up';
 
 interface TrendChartsProps {
@@ -53,7 +57,7 @@ export function TrendCharts(props: TrendChartsProps) {
       series.push({
         id: resource.id,
         data,
-        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        color: getDashboardTrendColor(i),
         name: resource.name,
       });
     }
@@ -77,7 +81,7 @@ export function TrendCharts(props: TrendChartsProps) {
       series.push({
         id: resource.id,
         data,
-        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        color: getDashboardTrendColor(i),
         name: resource.name,
       });
     }
@@ -99,9 +103,7 @@ export function TrendCharts(props: TrendChartsProps) {
             {(range) => {
               const active = () => selectedRange() === range;
               const className = () =>
-                active()
-                  ? 'px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium'
-                  : 'px-2 py-0.5 rounded border border-border text-base-content text-[11px] font-medium hover:bg-surface-hover transition-colors';
+                `px-2 py-0.5 text-[11px] ${segmentedButtonClass(active(), false, 'accent')}`;
 
               return (
                 <button
@@ -119,7 +121,7 @@ export function TrendCharts(props: TrendChartsProps) {
 
       <Show when={props.trends.error}>
         <div class="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
-          Unable to load trends
+          {getDashboardTrendErrorState().text}
         </div>
       </Show>
 

@@ -642,7 +642,7 @@ describe('SwarmServicesDrawer', () => {
         expect(screen.getByText('svc-running')).toBeInTheDocument();
       });
 
-      const dot = container.querySelector('.bg-green-500');
+      const dot = container.querySelector('.bg-emerald-500');
       expect(dot).toBeInTheDocument();
     });
 
@@ -654,7 +654,7 @@ describe('SwarmServicesDrawer', () => {
         expect(screen.getByText('svc-online')).toBeInTheDocument();
       });
 
-      const dot = container.querySelector('.bg-green-500');
+      const dot = container.querySelector('.bg-emerald-500');
       expect(dot).toBeInTheDocument();
     });
 
@@ -666,7 +666,7 @@ describe('SwarmServicesDrawer', () => {
         expect(screen.getByText('svc-healthy')).toBeInTheDocument();
       });
 
-      const dot = container.querySelector('.bg-green-500');
+      const dot = container.querySelector('.bg-emerald-500');
       expect(dot).toBeInTheDocument();
     });
 

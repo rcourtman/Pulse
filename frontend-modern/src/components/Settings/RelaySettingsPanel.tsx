@@ -18,6 +18,23 @@ import { showSuccess, showError } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
 import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
 import { logger } from '@/utils/logger';
+import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
+import {
+  getRelayConnectionPresentation,
+  getRelayDiagnosticClass,
+  RELAY_BETA_MESSAGE_CLASS,
+  RELAY_BETA_TITLE_CLASS,
+  RELAY_CODE_BLOCK_CLASS,
+  RELAY_DIAGNOSTICS_TITLE_CLASS,
+  RELAY_DIAGNOSTICS_WRAP_CLASS,
+  RELAY_INLINE_ACTION_CLASS,
+  RELAY_LAST_ERROR_CLASS,
+  RELAY_PRIMARY_BUTTON_CLASS,
+  RELAY_PRIMARY_LINK_CLASS,
+  RELAY_QR_IMAGE_CLASS,
+  RELAY_READONLY_NOTICE_CLASS,
+  RELAY_SECONDARY_BUTTON_CLASS,
+} from '@/utils/relayPresentation';
 import QRCode from 'qrcode';
 
 interface RelaySettingsPanelProps {
@@ -205,21 +222,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
     }
   };
 
-  const connectionStatusVariant = () => {
-    const cfg = config();
-    const st = status();
-    if (!cfg?.enabled) return 'muted' as const;
-    if (st?.connected) return 'success' as const;
-    return 'danger' as const;
-  };
-
-  const connectionStatusText = () => {
-    const cfg = config();
-    const st = status();
-    if (!cfg?.enabled) return 'Not enabled';
-    if (st?.connected) return 'Connected';
-    return 'Disconnected';
-  };
+  const connectionPresentation = () => getRelayConnectionPresentation(config(), status());
 
   // Pro feature gate
   if (!hasFeature('relay')) {
@@ -247,7 +250,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                   href={getUpgradeActionUrlOrFallback('relay')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  class={RELAY_PRIMARY_LINK_CLASS}
                   onClick={() => trackUpgradeClicked('settings_relay_panel', 'relay')}
                 >
                   Upgrade
@@ -257,7 +260,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                     type="button"
                     onClick={handleStartTrial}
                     disabled={startingTrial()}
-                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                    class={RELAY_INLINE_ACTION_CLASS}
                   >
                     Start free trial
                   </button>
@@ -276,20 +279,23 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
       description="Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon)."
       icon={<RadioTower size={20} strokeWidth={2} />}
     >
-      <Show when={!loading()} fallback={<div class="text-sm ">Loading configuration...</div>}>
+      <Show
+        when={!loading()}
+        fallback={<div class="text-sm ">{getSettingsConfigurationLoadingState().text}</div>}
+      >
         <Show when={!canManage()}>
           <Card
             tone="info"
             padding="md"
-            class="border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200"
+            class={RELAY_READONLY_NOTICE_CLASS}
           >
             Remote access settings are read-only for this account.
           </Card>
         </Show>
 
         <Card tone="info" padding="md">
-          <p class="text-sm text-base-content font-medium">Pulse Mobile rollout is coming soon</p>
-          <p class="text-xs text-muted mt-1">
+          <p class={RELAY_BETA_TITLE_CLASS}>Pulse Mobile rollout is coming soon</p>
+          <p class={RELAY_BETA_MESSAGE_CLASS}>
             Relay infrastructure is available now. Pairing and remote sessions are currently
             intended for staged beta access.
           </p>
@@ -299,12 +305,12 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
         <Card padding="md">
           <div class="flex items-center gap-3">
             <StatusDot
-              variant={connectionStatusVariant()}
+              variant={connectionPresentation().variant}
               size="md"
-              pulse={config()?.enabled && status()?.connected}
+              pulse={connectionPresentation().pulse}
             />
             <div class="flex-1">
-              <p class="text-sm font-medium text-base-content">{connectionStatusText()}</p>
+              <p class="text-sm font-medium text-base-content">{connectionPresentation().label}</p>
               <Show when={status()?.instance_id}>
                 <p class="text-xs text-muted mt-0.5">Instance: {status()!.instance_id}</p>
               </Show>
@@ -317,7 +323,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
             </div>
           </div>
           <Show when={status()?.last_error}>
-            <div class="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900 rounded px-2 py-1">
+            <div class={RELAY_LAST_ERROR_CLASS}>
               {status()!.last_error}
             </div>
           </Show>
@@ -356,7 +362,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
             />
             <Show when={canManage() && serverUrl() !== config()?.server_url}>
               <button
-                class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 sm:self-auto self-end"
+                class={`${RELAY_PRIMARY_BUTTON_CLASS} sm:self-auto self-end`}
                 onClick={() => void handleSaveServerUrl()}
                 disabled={saving()}
               >
@@ -390,7 +396,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
               <div class="space-y-3">
                 <div class="flex flex-wrap items-center gap-2">
                   <button
-                    class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                    class={RELAY_PRIMARY_BUTTON_CLASS}
                     onClick={() => void handlePairNewDevice()}
                     disabled={!canManage() || saving() || pairingLoading()}
                   >
@@ -402,7 +408,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                   </button>
                   <Show when={showPairing() && pairingPayload()}>
                     <button
-                      class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-base-content bg-surface-hover hover:bg-surface-hover rounded-md disabled:opacity-50"
+                      class={RELAY_SECONDARY_BUTTON_CLASS}
                       onClick={() => void handleCopyPairingPayload()}
                       disabled={!canManage() || pairingLoading()}
                     >
@@ -427,27 +433,21 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                         alt="Pulse mobile pairing QR code"
                         width="256"
                         height="256"
-                        class="rounded-md border border-border p-2"
+                        class={RELAY_QR_IMAGE_CLASS}
                       />
                     </Show>
 
                     <Show when={pairingPayload()?.deep_link}>
-                      <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
+                      <code class={RELAY_CODE_BLOCK_CLASS}>
                         {pairingPayload()!.deep_link}
                       </code>
                     </Show>
 
                     <Show when={(pairingPayload()?.diagnostics?.length ?? 0) > 0}>
-                      <div class="space-y-2">
-                        <p class="text-xs font-semibold text-base-content">Diagnostics</p>
+                      <div class={RELAY_DIAGNOSTICS_WRAP_CLASS}>
+                        <p class={RELAY_DIAGNOSTICS_TITLE_CLASS}>Diagnostics</p>
                         {(pairingPayload()?.diagnostics ?? []).map((diagnostic) => (
-                          <div
-                            class={`rounded px-2 py-1 text-xs ${
-                              diagnostic.severity === 'error'
-                                ? 'bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                : 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
-                            }`}
-                          >
+                          <div class={getRelayDiagnosticClass(diagnostic.severity)}>
                             <p class="font-medium">{diagnostic.message}</p>
                             <p class="mt-0.5 font-mono">
                               {diagnostic.code}

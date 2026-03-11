@@ -14,6 +14,12 @@ import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
+import { AI_CHAT_SESSION_EMPTY_STATE } from '@/utils/aiChatPresentation';
+import {
+  getAIChatControlLevelPresentation,
+  normalizeAIControlLevel,
+  type AIControlLevel,
+} from '@/utils/aiControlLevelPresentation';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
@@ -57,9 +63,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelsError, setModelsError] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
-  const [controlLevel, setControlLevel] = createSignal<'read_only' | 'controlled' | 'autonomous'>(
-    'read_only',
-  );
+  const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
   const [controlSaving, setControlSaving] = createSignal(false);
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
@@ -135,40 +139,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match ? match.name || match.id.split(':').pop() || match.id : override;
   });
 
-  const normalizeControlLevel = (value?: string): 'read_only' | 'controlled' | 'autonomous' => {
-    if (value === 'controlled' || value === 'autonomous' || value === 'read_only') {
-      return value;
-    }
-    if (value === 'suggest') {
-      return 'controlled';
-    }
-    return 'read_only';
-  };
-
-  const labelForControlLevel = (level: 'read_only' | 'controlled' | 'autonomous') => {
-    switch (level) {
-      case 'autonomous':
-        return 'Autonomous';
-      case 'controlled':
-        return 'Approval';
-      case 'read_only':
-      default:
-        return 'Read-only';
-    }
-  };
-
-  const controlLabel = createMemo(() => labelForControlLevel(controlLevel()));
-
-  const controlTone = createMemo(() => {
-    switch (controlLevel()) {
-      case 'autonomous':
-        return 'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900';
-      case 'controlled':
-        return 'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900';
-      default:
-        return 'border-border text-muted bg-surface';
-    }
-  });
+  const controlPresentation = createMemo(() => getAIChatControlLevelPresentation(controlLevel()));
 
   const loadModels = async (notify = false) => {
     if (notify) {
@@ -204,7 +175,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const settings = await AIAPI.getSettings();
       const chatOverride = (settings.chat_model || '').trim();
       const fallback = chatOverride || (settings.model || '').trim();
-      const resolvedControl = normalizeControlLevel(settings.control_level);
+      const resolvedControl = normalizeAIControlLevel(settings.control_level);
       setDefaultModel(fallback);
       setChatOverrideModel(chatOverride);
       setControlLevel(resolvedControl);
@@ -223,7 +194,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const previous = controlLevel();
     try {
       const updated = await AIAPI.updateSettings({ control_level: nextLevel });
-      const resolved = normalizeControlLevel(updated.control_level || nextLevel);
+      const resolved = normalizeAIControlLevel(updated.control_level || nextLevel);
       setControlLevel(resolved);
       if (resolved === 'autonomous') setAutonomousBannerDismissed(false);
       aiChatStore.notifySettingsChanged();
@@ -830,14 +801,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <div class="relative" data-dropdown>
               <button
                 onClick={() => setShowControlMenu(!showControlMenu())}
-                class={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlTone()} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
+                class={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
                 title="Control mode"
                 disabled={controlSaving()}
               >
                 <span
-                  class={`h-1.5 w-1.5 rounded-full ${controlLevel() === 'autonomous' ? 'bg-red-500' : controlLevel() === 'controlled' ? 'bg-amber-500' : 'bg-slate-400'}`}
+                  class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`}
                 />
-                <span>{controlLabel()}</span>
+                <span>{controlPresentation().label}</span>
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     stroke-linecap="round"
@@ -854,25 +825,37 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     Control mode for this chat
                   </div>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? 'bg-surface-alt' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}
                     onClick={() => updateControlLevel('read_only')}
                   >
-                    <div class="font-medium text-base-content">Read-only</div>
-                    <div class="text-[11px] text-muted">No commands or control actions</div>
+                    <div class="font-medium text-base-content">
+                      {getAIChatControlLevelPresentation('read_only').label}
+                    </div>
+                    <div class="text-[11px] text-muted">
+                      {getAIChatControlLevelPresentation('read_only').description}
+                    </div>
                   </button>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? 'bg-amber-50 dark:bg-amber-900' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? getAIChatControlLevelPresentation('controlled').selectedClassName : ''}`}
                     onClick={() => updateControlLevel('controlled')}
                   >
-                    <div class="font-medium text-base-content">Approval</div>
-                    <div class="text-[11px] text-muted">Ask before running commands</div>
+                    <div class="font-medium text-base-content">
+                      {getAIChatControlLevelPresentation('controlled').label}
+                    </div>
+                    <div class="text-[11px] text-muted">
+                      {getAIChatControlLevelPresentation('controlled').description}
+                    </div>
                   </button>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
                     onClick={() => updateControlLevel('autonomous')}
                   >
-                    <div class="font-medium text-base-content">Autonomous</div>
-                    <div class="text-[11px] text-muted">Executes without approval (Pro)</div>
+                    <div class="font-medium text-base-content">
+                      {getAIChatControlLevelPresentation('autonomous').label}
+                    </div>
+                    <div class="text-[11px] text-muted">
+                      {getAIChatControlLevelPresentation('autonomous').description}
+                    </div>
                   </button>
                 </div>
               </Show>
@@ -934,7 +917,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       when={sessions().length > 0}
                       fallback={
                         <div class="px-3 py-6 text-center text-xs text-muted">
-                          No previous conversations
+                          {AI_CHAT_SESSION_EMPTY_STATE}
                         </div>
                       }
                     >

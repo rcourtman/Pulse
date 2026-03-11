@@ -14,6 +14,14 @@ import {
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
+import {
+  getPMGDetailsDrawerPresentation,
+  PMG_DETAILS_FAILURE_STATE_TITLE,
+  PMG_DETAILS_LOADING_STATE_DESCRIPTION,
+  PMG_DETAILS_LOADING_STATE_TITLE,
+  PMG_DETAILS_EMPTY_STATE_DESCRIPTION,
+  PMG_DETAILS_EMPTY_STATE_TITLE,
+} from '@/utils/pmgPresentation';
 
 type PMGNodeStatus = {
   name: string;
@@ -125,6 +133,7 @@ const formatCompact = (value?: number | null): string => {
 export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
   const [searchRelay, setSearchRelay] = createSignal('');
   const [searchDomain, setSearchDomain] = createSignal('');
+  const drawerPresentation = getPMGDetailsDrawerPresentation();
 
   const resourceId = createMemo(() => normalize(props.resourceId));
 
@@ -196,7 +205,11 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
     <div class="space-y-3">
       <Show when={loadError()}>
         <Card padding="lg" tone="danger">
-          <EmptyState title="Failed to load PMG details" description={loadError()} tone="danger" />
+          <EmptyState
+            title={PMG_DETAILS_FAILURE_STATE_TITLE}
+            description={loadError()}
+            tone="danger"
+          />
         </Card>
       </Show>
       <Show
@@ -204,8 +217,8 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
         fallback={
           <Card padding="lg">
             <EmptyState
-              title="Loading mail gateway details..."
-              description="Fetching PMG resource details."
+              title={PMG_DETAILS_LOADING_STATE_TITLE}
+              description={PMG_DETAILS_LOADING_STATE_DESCRIPTION}
             />
           </Card>
         }
@@ -215,8 +228,8 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
           fallback={
             <Card padding="lg">
               <EmptyState
-                title="No PMG details for this resource yet"
-                description="Pulse hasn't ingested PMG analytics for this instance."
+                title={PMG_DETAILS_EMPTY_STATE_TITLE}
+                description={PMG_DETAILS_EMPTY_STATE_DESCRIPTION}
               />
             </Card>
           }
@@ -227,17 +240,21 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0">
                     <div class="text-sm font-semibold text-base-content truncate">
-                      {normalize(props.resourceName) || resource()?.name || 'Mail Gateway'}
+                      {normalize(props.resourceName) ||
+                        resource()?.name ||
+                        drawerPresentation.defaultResourceName}
                     </div>
                     <div class="mt-1 text-xs text-muted">
-                      {pmgData().hostname || 'Unknown host'}
+                      {pmgData().hostname || drawerPresentation.unknownHostLabel}
                       <Show when={pmgData().version}>
                         <span class="mx-2 text-muted">|</span>
                         <span>v{pmgData().version}</span>
                       </Show>
                     </div>
                     <Show when={lastUpdatedRelative()}>
-                      <div class="mt-1 text-[11px] text-muted">Updated {lastUpdatedRelative()}</div>
+                      <div class="mt-1 text-[11px] text-muted">
+                        {drawerPresentation.updatedPrefix} {lastUpdatedRelative()}
+                      </div>
                     </Show>
                   </div>
 
@@ -300,15 +317,25 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
               <Show when={(pmgData().nodes || []).length > 0}>
                 <Card padding="lg">
-                  <div class="text-xs font-semibold text-base-content">Nodes</div>
+                  <div class="text-xs font-semibold text-base-content">
+                    {drawerPresentation.nodesSectionTitle}
+                  </div>
                   <div class="mt-2 overflow-x-auto">
                     <Table class="min-w-full text-xs">
                       <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
                         <TableRow>
-                          <TableHead class="text-left py-2 pr-3">Node</TableHead>
-                          <TableHead class="text-left py-2 pr-3">Role</TableHead>
-                          <TableHead class="text-left py-2 pr-3">Status</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Queue</TableHead>
+                          <TableHead class="text-left py-2 pr-3">
+                            {drawerPresentation.nodeColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-left py-2 pr-3">
+                            {drawerPresentation.roleColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-left py-2 pr-3">
+                            {drawerPresentation.statusColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-right py-2 pl-3">
+                            {drawerPresentation.queueColumnLabel}
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody class="divide-y divide-border-subtle">
@@ -337,11 +364,13 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
               <Show when={(pmgData().relayDomains || []).length > 0}>
                 <Card padding="lg">
                   <div class="flex items-center justify-between gap-3">
-                    <div class="text-xs font-semibold text-base-content">Relay Domains</div>
+                    <div class="text-xs font-semibold text-base-content">
+                      {drawerPresentation.relayDomainsSectionTitle}
+                    </div>
                     <SearchField
                       value={searchRelay()}
                       onChange={setSearchRelay}
-                      placeholder="Search domains..."
+                      placeholder={drawerPresentation.domainSearchPlaceholder}
                       class="w-56"
                       inputClass="py-1 text-xs"
                     />
@@ -350,8 +379,12 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                     <Table class="min-w-full text-xs">
                       <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
                         <TableRow>
-                          <TableHead class="text-left py-2 pr-3">Domain</TableHead>
-                          <TableHead class="text-left py-2 pr-3">Comment</TableHead>
+                          <TableHead class="text-left py-2 pr-3">
+                            {drawerPresentation.domainColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-left py-2 pr-3">
+                            {drawerPresentation.commentColumnLabel}
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody class="divide-y divide-border-subtle">
@@ -377,17 +410,19 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 <Card padding="lg">
                   <div class="flex items-center justify-between gap-3">
                     <div class="min-w-0">
-                      <div class="text-xs font-semibold text-base-content">Domain Stats</div>
+                      <div class="text-xs font-semibold text-base-content">
+                        {drawerPresentation.domainStatsSectionTitle}
+                      </div>
                       <Show when={domainStatsAsOfRelative()}>
                         <div class="mt-0.5 text-[11px] text-muted">
-                          As of {domainStatsAsOfRelative()}
+                          {drawerPresentation.asOfPrefix} {domainStatsAsOfRelative()}
                         </div>
                       </Show>
                     </div>
                     <SearchField
                       value={searchDomain()}
                       onChange={setSearchDomain}
-                      placeholder="Search domains..."
+                      placeholder={drawerPresentation.domainSearchPlaceholder}
                       class="w-56"
                       inputClass="py-1 text-xs"
                     />
@@ -396,11 +431,21 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                     <Table class="min-w-full text-xs">
                       <TableHeader class="text-[10px] uppercase tracking-wide text-muted">
                         <TableRow>
-                          <TableHead class="text-left py-2 pr-3">Domain</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Mail</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Spam</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Virus</TableHead>
-                          <TableHead class="text-right py-2 pl-3">Bytes</TableHead>
+                          <TableHead class="text-left py-2 pr-3">
+                            {drawerPresentation.domainColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-right py-2 pl-3">
+                            {drawerPresentation.mailColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-right py-2 pl-3">
+                            {drawerPresentation.spamColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-right py-2 pl-3">
+                            {drawerPresentation.virusColumnLabel}
+                          </TableHead>
+                          <TableHead class="text-right py-2 pl-3">
+                            {drawerPresentation.bytesColumnLabel}
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody class="divide-y divide-border-subtle">
@@ -433,7 +478,9 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
               <Show when={spamBuckets().length > 0}>
                 <Card padding="lg">
-                  <div class="text-xs font-semibold text-base-content">Spam Distribution</div>
+                  <div class="text-xs font-semibold text-base-content">
+                    {drawerPresentation.spamDistributionSectionTitle}
+                  </div>
                   <div class="mt-3 space-y-2">
                     <For each={spamBuckets()}>
                       {(bucket) => (

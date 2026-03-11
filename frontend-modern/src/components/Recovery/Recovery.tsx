@@ -69,6 +69,16 @@ import {
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
 import {
+  getRecoveryActivityEmptyState,
+  getRecoveryActivityLoadingState,
+  getRecoveryHistoryEmptyState,
+  getRecoveryPointsFailureState,
+  getRecoveryPointsLoadingState,
+  getRecoveryProtectedItemsFailureState,
+  getRecoveryProtectedItemsLoadingState,
+  getRecoveryProtectedItemsEmptyState,
+} from '@/utils/recoveryEmptyStatePresentation';
+import {
   formatRecoveryTimeOnly,
   getRecoveryCompactAxisLabel,
   getRecoveryFullDateLabel,
@@ -84,6 +94,10 @@ import {
   getRecoverySpecialOutcomeTextClass,
 } from '@/utils/recoveryStatusPresentation';
 import {
+  getRecoveryGroupNoTimestampLabel,
+  getRecoveryHistorySearchPlaceholder,
+  getRecoveryProtectedSearchPlaceholder,
+  getRecoverySearchHistoryEmptyMessage,
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactRowClass,
   getRecoveryEventTimeTextClass,
@@ -682,7 +696,7 @@ const Recovery: Component = () => {
     for (const p of sortedPoints()) {
       const key = p.completedAt ? recoveryDateKeyFromTimestamp(Date.parse(p.completedAt)) : 'unknown';
       if (!groupMap.has(key)) {
-        let label = 'No Timestamp';
+        let label = getRecoveryGroupNoTimestampLabel();
         let tone: 'recent' | 'default' = 'default';
         if (key !== 'unknown') {
           const date = parseRecoveryDateKey(key);
@@ -900,12 +914,12 @@ const Recovery: Component = () => {
                 <SearchInput
                   value={protectedQuery}
                   onChange={(value) => setProtectedQuery(value)}
-                  placeholder="Search protected items..."
+                  placeholder={getRecoveryProtectedSearchPlaceholder()}
                   class="w-full"
                   clearOnEscape
                   history={{
                     storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                    emptyMessage: 'Recent searches appear here.',
+                    emptyMessage: getRecoverySearchHistoryEmptyMessage(),
                   }}
                 />
               }
@@ -968,13 +982,15 @@ const Recovery: Component = () => {
           </div>
         </Show>
         <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
-          <div class="px-6 py-6 text-sm text-muted">Loading protected items...</div>
+          <div class="px-6 py-6 text-sm text-muted">
+            {getRecoveryProtectedItemsLoadingState().text}
+          </div>
         </Show>
 
           <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
             <div class="p-6">
               <EmptyState
-                title="Failed to load protected items"
+                title={getRecoveryProtectedItemsFailureState().title}
                 description={String(
                   (recoveryRollups.rollups.error as Error)?.message ||
                     recoveryRollups.rollups.error,
@@ -991,10 +1007,7 @@ const Recovery: Component = () => {
             }
           >
             <div class="p-6">
-              <EmptyState
-                title="No protected items yet"
-                description="Pulse hasn’t observed any protected items for this org yet."
-              />
+              <EmptyState {...getRecoveryProtectedItemsEmptyState()} />
             </div>
           </Show>
 
@@ -1152,7 +1165,7 @@ const Recovery: Component = () => {
         <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
           <Card padding="sm">
             <EmptyState
-              title="Failed to load recovery points"
+              title={getRecoveryPointsFailureState().title}
               description={String(
                 (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
               )}
@@ -1339,10 +1352,10 @@ const Recovery: Component = () => {
               fallback={
                 <div class="text-sm text-muted">
                   <Show when={recoverySeries.response.loading}>
-                    <span>Loading recovery activity...</span>
+                    <span>{getRecoveryActivityLoadingState().text}</span>
                   </Show>
                   <Show when={!recoverySeries.response.loading}>
-                    <span>No recovery activity in the selected window.</span>
+                    <span>{getRecoveryActivityEmptyState().text}</span>
                   </Show>
                 </div>
               }
@@ -1586,12 +1599,12 @@ const Recovery: Component = () => {
                         setHistoryQuery(value);
                         setCurrentPage(1);
                       }}
-                      placeholder="Search recovery history..."
+                      placeholder={getRecoveryHistorySearchPlaceholder()}
                       class="w-full"
                       clearOnEscape
                       history={{
                         storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                        emptyMessage: 'Recent searches appear here.',
+                        emptyMessage: getRecoverySearchHistoryEmptyMessage(),
                       }}
                     />
                   }
@@ -1833,8 +1846,7 @@ const Recovery: Component = () => {
                     when={recoveryPoints.response.loading}
                     fallback={
                       <EmptyState
-                        title="No recovery history matches your filters"
-                        description="Adjust your search, provider, method, status, or verification filters."
+                        {...getRecoveryHistoryEmptyState()}
                         actions={
                           <Show when={hasActiveArtifactFilters()}>
                             <button
@@ -1849,7 +1861,7 @@ const Recovery: Component = () => {
                       />
                     }
                   >
-                    <div class="text-sm text-muted">Loading recovery points...</div>
+                    <div class="text-sm text-muted">{getRecoveryPointsLoadingState().text}</div>
                   </Show>
                 </div>
               }

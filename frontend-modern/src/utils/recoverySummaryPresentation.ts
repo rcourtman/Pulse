@@ -98,6 +98,32 @@ export interface RecoveryAttentionItem {
   detail: string;
 }
 
+export function getRecoveryAttentionChipClass(
+  tone: RecoveryAttentionItem['tone'],
+): string {
+  switch (tone) {
+    case 'rose':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+    case 'blue':
+      return 'border-blue-500/30 bg-blue-500/10 text-blue-200';
+    default:
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  }
+}
+
+export function getRecoveryAttentionDotClass(
+  tone: RecoveryAttentionItem['tone'],
+): string {
+  switch (tone) {
+    case 'rose':
+      return 'bg-rose-400';
+    case 'blue':
+      return 'bg-blue-400';
+    default:
+      return 'bg-amber-400';
+  }
+}
+
 export const RECOVERY_FRESHNESS_BUCKETS: RecoveryFreshnessBucketPresentation[] = [
   { key: 'under1h', label: '<1h', color: 'bg-emerald-500' },
   { key: 'under24h', label: '<24h', color: 'bg-emerald-400' },

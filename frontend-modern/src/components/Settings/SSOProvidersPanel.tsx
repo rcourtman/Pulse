@@ -29,17 +29,34 @@ import { SSOProviderTypeIcon } from './SSOProviderTypeIcon';
 import {
   getSSOProviderAddButtonLabel,
   getSSOCertificatePresentation,
+  getSSOCopySuccessMessage,
+  getSSOConnectionTestErrorMessage,
+  getSSOConnectionTestFailureMessage,
+  getSSOConnectionTestSuccessMessage,
   getSSOProviderCardClass,
+  getSSOProviderDeleteErrorMessage,
+  getSSOProviderDeleteSuccessMessage,
+  getSSOProviderDetailsLoadErrorMessage,
   getSSOProviderEmptyStateDescription,
   getSSOProviderEmptyStateTitle,
+  getSSOMetadataFetchErrorMessage,
+  getSSOMetadataUrlRequiredMessage,
   getSSOProvidersLoadingState,
+  getSSOProvidersLoadErrorMessage,
   getSSOProviderModalTitle,
+  getSSOProviderSaveErrorMessage,
+  getSSOProviderSaveSuccessMessage,
   getSSOProviderSummary,
+  getSSOProviderToggleErrorMessage,
+  getSSOProviderToggleSuccessMessage,
   getSSOProviderTypeBadgeClass,
   getSSOProviderTypeLabel,
   getSSOTestResultPresentation,
 } from '@/utils/ssoProviderPresentation';
 import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
   UPGRADE_TRIAL_LABEL,
@@ -240,13 +257,15 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         window.location.href = result.actionUrl;
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
+        );
       }
     } finally {
       setStartingTrial(false);
@@ -288,7 +307,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       }
     } catch (error) {
       logger.error('[SSOProvidersPanel] Failed to load providers:', error);
-      notificationStore.error('Failed to load SSO providers');
+      notificationStore.error(getSSOProvidersLoadErrorMessage());
     } finally {
       setLoading(false);
     }
@@ -350,7 +369,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       setShowModal(true);
     } catch (error) {
       logger.error('[SSOProvidersPanel] Failed to load provider for editing:', error);
-      notificationStore.error('Failed to load provider details');
+      notificationStore.error(getSSOProviderDetailsLoadErrorMessage());
     }
   };
 
@@ -419,13 +438,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         throw new Error(errText || `Failed to save provider (${response.status})`);
       }
 
-      notificationStore.success(isEdit ? 'Provider updated' : 'Provider created');
+      notificationStore.success(getSSOProviderSaveSuccessMessage(isEdit));
       setShowModal(false);
       loadProviders();
       props.onConfigUpdated?.();
     } catch (error) {
       logger.error('[SSOProvidersPanel] Failed to save provider:', error);
-      notificationStore.error(`Failed to save provider: ${error}`);
+      notificationStore.error(getSSOProviderSaveErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -443,13 +462,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         throw new Error(`Failed to delete provider (${response.status})`);
       }
 
-      notificationStore.success('Provider deleted');
+      notificationStore.success(getSSOProviderDeleteSuccessMessage());
       setDeleteConfirm(null);
       loadProviders();
       props.onConfigUpdated?.();
     } catch (error) {
       logger.error('[SSOProvidersPanel] Failed to delete provider:', error);
-      notificationStore.error('Failed to delete provider');
+      notificationStore.error(getSSOProviderDeleteErrorMessage());
     }
   };
 
@@ -467,18 +486,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         throw new Error(`Failed to update provider (${response.status})`);
       }
 
-      notificationStore.success(provider.enabled ? 'Provider disabled' : 'Provider enabled');
+      notificationStore.success(getSSOProviderToggleSuccessMessage(!provider.enabled));
       loadProviders();
       props.onConfigUpdated?.();
     } catch (error) {
       logger.error('[SSOProvidersPanel] Failed to toggle provider:', error);
-      notificationStore.error('Failed to update provider');
+      notificationStore.error(getSSOProviderToggleErrorMessage());
     }
   };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    notificationStore.success(`${label} copied to clipboard`);
+    notificationStore.success(getSSOCopySuccessMessage(label));
   };
 
   const testResultPresentation = createMemo(() =>
@@ -521,18 +540,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       setTestResult(result);
 
       if (result.success) {
-        notificationStore.success('Connection test successful');
+        notificationStore.success(getSSOConnectionTestSuccessMessage());
       } else {
-        notificationStore.error(`Connection test failed: ${result.message}`);
+        notificationStore.error(getSSOConnectionTestFailureMessage(result.message));
       }
     } catch (error) {
       logger.error('[SSOProvidersPanel] Test connection error:', error);
       setTestResult({
         success: false,
-        message: 'Failed to test connection',
+        message: getSSOConnectionTestErrorMessage(),
         error: String(error),
       });
-      notificationStore.error('Failed to test connection');
+      notificationStore.error(getSSOConnectionTestErrorMessage());
     } finally {
       setTesting(false);
     }
@@ -553,7 +572,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   // Fetch and preview metadata
   const fetchMetadataPreview = async () => {
     if (!form.samlIdpMetadataUrl.trim()) {
-      notificationStore.error('Please enter an IdP Metadata URL');
+      notificationStore.error(getSSOMetadataUrlRequiredMessage());
       return;
     }
 
@@ -582,7 +601,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       setShowMetadataPreview(true);
     } catch (error) {
       logger.error('[SSOProvidersPanel] Metadata preview error:', error);
-      notificationStore.error(`Failed to fetch metadata: ${error}`);
+      notificationStore.error(getSSOMetadataFetchErrorMessage(error));
     } finally {
       setLoadingPreview(false);
     }
@@ -1391,7 +1410,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   onClick={() => {
                     if (metadataPreview()?.xml) {
                       navigator.clipboard.writeText(metadataPreview()!.xml);
-                      notificationStore.success('XML copied to clipboard');
+                      notificationStore.success(getSSOCopySuccessMessage('XML'));
                     }
                   }}
                   class="px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-surface-hover flex items-center gap-1"

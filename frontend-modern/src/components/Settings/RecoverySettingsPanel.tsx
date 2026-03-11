@@ -2,18 +2,10 @@ import { Component, Show, For, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import Clock from 'lucide-solid/icons/clock';
-
-const BACKUP_INTERVAL_OPTIONS = [
-  { value: 0, label: 'Default (~90s)' },
-  { value: 300, label: '5 minutes' },
-  { value: 900, label: '15 minutes' },
-  { value: 1800, label: '30 minutes' },
-  { value: 3600, label: '1 hour' },
-  { value: 21600, label: '6 hours' },
-  { value: 86400, label: '24 hours' },
-];
-
-const BACKUP_INTERVAL_MAX_MINUTES = 7 * 24 * 60; // 7 days
+import {
+  BACKUP_INTERVAL_MAX_MINUTES,
+  BACKUP_INTERVAL_OPTIONS,
+} from '@/utils/systemSettingsPresentation';
 
 export interface RecoverySettingsPanelProps {
   backupPollingEnabled: Accessor<boolean>;

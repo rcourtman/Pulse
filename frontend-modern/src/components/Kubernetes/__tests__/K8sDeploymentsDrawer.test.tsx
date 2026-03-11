@@ -504,7 +504,7 @@ describe('K8sDeploymentsDrawer', () => {
         expect(screen.getByText('dep-running')).toBeInTheDocument();
       });
 
-      expect(container.querySelector('.bg-green-500')).toBeInTheDocument();
+      expect(container.querySelector('.bg-emerald-500')).toBeInTheDocument();
     });
 
     it('applies green class for online status', async () => {
@@ -515,7 +515,7 @@ describe('K8sDeploymentsDrawer', () => {
         expect(screen.getByText('dep-online')).toBeInTheDocument();
       });
 
-      expect(container.querySelector('.bg-green-500')).toBeInTheDocument();
+      expect(container.querySelector('.bg-emerald-500')).toBeInTheDocument();
     });
 
     it('applies green class for healthy status', async () => {
@@ -526,7 +526,7 @@ describe('K8sDeploymentsDrawer', () => {
         expect(screen.getByText('dep-healthy')).toBeInTheDocument();
       });
 
-      expect(container.querySelector('.bg-green-500')).toBeInTheDocument();
+      expect(container.querySelector('.bg-emerald-500')).toBeInTheDocument();
     });
 
     it('applies amber class for warning status', async () => {

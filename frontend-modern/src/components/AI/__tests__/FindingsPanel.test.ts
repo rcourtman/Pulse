@@ -1,31 +1,49 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildFindingFilterOptions,
   formatFindingLifecycleType,
   formatFindingLoopState,
+  getFindingEmptyStateCopy,
+  getFindingSeverityCompactLabel,
+  getFindingSeveritySortOrder,
+  getFindingResolutionReason,
   getFindingLoopStateBadgeClasses,
   getFindingSeverityBadgeClasses,
+  getFindingStatusBadgeClasses,
+  getFindingStatusLabel,
   getFindingSeverityToneClasses,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
+  getInvestigationOutcomeBadgeClasses,
+  getInvestigationOutcomeLabel,
+  getInvestigationOutcomeSortOrder,
+  getInvestigationStatusLabel,
   getInvestigationStatusBadgeClasses,
 } from '@/utils/aiFindingPresentation';
 
-describe('FindingsPanel constants', () => {
-  describe('severityOrder', () => {
-    it('has correct order for critical', () => {
-      expect(severityOrder.critical).toBe(0);
+describe('aiFindingPresentation', () => {
+  describe('severity presentation', () => {
+    it('has correct sort order for critical', () => {
+      expect(getFindingSeveritySortOrder('critical')).toBe(0);
     });
 
-    it('has correct order for warning', () => {
-      expect(severityOrder.warning).toBe(1);
+    it('has correct sort order for warning', () => {
+      expect(getFindingSeveritySortOrder('warning')).toBe(1);
     });
 
-    it('has correct order for watch', () => {
-      expect(severityOrder.watch).toBe(2);
+    it('has correct sort order for watch', () => {
+      expect(getFindingSeveritySortOrder('watch')).toBe(2);
     });
 
-    it('has correct order for info', () => {
-      expect(severityOrder.info).toBe(3);
+    it('has correct sort order for info', () => {
+      expect(getFindingSeveritySortOrder('info')).toBe(3);
+    });
+
+    it('returns compact severity labels', () => {
+      expect(getFindingSeverityCompactLabel('critical')).toBe('CRIT');
+      expect(getFindingSeverityCompactLabel('warning')).toBe('WARN');
+      expect(getFindingSeverityCompactLabel('watch')).toBe('WATCH');
+      expect(getFindingSeverityCompactLabel('info')).toBe('INFO');
     });
   });
 
@@ -80,6 +98,55 @@ describe('FindingsPanel constants', () => {
     });
   });
 
+  describe('findingStatusPresentation', () => {
+    it('returns canonical badge classes', () => {
+      expect(getFindingStatusBadgeClasses('resolved')).toContain('green');
+      expect(getFindingStatusBadgeClasses('snoozed')).toContain('blue');
+      expect(getFindingStatusBadgeClasses('dismissed')).toContain('bg-surface-alt');
+      expect(getFindingStatusBadgeClasses('unexpected')).toContain('bg-surface-alt');
+    });
+
+    it('returns canonical labels', () => {
+      expect(getFindingStatusLabel('resolved')).toBe('Resolved');
+      expect(getFindingStatusLabel('snoozed')).toBe('Snoozed');
+      expect(getFindingStatusLabel('dismissed')).toBe('Dismissed');
+      expect(getFindingStatusLabel('unexpected')).toBe('Dismissed');
+    });
+  });
+
+  describe('filterPresentation', () => {
+    it('builds canonical filter options', () => {
+      expect(
+        buildFindingFilterOptions({
+          needsAttentionCount: 2,
+          pendingApprovalCount: 1,
+        }),
+      ).toEqual([
+        { value: 'active', label: 'Active' },
+        { value: 'all', label: 'All' },
+        { value: 'resolved', label: 'Resolved' },
+        { value: 'attention', label: 'Needs Attention', tone: 'warning', count: 2 },
+        { value: 'approvals', label: 'Approvals', tone: 'warning', count: 1 },
+      ]);
+    });
+
+    it('returns canonical empty-state copy', () => {
+      expect(getFindingEmptyStateCopy('active')).toEqual({
+        title: 'No active findings',
+        body: 'Your infrastructure looks healthy!',
+      });
+      expect(getFindingEmptyStateCopy('attention')).toEqual({
+        title: 'No findings need attention right now.',
+      });
+      expect(getFindingEmptyStateCopy('approvals')).toEqual({
+        title: 'No pending approvals.',
+      });
+      expect(getFindingEmptyStateCopy('resolved')).toEqual({
+        title: 'No Patrol findings to display',
+      });
+    });
+  });
+
   describe('sourceColors', () => {
     it('has threshold color', () => {
       expect(getFindingSourceBadgeClasses('threshold')).toContain('orange');
@@ -109,6 +176,26 @@ describe('FindingsPanel constants', () => {
 
     it('has failed color', () => {
       expect(getInvestigationStatusBadgeClasses('failed')).toContain('red');
+    });
+
+    it('returns canonical status labels', () => {
+      expect(getInvestigationStatusLabel('pending')).toBe('Pending');
+      expect(getInvestigationStatusLabel('running')).toBe('Running');
+      expect(getInvestigationStatusLabel('completed')).toBe('Completed');
+      expect(getInvestigationStatusLabel('failed')).toBe('Failed');
+      expect(getInvestigationStatusLabel('needs_attention')).toBe('Needs Attention');
+    });
+  });
+
+  describe('investigationOutcomePresentation', () => {
+    it('returns canonical outcome labels and badge classes', () => {
+      expect(getInvestigationOutcomeLabel('fix_verified')).toBe('Fix verified');
+      expect(getInvestigationOutcomeBadgeClasses('fix_failed')).toContain('red');
+      expect(getInvestigationOutcomeBadgeClasses('cannot_fix')).toContain('bg-surface-alt');
+      expect(getInvestigationOutcomeSortOrder('fix_failed')).toBe(0);
+      expect(getInvestigationOutcomeSortOrder('needs_attention')).toBe(1);
+      expect(getInvestigationOutcomeSortOrder('fix_queued')).toBe(2);
+      expect(getInvestigationOutcomeSortOrder(undefined)).toBe(3);
     });
   });
 
@@ -175,11 +262,34 @@ describe('FindingsPanel constants', () => {
       expect(formatFindingLifecycleType('verification_passed')).toBe('Fix verified');
     });
   });
-});
 
-const severityOrder: Record<string, number> = {
-  critical: 0,
-  warning: 1,
-  watch: 2,
-  info: 3,
-};
+  describe('resolutionReasonPresentation', () => {
+    it('returns canonical threshold resolution reasons', () => {
+      expect(
+        getFindingResolutionReason(
+          {
+            isThreshold: true,
+            source: 'threshold',
+            alertType: 'cpu',
+            investigationOutcome: undefined,
+          } as never,
+          '2m ago',
+        ),
+      ).toBe('CPU returned to normal 2m ago');
+    });
+
+    it('returns canonical patrol resolution reasons', () => {
+      expect(
+        getFindingResolutionReason(
+          {
+            isThreshold: false,
+            source: 'ai-patrol',
+            alertType: undefined,
+            investigationOutcome: 'fix_verified',
+          } as never,
+          '1h ago',
+        ),
+      ).toBe('Fixed by Patrol 1h ago');
+    });
+  });
+});

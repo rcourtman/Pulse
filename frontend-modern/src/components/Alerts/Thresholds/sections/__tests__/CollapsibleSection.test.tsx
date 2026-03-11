@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { CollapsibleSection, SectionActionButton, NestedGroupHeader } from '../CollapsibleSection';
+import {
+  ALERT_THRESHOLDS_SECTION_DISABLED_LABEL,
+  ALERT_THRESHOLDS_SECTION_UNSAVED_CHANGES_TITLE,
+} from '@/utils/alertThresholdsSectionPresentation';
 
 afterEach(() => {
   cleanup();
@@ -158,7 +162,7 @@ describe('CollapsibleSection', () => {
       </CollapsibleSection>
     ));
 
-    expect(screen.getByText('Disabled')).toBeInTheDocument();
+    expect(screen.getByText(ALERT_THRESHOLDS_SECTION_DISABLED_LABEL)).toBeInTheDocument();
   });
 
   it('does not show "Disabled" badge by default', () => {
@@ -168,7 +172,9 @@ describe('CollapsibleSection', () => {
       </CollapsibleSection>
     ));
 
-    expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(ALERT_THRESHOLDS_SECTION_DISABLED_LABEL),
+    ).not.toBeInTheDocument();
   });
 
   it('shows unsaved changes indicator when hasChanges is true', () => {
@@ -178,7 +184,9 @@ describe('CollapsibleSection', () => {
       </CollapsibleSection>
     ));
 
-    const dot = container.querySelector('[title="Unsaved changes"]');
+    const dot = container.querySelector(
+      `[title="${ALERT_THRESHOLDS_SECTION_UNSAVED_CHANGES_TITLE}"]`,
+    );
     expect(dot).toBeInTheDocument();
   });
 
@@ -189,7 +197,9 @@ describe('CollapsibleSection', () => {
       </CollapsibleSection>
     ));
 
-    const dot = container.querySelector('[title="Unsaved changes"]');
+    const dot = container.querySelector(
+      `[title="${ALERT_THRESHOLDS_SECTION_UNSAVED_CHANGES_TITLE}"]`,
+    );
     expect(dot).not.toBeInTheDocument();
   });
 

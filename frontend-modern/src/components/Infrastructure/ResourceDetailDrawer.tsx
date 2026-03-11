@@ -27,6 +27,7 @@ import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { ReportMergeModal } from './ReportMergeModal';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { PMGInstanceDrawer } from '@/components/PMG/PMGInstanceDrawer';
@@ -1156,7 +1157,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               fallback={
                 <div class="flex items-center justify-center py-8">
                   <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                  <span class="ml-2 text-sm text-muted">Loading discovery...</span>
+                  <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
                 </div>
               }
             >

@@ -5,8 +5,11 @@ import { isPulseHttps } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import {
+  getSecurityFeatureStatePresentation,
+  getSecurityScorePresentation,
   getSecurityScoreSymbol,
   getSecurityScoreTextClass,
+  getSecurityWarningPresentation,
 } from '@/utils/securityScorePresentation';
 
 import type { SecurityStatus } from '@/types/config';
@@ -106,22 +109,25 @@ export const SecurityWarning: Component = () => {
     return null;
   }
 
+  const scorePercentage = () => (status()!.score / status()!.maxScore) * 100;
+  const scorePresentation = () => getSecurityScorePresentation(scorePercentage());
+  const warningPresentation = () =>
+    getSecurityWarningPresentation({
+      score: scorePercentage(),
+      publicAccess: status()!.publicAccess || false,
+      hasAuthentication: status()!.hasAuthentication,
+    });
+
   return (
     <Portal>
       <div
-        class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${
-          status()!.publicAccess && !status()!.hasAuthentication
-            ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
-            : 'bg-yellow-50 dark:bg-yellow-900 border-yellow-200 dark:border-yellow-800'
-        }`}
+        class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${warningPresentation().background} ${warningPresentation().border}`}
       >
         <div class="max-w-7xl mx-auto px-4 py-3">
           <div class="flex items-start justify-between">
             <div class="flex items-start space-x-3">
-              <span
-                class={`text-2xl ${getSecurityScoreTextClass((status()!.score / status()!.maxScore) * 100)}`}
-              >
-                {getSecurityScoreSymbol((status()!.score / status()!.maxScore) * 100)}
+              <span class={`text-2xl ${scorePresentation().tone.icon}`}>
+                {getSecurityScoreSymbol(scorePercentage())}
               </span>
               <div>
                 <div class="flex items-center gap-3">
@@ -129,11 +135,7 @@ export const SecurityWarning: Component = () => {
                     title={
                       <span>
                         Security score:{' '}
-                        <span
-                          class={getSecurityScoreTextClass(
-                            (status()!.score / status()!.maxScore) * 100,
-                          )}
-                        >
+                        <span class={getSecurityScoreTextClass(scorePercentage())}>
                           {status()!.score}/{status()!.maxScore}
                         </span>
                       </span>
@@ -152,50 +154,41 @@ export const SecurityWarning: Component = () => {
                 </div>
 
                 <p class="text-sm text-base-content mt-1">
-                  {status()!.publicAccess ? (
-                    <span class="font-semibold text-red-700 dark:text-red-300">
-                      WARNING: PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed
-                      to the internet!
-                    </span>
-                  ) : (
-                    'Your Pulse instance is accessible without authentication. Proxmox credentials could be exposed.'
-                  )}
+                  <span class={warningPresentation().messageClass}>
+                    {warningPresentation().message}
+                  </span>
                 </p>
 
                 <Show when={showDetails()}>
                   <div class="mt-3 space-y-1">
                     <div class="text-xs space-y-1">
                       <div class="flex items-center gap-2">
-                        <span
-                          class={status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'}
-                        >
-                          {status()!.credentialsEncrypted ? 'Yes' : 'No'}
+                        <span class={getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).className}>
+                          {getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).label}
                         </span>
                         <span>Credentials encrypted at rest</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class={status()!.exportProtected ? 'text-green-600' : 'text-red-600'}>
-                          {status()!.exportProtected ? 'Yes' : 'No'}
+                        <span class={getSecurityFeatureStatePresentation(status()!.exportProtected).className}>
+                          {getSecurityFeatureStatePresentation(status()!.exportProtected).label}
                         </span>
                         <span>Export requires authentication</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span
-                          class={status()!.hasAuthentication ? 'text-green-600' : 'text-red-600'}
-                        >
-                          {status()!.hasAuthentication ? 'Yes' : 'No'}
+                        <span class={getSecurityFeatureStatePresentation(status()!.hasAuthentication).className}>
+                          {getSecurityFeatureStatePresentation(status()!.hasAuthentication).label}
                         </span>
                         <span>Authentication enabled</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class={status()!.hasHTTPS ? 'text-green-600' : 'text-red-600'}>
-                          {status()!.hasHTTPS ? 'Yes' : 'No'}
+                        <span class={getSecurityFeatureStatePresentation(status()!.hasHTTPS).className}>
+                          {getSecurityFeatureStatePresentation(status()!.hasHTTPS).label}
                         </span>
                         <span>HTTPS connection</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class={status()!.hasAuditLogging ? 'text-green-600' : 'text-red-600'}>
-                          {status()!.hasAuditLogging ? 'Yes' : 'No'}
+                        <span class={getSecurityFeatureStatePresentation(status()!.hasAuditLogging).className}>
+                          {getSecurityFeatureStatePresentation(status()!.hasAuditLogging).label}
                         </span>
                         <span>Audit logging enabled</span>
                       </div>

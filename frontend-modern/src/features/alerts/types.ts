@@ -4,31 +4,6 @@ import type { BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
 export type { HysteresisThreshold } from '@/types/alerts';
 export type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
-export const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }> = {
-  overview: {
-    title: 'Alerts Overview',
-    description:
-      'Monitor active alerts, acknowledgements, and recent status changes across platforms.',
-  },
-  thresholds: {
-    title: 'Alert Thresholds',
-    description: 'Tune resource thresholds and override rules for nodes, guests, and containers.',
-  },
-  destinations: {
-    title: 'Notification Destinations',
-    description: 'Configure email, webhooks, and escalation paths for alert delivery.',
-  },
-  schedule: {
-    title: 'Maintenance Schedule',
-    description:
-      'Set quiet hours and maintenance windows to suppress alerts when expected changes occur.',
-  },
-  history: {
-    title: 'Alert History',
-    description: 'Review previously triggered alerts and their resolution timeline.',
-  },
-};
-
 export const ALERT_TAB_SEGMENTS: Record<AlertTab, string> = {
   overview: 'overview',
   thresholds: 'thresholds',

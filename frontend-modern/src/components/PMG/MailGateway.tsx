@@ -1,9 +1,8 @@
-import { Component, Show, For, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
+import { Component, Show, For, createMemo, createSignal } from 'solid-js';
 import { useTooltip } from '@/hooks/useTooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
-import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import {
   Table,
   TableHeader,
@@ -15,7 +14,22 @@ import {
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
+import {
+  getPMGOldestAgeTextClass,
+  getPMGQueueTextClass,
+} from '@/utils/pmgQueuePresentation';
+import {
+  getPMGDisconnectedState,
+  getPMGSearchEmptyState,
+  PMG_EMPTY_STATE_DESCRIPTION,
+  PMG_EMPTY_STATE_TITLE,
+  PMG_LOADING_STATE_DESCRIPTION,
+  PMG_LOADING_STATE_TITLE,
+  PMG_SEARCH_PLACEHOLDER,
+} from '@/utils/pmgPresentation';
+import { getPMGThreatPresentation } from '@/utils/pmgThreatPresentation';
 import { pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
+import { ServiceHealthBadge } from './ServiceHealthBadge';
 
 // Format large numbers with K/M suffixes
 const formatCompact = (value?: number | null): string => {
@@ -53,57 +67,23 @@ const ThreatBar: Component<{
   label: string;
   count: number;
 }> = (props) => {
-  const barColor = () => {
-    switch (props.color) {
-      case 'spam':
-        return 'bg-orange-500';
-      case 'virus':
-        return 'bg-red-500';
-      case 'quarantine':
-        return 'bg-yellow-500';
-    }
-  };
-
-  const textColor = () => {
-    switch (props.color) {
-      case 'spam':
-        return 'text-orange-600 dark:text-orange-400';
-      case 'virus':
-        return 'text-red-600 dark:text-red-400';
-      case 'quarantine':
-        return 'text-yellow-600 dark:text-yellow-400';
-    }
-  };
+  const presentation = () => getPMGThreatPresentation(props.color);
 
   return (
     <div class="space-y-1">
       <div class="flex items-center justify-between text-xs">
         <span class="text-muted">{props.label}</span>
-        <span class={`font-medium ${textColor()}`}>
+        <span class={`font-medium ${presentation().textClass}`}>
           {formatCompact(props.count)} ({formatPct(props.percent)})
         </span>
       </div>
       <div class="h-1.5 bg-surface-hover rounded-full overflow-hidden">
         <div
-          class={`h-full ${barColor()} transition-all duration-500 rounded-full`}
+          class={`h-full ${presentation().barClass} transition-all duration-500 rounded-full`}
           style={{ width: `${Math.min(props.percent * 10, 100)}%` }} // Scale up for visibility (10% threat = full bar)
         />
       </div>
     </div>
-  );
-};
-
-// Instance status badge
-const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
-  const statusInfo = createMemo(() => getServiceHealthPresentation(props.status, props.health));
-
-  return (
-    <span
-      class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${statusInfo().bg} ${statusInfo().text}`}
-    >
-      <span class={`w-1.5 h-1.5 rounded-full ${statusInfo().dot}`} />
-      {statusInfo().label}
-    </span>
   );
 };
 
@@ -123,13 +103,6 @@ const QueueIndicator: Component<{
   const queueTotal = () => props.queue?.total || 0;
   const hasQueue = () => queueTotal() > 0;
 
-  const queueSeverity = () => {
-    const total = queueTotal();
-    if (total > 100) return 'high';
-    if (total > 20) return 'medium';
-    return 'low';
-  };
-
   return (
     <>
       <div
@@ -141,13 +114,7 @@ const QueueIndicator: Component<{
       >
         <Show when={hasQueue()} fallback={<span class="text-xs text-slate-400">Empty</span>}>
           <span
-            class={`text-xs font-medium ${
-              queueSeverity() === 'high'
-                ? 'text-red-600 dark:text-red-400'
-                : queueSeverity() === 'medium'
-                  ? 'text-yellow-600 dark:text-yellow-400'
-                  : 'text-green-600 dark:text-green-400'
-            }`}
+            class={`text-xs font-medium ${getPMGQueueTextClass(queueTotal(), 'text-green-600 dark:text-green-400')}`}
           >
             {formatNum(queueTotal())} msgs
           </span>
@@ -179,7 +146,7 @@ const QueueIndicator: Component<{
             <Show when={(props.queue?.oldestAge || 0) > 0}>
               <div class="flex justify-between pt-1 mt-1 border-t border-border">
                 <span class="text-slate-400">Oldest</span>
-                <span class={(props.queue?.oldestAge || 0) > 1800 ? 'text-yellow-400' : ''}>
+                <span class={getPMGOldestAgeTextClass(props.queue?.oldestAge)}>
                   {Math.floor((props.queue?.oldestAge || 0) / 60)}m
                 </span>
               </div>
@@ -195,6 +162,8 @@ const MailGateway: Component = () => {
   const { state, connected, reconnecting, reconnect, initialDataReceived } = useWebSocket();
 
   const [searchTerm, setSearchTerm] = createSignal('');
+  const disconnectedState = createMemo(() => getPMGDisconnectedState(reconnecting()));
+  const searchEmptyState = createMemo(() => getPMGSearchEmptyState(searchTerm()));
 
   const instances = createMemo(() =>
     (state.resources || [])
@@ -300,8 +269,8 @@ const MailGateway: Component = () => {
                 />
               </svg>
             }
-            title="Loading mail gateway data..."
-            description="Connecting to the monitoring service."
+            title={PMG_LOADING_STATE_TITLE}
+            description={PMG_LOADING_STATE_DESCRIPTION}
           />
         </Card>
       </Show>
@@ -325,20 +294,16 @@ const MailGateway: Component = () => {
                 />
               </svg>
             }
-            title="Connection lost"
-            description={
-              reconnecting()
-                ? 'Attempting to reconnect…'
-                : 'Unable to connect to the backend server'
-            }
+            title={disconnectedState().title}
+            description={disconnectedState().description}
             tone="danger"
             actions={
-              !reconnecting() ? (
+              disconnectedState().actionLabel ? (
                 <button
                   onClick={() => reconnect()}
                   class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
                 >
-                  Reconnect now
+                  {disconnectedState().actionLabel}
                 </button>
               ) : undefined
             }
@@ -366,8 +331,8 @@ const MailGateway: Component = () => {
                   />
                 </svg>
               }
-              title="No Mail Gateways configured"
-              description="Add a Proxmox Mail Gateway via Settings → Infrastructure → Proxmox to start collecting mail analytics and security metrics."
+              title={PMG_EMPTY_STATE_TITLE}
+              description={PMG_EMPTY_STATE_DESCRIPTION}
             />
           </Card>
         </Show>
@@ -559,7 +524,7 @@ const MailGateway: Component = () => {
               <SearchInput
                 value={searchTerm}
                 onChange={setSearchTerm}
-                placeholder="Search gateways..."
+                placeholder={PMG_SEARCH_PLACEHOLDER}
                 class="max-w-md"
                 clearOnEscape
               />
@@ -585,12 +550,12 @@ const MailGateway: Component = () => {
                       d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
                     />
                   </svg>
-                  <div class="text-muted text-sm">No gateways match "{searchTerm()}"</div>
+                  <div class="text-muted text-sm">{searchEmptyState().description}</div>
                   <button
                     onClick={() => setSearchTerm('')}
                     class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    Clear search
+                    {searchEmptyState().actionLabel}
                   </button>
                 </div>
               </Card>
@@ -693,7 +658,10 @@ const MailGateway: Component = () => {
                           >
                             {pmg.name}
                           </a>
-                          <StatusBadge status={pmg.status || ''} health={pmg.connectionHealth} />
+                          <ServiceHealthBadge
+                            status={pmg.status || ''}
+                            health={pmg.connectionHealth}
+                          />
                           <Show when={pmg.version}>
                             <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                               v{pmg.version}

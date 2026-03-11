@@ -13,6 +13,10 @@ import { formatRelativeTime } from '@/utils/format';
 import { AgentLedgerAPI } from '@/api/agentLedger';
 import type { AgentLedgerEntry } from '@/api/agentLedger';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import {
+  getAgentLedgerErrorState,
+  getAgentLedgerLoadingState,
+} from '@/utils/unifiedAgentInventoryPresentation';
 
 function usagePercent(total: number, limit: number): number {
   if (limit <= 0) return 0;
@@ -51,20 +55,22 @@ export function AgentLedgerPanel() {
 
         {/* Loading state */}
         <Show when={ledger.loading}>
-          <p class="text-sm text-muted py-4 text-center">Loading agent ledger...</p>
+          <p class="text-sm text-muted py-4 text-center">{getAgentLedgerLoadingState().text}</p>
         </Show>
 
         {/* Error state */}
         <Show when={ledger.error}>
           <div class="text-sm text-red-600 dark:text-red-400 py-4 text-center">
-            <p>Failed to load agent ledger.</p>
+            <p>{getAgentLedgerErrorState().title}</p>
             <button
               type="button"
               class="mt-2 text-xs text-primary hover:underline disabled:opacity-50"
               disabled={ledger.loading}
               onClick={() => refetch()}
             >
-              {ledger.loading ? 'Retrying\u2026' : 'Retry'}
+              {ledger.loading
+                ? getAgentLedgerErrorState().retryingLabel
+                : getAgentLedgerErrorState().retryLabel}
             </button>
           </div>
         </Show>

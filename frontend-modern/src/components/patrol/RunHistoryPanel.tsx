@@ -1,6 +1,8 @@
 import { For, Show } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import type { PatrolRunRecord } from '@/api/patrol';
+import { getRunHistoryEmptyState } from '@/utils/patrolEmptyStatePresentation';
+import { getRunHistoryLoadingState } from '@/utils/patrolRunPresentation';
 import { RunHistoryEntry } from './RunHistoryEntry';
 
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -47,13 +49,13 @@ export function RunHistoryPanel(props: RunHistoryPanelProps) {
       </div>
 
       <Show when={props.loading}>
-        <div class="text-xs text-muted">Loading run history…</div>
+        <div class="text-xs text-muted">{getRunHistoryLoadingState()}</div>
       </Show>
 
       <Show when={!props.loading && props.runs.length === 0}>
         <div class="text-center py-8">
           <RefreshCwIcon class="w-12 h-12 mx-auto text-slate-300 mb-3" />
-          <p class="text-sm text-muted">No patrol runs yet. Trigger a run to populate history.</p>
+          <p class="text-sm text-muted">{getRunHistoryEmptyState().text}</p>
         </div>
       </Show>
 

@@ -1,5 +1,9 @@
 import { createSignal, createEffect, onMount } from 'solid-js';
 import { formatTemperature, getTemperatureSymbol } from '@/utils/temperature';
+import {
+  getThresholdSliderFillClass,
+  getThresholdSliderTextClass,
+} from '@/utils/thresholdSliderPresentation';
 
 interface ThresholdSliderProps {
   value: number;
@@ -15,14 +19,6 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
   let thumbRef: HTMLDivElement | undefined;
   const [thumbPosition, setThumbPosition] = createSignal(0);
   const [isDragging, setIsDragging] = createSignal(false);
-
-  // Color mapping
-  const colorMap: Record<ThresholdSliderProps['type'], string> = {
-    cpu: 'text-blue-500',
-    memory: 'text-green-500',
-    disk: 'text-amber-500',
-    temperature: 'text-rose-500',
-  };
 
   // Calculate visual position - allow full range 0-100%
   const calculateVisualPosition = (value: number) => {
@@ -79,15 +75,7 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
 
       {/* Colored fill */}
       <div
-        class={`absolute left-0 h-3.5 rounded ${
-          props.type === 'cpu'
-            ? 'bg-blue-500'
-            : props.type === 'memory'
-              ? 'bg-green-500'
-              : props.type === 'disk'
-                ? 'bg-amber-500'
-                : 'bg-rose-500'
-        }`}
+        class={`absolute left-0 h-3.5 rounded ${getThresholdSliderFillClass(props.type)}`}
         style={{ width: `${calculateVisualPosition(props.value)}%` }}
       ></div>
 
@@ -114,7 +102,7 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       {/* Custom thumb with value */}
       <div
         ref={thumbRef}
-        class={`absolute top-1/2 pointer-events-none z-10 ${colorMap[props.type]}`}
+        class={`absolute top-1/2 pointer-events-none z-10 ${getThresholdSliderTextClass(props.type)}`}
         style={{
           left: `${thumbPosition()}%`,
           transform: `translateY(-50%) translateX(${

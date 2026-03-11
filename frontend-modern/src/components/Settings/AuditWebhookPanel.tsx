@@ -10,6 +10,14 @@ import { formControl } from '@/components/shared/Form';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { apiFetchJSON } from '@/utils/apiClient';
 import {
+  AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS,
+  AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS,
+  AUDIT_WEBHOOK_READONLY_NOTICE_CLASS,
+  getAuditWebhookEmptyStateCopy,
+  getAuditWebhookFeatureGateCopy,
+  getAuditWebhookLoadingState,
+} from '@/utils/auditWebhookPresentation';
+import {
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
@@ -18,6 +26,15 @@ import {
   entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getUpgradeActionButtonClass,
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
 
 interface AuditWebhookPanelProps {
   canManage?: boolean;
@@ -30,6 +47,8 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
   const [loading, setLoading] = createSignal(true);
   const [startingTrial, setStartingTrial] = createSignal(false);
   const canManage = () => props.canManage !== false;
+  const featureGateCopy = () => getAuditWebhookFeatureGateCopy();
+  const emptyStateCopy = () => getAuditWebhookEmptyStateCopy();
 
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
@@ -42,13 +61,13 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
         window.location.href = result.actionUrl;
         return;
       }
-      showSuccess('Pro trial started');
+      showSuccess(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        showWarning('Trial already used');
+        showWarning(getTrialAlreadyUsedMessage());
       } else {
-        showWarning(err instanceof Error ? err.message : 'Failed to start trial');
+        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
       }
     } finally {
       setStartingTrial(false);
@@ -142,9 +161,9 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
           <Card tone="info" padding="md">
             <div class="flex flex-col sm:flex-row items-center gap-4">
               <div class="flex-1 text-center sm:text-left">
-                <p class="font-semibold text-base-content">Audit Webhooks (Pro)</p>
+                <p class="font-semibold text-base-content">{featureGateCopy().title}</p>
                 <p class="mt-1 text-sm text-muted">
-                  Audit webhooks are part of the audit logging feature set and require Pro.
+                  {featureGateCopy().body}
                 </p>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
@@ -152,21 +171,21 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   href={getUpgradeActionUrlOrFallback('audit_logging')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  class={getUpgradeActionButtonClass()}
                   onClick={() =>
                     trackUpgradeClicked('settings_audit_webhook_panel', 'audit_logging')
                   }
                 >
-                  Upgrade to Pro
+                  {UPGRADE_ACTION_LABEL}
                 </a>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"
                     onClick={handleStartTrial}
                     disabled={startingTrial()}
-                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                    class={UPGRADE_TRIAL_LINK_CLASS}
                   >
-                    Start free trial
+                    {UPGRADE_TRIAL_LABEL}
                   </button>
                 </Show>
               </div>
@@ -188,7 +207,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
       >
         <div class="space-y-6 p-4 sm:p-6">
           <Show when={!canManage()}>
-            <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            <div class={AUDIT_WEBHOOK_READONLY_NOTICE_CLASS}>
               Audit webhook configuration is read-only for this account.
             </div>
           </Show>
@@ -200,14 +219,14 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
 
           <Show
             when={!loading()}
-            fallback={<p class="text-sm text-muted">Loading audit webhooks…</p>}
+            fallback={<p class="text-sm text-muted">{getAuditWebhookLoadingState().text}</p>}
           >
             <div class="space-y-3">
               <For each={webhookUrls()}>
                 {(url) => (
-                  <div class="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-alt p-3">
+                  <div class={AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS}>
                     <div class="flex items-center gap-3 overflow-hidden min-w-0">
-                      <div class="p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-md shrink-0">
+                      <div class={AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS}>
                         <ExternalLink size={16} />
                       </div>
                       <span class="text-sm font-medium text-base-content truncate">{url}</span>
@@ -227,7 +246,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
               <Show when={webhookUrls().length === 0}>
                 <div class="py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-border rounded-md">
                   <Globe size={36} class="opacity-40 mb-3" />
-                  <p class="text-sm">No audit webhooks configured yet.</p>
+                  <p class="text-sm">{emptyStateCopy().title}</p>
                 </div>
               </Show>
             </div>

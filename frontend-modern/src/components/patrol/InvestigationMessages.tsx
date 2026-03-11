@@ -7,6 +7,7 @@
 
 import { Component, createResource, Show, For } from 'solid-js';
 import { getInvestigationMessages, formatTimestamp, type ChatMessage } from '@/api/patrol';
+import { getInvestigationMessagesState } from '@/utils/patrolEmptyStatePresentation';
 
 interface InvestigationMessagesProps {
   findingId: string;
@@ -32,15 +33,17 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
 
   return (
     <div class="mt-2">
-      <Show when={messages.loading}>
+      <Show when={!getInvestigationMessagesState(messages.loading, !!messages()?.length).empty && getInvestigationMessagesState(messages.loading, !!messages()?.length).text}>
         <div class="flex items-center gap-2 text-xs text-muted py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          Loading messages...
+          {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}
         </div>
       </Show>
 
-      <Show when={!messages.loading && (!messages() || messages()!.length === 0)}>
-        <p class="text-xs text-muted py-1">No investigation messages available.</p>
+      <Show when={getInvestigationMessagesState(messages.loading, !!messages()?.length).empty}>
+        <p class="text-xs text-muted py-1">
+          {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}
+        </p>
       </Show>
 
       <Show when={!messages.loading && messages() && messages()!.length > 0}>

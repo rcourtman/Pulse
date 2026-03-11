@@ -14,6 +14,11 @@ import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
+import {
+  getDashboardDisconnectedBannerState,
+  getDashboardNoResourcesState,
+  getDashboardUnavailableState,
+} from '@/utils/dashboardEmptyStatePresentation';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import {
@@ -86,6 +91,11 @@ export default function Dashboard() {
 
   // True when we have renderable cached data (even if connection is now lost)
   const hasCachedData = createMemo(() => (resources()?.length ?? 0) > 0);
+  const dashboardDisconnectedBannerState = createMemo(() =>
+    getDashboardDisconnectedBannerState(reconnecting()),
+  );
+  const dashboardUnavailableState = createMemo(() => getDashboardUnavailableState());
+  const dashboardNoResourcesState = createMemo(() => getDashboardNoResourcesState());
 
   const isEmpty = createMemo(() => !isLoading() && initialLoadComplete() && !hasCachedData());
 
@@ -160,9 +170,11 @@ export default function Dashboard() {
           aria-live="polite"
         >
           <div>
-            <p class="text-sm font-medium text-amber-900 dark:text-amber-100">Connection lost</p>
+            <p class="text-sm font-medium text-amber-900 dark:text-amber-100">
+              {dashboardDisconnectedBannerState().title}
+            </p>
             <p class="text-xs text-amber-700 dark:text-amber-300">
-              Real-time data is currently unavailable. Showing last-known state.
+              {dashboardDisconnectedBannerState().description}
             </p>
           </div>
           <button
@@ -170,7 +182,7 @@ export default function Dashboard() {
             onClick={() => reconnect()}
             class="shrink-0 inline-flex items-center rounded-md border border-amber-300 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
           >
-            Reconnect
+            {dashboardDisconnectedBannerState().actionLabel}
           </button>
         </div>
       </Show>
@@ -222,27 +234,25 @@ export default function Dashboard() {
         <Match when={hasConnectionError() && !initialLoadComplete()}>
           <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
             <h2 class="text-base sm:text-lg font-semibold text-base-content">
-              Dashboard unavailable
+              {dashboardUnavailableState().title}
             </h2>
-            <p class="mt-2 text-sm text-muted">
-              Real-time dashboard data is currently unavailable. Reconnect to try again.
-            </p>
+            <p class="mt-2 text-sm text-muted">{dashboardUnavailableState().description}</p>
             <button
               type="button"
               onClick={() => reconnect()}
               class="mt-4 inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-surface-hover"
             >
-              Reconnect
+              {dashboardUnavailableState().actionLabel}
             </button>
           </section>
         </Match>
 
         <Match when={isEmpty()}>
           <section class="border border-border rounded-md p-4 sm:p-5 bg-surface" aria-live="polite">
-            <h2 class="text-base sm:text-lg font-semibold text-base-content">No resources yet</h2>
-            <p class="mt-2 text-sm text-muted">
-              Once connected platforms report resources, your dashboard overview will appear here.
-            </p>
+            <h2 class="text-base sm:text-lg font-semibold text-base-content">
+              {dashboardNoResourcesState().title}
+            </h2>
+            <p class="mt-2 text-sm text-muted">{dashboardNoResourcesState().description}</p>
           </section>
         </Match>
 

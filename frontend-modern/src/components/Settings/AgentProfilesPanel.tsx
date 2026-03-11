@@ -34,6 +34,10 @@ import {
   isAgentProfileAssignableResource,
 } from '@/utils/agentResources';
 import {
+  getAgentProfileAssignmentsEmptyState,
+  getAgentProfilesEmptyState,
+} from '@/utils/agentProfilesPresentation';
+import {
   getPreferredNamedEntityLabel,
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
@@ -43,6 +47,15 @@ import {
   getStatusIndicatorBadgeToneClasses,
   isConnectedHealthStatus,
 } from '@/utils/status';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getUpgradeActionButtonClass,
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -88,13 +101,15 @@ export const AgentProfilesPanel: Component = () => {
         window.location.href = result.actionUrl;
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
+        );
       }
     } finally {
       setStartingTrial(false);
@@ -408,22 +423,22 @@ export const AgentProfilesPanel: Component = () => {
                 href={getUpgradeActionUrlOrFallback('agent_profiles')}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-800"
+                class={getUpgradeActionButtonClass({ tone: 'warning', mobileFullWidth: false })}
                 onClick={() =>
                   trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')
                 }
               >
                 <Crown class="w-4 h-4" />
-                Upgrade to Pro
+                {UPGRADE_ACTION_LABEL}
               </a>
               <Show when={canStartTrial()}>
                 <button
                   type="button"
                   onClick={handleStartTrial}
                   disabled={startingTrial()}
-                  class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                  class={UPGRADE_TRIAL_LINK_CLASS}
                 >
-                  Start free trial
+                  {UPGRADE_TRIAL_LABEL}
                 </button>
               </Show>
             </div>
@@ -473,7 +488,7 @@ export const AgentProfilesPanel: Component = () => {
             <Show when={!loading() && profiles().length === 0}>
               <div class="text-center py-8 text-muted">
                 <Settings class="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p class="text-sm">No profiles yet. Create one to get started.</p>
+                <p class="text-sm">{getAgentProfilesEmptyState()}</p>
               </div>
             </Show>
 
@@ -533,7 +548,7 @@ export const AgentProfilesPanel: Component = () => {
                     },
                   ]}
                   keyExtractor={(profile) => profile.id}
-                  emptyState="No profiles yet. Create one to get started."
+                  emptyState={getAgentProfilesEmptyState()}
                   desktopMinWidth="600px"
                   class="border-x-0 sm:border-x border-border"
                 />
@@ -552,7 +567,7 @@ export const AgentProfilesPanel: Component = () => {
             <Show when={connectedAgents().length === 0}>
               <div class="text-center py-8 text-muted">
                 <Users class="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p class="text-sm">No agents connected. Install an agent to assign profiles.</p>
+                <p class="text-sm">{getAgentProfileAssignmentsEmptyState()}</p>
               </div>
             </Show>
 
@@ -622,7 +637,7 @@ export const AgentProfilesPanel: Component = () => {
                     },
                   ]}
                   keyExtractor={(agent) => agent.id}
-                  emptyState="No agents connected. Install an agent to assign profiles."
+                  emptyState={getAgentProfileAssignmentsEmptyState()}
                   desktopMinWidth="800px"
                   class="border-x-0 sm:border-x"
                 />

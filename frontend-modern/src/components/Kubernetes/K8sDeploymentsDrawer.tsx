@@ -16,6 +16,11 @@ import {
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
+import {
+  getK8sDeploymentsDrawerPresentation,
+  getK8sDeploymentsEmptyState,
+  getK8sDeploymentsLoadingState,
+} from '@/utils/k8sDeploymentPresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
 const PAGE_LIMIT = 100;
@@ -93,6 +98,7 @@ export const K8sDeploymentsDrawer: Component<{
   const [namespace, setNamespace] = createSignal('');
   const [search, setSearch] = createSignal('');
   const [lastAppliedNamespace, setLastAppliedNamespace] = createSignal('');
+  const drawerPresentation = getK8sDeploymentsDrawerPresentation();
 
   const clusterName = createMemo(() => normalize(props.cluster));
 
@@ -171,15 +177,15 @@ export const K8sDeploymentsDrawer: Component<{
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-base-content">Deployments</div>
-            <div class="text-xs text-muted">Desired state controllers (not Pods)</div>
+            <div class="text-sm font-semibold text-base-content">{drawerPresentation.title}</div>
+            <div class="text-xs text-muted">{drawerPresentation.description}</div>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
             <SearchField
               value={search()}
               onChange={setSearch}
-              placeholder="Search deployments..."
+              placeholder={drawerPresentation.searchPlaceholder}
               class="w-[12rem]"
               inputClass="py-1 text-xs font-medium shadow-sm"
             />
@@ -187,12 +193,12 @@ export const K8sDeploymentsDrawer: Component<{
             <Show when={namespaceOptions().length > 0}>
               <LabeledFilterSelect
                 id="k8s-deployments-namespace"
-                label="Namespace"
+                label={drawerPresentation.namespaceFilterLabel}
                 value={namespace()}
                 onChange={(e) => setNamespace(e.currentTarget.value)}
                 selectClass="min-w-[10rem]"
               >
-                <option value="">All namespaces</option>
+                <option value="">{drawerPresentation.allNamespacesLabel}</option>
                 <For each={namespaceOptions()}>{(ns) => <option value={ns}>{ns}</option>}</For>
               </LabeledFilterSelect>
             </Show>
@@ -202,7 +208,7 @@ export const K8sDeploymentsDrawer: Component<{
               onClick={() => openPods(namespace() || undefined)}
               class="rounded-md border border-border px-3 py-1 text-xs font-semibold shadow-sm hover:bg-surface-hover"
             >
-              Open Pods
+              {drawerPresentation.openPodsLabel}
             </button>
           </div>
         </div>
@@ -215,18 +221,7 @@ export const K8sDeploymentsDrawer: Component<{
             when={filteredDeployments().length > 0}
             fallback={
               <Card padding="lg">
-                <EmptyState
-                  title={
-                    deployments().length > 0
-                      ? 'No deployments match your filters'
-                      : 'No deployments found'
-                  }
-                  description={
-                    deployments().length > 0
-                      ? 'Try clearing the search or namespace filter.'
-                      : 'Enable the Kubernetes agent deployment collection, then wait for the next report.'
-                  }
-                />
+                <EmptyState {...getK8sDeploymentsEmptyState(deployments().length > 0)} />
               </Card>
             }
           >
@@ -235,13 +230,27 @@ export const K8sDeploymentsDrawer: Component<{
                 <Table class="w-full min-w-[760px] border-collapse text-xs">
                   <TableHeader class="bg-surface-alt text-muted border-b border-border">
                     <TableRow class="text-left text-[10px] uppercase tracking-wide">
-                      <TableHead class="px-3 py-2 font-medium">Deployment</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Namespace</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Desired</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Updated</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Ready</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Available</TableHead>
-                      <TableHead class="px-3 py-2 font-medium">Actions</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.deploymentColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.namespaceColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.desiredColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.updatedColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.readyColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.availableColumnLabel}
+                      </TableHead>
+                      <TableHead class="px-3 py-2 font-medium">
+                        {drawerPresentation.actionsColumnLabel}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody class="divide-y divide-border-subtle">
@@ -284,7 +293,7 @@ export const K8sDeploymentsDrawer: Component<{
                                 onClick={() => openPods(dep.kubernetes?.namespace)}
                                 class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                               >
-                                View Pods
+                                {drawerPresentation.viewPodsLabel}
                               </button>
                             </TableCell>
                           </TableRow>
@@ -299,7 +308,7 @@ export const K8sDeploymentsDrawer: Component<{
         }
       >
         <Card padding="lg">
-          <EmptyState title="Loading deployments..." description="Fetching unified resources." />
+          <EmptyState {...getK8sDeploymentsLoadingState()} />
         </Card>
       </Show>
     </div>

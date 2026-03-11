@@ -3,6 +3,14 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { OrgsAPI, type Organization, type OrganizationMember } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
 import { canManageOrg, formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
+import {
+  getOrganizationDisplayNameRequiredMessage,
+  getOrganizationDisplayNameUpdateErrorMessage,
+  getOrganizationOverviewMembersEmptyState,
+  getOrganizationSettingsLoadErrorMessage,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
+} from '@/utils/organizationSettingsPresentation';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
@@ -37,13 +45,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
     } catch (error) {
       logger.error('Failed to load organization overview', error);
       const msg = error instanceof Error ? error.message : '';
-      if (msg.includes('402')) {
-        notificationStore.error('Multi-tenant requires an Enterprise license');
-      } else if (msg.includes('501')) {
-        notificationStore.error('Multi-tenant is not enabled on this server');
-      } else {
-        notificationStore.error('Failed to load organization details');
-      }
+      notificationStore.error(getOrganizationSettingsLoadErrorMessage(msg, 'overview'));
     } finally {
       setLoading(false);
     }
@@ -54,7 +56,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
     if (!currentOrg) return;
     const nextName = displayNameDraft().trim();
     if (!nextName) {
-      notificationStore.error('Display name is required');
+      notificationStore.error(getOrganizationDisplayNameRequiredMessage());
       return;
     }
     if (nextName === currentOrg.displayName) {
@@ -70,7 +72,9 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
     } catch (error) {
       logger.error('Failed to update organization display name', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update organization name',
+        getOrganizationDisplayNameUpdateErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
       );
     } finally {
       setSaving(false);
@@ -90,7 +94,11 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
   return (
     <Show
       when={isMultiTenantEnabled()}
-      fallback={<div class="p-4 text-sm ">This feature is not available.</div>}
+      fallback={
+        <div class={ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS}>
+          {ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE}
+        </div>
+      }
     >
       <div class="space-y-6">
         <SettingsPanel
@@ -237,7 +245,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                           },
                         ]}
                         keyExtractor={(member) => member.userId}
-                        emptyState="No members found."
+                        emptyState={getOrganizationOverviewMembersEmptyState()}
                         desktopMinWidth="560px"
                         class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-border"
                       />

@@ -1,8 +1,9 @@
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
-import type { InvestigationStatus } from '@/api/patrol';
+import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_LOOP_STATE_CLASSES = 'border-border bg-surface-alt text-muted';
+const DEFAULT_FINDING_STATUS_LABEL = 'Dismissed';
 
 const FINDING_SOURCE_LABELS: Record<string, string> = {
   threshold: 'Alert',
@@ -56,6 +57,14 @@ const INVESTIGATION_STATUS_CLASSES: Record<InvestigationStatus, string> = {
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
 };
 
+const INVESTIGATION_STATUS_LABELS: Record<InvestigationStatus, string> = {
+  pending: 'Pending',
+  running: 'Running',
+  completed: 'Completed',
+  failed: 'Failed',
+  needs_attention: 'Needs Attention',
+};
+
 const FINDING_LOOP_STATE_CLASSES: Record<string, string> = {
   detected:
     'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
@@ -98,6 +107,92 @@ const FINDING_LIFECYCLE_LABELS: Record<string, string> = {
   loop_transition_violation: 'Invalid transition blocked',
 };
 
+const FINDING_STATUS_BADGE_CLASSES: Record<string, string> = {
+  resolved:
+    'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
+  snoozed:
+    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  dismissed: DEFAULT_BADGE_CLASSES,
+};
+
+const FINDING_STATUS_LABELS: Record<string, string> = {
+  resolved: 'Resolved',
+  snoozed: 'Snoozed',
+  dismissed: 'Dismissed',
+};
+
+const INVESTIGATION_OUTCOME_LABELS: Record<InvestigationOutcome, string> = {
+  resolved: 'Resolved',
+  fix_queued: 'Fix queued',
+  fix_executed: 'Fix applied',
+  fix_failed: 'Fix failed',
+  needs_attention: 'Needs attention',
+  cannot_fix: 'Cannot auto-fix',
+  timed_out: 'Timed out',
+  fix_verified: 'Fix verified',
+  fix_verification_failed: 'Verification failed',
+  fix_verification_unknown: 'Verification unknown',
+};
+
+const INVESTIGATION_OUTCOME_CLASSES: Record<InvestigationOutcome, string> = {
+  resolved:
+    'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
+  fix_queued:
+    'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  fix_executed:
+    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
+  fix_failed:
+    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  needs_attention:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
+  cannot_fix: 'border-border bg-surface-alt text-muted',
+  timed_out: 'border-border bg-surface-alt text-base-content',
+  fix_verified:
+    'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
+  fix_verification_failed:
+    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  fix_verification_unknown:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
+};
+
+const FINDING_SEVERITY_SORT_ORDER: Record<string, number> = {
+  critical: 0,
+  warning: 1,
+  watch: 2,
+  info: 3,
+};
+
+const FINDING_SEVERITY_COMPACT_LABELS: Record<string, string> = {
+  critical: 'CRIT',
+  warning: 'WARN',
+  watch: 'WATCH',
+  info: 'INFO',
+};
+
+const INVESTIGATION_OUTCOME_SORT_ORDER: Record<string, number> = {
+  fix_verification_failed: 0,
+  fix_failed: 0,
+  fix_verification_unknown: 1,
+  timed_out: 1,
+  needs_attention: 1,
+  cannot_fix: 1,
+  fix_queued: 2,
+};
+
+export type FindingsFilter = 'all' | 'active' | 'resolved' | 'approvals' | 'attention';
+
+export interface FindingFilterOption {
+  value: FindingsFilter;
+  label: string;
+  tone?: 'default' | 'warning';
+  count?: number;
+}
+
+export interface FindingEmptyStateCopy {
+  title: string;
+  body?: string;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -108,12 +203,46 @@ export const getFindingSeverityBadgeClasses = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_CLASSES[severity] || DEFAULT_BADGE_CLASSES;
 
+export const getFindingStatusBadgeClasses = (status: string): string =>
+  FINDING_STATUS_BADGE_CLASSES[status] || DEFAULT_BADGE_CLASSES;
+
+export const getFindingStatusLabel = (status: string): string =>
+  FINDING_STATUS_LABELS[status] || DEFAULT_FINDING_STATUS_LABEL;
+
 export const getFindingSeverityToneClasses = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_TONE_CLASSES[severity] || 'bg-surface-alt text-muted';
 
+export const getFindingSeveritySortOrder = (
+  severity: UnifiedFinding['severity'] | string,
+): number => FINDING_SEVERITY_SORT_ORDER[severity] ?? 4;
+
+export const getFindingSeverityCompactLabel = (
+  severity: UnifiedFinding['severity'] | string,
+): string => FINDING_SEVERITY_COMPACT_LABELS[severity] || String(severity).toUpperCase();
+
 export const getInvestigationStatusBadgeClasses = (status: InvestigationStatus): string =>
   INVESTIGATION_STATUS_CLASSES[status] || DEFAULT_BADGE_CLASSES;
+
+export const getInvestigationStatusLabel = (status: InvestigationStatus | string): string =>
+  INVESTIGATION_STATUS_LABELS[status as InvestigationStatus] || String(status);
+
+export const getInvestigationOutcomeBadgeClasses = (
+  outcome: InvestigationOutcome | string,
+): string => INVESTIGATION_OUTCOME_CLASSES[outcome as InvestigationOutcome] || DEFAULT_BADGE_CLASSES;
+
+export const getInvestigationOutcomeLabel = (
+  outcome: InvestigationOutcome | string,
+): string => INVESTIGATION_OUTCOME_LABELS[outcome as InvestigationOutcome] || String(outcome);
+
+export const getInvestigationOutcomeSortOrder = (
+  outcome: InvestigationOutcome | string | undefined,
+): number => {
+  if (!outcome) {
+    return 3;
+  }
+  return INVESTIGATION_OUTCOME_SORT_ORDER[outcome] ?? 3;
+};
 
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>
   FINDING_LOOP_STATE_CLASSES[loopState] || DEFAULT_LOOP_STATE_CLASSES;
@@ -122,3 +251,112 @@ export const formatFindingLoopState = (loopState: string): string => loopState.r
 
 export const formatFindingLifecycleType = (value: string): string =>
   FINDING_LIFECYCLE_LABELS[value] || value.replace(/_/g, ' ');
+
+export const getFindingResolutionReason = (
+  finding: Pick<
+    UnifiedFinding,
+    'isThreshold' | 'source' | 'alertType' | 'investigationOutcome'
+  >,
+  resolvedTime: string,
+): string => {
+  if (finding.isThreshold || finding.source === 'threshold') {
+    switch (finding.alertType || '') {
+      case 'powered-off':
+        return `Guest came online ${resolvedTime}`;
+      case 'host-offline':
+        return `Agent came online ${resolvedTime}`;
+      case 'cpu':
+        return `CPU returned to normal ${resolvedTime}`;
+      case 'memory':
+        return `Memory returned to normal ${resolvedTime}`;
+      case 'disk':
+        return `Disk usage returned to normal ${resolvedTime}`;
+      case 'network':
+        return `Network recovered ${resolvedTime}`;
+      default:
+        return `Condition cleared ${resolvedTime}`;
+    }
+  }
+
+  if (finding.source === 'ai-patrol') {
+    switch (finding.investigationOutcome) {
+      case 'fix_verified':
+        return `Fixed by Patrol ${resolvedTime}`;
+      case 'fix_executed':
+        return `Fix applied by Patrol ${resolvedTime}`;
+      case 'resolved':
+        return `Resolved by Patrol ${resolvedTime}`;
+      case 'fix_failed':
+        return `Resolved after fix failed ${resolvedTime}`;
+      case 'fix_queued':
+        return `Resolved while fix was pending ${resolvedTime}`;
+      case 'fix_verification_failed':
+        return `Resolved after failed verification ${resolvedTime}`;
+      case 'fix_verification_unknown':
+        return `Resolved after inconclusive verification ${resolvedTime}`;
+      case 'timed_out':
+        return `Resolved after investigation timeout ${resolvedTime}`;
+      case 'cannot_fix':
+        return `Resolved manually ${resolvedTime}`;
+      case 'needs_attention':
+        return `Resolved after manual review ${resolvedTime}`;
+      default:
+        return `Issue no longer detected ${resolvedTime}`;
+    }
+  }
+
+  return `Resolved ${resolvedTime}`;
+};
+
+export const buildFindingFilterOptions = (counts: {
+  needsAttentionCount: number;
+  pendingApprovalCount: number;
+}): FindingFilterOption[] => {
+  const options: FindingFilterOption[] = [
+    { value: 'active', label: 'Active' },
+    { value: 'all', label: 'All' },
+    { value: 'resolved', label: 'Resolved' },
+  ];
+
+  if (counts.needsAttentionCount > 0) {
+    options.push({
+      value: 'attention',
+      label: 'Needs Attention',
+      tone: 'warning',
+      count: counts.needsAttentionCount,
+    });
+  }
+
+  if (counts.pendingApprovalCount > 0) {
+    options.push({
+      value: 'approvals',
+      label: 'Approvals',
+      tone: 'warning',
+      count: counts.pendingApprovalCount,
+    });
+  }
+
+  return options;
+};
+
+export const getFindingEmptyStateCopy = (filter: FindingsFilter): FindingEmptyStateCopy => {
+  switch (filter) {
+    case 'active':
+      return {
+        title: 'No active findings',
+        body: 'Your infrastructure looks healthy!',
+      };
+    case 'attention':
+      return {
+        title: 'No findings need attention right now.',
+      };
+    case 'approvals':
+      return {
+        title: 'No pending approvals.',
+      };
+    default:
+      return {
+        title: 'No Patrol findings to display',
+      };
+  }
+};

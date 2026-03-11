@@ -19,12 +19,34 @@ import { logger } from '@/utils/logger';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { Dialog } from '@/components/shared/Dialog';
 import { licenseStatus, startProTrial } from '@/stores/license';
+import {
+  buildNodeModalMonitoringPayload,
+  getNodeEndpointHelp,
+  getNodeEndpointPlaceholder,
+  getNodeGuestUrlPlaceholder,
+  getNodeModalDefaultFormData,
+  getNodeMonitoringCoverageCopy,
+  getNodeModalTestResultPresentation,
+  getNodeProductName,
+  getTemperatureMonitoringLockedCopy,
+  getNodeTokenIdPlaceholder,
+  getNodeUsernameHelp,
+  getNodeUsernamePlaceholder,
+  type NodeModalFormData,
+  type NodeModalNodeType,
+} from '@/utils/nodeModalPresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getTrialTryAgainLaterMessage,
+} from '@/utils/upgradePresentation';
 
 interface NodeModalProps {
   isOpen: boolean;
   resetKey?: number;
   onClose: () => void;
-  nodeType: 'pve' | 'pbs' | 'pmg';
+  nodeType: NodeModalNodeType;
   editingNode?: NodeConfig;
   prefillNode?: Partial<NodeConfig>;
   onSave: (nodeData: Partial<NodeConfig>) => void;
@@ -65,28 +87,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   } | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
 
-  // Function to get clean form data
-  const getCleanFormData = (nodeType: 'pve' | 'pbs' | 'pmg' = props.nodeType) => ({
-    name: '',
-    host: '',
-    guestURL: '',
-    authType: nodeType === 'pmg' ? 'password' : ('token' as 'password' | 'token'),
-    setupMode: 'agent' as 'agent' | 'auto' | 'manual', // Default to agent install (recommended)
-    user: '',
-    password: '',
-    tokenName: '',
-    tokenValue: '',
-    fingerprint: '',
-    verifySSL: true,
-    monitorPhysicalDisks: false,
-    physicalDiskPollingMinutes: 5,
-    monitorMailStats: true,
-    monitorQueues: true,
-    monitorQuarantine: true,
-    monitorDomainStats: false,
-  });
-
-  const [formData, setFormData] = createSignal(getCleanFormData());
+  const [formData, setFormData] = createSignal<NodeModalFormData>(
+    getNodeModalDefaultFormData(props.nodeType),
+  );
   const [quickSetupCommand, setQuickSetupCommand] = createSignal('');
   const [quickSetupToken, setQuickSetupToken] = createSignal('');
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
@@ -121,15 +124,19 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         }
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else if (statusCode === 429) {
-        notificationStore.error('Try again later');
+        notificationStore.error(getTrialTryAgainLaterMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
+            branded: true,
+          }),
+        );
       }
     } finally {
       setStartingTrial(false);
@@ -146,6 +153,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       return '';
     }
   };
+  const testResultPresentation = createMemo(() =>
+    getNodeModalTestResultPresentation(testResult()?.status),
+  );
 
   // Track previous state to detect changes
   let previousResetKey: number | undefined = undefined;
@@ -163,7 +173,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // Force reset if resetKey changed
     if (key !== undefined && key !== previousResetKey) {
       previousResetKey = key;
-      setFormData(() => getCleanFormData(props.nodeType));
+      setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       setQuickSetupCommand('');
       setQuickSetupToken('');
       setQuickSetupExpiry(null);
@@ -175,7 +185,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // Force reset if node type changed
     if (nodeType !== previousNodeType && previousNodeType !== undefined) {
       previousNodeType = nodeType;
-      setFormData(() => getCleanFormData(props.nodeType));
+      setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       setQuickSetupCommand('');
       setQuickSetupToken('');
       setQuickSetupExpiry(null);
@@ -187,7 +197,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
     // Reset when opening for new node
     if (isOpen && !editingNode && !prefillNode) {
-      setFormData(() => getCleanFormData(props.nodeType));
+      setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       setQuickSetupCommand('');
       setQuickSetupToken('');
       setQuickSetupExpiry(null);
@@ -229,7 +239,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
           })
         : undefined;
 
-    const formSource: ReturnType<typeof getCleanFormData> = {
+    const formSource: NodeModalFormData = {
       name: node.name || '',
       host: node.host || '',
       guestURL: ('guestURL' in node ? node.guestURL : '') || '',
@@ -302,32 +312,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       }
     }
 
-    // Add monitor settings based on type
-    if (props.nodeType === 'pve') {
-      Object.assign(nodeData, {
-        monitorVMs: true,
-        monitorContainers: true,
-        monitorStorage: true,
-        monitorBackups: true,
-        monitorPhysicalDisks: data.monitorPhysicalDisks,
-        physicalDiskPollingMinutes: data.physicalDiskPollingMinutes,
-      });
-    } else if (props.nodeType === 'pbs') {
-      Object.assign(nodeData, {
-        monitorDatastores: true,
-        monitorSyncJobs: true,
-        monitorVerifyJobs: true,
-        monitorPruneJobs: true,
-        monitorGarbageJobs: true,
-      });
-    } else {
-      Object.assign(nodeData, {
-        monitorMailStats: data.monitorMailStats,
-        monitorQueues: data.monitorQueues,
-        monitorQuarantine: data.monitorQuarantine,
-        monitorDomainStats: data.monitorDomainStats,
-      });
-    }
+    Object.assign(nodeData, buildNodeModalMonitoringPayload(props.nodeType, data));
 
     props.onSave(nodeData);
   };
@@ -464,30 +449,19 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     }
   };
 
-  const nodeProductName = () => {
-    switch (props.nodeType) {
-      case 'pve':
-        return 'Proxmox VE';
-      case 'pbs':
-        return 'Proxmox Backup Server';
-      default:
-        return 'Proxmox Mail Gateway';
-    }
-  };
-
   return (
     <Dialog
       isOpen={props.isOpen}
       onClose={props.onClose}
       panelClass="max-w-2xl"
-      ariaLabel={`${isEditingExistingNode() ? 'Edit' : 'Add'} ${nodeProductName()} node`}
+      ariaLabel={`${isEditingExistingNode() ? 'Edit' : 'Add'} ${getNodeProductName(props.nodeType)} node`}
     >
       <div class="relative w-full">
         <form onSubmit={handleSubmit}>
           {/* Header */}
           <div class="flex items-center justify-between p-4 border-b border-border">
             <SectionHeader
-              title={`${isEditingExistingNode() ? 'Edit' : 'Add'} ${nodeProductName()} node`}
+              title={`${isEditingExistingNode() ? 'Edit' : 'Add'} ${getNodeProductName(props.nodeType)} node`}
               size="md"
               class="flex-1"
             />
@@ -543,21 +517,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     type="text"
                     value={formData().host}
                     onInput={(e) => updateField('host', e.currentTarget.value)}
-                    placeholder={
-                      props.nodeType === 'pve'
-                        ? 'https://proxmox.example.com:8006'
-                        : props.nodeType === 'pbs'
-                          ? 'https://backup.example.com:8007'
-                          : 'https://mail-gateway.example.com:8006'
-                    }
+                    placeholder={getNodeEndpointPlaceholder(props.nodeType)}
                     required
                     class={controlClass()}
                   />
-                  <Show when={props.nodeType === 'pbs'}>
-                    <p class={formHelpText}>PBS requires HTTPS (not HTTP). Default port is 8007.</p>
-                  </Show>
-                  <Show when={props.nodeType === 'pmg'}>
-                    <p class={formHelpText}>PMG API listens on HTTPS. Default port is 8006.</p>
+                  <Show when={getNodeEndpointHelp(props.nodeType)}>
+                    {(help) => <p class={formHelpText}>{help()}</p>}
                   </Show>
                 </div>
 
@@ -569,13 +534,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     type="text"
                     value={formData().guestURL}
                     onInput={(e) => updateField('guestURL', e.currentTarget.value)}
-                    placeholder={
-                      props.nodeType === 'pve'
-                        ? 'https://pve.yourdomain.com'
-                        : props.nodeType === 'pbs'
-                          ? 'https://pbs.yourdomain.com'
-                          : 'https://pmg.yourdomain.com'
-                    }
+                    placeholder={getNodeGuestUrlPlaceholder(props.nodeType)}
                     class={controlClass()}
                   />
                   <p class={formHelpText}>
@@ -648,21 +607,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       type="text"
                       value={formData().user}
                       onInput={(e) => updateField('user', e.currentTarget.value)}
-                      placeholder={
-                        props.nodeType === 'pve'
-                          ? 'root@pam'
-                          : props.nodeType === 'pbs'
-                            ? 'admin@pbs'
-                            : 'root@pam'
-                      }
+                      placeholder={getNodeUsernamePlaceholder(props.nodeType)}
                       required={formData().authType === 'password'}
                       class={controlClass()}
                     />
-                    <Show when={props.nodeType === 'pbs'}>
-                      <p class={formHelpText}>Must include realm (e.g., admin@pbs).</p>
-                    </Show>
-                    <Show when={props.nodeType === 'pmg'}>
-                      <p class={formHelpText}>Include realm (e.g., root@pam or api@pmg).</p>
+                    <Show when={getNodeUsernameHelp(props.nodeType)}>
+                      {(help) => <p class={formHelpText}>{help()}</p>}
                     </Show>
                   </div>
 
@@ -1931,11 +1881,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         type="text"
                         value={formData().tokenName}
                         onInput={(e) => updateField('tokenName', e.currentTarget.value)}
-                        placeholder={
-                          props.nodeType === 'pve'
-                            ? 'pulse-monitor@pve!pulse-token'
-                            : 'pulse-monitor@pbs!pulse-token'
-                        }
+                        placeholder={getNodeTokenIdPlaceholder(props.nodeType)}
                         required={formData().authType === 'token'}
                         class={controlClass('font-mono')}
                       />
@@ -2012,9 +1958,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 titleClass="text-base-content"
               />
               <p class="text-sm text-muted">
-                {props.nodeType === 'pmg'
-                  ? 'Pulse captures mail flow analytics, rejection causes, and quarantine visibility without additional scripts.'
-                  : 'Pulse automatically tracks all supported resources for this node — virtual machines, containers, storage usage, backups, and PBS job activity — so you always get full visibility without extra configuration.'}
+                {getNodeMonitoringCoverageCopy(props.nodeType)}
               </p>
             </div>
 
@@ -2105,8 +2049,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     </Show>
                     <Show when={props.temperatureMonitoringLocked}>
                       <p class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                        Locked by environment variables. Remove the override
-                        (ENABLE_TEMPERATURE_MONITORING) and restart Pulse to manage it in the UI.
+                        {getTemperatureMonitoringLockedCopy()}
                       </p>
                     </Show>
                   </div>
@@ -2199,17 +2142,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
               });
               return null;
             })()}
-            <div
-              class={`mx-6 p-3 rounded-md text-sm ${
-                testResult()?.status === 'success'
-                  ? 'bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
-                  : testResult()?.status === 'warning'
-                    ? 'bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
-                    : 'bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
-              }`}
-            >
+            <div class={testResultPresentation().panelClass}>
               <div class="flex items-start gap-2">
-                <Show when={testResult()?.status === 'success'}>
+                <Show when={testResultPresentation().icon === 'success'}>
                   <svg
                     width="16"
                     height="16"
@@ -2223,7 +2158,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     <circle cx="12" cy="12" r="10"></circle>
                   </svg>
                 </Show>
-                <Show when={testResult()?.status === 'warning'}>
+                <Show when={testResultPresentation().icon === 'warning'}>
                   <svg
                     width="16"
                     height="16"
@@ -2236,7 +2171,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                   </svg>
                 </Show>
-                <Show when={testResult()?.status === 'error'}>
+                <Show when={testResultPresentation().icon === 'error'}>
                   <svg
                     width="16"
                     height="16"
@@ -2251,7 +2186,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     <line x1="9" y1="9" x2="15" y2="15"></line>
                   </svg>
                 </Show>
-                <div class="flex-1">
+                <div class={`flex-1 ${testResultPresentation().textClass}`}>
                   <p>{testResult()?.message}</p>
                   <Show when={testResult()?.isCluster}>
                     <p class="mt-1 text-xs opacity-80">

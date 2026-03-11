@@ -7,7 +7,15 @@ import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { getLicenseTierLabel } from '@/utils/licensePresentation';
+import {
+  getLicenseTierLabel,
+  getOrganizationBillingLicenseStatusLabel,
+} from '@/utils/licensePresentation';
+import {
+  getOrganizationSettingsLoadErrorMessage,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
+} from '@/utils/organizationSettingsPresentation';
 import CreditCard from 'lucide-solid/icons/credit-card';
 
 interface OrganizationBillingPanelProps {
@@ -57,13 +65,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
     } catch (error) {
       logger.error('Failed to load billing data', error);
       const msg = error instanceof Error ? error.message : '';
-      if (msg.includes('402')) {
-        notificationStore.error('Multi-tenant requires an Enterprise license');
-      } else if (msg.includes('501')) {
-        notificationStore.error('Multi-tenant is not enabled on this server');
-      } else {
-        notificationStore.error('Failed to load billing and plan details');
-      }
+      notificationStore.error(getOrganizationSettingsLoadErrorMessage(msg, 'billing'));
     } finally {
       setLoading(false);
     }
@@ -82,7 +84,11 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
   return (
     <Show
       when={isMultiTenantEnabled()}
-      fallback={<div class="p-4 text-sm ">This feature is not available.</div>}
+      fallback={
+        <div class={ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS}>
+          {ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE}
+        </div>
+      }
     >
       <div class="space-y-6">
         <SettingsPanel
@@ -143,11 +149,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
               <div class="rounded-md border border-border p-3">
                 <p class="text-xs uppercase tracking-wide text-muted">License Status</p>
                 <p class="mt-1 text-sm font-medium text-base-content">
-                  {status()?.valid
-                    ? status()?.in_grace_period
-                      ? 'Grace Period'
-                      : 'Active'
-                    : 'No License'}
+                  {getOrganizationBillingLicenseStatusLabel(status())}
                 </p>
               </div>
               <div class="rounded-md border border-border p-3">

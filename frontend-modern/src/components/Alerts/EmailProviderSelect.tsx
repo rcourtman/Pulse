@@ -1,6 +1,37 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import { NotificationsAPI } from '@/api/notifications';
 import { logger } from '@/utils/logger';
+import {
+  ALERT_EMAIL_FROM_ADDRESS_LABEL,
+  ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER,
+  ALERT_EMAIL_MANUAL_CONFIGURATION_LABEL,
+  ALERT_EMAIL_MAX_RETRIES_LABEL,
+  ALERT_EMAIL_PASSWORD_LABEL,
+  ALERT_EMAIL_PASSWORD_PLACEHOLDER,
+  ALERT_EMAIL_PROVIDER_LABEL,
+  ALERT_EMAIL_RATE_LIMIT_LABEL,
+  ALERT_EMAIL_RATE_LIMIT_SUFFIX,
+  ALERT_EMAIL_REAPPLY_DEFAULTS_LABEL,
+  ALERT_EMAIL_RECIPIENTS_LABEL,
+  ALERT_EMAIL_REPLY_TO_LABEL,
+  ALERT_EMAIL_REPLY_TO_PLACEHOLDER,
+  ALERT_EMAIL_RETRY_DELAY_LABEL,
+  ALERT_EMAIL_SECURITY_LABEL,
+  ALERT_EMAIL_SECURITY_NONE_LABEL,
+  ALERT_EMAIL_SECURITY_STARTTLS_LABEL,
+  ALERT_EMAIL_SECURITY_TLS_LABEL,
+  ALERT_EMAIL_SMTP_PORT_LABEL,
+  ALERT_EMAIL_SMTP_PORT_PLACEHOLDER,
+  ALERT_EMAIL_SMTP_SERVER_LABEL,
+  ALERT_EMAIL_SMTP_SERVER_PLACEHOLDER,
+  ALERT_EMAIL_USERNAME_LABEL,
+  getAlertEmailAdvancedToggleLabel,
+  getAlertEmailProviderOptionLabel,
+  getAlertEmailRecipientsPlaceholder,
+  getAlertEmailSetupInstructionsToggleLabel,
+  getAlertEmailTestButtonLabel,
+  getAlertEmailUsernamePlaceholder,
+} from '@/utils/alertEmailPresentation';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
 interface EmailProvider {
@@ -87,19 +118,17 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   return (
     <div class="space-y-4 text-sm overflow-hidden">
       <div class={formField}>
-        <label class={labelClass()}>Email provider</label>
+        <label class={labelClass()}>{ALERT_EMAIL_PROVIDER_LABEL}</label>
         <div class="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           <select
             value={props.config.provider}
             onChange={(e) => handleProviderChange(e.currentTarget.value)}
             class={`${controlClass('px-2 py-1.5')} sm:w-auto sm:min-w-[180px]`}
           >
-            <option value="">Manual configuration</option>
+            <option value="">{ALERT_EMAIL_MANUAL_CONFIGURATION_LABEL}</option>
             <For each={providers()}>
               {(provider) => (
-                <option value={provider.name}>
-                  {provider.name} ({provider.smtpHost}:{provider.smtpPort})
-                </option>
+                <option value={provider.name}>{getAlertEmailProviderOptionLabel(provider)}</option>
               )}
             </For>
           </select>
@@ -112,7 +141,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
               }}
               class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
             >
-              Reapply defaults
+              {ALERT_EMAIL_REAPPLY_DEFAULTS_LABEL}
             </button>
           </Show>
         </div>
@@ -125,7 +154,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             onClick={() => setShowInstructions(!showInstructions())}
             class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-300"
           >
-            {showInstructions() ? 'Hide setup instructions' : 'Show setup instructions'}
+            {getAlertEmailSetupInstructionsToggleLabel(showInstructions())}
           </button>
           <Show when={showInstructions()}>
             <div class={instructionBoxClass}>{currentProvider()!.instructions}</div>
@@ -138,18 +167,18 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
 
       <div class="grid w-full gap-3 sm:grid-cols-2">
         <div class={formField}>
-          <label class={labelClass()}>SMTP server</label>
+          <label class={labelClass()}>{ALERT_EMAIL_SMTP_SERVER_LABEL}</label>
           <input
             type="text"
             value={props.config.server}
             onInput={(e) => props.onChange({ ...props.config, server: e.currentTarget.value })}
-            placeholder="smtp.example.com"
+            placeholder={ALERT_EMAIL_SMTP_SERVER_PLACEHOLDER}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>SMTP port</label>
+          <label class={labelClass()}>{ALERT_EMAIL_SMTP_PORT_LABEL}</label>
           <input
             type="number"
             value={props.config.port || ''}
@@ -166,58 +195,58 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 props.onChange({ ...props.config, port: 587 });
               }
             }}
-            placeholder="587"
+            placeholder={ALERT_EMAIL_SMTP_PORT_PLACEHOLDER}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>From address</label>
+          <label class={labelClass()}>{ALERT_EMAIL_FROM_ADDRESS_LABEL}</label>
           <input
             type="email"
             value={props.config.from}
             onInput={(e) => props.onChange({ ...props.config, from: e.currentTarget.value })}
-            placeholder="noreply@example.com"
+            placeholder={ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>Reply-to address</label>
+          <label class={labelClass()}>{ALERT_EMAIL_REPLY_TO_LABEL}</label>
           <input
             type="email"
             value={props.config.replyTo || ''}
             onInput={(e) => props.onChange({ ...props.config, replyTo: e.currentTarget.value })}
-            placeholder="admin@example.com"
+            placeholder={ALERT_EMAIL_REPLY_TO_PLACEHOLDER}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>Username</label>
+          <label class={labelClass()}>{ALERT_EMAIL_USERNAME_LABEL}</label>
           <input
             type="text"
             value={props.config.username}
             onInput={(e) => props.onChange({ ...props.config, username: e.currentTarget.value })}
-            placeholder={props.config.provider === 'SendGrid' ? 'apikey' : 'username@example.com'}
+            placeholder={getAlertEmailUsernamePlaceholder(props.config.provider)}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
 
         <div class={formField}>
-          <label class={labelClass()}>Password / API key</label>
+          <label class={labelClass()}>{ALERT_EMAIL_PASSWORD_LABEL}</label>
           <input
             type="password"
             value={props.config.password}
             onInput={(e) => props.onChange({ ...props.config, password: e.currentTarget.value })}
-            placeholder="••••••••"
+            placeholder={ALERT_EMAIL_PASSWORD_PLACEHOLDER}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
       </div>
 
       <div class={formField}>
-        <label class={labelClass()}>Recipients (one per line)</label>
+        <label class={labelClass()}>{ALERT_EMAIL_RECIPIENTS_LABEL}</label>
         <textarea
           value={props.config.to.join('\n')}
           onInput={(e) => {
@@ -234,7 +263,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           }}
           rows={3}
           class={controlClass('px-2 py-1.5 font-mono leading-snug')}
-          placeholder={`Leave empty to use ${props.config.from || 'the from address'}\nOr add one recipient per line`}
+          placeholder={getAlertEmailRecipientsPlaceholder(props.config.from)}
         />
       </div>
 
@@ -244,14 +273,16 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           onClick={() => setShowAdvanced(!showAdvanced())}
           class="text-xs font-semibold uppercase tracking-wide transition-colors hover:text-muted"
         >
-          {showAdvanced() ? 'Hide advanced options' : 'Show advanced options'}
+          {getAlertEmailAdvancedToggleLabel(showAdvanced())}
         </button>
 
         <Show when={showAdvanced()}>
           <div class="mt-3 space-y-3 text-xs text-base-content">
             <div class="grid gap-3 sm:grid-cols-3">
               <div class="flex items-center gap-2">
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Security</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  {ALERT_EMAIL_SECURITY_LABEL}
+                </label>
                 <select
                   value={props.config.tls ? 'tls' : props.config.startTLS ? 'starttls' : 'none'}
                   onChange={(e) => {
@@ -264,13 +295,15 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                   }}
                   class={`${controlClass('px-2 py-1 text-sm')} min-w-[120px]`}
                 >
-                  <option value="none">None</option>
-                  <option value="starttls">STARTTLS (587)</option>
-                  <option value="tls">TLS/SSL (465)</option>
+                  <option value="none">{ALERT_EMAIL_SECURITY_NONE_LABEL}</option>
+                  <option value="starttls">{ALERT_EMAIL_SECURITY_STARTTLS_LABEL}</option>
+                  <option value="tls">{ALERT_EMAIL_SECURITY_TLS_LABEL}</option>
                 </select>
               </div>
               <div class="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Rate limit</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  {ALERT_EMAIL_RATE_LIMIT_LABEL}
+                </label>
                 <input
                   type="number"
                   value={props.config.rateLimit || 60}
@@ -279,13 +312,15 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                   }
                   class={`${controlClass('px-2 py-1 text-sm')} w-20`}
                 />
-                <span class={formHelpText}>/min</span>
+                <span class={formHelpText}>{ALERT_EMAIL_RATE_LIMIT_SUFFIX}</span>
               </div>
             </div>
 
             <div class="grid w-full gap-3 sm:grid-cols-2">
               <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Max retries</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  {ALERT_EMAIL_MAX_RETRIES_LABEL}
+                </label>
                 <input
                   type="number"
                   value={props.config.maxRetries || 3}
@@ -299,7 +334,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
               </div>
               <div class={formField}>
                 <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                  Retry delay (seconds)
+                  {ALERT_EMAIL_RETRY_DELAY_LABEL}
                 </label>
                 <input
                   type="number"
@@ -324,7 +359,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           disabled={props.testing || !props.config.enabled}
           class="rounded border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900"
         >
-          {props.testing ? 'Sending test email…' : 'Send test email'}
+          {getAlertEmailTestButtonLabel(Boolean(props.testing))}
         </button>
       </div>
     </div>

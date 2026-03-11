@@ -71,13 +71,18 @@ import {
   getAlertResourceIncidentCountLabel,
   getAlertResourceIncidentEmptyState,
   getAlertResourceIncidentFilteredEventsEmptyState,
+  getAlertResourceIncidentLoadFailure,
   getAlertResourceIncidentLoadingState,
+  getAlertResourceIncidentNoteSaveFailure,
+  getAlertResourceIncidentNoteSavedLabel,
   getAlertResourceIncidentNotePlaceholder,
   getAlertResourceIncidentPanelTitle,
   getAlertResourceIncidentRecentEventsSummary,
   getAlertResourceIncidentRefreshLabel,
   getAlertResourceIncidentSaveNoteLabel,
+  getAlertResourceIncidentTimelineFailure,
   getAlertResourceIncidentToggleLabel,
+  getAlertResourceIncidentViewTitle,
   getAlertIncidentStatusPresentation,
 } from '@/utils/alertIncidentPresentation';
 import {
@@ -91,13 +96,20 @@ import {
   getAlertAdministrationSectionDescription,
   getAlertAdministrationSectionTitle,
 } from '@/utils/alertAdministrationPresentation';
-import { getAlertActivationPresentation } from '@/utils/alertActivationPresentation';
+import {
+  getAlertActivationFailure,
+  getAlertActivationPresentation,
+  getAlertActivationSuccess,
+  getAlertDeactivationFailure,
+  getAlertDeactivationSuccess,
+} from '@/utils/alertActivationPresentation';
 import {
   getAlertFrequencyClearFilterButtonClass,
   getAlertFrequencySelectionPresentation,
 } from '@/utils/alertFrequencyPresentation';
 import { getAlertSeverityDotClass } from '@/utils/alertSeverityPresentation';
 import {
+  getAlertsTabGroups,
   getAlertsMobileTabClass,
   getAlertsSidebarTabClass,
   getAlertsTabTitle,
@@ -113,9 +125,14 @@ import {
   getAlertDestinationsAppriseTargetsHelp,
   getAlertDestinationsAppriseTestLabel,
   getAlertDestinationsAppriseTestError,
+  getAlertDestinationsAppriseTestFailure,
+  getAlertDestinationsAppriseTestSuccess,
+  getAlertDestinationsAppriseValidationError,
   getAlertDestinationsRetryLabel,
   getAlertDestinationsStatusLabel,
   getAlertDestinationsWebhookLoadError,
+  getAlertDestinationsEmailTestFailure,
+  getAlertDestinationsEmailTestSuccess,
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL,
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER,
@@ -148,7 +165,16 @@ import {
   ALERT_DESTINATIONS_EMAIL_PANEL_TITLE,
 } from '@/utils/alertDestinationsPresentation';
 import {
+  getAlertWebhookMutationFailure,
+  getAlertWebhookMutationSuccess,
+  getAlertWebhookTestFailure,
+  getAlertWebhookTestSuccess,
+  getAlertWebhooksSectionDescription,
+  getAlertWebhooksSectionTitle,
+} from '@/utils/alertWebhookPresentation';
+import {
   getAlertBucketCountLabel,
+  getAlertsPageHeaderMeta,
   getAlertHistoryLoadingState,
   getAlertHistoryEmptyState,
   getAlertHistorySearchPlaceholder,
@@ -158,6 +184,63 @@ import {
   getAlertTimelineLoadingState,
   getAlertTimelineUnavailableState,
 } from '@/utils/alertOverviewPresentation';
+import {
+  ALERT_CONFIG_COOLDOWN_DESCRIPTION,
+  ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP,
+  ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL,
+  ALERT_CONFIG_COOLDOWN_MAX_ALERTS_SUFFIX,
+  ALERT_CONFIG_COOLDOWN_PERIOD_HELP,
+  ALERT_CONFIG_COOLDOWN_PERIOD_LABEL,
+  ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX,
+  ALERT_CONFIG_COOLDOWN_TITLE,
+  ALERT_CONFIG_ESCALATION_AFTER_LABEL,
+  ALERT_CONFIG_ESCALATION_DESCRIPTION,
+  ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX,
+  ALERT_CONFIG_ESCALATION_NOTIFY_LABEL,
+  ALERT_CONFIG_ESCALATION_TITLE,
+  ALERT_CONFIG_ESCALATION_REMOVE_TITLE,
+  ALERT_CONFIG_GROUPING_BY_GUEST,
+  ALERT_CONFIG_GROUPING_BY_NODE,
+  ALERT_CONFIG_GROUPING_DESCRIPTION,
+  ALERT_CONFIG_GROUPING_STRATEGY_LABEL,
+  ALERT_CONFIG_GROUPING_WINDOW_HELP,
+  ALERT_CONFIG_GROUPING_WINDOW_LABEL,
+  ALERT_CONFIG_GROUPING_TITLE,
+  ALERT_CONFIG_QUIET_HOURS_TITLE,
+  ALERT_CONFIG_QUIET_HOURS_DESCRIPTION,
+  ALERT_CONFIG_QUIET_HOURS_START_TIME_LABEL,
+  ALERT_CONFIG_QUIET_HOURS_END_TIME_LABEL,
+  ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL,
+  ALERT_CONFIG_RECOVERY_DESCRIPTION,
+  ALERT_CONFIG_RECOVERY_TITLE,
+  ALERT_CONFIG_SCHEDULING_DESCRIPTION,
+  ALERT_CONFIG_SCHEDULING_TITLE,
+  ALERT_CONFIG_SUMMARY_DESCRIPTION,
+  ALERT_CONFIG_SUMMARY_TITLE,
+  getAlertConfigResetDefaultsLabel,
+  getAlertConfigResetDefaultsTitle,
+  getAlertConfigEscalationHelp,
+  getAlertConfigEscalationNotifyLabel,
+  getAlertConfigQuietHourSuppressOptions,
+  getAlertConfigDiscardedSuccess,
+  getAlertConfigDiscardLabel,
+  getAlertConfigReloadFailure,
+  getAlertConfigRecoveryHelp,
+  getAlertConfigSaveFailure,
+  getAlertConfigSaveSuccess,
+  getAlertConfigSaveChangesLabel,
+  getAlertConfigSummaryAllDisabled,
+  getAlertConfigSummaryCooldown,
+  getAlertConfigSummaryEscalation,
+  getAlertConfigSummaryGrouping,
+  getAlertConfigSummaryQuietHours,
+  getAlertConfigSummaryRecoveryEnabled,
+  getAlertConfigSummarySuppressing,
+  getAlertConfigToggleStatusLabel,
+  getAlertConfigUnsavedChangesLabel,
+  getAlertConfigLeaveConfirmation,
+  getAlertConfigSwarmGapValidationError,
+} from '@/utils/alertConfigPresentation';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -181,7 +264,6 @@ import {
   type EscalationConfig,
   type EscalationLevel,
   type EscalationNotifyTarget,
-  ALERT_HEADER_META,
   INCIDENT_EVENT_TYPES,
   GROUPING_WINDOW_DEFAULT_SECONDS,
   INCIDENT_EVENT_LABELS,
@@ -235,16 +317,14 @@ export function Alerts() {
     try {
       const success = await alertsActivation.activate();
       if (success) {
-        notificationStore.success(
-          "Alerts activated! You'll now receive alerts when issues are detected.",
-        );
+        notificationStore.success(getAlertActivationSuccess());
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
           logger.error('Failed to refresh alerts after activation', error);
         }
       } else {
-        notificationStore.error('Unable to activate alerts. Please try again.');
+        notificationStore.error(getAlertActivationFailure());
       }
     } finally {
       setIsSwitchingActivation(false);
@@ -259,32 +339,28 @@ export function Alerts() {
     try {
       const success = await alertsActivation.deactivate();
       if (success) {
-        notificationStore.success(
-          'Alerts deactivated. Nothing will be sent until you activate them again.',
-        );
+        notificationStore.success(getAlertDeactivationSuccess());
         try {
           await alertsActivation.refreshActiveAlerts();
         } catch (error) {
           logger.error('Failed to refresh alerts after deactivation', error);
         }
       } else {
-        notificationStore.error('Unable to deactivate alerts. Please try again.');
+        notificationStore.error(getAlertDeactivationFailure());
       }
     } catch (error) {
       logger.error('Deactivate alerts failed', error);
-      notificationStore.error('Unable to deactivate alerts. Please try again.');
+      notificationStore.error(getAlertDeactivationFailure());
     } finally {
       setIsSwitchingActivation(false);
     }
   };
 
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
+  const alertsPageHeaderMeta = getAlertsPageHeaderMeta();
 
   const headerMeta = () =>
-    ALERT_HEADER_META[activeTab()] ?? {
-      title: 'Alerts',
-      description: 'Manage alerting configuration.',
-    };
+    alertsPageHeaderMeta[activeTab()] ?? alertsPageHeaderMeta.default;
 
   createEffect(() => {
     const currentPath = location.pathname;
@@ -371,7 +447,7 @@ export function Alerts() {
   // Warn when navigating within the app
   useBeforeLeave((e) => {
     if (hasUnsavedChanges()) {
-      if (!confirm('You have unsaved changes that will be lost. Discard changes and leave?')) {
+      if (!confirm(getAlertConfigLeaveConfirmation())) {
         e.preventDefault();
       }
     }
@@ -1222,7 +1298,7 @@ export function Alerts() {
       }
 
       if (options.notify) {
-        notificationStore.success('Changes discarded');
+        notificationStore.success(getAlertConfigDiscardedSuccess());
       }
     } catch (err) {
       logger.error('Failed to load alert configuration:', err);
@@ -1230,7 +1306,7 @@ export function Alerts() {
       // defaults from the reset above.  Re-flag so Save stays disabled.
       setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       if (options.notify) {
-        notificationStore.error('Failed to reload configuration');
+        notificationStore.error(getAlertConfigReloadFailure());
       }
     } finally {
       setIsReloadingConfig(false);
@@ -1508,37 +1584,28 @@ export function Alerts() {
   const [disableAllPMGOffline, setDisableAllPMGOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
 
-  const tabGroups: {
+  const tabGroups = getAlertsTabGroups().map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({
+      ...item,
+      icon:
+        item.id === 'overview' ? (
+          <LayoutDashboard class="w-4 h-4" strokeWidth={2} />
+        ) : item.id === 'history' ? (
+          <History class="w-4 h-4" strokeWidth={2} />
+        ) : item.id === 'thresholds' ? (
+          <Gauge class="w-4 h-4" strokeWidth={2} />
+        ) : item.id === 'destinations' ? (
+          <Send class="w-4 h-4" strokeWidth={2} />
+        ) : (
+          <Calendar class="w-4 h-4" strokeWidth={2} />
+        ),
+    })),
+  })) satisfies {
     id: 'status' | 'configuration';
     label: string;
     items: { id: AlertTab; label: string; icon: JSX.Element }[];
-  }[] = [
-    {
-      id: 'status',
-      label: 'Status',
-      items: [
-        {
-          id: 'overview',
-          label: 'Overview',
-          icon: <LayoutDashboard class="w-4 h-4" strokeWidth={2} />,
-        },
-        { id: 'history', label: 'History', icon: <History class="w-4 h-4" strokeWidth={2} /> },
-      ],
-    },
-    {
-      id: 'configuration',
-      label: 'Configuration',
-      items: [
-        { id: 'thresholds', label: 'Thresholds', icon: <Gauge class="w-4 h-4" strokeWidth={2} /> },
-        {
-          id: 'destinations',
-          label: 'Notifications',
-          icon: <Send class="w-4 h-4" strokeWidth={2} />,
-        },
-        { id: 'schedule', label: 'Schedule', icon: <Calendar class="w-4 h-4" strokeWidth={2} /> },
-      ],
-    },
-  ];
+  }[];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
   // Sidebar always starts expanded for discoverability (consistent with Settings)
@@ -1601,7 +1668,7 @@ export function Alerts() {
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
-              <span class="text-sm font-medium">You have unsaved changes</span>
+              <span class="text-sm font-medium">{getAlertConfigUnsavedChangesLabel()}</span>
             </div>
             <div class="flex w-full gap-2 sm:w-auto">
               <button
@@ -1835,16 +1902,16 @@ export function Alerts() {
                     }
 
                     setHasUnsavedChanges(false);
-                    notificationStore.success('Configuration saved successfully!');
+                    notificationStore.success(getAlertConfigSaveSuccess());
                   } catch (err) {
                     logger.error('Failed to save configuration:', err);
                     notificationStore.error(
-                      err instanceof Error ? err.message : 'Failed to save configuration',
+                      err instanceof Error ? err.message : getAlertConfigSaveFailure(),
                     );
                   }
                 }}
               >
-                Save Changes
+                {getAlertConfigSaveChangesLabel()}
               </button>
               <button
                 class="flex-1 px-4 py-2 text-sm transition-colors border border-border rounded-md text-base-content hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
@@ -1853,7 +1920,7 @@ export function Alerts() {
                   await loadAlertConfiguration({ notify: true });
                 }}
               >
-                {isReloadingConfig() ? 'Discarding...' : 'Discard'}
+                {getAlertConfigDiscardLabel(isReloadingConfig())}
               </button>
             </div>
           </div>
@@ -2530,10 +2597,11 @@ function DestinationsTab(props: DestinationsTabProps) {
         type: 'email',
         config: { ...config } as Record<string, unknown>, // Send current form data, not saved config
       });
-      notificationStore.success('Test email sent successfully! Check your inbox.');
+      notificationStore.success(getAlertDestinationsEmailTestSuccess());
     } catch (err) {
-      logger.error('Failed to send test email:', err);
-      const msg = err instanceof Error ? err.message : 'Failed to send test email';
+      logger.error(getAlertDestinationsEmailTestFailure(), err);
+      const msg =
+        err instanceof Error ? err.message : getAlertDestinationsEmailTestFailure();
       const detail = (err as Error & { detail?: string })?.detail;
       showErrorWithDetail(msg, detail);
     } finally {
@@ -2547,25 +2615,26 @@ function DestinationsTab(props: DestinationsTabProps) {
       const config = buildAppriseRequestConfig();
 
       if (!config.enabled) {
-        throw new Error(getAlertDestinationsAppriseTestError('disabled'));
+        throw new Error(getAlertDestinationsAppriseValidationError('disabled'));
       }
 
       const targets = config.targets || [];
       if (config.mode === 'cli' && targets.length === 0) {
-        throw new Error(getAlertDestinationsAppriseTestError('missingTargets'));
+        throw new Error(getAlertDestinationsAppriseValidationError('missingTargets'));
       }
       if (config.mode === 'http' && !config.serverUrl) {
-        throw new Error('Enter an Apprise API server URL to test API delivery.');
+        throw new Error(getAlertDestinationsAppriseValidationError('missingServerUrl'));
       }
 
       await NotificationsAPI.testNotification({
         type: 'apprise',
         config,
       });
-      notificationStore.success('Test Apprise notification sent successfully!');
+      notificationStore.success(getAlertDestinationsAppriseTestSuccess());
     } catch (err) {
-      logger.error('Failed to send test Apprise notification:', err);
-      const msg = err instanceof Error ? err.message : 'Failed to send test notification';
+      logger.error(getAlertDestinationsAppriseTestFailure(), err);
+      const msg =
+        err instanceof Error ? err.message : getAlertDestinationsAppriseTestFailure();
       const detail = (err as Error & { detail?: string })?.detail;
       showErrorWithDetail(msg, detail);
     } finally {
@@ -2583,9 +2652,9 @@ function DestinationsTab(props: DestinationsTabProps) {
         // Test existing webhook by ID
         await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
       }
-      notificationStore.success('Test webhook sent successfully!');
+      notificationStore.success(getAlertWebhookTestSuccess());
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to send test webhook';
+      const msg = err instanceof Error ? err.message : getAlertWebhookTestFailure();
       const detail = (err as Error & { detail?: string })?.detail;
       showErrorWithDetail(msg, detail);
     } finally {
@@ -2906,8 +2975,8 @@ function DestinationsTab(props: DestinationsTabProps) {
         </SettingsPanel>
 
         <SettingsPanel
-          title="Webhooks"
-          description="Push alerts to chat apps or automation systems."
+          title={getAlertWebhooksSectionTitle()}
+          description={getAlertWebhooksSectionDescription()}
           action={
             <span class="text-xs text-muted whitespace-nowrap">{webhooks().length} configured</span>
           }
@@ -2920,11 +2989,11 @@ function DestinationsTab(props: DestinationsTabProps) {
               try {
                 const created = await NotificationsAPI.createWebhook(webhook);
                 setWebhooks([...webhooks(), created]);
-                notificationStore.success('Webhook added successfully');
+                notificationStore.success(getAlertWebhookMutationSuccess('add'));
               } catch (err) {
                 logger.error('Failed to add webhook:', err);
                 notificationStore.error(
-                  err instanceof Error ? err.message : 'Failed to add webhook',
+                  err instanceof Error ? err.message : getAlertWebhookMutationFailure('add'),
                 );
               }
             }}
@@ -2932,11 +3001,11 @@ function DestinationsTab(props: DestinationsTabProps) {
               try {
                 const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
                 setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
-                notificationStore.success('Webhook updated successfully');
+                notificationStore.success(getAlertWebhookMutationSuccess('update'));
               } catch (err) {
                 logger.error('Failed to update webhook:', err);
                 notificationStore.error(
-                  err instanceof Error ? err.message : 'Failed to update webhook',
+                  err instanceof Error ? err.message : getAlertWebhookMutationFailure('update'),
                 );
               }
             }}
@@ -2944,11 +3013,11 @@ function DestinationsTab(props: DestinationsTabProps) {
               try {
                 await NotificationsAPI.deleteWebhook(id);
                 setWebhooks(webhooks().filter((w) => w.id !== id));
-                notificationStore.success('Webhook deleted successfully');
+                notificationStore.success(getAlertWebhookMutationSuccess('delete'));
               } catch (err) {
                 logger.error('Failed to delete webhook:', err);
                 notificationStore.error(
-                  err instanceof Error ? err.message : 'Failed to delete webhook',
+                  err instanceof Error ? err.message : getAlertWebhookMutationFailure('delete'),
                 );
               }
             }}
@@ -3079,27 +3148,7 @@ function ScheduleTab(props: ScheduleTabProps) {
     'Pacific/Honolulu',
   ];
 
-  const quietHourSuppressOptions: Array<{
-    key: keyof QuietHoursConfig['suppress'];
-    label: string;
-    description: string;
-  }> = [
-    {
-      key: 'performance',
-      label: 'Performance alerts',
-      description: 'CPU, memory, disk, and network thresholds stay quiet.',
-    },
-    {
-      key: 'storage',
-      label: 'Storage alerts',
-      description: 'Silence storage usage, disk health, and ZFS events.',
-    },
-    {
-      key: 'offline',
-      label: 'Offline & power state',
-      description: 'Skip connectivity and powered-off alerts during backups.',
-    },
-  ];
+  const quietHourSuppressOptions = getAlertConfigQuietHourSuppressOptions();
 
   const days = [
     { id: 'monday', label: 'M', fullLabel: 'Monday' },
@@ -3115,14 +3164,16 @@ function ScheduleTab(props: ScheduleTabProps) {
     <div class="space-y-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-base-content">Alert scheduling</h3>
-          <p class="mt-1 text-sm text-muted">Configure when and how alerts are delivered</p>
+          <h3 class="text-base font-semibold text-base-content">
+            {ALERT_CONFIG_SCHEDULING_TITLE}
+          </h3>
+          <p class="mt-1 text-sm text-muted">{ALERT_CONFIG_SCHEDULING_DESCRIPTION}</p>
         </div>
         <button
           type="button"
           onClick={resetToDefaults}
           class="inline-flex items-center gap-2 self-start rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-surface-hover"
-          title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
+          title={getAlertConfigResetDefaultsTitle()}
         >
           <svg
             class="h-4 w-4"
@@ -3137,15 +3188,15 @@ function ScheduleTab(props: ScheduleTabProps) {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Reset to defaults
+          {getAlertConfigResetDefaultsLabel()}
         </button>
       </div>
 
       <div class="grid gap-6 xl:grid-cols-2">
         {/* Quiet Hours */}
         <SettingsPanel
-          title="Quiet hours"
-          description="Pause non-critical alerts during specific times."
+          title={ALERT_CONFIG_QUIET_HOURS_TITLE}
+          description={ALERT_CONFIG_QUIET_HOURS_DESCRIPTION}
           action={
             <Toggle
               checked={quietHours().enabled}
@@ -3168,7 +3219,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Start time
+                    {ALERT_CONFIG_QUIET_HOURS_START_TIME_LABEL}
                   </label>
                   <input
                     type="time"
@@ -3181,7 +3232,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>End time</label>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_CONFIG_QUIET_HOURS_END_TIME_LABEL}
+                  </label>
                   <input
                     type="time"
                     value={quietHours().end}
@@ -3193,7 +3246,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timezone</label>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    {ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL}
+                  </label>
                   <select
                     value={quietHours().timezone}
                     onChange={(e) => {
@@ -3332,8 +3387,8 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Cooldown Period */}
         <SettingsPanel
-          title="Alert cooldown"
-          description="Limit alert frequency to prevent spam."
+          title={ALERT_CONFIG_COOLDOWN_TITLE}
+          description={ALERT_CONFIG_COOLDOWN_DESCRIPTION}
           action={
             <Toggle
               checked={cooldown().enabled}
@@ -3354,7 +3409,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               containerClass="sm:self-start"
               label={
                 <span class="text-xs font-medium text-muted">
-                  {cooldown().enabled ? 'Enabled' : 'Disabled'}
+                  {getAlertConfigToggleStatusLabel(cooldown().enabled)}
                 </span>
               }
             />
@@ -3366,7 +3421,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Cooldown period
+                    {ALERT_CONFIG_COOLDOWN_PERIOD_LABEL}
                   </label>
                   <div class="relative">
                     <input
@@ -3385,17 +3440,17 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class={controlClass('pr-16')}
                     />
                     <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted">
-                      minutes
+                      {ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX}
                     </span>
                   </div>
                   <p class={`${formHelpText} mt-1`}>
-                    Minimum time between alerts for the same issue
+                    {ALERT_CONFIG_COOLDOWN_PERIOD_HELP}
                   </p>
                 </div>
 
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Max alerts / hour
+                    {ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL}
                   </label>
                   <div class="relative">
                     <input
@@ -3414,10 +3469,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                       class={controlClass('pr-16')}
                     />
                     <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted">
-                      alerts
+                      {ALERT_CONFIG_COOLDOWN_MAX_ALERTS_SUFFIX}
                     </span>
                   </div>
-                  <p class={`${formHelpText} mt-1`}>Per guest/metric combination</p>
+                  <p class={`${formHelpText} mt-1`}>{ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP}</p>
                 </div>
               </div>
             </div>
@@ -3426,8 +3481,8 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Alert Grouping */}
         <SettingsPanel
-          title="Smart grouping"
-          description="Bundle similar alerts together."
+          title={ALERT_CONFIG_GROUPING_TITLE}
+          description={ALERT_CONFIG_GROUPING_DESCRIPTION}
           action={
             <Toggle
               checked={grouping().enabled}
@@ -3438,7 +3493,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               containerClass="sm:self-start"
               label={
                 <span class="text-xs font-medium text-muted">
-                  {grouping().enabled ? 'Enabled' : 'Disabled'}
+                  {getAlertConfigToggleStatusLabel(grouping().enabled)}
                 </span>
               }
             />
@@ -3449,7 +3504,7 @@ function ScheduleTab(props: ScheduleTabProps) {
             <div class="space-y-4">
               <div class={formField}>
                 <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                  Grouping window
+                  {ALERT_CONFIG_GROUPING_WINDOW_LABEL}
                 </label>
                 <div class="flex items-center gap-3">
                   <input
@@ -3468,13 +3523,13 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </div>
                 </div>
                 <p class={`${formHelpText} mt-1`}>
-                  Alerts within this window are grouped together. Set to 0 to send immediately.
+                  {ALERT_CONFIG_GROUPING_WINDOW_HELP}
                 </p>
               </div>
 
               <div>
                 <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} mb-2 block`}>
-                  Grouping strategy
+                  {ALERT_CONFIG_GROUPING_STRATEGY_LABEL}
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
@@ -3502,7 +3557,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-base-content">By Node</span>
+                    <span class="text-sm font-medium text-base-content">
+                      {ALERT_CONFIG_GROUPING_BY_NODE}
+                    </span>
                   </label>
 
                   <label
@@ -3530,7 +3587,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-base-content">By Guest</span>
+                    <span class="text-sm font-medium text-base-content">
+                      {ALERT_CONFIG_GROUPING_BY_GUEST}
+                    </span>
                   </label>
                 </div>
               </div>
@@ -3540,8 +3599,8 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Recovery notifications */}
         <SettingsPanel
-          title="Recovery notifications"
-          description="Send a follow-up when an alert returns to normal."
+          title={ALERT_CONFIG_RECOVERY_TITLE}
+          description={ALERT_CONFIG_RECOVERY_DESCRIPTION}
           action={
             <Toggle
               checked={notifyOnResolve()}
@@ -3552,7 +3611,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               containerClass="sm:self-start"
               label={
                 <span class="text-xs font-medium text-muted">
-                  {notifyOnResolve() ? 'Enabled' : 'Disabled'}
+                  {getAlertConfigToggleStatusLabel(notifyOnResolve())}
                 </span>
               }
             />
@@ -3560,14 +3619,14 @@ function ScheduleTab(props: ScheduleTabProps) {
           class="space-y-3"
         >
           <p class={formHelpText}>
-            Sends on the same channels as live alerts to confirm when a condition clears.
+            {getAlertConfigRecoveryHelp()}
           </p>
         </SettingsPanel>
 
         {/* Escalation Rules */}
         <SettingsPanel
-          title="Alert escalation"
-          description="Notify additional contacts for persistent issues."
+          title={ALERT_CONFIG_ESCALATION_TITLE}
+          description={ALERT_CONFIG_ESCALATION_DESCRIPTION}
           action={
             <Toggle
               checked={escalation().enabled}
@@ -3578,7 +3637,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               containerClass="sm:self-start"
               label={
                 <span class="text-xs font-medium text-muted">
-                  {escalation().enabled ? 'Enabled' : 'Disabled'}
+                  {getAlertConfigToggleStatusLabel(escalation().enabled)}
                 </span>
               }
             />
@@ -3587,13 +3646,15 @@ function ScheduleTab(props: ScheduleTabProps) {
         >
           <Show when={escalation().enabled}>
             <div class="space-y-3">
-              <p class={formHelpText}>Define escalation levels for unresolved alerts:</p>
+              <p class={formHelpText}>{getAlertConfigEscalationHelp()}</p>
               <For each={escalation().levels}>
                 {(level, index) => (
                   <div class="flex items-center gap-3 rounded-md border border-border bg-surface-hover p-3">
                     <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-muted">After</span>
+                        <span class="text-xs font-medium text-muted">
+                          {ALERT_CONFIG_ESCALATION_AFTER_LABEL}
+                        </span>
                         <input
                           type="number"
                           min="5"
@@ -3611,10 +3672,14 @@ function ScheduleTab(props: ScheduleTabProps) {
                           }}
                           class={`${controlClass('px-2 py-1 text-sm')} w-20`}
                         />
-                        <span class="text-xs text-muted">min</span>
+                        <span class="text-xs text-muted">
+                          {ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX}
+                        </span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-muted">Notify</span>
+                        <span class="text-xs font-medium text-muted">
+                          {ALERT_CONFIG_ESCALATION_NOTIFY_LABEL}
+                        </span>
                         <select
                           value={level.notify}
                           onChange={(e) => {
@@ -3628,9 +3693,15 @@ function ScheduleTab(props: ScheduleTabProps) {
                           }}
                           class={`${controlClass('px-2 py-1 text-sm')} flex-1`}
                         >
-                          <option value="email">Email</option>
-                          <option value="webhook">Webhooks</option>
-                          <option value="all">All Channels</option>
+                          <option value="email">
+                            {getAlertConfigEscalationNotifyLabel('email')}
+                          </option>
+                          <option value="webhook">
+                            {getAlertConfigEscalationNotifyLabel('webhook')}
+                          </option>
+                          <option value="all">
+                            {getAlertConfigEscalationNotifyLabel('all')}
+                          </option>
                         </select>
                       </div>
                     </div>
@@ -3644,7 +3715,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                         props.setHasUnsavedChanges(true);
                       }}
                       class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900"
-                      title="Remove escalation level"
+                      title={ALERT_CONFIG_ESCALATION_REMOVE_TITLE}
                     >
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
@@ -3683,7 +3754,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                   />
                 </svg>
-                Add Escalation Level
+                {ALERT_CONFIG_ESCALATION_ADD_LABEL}
               </button>
             </div>
           </Show>
@@ -3691,18 +3762,15 @@ function ScheduleTab(props: ScheduleTabProps) {
 
         {/* Configuration Summary */}
         <SettingsPanel
-          title="Configuration summary"
-          description="Preview of the active schedule settings."
+          title={ALERT_CONFIG_SUMMARY_TITLE}
+          description={ALERT_CONFIG_SUMMARY_DESCRIPTION}
           tone="muted"
           padding="lg"
           bodyClass="space-y-1 text-sm text-blue-800 dark:text-blue-300"
           class="lg:col-span-2"
         >
           <Show when={quietHours().enabled}>
-            <p>
-              • Quiet hours active from {quietHours().start} to {quietHours().end} (
-              {quietHours().timezone})
-            </p>
+            <p>{getAlertConfigSummaryQuietHours(quietHours().start, quietHours().end, quietHours().timezone)}</p>
           </Show>
           <Show
             when={
@@ -3713,40 +3781,30 @@ function ScheduleTab(props: ScheduleTabProps) {
             }
           >
             <p>
-              • Suppressing{' '}
-              {quietHourSuppressOptions
-                .filter((option) => quietHours().suppress[option.key])
-                .map((option) => option.label)
-                .join(', ')}{' '}
-              during quiet hours
+              {getAlertConfigSummarySuppressing(
+                quietHourSuppressOptions
+                  .filter((option) => quietHours().suppress[option.key])
+                  .map((option) => option.label),
+              )}
             </p>
           </Show>
           <Show when={cooldown().enabled}>
-            <p>
-              • {cooldown().minutes} minute cooldown between alerts, max {cooldown().maxAlerts}{' '}
-              alerts per hour
-            </p>
+            <p>{getAlertConfigSummaryCooldown(cooldown().minutes, cooldown().maxAlerts)}</p>
           </Show>
           <Show when={grouping().enabled}>
             <p>
-              • Grouping alerts within {grouping().window} minute windows
-              <Show when={grouping().byNode || grouping().byGuest}>
-                {' '}
-                by{' '}
-                {[grouping().byNode && 'node', grouping().byGuest && 'guest']
-                  .filter(Boolean)
-                  .join(' and ')}
-              </Show>
+              {getAlertConfigSummaryGrouping(
+                grouping().window,
+                grouping().byNode,
+                grouping().byGuest,
+              )}
             </p>
           </Show>
           <Show when={notifyOnResolve()}>
-            <p>• Recovery notifications enabled when alerts clear</p>
+            <p>{getAlertConfigSummaryRecoveryEnabled()}</p>
           </Show>
           <Show when={escalation().enabled && escalation().levels.length > 0}>
-            <p>
-              • {escalation().levels.length} escalation level
-              {escalation().levels.length > 1 ? 's' : ''} configured
-            </p>
+            <p>{getAlertConfigSummaryEscalation(escalation().levels.length)}</p>
           </Show>
           <Show
             when={
@@ -3756,7 +3814,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               !escalation().enabled
             }
           >
-            <p>• All notification controls are disabled - alerts will be sent immediately</p>
+            <p>{getAlertConfigSummaryAllDisabled()}</p>
           </Show>
         </SettingsPanel>
       </div>
@@ -4030,8 +4088,8 @@ function HistoryTab(props: {
       const incidents = await AlertsAPI.getIncidentsForResource(resourceId, limit);
       setResourceIncidents((prev) => ({ ...prev, [resourceId]: incidents }));
     } catch (error) {
-      logger.error('Failed to load resource incidents', error);
-      notificationStore.error('Failed to load resource incidents');
+      logger.error(getAlertResourceIncidentLoadFailure(), error);
+      notificationStore.error(getAlertResourceIncidentLoadFailure());
     } finally {
       setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: false }));
     }
@@ -4461,8 +4519,8 @@ function HistoryTab(props: {
       setIncidentTimelines((prev) => ({ ...prev, [rowKey]: timeline }));
       setIncidentErrors((prev) => ({ ...prev, [rowKey]: false }));
     } catch (error) {
-      logger.error('Failed to load incident timeline', error);
-      notificationStore.error('Failed to load incident timeline');
+      logger.error(getAlertResourceIncidentTimelineFailure(), error);
+      notificationStore.error(getAlertResourceIncidentTimelineFailure());
       setIncidentErrors((prev) => ({ ...prev, [rowKey]: true }));
     } finally {
       setIncidentLoading((prev) => ({ ...prev, [rowKey]: false }));
@@ -4495,10 +4553,10 @@ function HistoryTab(props: {
       await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
       setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: '' }));
       await loadIncidentTimeline(rowKey, alertId, startedAt);
-      notificationStore.success('Incident note saved');
+      notificationStore.success(getAlertResourceIncidentNoteSavedLabel());
     } catch (error) {
-      logger.error('Failed to save incident note', error);
-      notificationStore.error('Failed to save incident note');
+      logger.error(getAlertResourceIncidentNoteSaveFailure(), error);
+      notificationStore.error(getAlertResourceIncidentNoteSaveFailure());
     } finally {
       setIncidentNoteSaving((prev) => {
         const next = new Set(prev);
@@ -5258,7 +5316,7 @@ function HistoryTab(props: {
                                           <button
                                             type="button"
                                             class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
-                                            title="View incidents for this resource"
+                                            title={getAlertResourceIncidentViewTitle()}
                                             onClick={() => {
                                               void openResourceIncidentPanel(
                                                 alert.resourceId as string,
@@ -5570,7 +5628,7 @@ function HistoryTab(props: {
                       setAlertHistory([]);
                       // Alert history cleared successfully
                     } catch (err) {
-                      logger.error('Error clearing alert history:', err);
+                      logger.error(getAlertAdministrationClearHistoryError(), err);
                       notificationStore.error(getAlertAdministrationClearHistoryError());
                     }
                   }

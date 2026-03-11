@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getResourcePickerEmptyState,
+  getResourcePickerTypeFilterLabel,
   matchesReportableResourceTypeFilter,
   normalizeReportableResourceType,
   REPORTABLE_RESOURCE_TYPES,
+  RESOURCE_PICKER_TYPE_FILTERS,
   reportableResourceTypeSortOrder,
 } from '@/utils/reportableResourceTypes';
 
@@ -34,5 +37,30 @@ describe('reportableResourceTypes', () => {
     expect(reportableResourceTypeSortOrder('storage')).toBeLessThan(
       reportableResourceTypeSortOrder('dataset'),
     );
+  });
+
+  it('exports canonical picker filter labels and order', () => {
+    expect(RESOURCE_PICKER_TYPE_FILTERS).toEqual([
+      'all',
+      'infrastructure',
+      'workloads',
+      'storage',
+      'recovery',
+    ]);
+    expect(getResourcePickerTypeFilterLabel('all')).toBe('All');
+    expect(getResourcePickerTypeFilterLabel('infrastructure')).toBe('Infrastructure');
+    expect(getResourcePickerTypeFilterLabel('workloads')).toBe('Workloads');
+    expect(getResourcePickerTypeFilterLabel('storage')).toBe('Storage');
+    expect(getResourcePickerTypeFilterLabel('recovery')).toBe('Recovery');
+  });
+
+  it('exports canonical resource picker empty states', () => {
+    expect(getResourcePickerEmptyState(false)).toEqual({
+      title: 'No resources available',
+      description: 'Resources appear as Pulse collects infrastructure and workload metrics',
+    });
+    expect(getResourcePickerEmptyState(true)).toEqual({
+      title: 'No resources match your filters',
+    });
   });
 });

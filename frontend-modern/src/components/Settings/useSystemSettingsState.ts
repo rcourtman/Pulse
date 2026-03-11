@@ -10,29 +10,25 @@ import {
   updateDockerUpdateActionsSetting,
   updateReduceProUpsellNoiseSetting,
 } from '@/stores/systemSettings';
+import {
+  BACKUP_INTERVAL_OPTIONS,
+  getCheckForUpdatesErrorMessage,
+  getBackupIntervalSelectValue,
+  getBackupIntervalSummary,
+  getDockerUpdateActionsUpdateErrorMessage,
+  getHideLocalLoginUpdateErrorMessage,
+  getLocalUpgradeMetricsUpdateErrorMessage,
+  getReduceUpsellNoiseUpdateErrorMessage,
+  getStartUpdateErrorMessage,
+  getSystemSettingsSaveErrorMessage,
+  getTelemetryUpdateErrorMessage,
+  getTemperatureMonitoringUpdateErrorMessage,
+  PVE_POLLING_MAX_SECONDS,
+  PVE_POLLING_MIN_SECONDS,
+  PVE_POLLING_PRESETS,
+} from '@/utils/systemSettingsPresentation';
 import { getSettingsTabSaveBehavior } from './settingsTabs';
 import type { SettingsTab } from './settingsTypes';
-
-const BACKUP_INTERVAL_OPTIONS = [
-  { label: 'Default (~90 seconds)', value: 0 },
-  { label: '15 minutes', value: 15 * 60 },
-  { label: '30 minutes', value: 30 * 60 },
-  { label: '1 hour', value: 60 * 60 },
-  { label: '6 hours', value: 6 * 60 * 60 },
-  { label: '12 hours', value: 12 * 60 * 60 },
-  { label: '24 hours', value: 24 * 60 * 60 },
-];
-
-const PVE_POLLING_MIN_SECONDS = 10;
-const PVE_POLLING_MAX_SECONDS = 3600;
-const PVE_POLLING_PRESETS = [
-  { label: '10 seconds (default)', value: 10 },
-  { label: '15 seconds', value: 15 },
-  { label: '30 seconds', value: 30 },
-  { label: '60 seconds', value: 60 },
-  { label: '2 minutes', value: 120 },
-  { label: '5 minutes', value: 300 },
-];
 
 interface UseSystemSettingsStateParams {
   activeTab: Accessor<SettingsTab>;
@@ -110,37 +106,11 @@ export function useSystemSettingsState({
   const backupPollingEnvLocked = () =>
     Boolean(envOverrides()['ENABLE_BACKUP_POLLING'] || envOverrides()['BACKUP_POLLING_INTERVAL']);
 
-  const backupIntervalSelectValue = () => {
-    if (backupPollingUseCustom()) {
-      return 'custom';
-    }
-    const seconds = backupPollingInterval();
-    return BACKUP_INTERVAL_OPTIONS.some((option) => option.value === seconds)
-      ? String(seconds)
-      : 'custom';
-  };
+  const backupIntervalSelectValue = () =>
+    getBackupIntervalSelectValue(backupPollingUseCustom(), backupPollingInterval());
 
-  const backupIntervalSummary = () => {
-    if (!backupPollingEnabled()) {
-      return 'Backup polling is disabled.';
-    }
-
-    const seconds = backupPollingInterval();
-    if (seconds <= 0) {
-      return 'Pulse checks backups and snapshots at the default cadence (~every 90 seconds).';
-    }
-    if (seconds % 86400 === 0) {
-      const days = seconds / 86400;
-      return `Pulse checks backups every ${days === 1 ? 'day' : `${days} days`}.`;
-    }
-    if (seconds % 3600 === 0) {
-      const hours = seconds / 3600;
-      return `Pulse checks backups every ${hours === 1 ? 'hour' : `${hours} hours`}.`;
-    }
-
-    const minutes = Math.max(1, Math.round(seconds / 60));
-    return `Pulse checks backups every ${minutes === 1 ? 'minute' : `${minutes} minutes`}.`;
-  };
+  const backupIntervalSummary = () =>
+    getBackupIntervalSummary(backupPollingEnabled(), backupPollingInterval());
 
   const initializeSystemSettingsState = async () => {
     try {
@@ -273,7 +243,9 @@ export function useSystemSettingsState({
         }, 3000);
       }
     } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to save settings');
+      notificationStore.error(
+        getSystemSettingsSaveErrorMessage(error instanceof Error ? error.message : undefined),
+      );
     }
   };
 
@@ -297,7 +269,7 @@ export function useSystemSettingsState({
     } catch (error) {
       logger.error('Failed to update hide local login setting', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update hide local login setting',
+        getHideLocalLoginUpdateErrorMessage(error instanceof Error ? error.message : undefined),
       );
       setHideLocalLogin(previous);
     } finally {
@@ -326,7 +298,9 @@ export function useSystemSettingsState({
     } catch (error) {
       logger.error('Failed to update Docker update actions setting', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update Docker update actions setting',
+        getDockerUpdateActionsUpdateErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
       );
       setDisableDockerUpdateActions(previous);
     } finally {
@@ -350,7 +324,7 @@ export function useSystemSettingsState({
     } catch (error) {
       logger.error('Failed to update reduce upsell noise setting', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update reduce upsell noise setting',
+        getReduceUpsellNoiseUpdateErrorMessage(error instanceof Error ? error.message : undefined),
       );
       setReduceProUpsellNoise(previous);
     } finally {
@@ -377,7 +351,9 @@ export function useSystemSettingsState({
     } catch (error) {
       logger.error('Failed to update local upgrade metrics setting', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update local upgrade metrics setting',
+        getLocalUpgradeMetricsUpdateErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
       );
       setDisableLocalUpgradeMetrics(previous);
     } finally {
@@ -403,7 +379,7 @@ export function useSystemSettingsState({
     } catch (error) {
       logger.error('Failed to update telemetry setting', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update telemetry setting',
+        getTelemetryUpdateErrorMessage(error instanceof Error ? error.message : undefined),
       );
       setTelemetryEnabled(previous);
     } finally {
@@ -430,7 +406,9 @@ export function useSystemSettingsState({
     } catch (error) {
       logger.error('Failed to update temperature monitoring setting', error);
       notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update temperature monitoring setting',
+        getTemperatureMonitoringUpdateErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
       );
       setTemperatureMonitoringEnabled(previous);
     } finally {
@@ -465,7 +443,7 @@ export function useSystemSettingsState({
         notificationStore.success('You are running the latest version');
       }
     } catch (error) {
-      notificationStore.error('Failed to check for updates');
+      notificationStore.error(getCheckForUpdatesErrorMessage());
       logger.error('Update check error', error);
     } finally {
       setCheckingForUpdates(false);
@@ -488,7 +466,7 @@ export function useSystemSettingsState({
       setShowUpdateConfirmation(false);
     } catch (error) {
       logger.error('Failed to start update', error);
-      notificationStore.error('Failed to start update. Please try again.');
+      notificationStore.error(getStartUpdateErrorMessage());
     } finally {
       setIsInstallingUpdate(false);
     }

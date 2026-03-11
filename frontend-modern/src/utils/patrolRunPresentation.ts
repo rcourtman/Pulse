@@ -47,3 +47,15 @@ export function getToolCallResultBadgeClass(success: boolean): string {
 export function getToolCallResultTextClass(success: boolean): string {
   return success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
 }
+
+export function getRunHistoryLoadingState(): string {
+  return 'Loading run history…';
+}
+
+export function getToolCallsLoadingState(): string {
+  return 'Loading tool calls...';
+}
+
+export function getToolCallsUnavailableState(): string {
+  return 'Tool call details not available for this run.';
+}

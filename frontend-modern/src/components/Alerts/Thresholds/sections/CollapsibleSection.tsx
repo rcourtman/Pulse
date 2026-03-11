@@ -10,6 +10,10 @@ import ChevronRight from 'lucide-solid/icons/chevron-right';
 import ChevronDown from 'lucide-solid/icons/chevron-down';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import {
+  getAlertThresholdsSectionDisabledLabel,
+  getAlertThresholdsSectionUnsavedChangesTitle,
+} from '@/utils/alertThresholdsSectionPresentation';
 
 export interface CollapsibleSectionProps {
   /** Unique identifier for the section */
@@ -106,13 +110,13 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
               </Show>
               <Show when={props.isGloballyDisabled}>
                 <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400">
-                  Disabled
+                  {getAlertThresholdsSectionDisabledLabel()}
                 </span>
               </Show>
               <Show when={props.hasChanges}>
                 <span
                   class="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500"
-                  title="Unsaved changes"
+                  title={getAlertThresholdsSectionUnsavedChangesTitle()}
                 />
               </Show>
             </div>

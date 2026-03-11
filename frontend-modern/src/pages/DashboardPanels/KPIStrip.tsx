@@ -6,12 +6,9 @@ import {
   buildStoragePath,
 } from '@/routing/resourceLinks';
 import { getDashboardAlertTone } from '@/utils/dashboardAlertPresentation';
+import { getDashboardKpiPresentation } from '@/utils/dashboardKpiPresentation';
 import { getAlertSeverityTextClass } from '@/utils/alertSeverityPresentation';
 import { formatBytes } from '@/utils/format';
-import ServerIcon from 'lucide-solid/icons/server';
-import ContainerIcon from 'lucide-solid/icons/box';
-import HardDriveIcon from 'lucide-solid/icons/hard-drive';
-import BellIcon from 'lucide-solid/icons/bell';
 
 interface KPIStripProps {
   infrastructure: {
@@ -35,23 +32,29 @@ interface KPIStripProps {
 }
 
 export function KPIStrip(props: KPIStripProps) {
+  const infrastructurePresentation = getDashboardKpiPresentation('infrastructure');
+  const workloadsPresentation = getDashboardKpiPresentation('workloads');
+  const storagePresentation = getDashboardKpiPresentation('storage');
+  const alertsPresentation = getDashboardKpiPresentation('alerts');
+  const InfrastructureIcon = infrastructurePresentation.icon;
+  const WorkloadsIcon = workloadsPresentation.icon;
+  const StorageIcon = storagePresentation.icon;
+  const AlertsIcon = alertsPresentation.icon;
+
   return (
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <a href={INFRASTRUCTURE_PATH} class="group block">
         <Card
           hoverable
           padding="none"
-          class="h-full border-l-[3px] border-l-blue-500 dark:border-l-blue-400 bg-surface group-hover:bg-surface-hover transition-colors"
+          class={infrastructurePresentation.cardClassName}
         >
           <div class="px-3.5 py-3">
             <div class="flex items-center justify-between">
               <p class="text-[11px] font-medium text-muted uppercase tracking-wide">
-                Infrastructure
+                {infrastructurePresentation.label}
               </p>
-              <ServerIcon
-                class="w-3.5 h-3.5 text-blue-500/50 dark:text-blue-400/50"
-                aria-hidden="true"
-              />
+              <InfrastructureIcon class={infrastructurePresentation.iconClassName} aria-hidden="true" />
             </div>
             <p class="text-2xl font-mono font-semibold text-base-content mt-1">
               {props.infrastructure.total}
@@ -70,15 +73,14 @@ export function KPIStrip(props: KPIStripProps) {
         <Card
           hoverable
           padding="none"
-          class="h-full border-l-[3px] border-l-violet-500 dark:border-l-violet-400 bg-surface group-hover:bg-surface-hover transition-colors"
+          class={workloadsPresentation.cardClassName}
         >
           <div class="px-3.5 py-3">
             <div class="flex items-center justify-between">
-              <p class="text-[11px] font-medium text-muted uppercase tracking-wide">Workloads</p>
-              <ContainerIcon
-                class="w-3.5 h-3.5 text-violet-500/50 dark:text-violet-400/50"
-                aria-hidden="true"
-              />
+              <p class="text-[11px] font-medium text-muted uppercase tracking-wide">
+                {workloadsPresentation.label}
+              </p>
+              <WorkloadsIcon class={workloadsPresentation.iconClassName} aria-hidden="true" />
             </div>
             <p class="text-2xl font-mono font-semibold text-base-content mt-1">
               {props.workloads.total}
@@ -97,15 +99,14 @@ export function KPIStrip(props: KPIStripProps) {
         <Card
           hoverable
           padding="none"
-          class="h-full border-l-[3px] border-l-cyan-500 dark:border-l-cyan-400 bg-surface group-hover:bg-surface-hover transition-colors"
+          class={storagePresentation.cardClassName}
         >
           <div class="px-3.5 py-3">
             <div class="flex items-center justify-between">
-              <p class="text-[11px] font-medium text-muted uppercase tracking-wide">Storage</p>
-              <HardDriveIcon
-                class="w-3.5 h-3.5 text-cyan-500/50 dark:text-cyan-400/50"
-                aria-hidden="true"
-              />
+              <p class="text-[11px] font-medium text-muted uppercase tracking-wide">
+                {storagePresentation.label}
+              </p>
+              <StorageIcon class={storagePresentation.iconClassName} aria-hidden="true" />
             </div>
             <p class="text-2xl font-mono font-semibold text-base-content mt-1">
               {Math.round(props.storage.capacityPercent)}%
@@ -122,15 +123,14 @@ export function KPIStrip(props: KPIStripProps) {
           hoverable
           tone={getDashboardAlertTone(props.alerts)}
           padding="none"
-          class="h-full border-l-[3px] border-l-amber-500 dark:border-l-amber-400 group-hover:brightness-95 dark:group-hover:brightness-110 transition-all"
+          class={alertsPresentation.cardClassName}
         >
           <div class="px-3.5 py-3">
             <div class="flex items-center justify-between">
-              <p class="text-[11px] font-medium text-muted uppercase tracking-wide">Alerts</p>
-              <BellIcon
-                class="w-3.5 h-3.5 text-amber-500/50 dark:text-amber-400/50"
-                aria-hidden="true"
-              />
+              <p class="text-[11px] font-medium text-muted uppercase tracking-wide">
+                {alertsPresentation.label}
+              </p>
+              <AlertsIcon class={alertsPresentation.iconClassName} aria-hidden="true" />
             </div>
             <p class="text-2xl font-mono font-semibold text-base-content mt-1">
               {props.alerts.total}

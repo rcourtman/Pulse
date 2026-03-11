@@ -1,6 +1,15 @@
 import { Show, For, createSignal, createEffect } from 'solid-js';
 import { Dialog } from '../shared/Dialog';
 import { ThresholdSlider } from '../Dashboard/ThresholdSlider';
+import {
+  ALERT_BULK_EDIT_CANCEL_LABEL,
+  ALERT_BULK_EDIT_CLEAR_LABEL,
+  ALERT_BULK_EDIT_DIALOG_TITLE,
+  ALERT_BULK_EDIT_UNCHANGED_LABEL,
+  getAlertBulkEditApplyLabel,
+  getAlertBulkEditDescription,
+  getAlertBulkEditOpenLabel,
+} from '@/utils/alertBulkEditPresentation';
 
 export interface BulkEditDialogProps {
   isOpen: boolean;
@@ -76,13 +85,14 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
   };
 
   return (
-    <Dialog isOpen={props.isOpen} onClose={props.onClose} ariaLabel="Bulk Edit Settings">
+    <Dialog isOpen={props.isOpen} onClose={props.onClose} ariaLabel={getAlertBulkEditOpenLabel()}>
       <div class="fixed inset-0 min-h-screen z-[100] flex items-center justify-center pointer-events-none">
         <div class="bg-surface rounded-xl shadow-2xl ring-1 ring-border max-w-lg w-full p-6 max-h-[90vh] flex flex-col pointer-events-auto">
-          <h2 class="text-xl font-semibold text-base-content mb-2">Bulk Edit Settings</h2>
+          <h2 class="text-xl font-semibold text-base-content mb-2">
+            {ALERT_BULK_EDIT_DIALOG_TITLE}
+          </h2>
           <p class="text-sm text-muted mb-6">
-            Applying changes to {props.selectedIds.length} items. Leave fields empty to keep
-            existing options.
+            {getAlertBulkEditDescription(props.selectedIds.length)}
           </p>
 
           <div class="space-y-6 overflow-y-auto px-1 flex-1 min-h-0">
@@ -98,7 +108,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                     <div class="flex items-center justify-between mb-2">
                       <label class="text-sm font-medium text-base-content">{column}</label>
                       <span class="text-xs text-slate-500 font-mono">
-                        {val() !== undefined ? val() : 'Unchanged'}
+                        {val() !== undefined ? val() : ALERT_BULK_EDIT_UNCHANGED_LABEL}
                       </span>
                     </div>
                     <div class="flex items-center justify-between gap-4">
@@ -123,7 +133,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                             max={bounds.max}
                             step={bounds.step}
                             value={val() ?? ''}
-                            placeholder="Unchanged"
+                            placeholder={ALERT_BULK_EDIT_UNCHANGED_LABEL}
                             onInput={(e) => {
                               const v = parseFloat(e.currentTarget.value);
                               setThresholds((prev) => ({
@@ -143,7 +153,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                               setThresholds((prev) => ({ ...prev, [metric]: undefined }))
                             }
                           >
-                            Clear
+                            {ALERT_BULK_EDIT_CLEAR_LABEL}
                           </button>
                         </Show>
                       </div>
@@ -160,14 +170,14 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
               class="px-5 py-2 text-sm font-medium text-base-content bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors shadow-sm"
               onClick={props.onClose}
             >
-              Cancel
+              {ALERT_BULK_EDIT_CANCEL_LABEL}
             </button>
             <button
               type="button"
               class="px-5 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-md shadow-sm transition-colors"
               onClick={handleSave}
             >
-              Apply to {props.selectedIds.length} items
+              {getAlertBulkEditApplyLabel(props.selectedIds.length)}
             </button>
           </div>
         </div>

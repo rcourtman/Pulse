@@ -4,8 +4,12 @@ import {
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactRowClass,
   getRecoveryEventTimeTextClass,
+  getRecoveryGroupNoTimestampLabel,
+  getRecoveryHistorySearchPlaceholder,
+  getRecoveryProtectedSearchPlaceholder,
   getRecoveryRollupAgeTextClass,
   getRecoveryRollupIssueTone,
+  getRecoverySearchHistoryEmptyMessage,
   getRecoverySubjectTypeBadgeClass,
   getRecoverySubjectTypeLabel,
   isRecoveryRollupStale,
@@ -13,6 +17,10 @@ import {
   RECOVERY_ADVANCED_FILTER_LABEL_CLASS,
   RECOVERY_GROUP_HEADER_ROW_CLASS,
   RECOVERY_GROUP_HEADER_TEXT_CLASS,
+  RECOVERY_GROUP_NO_TIMESTAMP_LABEL,
+  RECOVERY_HISTORY_SEARCH_PLACEHOLDER,
+  RECOVERY_PROTECTED_SEARCH_PLACEHOLDER,
+  RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE,
 } from '@/utils/recoveryTablePresentation';
 
 describe('recoveryTablePresentation', () => {
@@ -21,6 +29,14 @@ describe('recoveryTablePresentation', () => {
     expect(RECOVERY_GROUP_HEADER_TEXT_CLASS).toContain('font-semibold');
     expect(RECOVERY_ADVANCED_FILTER_LABEL_CLASS).toContain('text-muted');
     expect(RECOVERY_ADVANCED_FILTER_FIELD_CLASS).toContain('focus:border-blue-500');
+    expect(RECOVERY_GROUP_NO_TIMESTAMP_LABEL).toBe('No Timestamp');
+    expect(RECOVERY_PROTECTED_SEARCH_PLACEHOLDER).toBe('Search protected items...');
+    expect(RECOVERY_HISTORY_SEARCH_PLACEHOLDER).toBe('Search recovery history...');
+    expect(RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE).toBe('Recent searches appear here.');
+    expect(getRecoveryGroupNoTimestampLabel()).toBe('No Timestamp');
+    expect(getRecoveryProtectedSearchPlaceholder()).toBe('Search protected items...');
+    expect(getRecoveryHistorySearchPlaceholder()).toBe('Search recovery history...');
+    expect(getRecoverySearchHistoryEmptyMessage()).toBe('Recent searches appear here.');
   });
 
   it('derives time text classes from event recency', () => {

@@ -1,9 +1,6 @@
 import { Component, Accessor, Setter, Show, For, createMemo, createSignal } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { Dynamic } from 'solid-js/web';
-import Server from 'lucide-solid/icons/server';
-import HardDrive from 'lucide-solid/icons/hard-drive';
-import Mail from 'lucide-solid/icons/mail';
 import Loader from 'lucide-solid/icons/loader';
 import type { Resource } from '@/types/resource';
 import type { PBSInstance, PMGInstance } from '@/types/api';
@@ -19,6 +16,11 @@ import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import { NodeModal } from './NodeModal';
 import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
 import { SettingsSectionNav } from './SettingsSectionNav';
+import {
+  buildProxmoxDiscoveryPrefillNode,
+  getProxmoxVariantPresentation,
+} from '@/utils/proxmoxSettingsPresentation';
+import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import type {
   DiscoveredServer,
   DiscoveryScanStatus,
@@ -75,104 +77,12 @@ export interface ProxmoxSettingsPanelProps {
   embedded?: boolean;
 }
 
-type VariantConfig = {
-  title: string;
-  addLabel: string;
-  emptyTitle: string;
-  emptyDescription: string;
-  scanningLabel: string;
-  emptyIcon: Component<{ class?: string }>;
-  nameFromServer: (server: DiscoveredServer) => string;
-  titleFromServer: (server: DiscoveredServer) => string;
-};
-
-const VARIANT_CONFIG: Record<NodeType, VariantConfig> = {
-  pve: {
-    title: 'Proxmox VE nodes',
-    addLabel: 'Add Proxmox VE Connection',
-    emptyTitle: 'No Proxmox VE connections configured',
-    emptyDescription:
-      'Add a Proxmox VE connection when the unified agent is not available on the host',
-    scanningLabel: 'Scanning your network for Proxmox VE servers…',
-    emptyIcon: Server,
-    nameFromServer: (server) => server.hostname || `pve-${server.ip}`,
-    titleFromServer: (server) => server.hostname || `Proxmox VE at ${server.ip}`,
-  },
-  pbs: {
-    title: 'Proxmox Backup Server nodes',
-    addLabel: 'Add Backup Server Connection',
-    emptyTitle: 'No Proxmox Backup Server connections configured',
-    emptyDescription:
-      'Add a Proxmox Backup Server connection when the unified agent is not available on the host',
-    scanningLabel: 'Scanning your network for Proxmox Backup Servers…',
-    emptyIcon: HardDrive,
-    nameFromServer: (server) => server.hostname || `pbs-${server.ip}`,
-    titleFromServer: (server) => server.hostname || `Backup Server at ${server.ip}`,
-  },
-  pmg: {
-    title: 'Proxmox Mail Gateway nodes',
-    addLabel: 'Add Mail Gateway Connection',
-    emptyTitle: 'No Proxmox Mail Gateway connections configured',
-    emptyDescription:
-      'Add a Proxmox Mail Gateway connection when the unified agent is not available on the host',
-    scanningLabel: 'Scanning your network for Proxmox Mail Gateway servers…',
-    emptyIcon: Mail,
-    nameFromServer: (server) => server.hostname || `pmg-${server.ip}`,
-    titleFromServer: (server) => server.hostname || `Mail Gateway at ${server.ip}`,
-  },
-};
-
-const buildDiscoveryPrefillNode = (server: DiscoveredServer): Partial<NodeConfig> => {
-  const baseNode = {
-    type: server.type,
-    name: VARIANT_CONFIG[server.type].nameFromServer(server),
-    host: `https://${server.ip}:${server.port}`,
-    verifySSL: false,
-  } as const;
-
-  switch (server.type) {
-    case 'pve':
-      return {
-        ...baseNode,
-        user: '',
-        tokenName: '',
-        tokenValue: '',
-        monitorVMs: true,
-        monitorContainers: true,
-        monitorStorage: true,
-        monitorBackups: true,
-        monitorPhysicalDisks: false,
-      };
-    case 'pbs':
-      return {
-        ...baseNode,
-        user: '',
-        tokenName: '',
-        tokenValue: '',
-        monitorDatastores: true,
-        monitorSyncJobs: true,
-        monitorVerifyJobs: true,
-        monitorPruneJobs: true,
-        monitorGarbageJobs: true,
-      };
-    case 'pmg':
-      return {
-        ...baseNode,
-        user: '',
-        monitorMailStats: true,
-        monitorQueues: true,
-        monitorQuarantine: true,
-        monitorDomainStats: false,
-      };
-  }
-};
-
 export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props) => {
   const navigate = useNavigate();
   const [prefillNode, setPrefillNode] = createSignal<Partial<NodeConfig> | null>(null);
 
   const activeAgent = () => props.selectedAgent();
-  const activeConfig = createMemo(() => VARIANT_CONFIG[activeAgent()]);
+  const activeConfig = createMemo(() => getProxmoxVariantPresentation(activeAgent()));
   const activeDiscoveredNodes = createMemo(() =>
     props.discoveredNodes().filter((node) => node.type === activeAgent()),
   );
@@ -206,7 +116,7 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
   };
 
   const openDiscoveredNode = (server: DiscoveredServer) => {
-    setPrefillNode(buildDiscoveryPrefillNode(server));
+    setPrefillNode(buildProxmoxDiscoveryPrefillNode(server));
     props.setEditingNode(null);
     props.setCurrentNodeType(server.type);
     props.setModalResetKey((previous) => previous + 1);
@@ -357,7 +267,7 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
         <div class="space-y-4">
           <Show when={!props.initialLoadComplete()}>
             <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
-              Loading configuration...
+              {getSettingsConfigurationLoadingState().text}
             </div>
           </Show>
 

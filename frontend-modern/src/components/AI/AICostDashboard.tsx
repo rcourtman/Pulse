@@ -15,6 +15,13 @@ import { logger } from '@/utils/logger';
 import { notificationStore } from '@/stores/notifications';
 import type { AICostSummary, AISettings } from '@/types/ai';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
+import {
+  AI_COST_DAILY_TOKEN_EMPTY_STATE,
+  AI_COST_DAILY_USD_EMPTY_STATE,
+  AI_COST_EMPTY_STATE,
+  getAICostLoadingState,
+  getAICostRangeButtonClass,
+} from '@/utils/aiCostPresentation';
 
 const usdFormatter = new Intl.NumberFormat(undefined, {
   style: 'currency',
@@ -279,11 +286,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(1)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
-                days() === 1
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                  : 'border-border hover:bg-surface-hover'
-              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 1, loading())}
             >
               1d
             </button>
@@ -291,11 +294,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(7)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
-                days() === 7
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                  : 'border-border hover:bg-surface-hover'
-              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 7, loading())}
             >
               7d
             </button>
@@ -303,11 +302,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(30)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
-                days() === 30
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                  : 'border-border hover:bg-surface-hover'
-              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 30, loading())}
             >
               30d
             </button>
@@ -315,11 +310,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(90)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
-                days() === 90
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                  : 'border-border hover:bg-surface-hover'
-              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 90, loading())}
             >
               90d
             </button>
@@ -327,11 +318,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => handleRangeClick(365)}
-              class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${
-                days() === 365
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                  : 'border-border hover:bg-surface-hover'
-              } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={getAICostRangeButtonClass(days() === 365, loading())}
             >
               1y
             </button>
@@ -341,7 +328,7 @@ export const AICostDashboard: Component = () => {
 
       <div class="p-6 space-y-4">
         <Show when={!summary() && loading()}>
-          <div class="text-sm text-muted">Loading usage…</div>
+          <div class="text-sm text-muted">{getAICostLoadingState().text}</div>
         </Show>
 
         <Show when={summary()?.truncated}>
@@ -377,7 +364,7 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={!summary() && !loading() && !loadError()}>
-          <div class="text-sm text-muted">No usage data yet.</div>
+          <div class="text-sm text-muted">{AI_COST_EMPTY_STATE}</div>
         </Show>
 
         <Show when={summary()}>
@@ -467,7 +454,7 @@ export const AICostDashboard: Component = () => {
                   <div class="mt-2">
                     <Show
                       when={anyPricingKnown() && dailyUSDValues().length >= 2}
-                      fallback={<div class="text-xs text-muted">No daily USD trend yet.</div>}
+                      fallback={<div class="text-xs text-muted">{AI_COST_DAILY_USD_EMPTY_STATE}</div>}
                     >
                       <TinySparkline values={dailyUSDValues()} stroke="#10b981" />
                     </Show>
@@ -485,7 +472,9 @@ export const AICostDashboard: Component = () => {
                   <div class="mt-2">
                     <Show
                       when={dailyTokenValues().length >= 2}
-                      fallback={<div class="text-xs text-muted">No daily token trend yet.</div>}
+                      fallback={
+                        <div class="text-xs text-muted">{AI_COST_DAILY_TOKEN_EMPTY_STATE}</div>
+                      }
                     >
                       <TinySparkline values={dailyTokenValues()} stroke="#3b82f6" />
                     </Show>

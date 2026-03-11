@@ -34,6 +34,12 @@ import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { notificationStore } from '@/stores/notifications';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getTrialTryAgainLaterMessage,
+} from '@/utils/upgradePresentation';
 
 /** Format a tooltip value according to the metric unit. */
 function formatTooltipValue(value: number, unit?: string): string {
@@ -99,15 +105,19 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         }
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else if (statusCode === 429) {
-        notificationStore.error('Try again later');
+        notificationStore.error(getTrialTryAgainLaterMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
+            branded: true,
+          }),
+        );
       }
     } finally {
       setStartingTrial(false);

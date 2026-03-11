@@ -13,11 +13,10 @@ import {
   OrgsAPI,
   type IncomingOrganizationShare,
   type Organization,
-  type OrganizationRole,
   type OrganizationShare,
 } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
-import { canManageOrg, formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
+import { canManageOrg, formatOrgDate, roleBadgeClass } from '@/utils/orgUtils';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
@@ -28,6 +27,26 @@ import {
   isCanonicalResourceType,
   normalizeCanonicalResourceTypeInput,
 } from '@/utils/canonicalResourceTypes';
+import {
+  normalizeOrganizationShareRole,
+  ORGANIZATION_SHARE_ROLE_OPTIONS,
+  type ShareAccessRole,
+} from '@/utils/organizationRolePresentation';
+import {
+  getOrganizationShareCreateErrorMessage,
+  getOrganizationShareCreateSuccessMessage,
+  getOrganizationShareDeleteErrorMessage,
+  getOrganizationShareDeleteSuccessMessage,
+  getOrganizationShareInvalidResourceMessage,
+  getOrganizationShareResourceIdRequiredMessage,
+  getOrganizationShareTargetOrgDifferentMessage,
+  getOrganizationShareTargetOrgRequiredMessage,
+  getOrganizationIncomingSharesEmptyState,
+  getOrganizationOutgoingSharesEmptyState,
+  getOrganizationSettingsLoadErrorMessage,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
+} from '@/utils/organizationSettingsPresentation';
 import { useResources, getDisplayName } from '@/hooks/useResources';
 import Share2 from 'lucide-solid/icons/share-2';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -37,24 +56,10 @@ interface OrganizationSharingPanelProps {
   currentUser?: string;
 }
 
-type ShareAccessRole = 'viewer' | 'editor' | 'admin';
-
 type ResourceOption = {
   id: string;
   type: string;
   name: string;
-};
-
-const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [
-  { value: 'viewer', label: 'Viewer' },
-  { value: 'editor', label: 'Editor' },
-  { value: 'admin', label: 'Admin' },
-];
-
-const normalizeShareRole = (role: OrganizationRole): ShareAccessRole => {
-  const normalized = normalizeRole(role);
-  if (normalized === 'admin' || normalized === 'editor') return normalized;
-  return 'viewer';
 };
 
 export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> = (props) => {
@@ -157,17 +162,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       const firstTarget =
         targetOrgId().trim() || allOrgs.find((candidate) => candidate.id !== orgId)?.id || '';
       setTargetOrgId(firstTarget);
-      setTargetOrgError(firstTarget === '' ? 'Target organization is required' : '');
+      setTargetOrgError(firstTarget === '' ? getOrganizationShareTargetOrgRequiredMessage() : '');
     } catch (error) {
       logger.error('Failed to load organization sharing data', error);
       const msg = error instanceof Error ? error.message : '';
-      if (msg.includes('402')) {
-        notificationStore.error('Multi-tenant requires an Enterprise license');
-      } else if (msg.includes('501')) {
-        notificationStore.error('Multi-tenant is not enabled on this server');
-      } else {
-        notificationStore.error('Failed to load organization sharing details');
-      }
+      notificationStore.error(getOrganizationSettingsLoadErrorMessage(msg, 'sharing'));
     } finally {
       setLoading(false);
     }
@@ -201,7 +200,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
 
   const updateTargetOrg = (value: string) => {
     setTargetOrgId(value);
-    setTargetOrgError(value.trim() === '' ? 'Target organization is required' : '');
+    setTargetOrgError(value.trim() === '' ? getOrganizationShareTargetOrgRequiredMessage() : '');
   };
 
   const updateResourceType = (value: string) => {
@@ -216,7 +215,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const updateResourceId = (value: string) => {
     setSelectedQuickPick('');
     setResourceId(value);
-    setResourceIdError(value.trim() === '' ? 'Resource ID is required' : '');
+    setResourceIdError(value.trim() === '' ? getOrganizationShareResourceIdRequiredMessage() : '');
   };
 
   const updateResourceName = (value: string) => {
@@ -236,25 +235,29 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     const hasValidManualType = isCanonicalResourceType(nextResourceType);
     const hasValidManualResourceId = nextResourceId !== '';
 
-    setTargetOrgError(nextTargetOrgId === '' ? 'Target organization is required' : '');
+    setTargetOrgError(
+      nextTargetOrgId === '' ? getOrganizationShareTargetOrgRequiredMessage() : '',
+    );
     if (hasQuickPick) {
       setResourceTypeError('');
       setResourceIdError('');
     } else {
       setResourceTypeError(hasValidManualType ? '' : INVALID_RESOURCE_TYPE_ERROR);
-      setResourceIdError(hasValidManualResourceId ? '' : 'Resource ID is required');
+      setResourceIdError(
+        hasValidManualResourceId ? '' : getOrganizationShareResourceIdRequiredMessage(),
+      );
     }
 
     if (!nextTargetOrgId) {
-      notificationStore.error('Target organization is required');
+      notificationStore.error(getOrganizationShareTargetOrgRequiredMessage());
       return;
     }
     if (nextTargetOrgId === currentOrg.id) {
-      notificationStore.error('Target organization must differ from the current organization');
+      notificationStore.error(getOrganizationShareTargetOrgDifferentMessage());
       return;
     }
     if (!hasQuickPick && (!hasValidManualType || !hasValidManualResourceId)) {
-      notificationStore.error('Valid resource type and resource ID are required');
+      notificationStore.error(getOrganizationShareInvalidResourceMessage());
       return;
     }
 
@@ -267,11 +270,13 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         resourceName: nextResourceName,
         accessRole: accessRole(),
       });
-      notificationStore.success('Resource shared successfully');
+      notificationStore.success(getOrganizationShareCreateSuccessMessage());
       await loadShares(currentOrg.id);
     } catch (error) {
       logger.error('Failed to create organization share', error);
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to create share');
+      notificationStore.error(
+        getOrganizationShareCreateErrorMessage(error instanceof Error ? error.message : undefined),
+      );
     } finally {
       setSaving(false);
     }
@@ -287,11 +292,13 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     setSaving(true);
     try {
       await OrgsAPI.deleteShare(currentOrg.id, share.id);
-      notificationStore.success('Share removed');
+      notificationStore.success(getOrganizationShareDeleteSuccessMessage());
       await loadShares(currentOrg.id);
     } catch (error) {
       logger.error('Failed to delete organization share', error);
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to delete share');
+      notificationStore.error(
+        getOrganizationShareDeleteErrorMessage(error instanceof Error ? error.message : undefined),
+      );
     } finally {
       setSaving(false);
     }
@@ -310,7 +317,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   return (
     <Show
       when={isMultiTenantEnabled()}
-      fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}
+      fallback={
+        <div class={ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS}>
+          {ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE}
+        </div>
+      }
     >
       <div class="space-y-6">
         <SettingsPanel
@@ -431,7 +442,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                         }
                         class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <For each={accessRoleOptions}>
+                        <For each={ORGANIZATION_SHARE_ROLE_OPTIONS}>
                           {(option) => <option value={option.value}>{option.label}</option>}
                         </For>
                       </select>
@@ -587,7 +598,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       key: 'accessRole',
                       label: 'Access',
                       render: (share) => {
-                        const role = normalizeShareRole(share.accessRole);
+                        const role = normalizeOrganizationShareRole(share.accessRole);
                         return (
                           <span
                             class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}
@@ -626,7 +637,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     },
                   ]}
                   keyExtractor={(share) => share.id}
-                  emptyState="No outgoing shares configured."
+                  emptyState={getOrganizationOutgoingSharesEmptyState()}
                   desktopMinWidth="760px"
                   class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-border"
                 />
@@ -666,7 +677,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       key: 'accessRole',
                       label: 'Access',
                       render: (share) => {
-                        const role = normalizeShareRole(share.accessRole);
+                        const role = normalizeOrganizationShareRole(share.accessRole);
                         return (
                           <span
                             class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}
@@ -685,7 +696,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     },
                   ]}
                   keyExtractor={(share) => share.id}
-                  emptyState="No incoming shares from other organizations."
+                  emptyState={getOrganizationIncomingSharesEmptyState()}
                   desktopMinWidth="620px"
                   class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-border"
                 />

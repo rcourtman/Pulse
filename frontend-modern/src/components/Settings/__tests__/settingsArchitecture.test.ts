@@ -119,6 +119,8 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps page-level settings header chrome inside SettingsPageShell', () => {
     expect(settingsShellSource).toContain('<PageHeader');
+    expect(settingsShellSource).toContain('getSettingsSearchEmptyState');
+    expect(settingsShellSource).not.toContain('No settings found for "');
     expect(infrastructureWorkspaceSource).not.toContain('<PageHeader');
     expect(infrastructureWorkspaceSource).not.toMatch(/<h[12][^>]*>/);
     expect(infrastructureWorkspaceSource).not.toContain('Add and manage infrastructure');

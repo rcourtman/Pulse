@@ -1,5 +1,11 @@
 import type { Alert } from '@/types/api';
 
+const ALERT_SEVERITY_COMPACT_LABELS: Record<string, string> = {
+  critical: 'CRIT',
+  warning: 'WARN',
+  info: 'INFO',
+};
+
 export function getAlertSeverityBadgeClass(level: Alert['level'] | string): string {
   const base =
     'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase';
@@ -22,5 +28,20 @@ export function getAlertSeverityTextClass(level: Alert['level'] | string): strin
       return 'text-amber-600 dark:text-amber-400';
     default:
       return 'text-blue-600 dark:text-blue-400';
+  }
+}
+
+export function getAlertSeverityCompactLabel(level: Alert['level'] | string): string {
+  return ALERT_SEVERITY_COMPACT_LABELS[level] || String(level).toUpperCase();
+}
+
+export function getAlertSeverityDotClass(level: Alert['level'] | string): string {
+  switch (level) {
+    case 'critical':
+      return 'h-2 w-2 rounded-full bg-red-500';
+    case 'warning':
+      return 'h-2 w-2 rounded-full bg-yellow-500';
+    default:
+      return 'h-2 w-2 rounded-full bg-blue-500';
   }
 }

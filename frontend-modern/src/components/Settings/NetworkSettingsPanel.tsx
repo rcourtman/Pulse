@@ -5,14 +5,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import Network from 'lucide-solid/icons/network';
-
-const COMMON_DISCOVERY_SUBNETS = [
-  '192.168.1.0/24',
-  '192.168.0.0/24',
-  '10.0.0.0/24',
-  '172.16.0.0/24',
-  '192.168.10.0/24',
-];
+import { COMMON_DISCOVERY_SUBNETS } from '@/utils/systemSettingsPresentation';
 
 interface NetworkSettingsPanelProps {
   // Discovery settings

@@ -3,6 +3,7 @@ import ChevronRight from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { getSettingsSearchEmptyState } from '@/utils/settingsShellPresentation';
 import type { SettingsHeaderMeta, SettingsNavGroup, SettingsTab } from './settingsTypes';
 
 interface SettingsPageShellProps {
@@ -143,7 +144,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 }
               >
                 <div class="py-4 px-4 text-center text-sm text-muted">
-                  No settings found for "{props.searchQuery()}"
+                  {getSettingsSearchEmptyState(props.searchQuery()).text}
                 </div>
               </Show>
 

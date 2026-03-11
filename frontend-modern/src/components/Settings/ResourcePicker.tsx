@@ -4,16 +4,21 @@ import CheckSquare from 'lucide-solid/icons/check-square';
 import XSquare from 'lucide-solid/icons/x-square';
 import { formControl } from '@/components/shared/Form';
 import { SearchField } from '@/components/shared/SearchField';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { useResources, getDisplayName } from '@/hooks/useResources';
 import type { Resource, ResourceType } from '@/types/resource';
 import {
+  getResourcePickerEmptyState,
+  getResourcePickerTypeFilterLabel,
   matchesReportableResourceTypeFilter,
   REPORTABLE_RESOURCE_TYPES,
+  RESOURCE_PICKER_TYPE_FILTERS,
   reportableResourceTypeSortOrder,
   type ResourcePickerTypeFilter as TypeFilter,
 } from '@/utils/reportableResourceTypes';
 import { showWarning } from '@/utils/toast';
 import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 const MAX_SELECTION = 50;
 
@@ -26,31 +31,6 @@ export interface SelectedResource {
 interface ResourcePickerProps {
   selected: Accessor<SelectedResource[]>;
   onSelectionChange: (items: SelectedResource[]) => void;
-}
-
-const typeFilterLabels: Record<TypeFilter, string> = {
-  all: 'All',
-  infrastructure: 'Infrastructure',
-  workloads: 'Workloads',
-  storage: 'Storage',
-  recovery: 'Recovery',
-};
-
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'online':
-    case 'running':
-      return 'bg-emerald-400';
-    case 'offline':
-    case 'stopped':
-      return 'bg-slate-500';
-    case 'degraded':
-      return 'bg-amber-400';
-    case 'paused':
-      return 'bg-blue-400';
-    default:
-      return 'bg-slate-500';
-  }
 }
 
 export function ResourcePicker(props: ResourcePickerProps) {
@@ -178,7 +158,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
         {/* Type toggle buttons */}
         <div class="flex gap-1">
-          <For each={['all', 'infrastructure', 'workloads', 'storage', 'recovery'] as TypeFilter[]}>
+          <For each={RESOURCE_PICKER_TYPE_FILTERS}>
             {(type) => (
               <button
                 class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all ${
@@ -188,7 +168,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                 }`}
                 onClick={() => setTypeFilter(type)}
               >
-                {typeFilterLabels[type]}
+                {getResourcePickerTypeFilterLabel(type)}
               </button>
             )}
           </For>
@@ -201,9 +181,9 @@ export function ResourcePicker(props: ResourcePickerProps) {
           when={reportableResources().length > 0}
           fallback={
             <div class="p-8 text-center text-slate-400">
-              <p class="text-sm">No resources available</p>
+              <p class="text-sm">{getResourcePickerEmptyState(false).title}</p>
               <p class="text-xs mt-1 text-slate-500">
-                Resources appear as Pulse collects infrastructure and workload metrics
+                {getResourcePickerEmptyState(false).description}
               </p>
             </div>
           }
@@ -212,7 +192,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             when={filteredResources().length > 0}
             fallback={
               <div class="p-6 text-center text-slate-400 text-sm">
-                No resources match your filters
+                {getResourcePickerEmptyState(true).title}
               </div>
             }
           >
@@ -256,8 +236,10 @@ export function ResourcePicker(props: ResourcePickerProps) {
                       </div>
 
                       {/* Status dot */}
-                      <div
-                        class={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusColor(resource.status)}`}
+                      <StatusDot
+                        variant={getSimpleStatusIndicator(resource.status).variant}
+                        size="sm"
+                        ariaHidden
                       />
 
                       {/* Name and ID */}

@@ -2,6 +2,7 @@ import { Component, For, Show, createSignal, onCleanup } from 'solid-js';
 import type { DeployWizardState } from '@/hooks/useDeployWizard';
 import { NodesAPI } from '@/api/nodes';
 import { copyToClipboard } from '@/utils/clipboard';
+import { getDeployInstallCommandLoadingState } from '@/utils/deployFlowPresentation';
 import { DeployStatusBadge } from './DeployStatusBadge';
 import { ErrorDetail } from './ErrorDetail';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle-2';
@@ -150,7 +151,7 @@ export const ResultsStep: Component<ResultsStepProps> = (props) => {
               <Show when={installCommandLoading()}>
                 <div class="flex items-center gap-2 py-2 text-muted">
                   <div class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Loading install command...
+                  {getDeployInstallCommandLoadingState()}
                 </div>
               </Show>
               <Show when={installCommandError()}>

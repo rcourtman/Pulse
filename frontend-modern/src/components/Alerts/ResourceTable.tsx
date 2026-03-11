@@ -18,8 +18,19 @@ import { HelpIcon } from '@/components/shared/HelpIcon';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
 import { logger } from '@/utils/logger';
 import {
+  getAlertResourceTableAlertDelayLabel,
+  getAlertResourceTableCustomBadgeLabel,
+  getAlertResourceTableEditMetricTitle,
+  getAlertResourceTableEditNotePlaceholder,
   getAlertResourceTableEmptyState,
+  getAlertResourceTableMetricInputTitle,
+  getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableNoResultsState,
+  getAlertResourceTableOfflineStateOrder,
+  getAlertResourceTableOfflineStatePresentation,
+  getAlertResourceTableOverrideNotePlaceholder,
+  getAlertResourceTableResetFactoryDefaultsLabel,
+  getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
 import {
   ALERT_BULK_EDIT_CLEAR_LABEL,
@@ -496,39 +507,17 @@ export function ResourceTable(props: ResourceTableProps) {
     titleDisabled?: string;
     titleWhenDisabled?: string;
   }) => <StatusBadge {...config} />;
-  const offlineStateOrder: OfflineState[] = ['off', 'warning', 'critical'];
-  const offlineStateConfig: Record<
-    OfflineState,
-    { label: string; className: string; title: string }
-  > = {
-    off: {
-      label: 'Off',
-      className: 'bg-surface-alt text-muted hover:bg-surface-hover',
-      title: 'Offline alerts disabled for this resource.',
-    },
-    warning: {
-      label: 'Warn',
-      className:
-        'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800',
-      title: 'Offline alerts will raise warning-level notifications.',
-    },
-    critical: {
-      label: 'Crit',
-      className:
-        'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800',
-      title: 'Offline alerts will raise critical-level notifications.',
-    },
-  };
   const nextOfflineState = (state: OfflineState): OfflineState => {
-    const idx = offlineStateOrder.indexOf(state);
-    return offlineStateOrder[(idx + 1) % offlineStateOrder.length];
+    const order = getAlertResourceTableOfflineStateOrder();
+    const idx = order.indexOf(state);
+    return order[(idx + 1) % order.length];
   };
   const renderOfflineStateButton = (
     state: OfflineState,
     disabled: boolean,
     onToggle: () => void,
   ) => {
-    const config = offlineStateConfig[state];
+    const config = getAlertResourceTableOfflineStatePresentation(state);
     return (
       <button
         type="button"
@@ -558,7 +547,7 @@ export function ResourceTable(props: ResourceTableProps) {
               <span class="font-semibold text-sm">Global Defaults</span>
               <Show when={hasCustomGlobalDefaults()}>
                 <span class="text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                  Custom
+                  {getAlertResourceTableCustomBadgeLabel()}
                 </span>
               </Show>
             </div>
@@ -596,7 +585,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         max={bounds.max}
                         step={metricStep(metric)}
                         value={isOff() ? '' : val()}
-                        placeholder={isOff() ? 'Off' : ''}
+                        placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
                         disabled={isOff()}
                         class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
                         onInput={(e) => {
@@ -811,7 +800,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             onClick={() => props.onRemoveOverride(resource.id)}
                             class="p-1.5 bg-surface-alt hover:text-muted rounded transition-colors"
                             aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
-                            title="Revert to defaults"
+                            title={getAlertResourceTableRevertToDefaultsLabel()}
                           >
                             <RotateCcw class="w-4 h-4" />
                           </button>
@@ -824,7 +813,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       <textarea
                         class="w-full text-xs p-2 rounded border border-border bg-surface-alt"
                         rows={2}
-                        placeholder="Add a note..."
+                        placeholder={getAlertResourceTableEditNotePlaceholder()}
                         value={props.editingNote()}
                         onInput={(e) => props.setEditingNote(e.currentTarget.value)}
                       />
@@ -879,7 +868,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                   min={bounds.min}
                                   max={bounds.max}
                                   value={thresholds()?.[metric] ?? ''}
-                                  placeholder={isDisabled() ? 'Off' : ''}
+                                  placeholder={getAlertResourceTableMetricPlaceholder(
+                                    isDisabled(),
+                                  )}
                                   class="w-16 text-right text-xs p-1 rounded border border-border bg-surface"
                                   onInput={(e) => {
                                     const val = parseFloat(e.currentTarget.value);
@@ -997,7 +988,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       <span class="text-sm font-semibold text-base-content">Global Defaults</span>
                       <Show when={hasCustomGlobalDefaults()}>
                         <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                          Custom
+                          {getAlertResourceTableCustomBadgeLabel()}
                         </span>
                       </Show>
                     </div>
@@ -1018,7 +1009,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               max={bounds.max}
                               step={metricStep(metric)}
                               value={isOff() ? '' : val()}
-                              placeholder={isOff() ? 'Off' : ''}
+                              placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
                               disabled={isOff()}
                               onInput={(e) => {
                                 const value = parseFloat(e.currentTarget.value);
@@ -1037,11 +1028,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   ? 'border-border bg-surface-alt text-muted italic placeholder: dark:placeholder: placeholder:opacity-60 pointer-events-none'
                                   : 'border-border text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                               }`}
-                              title={
-                                isOff()
-                                  ? 'Click to enable this metric'
-                                  : 'Set to -1 to disable alerts for this metric'
-                              }
+                              title={getAlertResourceTableMetricInputTitle(isOff())}
                             />
                             <Show when={isOff()}>
                               <button
@@ -1055,7 +1042,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   }));
                                   props.setHasUnsavedChanges?.(true);
                                 }}
-                                title="Click to enable this metric"
+                                title={getAlertResourceTableMetricInputTitle(true)}
                               >
                                 <span class="sr-only">Enable {column} default</span>
                               </button>
@@ -1155,8 +1142,8 @@ export function ResourceTable(props: ResourceTableProps) {
                           type="button"
                           onClick={() => props.onResetDefaults?.()}
                           class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                          title="Reset to factory defaults"
-                          aria-label="Reset to factory defaults"
+                          title={getAlertResourceTableResetFactoryDefaultsLabel()}
+                          aria-label={getAlertResourceTableResetFactoryDefaultsLabel()}
                         >
                           <svg
                             class="w-4 h-4"
@@ -1198,7 +1185,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   </TableCell>
                   <TableCell class="p-1 px-2 align-middle">
                     <span class="text-xs font-semibold uppercase tracking-wide text-muted inline-flex items-center gap-1">
-                      Alert Delay (s)
+                      {getAlertResourceTableAlertDelayLabel()}
                       <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
                     </span>
                   </TableCell>
@@ -1444,7 +1431,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       when={resource.hasOverride || resource.disableConnectivity}
                                     >
                                       <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                        Custom
+                                        {getAlertResourceTableCustomBadgeLabel()}
                                       </span>
                                     </Show>
                                     <Show when={isEditing()}>
@@ -1456,7 +1443,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           id={`note-${resource.id}`}
                                           class="w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                           rows={2}
-                                          placeholder="Add a note about this override (optional)"
+                                          placeholder={getAlertResourceTableOverrideNotePlaceholder()}
                                           value={props.editingNote()}
                                           onInput={(e) =>
                                             props.setEditingNote(e.currentTarget.value)
@@ -1539,7 +1526,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   openMetricEditor(event);
                                                 }}
                                                 class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
-                                                title="Click to edit this metric"
+                                                title={getAlertResourceTableEditMetricTitle()}
                                               >
                                                 <MetricValueWithHeat
                                                   resourceId={resource.id}
@@ -1621,8 +1608,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   max={bounds.max}
                                                   step={metricStep(metric)}
                                                   value={thresholds()?.[metric] ?? ''}
-                                                  placeholder={isDisabled() ? 'Off' : ''}
-                                                  title="Set to -1 to disable alerts for this metric"
+                                                  placeholder={getAlertResourceTableMetricPlaceholder(
+                                                    isDisabled(),
+                                                  )}
+                                                  title={getAlertResourceTableMetricInputTitle(
+                                                    isDisabled(),
+                                                  )}
                                                   ref={(el) => {
                                                     if (
                                                       isEditing() &&
@@ -1813,7 +1804,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           type="button"
                                           onClick={() => props.onRemoveOverride(resource.id)}
                                           class="p-1 hover:text-muted transition-colors"
-                                          title="Revert to defaults"
+                                          title={getAlertResourceTableRevertToDefaultsLabel()}
                                           aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
                                         >
                                           <RotateCcw class="w-4 h-4" />
@@ -1950,7 +1941,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       when={resource.hasOverride || resource.disableConnectivity}
                                     >
                                       <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                        Custom
+                                        {getAlertResourceTableCustomBadgeLabel()}
                                       </span>
                                     </Show>
                                   </div>
@@ -1994,7 +1985,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   </Show>
                                   <Show when={resource.hasOverride || resource.disableConnectivity}>
                                     <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                      Custom
+                                      {getAlertResourceTableCustomBadgeLabel()}
                                     </span>
                                   </Show>
                                 </div>
@@ -2053,7 +2044,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           <div
                                             onClick={openMetricEditor}
                                             class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
-                                            title="Click to edit this metric"
+                                            title={getAlertResourceTableEditMetricTitle()}
                                           >
                                             <MetricValueWithHeat
                                               resourceId={resource.id}
@@ -2078,8 +2069,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                             }
                                             step={metricStep(metric)}
                                             value={thresholds()?.[metric] ?? ''}
-                                            placeholder={isDisabled() ? 'Off' : ''}
-                                            title="Set to -1 to disable alerts for this metric"
+                                            placeholder={getAlertResourceTableMetricPlaceholder(
+                                              isDisabled(),
+                                            )}
+                                            title={getAlertResourceTableMetricInputTitle(
+                                              isDisabled(),
+                                            )}
                                             ref={(el) => {
                                               if (
                                                 isEditing() &&
@@ -2247,7 +2242,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           type="button"
                                           onClick={() => props.onRemoveOverride(resource.id)}
                                           class="p-1 hover:text-base-content transition-colors"
-                                          title="Revert to defaults"
+                                          title={getAlertResourceTableRevertToDefaultsLabel()}
                                           aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
                                         >
                                           <RotateCcw class="w-4 h-4" />

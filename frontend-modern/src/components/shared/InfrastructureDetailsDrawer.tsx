@@ -7,6 +7,7 @@ import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
 import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
 import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import {
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
@@ -85,7 +86,7 @@ export const InfrastructureDetailsDrawer: Component<InfrastructureDetailsDrawerP
           fallback={
             <div class="flex items-center justify-center py-8">
               <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-              <span class="ml-2 text-sm text-muted">Loading discovery...</span>
+              <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
             </div>
           }
         >

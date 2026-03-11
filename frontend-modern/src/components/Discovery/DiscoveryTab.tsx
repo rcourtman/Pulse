@@ -21,6 +21,15 @@ import {
 } from '../../api/discovery';
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 import { eventBus } from '../../stores/events';
+import {
+  getDiscoveryInitialEmptyState,
+  getDiscoveryLoadingState,
+  getDiscoveryNotesEmptyState,
+  getDiscoveryAnalysisProviderBadgeClass,
+  getDiscoveryCategoryBadgeClass,
+  getDiscoverySuggestedURLFallback,
+  getDiscoveryURLSuggestionSourceLabel,
+} from '@/utils/discoveryPresentation';
 
 interface DiscoveryTabProps {
   resourceType: ResourceType;
@@ -34,29 +43,6 @@ interface DiscoveryTabProps {
 // Construct the resource ID in the same format the backend uses
 const makeResourceId = (type: ResourceType, agentId: string, resourceId: string) => {
   return `${toDiscoveryAPIResourceType(type) || type}:${agentId}:${resourceId}`;
-};
-
-const getURLSuggestionSourceLabel = (code?: string): string => {
-  switch ((code || '').trim()) {
-    case 'service_default_match':
-      return 'Known service default';
-    case 'service_default_variation_match':
-      return 'Known service variant';
-    case 'web_port_inference':
-      return 'Detected web port';
-    case 'host_management_profile_proxmox_node':
-    case 'host_management_profile_linked_proxmox_node':
-    case 'host_management_profile_pve':
-      return 'Proxmox node profile';
-    case 'host_management_profile_pbs':
-      return 'Proxmox Backup profile';
-    case 'host_management_profile_pmg':
-      return 'Proxmox Mail Gateway profile';
-    case 'host_management_profile_nas':
-      return 'NAS node profile';
-    default:
-      return 'Discovery heuristic';
-  }
 };
 
 const toSentence = (text?: string): string => {
@@ -167,13 +153,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const detail = toSentence(d.suggested_url_source_detail);
     if (detail) return detail;
     if (d.suggested_url_source_code)
-      return getURLSuggestionSourceLabel(d.suggested_url_source_code);
+      return getDiscoveryURLSuggestionSourceLabel(d.suggested_url_source_code);
     return '';
   });
   const suggestedURLReasonTitle = createMemo(() => {
     const d = discovery();
     if (!d) return '';
-    const label = getURLSuggestionSourceLabel(d.suggested_url_source_code);
+    const label = getDiscoveryURLSuggestionSourceLabel(d.suggested_url_source_code);
     if (d.suggested_url_source_detail) return `${label}: ${d.suggested_url_source_detail}`;
     return label;
   });
@@ -373,7 +359,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           <Show
             when={discoveryInfo()?.ai_provider?.is_local}
             fallback={
-              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              <span class={getDiscoveryAnalysisProviderBadgeClass(false)}>
                 {/* Cloud icon */}
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -387,7 +373,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </span>
             }
           >
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+            <span class={getDiscoveryAnalysisProviderBadgeClass(true)}>
               {/* Server/local icon */}
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -508,7 +494,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
       <Show when={showLoadingSpinner()}>
         <div class="flex items-center justify-center py-8">
           <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-          <span class="ml-2 text-sm text-muted">Loading discovery...</span>
+          <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
         </div>
       </Show>
 
@@ -648,16 +634,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               when={discovery.loading}
               fallback={
                 <>
-                  <p class="text-sm">No discovery data yet</p>
+                  <p class="text-sm">{getDiscoveryInitialEmptyState(false).title}</p>
                   <p class="text-xs text-muted mt-1">
-                    Run a discovery scan to identify services and configurations
+                    {getDiscoveryInitialEmptyState(false).description}
                   </p>
                 </>
               }
             >
-              <p class="text-sm">Checking existing discovery data...</p>
+              <p class="text-sm">{getDiscoveryInitialEmptyState(true).title}</p>
               <p class="text-xs text-muted mt-1">
-                You can run discovery now if this takes too long.
+                {getDiscoveryInitialEmptyState(true).description}
               </p>
             </Show>
           </div>
@@ -834,7 +820,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   </Show>
                 </div>
                 <Show when={d().category && d().category !== 'unknown'}>
-                  <span class="inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                  <span class={getDiscoveryCategoryBadgeClass()}>
                     {getCategoryDisplayName(d().category)}
                   </span>
                 </Show>
@@ -856,9 +842,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   when={d().suggested_url}
                   fallback={
                     <div class="text-xs text-blue-800 dark:text-blue-200">
-                      <p class="font-medium">No suggested URL found</p>
+                      <p class="font-medium">{getDiscoverySuggestedURLFallback().title}</p>
                       <p class="mt-1 text-blue-700 dark:text-blue-300">
-                        {d().suggested_url_diagnostic}
+                        {getDiscoverySuggestedURLFallback(d().suggested_url_diagnostic).description}
                       </p>
                     </div>
                   }
@@ -1009,7 +995,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     when={d().user_notes}
                     fallback={
                       <p class="text-xs text-muted italic">
-                        No notes yet. Add notes to document important information.
+                        {getDiscoveryNotesEmptyState().text}
                       </p>
                     }
                   >

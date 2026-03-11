@@ -63,4 +63,18 @@ describe('WebInterfaceUrlField', () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it('uses the canonical discovery fallback copy for missing suggested urls', async () => {
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="guest"
+        metadataId="guest-1"
+        customUrl=""
+        suggestedUrlDiagnostic="No management interface could be inferred."
+      />
+    ));
+
+    expect(await screen.findByText('No suggested URL found')).toBeInTheDocument();
+    expect(screen.getByText('No management interface could be inferred.')).toBeInTheDocument();
+  });
 });

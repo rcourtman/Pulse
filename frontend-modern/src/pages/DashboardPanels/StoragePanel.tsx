@@ -2,10 +2,15 @@ import { Match, Switch } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { buildStoragePath } from '@/routing/resourceLinks';
 import { formatBytes } from '@/utils/format';
-import { getMetricColorClass } from '@/utils/metricThresholds';
 import { deltaColorClass, formatDelta, formatPercent } from './dashboardHelpers';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import type { TrendData } from '@/hooks/useDashboardTrends';
+import {
+  computeDashboardStorageCapacityPercent,
+  DASHBOARD_STORAGE_EMPTY_STATE,
+  getDashboardStorageCapacityBarClass,
+  getDashboardStorageIssueBadges,
+} from '@/utils/dashboardStoragePresentation';
 
 interface StoragePanelProps {
   storage: DashboardOverview['storage'];
@@ -13,14 +18,9 @@ interface StoragePanelProps {
   loading: boolean;
 }
 
-function computeCapacityPercent(used: number, total: number): number {
-  if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) return 0;
-  return Math.min(100, Math.max(0, (used / total) * 100));
-}
-
 export function StoragePanel(props: StoragePanelProps) {
   const capacityPercent = () =>
-    computeCapacityPercent(props.storage.totalUsed, props.storage.totalCapacity);
+    computeDashboardStorageCapacityPercent(props.storage.totalUsed, props.storage.totalCapacity);
   const hasTrend = () => !!props.storageTrend && props.storageTrend.points.length >= 2;
 
   return (
@@ -40,7 +40,7 @@ export function StoragePanel(props: StoragePanelProps) {
 
       <Switch>
         <Match when={props.storage.total === 0}>
-          <p class="text-xs text-muted mt-1">No storage resources</p>
+          <p class="text-xs text-muted mt-1">{DASHBOARD_STORAGE_EMPTY_STATE}</p>
         </Match>
         <Match when={props.storage.total > 0}>
           <div class="mt-1.5 space-y-1.5">
@@ -55,22 +55,15 @@ export function StoragePanel(props: StoragePanelProps) {
 
             <div class="h-2 overflow-hidden rounded bg-surface-alt">
               <div
-                class={`h-full rounded ${getMetricColorClass(capacityPercent(), 'disk')}`}
+                class={`h-full rounded ${getDashboardStorageCapacityBarClass(capacityPercent())}`}
                 style={{ width: `${capacityPercent()}%` }}
               />
             </div>
 
             <div class="flex flex-wrap items-center gap-3 text-xs">
-              {props.storage.warningCount > 0 && (
-                <span class="font-medium text-amber-600 dark:text-amber-400">
-                  {props.storage.warningCount} warnings
-                </span>
-              )}
-              {props.storage.criticalCount > 0 && (
-                <span class="font-medium text-red-600 dark:text-red-400">
-                  {props.storage.criticalCount} critical
-                </span>
-              )}
+              {getDashboardStorageIssueBadges(props.storage).map((badge) => (
+                <span class={badge.className}>{badge.label}</span>
+              ))}
               {hasTrend() && (
                 <span
                   class={`font-mono font-medium ${deltaColorClass(props.storageTrend?.delta ?? null)}`}

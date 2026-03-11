@@ -8,33 +8,22 @@ import {
 import { isHostedModeEnabled, isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import {
+  BILLING_ADMIN_EMPTY_STATE,
+  getBillingAdminOrganizationBadges,
+  getBillingAdminStateUpdateSuccessMessage,
+  getBillingAdminTrialStatus,
+  getLicenseSubscriptionStatusPresentation,
+} from '@/utils/licensePresentation';
+import {
+  getOrganizationSettingsLoadErrorMessage as getOrganizationSettingsPanelLoadErrorMessage,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_CLASS,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_MESSAGE,
+} from '@/utils/organizationSettingsPresentation';
 import CreditCard from 'lucide-solid/icons/credit-card';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 type BillingStateCache = Record<string, BillingState | undefined>;
-
-function formatUnixSeconds(value?: number | null): string {
-  if (!value || value <= 0) return 'N/A';
-  const date = new Date(value * 1000);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString();
-}
-
-function trialStatus(state?: BillingState): string {
-  if (!state) return 'Loading...';
-
-  const sub = (state.subscription_state || '').toLowerCase();
-  if (sub !== 'trial' && !state.trial_ends_at && !state.trial_started_at) {
-    return 'No trial';
-  }
-
-  const started = formatUnixSeconds(state.trial_started_at);
-  const ends = formatUnixSeconds(state.trial_ends_at);
-  if (sub === 'trial') {
-    return `Trial (ends ${ends})`;
-  }
-  return `Trial (started ${started}, ends ${ends})`;
-}
 
 async function promisePool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
   if (items.length === 0) return;
@@ -72,9 +61,10 @@ export const BillingAdminPanel: Component = () => {
       setOrgs(next ?? []);
     } catch (err) {
       logger.error('Failed to list hosted organizations', err);
-      const msg = err instanceof Error ? err.message : 'Failed to list organizations';
-      setOrgsError(msg);
-      notificationStore.error(msg);
+      const msg = err instanceof Error ? err.message : '';
+      const errorMessage = getOrganizationSettingsPanelLoadErrorMessage(msg, 'billing-admin');
+      setOrgsError(errorMessage);
+      notificationStore.error(errorMessage);
     } finally {
       setLoadingOrgs(false);
     }
@@ -125,12 +115,7 @@ export const BillingAdminPanel: Component = () => {
 
       const saved = await BillingAdminAPI.putBillingState(orgID, payload);
       setBillingByOrgID((prev) => ({ ...prev, [orgID]: saved }));
-      notificationStore.success(
-        nextState === 'suspended'
-          ? 'Organization billing suspended'
-          : 'Organization billing activated',
-        2500,
-      );
+      notificationStore.success(getBillingAdminStateUpdateSuccessMessage(nextState), 2500);
     } catch (err) {
       logger.error('Failed to update billing state', { orgID, err });
       const msg = err instanceof Error ? err.message : 'Failed to update billing state';
@@ -169,7 +154,11 @@ export const BillingAdminPanel: Component = () => {
   return (
     <Show
       when={hostedEnabled()}
-      fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}
+      fallback={
+        <div class={ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_CLASS}>
+          {ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_MESSAGE}
+        </div>
+      }
     >
       <SettingsPanel
         title="Billing Admin"
@@ -201,7 +190,7 @@ export const BillingAdminPanel: Component = () => {
           <PulseDataGrid
             data={orgs()}
             isLoading={loadingOrgs()}
-            emptyState="No organizations found."
+            emptyState={BILLING_ADMIN_EMPTY_STATE}
             desktopMinWidth="920px"
             columns={[
               {
@@ -225,16 +214,11 @@ export const BillingAdminPanel: Component = () => {
                       </div>
                       <div class="text-xs text-muted">
                         <span class="font-mono">{org.org_id}</span>
-                        <Show when={org.soft_deleted}>
-                          <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                            soft-deleted
+                        {getBillingAdminOrganizationBadges(org).map((badge) => (
+                          <span class={`ml-2 rounded px-1.5 py-0.5 ${badge.badgeClass}`}>
+                            {badge.label}
                           </span>
-                        </Show>
-                        <Show when={org.suspended && !org.soft_deleted}>
-                          <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                            suspended
-                          </span>
-                        </Show>
+                        ))}
                       </div>
                     </button>
                   );
@@ -255,10 +239,10 @@ export const BillingAdminPanel: Component = () => {
                 render: (org) => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
-                  const currentSubState = () =>
-                    (billing()?.subscription_state || '').toLowerCase() || 'unknown';
                   return (
-                    <span class="font-mono text-xs text-base-content">{currentSubState()}</span>
+                    <span class="font-mono text-xs text-base-content">
+                      {getLicenseSubscriptionStatusPresentation(billing()?.subscription_state).label}
+                    </span>
                   );
                 },
               },
@@ -268,7 +252,11 @@ export const BillingAdminPanel: Component = () => {
                 render: (org) => {
                   const orgID = () => (org.org_id || '').trim();
                   const billing = () => billingByOrgID()[orgID()];
-                  return <span class="text-xs text-base-content">{trialStatus(billing())}</span>;
+                  return (
+                    <span class="text-xs text-base-content">
+                      {getBillingAdminTrialStatus(billing())}
+                    </span>
+                  );
                 },
               },
               {

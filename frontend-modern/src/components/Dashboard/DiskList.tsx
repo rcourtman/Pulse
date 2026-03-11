@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import type { Disk } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 import { getMetricColorClass } from '@/utils/metricThresholds';
+import { getDashboardGuestDiskStatusMessage } from '@/utils/dashboardGuestPresentation';
 
 interface DiskListProps {
   disks: Disk[];
@@ -15,28 +16,7 @@ export function DiskList(props: DiskListProps) {
   };
 
   const getDiskStatusTooltip = () => {
-    const reason = props.diskStatusReason;
-
-    switch (reason) {
-      case 'agent-not-running':
-        return 'Guest agent not running. Install and start qemu-guest-agent in the VM.';
-      case 'agent-timeout':
-        return 'Guest agent timeout. Agent may need to be restarted.';
-      case 'permission-denied':
-        return 'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).';
-      case 'agent-disabled':
-        return 'Guest agent is disabled in VM configuration. Enable it in VM Options.';
-      case 'no-filesystems':
-        return 'No filesystems found. VM may be booting or using a Live ISO.';
-      case 'special-filesystems-only':
-        return 'Only special filesystems detected (ISO/squashfs). This is normal for Live systems.';
-      case 'agent-error':
-        return 'Error communicating with guest agent.';
-      case 'no-data':
-        return 'No disk data available from Proxmox API.';
-      default:
-        return 'Disk stats unavailable. Guest agent may not be installed.';
-    }
+    return getDashboardGuestDiskStatusMessage(props.diskStatusReason);
   };
 
   return (

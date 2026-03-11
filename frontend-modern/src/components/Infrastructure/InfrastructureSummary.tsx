@@ -24,9 +24,9 @@ import {
   getPreferredResourceHostname,
   getResourceIdentityAliases,
 } from '@/utils/resourceIdentity';
-import { RESOURCE_COLORS } from '@/pages/DashboardPanels/resourceColors';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
+import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 
 const normalizeResourceIdentifier = (value?: string | null): string[] => {
   if (!value) return [];
@@ -445,7 +445,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
           metricSeries('diskread'),
           metricSeries('diskwrite'),
         ),
-        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        color: getChartSeriesColor(i),
         name: getPreferredResourceDisplayName(resource),
       };
     });

@@ -2,6 +2,7 @@ import { Component, For, Show, createSignal, createMemo, onMount, onCleanup } fr
 import { getProviderFromModelId, groupModelsByProvider } from '../aiChatUtils';
 import { SearchField } from '@/components/shared/SearchField';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
+import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';
 import type { ModelInfo } from './types';
 
 export interface ModelSelectorProps {
@@ -267,7 +268,9 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
 
             {/* No results */}
             <Show when={!props.isLoading && filteredModels().length === 0}>
-              <div class="px-3 py-4 text-center text-[11px] text-muted">No matching models.</div>
+              <div class="px-3 py-4 text-center text-[11px] text-muted">
+                {AI_CHAT_MODEL_SELECTOR_EMPTY_STATE}
+              </div>
             </Show>
 
             {/* Grouped models */}

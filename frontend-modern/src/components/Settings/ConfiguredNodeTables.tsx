@@ -1,12 +1,15 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 
-import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
+import type { NodeConfigWithStatus } from '@/types/nodes';
 import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { unwrap } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getClusterEndpointPresentation } from '@/utils/clusterEndpointPresentation';
+import {
+  resolveConfiguredInstanceStatusIndicator,
+  resolveConfiguredPveNodeStatusIndicator,
+} from '@/utils/configuredNodeStatusPresentation';
 import {
   Table,
   TableHeader,
@@ -16,10 +19,9 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import {
-  getSimpleStatusIndicator,
   getStatusIndicatorBadgeToneClasses,
-  type StatusIndicator,
 } from '@/utils/status';
+import { getConfiguredNodeCapabilityBadges } from '@/utils/configuredNodeCapabilityPresentation';
 
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
@@ -30,73 +32,6 @@ interface PveNodesTableProps {
   onDelete: (node: NodeConfigWithStatus) => void;
   onRefreshCluster?: (nodeId: string) => void;
 }
-
-const isTemperatureMonitoringEnabled = (
-  node: NodeConfigWithStatus,
-  globalEnabled: boolean,
-): boolean => {
-  // Check per-node setting first, fall back to global
-  if (
-    node.temperatureMonitoringEnabled !== undefined &&
-    node.temperatureMonitoringEnabled !== null
-  ) {
-    return node.temperatureMonitoringEnabled;
-  }
-  return globalEnabled;
-};
-
-const resolveConfiguredNodeStatusIndicator = ({
-  configuredStatus,
-  liveStatus,
-  connectionHealth,
-}: {
-  configuredStatus?: string | null;
-  liveStatus?: string | null;
-  connectionHealth?: string | null;
-}): StatusIndicator => {
-  if (
-    connectionHealth === 'unhealthy' ||
-    connectionHealth === 'error' ||
-    liveStatus === 'offline' ||
-    liveStatus === 'disconnected'
-  ) {
-    return getSimpleStatusIndicator('offline');
-  }
-  if (connectionHealth === 'degraded') {
-    return getSimpleStatusIndicator('degraded');
-  }
-  if (liveStatus === 'online' || connectionHealth === 'healthy') {
-    return getSimpleStatusIndicator('online');
-  }
-
-  switch (configuredStatus) {
-    case 'connected':
-      return getSimpleStatusIndicator('online');
-    case 'pending':
-      return getSimpleStatusIndicator('pending');
-    case 'disconnected':
-    case 'offline':
-    case 'error':
-      return getSimpleStatusIndicator('offline');
-    default:
-      return getSimpleStatusIndicator('unknown');
-  }
-};
-
-const resolvePveStatusIndicator = (
-  node: NodeConfigWithStatus,
-  stateNodes: PveNodesTableProps['stateNodes'],
-): StatusIndicator => {
-  const stateNode = stateNodes.find((n) => n.platformId === node.name || n.name === node.name);
-  const pd = stateNode?.platformData
-    ? (unwrap(stateNode.platformData) as Record<string, unknown>)
-    : undefined;
-  return resolveConfiguredNodeStatusIndicator({
-    configuredStatus: node.status,
-    liveStatus: stateNode?.status,
-    connectionHealth: pd?.connectionHealth as string | undefined,
-  });
-};
 
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
   return (
@@ -126,7 +61,13 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
             <For each={props.nodes}>
               {(node) => {
                 const statusIndicator = createMemo(() =>
-                  resolvePveStatusIndicator(node, props.stateNodes),
+                  resolveConfiguredPveNodeStatusIndicator(node, props.stateNodes),
+                );
+                const capabilityBadges = createMemo(() =>
+                  getConfiguredNodeCapabilityBadges(
+                    node,
+                    props.globalTemperatureMonitoringEnabled ?? true,
+                  ),
                 );
                 const clusterEndpoints = createMemo(() =>
                   'clusterEndpoints' in node && node.clusterEndpoints ? node.clusterEndpoints : [],
@@ -263,44 +204,9 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                     </TableCell>
                     <TableCell class="align-top px-3 py-3">
                       <div class="flex flex-wrap gap-1">
-                        {node.type === 'pve' && 'monitorVMs' in node && node.monitorVMs && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            VMs
-                          </span>
-                        )}
-                        {node.type === 'pve' &&
-                          'monitorContainers' in node &&
-                          node.monitorContainers && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Containers
-                            </span>
-                          )}
-                        {node.type === 'pve' && 'monitorStorage' in node && node.monitorStorage && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Storage
-                          </span>
-                        )}
-                        {node.type === 'pve' && 'monitorBackups' in node && node.monitorBackups && (
-                          <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                            Recovery
-                          </span>
-                        )}
-                        {node.type === 'pve' &&
-                          'monitorPhysicalDisks' in node &&
-                          node.monitorPhysicalDisks && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Physical Disks
-                            </span>
-                          )}
-                        {node.type === 'pve' &&
-                          isTemperatureMonitoringEnabled(
-                            node,
-                            props.globalTemperatureMonitoringEnabled ?? true,
-                          ) && (
-                            <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                              Temperature
-                            </span>
-                          )}
+                        <For each={capabilityBadges()}>
+                          {(badge) => <span class={badge.className}>{badge.label}</span>}
+                        </For>
                       </div>
                     </TableCell>
                     <TableCell class="align-top px-3 py-3 whitespace-nowrap">
@@ -392,18 +298,6 @@ interface PbsNodesTableProps {
   onDelete: (node: NodeConfigWithStatus) => void;
 }
 
-const resolvePbsStatusIndicator = (
-  node: NodeConfigWithStatus,
-  statePbs: PbsNodesTableProps['statePbs'],
-): StatusIndicator => {
-  const statePBS = statePbs.find((p) => p.name === node.name);
-  return resolveConfiguredNodeStatusIndicator({
-    configuredStatus: node.status,
-    liveStatus: statePBS?.status,
-    connectionHealth: statePBS?.connectionHealth,
-  });
-};
-
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="card" class="rounded-md">
@@ -432,7 +326,13 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
             <For each={props.nodes}>
               {(node) => {
                 const statusIndicator = createMemo(() =>
-                  resolvePbsStatusIndicator(node, props.statePbs),
+                  resolveConfiguredInstanceStatusIndicator(node, props.statePbs),
+                );
+                const capabilityBadges = createMemo(() =>
+                  getConfiguredNodeCapabilityBadges(
+                    node,
+                    props.globalTemperatureMonitoringEnabled ?? true,
+                  ),
                 );
                 return (
                   <TableRow class="even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
@@ -472,51 +372,9 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                     </TableCell>
                     <TableCell class="align-top px-3 py-3">
                       <div class="flex flex-wrap gap-1">
-                        {node.type === 'pbs' &&
-                          'monitorDatastores' in node &&
-                          node.monitorDatastores && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Datastores
-                            </span>
-                          )}
-                        {node.type === 'pbs' &&
-                          'monitorSyncJobs' in node &&
-                          node.monitorSyncJobs && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Sync Jobs
-                            </span>
-                          )}
-                        {node.type === 'pbs' &&
-                          'monitorVerifyJobs' in node &&
-                          node.monitorVerifyJobs && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Verify Jobs
-                            </span>
-                          )}
-                        {node.type === 'pbs' &&
-                          'monitorPruneJobs' in node &&
-                          node.monitorPruneJobs && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Prune Jobs
-                            </span>
-                          )}
-                        {node.type === 'pbs' &&
-                          'monitorGarbageJobs' in node &&
-                          (node as NodeConfig & { monitorGarbageJobs?: boolean })
-                            .monitorGarbageJobs && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Garbage Collection
-                            </span>
-                          )}
-                        {node.type === 'pbs' &&
-                          isTemperatureMonitoringEnabled(
-                            node,
-                            props.globalTemperatureMonitoringEnabled ?? true,
-                          ) && (
-                            <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                              Temperature
-                            </span>
-                          )}
+                        <For each={capabilityBadges()}>
+                          {(badge) => <span class={badge.className}>{badge.label}</span>}
+                        </For>
                       </div>
                     </TableCell>
                     <TableCell class="align-top px-3 py-3 whitespace-nowrap">
@@ -608,18 +466,6 @@ interface PmgNodesTableProps {
   onDelete: (node: NodeConfigWithStatus) => void;
 }
 
-const resolvePmgStatusIndicator = (
-  node: NodeConfigWithStatus,
-  statePmg: PmgNodesTableProps['statePmg'],
-): StatusIndicator => {
-  const statePMG = statePmg.find((p) => p.name === node.name);
-  return resolveConfiguredNodeStatusIndicator({
-    configuredStatus: node.status,
-    liveStatus: statePMG?.status,
-    connectionHealth: statePMG?.connectionHealth,
-  });
-};
-
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="card" class="rounded-md">
@@ -648,7 +494,13 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
             <For each={props.nodes}>
               {(node) => {
                 const statusIndicator = createMemo(() =>
-                  resolvePmgStatusIndicator(node, props.statePmg),
+                  resolveConfiguredInstanceStatusIndicator(node, props.statePmg),
+                );
+                const capabilityBadges = createMemo(() =>
+                  getConfiguredNodeCapabilityBadges(
+                    node,
+                    props.globalTemperatureMonitoringEnabled ?? true,
+                  ),
                 );
                 return (
                   <TableRow class="even:bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
@@ -688,33 +540,9 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                     </TableCell>
                     <TableCell class="align-top px-3 py-3">
                       <div class="flex flex-wrap gap-1">
-                        {node.type === 'pmg' &&
-                          (node as NodeConfig & { monitorMailStats?: boolean })
-                            .monitorMailStats && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Mail stats
-                            </span>
-                          )}
-                        {node.type === 'pmg' &&
-                          (node as NodeConfig & { monitorQueues?: boolean }).monitorQueues && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Queues
-                            </span>
-                          )}
-                        {node.type === 'pmg' &&
-                          (node as NodeConfig & { monitorQuarantine?: boolean })
-                            .monitorQuarantine && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Quarantine
-                            </span>
-                          )}
-                        {node.type === 'pmg' &&
-                          (node as NodeConfig & { monitorDomainStats?: boolean })
-                            .monitorDomainStats && (
-                            <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                              Domain stats
-                            </span>
-                          )}
+                        <For each={capabilityBadges()}>
+                          {(badge) => <span class={badge.className}>{badge.label}</span>}
+                        </For>
                       </div>
                     </TableCell>
                     <TableCell class="align-top px-3 py-3 whitespace-nowrap">

@@ -4,6 +4,18 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
+import {
+  getSecurityAuthRestartInstruction,
+  SECURITY_AUTH_DISABLED_MESSAGE,
+  SECURITY_AUTH_DISABLED_PANEL_TITLE,
+  SECURITY_AUTH_DISABLED_READ_ONLY_MESSAGE,
+  SECURITY_AUTH_RESTART_FOOTER,
+  SECURITY_AUTH_RESTART_REQUIRED_MESSAGE,
+  SECURITY_AUTH_RESTART_REQUIRED_TITLE,
+  SECURITY_AUTH_RESTART_TIP,
+  SECURITY_AUTH_SETTINGS_READ_ONLY_MESSAGE,
+  SECURITY_AUTH_SETUP_LABEL,
+} from '@/utils/securityAuthPresentation';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import Lock from 'lucide-solid/icons/lock';
 import type { VersionInfo } from '@/api/updates';
@@ -38,6 +50,9 @@ interface SecurityAuthPanelProps {
 }
 
 export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
+  const restartInstruction = () =>
+    getSecurityAuthRestartInstruction(props.versionInfo()?.deploymentType);
+
   return (
     <div class="space-y-6">
       {/* Show message when auth is disabled */}
@@ -65,14 +80,18 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                   />
                 </svg>
               </div>
-              <SectionHeader title="Authentication disabled" size="sm" class="flex-1" />
+              <SectionHeader
+                title={SECURITY_AUTH_DISABLED_PANEL_TITLE}
+                size="sm"
+                class="flex-1"
+              />
               <button
                 type="button"
                 onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
                 disabled={!props.canManage}
                 class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800 whitespace-nowrap"
               >
-                Setup
+                {SECURITY_AUTH_SETUP_LABEL}
               </button>
             </div>
           </div>
@@ -80,13 +99,12 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           {/* Content */}
           <div class="p-6">
             <p class="text-sm text-amber-700 dark:text-amber-300 mb-4">
-              Authentication is currently disabled. Set up password authentication to protect your
-              Pulse instance.
+              {SECURITY_AUTH_DISABLED_MESSAGE}
             </p>
 
             <Show when={!props.canManage}>
               <p class="text-xs text-amber-700 dark:text-amber-300 mb-4">
-                This account can view authentication status but cannot configure it.
+                {SECURITY_AUTH_DISABLED_READ_ONLY_MESSAGE}
               </p>
             </Show>
 
@@ -120,7 +138,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           <div class="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
             <Show when={!props.canManage}>
               <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                Authentication settings are read-only for this account.
+                {SECURITY_AUTH_SETTINGS_READ_ONLY_MESSAGE}
               </div>
             </Show>
             <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -203,14 +221,13 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             </div>
             <div class="flex-1">
               <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                Security Configured - Restart Required
+                {SECURITY_AUTH_RESTART_REQUIRED_TITLE}
               </h4>
               <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                Security settings have been configured but the service needs to be restarted to
-                activate them.
+                {SECURITY_AUTH_RESTART_REQUIRED_MESSAGE}
               </p>
               <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                After restarting, you'll need to log in with your saved credentials.
+                {SECURITY_AUTH_RESTART_FOOTER}
               </p>
 
               <div class="mt-4 bg-surface rounded-md p-3 border border-amber-200 dark:border-amber-700">
@@ -223,16 +240,17 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                       ProxmoxVE console
                     </p>
                     <p class="text-xs text-muted italic">
-                      Or restart manually with: <code class="text-xs">systemctl restart pulse</code>
+                      {restartInstruction().secondaryLabel}{' '}
+                      <code class="text-xs">{restartInstruction().command}</code>
                     </p>
                   </div>
                 </Show>
 
                 <Show when={props.versionInfo()?.deploymentType === 'docker'}>
                   <div class="space-y-1">
-                    <p class="text-xs text-base-content">Restart your Docker container:</p>
+                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
                     <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
-                      docker restart pulse
+                      {restartInstruction().command}
                     </code>
                   </div>
                 </Show>
@@ -244,34 +262,32 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                   }
                 >
                   <div class="space-y-1">
-                    <p class="text-xs text-base-content">Restart the service:</p>
+                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
                     <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
-                      sudo systemctl restart pulse
+                      {restartInstruction().command}
                     </code>
                   </div>
                 </Show>
 
                 <Show when={props.versionInfo()?.deploymentType === 'development'}>
                   <div class="space-y-1">
-                    <p class="text-xs text-base-content">Restart the development server:</p>
+                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
                     <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
-                      sudo systemctl restart pulse-hot-dev
+                      {restartInstruction().command}
                     </code>
                   </div>
                 </Show>
 
                 <Show when={!props.versionInfo()?.deploymentType}>
                   <div class="space-y-1">
-                    <p class="text-xs text-base-content">
-                      Restart Pulse using your deployment method
-                    </p>
+                    <p class="text-xs text-base-content">{restartInstruction().label}</p>
                   </div>
                 </Show>
               </div>
 
               <div class="mt-3 p-2 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded">
                 <p class="text-xs text-green-700 dark:text-green-300">
-                  <strong>Tip:</strong> Make sure you've saved your credentials before restarting!
+                  <strong>Tip:</strong> {SECURITY_AUTH_RESTART_TIP.replace(/^Tip:\s*/, '')}
                 </p>
               </div>
             </div>

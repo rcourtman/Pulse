@@ -1,6 +1,7 @@
 import { Component, Show, For, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
+import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import Activity from 'lucide-solid/icons/activity';
@@ -10,17 +11,9 @@ import Thermometer from 'lucide-solid/icons/thermometer';
 import Maximize2 from 'lucide-solid/icons/maximize-2';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
+import { PVE_POLLING_PRESETS } from '@/utils/systemSettingsPresentation';
 
 import Laptop from 'lucide-solid/icons/laptop';
-
-const PVE_POLLING_MIN_SECONDS = 10;
-const PVE_POLLING_MAX_SECONDS = 3600;
-const PVE_POLLING_PRESETS = [
-  { label: 'Realtime (10s)', value: 10 },
-  { label: 'Balanced (30s)', value: 30 },
-  { label: 'Low (60s)', value: 60 },
-  { label: 'Very low (5m)', value: 300 },
-];
 
 interface GeneralSettingsPanelProps {
   darkMode: Accessor<boolean>;
@@ -201,12 +194,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 Disable local upgrade metrics
               </span>
               <Show when={props.disableLocalUpgradeMetricsLocked()}>
-                <span
-                  class="shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                  title="Locked by environment variable PULSE_DISABLE_LOCAL_UPGRADE_METRICS"
-                >
-                  ENV
-                </span>
+                <EnvironmentLockBadge envVar="PULSE_DISABLE_LOCAL_UPGRADE_METRICS" />
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-2">
@@ -232,12 +220,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 Anonymous telemetry
               </span>
               <Show when={props.telemetryEnabledLocked()}>
-                <span
-                  class="shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                  title="Locked by environment variable PULSE_TELEMETRY"
-                >
-                  ENV
-                </span>
+                <EnvironmentLockBadge envVar="PULSE_TELEMETRY" />
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-3">

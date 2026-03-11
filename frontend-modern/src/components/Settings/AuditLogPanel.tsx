@@ -1,7 +1,5 @@
 import { createSignal, Show, For, onMount, createMemo, onCleanup, createEffect } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
-import CheckCircle from 'lucide-solid/icons/check-circle';
-import XCircle from 'lucide-solid/icons/x-circle';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Filter from 'lucide-solid/icons/filter';
 import Info from 'lucide-solid/icons/info';
@@ -29,6 +27,26 @@ import {
   startProTrial,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import {
+  AUDIT_REFRESH_BUTTON_CLASS,
+  AUDIT_VERIFY_ALL_BUTTON_CLASS,
+  AUDIT_VERIFY_ROW_BUTTON_CLASS,
+  AUDIT_TOOLBAR_BUTTON_CLASS,
+  getAuditEventStatusPresentation,
+  getAuditEventTypeBadgeClass,
+  getAuditLogEmptyState,
+  getAuditLogLoadingState,
+  getAuditVerificationBadgePresentation,
+} from '@/utils/auditLogPresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getUpgradeActionButtonClass,
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
 
 interface AuditEvent {
   id: string;
@@ -94,13 +112,13 @@ export default function AuditLogPanel() {
         window.location.href = result.actionUrl;
         return;
       }
-      showSuccess('Pro trial started');
+      showSuccess(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        showWarning('Trial already used');
+        showWarning(getTrialAlreadyUsedMessage());
       } else {
-        showWarning(err instanceof Error ? err.message : 'Failed to start trial');
+        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
       }
     } finally {
       setStartingTrial(false);
@@ -401,22 +419,6 @@ export default function AuditLogPanel() {
     return date.toLocaleString();
   };
 
-  const getEventIcon = (_event: string, success: boolean) => {
-    if (!success) return <XCircle class="w-4 h-4 text-rose-400" />;
-    return <CheckCircle class="w-4 h-4 text-emerald-400" />;
-  };
-
-  const getEventTypeBadge = (event: string) => {
-    const colors: Record<string, string> = {
-      login: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      logout: 'bg-surface-alt text-base-content',
-      config_change: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-      startup: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      oidc_token_refresh: 'bg-surface-alt text-base-content',
-    };
-    return colors[event] || 'bg-surface-alt text-base-content';
-  };
-
   const hasSignedEvents = () => events().some((event) => event.signature);
   const hasResumeEvents = () =>
     events().some((event) => {
@@ -520,31 +522,6 @@ export default function AuditLogPanel() {
     });
   });
 
-  const getVerificationBadge = (state?: VerificationState) => {
-    if (!state) {
-      return { label: 'Not checked', class: 'bg-surface-alt text-base-content' };
-    }
-    switch (state.status) {
-      case 'verified':
-        return {
-          label: 'Verified',
-          class: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        };
-      case 'failed':
-        return {
-          label: 'Failed',
-          class: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-        };
-      case 'error':
-        return {
-          label: 'Error',
-          class: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-        };
-      default:
-        return { label: 'Unavailable', class: 'bg-surface-alt text-base-content' };
-    }
-  };
-
   return (
     <div class="space-y-6">
       <SettingsPanel
@@ -558,7 +535,7 @@ export default function AuditLogPanel() {
             <button
               onClick={() => fetchAuditEvents()}
               disabled={loading() || !auditLoggingEnabled()}
-              class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+              class={AUDIT_REFRESH_BUTTON_CLASS}
             >
               <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
               Refresh
@@ -566,22 +543,26 @@ export default function AuditLogPanel() {
             <button
               onClick={() => verifyAllEvents({ showToast: true })}
               disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
-              class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50"
+              class={AUDIT_VERIFY_ALL_BUTTON_CLASS}
             >
-              <CheckCircle class="w-4 h-4" />
+              {(() => {
+                const presentation = getAuditEventStatusPresentation(true);
+                const Icon = presentation.icon;
+                return <Icon class="w-4 h-4" />;
+              })()}
               {verifyAllLabel()}
             </button>
             <button
               onClick={() => setCancelVerifyAll(true)}
               disabled={!verifyingAll()}
-              class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+              class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
             >
               Cancel
             </button>
             <button
               onClick={() => verifyAllEvents({ showToast: true, resume: true })}
               disabled={verifyingAll() || !hasResumeEvents()}
-              class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-muted bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+              class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
               onMouseEnter={(e) => {
                 if (!hasResumeEvents()) return;
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -618,19 +599,19 @@ export default function AuditLogPanel() {
                   href={getUpgradeActionUrlOrFallback('audit_logging')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
                   onClick={() => trackUpgradeClicked('settings_audit_log_panel', 'audit_logging')}
                 >
-                  Upgrade to Pro
+                  {UPGRADE_ACTION_LABEL}
                 </a>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"
                     onClick={handleStartTrial}
                     disabled={startingTrial()}
-                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                    class={UPGRADE_TRIAL_LINK_CLASS}
                   >
-                    Start free trial
+                    {UPGRADE_TRIAL_LABEL}
                   </button>
                 </Show>
               </div>
@@ -837,6 +818,7 @@ export default function AuditLogPanel() {
         <Show when={loading()}>
           <div class="flex items-center justify-center py-12">
             <RefreshCw class="w-8 h-8 text-blue-500 animate-spin" />
+            <span class="sr-only">{getAuditLogLoadingState().text}</span>
           </div>
         </Show>
 
@@ -885,7 +867,11 @@ export default function AuditLogPanel() {
                   label: 'Status',
                   width: '64px',
                   align: 'center',
-                  render: (event) => getEventIcon(event.event, event.success),
+                  render: (event) => {
+                    const presentation = getAuditEventStatusPresentation(event.success);
+                    const Icon = presentation.icon;
+                    return <Icon class={presentation.className} />;
+                  },
                 },
                 {
                   key: 'timestamp',
@@ -899,7 +885,7 @@ export default function AuditLogPanel() {
                   label: 'Event',
                   render: (event) => (
                     <span
-                      class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getEventTypeBadge(event.event)}`}
+                      class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getAuditEventTypeBadgeClass(event.event)}`}
                     >
                       {event.event}
                     </span>
@@ -935,7 +921,7 @@ export default function AuditLogPanel() {
                     }
                     const state = verification()[event.id];
                     const isVerifying = verifying()[event.id];
-                    const badge = getVerificationBadge(state);
+                    const badge = getAuditVerificationBadgePresentation(state);
 
                     return (
                       <div class="flex items-center gap-2">
@@ -943,7 +929,7 @@ export default function AuditLogPanel() {
                           when={isVerifying}
                           fallback={
                             <span
-                              class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.class}`}
+                              class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.className}`}
                             >
                               {badge.label}
                             </span>
@@ -954,7 +940,7 @@ export default function AuditLogPanel() {
                         <button
                           onClick={() => verifyEvent(event)}
                           disabled={isVerifying}
-                          class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50"
+                          class={AUDIT_VERIFY_ROW_BUTTON_CLASS}
                         >
                           Verify
                         </button>
@@ -979,11 +965,11 @@ export default function AuditLogPanel() {
               >
                 <ShieldAlert class="w-12 h-12 text-blue-300 dark:text-blue-900 mb-4" />
               </Show>
-              <h3 class="text-lg font-medium text-base-content">No audit events found</h3>
+              <h3 class="text-lg font-medium text-base-content">
+                {getAuditLogEmptyState(activeFilterCount()).title}
+              </h3>
               <p class="mt-2 text-sm text-muted">
-                {activeFilterCount() > 0
-                  ? 'No events match your current filters. Try adjusting or clearing them.'
-                  : 'Audit logging is active, but no events have been recorded yet.'}
+                {getAuditLogEmptyState(activeFilterCount()).description}
               </p>
               <Show when={activeFilterCount() > 0}>
                 <button

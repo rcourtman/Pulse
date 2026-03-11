@@ -3,7 +3,6 @@ import { For, Show, createMemo } from 'solid-js';
 import { useTooltip } from '@/hooks/useTooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { Card } from '@/components/shared/Card';
-import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import {
   Table,
   TableHeader,
@@ -13,7 +12,13 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
+import {
+  getPMGOldestAgeTextClass,
+  getPMGQueueTextClass,
+} from '@/utils/pmgQueuePresentation';
+import { getPMGThreatPresentation } from '@/utils/pmgThreatPresentation';
 import type { PMGInstance } from '@/types/api';
+import { ServiceHealthBadge } from './ServiceHealthBadge';
 
 // Format large numbers with K/M suffixes
 const formatCompact = (value?: number | null): string => {
@@ -55,56 +60,23 @@ const ThreatBar: Component<{
   label: string;
   count: number;
 }> = (props) => {
-  const barColor = () => {
-    switch (props.color) {
-      case 'spam':
-        return 'bg-orange-500';
-      case 'virus':
-        return 'bg-red-500';
-      case 'quarantine':
-        return 'bg-yellow-500';
-    }
-  };
-
-  const textColor = () => {
-    switch (props.color) {
-      case 'spam':
-        return 'text-orange-600 dark:text-orange-400';
-      case 'virus':
-        return 'text-red-600 dark:text-red-400';
-      case 'quarantine':
-        return 'text-yellow-600 dark:text-yellow-400';
-    }
-  };
+  const presentation = () => getPMGThreatPresentation(props.color);
 
   return (
     <div class="space-y-1">
       <div class="flex items-center justify-between text-xs">
         <span class="text-muted">{props.label}</span>
-        <span class={`font-medium ${textColor()}`}>
+        <span class={`font-medium ${presentation().textClass}`}>
           {formatCompact(props.count)} ({formatPct(props.percent)})
         </span>
       </div>
       <div class="h-1.5 bg-surface-hover rounded-full overflow-hidden">
         <div
-          class={`h-full ${barColor()} transition-all duration-500 rounded-full`}
+          class={`h-full ${presentation().barClass} transition-all duration-500 rounded-full`}
           style={{ width: `${Math.min(props.percent * 10, 100)}%` }} // Scale up for visibility (10% threat = full bar)
         />
       </div>
     </div>
-  );
-};
-
-const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
-  const statusInfo = createMemo(() => getServiceHealthPresentation(props.status, props.health));
-
-  return (
-    <span
-      class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${statusInfo().bg} ${statusInfo().text}`}
-    >
-      <span class={`w-1.5 h-1.5 rounded-full ${statusInfo().dot}`} />
-      {statusInfo().label}
-    </span>
   );
 };
 
@@ -122,13 +94,6 @@ const QueueIndicator: Component<{
   const queueTotal = () => props.queue?.total || 0;
   const hasQueue = () => queueTotal() > 0;
 
-  const queueSeverity = () => {
-    const total = queueTotal();
-    if (total > 100) return 'high';
-    if (total > 20) return 'medium';
-    return 'low';
-  };
-
   return (
     <>
       <div
@@ -140,7 +105,7 @@ const QueueIndicator: Component<{
       >
         <Show when={hasQueue()} fallback={<span class="text-xs text-slate-400">No queue</span>}>
           <span
-            class={`text-xs font-medium ${queueSeverity() === 'high' ? 'text-red-600 dark:text-red-400' : queueSeverity() === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-muted'}`}
+            class={`text-xs font-medium ${getPMGQueueTextClass(queueTotal())}`}
           >
             {formatNum(queueTotal())} msgs
           </span>
@@ -168,7 +133,7 @@ const QueueIndicator: Component<{
             <Show when={(props.queue?.oldestAge || 0) > 0}>
               <div class="flex justify-between border-t border-border pt-1 mt-1">
                 <span class="text-muted">Oldest</span>
-                <span class={(props.queue?.oldestAge || 0) > 1800 ? 'text-yellow-400' : ''}>
+                <span class={getPMGOldestAgeTextClass(props.queue?.oldestAge)}>
                   {Math.floor((props.queue?.oldestAge || 0) / 60)}m
                 </span>
               </div>
@@ -360,7 +325,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
           >
             {props.pmg.name}
           </a>
-          <StatusBadge status={props.pmg.status || ''} health={props.pmg.connectionHealth} />
+          <ServiceHealthBadge status={props.pmg.status || ''} health={props.pmg.connectionHealth} />
           <Show when={props.pmg.version}>
             <span class="text-xs text-muted bg-surface-hover px-1.5 py-0.5 rounded">
               v{props.pmg.version}

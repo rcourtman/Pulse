@@ -14,6 +14,7 @@ import { useSettingsPanelRegistry } from './useSettingsPanelRegistry';
 import { useSettingsShellState } from './useSettingsShellState';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
+import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 
 import { getLimit, isPro, loadLicenseStatus } from '@/stores/license';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
@@ -434,7 +435,7 @@ const Settings: Component<SettingsProps> = (props) => {
             <Suspense
               fallback={
                 <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
-                  Loading settings...
+                  {getSettingsLoadingState().text}
                 </div>
               }
             >

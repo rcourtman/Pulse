@@ -7,6 +7,8 @@ import {
   buildRecoveryFreshnessBuckets,
   buildRecoveryPostureSegments,
   buildRecoveryPostureSummary,
+  getRecoveryAttentionChipClass,
+  getRecoveryAttentionDotClass,
   RECOVERY_SUMMARY_TIME_RANGES,
   RECOVERY_SUMMARY_TIME_RANGE_LABELS,
   type RecoverySummaryTimeRange,
@@ -26,28 +28,6 @@ export interface RecoverySummaryProps {
   };
   timeRange: () => RecoverySummaryTimeRange;
   onTimeRangeChange?: (range: RecoverySummaryTimeRange) => void;
-}
-
-function getAttentionChipClass(tone: 'rose' | 'amber' | 'blue'): string {
-  switch (tone) {
-    case 'rose':
-      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
-    case 'blue':
-      return 'border-blue-500/30 bg-blue-500/10 text-blue-200';
-    default:
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
-  }
-}
-
-function getAttentionDotClass(tone: 'rose' | 'amber' | 'blue'): string {
-  switch (tone) {
-    case 'rose':
-      return 'bg-rose-400';
-    case 'blue':
-      return 'bg-blue-400';
-    default:
-      return 'bg-amber-400';
-  }
 }
 
 export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
@@ -245,9 +225,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <For each={attentionItems().slice(0, 5)}>
                 {(item) => (
                   <div
-                    class={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs ${getAttentionChipClass(item.tone)}`}
+                    class={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs ${getRecoveryAttentionChipClass(item.tone)}`}
                   >
-                    <span class={`h-2 w-2 rounded-full ${getAttentionDotClass(item.tone)}`} />
+                    <span
+                      class={`h-2 w-2 rounded-full ${getRecoveryAttentionDotClass(item.tone)}`}
+                    />
                     <span class="font-medium">{item.label}</span>
                     <span class="tabular-nums">{item.count}</span>
                   </div>
@@ -260,4 +242,3 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     </Show>
   );
 };
-

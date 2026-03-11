@@ -5,6 +5,13 @@ export interface ServiceHealthPresentation {
   label: string;
 }
 
+export type ServiceHealthSummaryTone = 'ok' | 'warning' | 'muted';
+
+export interface ServiceHealthSummaryPresentation {
+  tone: ServiceHealthSummaryTone;
+  textClass: string;
+}
+
 const UNKNOWN_PRESENTATION: ServiceHealthPresentation = {
   bg: 'bg-surface-alt',
   text: 'text-muted',
@@ -52,5 +59,31 @@ export function getServiceHealthPresentation(
   return {
     ...UNKNOWN_PRESENTATION,
     label: normalized,
+  };
+}
+
+export function getServiceHealthSummaryPresentation(
+  status?: string | null,
+  health?: string | null,
+): ServiceHealthSummaryPresentation {
+  const presentation = getServiceHealthPresentation(status, health);
+
+  if (presentation.dot === 'bg-green-500') {
+    return {
+      tone: 'ok',
+      textClass: 'text-emerald-600 dark:text-emerald-400',
+    };
+  }
+
+  if (presentation.dot === 'bg-yellow-500' || presentation.dot === 'bg-red-500') {
+    return {
+      tone: 'warning',
+      textClass: 'text-amber-600 dark:text-amber-400',
+    };
+  }
+
+  return {
+    tone: 'muted',
+    textClass: 'text-muted',
   };
 }

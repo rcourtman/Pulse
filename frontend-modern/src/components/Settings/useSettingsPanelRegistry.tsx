@@ -9,6 +9,7 @@ import { AgentLedgerPanel } from './AgentLedgerPanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { createSettingsPanelRegistry } from './settingsPanelRegistry';
 import type { ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
+import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 
 interface UseSettingsPanelRegistryParams {
   darkMode: Accessor<boolean>;
@@ -133,7 +134,7 @@ export function useSettingsPanelRegistry(params: UseSettingsPanelRegistryParams)
     <>
       <Show when={!params.initialLoadComplete()}>
         <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
-          Loading configuration...
+          {getSettingsConfigurationLoadingState().text}
         </div>
       </Show>
       <Show when={params.initialLoadComplete()}>

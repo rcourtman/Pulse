@@ -1,5 +1,10 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { DeployWizardState } from '@/hooks/useDeployWizard';
+import {
+  getDeployCandidatesLoadingState,
+  getDeployNoCandidatesState,
+  getDeployNoSourceAgentsState,
+} from '@/utils/deployFlowPresentation';
 import CheckIcon from 'lucide-solid/icons/check';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 
@@ -31,7 +36,7 @@ export const CandidatesStep: Component<CandidatesStepProps> = (props) => {
           class="flex items-center justify-center py-8 text-sm text-muted"
         >
           <div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
-          Loading cluster nodes...
+          {getDeployCandidatesLoadingState()}
         </div>
       </Show>
 
@@ -69,10 +74,7 @@ export const CandidatesStep: Component<CandidatesStepProps> = (props) => {
             class="rounded-md bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2"
           >
             <AlertCircleIcon class="w-4 h-4 mt-0.5 shrink-0" />
-            <span>
-              No online source agents found. At least one node in this cluster must have a connected
-              Pulse agent to deploy to other nodes.
-            </span>
+            <span>{getDeployNoSourceAgentsState()}</span>
           </div>
         </Show>
 
@@ -181,7 +183,7 @@ export const CandidatesStep: Component<CandidatesStepProps> = (props) => {
         </Show>
 
         <Show when={w.candidates().length === 0 && !w.candidatesLoading()}>
-          <div class="text-center py-8 text-sm text-muted">No nodes found in this cluster.</div>
+          <div class="text-center py-8 text-sm text-muted">{getDeployNoCandidatesState()}</div>
         </Show>
       </Show>
     </div>

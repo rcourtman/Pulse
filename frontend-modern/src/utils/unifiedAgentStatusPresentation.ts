@@ -7,6 +7,11 @@ export interface UnifiedAgentStatusPresentation {
   label: string;
 }
 
+export interface UnifiedAgentLookupStatusPresentation {
+  badgeClass: string;
+  label: string;
+}
+
 export const MONITORING_STOPPED_STATUS_LABEL = 'Monitoring stopped';
 export const ALLOW_RECONNECT_LABEL = 'Allow reconnect';
 
@@ -31,5 +36,21 @@ export function getUnifiedAgentStatusPresentation(
   return {
     badgeClass: 'bg-surface-alt text-base-content',
     label: healthStatus || 'unknown',
+  };
+}
+
+export function getUnifiedAgentLookupStatusPresentation(
+  connected: boolean,
+): UnifiedAgentLookupStatusPresentation {
+  if (connected) {
+    return {
+      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+      label: 'Connected',
+    };
+  }
+
+  return {
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    label: 'Not reporting yet',
   };
 }

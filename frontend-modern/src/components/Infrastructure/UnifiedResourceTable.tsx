@@ -24,6 +24,7 @@ import {
 } from '@/utils/resourceBadgePresentation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getAgentStatusIndicator } from '@/utils/status';
+import { getServiceHealthSummaryPresentation } from '@/utils/serviceHealthPresentation';
 import type { Disk } from '@/types/api';
 import {
   splitPrimaryAndServiceResources,
@@ -80,13 +81,11 @@ type PMGServiceData = {
   connectionHealth?: string;
 };
 
-type ServiceSummaryTone = 'ok' | 'warning' | 'muted';
-
 type PBSTableRow = {
   datastores: number | null;
   jobs: number | null;
   health: string | null;
-  tone: ServiceSummaryTone;
+  tone: ReturnType<typeof getServiceHealthSummaryPresentation>['tone'];
 };
 
 type PMGTableRow = {
@@ -95,7 +94,7 @@ type PMGTableRow = {
   hold: number | null;
   nodes: number | null;
   health: string | null;
-  tone: ServiceSummaryTone;
+  tone: ReturnType<typeof getServiceHealthSummaryPresentation>['tone'];
 };
 
 type HostTableHeaderItem = {
@@ -126,15 +125,6 @@ const hasAlternateName = (resource: Resource) => {
   return display !== name;
 };
 
-const summarizeServiceHealthTone = (value?: string): ServiceSummaryTone => {
-  const normalized = (value || '').trim().toLowerCase();
-  if (!normalized) return 'muted';
-  if (['offline', 'down', 'disconnected', 'error', 'failed'].includes(normalized)) return 'warning';
-  if (['degraded', 'warning', 'stale'].includes(normalized)) return 'warning';
-  if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) return 'ok';
-  return 'muted';
-};
-
 const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
   if (resource.type !== 'pbs') return null;
   const platformData = resource.platformData as
@@ -153,7 +143,7 @@ const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
     datastores: (pbs?.datastoreCount || 0) > 0 ? pbs?.datastoreCount || 0 : null,
     jobs: totalJobs > 0 ? totalJobs : null,
     health,
-    tone: summarizeServiceHealthTone(health || undefined),
+    tone: getServiceHealthSummaryPresentation(resource.status, health).tone,
   };
 };
 
@@ -172,7 +162,10 @@ const getPMGTableRow = (resource: Resource): PMGTableRow | null => {
     hold: (pmg?.queueHold || 0) > 0 ? pmg?.queueHold || 0 : null,
     nodes: (pmg?.nodeCount || 0) > 0 ? pmg?.nodeCount || 0 : null,
     health,
-    tone: backlog > 0 ? 'warning' : summarizeServiceHealthTone(health || undefined),
+    tone:
+      backlog > 0
+        ? 'warning'
+        : getServiceHealthSummaryPresentation(resource.status, health).tone,
   };
 };
 
@@ -1043,12 +1036,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                      const healthClass = createMemo(() => {
-                        const tone = pbsRow()?.tone ?? 'muted';
-                        if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
-                        if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
-                        return 'text-muted';
-                      });
+                      const healthClass = createMemo(() =>
+                        getServiceHealthSummaryPresentation(resource.status, pbsRow()?.health)
+                          .textClass,
+                      );
 
                       const rowClass = createMemo(() => {
                         const baseBorder = 'border-b border-border-subtle';
@@ -1341,12 +1332,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                         getUnifiedSourceBadges(getUnifiedSources(resource)),
                       );
                       const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-                      const healthClass = createMemo(() => {
-                        const tone = pmgRow()?.tone ?? 'muted';
-                        if (tone === 'ok') return 'text-emerald-600 dark:text-emerald-400';
-                        if (tone === 'warning') return 'text-amber-600 dark:text-amber-400';
-                        return 'text-muted';
-                      });
+                      const healthClass = createMemo(() =>
+                        getServiceHealthSummaryPresentation(resource.status, pmgRow()?.health)
+                          .textClass,
+                      );
                       const queueClass = createMemo(() =>
                         (pmgRow()?.deferred || 0) + (pmgRow()?.hold || 0) > 0
                           ? 'text-amber-600 dark:text-amber-400'

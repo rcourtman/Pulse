@@ -17,6 +17,19 @@ import {
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { toReportingResourceType } from '@/utils/reportingResourceTypes';
+import {
+  getReportingToggleButtonClass,
+  REPORTING_RANGE_OPTIONS,
+} from '@/utils/reportingPresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getUpgradeActionButtonClass,
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
 
 interface FormFieldProps {
   label: string;
@@ -65,13 +78,13 @@ export function ReportingPanel() {
         window.location.href = result.actionUrl;
         return;
       }
-      showSuccess('Pro trial started');
+      showSuccess(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        showWarning('Trial already used');
+        showWarning(getTrialAlreadyUsedMessage());
       } else {
-        showWarning(err instanceof Error ? err.message : 'Failed to start trial');
+        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
       }
     } finally {
       setStartingTrial(false);
@@ -182,21 +195,21 @@ export function ReportingPanel() {
                   href={getUpgradeActionUrlOrFallback('advanced_reporting')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  class={getUpgradeActionButtonClass()}
                   onClick={() =>
                     trackUpgradeClicked('settings_reporting_panel', 'advanced_reporting')
                   }
                 >
-                  Upgrade to Pro
+                  {UPGRADE_ACTION_LABEL}
                 </a>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"
                     onClick={handleStartTrial}
                     disabled={startingTrial()}
-                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                    class={UPGRADE_TRIAL_LINK_CLASS}
                   >
-                    Start free trial
+                    {UPGRADE_TRIAL_LABEL}
                   </button>
                 </Show>
               </div>
@@ -246,17 +259,13 @@ export function ReportingPanel() {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField label="Time Range">
                 <div class="grid grid-cols-1 sm:flex gap-2">
-                  <For each={['24h', '7d', '30d']}>
-                    {(r) => (
+                  <For each={REPORTING_RANGE_OPTIONS}>
+                    {(option) => (
                       <button
-                        class={`w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 rounded-md border transition-all ${range() === r ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500' : ' border-border text-base-content hover:bg-surface-alt'}`}
-                        onClick={() => setRange(r)}
+                        class={getReportingToggleButtonClass(range() === option.value)}
+                        onClick={() => setRange(option.value)}
                       >
-                        {r === '24h'
-                          ? 'Last 24 Hours'
-                          : r === '7d'
-                            ? 'Last 7 Days'
-                            : 'Last 30 Days'}
+                        {option.label}
                       </button>
                     )}
                   </For>
@@ -266,14 +275,14 @@ export function ReportingPanel() {
               <FormField label="Export Format">
                 <div class="grid grid-cols-1 sm:flex gap-2">
                   <button
-                    class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'pdf' ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500' : ' border-border text-base-content hover:bg-surface-alt'}`}
+                    class={`${getReportingToggleButtonClass(format() === 'pdf')} flex items-center justify-center gap-2`}
                     onClick={() => setFormat('pdf')}
                   >
                     <FileText size={16} />
                     PDF Report
                   </button>
                   <button
-                    class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'csv' ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500' : ' border-border text-base-content hover:bg-surface-alt'}`}
+                    class={`${getReportingToggleButtonClass(format() === 'csv')} flex items-center justify-center gap-2`}
                     onClick={() => setFormat('csv')}
                   >
                     <BarChart size={16} />

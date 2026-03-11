@@ -14,6 +14,28 @@ import {
   entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import {
+  createDefaultRBACPermission,
+  RBAC_PERMISSION_ACTIONS,
+  RBAC_PERMISSION_RESOURCES,
+} from '@/utils/rbacPermissions';
+import {
+  getRBACFeatureGateCopy,
+  getRolesDeleteErrorMessage,
+  getRolesEmptyState,
+  getRolesLoadErrorMessage,
+  getRolesRequiredFieldsMessage,
+  getRolesSaveErrorMessage,
+} from '@/utils/rbacPresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getUpgradeActionButtonClass,
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -22,9 +44,6 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import X from 'lucide-solid/icons/x';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
-const ACTIONS = ['read', 'write', 'delete', 'admin', '*'];
-const RESOURCES = ['settings', 'audit_logs', 'nodes', 'users', 'license', '*'];
-
 export const RolesPanel: Component = () => {
   const [roles, setRoles] = createSignal<Role[]>([]);
   const [loading, setLoading] = createSignal(true);
@@ -32,6 +51,7 @@ export const RolesPanel: Component = () => {
   const [editingRole, setEditingRole] = createSignal<Role | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [startingTrial, setStartingTrial] = createSignal(false);
+  const featureGateCopy = () => getRBACFeatureGateCopy('roles');
 
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
 
@@ -44,13 +64,15 @@ export const RolesPanel: Component = () => {
         window.location.href = result.actionUrl;
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
+        );
       }
     } finally {
       setStartingTrial(false);
@@ -81,7 +103,7 @@ export const RolesPanel: Component = () => {
         return;
       }
       logger.error('Failed to load roles', err);
-      notificationStore.error('Failed to load roles');
+      notificationStore.error(getRolesLoadErrorMessage());
     } finally {
       setLoading(false);
     }
@@ -117,7 +139,7 @@ export const RolesPanel: Component = () => {
     setFormId('');
     setFormName('');
     setFormDescription('');
-    setFormPermissions([{ action: 'read', resource: 'nodes' }]);
+    setFormPermissions([createDefaultRBACPermission()]);
     setShowModal(true);
   };
 
@@ -141,7 +163,7 @@ export const RolesPanel: Component = () => {
       await loadRoles();
     } catch (err) {
       logger.error('Failed to delete role', err);
-      notificationStore.error('Failed to delete role');
+      notificationStore.error(getRolesDeleteErrorMessage());
     }
   };
 
@@ -149,7 +171,7 @@ export const RolesPanel: Component = () => {
     const id = formId().trim().toLowerCase().replace(/\s+/g, '-');
     const name = formName().trim();
     if (!id || !name) {
-      notificationStore.error('ID and Name are required');
+      notificationStore.error(getRolesRequiredFieldsMessage());
       return;
     }
 
@@ -168,14 +190,14 @@ export const RolesPanel: Component = () => {
       await loadRoles();
     } catch (err) {
       logger.error('Failed to save role', err);
-      notificationStore.error('Failed to save role');
+      notificationStore.error(getRolesSaveErrorMessage());
     } finally {
       setSaving(false);
     }
   };
 
   const addPermission = () => {
-    setFormPermissions([...formPermissions(), { action: 'read', resource: 'nodes' }]);
+    setFormPermissions([...formPermissions(), createDefaultRBACPermission()]);
   };
 
   const removePermission = (index: number) => {
@@ -214,9 +236,9 @@ export const RolesPanel: Component = () => {
           <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
             <div class="flex flex-col sm:flex-row items-center gap-4">
               <div class="flex-1 text-center sm:text-left">
-                <h4 class="text-base font-semibold text-base-content">Custom Roles (Pro)</h4>
+                <h4 class="text-base font-semibold text-base-content">{featureGateCopy().title}</h4>
                 <p class="text-sm text-muted mt-1">
-                  Define granular permissions and custom access tiers for your team.
+                  {featureGateCopy().body}
                 </p>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
@@ -224,19 +246,19 @@ export const RolesPanel: Component = () => {
                   href={getUpgradeActionUrlOrFallback('rbac')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  class={getUpgradeActionButtonClass()}
                   onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
                 >
-                  Upgrade to Pro
+                  {UPGRADE_ACTION_LABEL}
                 </a>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"
                     onClick={handleStartTrial}
                     disabled={startingTrial()}
-                    class="text-sm text-indigo-500 hover:underline disabled:opacity-50"
+                    class={UPGRADE_TRIAL_LINK_CLASS}
                   >
-                    Start free trial
+                    {UPGRADE_TRIAL_LABEL}
                   </button>
                 </Show>
               </div>
@@ -317,7 +339,7 @@ export const RolesPanel: Component = () => {
                 },
               ]}
               keyExtractor={(role) => role.id}
-              emptyState="No roles available."
+              emptyState={getRolesEmptyState()}
               desktopMinWidth="620px"
               class="border-x-0 sm:border-x"
             />
@@ -406,7 +428,7 @@ export const RolesPanel: Component = () => {
                           }
                           class="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
                         >
-                          <For each={ACTIONS}>
+                          <For each={RBAC_PERMISSION_ACTIONS}>
                             {(action) => <option value={action}>{action}</option>}
                           </For>
                         </select>
@@ -418,7 +440,7 @@ export const RolesPanel: Component = () => {
                           }
                           class="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
                         >
-                          <For each={RESOURCES}>
+                          <For each={RBAC_PERMISSION_RESOURCES}>
                             {(resource) => <option value={resource}>{resource}</option>}
                           </For>
                         </select>

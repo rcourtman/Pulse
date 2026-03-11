@@ -1,4 +1,6 @@
 import { createSignal, createEffect, For, Show, onCleanup } from 'solid-js';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 export interface MentionResource {
   id: string;
@@ -127,20 +129,6 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     }
   };
 
-  // Get status color
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case 'running':
-        return 'bg-green-500';
-      case 'stopped':
-        return 'bg-red-500';
-      case 'paused':
-        return 'bg-yellow-500';
-      default:
-        return 'bg-slate-400';
-    }
-  };
-
   return (
     <Show when={props.visible && filteredResources().length > 0}>
       <div
@@ -167,7 +155,11 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
                   <div class="flex items-center gap-2">
                     <span class="font-medium text-base-content truncate">{resource.name}</span>
                     <Show when={resource.status}>
-                      <span class={`w-2 h-2 rounded-full ${getStatusColor(resource.status)}`} />
+                      <StatusDot
+                        variant={getSimpleStatusIndicator(resource.status).variant}
+                        size="sm"
+                        ariaHidden
+                      />
                     </Show>
                   </div>
                   <div class="text-xs text-muted">

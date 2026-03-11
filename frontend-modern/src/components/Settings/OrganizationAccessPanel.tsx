@@ -8,6 +8,17 @@ import {
 } from '@/api/orgs';
 import { getOrgID } from '@/utils/apiClient';
 import { canManageOrg, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
+import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
+import {
+  getOrganizationAccessEmptyState,
+  getOrganizationAddMemberErrorMessage,
+  getOrganizationMemberUserIdRequiredMessage,
+  getOrganizationOwnerRoleLockedMessage,
+  getOrganizationRemoveMemberErrorMessage,
+  getOrganizationSettingsLoadErrorMessage,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
+  ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
+} from '@/utils/organizationSettingsPresentation';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
@@ -19,13 +30,6 @@ import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 interface OrganizationAccessPanelProps {
   currentUser?: string;
 }
-
-const roleOptions: Array<{ value: OrganizationRole; label: string }> = [
-  { value: 'viewer', label: 'Viewer' },
-  { value: 'editor', label: 'Editor' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'owner', label: 'Owner' },
-];
 
 export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = (props) => {
   const [loading, setLoading] = createSignal(true);
@@ -50,13 +54,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     } catch (error) {
       logger.error('Failed to load organization access data', error);
       const msg = error instanceof Error ? error.message : '';
-      if (msg.includes('402')) {
-        notificationStore.error('Multi-tenant requires an Enterprise license');
-      } else if (msg.includes('501')) {
-        notificationStore.error('Multi-tenant is not enabled on this server');
-      } else {
-        notificationStore.error('Failed to load organization access settings');
-      }
+      notificationStore.error(getOrganizationSettingsLoadErrorMessage(msg, 'access'));
     } finally {
       setLoading(false);
     }
@@ -69,7 +67,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     if (currentRole === role) return;
 
     if (member.userId === currentOrg.ownerUserId && role !== 'owner') {
-      notificationStore.error('Current owner can only remain owner. Transfer ownership instead.');
+      notificationStore.error(getOrganizationOwnerRoleLockedMessage());
       return;
     }
 
@@ -94,7 +92,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
 
     const userId = inviteUserID().trim();
     if (!userId) {
-      notificationStore.error('User ID is required');
+      notificationStore.error(getOrganizationMemberUserIdRequiredMessage());
       return;
     }
 
@@ -107,7 +105,9 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
       await loadOrganizationAccess();
     } catch (error) {
       logger.error('Failed to add organization member', error);
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to add member');
+      notificationStore.error(
+        getOrganizationAddMemberErrorMessage(error instanceof Error ? error.message : undefined),
+      );
     } finally {
       setSaving(false);
     }
@@ -127,7 +127,11 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
       await loadOrganizationAccess();
     } catch (error) {
       logger.error('Failed to remove organization member', error);
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to remove member');
+      notificationStore.error(
+        getOrganizationRemoveMemberErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -146,7 +150,11 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
   return (
     <Show
       when={isMultiTenantEnabled()}
-      fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}
+      fallback={
+        <div class={ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS}>
+          {ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE}
+        </div>
+      }
     >
       <div class="space-y-6">
         <SettingsPanel
@@ -206,7 +214,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                           class="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <For
-                            each={roleOptions.filter(
+                            each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
                               (option) =>
                                 option.value !== 'owner' ||
                                 currentOrg().ownerUserId === props.currentUser,
@@ -276,7 +284,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                                   class="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   <For
-                                    each={roleOptions.filter(
+                                    each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
                                       (option) =>
                                         option.value !== 'owner' ||
                                         props.currentUser === currentOrg().ownerUserId,
@@ -327,7 +335,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                         },
                       ]}
                       keyExtractor={(member) => member.userId}
-                      emptyState="No organization members found."
+                      emptyState={getOrganizationAccessEmptyState()}
                       desktopMinWidth="700px"
                     />
                   </div>

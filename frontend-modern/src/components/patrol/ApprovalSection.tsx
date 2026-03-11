@@ -13,6 +13,12 @@ import { hasFeature, licenseStatus, startProTrial } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { RemediationStatus } from './RemediationStatus';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getTrialTryAgainLaterMessage,
+} from '@/utils/upgradePresentation';
 
 interface ApprovalSectionProps {
   findingId: string;
@@ -61,15 +67,19 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
         }
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else if (statusCode === 429) {
-        notificationStore.error('Try again later');
+        notificationStore.error(getTrialTryAgainLaterMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
+            branded: true,
+          }),
+        );
       }
     } finally {
       setStartingTrial(false);

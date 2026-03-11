@@ -20,6 +20,7 @@ import Sparkles from 'lucide-solid/icons/sparkles';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
+import { DIAGNOSTICS_EMPTY_PBS_MESSAGE } from '@/utils/diagnosticsPresentation';
 
 // Type definitions
 interface DiagnosticsNode {
@@ -508,7 +509,9 @@ export const DiagnosticsPanel: Component = () => {
           >
             <Show
               when={(diagnosticsData()?.pbs?.length || 0) > 0}
-              fallback={<div class="text-center py-4 text-muted">No PBS configured</div>}
+              fallback={
+                <div class="text-center py-4 text-muted">{DIAGNOSTICS_EMPTY_PBS_MESSAGE}</div>
+              }
             >
               <div class="flex items-center justify-between mb-2">
                 <span>Total Instances</span>
@@ -733,18 +736,18 @@ export const DiagnosticsPanel: Component = () => {
               <div class="flex flex-wrap gap-2">
                 <span
                   class={`px-2 py-1 rounded text-xs font-medium ${
-                    diagnosticsData()?.alerts?.missingCooldown
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                      : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                    getStatusIndicatorBadgeToneClasses(
+                      diagnosticsData()?.alerts?.missingCooldown ? 'warning' : 'success',
+                    )
                   }`}
                 >
                   Cooldown: {diagnosticsData()?.alerts?.missingCooldown ? 'Missing' : 'Configured'}
                 </span>
                 <span
                   class={`px-2 py-1 rounded text-xs font-medium ${
-                    diagnosticsData()?.alerts?.missingGroupingWindow
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                      : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                    getStatusIndicatorBadgeToneClasses(
+                      diagnosticsData()?.alerts?.missingGroupingWindow ? 'warning' : 'success',
+                    )
                   }`}
                 >
                   Grouping:{' '}

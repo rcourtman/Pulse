@@ -8,6 +8,7 @@ import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import { resolveWorkloadType } from '@/utils/workloads';
 import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import {
   getDiscoveryHostIdForWorkload,
   getDiscoveryResourceIdForWorkload,
@@ -419,7 +420,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           fallback={
             <div class="flex items-center justify-center py-8">
               <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-              <span class="ml-2 text-sm text-muted">Loading discovery...</span>
+              <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
             </div>
           }
         >

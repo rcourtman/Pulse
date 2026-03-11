@@ -32,6 +32,12 @@ import {
   getUpgradeActionUrlOrFallback,
   startProTrial,
 } from '@/stores/license';
+import {
+  RELAY_ONBOARDING_SETUP_LABEL,
+  RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL,
+  RELAY_ONBOARDING_TRIAL_HINT,
+  RELAY_ONBOARDING_TRIAL_STARTING_LABEL,
+} from '@/utils/relayPresentation';
 import type { WizardState } from '../SetupWizard';
 
 interface CompleteStepProps {
@@ -809,7 +815,7 @@ Keep these credentials secure!
                           d="M13 7l5 5m0 0l-5 5m5-5H6"
                         />
                       </svg>
-                      Set Up Relay
+                      {RELAY_ONBOARDING_SETUP_LABEL}
                     </button>
                   }
                 >
@@ -836,15 +842,15 @@ Keep these credentials secure!
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                           ></path>
                         </svg>
-                        Starting trial...
+                        {RELAY_ONBOARDING_TRIAL_STARTING_LABEL}
                       </>
                     ) : (
-                      'Start Free Trial & Set Up Mobile'
+                      RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL
                     )}
                   </button>
                 </Show>
                 <p class="mt-3 text-[10px] text-slate-500 dark:text-indigo-300 font-medium tracking-wide">
-                  14-DAY PRO TRIAL &middot; NO CREDIT CARD REQUIRED
+                  {RELAY_ONBOARDING_TRIAL_HINT}
                 </p>
               </div>
             </div>

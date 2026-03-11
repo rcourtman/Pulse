@@ -15,8 +15,37 @@ import {
   getAIProviderHealthPresentation,
   type AIProviderHealthStatus,
 } from '@/utils/aiProviderHealthPresentation';
-import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
+  getAIControlLevelBadgeClass,
+  getAIControlLevelDescription,
+  getAIControlLevelPanelClass,
+  normalizeAIControlLevel,
+  type AIControlLevel,
+} from '@/utils/aiControlLevelPresentation';
+import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
+import { getAISessionDiffStatusPresentation } from '@/utils/aiSessionDiffPresentation';
+import {
+  getAICredentialsClearErrorMessage,
+  getAIOAuthErrorMessage,
+  getAIChatSessionsEmptyState,
+  getAIChatSessionsLoadErrorMessage,
+  getAIChatSessionsLoadingState,
+  getAIProviderTestResultTextClass,
+  getAISessionDiffErrorMessage,
+  getAISessionRevertErrorMessage,
+  getAISessionSummarizeErrorMessage,
+  getAIModelsLoadErrorMessage,
+  getAISettingsLoadErrorMessage,
+  getAISettingsLoadingState,
+  getAISettingsReadinessPresentation,
+  getAISettingsRetryLabel,
+  getAISettingsSaveErrorMessage,
+  getAISettingsToggleErrorMessage,
+} from '@/utils/aiSettingsPresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
   getUpgradeActionUrlOrFallback,
   hasFeature,
   loadLicenseStatus,
@@ -51,18 +80,6 @@ const createInitialProviderHealth = (): Record<AIProvider, ProviderHealthState> 
   gemini: { status: 'not_configured', message: '' },
   ollama: { status: 'not_configured', message: '' },
 });
-
-type ControlLevel = 'read_only' | 'controlled' | 'autonomous';
-
-const normalizeControlLevel = (value?: string): ControlLevel => {
-  if (value === 'controlled' || value === 'autonomous' || value === 'read_only') {
-    return value;
-  }
-  if (value === 'suggest') {
-    return 'controlled';
-  }
-  return 'read_only';
-};
 
 // Check if a provider is configured based on settings
 function isProviderConfigured(provider: string, settings: AISettingsType | null): boolean {
@@ -150,6 +167,13 @@ export const AISettings: Component = () => {
   );
   const [preflightRunning, setPreflightRunning] = createSignal(false);
   const [preflightLastCheckedAt, setPreflightLastCheckedAt] = createSignal<number | null>(null);
+  const settingsReadiness = createMemo(() =>
+    getAISettingsReadinessPresentation(
+      Boolean(settings()?.configured),
+      settings()?.configured_providers?.length || 0,
+      availableModels().length,
+    ),
+  );
   const hasAutoFixFeature = createMemo(() => hasFeature('ai_autofix'));
   const autoFixLocked = createMemo(() => !hasAutoFixFeature());
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
@@ -167,13 +191,13 @@ export const AISettings: Component = () => {
         window.location.href = result.actionUrl;
         return;
       }
-      showSuccess('Pro trial started');
+      showSuccess(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        showWarning('Trial already used');
+        showWarning(getTrialAlreadyUsedMessage());
       } else {
-        showWarning(err instanceof Error ? err.message : 'Failed to start trial');
+        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
       }
     } finally {
       setStartingTrial(false);
@@ -230,7 +254,7 @@ export const AISettings: Component = () => {
     // Request timeout (seconds) - for slow Ollama hardware
     requestTimeoutSeconds: 300,
     // Infrastructure control settings
-    controlLevel: 'read_only' as ControlLevel,
+    controlLevel: 'read_only' as AIControlLevel,
     protectedGuests: '' as string, // Comma-separated VMIDs/names
     // Discovery settings
     discoveryEnabled: false,
@@ -290,7 +314,7 @@ export const AISettings: Component = () => {
           ? String(data.cost_budget_usd_30d)
           : '',
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
-      controlLevel: normalizeControlLevel(data.control_level),
+        controlLevel: normalizeAIControlLevel(data.control_level),
       protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
       discoveryEnabled: data.discovery_enabled ?? false,
       discoveryIntervalHours: data.discovery_interval_hours ?? 0,
@@ -321,7 +345,7 @@ export const AISettings: Component = () => {
       }
       setAvailableModels(result.models ?? []);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to load models';
+      const message = getAIModelsLoadErrorMessage(e instanceof Error ? e.message : '');
       setModelsError(message);
       setAvailableModels([]);
       logger.debug('[AISettings] Failed to load models from API:', e);
@@ -345,7 +369,9 @@ export const AISettings: Component = () => {
     } catch (error) {
       logger.error('[AISettings] Failed to load chat sessions:', error);
       setChatSessions([]);
-      const message = error instanceof Error ? error.message : 'Failed to load chat sessions.';
+      const message = getAIChatSessionsLoadErrorMessage(
+        error instanceof Error ? error.message : '',
+      );
       setChatSessionsError(message);
     } finally {
       setChatSessionsLoading(false);
@@ -365,32 +391,6 @@ export const AISettings: Component = () => {
     return `${session.title || 'Untitled'} - ${session.message_count} msgs - ${dateLabel} ${timeLabel}`;
   };
 
-  const formatDiffStatus = (status: FileChange['status']) => {
-    switch (status) {
-      case 'added':
-        return 'Added';
-      case 'modified':
-        return 'Modified';
-      case 'deleted':
-        return 'Deleted';
-      default:
-        return 'Changed';
-    }
-  };
-
-  const diffStatusClasses = (status: FileChange['status']) => {
-    switch (status) {
-      case 'added':
-        return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200';
-      case 'modified':
-        return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
-      case 'deleted':
-        return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200';
-      default:
-        return 'bg-surface-alt text-base-content';
-    }
-  };
-
   const formatDiffStats = (change: FileChange) => `+${change.added} -${change.removed}`;
 
   const handleSessionSummarize = async () => {
@@ -406,7 +406,9 @@ export const AISettings: Component = () => {
       notificationStore.success('Session summarized.');
     } catch (error) {
       logger.error('[AISettings] Failed to summarize session:', error);
-      const message = error instanceof Error ? error.message : 'Failed to summarize session.';
+      const message = getAISessionSummarizeErrorMessage(
+        error instanceof Error ? error.message : '',
+      );
       notificationStore.error(message);
     } finally {
       setSessionActionLoading(null);
@@ -438,7 +440,7 @@ export const AISettings: Component = () => {
       setShowDiffModal(true);
     } catch (error) {
       logger.error('[AISettings] Failed to get session diff:', error);
-      const message = error instanceof Error ? error.message : 'Failed to get session diff.';
+      const message = getAISessionDiffErrorMessage(error instanceof Error ? error.message : '');
       notificationStore.error(message);
     } finally {
       setSessionActionLoading(null);
@@ -459,7 +461,7 @@ export const AISettings: Component = () => {
       notificationStore.success('Session changes reverted.');
     } catch (error) {
       logger.error('[AISettings] Failed to revert session:', error);
-      const message = error instanceof Error ? error.message : 'Failed to revert session.';
+      const message = getAISessionRevertErrorMessage(error instanceof Error ? error.message : '');
       notificationStore.error(message);
     } finally {
       setSessionActionLoading(null);
@@ -578,13 +580,7 @@ export const AISettings: Component = () => {
     // Reload settings to get updated OAuth status
     loadSettings();
   } else if (oauthError) {
-    const errorMessages: Record<string, string> = {
-      missing_params: 'OAuth callback missing required parameters',
-      invalid_state: 'Invalid OAuth state - please try again',
-      token_exchange_failed: 'Failed to complete authentication with Claude',
-      save_failed: 'Failed to save OAuth credentials',
-    };
-    notificationStore.error(errorMessages[oauthError] || `OAuth error: ${oauthError}`);
+    notificationStore.error(getAIOAuthErrorMessage(oauthError));
     // Clean up URL
     window.history.replaceState({}, '', window.location.pathname);
   }
@@ -750,8 +746,7 @@ export const AISettings: Component = () => {
       aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
-      const message =
-        error instanceof Error ? error.message : 'Failed to save Pulse Assistant settings';
+      const message = getAISettingsSaveErrorMessage(error instanceof Error ? error.message : '');
       notificationStore.error(message);
     } finally {
       setSaving(false);
@@ -852,7 +847,7 @@ export const AISettings: Component = () => {
       aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error(`[AISettings] Clear ${provider} failed:`, error);
-      const message = error instanceof Error ? error.message : 'Failed to clear credentials';
+      const message = getAICredentialsClearErrorMessage(error instanceof Error ? error.message : '');
       notificationStore.error(message);
     } finally {
       setSaving(false);
@@ -920,10 +915,9 @@ export const AISettings: Component = () => {
                   // Revert on failure
                   setForm('enabled', !newValue);
                   logger.error('[AISettings] Failed to toggle AI:', error);
-                  const message =
-                    error instanceof Error
-                      ? error.message
-                      : 'Failed to update Pulse Assistant setting';
+                  const message = getAISettingsToggleErrorMessage(
+                    error instanceof Error ? error.message : '',
+                  );
                   notificationStore.error(message);
                 }
               }}
@@ -943,7 +937,7 @@ export const AISettings: Component = () => {
           <Show when={loading()}>
             <div class="flex items-center gap-3 text-sm text-muted p-4 sm:p-6">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              Loading Pulse Assistant settings...
+              {getAISettingsLoadingState().text}
             </div>
           </Show>
 
@@ -963,17 +957,14 @@ export const AISettings: Component = () => {
                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
                   />
                 </svg>
-                <span>
-                  Failed to load Pulse Assistant settings. Your configuration could not be
-                  retrieved.
-                </span>
+                <span>{getAISettingsLoadErrorMessage()}</span>
               </div>
               <button
                 type="button"
                 class="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50"
                 onClick={() => loadSettings()}
               >
-                Retry
+                {getAISettingsRetryLabel()}
               </button>
             </div>
           </Show>
@@ -1461,7 +1452,7 @@ export const AISettings: Component = () => {
                         </div>
                         <Show when={providerTestResult()?.provider === 'anthropic'}>
                           <p
-                            class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}
+                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
                           >
                             {providerTestResult()?.message}
                           </p>
@@ -1575,7 +1566,7 @@ export const AISettings: Component = () => {
                         </div>
                         <Show when={providerTestResult()?.provider === 'openai'}>
                           <p
-                            class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}
+                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
                           >
                             {providerTestResult()?.message}
                           </p>
@@ -1683,7 +1674,7 @@ export const AISettings: Component = () => {
                         </div>
                         <Show when={providerTestResult()?.provider === 'openrouter'}>
                           <p
-                            class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}
+                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
                           >
                             {providerTestResult()?.message}
                           </p>
@@ -1783,7 +1774,7 @@ export const AISettings: Component = () => {
                         </div>
                         <Show when={providerTestResult()?.provider === 'deepseek'}>
                           <p
-                            class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}
+                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
                           >
                             {providerTestResult()?.message}
                           </p>
@@ -1883,7 +1874,7 @@ export const AISettings: Component = () => {
                         </div>
                         <Show when={providerTestResult()?.provider === 'gemini'}>
                           <p
-                            class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}
+                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
                           >
                             {providerTestResult()?.message}
                           </p>
@@ -1988,7 +1979,7 @@ export const AISettings: Component = () => {
                         </div>
                         <Show when={providerTestResult()?.provider === 'ollama'}>
                           <p
-                            class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}
+                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
                           >
                             {providerTestResult()?.message}
                           </p>
@@ -2194,7 +2185,7 @@ export const AISettings: Component = () => {
 
               {/* Pulse Permission Level */}
               <div
-                class={`space-y-3 p-4 rounded-md border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900'}`}
+                class={`space-y-3 p-4 rounded-md border ${getAIControlLevelPanelClass(form.controlLevel)}`}
               >
                 <div class="flex items-center gap-2">
                   <svg
@@ -2213,13 +2204,7 @@ export const AISettings: Component = () => {
                   <span class="text-sm font-medium text-base-content">Pulse Permission Level</span>
                   <Show when={form.controlLevel !== 'read_only'}>
                     <span
-                      class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                        form.controlLevel === 'autonomous'
-                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                          : form.controlLevel === 'controlled'
-                            ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
-                            : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                      }`}
+                      class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${getAIControlLevelBadgeClass(form.controlLevel)}`}
                     >
                       {form.controlLevel}
                     </span>
@@ -2233,7 +2218,9 @@ export const AISettings: Component = () => {
                   </label>
                   <select
                     value={form.controlLevel}
-                    onChange={(e) => setForm('controlLevel', e.currentTarget.value as ControlLevel)}
+                    onChange={(e) =>
+                      setForm('controlLevel', e.currentTarget.value as AIControlLevel)
+                    }
                     class="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
                     disabled={saving()}
                   >
@@ -2247,12 +2234,7 @@ export const AISettings: Component = () => {
                   </select>
                 </div>
                 <p class="text-[10px] text-muted ml-[7.5rem]">
-                  {form.controlLevel === 'read_only' &&
-                    'Read-only mode: Pulse Assistant can query and observe only.'}
-                  {form.controlLevel === 'controlled' &&
-                    'Controlled mode: Pulse Assistant can execute commands and control VMs/containers with approval.'}
-                  {form.controlLevel === 'autonomous' &&
-                    'Autonomous mode: Pulse Assistant executes commands and control actions without confirmation.'}
+                  {getAIControlLevelDescription(form.controlLevel)}
                 </p>
                 <Show when={form.controlLevel === 'autonomous'}>
                   <div class="p-2 bg-amber-100 dark:bg-amber-900 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
@@ -2379,7 +2361,7 @@ export const AISettings: Component = () => {
                     </div>
 
                     <Show when={chatSessionsLoading()}>
-                      <div class="text-xs text-muted">Loading chat sessions...</div>
+                      <div class="text-xs text-muted">{getAIChatSessionsLoadingState().text}</div>
                     </Show>
                     <Show when={!chatSessionsLoading()}>
                       <Show when={chatSessionsError()}>
@@ -2390,7 +2372,7 @@ export const AISettings: Component = () => {
                           when={chatSessions().length > 0}
                           fallback={
                             <div class="text-xs text-muted">
-                              No chat sessions yet. Start a chat to create one.
+                              {getAIChatSessionsEmptyState().text}
                             </div>
                           }
                         >
@@ -2456,23 +2438,11 @@ export const AISettings: Component = () => {
             <Show when={settings()}>
               <div class="p-4 sm:p-6">
                 <div
-                  class={`flex items-center gap-2 p-3 rounded-md ${
-                    settings()?.configured
-                      ? 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200'
-                      : 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
-                  }`}
+                  class={`flex items-center gap-2 p-3 rounded-md ${settingsReadiness().containerClassName}`}
                 >
-                  <div
-                    class={`w-2 h-2 rounded-full ${
-                      settings()?.configured ? 'bg-emerald-400' : 'bg-amber-400'
-                    }`}
-                  />
+                  <div class={`w-2 h-2 rounded-full ${settingsReadiness().dotClassName}`} />
                   <div class="flex-1 min-w-0">
-                    <span class="text-xs font-medium">
-                      {settings()?.configured
-                        ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
-                        : 'Configure at least one provider above to enable Pulse Assistant features'}
-                    </span>
+                    <span class="text-xs font-medium">{settingsReadiness().summary}</span>
                     <Show when={settings()?.configured && settings()?.model}>
                       <span class="block sm:inline text-xs opacity-75 sm:ml-2">
                         • Default: {settings()?.model?.split(':').pop() || settings()?.model}
@@ -2548,19 +2518,22 @@ export const AISettings: Component = () => {
               </Show>
               <div class="space-y-2">
                 <For each={diffFiles()}>
-                  {(file) => (
-                    <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between rounded-md border border-border px-3 py-2 text-xs">
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span
-                          class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${diffStatusClasses(file.status)}`}
-                        >
-                          {formatDiffStatus(file.status)}
-                        </span>
-                        <span class="text-base-content truncate">{file.path}</span>
+                  {(file) => {
+                    const diffStatus = getAISessionDiffStatusPresentation(file.status);
+                    return (
+                      <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between rounded-md border border-border px-3 py-2 text-xs">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span
+                            class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${diffStatus.badgeClasses}`}
+                          >
+                            {diffStatus.label}
+                          </span>
+                          <span class="text-base-content truncate">{file.path}</span>
+                        </div>
+                        <span class="text-muted sm:flex-shrink-0">{formatDiffStats(file)}</span>
                       </div>
-                      <span class="text-muted sm:flex-shrink-0">{formatDiffStats(file)}</span>
-                    </div>
-                  )}
+                    );
+                  }}
                 </For>
               </div>
             </div>

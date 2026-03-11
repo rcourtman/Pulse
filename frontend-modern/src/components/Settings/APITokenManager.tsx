@@ -16,6 +16,11 @@ import { useWebSocket } from '@/App';
 import { getPulseBaseUrl } from '@/utils/url';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import { logger } from '@/utils/logger';
+import {
+  getAPITokenGenerateErrorMessage,
+  getAPITokensLoadErrorMessage,
+  getAPITokenRevokeErrorMessage,
+} from '@/utils/apiTokenPresentation';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
@@ -299,7 +304,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       setTokensLoaded(true);
     } catch (err) {
       logger.error('Failed to load API tokens', err);
-      notificationStore.error('Failed to load API tokens');
+      notificationStore.error(getAPITokensLoadErrorMessage());
     } finally {
       setLoading(false);
     }
@@ -385,7 +390,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       props.onTokensChanged?.();
     } catch (err) {
       logger.error('Failed to generate API token', err);
-      notificationStore.error('Failed to generate API token');
+      notificationStore.error(getAPITokenGenerateErrorMessage());
     } finally {
       setIsGenerating(false);
     }
@@ -467,7 +472,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       }
     } catch (err) {
       logger.error('Failed to revoke API token', err);
-      notificationStore.error('Failed to revoke API token');
+      notificationStore.error(getAPITokenRevokeErrorMessage());
     }
   };
 

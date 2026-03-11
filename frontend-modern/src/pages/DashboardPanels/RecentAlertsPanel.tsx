@@ -5,7 +5,11 @@ import { AlertsAPI } from '@/api/alerts';
 import { formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
 import {
+  DASHBOARD_ALERTS_EMPTY_STATE,
+} from '@/utils/dashboardAlertPresentation';
+import {
   getAlertSeverityBadgeClass,
+  getAlertSeverityCompactLabel,
   getAlertSeverityTextClass,
 } from '@/utils/alertSeverityPresentation';
 import type { Alert } from '@/types/api';
@@ -109,7 +113,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           when={props.alerts.length > 0}
           fallback={
             <p class="text-xs font-medium text-emerald-700 dark:text-emerald-300 pt-0.5">
-              No active alerts
+              {DASHBOARD_ALERTS_EMPTY_STATE}
             </p>
           }
         >
@@ -129,7 +133,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
               {(alert) => (
                 <li class="flex items-center gap-2 -mx-1 px-1 py-1 rounded hover:bg-surface-hover transition-colors">
                   <span class={getAlertSeverityBadgeClass(alert.level)}>
-                    {alert.level === 'critical' ? 'CRIT' : 'WARN'}
+                    {getAlertSeverityCompactLabel(alert.level)}
                   </span>
                   <p class="min-w-0 text-xs text-base-content truncate">{alert.resourceName}</p>
                   <p class="min-w-0 text-xs text-muted truncate flex-1">{alert.message}</p>

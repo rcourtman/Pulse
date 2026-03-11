@@ -46,6 +46,12 @@ import { getOrgID } from '@/utils/apiClient';
 import { aiChatStore } from '@/stores/aiChat';
 import { eventBus } from '@/stores/events';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import {
+  getDashboardDisconnectedState,
+  getDashboardGuestsEmptyState,
+  getDashboardInfrastructureEmptyState,
+  getDashboardLoadingState,
+} from '@/utils/dashboardEmptyStatePresentation';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 import {
   WorkloadsSummary,
@@ -303,10 +309,16 @@ export function Dashboard(props: DashboardProps) {
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const isWorkloadsRoute = () => location.pathname === WORKLOADS_PATH;
+  const [search, setSearch] = createSignal('');
 
   const kioskMode = useKioskMode();
+  const dashboardInfrastructureEmptyState = createMemo(() => getDashboardInfrastructureEmptyState());
+  const dashboardGuestsEmptyState = createMemo(() =>
+    getDashboardGuestsEmptyState(search()),
+  );
+  const dashboardLoadingState = createMemo(() => getDashboardLoadingState(reconnecting()));
+  const dashboardDisconnectedState = createMemo(() => getDashboardDisconnectedState(reconnecting()));
 
-  const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(
@@ -1399,17 +1411,13 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="Loading dashboard data..."
-            description={
-              reconnecting()
-                ? 'Reconnecting to monitoring service…'
-                : 'Connecting to monitoring service'
-            }
+            title={dashboardLoadingState().title}
+            description={dashboardLoadingState().description}
           />
         </Card>
       </Show>
 
-      {/* Empty State - No infrastructure hosts connected */}
+      {/* Empty state when no infrastructure has connected yet */}
       <Show
         when={
           connected() &&
@@ -1436,8 +1444,8 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="No infrastructure hosts connected"
-            description="Install the Pulse agent to connect a host and unlock v6 infrastructure data, or add a Proxmox connection in Settings → Infrastructure → Proxmox."
+            title={dashboardInfrastructureEmptyState().title}
+            description={dashboardInfrastructureEmptyState().description}
             actions={
               !kioskMode() ? (
                 <button
@@ -1445,7 +1453,7 @@ export function Dashboard(props: DashboardProps) {
                   onClick={() => navigate('/settings')}
                   class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  Go to Settings
+                  {dashboardInfrastructureEmptyState().actionLabel}
                 </button>
               ) : undefined
             }
@@ -1472,20 +1480,16 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="Connection lost"
-            description={
-              reconnecting()
-                ? 'Attempting to reconnect…'
-                : 'Unable to connect to the backend server'
-            }
+            title={dashboardDisconnectedState().title}
+            description={dashboardDisconnectedState().description}
             tone="danger"
             actions={
-              !reconnecting() ? (
+              dashboardDisconnectedState().actionLabel ? (
                 <button
                   onClick={() => reconnect()}
                   class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
                 >
-                  Reconnect now
+                  {dashboardDisconnectedState().actionLabel}
                 </button>
               ) : undefined
             }
@@ -1806,12 +1810,8 @@ export function Dashboard(props: DashboardProps) {
                 />
               </svg>
             }
-            title="No guests found"
-            description={
-              search() && search().trim() !== ''
-                ? `No guests match your search "${search()}"`
-                : 'No guests match your current filters'
-            }
+            title={dashboardGuestsEmptyState().title}
+            description={dashboardGuestsEmptyState().description}
           />
         </Card>
       </Show>

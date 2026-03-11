@@ -6,6 +6,8 @@ import {
   buildRecoveryOutcomeSegments,
   buildRecoveryPostureSegments,
   buildRecoveryPostureSummary,
+  getRecoveryAttentionChipClass,
+  getRecoveryAttentionDotClass,
   RECOVERY_FRESHNESS_BUCKETS,
   RECOVERY_SUMMARY_TIME_RANGES,
   RECOVERY_SUMMARY_TIME_RANGE_LABELS,
@@ -133,5 +135,21 @@ describe('recoverySummaryPresentation', () => {
       { key: 'stale', count: 3 },
       { key: 'running', count: 1 },
     ]);
+  });
+
+  it('exposes canonical recovery attention badge tones', () => {
+    expect(getRecoveryAttentionChipClass('rose')).toBe(
+      'border-rose-500/30 bg-rose-500/10 text-rose-200',
+    );
+    expect(getRecoveryAttentionChipClass('amber')).toBe(
+      'border-amber-500/30 bg-amber-500/10 text-amber-200',
+    );
+    expect(getRecoveryAttentionChipClass('blue')).toBe(
+      'border-blue-500/30 bg-blue-500/10 text-blue-200',
+    );
+
+    expect(getRecoveryAttentionDotClass('rose')).toBe('bg-rose-400');
+    expect(getRecoveryAttentionDotClass('amber')).toBe('bg-amber-400');
+    expect(getRecoveryAttentionDotClass('blue')).toBe('bg-blue-400');
   });
 });

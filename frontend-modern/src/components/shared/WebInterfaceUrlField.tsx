@@ -1,6 +1,7 @@
 import { Component, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
+import { getDiscoverySuggestedURLFallback } from '@/utils/discoveryPresentation';
 
 export interface WebInterfaceUrlFieldProps {
   metadataKind: 'guest' | 'agent';
@@ -58,6 +59,9 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   );
   const showSuggestedUrl = createMemo(
     () => hasSuggestedUrl() && normalizedSuggestedUrl() !== normalizedCurrentUrl(),
+  );
+  const suggestedUrlFallback = createMemo(() =>
+    getDiscoverySuggestedURLFallback(props.suggestedUrlDiagnostic),
   );
 
   const clearUrlSuccessTimer = () => {
@@ -231,8 +235,8 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
 
         <Show when={showSuggestedDiagnostic()}>
           <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
-            <p class="font-medium">No suggested URL found</p>
-            <p class="mt-0.5">{props.suggestedUrlDiagnostic}</p>
+            <p class="font-medium">{suggestedUrlFallback().title}</p>
+            <p class="mt-0.5">{suggestedUrlFallback().description}</p>
           </div>
         </Show>
 

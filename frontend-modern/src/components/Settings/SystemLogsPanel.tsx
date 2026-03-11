@@ -3,6 +3,10 @@ import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import {
+  getSystemLogLineClass,
+  getSystemLogStreamPresentation,
+} from '@/utils/systemLogsPresentation';
 import Download from 'lucide-solid/icons/download';
 import Pause from 'lucide-solid/icons/pause';
 import Play from 'lucide-solid/icons/play';
@@ -98,6 +102,8 @@ export const SystemLogsPanel: Component = () => {
     window.location.href = '/api/logs/download';
   };
 
+  const streamPresentation = () => getSystemLogStreamPresentation(isPaused());
+
   return (
     <div class="space-y-6">
       <OperationsPanel
@@ -126,9 +132,7 @@ export const SystemLogsPanel: Component = () => {
               <button
                 onClick={() => setIsPaused(!isPaused())}
                 class={`min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded transition-colors ${
-                  isPaused()
-                    ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'
-                    : 'hover:bg-surface-hover text-muted'
+                  streamPresentation().pauseButtonClass
                 }`}
                 title={isPaused() ? 'Resume Stream' : 'Pause Stream'}
               >
@@ -162,22 +166,7 @@ export const SystemLogsPanel: Component = () => {
             <For each={logs()}>
               {(log) => (
                 <div class="animate-enter border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded">
-                  {/* Basic highlighting for log levels */}
-                  {log.includes('"level":"error"') ||
-                  log.includes('ERR') ||
-                  log.includes('[ERROR]') ? (
-                    <span class="text-red-400">{log}</span>
-                  ) : log.includes('"level":"warn"') ||
-                    log.includes('WRN') ||
-                    log.includes('[WARN]') ? (
-                    <span class="text-amber-400">{log}</span>
-                  ) : log.includes('"level":"debug"') ||
-                    log.includes('DBG') ||
-                    log.includes('[DEBUG]') ? (
-                    <span class="text-blue-400">{log}</span>
-                  ) : (
-                    <span class="text-slate-300">{log}</span>
-                  )}
+                  <span class={getSystemLogLineClass(log)}>{log}</span>
                 </div>
               )}
             </For>
@@ -195,10 +184,8 @@ export const SystemLogsPanel: Component = () => {
               Buffer: {logs().length} / {MAX_LOGS} lines
             </span>
             <span class="flex items-center gap-2">
-              <div
-                class={`w-2 h-2 rounded-full ${isPaused() ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`}
-              ></div>
-              {isPaused() ? 'Stream Paused' : 'Live'}
+              <div class={`w-2 h-2 rounded-full ${streamPresentation().indicatorClass}`}></div>
+              {streamPresentation().label}
             </span>
           </div>
         </div>

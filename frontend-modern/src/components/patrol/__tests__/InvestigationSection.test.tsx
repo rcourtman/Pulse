@@ -1,7 +1,11 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Investigation } from '@/api/patrol';
-import { getInvestigationStatusBadgeClasses } from '@/utils/aiFindingPresentation';
+import {
+  getInvestigationOutcomeBadgeClasses,
+  getInvestigationOutcomeLabel,
+  getInvestigationStatusBadgeClasses,
+} from '@/utils/aiFindingPresentation';
 import InvestigationSection from '../InvestigationSection';
 
 const getInvestigationMock = vi.hoisted(() => vi.fn<() => Promise<Investigation>>());
@@ -11,23 +15,6 @@ const loadFindingsMock = vi.hoisted(() => vi.fn());
 vi.mock('@/api/patrol', () => ({
   getInvestigation: (...args: unknown[]) => getInvestigationMock(...args),
   reinvestigateFinding: (...args: unknown[]) => reinvestigateFindingMock(...args),
-  investigationStatusLabels: {
-    pending: 'Pending',
-    running: 'Running',
-    completed: 'Completed',
-    failed: 'Failed',
-    needs_attention: 'Needs Attention',
-  },
-  investigationOutcomeLabels: {
-    resolved: 'Resolved',
-    needs_attention: 'Needs Attention',
-  },
-  investigationOutcomeColors: {
-    resolved:
-      'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
-    needs_attention:
-      'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
-  },
   formatTimestamp: (value: string) => value,
 }));
 
@@ -75,5 +62,26 @@ describe('InvestigationSection', () => {
 
     const statusBadge = await screen.findByText('Running');
     expect(statusBadge.className).toContain(getInvestigationStatusBadgeClasses('running'));
+  });
+
+  it('renders investigation outcome badges from the shared finding presentation contract', async () => {
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-2',
+      finding_id: 'finding-2',
+      session_id: 'session-2',
+      status: 'completed',
+      outcome: 'needs_attention',
+      started_at: '2026-03-08T10:00:00.000Z',
+      turn_count: 2,
+      summary: 'Manual review needed.',
+      tools_used: ['ssh'],
+    } satisfies Investigation);
+
+    render(() => <InvestigationSection findingId="finding-2" investigationStatus="completed" />);
+
+    const outcomeBadge = await screen.findByText(getInvestigationOutcomeLabel('needs_attention'));
+    expect(outcomeBadge.className).toContain(
+      getInvestigationOutcomeBadgeClasses('needs_attention'),
+    );
   });
 });

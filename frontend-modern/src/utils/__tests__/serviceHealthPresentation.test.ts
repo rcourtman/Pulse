@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
+import {
+  getServiceHealthPresentation,
+  getServiceHealthSummaryPresentation,
+} from '@/utils/serviceHealthPresentation';
 
 describe('getServiceHealthPresentation', () => {
   it('treats healthy and online states as healthy', () => {
@@ -56,6 +59,21 @@ describe('getServiceHealthPresentation', () => {
       bg: 'bg-surface-alt',
       text: 'text-muted',
       dot: 'bg-slate-400',
+    });
+  });
+
+  it('returns shared summary tone classes for compact service tables', () => {
+    expect(getServiceHealthSummaryPresentation('online')).toEqual({
+      tone: 'ok',
+      textClass: 'text-emerald-600 dark:text-emerald-400',
+    });
+    expect(getServiceHealthSummaryPresentation(undefined, 'warning')).toEqual({
+      tone: 'warning',
+      textClass: 'text-amber-600 dark:text-amber-400',
+    });
+    expect(getServiceHealthSummaryPresentation('syncing')).toEqual({
+      tone: 'muted',
+      textClass: 'text-muted',
     });
   });
 });

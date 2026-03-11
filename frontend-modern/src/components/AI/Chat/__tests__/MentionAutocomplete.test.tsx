@@ -141,9 +141,9 @@ describe('MentionAutocomplete', () => {
 
     it('shows status indicator dot for resources with status', () => {
       renderAutocomplete({ query: 'web' });
-      // The status dot is a span with bg-green-500 class (running)
+      // The status dot uses the shared success variant.
       const resourceBtn = screen.getByText('web-server').closest('button')!;
-      const statusDot = resourceBtn.querySelector('.bg-green-500');
+      const statusDot = resourceBtn.querySelector('.bg-emerald-500');
       expect(statusDot).not.toBeNull();
     });
 
@@ -333,7 +333,7 @@ describe('MentionAutocomplete', () => {
       const resources = [makeResource({ status: 'paused' })];
       renderAutocomplete({ resources });
       const resourceBtn = screen.getByText('web-server').closest('button')!;
-      const statusDot = resourceBtn.querySelector('.bg-yellow-500');
+      const statusDot = resourceBtn.querySelector('.rounded-full');
       expect(statusDot).not.toBeNull();
     });
 

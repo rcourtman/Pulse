@@ -6,6 +6,10 @@ import {
   RECOVERY_OUTCOMES,
   getRecoveryOutcomeBadgeClass,
 } from '@/utils/recoveryOutcomePresentation';
+import {
+  DASHBOARD_RECOVERY_EMPTY_STATE,
+  DASHBOARD_RECOVERY_STALE_MESSAGE,
+} from '@/utils/dashboardRecoveryPresentation';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 
 interface RecoveryStatusPanelProps {
@@ -35,7 +39,7 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
       </div>
       <Show
         when={props.recovery.hasData}
-        fallback={<p class="text-xs text-muted mt-1">No recovery data available</p>}
+        fallback={<p class="text-xs text-muted mt-1">{DASHBOARD_RECOVERY_EMPTY_STATE}</p>}
       >
         <div class="space-y-1.5">
           <div class="flex items-baseline justify-between gap-4">
@@ -57,7 +61,7 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
 
           <Show when={isStale()}>
             <p class="text-sm font-medium text-amber-700 dark:text-amber-300">
-              Last recovery point over 24 hours ago
+              {DASHBOARD_RECOVERY_STALE_MESSAGE}
             </p>
           </Show>
 
