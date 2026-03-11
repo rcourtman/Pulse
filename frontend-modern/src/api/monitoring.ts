@@ -7,10 +7,10 @@ import type {
 } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
+  assertAPIResponseOK,
   coerceTimestampMillis,
   isAPIResponseStatus,
   parseOptionalJSON,
-  readAPIErrorMessage,
 } from './responseUtils';
 
 export class MonitoringAPI {
@@ -52,7 +52,7 @@ export class MonitoringAPI {
         return {};
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
 
     if (isAPIResponseStatus(response, 204)) {
@@ -75,7 +75,7 @@ export class MonitoringAPI {
         return;
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
   }
 
@@ -92,7 +92,7 @@ export class MonitoringAPI {
         return;
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
   }
 
@@ -112,7 +112,7 @@ export class MonitoringAPI {
         throw new Error('Container runtime not found');
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
   }
 
@@ -123,9 +123,7 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
   }
 
   static async deleteKubernetesCluster(
@@ -142,7 +140,7 @@ export class MonitoringAPI {
         return {};
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
 
     if (isAPIResponseStatus(response, 204)) {
@@ -164,7 +162,7 @@ export class MonitoringAPI {
         return;
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
   }
 
@@ -180,7 +178,7 @@ export class MonitoringAPI {
         return;
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
   }
 
@@ -203,7 +201,7 @@ export class MonitoringAPI {
         throw new Error('Kubernetes cluster not found');
       }
 
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
     }
   }
 
@@ -214,9 +212,7 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
   }
 
   static async deleteAgent(agentId: string): Promise<void> {
@@ -227,9 +223,7 @@ export class MonitoringAPI {
     const url = `${this.baseUrl}/agents/agent/${encodeURIComponent(agentId)}`;
     const response = await apiFetch(url, { method: 'DELETE' });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
 
     // Consume and ignore the body so the fetch can be reused by the connection pool.
     try {
@@ -256,9 +250,7 @@ export class MonitoringAPI {
       body: JSON.stringify(config),
     });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
   }
 
   static async unlinkAgent(agentId: string): Promise<void> {
@@ -277,9 +269,7 @@ export class MonitoringAPI {
       }),
     });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
   }
 
   static async lookupAgent(params: {
@@ -301,11 +291,7 @@ export class MonitoringAPI {
       return null;
     }
 
-    if (!response.ok) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Lookup failed with status ${response.status}`),
-      );
-    }
+    await assertAPIResponseOK(response, `Lookup failed with status ${response.status}`);
 
     const data = await parseOptionalJSON<AgentLookupResponse | null>(
       response,
@@ -346,9 +332,7 @@ export class MonitoringAPI {
       body: JSON.stringify({ agentId, containerId, containerName }),
     });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
 
     return parseOptionalJSON(
       response,
@@ -369,9 +353,7 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
 
     return parseOptionalJSON(response, { success: true }, 'Failed to parse check updates response');
   }
@@ -388,9 +370,7 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    if (!response.ok) {
-      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
-    }
+    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
 
     return parseOptionalJSON(response, { success: true }, 'Failed to parse update all response');
   }

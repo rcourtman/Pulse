@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  assertAPIResponseOK,
   arrayOrUndefined,
   arrayOrEmpty,
   apiErrorStatus,
@@ -85,6 +86,20 @@ describe('readAPIErrorMessage', () => {
     const response = new Response(JSON.stringify({ message: { text: 'Nested' } }));
     const result = await readAPIErrorMessage(response, 'Fallback');
     expect(result).toBe('{"message":{"text":"Nested"}}');
+  });
+});
+
+describe('assertAPIResponseOK', () => {
+  it('does nothing for ok responses', async () => {
+    await expect(assertAPIResponseOK(new Response('', { status: 200 }), 'Fallback')).resolves.toBe(
+      undefined,
+    );
+  });
+
+  it('throws the canonical parsed error message for non-ok responses', async () => {
+    await expect(
+      assertAPIResponseOK(new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 }), 'Fallback'),
+    ).rejects.toThrow('Bad request');
   });
 });
 

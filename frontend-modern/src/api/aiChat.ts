@@ -1,5 +1,5 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { parseJSONTextSafe, readAPIErrorMessage } from './responseUtils';
+import { assertAPIResponseOK, parseJSONTextSafe } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type { AIChatStreamEvent } from './generated/aiChatEvents';
 
@@ -223,11 +223,7 @@ export class AIChatAPI {
       signal,
     });
 
-    if (!response.ok) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Request failed with status ${response.status}`),
-      );
-    }
+    await assertAPIResponseOK(response, `Request failed with status ${response.status}`);
 
     const reader = response.body?.getReader();
     if (!reader) {

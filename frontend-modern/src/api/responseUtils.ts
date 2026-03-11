@@ -51,6 +51,14 @@ export async function readAPIErrorMessage(response: Response, fallback: string):
   }
 }
 
+export async function assertAPIResponseOK(response: Response, fallback: string): Promise<void> {
+  if (response.ok) {
+    return;
+  }
+
+  throw new Error(await readAPIErrorMessage(response, fallback));
+}
+
 export function apiErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== 'object') {
     return null;

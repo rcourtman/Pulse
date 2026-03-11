@@ -1,11 +1,11 @@
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
+  assertAPIResponseOK,
   arrayOrEmpty,
   isAPIErrorStatus,
   isAPIResponseStatus,
   objectArrayFieldOrEmpty,
   parseRequiredJSON,
-  readAPIErrorMessage,
 } from './responseUtils';
 
 /**
@@ -143,11 +143,7 @@ export class AgentProfilesAPI {
       body: JSON.stringify({ name, description, config }),
     });
 
-    if (!response.ok) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Failed to create profile: ${response.status}`),
-      );
-    }
+    await assertAPIResponseOK(response, `Failed to create profile: ${response.status}`);
 
     return parseRequiredJSON(response, 'Failed to parse created profile');
   }
@@ -167,11 +163,7 @@ export class AgentProfilesAPI {
       body: JSON.stringify({ id, name, description, config }),
     });
 
-    if (!response.ok) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Failed to update profile: ${response.status}`),
-      );
-    }
+    await assertAPIResponseOK(response, `Failed to update profile: ${response.status}`);
 
     return parseRequiredJSON(response, 'Failed to parse updated profile');
   }
@@ -184,10 +176,8 @@ export class AgentProfilesAPI {
       method: 'DELETE',
     });
 
-    if (!response.ok && !isAPIResponseStatus(response, 204)) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Failed to delete profile: ${response.status}`),
-      );
+    if (!isAPIResponseStatus(response, 204)) {
+      await assertAPIResponseOK(response, `Failed to delete profile: ${response.status}`);
     }
   }
 
@@ -216,11 +206,7 @@ export class AgentProfilesAPI {
       body: JSON.stringify({ agent_id: agentId, profile_id: profileId }),
     });
 
-    if (!response.ok) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Failed to assign profile: ${response.status}`),
-      );
-    }
+    await assertAPIResponseOK(response, `Failed to assign profile: ${response.status}`);
   }
 
   /**
@@ -231,10 +217,8 @@ export class AgentProfilesAPI {
       method: 'DELETE',
     });
 
-    if (!response.ok && !isAPIResponseStatus(response, 204)) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Failed to unassign profile: ${response.status}`),
-      );
+    if (!isAPIResponseStatus(response, 204)) {
+      await assertAPIResponseOK(response, `Failed to unassign profile: ${response.status}`);
     }
   }
 
@@ -255,9 +239,7 @@ export class AgentProfilesAPI {
           'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
         );
       }
-      throw new Error(
-        await readAPIErrorMessage(response, `Failed to get suggestion: ${response.status}`),
-      );
+      await assertAPIResponseOK(response, `Failed to get suggestion: ${response.status}`);
     }
 
     return parseRequiredJSON(response, 'Failed to parse profile suggestion');

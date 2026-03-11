@@ -1,11 +1,11 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import {
+  assertAPIResponseOK,
   arrayOrEmpty,
   isAPIErrorStatus,
   objectArrayFieldOrEmpty,
   parseJSONTextSafe,
   promoteLegacyAlertIdentifier,
-  readAPIErrorMessage,
 } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type {
@@ -193,11 +193,7 @@ export class AIAPI {
       signal,
     });
 
-    if (!response.ok) {
-      throw new Error(
-        await readAPIErrorMessage(response, `Request failed with status ${response.status}`),
-      );
-    }
+    await assertAPIResponseOK(response, `Request failed with status ${response.status}`);
 
     const reader = response.body?.getReader();
     if (!reader) {

@@ -2,12 +2,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '../agentProfiles';
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import {
+  assertAPIResponseOK,
   arrayOrEmpty,
   isAPIErrorStatus,
   isAPIResponseStatus,
   objectArrayFieldOrEmpty,
   parseRequiredJSON,
-  readAPIErrorMessage,
 } from '../responseUtils';
 
 vi.mock('@/utils/apiClient', () => ({
@@ -16,8 +16,8 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 vi.mock('../responseUtils', () => ({
+  assertAPIResponseOK: vi.fn(),
   arrayOrEmpty: vi.fn(),
-  readAPIErrorMessage: vi.fn().mockResolvedValue('Error'),
   isAPIErrorStatus: vi.fn(),
   isAPIResponseStatus: vi.fn(),
   objectArrayFieldOrEmpty: vi.fn(),
@@ -34,6 +34,7 @@ describe('AgentProfilesAPI', () => {
       return (response as { status?: number } | null)?.status === expectedStatus;
     });
     vi.mocked(arrayOrEmpty).mockImplementation((value) => (Array.isArray(value) ? value : []));
+    vi.mocked(assertAPIResponseOK).mockResolvedValue(undefined);
     vi.mocked(objectArrayFieldOrEmpty).mockImplementation((value, field) => {
       if (!value || typeof value !== 'object') {
         return [];
@@ -129,7 +130,7 @@ describe('AgentProfilesAPI', () => {
     it('throws on failure', async () => {
       const mockResponse = { ok: false, status: 400 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
-      vi.mocked(readAPIErrorMessage).mockResolvedValueOnce('Bad request');
+      vi.mocked(assertAPIResponseOK).mockRejectedValueOnce(new Error('Bad request'));
 
       await expect(AgentProfilesAPI.createProfile('Name', {})).rejects.toThrow('Bad request');
     });
@@ -258,7 +259,7 @@ describe('AgentProfilesAPI', () => {
     it('does not infer service-unavailable status from arbitrary responses', async () => {
       const mockResponse = { ok: false, status: 500 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
-      vi.mocked(readAPIErrorMessage).mockResolvedValueOnce('Server error');
+      vi.mocked(assertAPIResponseOK).mockRejectedValueOnce(new Error('Server error'));
 
       await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow(
         'Server error',
