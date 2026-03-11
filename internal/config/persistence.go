@@ -2118,6 +2118,147 @@ type PatrolRunRecord struct {
 	ToolCallCount int              `json:"tool_call_count"`
 }
 
+type patrolRunRecordJSON struct {
+	ID                        string           `json:"id"`
+	StartedAt                 time.Time        `json:"started_at"`
+	CompletedAt               time.Time        `json:"completed_at"`
+	DurationMs                int64            `json:"duration_ms"`
+	Type                      string           `json:"type"`
+	TriggerReason             string           `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          []string         `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs []string         `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        []string         `json:"scope_resource_types,omitempty"`
+	ScopeContext              string           `json:"scope_context,omitempty"`
+	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
+	LegacyAlertID             string           `json:"legacy_alert_id,omitempty"`
+	AlertID                   string           `json:"alert_id,omitempty"`
+	FindingID                 string           `json:"finding_id,omitempty"`
+	ResourcesChecked          int              `json:"resources_checked"`
+	NodesChecked              int              `json:"nodes_checked"`
+	GuestsChecked             int              `json:"guests_checked"`
+	DockerChecked             int              `json:"docker_checked"`
+	StorageChecked            int              `json:"storage_checked"`
+	HostsChecked              int              `json:"hosts_checked"`
+	PBSChecked                int              `json:"pbs_checked"`
+	KubernetesChecked         int              `json:"kubernetes_checked"`
+	NewFindings               int              `json:"new_findings"`
+	ExistingFindings          int              `json:"existing_findings"`
+	ResolvedFindings          int              `json:"resolved_findings"`
+	AutoFixCount              int              `json:"auto_fix_count,omitempty"`
+	FindingsSummary           string           `json:"findings_summary"`
+	FindingIDs                []string         `json:"finding_ids,omitempty"`
+	ErrorCount                int              `json:"error_count"`
+	Status                    string           `json:"status"`
+	AIAnalysis                string           `json:"ai_analysis,omitempty"`
+	InputTokens               int              `json:"input_tokens,omitempty"`
+	OutputTokens              int              `json:"output_tokens,omitempty"`
+	ToolCalls                 []ToolCallRecord `json:"tool_calls,omitempty"`
+	ToolCallCount             int              `json:"tool_call_count"`
+}
+
+func canonicalPatrolAlertIdentifier(alertIdentifier, legacyAlertID, alertID string) string {
+	if normalized := strings.TrimSpace(alertIdentifier); normalized != "" {
+		return normalized
+	}
+	if normalized := strings.TrimSpace(alertID); normalized != "" {
+		return normalized
+	}
+	return strings.TrimSpace(legacyAlertID)
+}
+
+func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
+	alertIdentifier := canonicalPatrolAlertIdentifier("", "", record.AlertID)
+	record.AlertID = alertIdentifier
+	return record
+}
+
+func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
+	normalized := normalizePatrolRunRecord(r)
+	alertIdentifier := strings.TrimSpace(normalized.AlertID)
+	return json.Marshal(patrolRunRecordJSON{
+		ID:                        normalized.ID,
+		StartedAt:                 normalized.StartedAt,
+		CompletedAt:               normalized.CompletedAt,
+		DurationMs:                normalized.DurationMs,
+		Type:                      normalized.Type,
+		TriggerReason:             normalized.TriggerReason,
+		ScopeResourceIDs:          normalized.ScopeResourceIDs,
+		EffectiveScopeResourceIDs: normalized.EffectiveScopeResourceIDs,
+		ScopeResourceTypes:        normalized.ScopeResourceTypes,
+		ScopeContext:              normalized.ScopeContext,
+		AlertIdentifier:           alertIdentifier,
+		LegacyAlertID:             alertIdentifier,
+		AlertID:                   alertIdentifier,
+		FindingID:                 normalized.FindingID,
+		ResourcesChecked:          normalized.ResourcesChecked,
+		NodesChecked:              normalized.NodesChecked,
+		GuestsChecked:             normalized.GuestsChecked,
+		DockerChecked:             normalized.DockerChecked,
+		StorageChecked:            normalized.StorageChecked,
+		HostsChecked:              normalized.HostsChecked,
+		PBSChecked:                normalized.PBSChecked,
+		KubernetesChecked:         normalized.KubernetesChecked,
+		NewFindings:               normalized.NewFindings,
+		ExistingFindings:          normalized.ExistingFindings,
+		ResolvedFindings:          normalized.ResolvedFindings,
+		AutoFixCount:              normalized.AutoFixCount,
+		FindingsSummary:           normalized.FindingsSummary,
+		FindingIDs:                normalized.FindingIDs,
+		ErrorCount:                normalized.ErrorCount,
+		Status:                    normalized.Status,
+		AIAnalysis:                normalized.AIAnalysis,
+		InputTokens:               normalized.InputTokens,
+		OutputTokens:              normalized.OutputTokens,
+		ToolCalls:                 normalized.ToolCalls,
+		ToolCallCount:             normalized.ToolCallCount,
+	})
+}
+
+func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
+	var payload patrolRunRecordJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	alertIdentifier := canonicalPatrolAlertIdentifier(payload.AlertIdentifier, payload.LegacyAlertID, payload.AlertID)
+	*r = PatrolRunRecord{
+		ID:                        payload.ID,
+		StartedAt:                 payload.StartedAt,
+		CompletedAt:               payload.CompletedAt,
+		DurationMs:                payload.DurationMs,
+		Type:                      payload.Type,
+		TriggerReason:             payload.TriggerReason,
+		ScopeResourceIDs:          payload.ScopeResourceIDs,
+		EffectiveScopeResourceIDs: payload.EffectiveScopeResourceIDs,
+		ScopeResourceTypes:        payload.ScopeResourceTypes,
+		ScopeContext:              payload.ScopeContext,
+		AlertID:                   alertIdentifier,
+		FindingID:                 payload.FindingID,
+		ResourcesChecked:          payload.ResourcesChecked,
+		NodesChecked:              payload.NodesChecked,
+		GuestsChecked:             payload.GuestsChecked,
+		DockerChecked:             payload.DockerChecked,
+		StorageChecked:            payload.StorageChecked,
+		HostsChecked:              payload.HostsChecked,
+		PBSChecked:                payload.PBSChecked,
+		KubernetesChecked:         payload.KubernetesChecked,
+		NewFindings:               payload.NewFindings,
+		ExistingFindings:          payload.ExistingFindings,
+		ResolvedFindings:          payload.ResolvedFindings,
+		AutoFixCount:              payload.AutoFixCount,
+		FindingsSummary:           payload.FindingsSummary,
+		FindingIDs:                payload.FindingIDs,
+		ErrorCount:                payload.ErrorCount,
+		Status:                    payload.Status,
+		AIAnalysis:                payload.AIAnalysis,
+		InputTokens:               payload.InputTokens,
+		OutputTokens:              payload.OutputTokens,
+		ToolCalls:                 payload.ToolCalls,
+		ToolCallCount:             payload.ToolCallCount,
+	}
+	return nil
+}
+
 // ToolCallRecord captures a single tool invocation during a patrol run.
 type ToolCallRecord struct {
 	ID        string `json:"id"`
