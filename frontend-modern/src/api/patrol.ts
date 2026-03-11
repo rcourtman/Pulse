@@ -433,16 +433,9 @@ function normalizeHistoryLimit(limit: number): number {
 }
 
 function normalizePatrolRunRecord(run: PatrolRunRecord): PatrolRunRecord {
-  const alertIdentifier = run.alert_identifier ?? run.alert_id;
-  const {
-    alert_identifier: _alertIdentifier,
-    legacy_alert_id: _legacyAlertId,
-    alert_id: _alertId,
-    ...rest
-  } = run as PatrolRunRecord & {
+  const alertIdentifier = run.alert_identifier;
+  const { alert_identifier: _alertIdentifier, ...rest } = run as PatrolRunRecord & {
     alert_identifier?: string;
-    legacy_alert_id?: string;
-    alert_id?: string;
   };
   return {
     ...rest,
