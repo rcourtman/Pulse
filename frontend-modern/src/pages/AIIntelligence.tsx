@@ -28,7 +28,12 @@ import {
 } from '@/api/patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
+import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { getFindingSeverityToneClasses } from '@/utils/aiFindingPresentation';
+import {
+  getPatrolSummaryPresentation,
+  PATROL_NO_ISSUES_LABEL,
+} from '@/utils/patrolSummaryPresentation';
 
 interface ModelInfo {
   id: string;
@@ -78,19 +83,14 @@ import {
 import { formatRelativeTime } from '@/utils/format';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { formatTriggerReason, groupModelsByProvider } from '@/utils/patrolFormat';
-
-// Schedule presets in minutes
-const SCHEDULE_PRESETS = [
-  { value: 0, label: 'Disabled' },
-  { value: 10, label: '10 min' },
-  { value: 15, label: '15 min' },
-  { value: 30, label: '30 min' },
-  { value: 60, label: '1 hour' },
-  { value: 180, label: '3 hours' },
-  { value: 360, label: '6 hours' },
-  { value: 720, label: '12 hours' },
-  { value: 1440, label: '24 hours' },
-];
+import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
+import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
+import {
+  getProTrialStartedMessage,
+  getTrialAlreadyUsedMessage,
+  getTrialStartErrorMessage,
+  getTrialTryAgainLaterMessage,
+} from '@/utils/upgradePresentation';
 
 type PatrolTab = 'findings' | 'history';
 
@@ -189,6 +189,21 @@ export function AIIntelligence() {
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
   const [patrolEventTriggers, setPatrolEventTriggers] = createSignal<boolean>(true);
   const [startingTrial, setStartingTrial] = createSignal(false);
+  const quickstartPresentation = createMemo(() =>
+    getAIQuickstartCreditsPresentation(
+      patrolStatus()?.quickstart_credits_remaining ?? 0,
+      patrolStatus()?.quickstart_credits_total ?? 0,
+    ),
+  );
+  const criticalSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation('critical', summaryStats().criticalFindings > 0),
+  );
+  const warningSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation('warning', summaryStats().warningFindings > 0),
+  );
+  const fixedSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
+  );
 
   const canStartTrial = createMemo(() => {
     const state = licenseStatus()?.subscription_state;
@@ -207,15 +222,19 @@ export function AIIntelligence() {
         }
         return;
       }
-      notificationStore.success('Pro trial started');
+      notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;
       if (statusCode === 409) {
-        notificationStore.error('Trial already used');
+        notificationStore.error(getTrialAlreadyUsedMessage());
       } else if (statusCode === 429) {
-        notificationStore.error('Try again later');
+        notificationStore.error(getTrialTryAgainLaterMessage());
       } else {
-        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+        notificationStore.error(
+          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
+            branded: true,
+          }),
+        );
       }
     } finally {
       setStartingTrial(false);
@@ -246,13 +265,7 @@ export function AIIntelligence() {
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
 
   const scheduleOptions = createMemo(() => {
-    const current = patrolInterval();
-    const options = [...SCHEDULE_PRESETS];
-    if (Number.isFinite(current) && !options.some((opt) => opt.value === current)) {
-      options.push({ value: current, label: `${current} min` });
-      options.sort((a, b) => a.value - b.value);
-    }
-    return options;
+    return buildPatrolScheduleOptions(patrolInterval());
   });
 
   // Load available models
@@ -707,11 +720,11 @@ export function AIIntelligence() {
     }
   }
 
-  const summaryStats = () => {
+  function summaryStats() {
     const allFindings = aiIntelligenceStore.findings;
     // Only count Patrol findings (exclude threshold alerts)
     const patrolFindings = allFindings.filter(
-      (f) => f.source !== 'threshold' && !f.isThreshold && !f.alertId,
+      (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
     );
     const activeFindings = patrolFindings.filter((f) => f.status === 'active');
 
@@ -732,7 +745,7 @@ export function AIIntelligence() {
       fixedCount,
       hasAnyPatrolFindings: patrolFindings.length > 0,
     };
-  };
+  }
 
   return (
     <div class="h-full flex flex-col bg-base">
@@ -832,25 +845,14 @@ export function AIIntelligence() {
             }
           >
             <div
-              class={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium ${
-                (patrolStatus()?.quickstart_credits_remaining ?? 0) > 0
-                  ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
-                  : 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
-              }`}
-              title={
-                (patrolStatus()?.quickstart_credits_remaining ?? 0) > 0
-                  ? `${patrolStatus()!.quickstart_credits_remaining}/${patrolStatus()!.quickstart_credits_total} free quickstart patrol runs remaining. No API key needed.`
-                  : 'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.'
-              }
+              class={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium ${quickstartPresentation().className}`}
+              title={quickstartPresentation().title}
             >
               <Show
                 when={(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0}
-                fallback={<span>Credits exhausted — connect API key</span>}
+                fallback={<span>{quickstartPresentation().summary}</span>}
               >
-                <span>
-                  {patrolStatus()!.quickstart_credits_remaining}/
-                  {patrolStatus()!.quickstart_credits_total} quickstart credits
-                </span>
+                <span>{quickstartPresentation().summary}</span>
               </Show>
             </div>
           </Show>
@@ -1236,7 +1238,7 @@ export function AIIntelligence() {
               <Show when={patrolStatus()?.last_patrol_at}>
                 <div class="flex items-center gap-2 px-4 py-3 bg-surface rounded-md border border-border">
                   <CheckCircleIcon class="w-4 h-4 text-green-500 dark:text-green-400" />
-                  <span class="text-sm text-muted">No issues found</span>
+                  <span class="text-sm text-muted">{PATROL_NO_ISSUES_LABEL}</span>
                 </div>
               </Show>
             }
@@ -1246,29 +1248,13 @@ export function AIIntelligence() {
               <div class="bg-surface rounded-md border border-border p-3">
                 <div class="flex items-center gap-2">
                   <div
-                    class={`p-1.5 rounded-md border ${
-                      summaryStats().criticalFindings > 0
-                        ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
-                        : 'bg-surface border-border'
-                    }`}
+                    class={`p-1.5 rounded-md border ${criticalSummaryPresentation().iconContainerClass}`}
                   >
-                    <ShieldAlertIcon
-                      class={`w-4 h-4 ${
-                        summaryStats().criticalFindings > 0
-                          ? 'text-red-500 dark:text-red-400'
-                          : 'text-muted'
-                      }`}
-                    />
+                    <ShieldAlertIcon class={`w-4 h-4 ${criticalSummaryPresentation().iconClass}`} />
                   </div>
                   <div>
                     <p class="text-xs text-muted">Critical</p>
-                    <p
-                      class={`text-lg font-bold ${
-                        summaryStats().criticalFindings > 0
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-muted'
-                      }`}
-                    >
+                    <p class={`text-lg font-bold ${criticalSummaryPresentation().valueClass}`}>
                       {summaryStats().criticalFindings}
                     </p>
                   </div>
@@ -1279,29 +1265,13 @@ export function AIIntelligence() {
               <div class="bg-surface rounded-md border border-border p-3">
                 <div class="flex items-center gap-2">
                   <div
-                    class={`p-1.5 rounded-md border ${
-                      summaryStats().warningFindings > 0
-                        ? 'bg-amber-50 dark:bg-amber-900 border-amber-200 dark:border-amber-800'
-                        : 'bg-surface border-border'
-                    }`}
+                    class={`p-1.5 rounded-md border ${warningSummaryPresentation().iconContainerClass}`}
                   >
-                    <ActivityIcon
-                      class={`w-4 h-4 ${
-                        summaryStats().warningFindings > 0
-                          ? 'text-amber-500 dark:text-amber-400'
-                          : 'text-muted'
-                      }`}
-                    />
+                    <ActivityIcon class={`w-4 h-4 ${warningSummaryPresentation().iconClass}`} />
                   </div>
                   <div>
                     <p class="text-xs text-muted">Warnings</p>
-                    <p
-                      class={`text-lg font-bold ${
-                        summaryStats().warningFindings > 0
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-muted'
-                      }`}
-                    >
+                    <p class={`text-lg font-bold ${warningSummaryPresentation().valueClass}`}>
                       {summaryStats().warningFindings}
                     </p>
                   </div>
@@ -1312,29 +1282,13 @@ export function AIIntelligence() {
               <div class="bg-surface rounded-md border border-border p-3">
                 <div class="flex items-center gap-2">
                   <div
-                    class={`p-1.5 rounded-md border ${
-                      summaryStats().fixedCount > 0
-                        ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'
-                        : 'bg-surface border-border'
-                    }`}
+                    class={`p-1.5 rounded-md border ${fixedSummaryPresentation().iconContainerClass}`}
                   >
-                    <CheckCircleIcon
-                      class={`w-4 h-4 ${
-                        summaryStats().fixedCount > 0
-                          ? 'text-green-500 dark:text-green-400'
-                          : 'text-muted'
-                      }`}
-                    />
+                    <CheckCircleIcon class={`w-4 h-4 ${fixedSummaryPresentation().iconClass}`} />
                   </div>
                   <div>
                     <p class="text-xs text-muted">Fixed</p>
-                    <p
-                      class={`text-lg font-bold ${
-                        summaryStats().fixedCount > 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-muted'
-                      }`}
-                    >
+                    <p class={`text-lg font-bold ${fixedSummaryPresentation().valueClass}`}>
                       {summaryStats().fixedCount}
                     </p>
                   </div>
