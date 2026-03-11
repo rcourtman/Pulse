@@ -345,6 +345,12 @@ func TestGetWebhookTemplates_PagerDutySettings(t *testing.T) {
 	if !strings.Contains(pagerduty.PayloadTemplate, "event_action") {
 		t.Error("PagerDuty PayloadTemplate should contain 'event_action'")
 	}
+	if !strings.Contains(pagerduty.PayloadTemplate, `"alert_identifier": "{{.ID}}"`) {
+		t.Error("PagerDuty PayloadTemplate should contain canonical 'alert_identifier'")
+	}
+	if !strings.Contains(pagerduty.PayloadTemplate, `"alert_id": "{{.ID}}"`) {
+		t.Error("PagerDuty PayloadTemplate should preserve compatibility 'alert_id'")
+	}
 }
 
 func TestGetWebhookTemplates_GenericSettings(t *testing.T) {
