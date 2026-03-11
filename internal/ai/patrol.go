@@ -156,8 +156,6 @@ type patrolRunRecordJSON struct {
 	ScopeResourceTypes        []string         `json:"scope_resource_types,omitempty"`
 	ScopeContext              string           `json:"scope_context,omitempty"`
 	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
-	LegacyAlertID             string           `json:"legacy_alert_id,omitempty"`
-	AlertID                   string           `json:"alert_id,omitempty"`
 	FindingID                 string           `json:"finding_id,omitempty"`
 	ResourcesChecked          int              `json:"resources_checked"`
 	NodesChecked              int              `json:"nodes_checked"`
@@ -186,18 +184,12 @@ type patrolRunRecordJSON struct {
 	ToolCallCount             int              `json:"tool_call_count"`
 }
 
-func canonicalPatrolAlertIdentifier(alertIdentifier, legacyAlertID, alertID string) string {
-	if normalized := strings.TrimSpace(alertIdentifier); normalized != "" {
-		return normalized
-	}
-	if normalized := strings.TrimSpace(alertID); normalized != "" {
-		return normalized
-	}
-	return strings.TrimSpace(legacyAlertID)
+func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
+	return strings.TrimSpace(alertIdentifier)
 }
 
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
-	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier, "", "")
+	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	return record
 }
 
@@ -262,7 +254,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		EffectiveScopeResourceIDs: payload.EffectiveScopeResourceIDs,
 		ScopeResourceTypes:        payload.ScopeResourceTypes,
 		ScopeContext:              payload.ScopeContext,
-		AlertIdentifier:           canonicalPatrolAlertIdentifier(payload.AlertIdentifier, payload.LegacyAlertID, payload.AlertID),
+		AlertIdentifier:           canonicalPatrolAlertIdentifier(payload.AlertIdentifier),
 		FindingID:                 payload.FindingID,
 		ResourcesChecked:          payload.ResourcesChecked,
 		NodesChecked:              payload.NodesChecked,
