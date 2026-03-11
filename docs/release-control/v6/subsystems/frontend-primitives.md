@@ -75,3 +75,10 @@ duplicating border-2 active-card styling in feature components.
 Settings informational callouts with icon-plus-copy layouts must now route
 through the shared `CalloutCard` primitive instead of maintaining feature-local
 blue bordered wrappers.
+
+Alert incident-event filter containers, labels, and chips must now route
+through the shared presentation helpers in
+`frontend-modern/src/utils/alertIncidentPresentation.ts` instead of allowing
+`frontend-modern/src/pages/Alerts.tsx` and
+`frontend-modern/src/features/alerts/OverviewTab.tsx` to fork their own filter
+button styling.

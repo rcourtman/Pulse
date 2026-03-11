@@ -23,6 +23,10 @@ import {
   getAlertResourceIncidentSaveNoteLabel,
   getAlertResourceIncidentToggleLabel,
   getAlertIncidentStatusPresentation,
+  getAlertIncidentEventFilterActionButtonClass,
+  getAlertIncidentEventFilterChipClass,
+  getAlertIncidentEventFilterContainerClass,
+  getAlertIncidentEventFilterLabelClass,
   normalizeAlertIncidentStatus,
 } from '@/utils/alertIncidentPresentation';
 
@@ -117,5 +121,32 @@ describe('alertIncidentPresentation', () => {
       text: 'No events match the selected filters.',
     });
     expect(getAlertResourceIncidentRecentEventsSummary(6)).toBe('Showing last 6 events');
+  });
+
+  it('returns canonical incident event filter presentation classes', () => {
+    expect(getAlertIncidentEventFilterContainerClass('compact')).toBe(
+      'flex flex-wrap items-center gap-2 text-[10px] text-muted',
+    );
+    expect(getAlertIncidentEventFilterContainerClass('panel')).toBe(
+      'flex flex-wrap items-center gap-1.5 rounded border border-border bg-surface-alt/50 p-2',
+    );
+    expect(getAlertIncidentEventFilterLabelClass('compact')).toBe(
+      'uppercase tracking-wide text-[9px] text-muted',
+    );
+    expect(getAlertIncidentEventFilterLabelClass('panel')).toBe(
+      'mr-1 text-xs font-medium text-muted',
+    );
+    expect(getAlertIncidentEventFilterActionButtonClass()).toBe(
+      'px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover',
+    );
+    expect(getAlertIncidentEventFilterChipClass(true, 'compact')).toBe(
+      'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+    );
+    expect(getAlertIncidentEventFilterChipClass(false, 'compact')).toBe(
+      'px-2 py-0.5 rounded border text-[10px] transition-colors border-border text-slate-500',
+    );
+    expect(getAlertIncidentEventFilterChipClass(false, 'panel')).toBe(
+      'px-2 py-0.5 rounded border text-[10px] transition-colors font-medium border-border text-muted hover:bg-surface-alt',
+    );
   });
 });

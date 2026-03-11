@@ -30,6 +30,10 @@ export const ALERT_RESOURCE_INCIDENT_VIEW_TITLE = 'View incidents for this resou
 
 const ALERT_INCIDENT_STATUS_BASE = 'px-2 py-0.5 rounded';
 const ALERT_INCIDENT_LEVEL_BASE = 'px-2 py-0.5 rounded';
+const ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE =
+  'px-2 py-0.5 rounded border text-[10px] transition-colors';
+
+export type AlertIncidentEventFilterVariant = 'compact' | 'panel';
 
 export function normalizeAlertIncidentStatus(
   status?: string | null,
@@ -170,4 +174,43 @@ export function getAlertResourceIncidentNoteSaveFailure() {
 
 export function getAlertResourceIncidentViewTitle() {
   return ALERT_RESOURCE_INCIDENT_VIEW_TITLE;
+}
+
+export function getAlertIncidentEventFilterContainerClass(
+  variant: AlertIncidentEventFilterVariant,
+): string {
+  if (variant === 'panel') {
+    return 'flex flex-wrap items-center gap-1.5 rounded border border-border bg-surface-alt/50 p-2';
+  }
+
+  return 'flex flex-wrap items-center gap-2 text-[10px] text-muted';
+}
+
+export function getAlertIncidentEventFilterLabelClass(
+  variant: AlertIncidentEventFilterVariant,
+): string {
+  if (variant === 'panel') {
+    return 'mr-1 text-xs font-medium text-muted';
+  }
+
+  return 'uppercase tracking-wide text-[9px] text-muted';
+}
+
+export function getAlertIncidentEventFilterActionButtonClass(): string {
+  return 'px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover';
+}
+
+export function getAlertIncidentEventFilterChipClass(
+  selected: boolean,
+  variant: AlertIncidentEventFilterVariant,
+): string {
+  if (selected) {
+    return `${ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE} border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300`;
+  }
+
+  if (variant === 'panel') {
+    return `${ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE} font-medium border-border text-muted hover:bg-surface-alt`;
+  }
+
+  return `${ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE} border-border text-slate-500`;
 }

@@ -21,6 +21,11 @@ import {
   unifiedTypeToAlertDisplayType,
 } from '@/features/alerts/helpers';
 import {
+  getAlertIncidentEventFilterActionButtonClass,
+  getAlertIncidentEventFilterChipClass,
+  getAlertIncidentEventFilterContainerClass,
+} from '@/utils/alertIncidentPresentation';
+import {
   getAlertQuietSuppressCardClass,
   getAlertQuietSuppressCheckboxClass,
 } from '@/utils/alertSchedulePresentation';
@@ -158,6 +163,26 @@ describe('quiet suppress presentation helpers', () => {
   it('returns the selected quiet suppress checkbox presentation', () => {
     expect(getAlertQuietSuppressCheckboxClass(true)).toBe(
       'mt-1 flex h-4 w-4 items-center justify-center rounded border-2 border-blue-500 bg-blue-500',
+    );
+  });
+});
+
+describe('incident event filter presentation helpers', () => {
+  it('returns the compact filter container presentation', () => {
+    expect(getAlertIncidentEventFilterContainerClass('compact')).toBe(
+      'flex flex-wrap items-center gap-2 text-[10px] text-muted',
+    );
+  });
+
+  it('returns the shared action button presentation', () => {
+    expect(getAlertIncidentEventFilterActionButtonClass()).toBe(
+      'px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover',
+    );
+  });
+
+  it('returns the selected compact chip presentation', () => {
+    expect(getAlertIncidentEventFilterChipClass(true, 'compact')).toBe(
+      'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
     );
   });
 });

@@ -2042,6 +2042,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertResourceIncidentRecentEventsSummary');
     expect(alertsPageSource).toContain('getAlertResourceIncidentNotePlaceholder');
     expect(alertsPageSource).toContain('getAlertResourceIncidentSaveNoteLabel');
+    expect(alertsPageSource).toContain('getAlertIncidentEventFilterContainerClass');
+    expect(alertsPageSource).toContain('getAlertIncidentEventFilterActionButtonClass');
+    expect(alertsPageSource).toContain('getAlertIncidentEventFilterChipClass');
     expect(alertsPageSource).toContain('getAlertBucketCountLabel');
     expect(alertsPageSource).toContain('getAlertHistorySearchPlaceholder');
     expect(alertsPageSource).toContain('getAlertsPageHeaderMeta');
@@ -2676,6 +2679,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertTimelineEmptyState');
     expect(alertOverviewTabSource).toContain('getAlertTimelineUnavailableState');
     expect(alertOverviewTabSource).toContain('getAlertTimelineFailureState');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentEventFilterContainerClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentEventFilterChipClass');
     expect(alertOverviewTabSource).not.toContain('Loading timeline...');
     expect(alertOverviewTabSource).not.toContain(
       'No timeline events match the selected filters.',
@@ -2700,6 +2705,15 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertHistorySearchPlaceholder',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentEventFilterContainerClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentEventFilterActionButtonClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentEventFilterChipClass',
     );
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertHistoryEmptyState',

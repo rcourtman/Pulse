@@ -66,6 +66,10 @@ import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
 import {
   getAlertHistoryStatusPresentation,
+  getAlertIncidentEventFilterActionButtonClass,
+  getAlertIncidentEventFilterChipClass,
+  getAlertIncidentEventFilterContainerClass,
+  getAlertIncidentEventFilterLabelClass,
   getAlertIncidentLevelBadgeClass,
   getAlertResourceIncidentAcknowledgedByLabel,
   getAlertResourceIncidentCountLabel,
@@ -3835,18 +3839,18 @@ export function IncidentEventFilters(props: {
   };
 
   return (
-    <div class="flex flex-wrap items-center gap-2 text-[10px] text-muted">
-      <span class="uppercase tracking-wide text-[9px] text-muted">Filters</span>
+    <div class={getAlertIncidentEventFilterContainerClass('compact')}>
+      <span class={getAlertIncidentEventFilterLabelClass('compact')}>Filters</span>
       <button
         type="button"
-        class="px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover"
+        class={getAlertIncidentEventFilterActionButtonClass()}
         onClick={() => props.setFilters(new Set(INCIDENT_EVENT_TYPES))}
       >
         All
       </button>
       <button
         type="button"
-        class="px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover"
+        class={getAlertIncidentEventFilterActionButtonClass()}
         onClick={() => props.setFilters(new Set())}
       >
         None
@@ -3857,11 +3861,7 @@ export function IncidentEventFilters(props: {
           return (
             <button
               type="button"
-              class={`px-2 py-0.5 rounded border text-[10px] ${
-                selected()
-                  ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                  : 'border-border text-slate-500'
-              }`}
+              class={getAlertIncidentEventFilterChipClass(selected(), 'compact')}
               onClick={() => toggleFilter(type)}
             >
               {INCIDENT_EVENT_LABELS[type]}

@@ -24,6 +24,9 @@ import {
   getAlertTimelineUnavailableState,
 } from '@/utils/alertOverviewPresentation';
 import {
+  getAlertIncidentEventFilterChipClass,
+  getAlertIncidentEventFilterContainerClass,
+  getAlertIncidentEventFilterLabelClass,
   getAlertResourceIncidentNotePlaceholder,
   getAlertResourceIncidentSaveNoteLabel,
 } from '@/utils/alertIncidentPresentation';
@@ -74,15 +77,15 @@ function IncidentEventFilters(props: {
   };
 
   return (
-    <div class="flex flex-wrap items-center gap-1.5 p-2 bg-surface-alt/50 rounded border border-border">
-      <span class="text-xs font-medium text-muted mr-1">Filter events:</span>
+    <div class={getAlertIncidentEventFilterContainerClass('panel')}>
+      <span class={getAlertIncidentEventFilterLabelClass('panel')}>Filter events:</span>
       <For each={INCIDENT_EVENT_TYPES}>
         {(type) => {
           const selected = () => props.filters().has(type);
           return (
             <button
               onClick={() => toggleFilter(type)}
-              class={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${selected() ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800' : ' text-muted border-border hover:bg-surface-alt'} border`}
+              class={getAlertIncidentEventFilterChipClass(selected(), 'panel')}
             >
               {INCIDENT_EVENT_LABELS[type]}
             </button>

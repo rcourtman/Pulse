@@ -64,3 +64,9 @@ The alerts schedule surface now also routes quiet-hour suppress-category card
 styling through `frontend-modern/src/utils/alertSchedulePresentation.ts`
 instead of leaving that selectable-card presentation inline in
 `frontend-modern/src/pages/Alerts.tsx`.
+
+Incident-event filter chip and filter-action styling now routes through
+`frontend-modern/src/utils/alertIncidentPresentation.ts` for both
+`frontend-modern/src/pages/Alerts.tsx` and
+`frontend-modern/src/features/alerts/OverviewTab.tsx` instead of allowing
+those alert timeline surfaces to fork their own filter presentation.
