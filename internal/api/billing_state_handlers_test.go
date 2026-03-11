@@ -134,6 +134,38 @@ func TestBillingStatePutAuditLogEmitted(t *testing.T) {
 	}
 }
 
+func TestBillingStateGetPreservesMissingPlanVersion(t *testing.T) {
+	router, baseDir := newBillingStateTestRouter(t, true)
+	store := config.NewFileBillingStore(baseDir)
+
+	if err := store.SaveBillingState("acme", &entitlements.BillingState{
+		Capabilities:      []string{"feature_x"},
+		Limits:            map[string]int64{"max_agents": 25},
+		MetersEnabled:     []string{"api_requests"},
+		PlanVersion:       "   ",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("seed billing state: %v", err)
+	}
+
+	rec := doBillingStateRequest(router, http.MethodGet, "/api/admin/orgs/acme/billing-state", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload entitlements.BillingState
+	if err := decodeResponse(rec, &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if payload.PlanVersion != "" {
+		t.Fatalf("expected empty plan_version, got %q", payload.PlanVersion)
+	}
+	if payload.SubscriptionState != entitlements.SubStateActive {
+		t.Fatalf("expected subscription_state %q, got %q", entitlements.SubStateActive, payload.SubscriptionState)
+	}
+}
+
 func TestBillingStatePutRejectsInvalidSubscriptionState(t *testing.T) {
 	router, _ := newBillingStateTestRouter(t, true)
 

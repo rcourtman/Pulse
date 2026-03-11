@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "subsystems": [
     {
       "id": "alerts",
@@ -74,6 +74,7 @@
         "exact_files": [
           "internal/unifiedresources/code_standards_test.go"
         ],
+        "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
             "id": "metrics-hot-path",
@@ -87,6 +88,20 @@
             "exact_files": [
               "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
               "internal/monitoring/monitor_metrics_slo_test.go"
+            ]
+          },
+          {
+            "id": "monitoring-runtime",
+            "label": "monitoring runtime proof",
+            "match_prefixes": [
+              "internal/monitoring/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/canonical_guardrails_test.go",
+              "internal/unifiedresources/code_standards_test.go"
             ]
           }
         ]
@@ -181,6 +196,7 @@
           "pkg/licensing/grant_claims_contract_test.go",
           "internal/api/contract_test.go"
         ],
+        "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
             "id": "pricing-pages",
@@ -196,6 +212,28 @@
               "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
               "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
               "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx"
+            ]
+          },
+          {
+            "id": "cloud-runtime-canonicalization",
+            "label": "cloud runtime canonicalization proof",
+            "match_prefixes": [
+              "pkg/licensing/",
+              "internal/api/licensing_",
+              "internal/api/payments_",
+              "internal/api/stripe_"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/billing_state_normalization_test.go",
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/database_source_test.go",
+              "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/stripe_subscription_test.go",
+              "internal/api/billing_state_handlers_test.go",
+              "internal/api/contract_test.go"
             ]
           }
         ]
@@ -285,6 +323,7 @@
           "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
           "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
         ],
+        "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
             "id": "page-controls-and-filters",
@@ -337,6 +376,31 @@
             "exact_files": [
               "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx"
+            ]
+          },
+          {
+            "id": "shared-component-guardrails",
+            "label": "shared primitive guardrail proof",
+            "match_prefixes": [
+              "frontend-modern/src/components/shared/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
+              "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
+              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+              "frontend-modern/src/components/shared/PageControls.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
+              "frontend-modern/src/components/shared/__tests__/CommandPaletteModal.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/Dialog.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/WhatsNewModal.test.tsx"
             ]
           }
         ]

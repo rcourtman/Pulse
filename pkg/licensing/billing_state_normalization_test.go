@@ -42,8 +42,8 @@ func TestNormalizeBillingState(t *testing.T) {
 	if normalized.SubscriptionState != SubStateActive {
 		t.Fatalf("subscription_state=%q, want %q", normalized.SubscriptionState, SubStateActive)
 	}
-	if normalized.PlanVersion != string(SubStateActive) {
-		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, string(SubStateActive))
+	if normalized.PlanVersion != "" {
+		t.Fatalf("plan_version=%q, want empty", normalized.PlanVersion)
 	}
 	if normalized.StripeCustomerID != "cus_123" {
 		t.Fatalf("stripe_customer_id=%q, want %q", normalized.StripeCustomerID, "cus_123")

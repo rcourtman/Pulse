@@ -11,6 +11,12 @@ Machine companion:
 
 Recent locked release decision:
 
+- 2026-03-11: Monitoring, frontend-primitives, and cloud-paid now ratchet
+  toward no-default governance. Their subsystem registry entries require
+  explicit path-policy coverage, monitoring/frontend guardrail tests now fail
+  on the highest-risk forbidden-path regressions, and hosted billing-state
+  normalization now preserves a missing `plan_version` instead of synthesizing
+  one from `subscription_state`.
 - 2026-03-11: Canonical governance now runs in both local hooks and CI.
   `scripts/release_control/canonical_completion_guard.py` can validate either
   staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`

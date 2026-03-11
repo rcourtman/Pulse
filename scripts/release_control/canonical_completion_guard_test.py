@@ -1,14 +1,56 @@
 import unittest
 
 from canonical_completion_guard import (
+    REPO_ROOT,
     SUBSYSTEM_REGISTRY,
     build_verification_requirements,
     infer_impacted_subsystems,
+    is_ignored_runtime_file,
+    is_test_or_fixture,
     load_subsystem_rules,
+    path_policy_matches,
     parse_args,
     staged_verification_files_for_requirement,
     stdin_files,
+    subsystem_matches_path,
 )
+
+
+def owned_runtime_files(rule: dict) -> list[str]:
+    owned: set[str] = set()
+
+    for prefix in rule.get("owned_prefixes", []):
+        root = REPO_ROOT / prefix
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            if is_test_or_fixture(rel) or is_ignored_runtime_file(rel):
+                continue
+            if subsystem_matches_path(rule, rel):
+                owned.add(rel)
+
+    for rel in rule.get("owned_files", []):
+        path = REPO_ROOT / rel
+        if not path.exists() or not path.is_file():
+            continue
+        if is_test_or_fixture(rel) or is_ignored_runtime_file(rel):
+            continue
+        if subsystem_matches_path(rule, rel):
+            owned.add(rel)
+
+    return sorted(owned)
+
+
+def unmatched_owned_runtime_files(rule: dict) -> list[str]:
+    policies = list(rule.get("verification", {}).get("path_policies", []))
+    return [
+        rel
+        for rel in owned_runtime_files(rule)
+        if not any(path_policy_matches(policy, rel) for policy in policies)
+    ]
 
 
 class CanonicalCompletionGuardTest(unittest.TestCase):
@@ -48,6 +90,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "allow_same_subsystem_tests": True,
                         "test_prefixes": [],
                         "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                        "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
                                 "id": "metrics-hot-path",
@@ -60,17 +103,32 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                                     "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
                                     "internal/monitoring/monitor_metrics_slo_test.go",
                                 ],
+                            },
+                            {
+                                "id": "monitoring-runtime",
+                                "label": "monitoring runtime proof",
+                                "match_prefixes": ["internal/monitoring/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": [
+                                    "internal/monitoring/canonical_guardrails_test.go",
+                                    "internal/unifiedresources/code_standards_test.go",
+                                ],
                             }
                         ],
                     },
                     "verification_requirements": [
                         {
-                            "id": "default",
-                            "label": "default subsystem verification",
+                            "id": "monitoring-runtime",
+                            "label": "monitoring runtime proof",
                             "touched_runtime_files": ["internal/monitoring/monitor.go"],
-                            "allow_same_subsystem_tests": True,
+                            "allow_same_subsystem_tests": False,
                             "test_prefixes": [],
-                            "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                            "exact_files": [
+                                "internal/monitoring/canonical_guardrails_test.go",
+                                "internal/unifiedresources/code_standards_test.go",
+                            ],
                         }
                     ],
                 }
@@ -236,7 +294,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(matches, ["internal/unifiedresources/code_standards_test.go"])
 
-    def test_same_subsystem_test_counts_when_registry_allows_it(self):
+    def test_monitoring_runtime_rejects_arbitrary_same_subsystem_test(self):
         monitoring_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "monitoring")
         requirement = build_verification_requirements(
             monitoring_rule,
@@ -247,7 +305,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             requirement,
             ["internal/monitoring/monitor_extra_coverage_test.go"],
         )
-        self.assertEqual(matches, ["internal/monitoring/monitor_extra_coverage_test.go"])
+        self.assertEqual(matches, [])
 
     def test_api_contracts_reject_arbitrary_same_subsystem_test(self):
         api_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
@@ -364,6 +422,23 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
     def test_parse_args_supports_files_from_stdin(self):
         args = parse_args(["--files-from-stdin"])
         self.assertTrue(args.files_from_stdin)
+
+    def test_explicit_coverage_subsystems_have_no_unmatched_runtime_files(self):
+        explicit_rules = {
+            rule["id"]: rule
+            for rule in load_subsystem_rules()
+            if rule["verification"].get("require_explicit_path_policy_coverage")
+        }
+        self.assertEqual(
+            set(explicit_rules),
+            {"monitoring", "cloud-paid", "frontend-primitives"},
+        )
+        for subsystem_id, rule in explicit_rules.items():
+            self.assertEqual(
+                unmatched_owned_runtime_files(rule),
+                [],
+                msg=f"{subsystem_id} has runtime files that still rely on default verification fallback",
+            )
 
 
 if __name__ == "__main__":

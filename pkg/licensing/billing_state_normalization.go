@@ -66,9 +66,8 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	if normalized.MetersEnabled == nil {
 		normalized.MetersEnabled = []string{}
 	}
-	if normalized.PlanVersion == "" && normalized.SubscriptionState != "" {
-		normalized.PlanVersion = string(normalized.SubscriptionState)
-	}
+	// Preserve absence when the stored hosted billing record has no plan label.
+	// Canonical defaults still come from DefaultBillingState()/call-site defaults.
 	normalized.PlanVersion = CanonicalizePlanVersion(normalized.PlanVersion)
 	if limit, known := CloudPlanAgentLimits[normalized.PlanVersion]; known {
 		normalized.Limits["max_agents"] = int64(limit)

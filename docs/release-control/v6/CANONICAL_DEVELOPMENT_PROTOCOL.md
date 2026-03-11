@@ -95,6 +95,8 @@ tests only when the registry explicitly allows them.
 When a subsystem defines ordered `path_policies`, each touched runtime file must
 satisfy the first matching proof policy for that file. Files that match no
 explicit path policy fall back to the subsystem default verification policy.
+Subsystems can ratchet further by requiring explicit path-policy coverage for
+all owned runtime files, eliminating default fallback for that subsystem.
 
 ## Guardrails
 

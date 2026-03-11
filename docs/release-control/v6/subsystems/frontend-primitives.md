@@ -35,3 +35,8 @@ extends shared components instead of creating new local variants.
 The frontend already has several guardrail tests. The next step is to keep
 turning repeated local patterns into explicit shared primitives with hard usage
 bounds.
+
+The subsystem registry now also requires explicit proof-policy coverage for all
+shared runtime files, and shared-component guardrails fail if raw table
+composition is reintroduced in new shared components outside the canonical
+allowlist.

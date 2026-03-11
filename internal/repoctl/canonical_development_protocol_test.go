@@ -95,13 +95,14 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 	rel := "docs/release-control/v6/subsystems/registry.json"
 	content := readRepoFile(t, rel)
 	assertContainsAll(t, rel, content, []string{
-		"\"version\": 3",
+		"\"version\": 4",
 		"\"subsystems\":",
 		"\"verification\":",
 		"\"allow_same_subsystem_tests\":",
 		"\"test_prefixes\":",
 		"\"exact_files\":",
 		"\"path_policies\":",
+		"\"require_explicit_path_policy_coverage\":",
 		"docs/release-control/v6/subsystems/alerts.md",
 		"docs/release-control/v6/subsystems/monitoring.md",
 		"docs/release-control/v6/subsystems/unified-resources.md",

@@ -67,6 +67,9 @@ Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`
 or `suspended` into the canonical plan field.
+Hosted billing-state normalization now follows the same rule: a missing
+`plan_version` must remain missing instead of being synthesized from
+`subscription_state`, while explicit trial defaults remain explicit.
 Legacy MSP plan aliases are input-only compatibility shims. Live runtime
 defaults, fallback provisioning, entitlement issuance, and limit/workspace
 lookups must resolve to canonical `msp_starter` rather than preserving

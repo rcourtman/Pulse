@@ -82,3 +82,8 @@ Storage-backup preservation now also derives node-to-storage membership from
 canonical `ReadState.StoragePools()` instead of from snapshot-owned storage
 arrays, leaving only persisted backup/cache payloads in this path on direct
 snapshot state.
+
+Canonical monitoring guardrails now also fail if resource-array access is
+reintroduced through `GetState().VMs`/`Containers`/`Nodes`/`Hosts`/`Storage`/
+`DockerHosts`/`PBSInstances` helpers, and the subsystem registry now requires
+explicit proof-policy coverage for all owned runtime files.
