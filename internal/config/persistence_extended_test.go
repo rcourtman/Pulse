@@ -59,7 +59,7 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 			CompletedAt:      time.Now().Add(-59 * time.Minute),
 			DurationMs:       60000,
 			Type:             "quick",
-			AlertID:          "instance:node:100::metric/cpu",
+			AlertIdentifier:  "instance:node:100::metric/cpu",
 			ResourcesChecked: 10,
 			NewFindings:      2,
 		},
@@ -77,8 +77,8 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 	if len(history.Runs) != 1 || history.Runs[0].ID != "run-1" {
 		t.Errorf("Patrol history mismatch: %+v", history)
 	}
-	if history.Runs[0].AlertID != "instance:node:100::metric/cpu" {
-		t.Errorf("Expected canonical alert ID after load, got %q", history.Runs[0].AlertID)
+	if history.Runs[0].AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Errorf("Expected canonical alert identifier after load, got %q", history.Runs[0].AlertIdentifier)
 	}
 
 	// Test non-existent file
@@ -94,8 +94,8 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 
 func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	record := config.PatrolRunRecord{
-		ID:      "run-1",
-		AlertID: "instance:node:100::metric/cpu",
+		ID:              "run-1",
+		AlertIdentifier: "instance:node:100::metric/cpu",
 	}
 
 	raw, err := json.Marshal(record)
@@ -124,8 +124,8 @@ func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	}`), &decodedCanonical); err != nil {
 		t.Fatalf("unmarshal canonical patrol run: %v", err)
 	}
-	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected canonical alert identifier to load, got %q", decodedCanonical.AlertID)
+	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert identifier to load, got %q", decodedCanonical.AlertIdentifier)
 	}
 
 	var decodedLegacy config.PatrolRunRecord
@@ -135,8 +135,8 @@ func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	}`), &decodedLegacy); err != nil {
 		t.Fatalf("unmarshal legacy patrol run: %v", err)
 	}
-	if decodedLegacy.AlertID != "legacy-alert-id" {
-		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertID)
+	if decodedLegacy.AlertIdentifier != "legacy-alert-id" {
+		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertIdentifier)
 	}
 }
 

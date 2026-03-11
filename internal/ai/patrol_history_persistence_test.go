@@ -229,8 +229,6 @@ func TestPatrolHistoryPersistenceAdapter_NormalizesAlertIdentity(t *testing.T) {
 			CompletedAt:     time.Now(),
 			DurationMs:      60000,
 			AlertIdentifier: "instance:node:100::metric/cpu",
-			LegacyAlertID:   "legacy-alert-id",
-			AlertID:         "legacy-alert-id",
 		},
 	}
 

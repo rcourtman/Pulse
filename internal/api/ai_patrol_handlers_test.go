@@ -331,7 +331,7 @@ func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
 		CompletedAt:      time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC),
 		DurationMs:       60000,
 		Type:             "patrol",
-		AlertID:          "instance:node:100::metric/cpu",
+		AlertIdentifier:  "instance:node:100::metric/cpu",
 		ResourcesChecked: 1,
 		FindingsSummary:  "ok",
 		FindingIDs:       []string{},

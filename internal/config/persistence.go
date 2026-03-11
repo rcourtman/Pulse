@@ -2089,7 +2089,7 @@ type PatrolRunRecord struct {
 	EffectiveScopeResourceIDs []string  `json:"effective_scope_resource_ids,omitempty"`
 	ScopeResourceTypes        []string  `json:"scope_resource_types,omitempty"`
 	ScopeContext              string    `json:"scope_context,omitempty"`
-	AlertID                   string    `json:"alert_id,omitempty"`
+	AlertIdentifier           string    `json:"alert_identifier,omitempty"`
 	FindingID                 string    `json:"finding_id,omitempty"`
 	ResourcesChecked          int       `json:"resources_checked"`
 	// Breakdown by resource type
@@ -2167,14 +2167,14 @@ func canonicalPatrolAlertIdentifier(alertIdentifier, legacyAlertID, alertID stri
 }
 
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
-	alertIdentifier := canonicalPatrolAlertIdentifier("", "", record.AlertID)
-	record.AlertID = alertIdentifier
+	alertIdentifier := canonicalPatrolAlertIdentifier(record.AlertIdentifier, "", "")
+	record.AlertIdentifier = alertIdentifier
 	return record
 }
 
 func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 	normalized := normalizePatrolRunRecord(r)
-	alertIdentifier := strings.TrimSpace(normalized.AlertID)
+	alertIdentifier := strings.TrimSpace(normalized.AlertIdentifier)
 	return json.Marshal(patrolRunRecordJSON{
 		ID:                        normalized.ID,
 		StartedAt:                 normalized.StartedAt,
@@ -2230,7 +2230,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		EffectiveScopeResourceIDs: payload.EffectiveScopeResourceIDs,
 		ScopeResourceTypes:        payload.ScopeResourceTypes,
 		ScopeContext:              payload.ScopeContext,
-		AlertID:                   alertIdentifier,
+		AlertIdentifier:           alertIdentifier,
 		FindingID:                 payload.FindingID,
 		ResourcesChecked:          payload.ResourcesChecked,
 		NodesChecked:              payload.NodesChecked,

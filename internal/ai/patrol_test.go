@@ -537,7 +537,6 @@ func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	record := PatrolRunRecord{
 		ID:              "run-1",
 		AlertIdentifier: "instance:node:100::metric/cpu",
-		LegacyAlertID:   "legacy-alert-id",
 		StartedAt:       time.Now(),
 		CompletedAt:     time.Now(),
 	}
