@@ -1924,7 +1924,6 @@ type aiFindingRecordAlias AIFindingRecord
 type aiFindingRecordJSON struct {
 	aiFindingRecordAlias
 	AlertIdentifier string `json:"alert_identifier,omitempty"`
-	LegacyAlertID   string `json:"alert_id,omitempty"`
 }
 
 func (r AIFindingRecord) MarshalJSON() ([]byte, error) {
@@ -1942,9 +1941,6 @@ func (r *AIFindingRecord) UnmarshalJSON(data []byte) error {
 
 	*r = AIFindingRecord(payload.aiFindingRecordAlias)
 	r.AlertIdentifier = strings.TrimSpace(payload.AlertIdentifier)
-	if r.AlertIdentifier == "" {
-		r.AlertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
-	}
 	return nil
 }
 
@@ -2159,8 +2155,6 @@ type patrolRunRecordJSON struct {
 	ScopeResourceTypes        []string         `json:"scope_resource_types,omitempty"`
 	ScopeContext              string           `json:"scope_context,omitempty"`
 	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
-	LegacyAlertID             string           `json:"legacy_alert_id,omitempty"`
-	AlertID                   string           `json:"alert_id,omitempty"`
 	FindingID                 string           `json:"finding_id,omitempty"`
 	ResourcesChecked          int              `json:"resources_checked"`
 	NodesChecked              int              `json:"nodes_checked"`
@@ -2185,18 +2179,12 @@ type patrolRunRecordJSON struct {
 	ToolCallCount             int              `json:"tool_call_count"`
 }
 
-func canonicalPatrolAlertIdentifier(alertIdentifier, legacyAlertID, alertID string) string {
-	if normalized := strings.TrimSpace(alertIdentifier); normalized != "" {
-		return normalized
-	}
-	if normalized := strings.TrimSpace(alertID); normalized != "" {
-		return normalized
-	}
-	return strings.TrimSpace(legacyAlertID)
+func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
+	return strings.TrimSpace(alertIdentifier)
 }
 
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
-	alertIdentifier := canonicalPatrolAlertIdentifier(record.AlertIdentifier, "", "")
+	alertIdentifier := canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	record.AlertIdentifier = alertIdentifier
 	return record
 }
@@ -2247,7 +2235,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	alertIdentifier := canonicalPatrolAlertIdentifier(payload.AlertIdentifier, payload.LegacyAlertID, payload.AlertID)
+	alertIdentifier := canonicalPatrolAlertIdentifier(payload.AlertIdentifier)
 	*r = PatrolRunRecord{
 		ID:                        payload.ID,
 		StartedAt:                 payload.StartedAt,

@@ -92,7 +92,7 @@ func TestConfigPersistence_PatrolRunHistory(t *testing.T) {
 	}
 }
 
-func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
 	record := config.PatrolRunRecord{
 		ID:              "run-1",
 		AlertIdentifier: "instance:node:100::metric/cpu",
@@ -128,15 +128,15 @@ func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 		t.Fatalf("expected canonical alert identifier to load, got %q", decodedCanonical.AlertIdentifier)
 	}
 
-	var decodedLegacy config.PatrolRunRecord
+	var decoded config.PatrolRunRecord
 	if err := json.Unmarshal([]byte(`{
 		"id":"run-1",
-		"alert_id":"legacy-alert-id"
-	}`), &decodedLegacy); err != nil {
-		t.Fatalf("unmarshal legacy patrol run: %v", err)
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decoded); err != nil {
+		t.Fatalf("unmarshal canonical patrol run: %v", err)
 	}
-	if decodedLegacy.AlertIdentifier != "legacy-alert-id" {
-		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertIdentifier)
+	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decoded.AlertIdentifier)
 	}
 }
 

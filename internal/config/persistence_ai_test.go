@@ -46,7 +46,7 @@ func TestPersistence_AIFindings(t *testing.T) {
 	assert.Empty(t, loaded.Findings)
 }
 
-func TestAIFindingRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+func TestAIFindingRecordJSONCanonicalOutput(t *testing.T) {
 	record := AIFindingRecord{
 		ID:              "finding-1",
 		Description:     "analysis",
@@ -74,15 +74,15 @@ func TestAIFindingRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	}`), &decodedCanonical))
 	assert.Equal(t, "instance:node:100::metric/cpu", decodedCanonical.AlertIdentifier)
 
-	var decodedLegacy AIFindingRecord
+	var decoded AIFindingRecord
 	require.NoError(t, json.Unmarshal([]byte(`{
 		"id":"finding-1",
 		"description":"analysis",
 		"detected_at":"2026-03-11T00:00:00Z",
 		"last_seen_at":"2026-03-11T00:00:00Z",
-		"alert_id":"legacy-alert-id"
-	}`), &decodedLegacy))
-	assert.Equal(t, "legacy-alert-id", decodedLegacy.AlertIdentifier)
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decoded))
+	assert.Equal(t, "instance:node:100::metric/cpu", decoded.AlertIdentifier)
 }
 
 func TestPersistence_AIUsageHistory(t *testing.T) {
