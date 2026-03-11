@@ -23,7 +23,7 @@ func TestNewFindingsPersistenceAdapter(t *testing.T) {
 	}
 }
 
-func TestFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
+func TestFindingJSONCanonicalOutput(t *testing.T) {
 	finding := Finding{
 		ID:              "finding-1",
 		Severity:        FindingSeverityWarning,
@@ -68,7 +68,7 @@ func TestFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
 	}
 
-	var decodedLegacy Finding
+	var decoded Finding
 	if err := json.Unmarshal([]byte(`{
 		"id":"finding-1",
 		"severity":"warning",
@@ -77,12 +77,12 @@ func TestFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 		"title":"High CPU",
 		"detected_at":"2026-03-11T00:00:00Z",
 		"last_seen_at":"2026-03-11T00:00:00Z",
-		"alert_id":"legacy-alert-id"
-	}`), &decodedLegacy); err != nil {
-		t.Fatalf("unmarshal legacy finding: %v", err)
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decoded); err != nil {
+		t.Fatalf("unmarshal canonical finding: %v", err)
 	}
-	if decodedLegacy.AlertIdentifier != "legacy-alert-id" {
-		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertIdentifier)
+	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decoded.AlertIdentifier)
 	}
 }
 

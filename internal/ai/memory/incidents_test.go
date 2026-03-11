@@ -9,7 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
-func TestIncidentJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
+func TestIncidentJSONCanonicalOutput(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now().UTC().Truncate(time.Second)
@@ -43,7 +43,7 @@ func TestIncidentJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	var decoded Incident
 	if err := json.Unmarshal([]byte(`{
 		"id":"incident-2",
-		"alertId":"legacy-alert-id",
+		"alertIdentifier":"instance:node:100::metric/cpu",
 		"alertType":"cpu",
 		"level":"warning",
 		"resourceId":"resource-2",
@@ -51,10 +51,10 @@ func TestIncidentJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 		"status":"open",
 		"openedAt":"2026-03-01T00:00:00Z"
 	}`), &decoded); err != nil {
-		t.Fatalf("decode legacy incident: %v", err)
+		t.Fatalf("decode canonical incident: %v", err)
 	}
-	if decoded.AlertIdentifier != "legacy-alert-id" {
-		t.Fatalf("expected legacy alertId to load, got %q", decoded.AlertIdentifier)
+	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier to load, got %q", decoded.AlertIdentifier)
 	}
 }
 

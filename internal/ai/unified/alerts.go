@@ -134,7 +134,6 @@ type unifiedFindingJSON struct {
 	Recommendation         string                         `json:"recommendation,omitempty"`
 	Evidence               string                         `json:"evidence,omitempty"`
 	AlertIdentifier        string                         `json:"alert_identifier,omitempty"`
-	LegacyAlertID          string                         `json:"alert_id,omitempty"`
 	AlertType              string                         `json:"alert_type,omitempty"`
 	Value                  float64                        `json:"value,omitempty"`
 	Threshold              float64                        `json:"threshold,omitempty"`
@@ -220,11 +219,6 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
-	if alertIdentifier == "" {
-		alertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
-	}
-
 	*f = UnifiedFinding{
 		ID:                     payload.ID,
 		Source:                 payload.Source,
@@ -238,7 +232,7 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 		Description:            payload.Description,
 		Recommendation:         payload.Recommendation,
 		Evidence:               payload.Evidence,
-		AlertIdentifier:        alertIdentifier,
+		AlertIdentifier:        strings.TrimSpace(payload.AlertIdentifier),
 		AlertType:              payload.AlertType,
 		Value:                  payload.Value,
 		Threshold:              payload.Threshold,

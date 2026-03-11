@@ -69,7 +69,6 @@ type Incident struct {
 type incidentJSON struct {
 	ID              string          `json:"id"`
 	AlertIdentifier string          `json:"alertIdentifier"`
-	LegacyAlertID   string          `json:"alertId,omitempty"`
 	AlertType       string          `json:"alertType"`
 	Level           string          `json:"level"`
 	ResourceID      string          `json:"resourceId"`
@@ -118,13 +117,9 @@ func (i *Incident) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return err
 	}
-	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
-	if alertIdentifier == "" {
-		alertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
-	}
 	*i = Incident{
 		ID:              payload.ID,
-		AlertIdentifier: alertIdentifier,
+		AlertIdentifier: strings.TrimSpace(payload.AlertIdentifier),
 		AlertType:       payload.AlertType,
 		Level:           payload.Level,
 		ResourceID:      payload.ResourceID,

@@ -166,7 +166,6 @@ type findingJSON struct {
 	AcknowledgedAt         *time.Time              `json:"acknowledged_at,omitempty"`
 	SnoozedUntil           *time.Time              `json:"snoozed_until,omitempty"`
 	AlertIdentifier        string                  `json:"alert_identifier,omitempty"`
-	LegacyAlertID          string                  `json:"alert_id,omitempty"`
 	DismissedReason        string                  `json:"dismissed_reason,omitempty"`
 	UserNote               string                  `json:"user_note,omitempty"`
 	TimesRaised            int                     `json:"times_raised"`
@@ -228,11 +227,6 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
-	if alertIdentifier == "" {
-		alertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
-	}
-
 	*f = Finding{
 		ID:                     payload.ID,
 		Key:                    payload.Key,
@@ -254,7 +248,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		ResolveReason:          payload.ResolveReason,
 		AcknowledgedAt:         payload.AcknowledgedAt,
 		SnoozedUntil:           payload.SnoozedUntil,
-		AlertIdentifier:        alertIdentifier,
+		AlertIdentifier:        strings.TrimSpace(payload.AlertIdentifier),
 		DismissedReason:        payload.DismissedReason,
 		UserNote:               payload.UserNote,
 		TimesRaised:            payload.TimesRaised,

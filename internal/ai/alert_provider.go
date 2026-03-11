@@ -228,7 +228,6 @@ type AlertInvestigationRequest struct {
 
 type alertInvestigationRequestJSON struct {
 	AlertIdentifier string  `json:"alertIdentifier,omitempty"`
-	LegacyAlertID   string  `json:"alert_id,omitempty"`
 	ResourceID      string  `json:"resource_id"`
 	ResourceName    string  `json:"resource_name"`
 	ResourceType    string  `json:"resource_type"`
@@ -266,13 +265,8 @@ func (r *AlertInvestigationRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
-	if alertIdentifier == "" {
-		alertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
-	}
-
 	*r = AlertInvestigationRequest{
-		AlertIdentifier: alertIdentifier,
+		AlertIdentifier: strings.TrimSpace(payload.AlertIdentifier),
 		ResourceID:      payload.ResourceID,
 		ResourceName:    payload.ResourceName,
 		ResourceType:    payload.ResourceType,
