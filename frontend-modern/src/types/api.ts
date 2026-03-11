@@ -1000,9 +1000,9 @@ export interface IncidentEvent {
 
 export interface Incident {
   id: string;
-  alertIdentifier?: string;
+  alertIdentifier: string;
   legacyAlertId?: string;
-  alertId: string;
+  alertId?: string;
   alertType: string;
   level: string;
   resourceId: string;
