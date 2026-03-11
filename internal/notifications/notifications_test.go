@@ -3609,8 +3609,8 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		}
 	})
 
-	t.Run("generic fallback is backward compatible with no service", func(t *testing.T) {
-		// When no service is set, the generic JSON fallback should still work
+	t.Run("generic fallback uses canonical alert identifier with no service", func(t *testing.T) {
+		// When no service is set, the generic JSON fallback should still work.
 		var gotBody []byte
 		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
@@ -3649,8 +3649,8 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		}
 	})
 
-	t.Run("generic service also uses backward compatible fallback", func(t *testing.T) {
-		// When service is explicitly "generic", it should use the same legacy payload
+	t.Run("generic service also uses canonical alert identifier fallback", func(t *testing.T) {
+		// When service is explicitly "generic", it should use the same generic payload shape.
 		var gotBody []byte
 		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
@@ -3706,7 +3706,7 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 			URL:      server.URL + "/custom",
 			Enabled:  true,
 			Service:  "discord",
-			Template: `{"custom": true, "event": "{{.Event}}", "alert_id": "{{.ID}}"}`,
+			Template: `{"custom": true, "event": "{{.Event}}", "alert_identifier": "{{.ID}}"}`,
 		}
 
 		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)

@@ -6832,7 +6832,7 @@ func TestReevaluateActiveAlertsLocked(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
 
-		// Alert ID without dash separator
+		// Identifier without a parseable metric suffix
 		m.activeAlerts["singlepart"] = &Alert{ID: "singlepart", Type: "cpu", Value: 90}
 
 		m.mu.Lock()
