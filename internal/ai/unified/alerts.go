@@ -517,7 +517,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 				existing.ResolvedAt = nil
 				log.Debug().
 					Str("finding_id", existing.ID).
-					Str("alert_id", alertID).
+					Str("alert_identifier", alertID).
 					Msg("Re-opened resolved finding due to alert re-firing")
 			}
 
@@ -555,7 +555,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 
 	log.Debug().
 		Str("finding_id", finding.ID).
-		Str("alert_id", alertID).
+		Str("alert_identifier", alertID).
 		Str("resource", finding.ResourceName).
 		Str("category", string(finding.Category)).
 		Msg("Created unified finding from alert")
@@ -713,7 +713,7 @@ func (s *UnifiedStore) ResolveByAlert(alertID string) bool {
 
 	log.Debug().
 		Str("finding_id", findingID).
-		Str("alert_id", alertID).
+		Str("alert_identifier", alertID).
 		Msg("Resolved unified finding from alert")
 
 	return true

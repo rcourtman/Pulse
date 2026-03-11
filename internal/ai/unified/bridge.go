@@ -164,7 +164,7 @@ func (b *AlertBridge) syncExistingAlerts() {
 		_, isNew := b.store.AddFromAlert(alert)
 		if isNew {
 			log.Debug().
-				Str("alert_id", alert.GetAlertID()).
+				Str("alert_identifier", alert.GetAlertID()).
 				Str("resource", alert.GetResourceName()).
 				Msg("Synced existing alert to unified store")
 		}
@@ -192,7 +192,7 @@ func (b *AlertBridge) handleNewAlert(alert AlertAdapter) {
 	if isNew {
 		log.Info().
 			Str("finding_id", finding.ID).
-			Str("alert_id", alert.GetAlertID()).
+			Str("alert_identifier", alert.GetAlertID()).
 			Str("resource", finding.ResourceName).
 			Str("category", string(finding.Category)).
 			Str("severity", string(finding.Severity)).
@@ -228,7 +228,7 @@ func (b *AlertBridge) handleAlertResolved(alertID string) {
 	// Resolve the unified finding
 	if b.store.ResolveByAlert(alertID) {
 		log.Info().
-			Str("alert_id", alertID).
+			Str("alert_identifier", alertID).
 			Msg("Resolved unified finding from alert")
 
 		// Cancel any pending enhancement
