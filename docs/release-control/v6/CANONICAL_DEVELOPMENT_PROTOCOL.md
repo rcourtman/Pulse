@@ -48,8 +48,9 @@ point for validating subsystem ownership, proof routing, registry lane
 bindings, canonical ordering for unordered registry lists, and path-policy
 reachability under first-match precedence.
 `scripts/release_control/contract_audit.py --check` is the machine audit entry
-point for validating structured contract metadata, section presence/order, and
-registry/status linkage for subsystem contracts.
+point for validating structured contract metadata, section presence/order,
+registry/status linkage, and canonical path references inside subsystem
+contracts.
 
 ## Subsystem Contracts
 

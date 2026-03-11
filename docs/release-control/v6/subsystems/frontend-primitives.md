@@ -26,7 +26,7 @@ extends shared components instead of creating new local variants.
 
 ## Extension Points
 
-1. Add shared primitives in `components/shared/`
+1. Add shared primitives in `frontend-modern/src/components/shared/`
 2. Add feature-specific presentation only when no shared primitive should own it
 3. Add guardrail tests when a new shared pattern is introduced
 

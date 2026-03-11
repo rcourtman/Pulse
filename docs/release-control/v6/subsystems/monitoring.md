@@ -29,7 +29,7 @@ truth for live infrastructure data.
 
 1. Add pollers/providers through `internal/monitoring/`
 2. Add typed read access through `internal/unifiedresources/views.go`
-3. Add unified supplemental ingest through `poll_providers.go`
+3. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
 
 ## Forbidden Paths
 

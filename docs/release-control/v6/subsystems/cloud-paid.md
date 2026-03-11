@@ -51,7 +51,7 @@ agreement, and cloud-specific enforcement rules.
 6. Add or change license-server transport through `pkg/licensing/license_server_client.go`
 7. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
 8. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
-9. Add or change cloud plan presentation through `CloudPricing.tsx`
+9. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 10. Add contract tests where runtime and pricing need to stay aligned
 
 ## Forbidden Paths

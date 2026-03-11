@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
@@ -40,6 +41,18 @@ METADATA_REQUIRED_FIELDS = {
     "status_file",
     "registry_file",
 }
+PATH_SUFFIXES = (
+    ".go",
+    ".json",
+    ".md",
+    ".mjs",
+    ".py",
+    ".sh",
+    ".ts",
+    ".tsx",
+    ".yaml",
+    ".yml",
+)
 
 
 def load_registry_payload() -> dict[str, Any]:
@@ -66,6 +79,42 @@ def section_body(lines: list[str], heading: str) -> list[str]:
             end = index
             break
     return lines[start:end]
+
+
+def section_list_items(body_lines: list[str]) -> list[tuple[int, str]]:
+    items: list[tuple[int, str]] = []
+    for index, line in enumerate(body_lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for marker in [f"{n}." for n in range(1, 100)]:
+            if stripped.startswith(marker + " "):
+                items.append((index, stripped[len(marker) + 1 :]))
+                break
+    return items
+
+
+def looks_like_repo_path(token: str) -> bool:
+    candidate = token.strip()
+    return "/" in candidate or candidate.endswith(PATH_SUFFIXES)
+
+
+def validate_repo_path_token(token: str, *, rel: str, heading: str, errors: list[str]) -> None:
+    raw = token.rstrip("/") if token.endswith("/") else token
+    if not raw:
+        errors.append(f"{rel} {heading} contains non-clean repo-relative path {token!r}")
+        return
+    candidate = Path(raw)
+    normalized = candidate.as_posix()
+    if candidate.is_absolute() or raw.startswith("../") or "/../" in raw or normalized != raw:
+        errors.append(f"{rel} {heading} contains non-clean repo-relative path {token!r}")
+        return
+    resolved = REPO_ROOT / raw
+    if not resolved.exists():
+        errors.append(f"{rel} {heading} references missing path {token!r}")
+        return
+    if token.endswith("/") and not resolved.is_dir():
+        errors.append(f"{rel} {heading} expects directory path {token!r}")
 
 
 def parse_contract_metadata(body_lines: list[str]) -> tuple[dict[str, Any] | None, list[str]]:
@@ -129,8 +178,23 @@ def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
             errors.append(f"{rel} section {heading!r} must not be empty")
             continue
         if heading in LIST_SECTIONS:
-            if not any(line.lstrip().startswith(tuple(f"{n}." for n in range(1, 10))) for line in body):
+            items = section_list_items(body)
+            if not items:
                 errors.append(f"{rel} section {heading!r} must contain a numbered list")
+                continue
+            if heading == "## Canonical Files":
+                for _, item in items:
+                    path_tokens = [token for token in re.findall(r"`([^`]+)`", item) if looks_like_repo_path(token)]
+                    if not path_tokens:
+                        errors.append(f"{rel} section {heading!r} entries must include at least one repo path")
+                        continue
+                    for token in path_tokens:
+                        validate_repo_path_token(token, rel=rel, heading=heading, errors=errors)
+            if heading == "## Extension Points":
+                for _, item in items:
+                    for token in re.findall(r"`([^`]+)`", item):
+                        if looks_like_repo_path(token):
+                            validate_repo_path_token(token, rel=rel, heading=heading, errors=errors)
 
     return {
         "title": lines[0].strip() if lines else "",

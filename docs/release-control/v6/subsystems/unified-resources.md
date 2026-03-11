@@ -27,8 +27,8 @@ cross-source deduplication.
 
 ## Extension Points
 
-1. Add new resource types and identity fields in `types.go`
-2. Add typed accessors and views in `views.go`
+1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
+2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
 
 ## Forbidden Paths
