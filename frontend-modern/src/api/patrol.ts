@@ -400,11 +400,6 @@ export interface PatrolRunRecord {
   scope_resource_types?: string[];
   scope_context?: string;
   alertIdentifier?: string;
-  legacyAlertId?: string;
-  alertId?: string;
-  alert_identifier?: string;
-  legacy_alert_id?: string;
-  alert_id?: string;
   finding_id?: string;
   resources_checked: number;
   nodes_checked: number;
@@ -444,15 +439,19 @@ function normalizeHistoryLimit(limit: number): number {
 
 function normalizePatrolRunRecord(run: PatrolRunRecord): PatrolRunRecord {
   const alertIdentifier = run.alert_identifier ?? run.alert_id;
-  const legacyAlertId = run.legacy_alert_id ?? run.alert_id ?? alertIdentifier;
+  const {
+    alert_identifier: _alertIdentifier,
+    legacy_alert_id: _legacyAlertId,
+    alert_id: _alertId,
+    ...rest
+  } = run as PatrolRunRecord & {
+    alert_identifier?: string;
+    legacy_alert_id?: string;
+    alert_id?: string;
+  };
   return {
-    ...run,
+    ...rest,
     ...(alertIdentifier ? { alertIdentifier } : {}),
-    ...(legacyAlertId ? { legacyAlertId } : {}),
-    ...(run.alertId ?? run.alert_id ?? alertIdentifier ? { alertId: run.alertId ?? run.alert_id ?? alertIdentifier } : {}),
-    ...(alertIdentifier ? { alert_identifier: alertIdentifier } : {}),
-    ...(run.legacy_alert_id ?? legacyAlertId ? { legacy_alert_id: run.legacy_alert_id ?? legacyAlertId } : {}),
-    ...(run.alert_id ?? alertIdentifier ? { alert_id: run.alert_id ?? alertIdentifier } : {}),
   };
 }
 

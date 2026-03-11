@@ -200,12 +200,6 @@ func canonicalPatrolAlertIdentifier(alertIdentifier, legacyAlertID, alertID stri
 
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier, record.LegacyAlertID, record.AlertID)
-	if strings.TrimSpace(record.LegacyAlertID) == "" {
-		record.LegacyAlertID = strings.TrimSpace(record.AlertID)
-	}
-	if strings.TrimSpace(record.AlertID) == "" {
-		record.AlertID = record.AlertIdentifier
-	}
 	return record
 }
 
@@ -223,8 +217,6 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		ScopeResourceTypes:        normalized.ScopeResourceTypes,
 		ScopeContext:              normalized.ScopeContext,
 		AlertIdentifier:           normalized.AlertIdentifier,
-		LegacyAlertID:             normalized.LegacyAlertID,
-		AlertID:                   normalized.AlertID,
 		FindingID:                 normalized.FindingID,
 		ResourcesChecked:          normalized.ResourcesChecked,
 		NodesChecked:              normalized.NodesChecked,

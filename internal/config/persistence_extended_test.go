@@ -110,11 +110,11 @@ func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
 	}
-	if payload["legacy_alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected legacy_alert_id compatibility alias, got %#v", payload["legacy_alert_id"])
+	if _, ok := payload["legacy_alert_id"]; ok {
+		t.Fatalf("did not expect legacy_alert_id in canonical payload, got %#v", payload["legacy_alert_id"])
 	}
-	if payload["alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected alert_id compatibility alias, got %#v", payload["alert_id"])
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
 	var decodedCanonical config.PatrolRunRecord

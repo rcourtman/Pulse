@@ -359,11 +359,11 @@ func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
 	if history[0]["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", history[0]["alert_identifier"])
 	}
-	if history[0]["legacy_alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility legacy_alert_id, got %#v", history[0]["legacy_alert_id"])
+	if _, ok := history[0]["legacy_alert_id"]; ok {
+		t.Fatalf("did not expect legacy_alert_id in patrol history response, got %#v", history[0]["legacy_alert_id"])
 	}
-	if history[0]["alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alert_id, got %#v", history[0]["alert_id"])
+	if _, ok := history[0]["alert_id"]; ok {
+		t.Fatalf("did not expect alert_id in patrol history response, got %#v", history[0]["alert_id"])
 	}
 }
 

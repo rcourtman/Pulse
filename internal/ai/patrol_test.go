@@ -554,11 +554,11 @@ func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
 	}
-	if payload["legacy_alert_id"] != "legacy-alert-id" {
-		t.Fatalf("expected legacy_alert_id, got %#v", payload["legacy_alert_id"])
+	if _, ok := payload["legacy_alert_id"]; ok {
+		t.Fatalf("did not expect legacy_alert_id in canonical payload, got %#v", payload["legacy_alert_id"])
 	}
-	if payload["alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alert_id, got %#v", payload["alert_id"])
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
 	var decodedCanonical PatrolRunRecord
@@ -573,9 +573,6 @@ func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	}
 	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
-	}
-	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected alert_id compatibility field to mirror canonical ID, got %q", decodedCanonical.AlertID)
 	}
 
 	var decodedLegacy PatrolRunRecord

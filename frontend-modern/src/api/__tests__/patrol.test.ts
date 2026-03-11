@@ -57,8 +57,6 @@ describe('patrol api', () => {
         status: 'healthy',
         tool_call_count: 0,
         alert_identifier: 'canonical-alert-1',
-        legacy_alert_id: 'legacy-alert-1',
-        alert_id: 'legacy-alert-1',
       },
     ] as any);
 
@@ -66,11 +64,6 @@ describe('patrol api', () => {
 
     expect(result[0]).toMatchObject({
       alertIdentifier: 'canonical-alert-1',
-      legacyAlertId: 'legacy-alert-1',
-      alertId: 'legacy-alert-1',
-      alert_identifier: 'canonical-alert-1',
-      legacy_alert_id: 'legacy-alert-1',
-      alert_id: 'legacy-alert-1',
     });
   });
 });

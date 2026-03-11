@@ -2187,8 +2187,6 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		ScopeResourceTypes:        normalized.ScopeResourceTypes,
 		ScopeContext:              normalized.ScopeContext,
 		AlertIdentifier:           alertIdentifier,
-		LegacyAlertID:             alertIdentifier,
-		AlertID:                   alertIdentifier,
 		FindingID:                 normalized.FindingID,
 		ResourcesChecked:          normalized.ResourcesChecked,
 		NodesChecked:              normalized.NodesChecked,

@@ -248,12 +248,6 @@ func TestPatrolHistoryPersistenceAdapter_NormalizesAlertIdentity(t *testing.T) {
 	if loaded[0].AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert identifier after load, got %q", loaded[0].AlertIdentifier)
 	}
-	if loaded[0].AlertID != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alert_id to be canonical after load, got %q", loaded[0].AlertID)
-	}
-	if loaded[0].LegacyAlertID != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected legacy_alert_id mirror to be populated after load, got %q", loaded[0].LegacyAlertID)
-	}
 }
 
 func TestPatrolRunHistoryStore_PersistenceStatusAndErrors(t *testing.T) {
