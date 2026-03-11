@@ -134,7 +134,8 @@ describe('agent model guardrails', () => {
     expect(apiTokenManagerSource).toContain("resource.type === 'pbs'");
     expect(apiTokenManagerSource).toContain("resource.type === 'pmg'");
     expect(apiTokenManagerSource).toContain("resource.type === 'truenas'");
-    expect(apiTokenManagerSource).toContain('resource.agent != null');
+    expect(apiTokenManagerSource).toContain('resourceHasAgentFacet(resource)');
+    expect(apiTokenManagerSource).toContain('getActionableDockerRuntimeIdFromResource(resource)');
     expect(apiTokenManagerSource).toContain('markDockerRuntimesTokenRevoked');
     expect(apiTokenManagerSource).not.toContain('markDockerHostsTokenRevoked');
     expect(apiTokenManagerSource).not.toContain("resource.type === 'host'");
@@ -142,6 +143,7 @@ describe('agent model guardrails', () => {
     expect(apiTokenManagerSource).not.toContain(
       "const hostResources = createMemo(() => byType('host'))",
     );
+    expect(apiTokenManagerSource).not.toContain('isAppContainerDiscoveryResourceType');
     expect(apiTokenManagerSource).not.toContain("notificationStore.error('Failed to load API tokens')");
     expect(apiTokenManagerSource).not.toContain(
       "notificationStore.error('Failed to generate API token')",

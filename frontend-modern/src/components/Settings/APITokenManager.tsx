@@ -26,9 +26,9 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
-import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
   getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
@@ -67,7 +67,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       resource.type === 'pbs' ||
       resource.type === 'pmg' ||
       resource.type === 'truenas' ||
-      resource.agent != null ||
       resourceHasAgentFacet(resource)
     );
   };
@@ -116,15 +115,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const dockerActionIdForResource = (resource: Resource): string => {
-    const platformData = readPlatformData(resource);
-    return (
-      readPlatformString(readNestedPlatformField(platformData, 'hostSourceId')) ||
-      resource.discoveryTarget?.agentId ||
-      (isAppContainerDiscoveryResourceType(resource.discoveryTarget?.resourceType)
-        ? resource.discoveryTarget.resourceId
-        : undefined) ||
-      resource.id
-    );
+    return getActionableDockerRuntimeIdFromResource(resource) || resource.id;
   };
 
   const revokedTokenIdForResource = (resource: Resource): string | undefined => {
