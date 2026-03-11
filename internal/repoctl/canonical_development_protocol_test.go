@@ -81,3 +81,18 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"## Development Governance",
 	})
 }
+
+func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
+	hook := readRepoFile(t, ".husky/pre-commit")
+	assertContainsAll(t, ".husky/pre-commit", hook, []string{
+		"canonical_completion_guard.py",
+		"Running canonical completion guard...",
+	})
+
+	script := readRepoFile(t, "scripts/release_control/canonical_completion_guard.py")
+	assertContainsAll(t, "scripts/release_control/canonical_completion_guard.py", script, []string{
+		"SUBSYSTEM_RULES",
+		"check_staged_contracts",
+		"docs/release-control/v6/subsystems/",
+	})
+}

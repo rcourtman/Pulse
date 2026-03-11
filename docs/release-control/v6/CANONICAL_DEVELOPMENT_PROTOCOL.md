@@ -73,6 +73,9 @@ This is the minimum update set for canonical work:
 3. contract update
 4. guardrail/ratchet update when an old path is retired
 
+This protocol is enforced at commit time by the canonical completion guard in
+`scripts/release_control/canonical_completion_guard.py`.
+
 ## Guardrails
 
 Canonical architecture is not considered real until the repo can enforce it.
@@ -86,6 +89,9 @@ Preferred guardrail types:
 5. drift tests for generated or embedded artifacts
 
 Documentation alone is not sufficient when a rule can be made executable.
+
+The canonical completion guard is the default repo-level enforcement point for
+subsystem contract updates.
 
 ## How To Extend Pulse
 

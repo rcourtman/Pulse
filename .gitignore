@@ -201,6 +201,10 @@ docs/release-control/v6/*
 !docs/release-control/v6/subsystems/
 !docs/release-control/v6/subsystems/*.md
 scripts/release_control/
+!scripts/release_control/
+scripts/release_control/*
+!scripts/release_control/canonical_completion_guard.py
+!scripts/release_control/canonical_completion_guard_test.py
 .agent/
 
 # Pulse Pro landing page (private)

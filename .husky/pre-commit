@@ -60,6 +60,10 @@ else
 fi
 echo "Sensitivity check passed."
 
+# Enforce canonical subsystem completion discipline
+echo "Running canonical completion guard..."
+python3 scripts/release_control/canonical_completion_guard.py
+
 
 # Run Go formatting
 echo "Running Go formatter..."
