@@ -3093,7 +3093,6 @@ func TestAddWebhookDelivery_PreservesCanonicalAlertIdentifier(t *testing.T) {
 		WebhookName:     "enhanced-webhook",
 		WebhookURL:      "https://example.com/enhanced",
 		AlertIdentifier: "resource:vm:100::service-gap",
-		AlertID:         "legacy-alert-id",
 		Timestamp:       time.Now(),
 		Success:         true,
 		StatusCode:      200,
@@ -3109,9 +3108,6 @@ func TestAddWebhookDelivery_PreservesCanonicalAlertIdentifier(t *testing.T) {
 			"expected canonical alertIdentifier to be preserved, got %q",
 			nm.webhookHistory[0].AlertIdentifier,
 		)
-	}
-	if nm.webhookHistory[0].AlertID != "legacy-alert-id" {
-		t.Fatalf("expected legacy alertId to be preserved, got %q", nm.webhookHistory[0].AlertID)
 	}
 }
 

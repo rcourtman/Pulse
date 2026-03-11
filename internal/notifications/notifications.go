@@ -156,7 +156,6 @@ type WebhookDelivery struct {
 	WebhookURL      string    `json:"webhookUrl"`
 	Service         string    `json:"service"`
 	AlertIdentifier string    `json:"alertIdentifier,omitempty"`
-	AlertID         string    `json:"-"`
 	Timestamp       time.Time `json:"timestamp"`
 	StatusCode      int       `json:"statusCode"`
 	Success         bool      `json:"success"`
@@ -3058,13 +3057,6 @@ func (n *NotificationManager) isIPInAllowlist(ip net.IP) bool {
 func (n *NotificationManager) addWebhookDelivery(delivery WebhookDelivery) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-
-	if strings.TrimSpace(delivery.AlertIdentifier) == "" {
-		delivery.AlertIdentifier = strings.TrimSpace(delivery.AlertID)
-	}
-	if strings.TrimSpace(delivery.AlertID) == "" {
-		delivery.AlertID = delivery.AlertIdentifier
-	}
 
 	// Add to history
 	n.webhookHistory = append(n.webhookHistory, delivery)

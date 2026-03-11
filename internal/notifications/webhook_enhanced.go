@@ -298,7 +298,6 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 				WebhookURL:      webhook.URL,
 				Service:         webhook.Service,
 				AlertIdentifier: "enhanced", // Enhanced webhooks are service-level deliveries, not alert-bound.
-				AlertID:         "enhanced",
 				Timestamp:       time.Now(),
 				StatusCode:      200, // Assume success
 				Success:         true,
@@ -357,7 +356,6 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 		WebhookURL:      webhook.URL,
 		Service:         webhook.Service,
 		AlertIdentifier: "enhanced", // Enhanced webhooks are service-level deliveries, not alert-bound.
-		AlertID:         "enhanced",
 		Timestamp:       time.Now(),
 		StatusCode:      0, // Unknown status
 		Success:         false,
