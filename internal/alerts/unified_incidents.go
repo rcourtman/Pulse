@@ -92,7 +92,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 				}
 				alert.Metadata["canonicalSuppressionKeys"] = append([]string(nil), spec.SuppressionKeys...)
 			}
-			desired[alert.ID] = alert
+			desired[canonicalTrackingKeyForSpec(spec, alert.ID)] = alert
 		}
 	}
 
@@ -100,18 +100,17 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	defer m.mu.Unlock()
 
 	for storageKey, alert := range m.activeAlerts {
-		alertID := effectiveAlertID(alert, storageKey)
-		if !strings.HasPrefix(alertID, unifiedIncidentAlertPrefix) {
+		if !strings.HasPrefix(storageKey, unifiedresources.CanonicalResourceID(alert.ResourceID)+canonicalStateSeparator+"alertspec:provider-incident:") {
 			continue
 		}
-		if _, keep := desired[alertID]; keep {
+		if _, keep := desired[storageKey]; keep {
 			continue
 		}
-		m.clearAlertNoLock(alertID)
+		m.clearAlertNoLock(storageKey)
 	}
 
-	for alertID, alert := range desired {
-		if existing, exists := m.getActiveAlertNoLock(alertID); exists && existing != nil {
+	for storageKey, alert := range desired {
+		if existing, exists := m.getActiveAlertNoLock(storageKey); exists && existing != nil {
 			existing.LastSeen = alert.LastSeen
 			existing.Level = alert.Level
 			existing.ResourceID = alert.ResourceID
@@ -122,12 +121,12 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			existing.Message = alert.Message
 			existing.Metadata = alert.Metadata
 			applyCanonicalIdentity(existing, alert.CanonicalSpecID, alert.CanonicalKind)
-			m.setActiveAlertNoLock(alertID, existing)
+			m.setActiveAlertNoLock(storageKey, existing)
 			continue
 		}
 
-		m.preserveAlertState(alertID, alert)
-		m.setActiveAlertNoLock(alertID, alert)
+		m.preserveAlertState(storageKey, alert)
+		m.setActiveAlertNoLock(storageKey, alert)
 		m.recentAlerts[canonicalTrackingKeyForAlert(alert)] = alert
 		m.historyManager.AddAlert(*alert)
 		m.dispatchAlert(alert, false)

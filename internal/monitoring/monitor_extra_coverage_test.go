@@ -1039,7 +1039,7 @@ func TestMonitor_PruneDockerAlerts_Extra(t *testing.T) {
 	}
 }
 
-func TestMonitor_SyncAlertsToState_PreservesLegacyIDAndCanonicalID(t *testing.T) {
+func TestMonitor_SyncAlertsToState_UsesCanonicalAlertID(t *testing.T) {
 	m := &Monitor{
 		state:        models.NewState(),
 		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
@@ -1061,9 +1061,6 @@ func TestMonitor_SyncAlertsToState_PreservesLegacyIDAndCanonicalID(t *testing.T)
 	alert := snapshot.ActiveAlerts[0]
 	if !strings.HasPrefix(alert.ID, "docker:sync-host::") {
 		t.Fatalf("snapshot alert ID = %q, want canonical docker host alert ID", alert.ID)
-	}
-	if alert.LegacyID != "docker-host-offline-sync-host" {
-		t.Fatalf("snapshot alert LegacyID = %q, want legacy docker host alert ID", alert.LegacyID)
 	}
 }
 

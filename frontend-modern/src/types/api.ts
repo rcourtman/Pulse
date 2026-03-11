@@ -967,7 +967,6 @@ export interface Stats {
 // Alert types
 export interface Alert {
   id: string;
-  legacyId?: string;
   type: string;
   level: 'warning' | 'critical';
   resourceId: string;

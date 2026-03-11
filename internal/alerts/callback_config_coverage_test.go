@@ -198,7 +198,7 @@ func TestCheckMetricInvokesAICallbackWhenNotificationsSuppressed(t *testing.T) {
 	}
 
 	m.mu.RLock()
-	stored := testRequireActiveAlert(t, m, "ai-resource-cpu")
+	stored := testRequireActiveAlert(t, m, canonicalMetricStateID("ai-resource", "cpu"))
 	m.mu.RUnlock()
 
 	if stored == nil {
@@ -207,8 +207,9 @@ func TestCheckMetricInvokesAICallbackWhenNotificationsSuppressed(t *testing.T) {
 	if aiAlert == stored {
 		t.Fatal("expected AI callback to receive a cloned alert")
 	}
-	if aiAlert.ID != "ai-resource-cpu" {
-		t.Fatalf("expected AI callback alert ID ai-resource-cpu, got %q", aiAlert.ID)
+	expectedID := canonicalMetricStateID("ai-resource", "cpu")
+	if aiAlert.ID != expectedID {
+		t.Fatalf("expected AI callback alert ID %q, got %q", expectedID, aiAlert.ID)
 	}
 }
 

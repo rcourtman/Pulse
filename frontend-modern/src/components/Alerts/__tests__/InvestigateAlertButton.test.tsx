@@ -46,7 +46,6 @@ import { InvestigateAlertButton } from '../InvestigateAlertButton';
 function makeAlert(overrides: Partial<Alert> = {}): Alert {
   return {
     id: 'alert-1',
-    legacyId: 'legacy-alert-1',
     type: 'cpu',
     level: 'warning',
     resourceId: 'vm-101',

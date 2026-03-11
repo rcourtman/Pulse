@@ -19,8 +19,8 @@ func activeAlertStorageKey(alert *Alert, fallback string) string {
 func effectiveAlertID(alert *Alert, fallback string) string {
 	if alert != nil {
 		backfillCanonicalIdentity(alert)
-		if alert.LegacyID != "" {
-			return alert.LegacyID
+		if alert.CanonicalState != "" {
+			return alert.CanonicalState
 		}
 		if alert.ID != "" {
 			return alert.ID
@@ -60,10 +60,31 @@ func (m *Manager) resolveActiveAlertKeyNoLock(id string) (string, bool) {
 	return key, true
 }
 
+func (m *Manager) resolveActiveAlertKeyByCanonicalStateNoLock(id string) (string, bool) {
+	for storageKey, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		backfillCanonicalIdentity(alert)
+		if alert.CanonicalState != id {
+			continue
+		}
+		if m.activeAlertAlias == nil {
+			m.activeAlertAlias = make(map[string]string)
+		}
+		m.activeAlertAlias[id] = storageKey
+		return storageKey, true
+	}
+	return "", false
+}
+
 func (m *Manager) getActiveAlertNoLock(id string) (*Alert, bool) {
 	key, ok := m.resolveActiveAlertKeyNoLock(id)
 	if !ok {
-		return nil, false
+		key, ok = m.resolveActiveAlertKeyByCanonicalStateNoLock(id)
+		if !ok {
+			return nil, false
+		}
 	}
 	alert := m.activeAlerts[key]
 	if alert == nil {
@@ -74,7 +95,10 @@ func (m *Manager) getActiveAlertNoLock(id string) (*Alert, bool) {
 }
 
 func (m *Manager) hasActiveAlertNoLock(id string) bool {
-	_, ok := m.resolveActiveAlertKeyNoLock(id)
+	if _, ok := m.resolveActiveAlertKeyNoLock(id); ok {
+		return true
+	}
+	_, ok := m.resolveActiveAlertKeyByCanonicalStateNoLock(id)
 	return ok
 }
 
@@ -169,6 +193,20 @@ func (m *Manager) getResolvedAlertNoLock(id string) (*ResolvedAlert, bool) {
 	}
 	key, ok := m.resolvedAlias[id]
 	if !ok {
+		for storageKey, resolved := range m.recentlyResolved {
+			if resolved == nil || resolved.Alert == nil {
+				continue
+			}
+			backfillCanonicalIdentity(resolved.Alert)
+			if resolved.Alert.CanonicalState != id {
+				continue
+			}
+			if m.resolvedAlias == nil {
+				m.resolvedAlias = make(map[string]string)
+			}
+			m.resolvedAlias[id] = storageKey
+			return resolved, true
+		}
 		return nil, false
 	}
 	resolved, exists := m.recentlyResolved[key]

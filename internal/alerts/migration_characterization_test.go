@@ -83,7 +83,8 @@ func testVM(resourceID string, vmID int, name, node, instance, status string, cp
 
 func TestAlertCharacterizationCanonicalGuestIdentityAcrossTypedAndUnifiedChecks(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := resourceID + "-cpu"
+	specID := canonicalMetricSpecID(resourceID, "cpu")
+	alertID := buildCanonicalStateID(resourceID, specID)
 
 	m := newCharacterizationManager(t, characterizationBaseConfig())
 	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.85), "pve1")
@@ -109,18 +110,17 @@ func TestAlertCharacterizationCanonicalGuestIdentityAcrossTypedAndUnifiedChecks(
 	if typedAlert.ID != alertID || unifiedAlert.ID != alertID {
 		t.Fatalf("expected stable alert ID %q, got typed=%q unified=%q", alertID, typedAlert.ID, unifiedAlert.ID)
 	}
-	if typedAlert.CanonicalSpecID != alertID || unifiedAlert.CanonicalSpecID != alertID {
-		t.Fatalf("expected canonical spec id %q, got typed=%q unified=%q", alertID, typedAlert.CanonicalSpecID, unifiedAlert.CanonicalSpecID)
+	if typedAlert.CanonicalSpecID != specID || unifiedAlert.CanonicalSpecID != specID {
+		t.Fatalf("expected canonical spec id %q, got typed=%q unified=%q", specID, typedAlert.CanonicalSpecID, unifiedAlert.CanonicalSpecID)
 	}
-	if typedAlert.CanonicalState != resourceID+"::"+alertID || unifiedAlert.CanonicalState != resourceID+"::"+alertID {
-		t.Fatalf("expected canonical state %q, got typed=%q unified=%q", resourceID+"::"+alertID, typedAlert.CanonicalState, unifiedAlert.CanonicalState)
+	if typedAlert.CanonicalState != alertID || unifiedAlert.CanonicalState != alertID {
+		t.Fatalf("expected canonical state %q, got typed=%q unified=%q", alertID, typedAlert.CanonicalState, unifiedAlert.CanonicalState)
 	}
 }
 
 func TestAlertCharacterizationGetActiveAlertsExportsCanonicalIdentity(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	legacyAlertID := resourceID + "-cpu"
-	canonicalState := buildCanonicalStateID(resourceID, legacyAlertID)
+	canonicalState := canonicalMetricStateID(resourceID, "cpu")
 
 	m := newCharacterizationManager(t, characterizationBaseConfig())
 	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.85), "pve1")
@@ -131,9 +131,6 @@ func TestAlertCharacterizationGetActiveAlertsExportsCanonicalIdentity(t *testing
 	}
 	if alerts[0].ID != canonicalState {
 		t.Fatalf("GetActiveAlerts() ID = %q, want canonical ID %q", alerts[0].ID, canonicalState)
-	}
-	if alerts[0].LegacyID != legacyAlertID {
-		t.Fatalf("GetActiveAlerts() LegacyID = %q, want %q", alerts[0].LegacyID, legacyAlertID)
 	}
 }
 
@@ -230,9 +227,6 @@ func TestAlertCharacterizationHistoryUpdateUsesCanonicalStateAcrossAlertIDChange
 	if history[0].ID != expectedCanonicalState {
 		t.Fatalf("history alert ID = %q, want canonical ID %q", history[0].ID, expectedCanonicalState)
 	}
-	if history[0].LegacyID != oldAlertID {
-		t.Fatalf("history alert LegacyID = %q, want legacy ID %q preserved", history[0].LegacyID, oldAlertID)
-	}
 }
 
 func TestAlertCharacterizationRecentSuppressionSurvivesAlertIDChangeForSameCanonicalState(t *testing.T) {
@@ -291,8 +285,8 @@ func TestAlertCharacterizationRecentSuppressionSurvivesAlertIDChangeForSameCanon
 
 func TestAlertCharacterizationAcknowledgeByCanonicalStateAlias(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := resourceID + "-cpu"
-	canonicalState := buildCanonicalStateID(resourceID, alertID)
+	alertID := canonicalMetricStateID(resourceID, "cpu")
+	canonicalState := alertID
 
 	m := newCharacterizationManager(t, characterizationBaseConfig())
 	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.95), "pve1")
@@ -351,8 +345,8 @@ func TestAlertCharacterizationGuestThresholdPrecedence(t *testing.T) {
 	m.CheckGuest(testVM(ruleGuestID, 102, "app-rule", "node1", "pve1", "running", 0.80), "pve1")
 	m.CheckGuest(testVM(overrideGuestID, 101, "app-override", "node1", "pve1", "running", 0.80), "pve1")
 
-	assertAlertPresent(t, m, ruleGuestID+"-cpu")
-	assertAlertMissing(t, m, overrideGuestID+"-cpu")
+	assertAlertPresent(t, m, canonicalMetricStateID(ruleGuestID, "cpu"))
+	assertAlertMissing(t, m, canonicalMetricStateID(overrideGuestID, "cpu"))
 }
 
 func TestAlertCharacterizationDisableConnectivitySuppressesPoweredOffButNotMetrics(t *testing.T) {
@@ -376,12 +370,12 @@ func TestAlertCharacterizationDisableConnectivitySuppressesPoweredOffButNotMetri
 	}
 
 	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.95), "pve1")
-	assertAlertPresent(t, m, resourceID+"-cpu")
+	assertAlertPresent(t, m, canonicalMetricStateID(resourceID, "cpu"))
 }
 
 func TestAlertCharacterizationReevaluatesAlertsWhenConfigChanges(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := resourceID + "-cpu"
+	alertID := canonicalMetricStateID(resourceID, "cpu")
 	cfg := characterizationBaseConfig()
 
 	m := newCharacterizationManager(t, cfg)
@@ -409,7 +403,7 @@ func TestAlertCharacterizationReevaluatesAlertsWhenConfigChanges(t *testing.T) {
 
 	select {
 	case got := <-resolved:
-		expectedResolvedID := buildCanonicalStateID(resourceID, alertID)
+		expectedResolvedID := alertID
 		if got != expectedResolvedID {
 			t.Fatalf("resolved callback = %q, want %q", got, expectedResolvedID)
 		}
@@ -438,12 +432,12 @@ func TestAlertCharacterizationPoweredOffLifecycle(t *testing.T) {
 	paused := testVM(resourceID, 101, "app01", "node1", "pve1", "paused", 0)
 
 	m.CheckGuest(running, "pve1")
-	assertAlertPresent(t, m, resourceID+"-cpu")
+	assertAlertPresent(t, m, canonicalMetricStateID(resourceID, "cpu"))
 
 	m.CheckGuest(stopped, "pve1")
 	m.CheckGuest(stopped, "pve1")
 
-	assertAlertMissing(t, m, resourceID+"-cpu")
+	assertAlertMissing(t, m, canonicalMetricStateID(resourceID, "cpu"))
 	assertAlertPresent(t, m, alertID)
 
 	m.CheckGuest(paused, "pve1")
@@ -459,7 +453,7 @@ func TestAlertCharacterizationPoweredOffLifecycle(t *testing.T) {
 
 func TestAlertCharacterizationAcknowledgmentSurvivesPoweredOffReappearance(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := "guest-powered-off-" + resourceID
+	alertID := canonicalPoweredStateStateID(resourceID)
 	m := newCharacterizationManager(t, characterizationBaseConfig())
 
 	stopped := testVM(resourceID, 101, "app01", "node1", "pve1", "stopped", 0)
@@ -496,8 +490,8 @@ func TestAlertCharacterizationAcknowledgmentSurvivesPoweredOffReappearance(t *te
 
 func TestAlertCharacterizationSuppressTagClearsMetricSuppressionIdentity(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := resourceID + "-cpu"
-	trackingKey := buildCanonicalStateID(resourceID, alertID)
+	alertID := canonicalMetricStateID(resourceID, "cpu")
+	trackingKey := alertID
 	cfg := characterizationBaseConfig()
 	cfg.SuppressionWindow = 30
 	cfg.MinimumDelta = 5
@@ -539,8 +533,8 @@ func TestAlertCharacterizationSuppressTagClearsMetricSuppressionIdentity(t *test
 
 func TestAlertCharacterizationResolvedLookupByCanonicalStateAlias(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := resourceID + "-cpu"
-	canonicalState := buildCanonicalStateID(resourceID, alertID)
+	alertID := canonicalMetricStateID(resourceID, "cpu")
+	canonicalState := alertID
 
 	m := newCharacterizationManager(t, characterizationBaseConfig())
 	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.95), "pve1")
@@ -553,22 +547,20 @@ func TestAlertCharacterizationResolvedLookupByCanonicalStateAlias(t *testing.T) 
 	if resolved.Alert.ID != canonicalState {
 		t.Fatalf("resolved alert ID = %q, want canonical ID %q", resolved.Alert.ID, canonicalState)
 	}
-	if resolved.Alert.LegacyID != alertID {
-		t.Fatalf("resolved alert legacy ID = %q, want %q", resolved.Alert.LegacyID, alertID)
-	}
 }
 
 func TestAlertCharacterizationManualClearRemovesCanonicalTrackingState(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := resourceID + "-cpu"
-	trackingKey := buildCanonicalStateID(resourceID, alertID)
+	specID := canonicalMetricSpecID(resourceID, "cpu")
+	alertID := buildCanonicalStateID(resourceID, specID)
+	trackingKey := alertID
 
 	m := newCharacterizationManager(t, characterizationBaseConfig())
 	m.CheckGuest(testVM(resourceID, 101, "app01", "node1", "pve1", "running", 0.85), "pve1")
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.Lock()
-	m.recentAlerts[trackingKey] = &Alert{ID: alertID, ResourceID: resourceID, CanonicalState: trackingKey, StartTime: time.Now(), LastSeen: time.Now()}
+	m.recentAlerts[trackingKey] = &Alert{ID: alertID, ResourceID: resourceID, CanonicalState: trackingKey, CanonicalSpecID: specID, StartTime: time.Now(), LastSeen: time.Now()}
 	m.suppressedUntil[trackingKey] = time.Now().Add(time.Hour)
 	m.alertRateLimit[trackingKey] = []time.Time{time.Now()}
 	m.mu.Unlock()
@@ -589,8 +581,8 @@ func TestAlertCharacterizationManualClearRemovesCanonicalTrackingState(t *testin
 
 func TestAlertCharacterizationResolvedCallbackUsesCanonicalIDForCanonicalAliasClear(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
-	alertID := resourceID + "-cpu"
-	canonicalState := buildCanonicalStateID(resourceID, alertID)
+	alertID := canonicalMetricSpecID(resourceID, "cpu")
+	canonicalState := canonicalMetricStateID(resourceID, "cpu")
 
 	m := newCharacterizationManager(t, characterizationBaseConfig())
 	resolved := make(chan string, 1)
@@ -606,7 +598,7 @@ func TestAlertCharacterizationResolvedCallbackUsesCanonicalIDForCanonicalAliasCl
 		Type:            "cpu",
 		ResourceID:      resourceID,
 		ResourceName:    "app01",
-		CanonicalSpecID: alertID,
+		CanonicalSpecID: canonicalMetricSpecID(resourceID, "cpu"),
 		CanonicalKind:   "metric_threshold",
 		CanonicalState:  canonicalState,
 		StartTime:       time.Now().Add(-time.Minute),

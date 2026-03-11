@@ -144,7 +144,6 @@ func TestAlertManagerMCPAdapter(t *testing.T) {
 		alerts: []alerts.Alert{
 			{
 				ID:           "a1",
-				LegacyID:     "legacy-a1",
 				ResourceID:   "vm-1",
 				ResourceName: "vm1",
 				Type:         "cpu",
@@ -164,9 +163,6 @@ func TestAlertManagerMCPAdapter(t *testing.T) {
 	}
 	if got[0].Severity != "warning" || got[0].ResourceName != "vm1" || got[0].Message != "high cpu" {
 		t.Fatalf("unexpected alert mapping: %+v", got[0])
-	}
-	if got[0].LegacyID != "legacy-a1" {
-		t.Fatalf("expected legacy alert ID to be preserved, got %+v", got[0])
 	}
 }
 

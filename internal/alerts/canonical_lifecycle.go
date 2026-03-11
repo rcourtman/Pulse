@@ -328,10 +328,11 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	trackingKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
+	storageKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
+	trackingKey := storageKey
 
 	var existing *Alert
-	if current, ok := m.getActiveAlertNoLock(params.AlertID); ok {
+	if current, ok := m.getActiveAlertNoLock(storageKey); ok {
 		existing = current
 	}
 
@@ -344,7 +345,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	if err != nil {
 		log.Warn().
 			Err(err).
-			Str("alertID", params.AlertID).
+			Str("alertID", storageKey).
 			Str("resourceID", params.ResourceID).
 			Str("specID", params.Spec.ID).
 			Msg("Skipping invalid canonical lifecycle evaluation")
@@ -368,10 +369,10 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			level = AlertLevelWarning
 		}
 		alert := &Alert{
-			ID:           params.AlertID,
+			ID:           storageKey,
 			Type:         params.AlertType,
 			Level:        level,
-			ResourceID:   params.ResourceID,
+			ResourceID:   params.Spec.ResourceID,
 			ResourceName: params.ResourceName,
 			Node:         params.Node,
 			Instance:     params.Instance,
@@ -387,8 +388,8 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 
-		m.preserveAlertState(params.AlertID, alert)
-		m.setActiveAlertNoLock(params.AlertID, alert)
+		m.preserveAlertState(storageKey, alert)
+		m.setActiveAlertNoLock(storageKey, alert)
 		if params.AddToRecent {
 			m.recentAlerts[trackingKey] = alert
 		}
@@ -403,7 +404,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 
 		if params.RateLimit && !m.checkRateLimit(trackingKey) {
 			log.Debug().
-				Str("alertID", params.AlertID).
+				Str("alertID", storageKey).
 				Str("trackingKey", trackingKey).
 				Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 				Msg("Lifecycle alert notification suppressed due to rate limit")
@@ -417,13 +418,13 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			return result, true
 		}
 
-		m.removeActiveAlertNoLock(params.AlertID)
+		m.removeActiveAlertNoLock(storageKey)
 		resolvedAlert := &ResolvedAlert{
 			Alert:        existing,
 			ResolvedTime: params.Evidence.ObservedAt,
 		}
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-		m.safeCallResolvedAlertCallback(existing, params.AlertID, true)
+		m.safeCallResolvedAlertCallback(existing, storageKey, true)
 		return result, true
 	}
 }
@@ -436,10 +437,11 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	trackingKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
+	storageKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
+	trackingKey := storageKey
 
 	var existing *Alert
-	if current, ok := m.getActiveAlertNoLock(params.AlertID); ok {
+	if current, ok := m.getActiveAlertNoLock(storageKey); ok {
 		existing = current
 	}
 
@@ -452,7 +454,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 	if err != nil {
 		log.Warn().
 			Err(err).
-			Str("alertID", params.AlertID).
+			Str("alertID", storageKey).
 			Str("resourceID", params.ResourceID).
 			Str("specID", params.Spec.ID).
 			Msg("Skipping invalid canonical stateful evaluation")
@@ -489,10 +491,10 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			startTime = params.StartTimeOverride
 		}
 		alert := &Alert{
-			ID:           params.AlertID,
+			ID:           storageKey,
 			Type:         params.AlertType,
 			Level:        level,
-			ResourceID:   params.ResourceID,
+			ResourceID:   params.Spec.ResourceID,
 			ResourceName: params.ResourceName,
 			Node:         params.Node,
 			Instance:     params.Instance,
@@ -508,8 +510,8 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 
-		m.preserveAlertState(params.AlertID, alert)
-		m.setActiveAlertNoLock(params.AlertID, alert)
+		m.preserveAlertState(storageKey, alert)
+		m.setActiveAlertNoLock(storageKey, alert)
 		if params.AddToRecent {
 			m.recentAlerts[trackingKey] = alert
 		}
@@ -520,7 +522,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			}
 			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				log.Debug().
-					Str("alertID", params.AlertID).
+					Str("alertID", storageKey).
 					Str("trackingKey", trackingKey).
 					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 					Msg("Stateful alert notification suppressed due to rate limit")
@@ -536,7 +538,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			}
 			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				log.Debug().
-					Str("alertID", params.AlertID).
+					Str("alertID", storageKey).
 					Str("trackingKey", trackingKey).
 					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
 					Msg("Stateful escalation notification suppressed due to rate limit")
@@ -544,20 +546,20 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			}
 			m.dispatchAlert(alert, params.DispatchAsync)
 		}
-		m.setActiveAlertNoLock(params.AlertID, alert)
+		m.setActiveAlertNoLock(storageKey, alert)
 		return result, true
 	default:
 		if existing == nil {
 			return result, true
 		}
 
-		m.removeActiveAlertNoLock(params.AlertID)
+		m.removeActiveAlertNoLock(storageKey)
 		resolvedAlert := &ResolvedAlert{
 			Alert:        existing,
 			ResolvedTime: params.Evidence.ObservedAt,
 		}
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-		m.safeCallResolvedAlertCallback(existing, params.AlertID, true)
+		m.safeCallResolvedAlertCallback(existing, storageKey, true)
 		return result, true
 	}
 }

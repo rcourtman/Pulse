@@ -71,13 +71,14 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	}
 
 	alertID := spec.ID
-	trackingKey := canonicalTrackingKeyForSpec(spec, alertID)
+	storageKey := canonicalTrackingKeyForSpec(spec, alertID)
+	trackingKey := storageKey
 	metricType := spec.MetricThreshold.Metric
 	if spec.Disabled || spec.MetricThreshold.Trigger <= 0 {
 		m.mu.Lock()
 		delete(m.pendingAlerts, trackingKey)
 		m.mu.Unlock()
-		m.clearAlert(alertID)
+		m.clearAlert(storageKey)
 		return
 	}
 
@@ -86,12 +87,12 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	existingAlert, exists := m.getActiveAlertNoLock(alertID)
+	existingAlert, exists := m.getActiveAlertNoLock(storageKey)
 	monitorOnly := opts != nil && opts.MonitorOnly
 
 	if suppressUntil, suppressed := m.suppressedUntil[trackingKey]; suppressed && time.Now().Before(suppressUntil) {
 		log.Debug().
-			Str("alertID", alertID).
+			Str("alertID", storageKey).
 			Str("trackingKey", trackingKey).
 			Time("suppressedUntil", suppressUntil).
 			Msg("Canonical metric alert suppressed")
@@ -145,7 +146,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	if err != nil {
 		log.Warn().
 			Err(err).
-			Str("alertID", alertID).
+			Str("alertID", storageKey).
 			Str("resourceID", spec.ResourceID).
 			Str("metricType", metricType).
 			Msg("Skipping invalid canonical metric evaluation")
@@ -176,7 +177,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 
 		if !exists {
 			alert := &Alert{
-				ID:              alertID,
+				ID:              storageKey,
 				Type:            metricType,
 				Level:           level,
 				ResourceID:      spec.ResourceID,
@@ -193,8 +194,8 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			}
 
 			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
-			m.preserveAlertState(alertID, alert)
-			m.setActiveAlertNoLock(alertID, alert)
+			m.preserveAlertState(storageKey, alert)
+			m.setActiveAlertNoLock(storageKey, alert)
 			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
 
@@ -264,7 +265,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				existingAlert.LastNotified = nil
 			}
 		}
-		m.setActiveAlertNoLock(alertID, existingAlert)
+		m.setActiveAlertNoLock(storageKey, existingAlert)
 	default:
 		if !exists {
 			return
@@ -274,10 +275,10 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			Alert:        existingAlert,
 			ResolvedTime: observedAt,
 		}
-		m.removeActiveAlertNoLock(alertID)
+		m.removeActiveAlertNoLock(storageKey)
 		asyncSaveActiveAlerts("canonical metric resolution", m.SaveActiveAlerts)
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-		m.safeCallResolvedAlertCallback(existingAlert, alertID, true)
+		m.safeCallResolvedAlertCallback(existingAlert, storageKey, true)
 	}
 }
 

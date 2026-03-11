@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -102,7 +103,7 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 	}{
 		{
 			name:    "VM CPU above threshold creates alert",
-			alertID: "vm-101-cpu",
+			alertID: canonicalMetricStateID("vm-101", "cpu"),
 			input: &UnifiedResourceInput{
 				ID:   "vm-101",
 				Type: "vm",
@@ -112,7 +113,7 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 		},
 		{
 			name:    "System container CPU above threshold creates alert",
-			alertID: "lxc-200-cpu",
+			alertID: canonicalMetricStateID("lxc-200", "cpu"),
 			input: &UnifiedResourceInput{
 				ID:   "lxc-200",
 				Type: "system-container",
@@ -122,7 +123,7 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 		},
 		{
 			name:    "Node memory above threshold creates alert",
-			alertID: "node-a-memory",
+			alertID: canonicalMetricStateID("node-a", "memory"),
 			input: &UnifiedResourceInput{
 				ID:     "node-a",
 				Type:   "node",
@@ -132,7 +133,7 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 		},
 		{
 			name:    "Agent disk above threshold creates alert",
-			alertID: "host-1-disk",
+			alertID: canonicalMetricStateID("host-1", "disk"),
 			input: &UnifiedResourceInput{
 				ID:   "host-1",
 				Type: "agent",
@@ -142,7 +143,7 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 		},
 		{
 			name:    "Storage usage above threshold creates alert",
-			alertID: "storage-1-usage",
+			alertID: canonicalMetricStateID("storage-1", "usage"),
 			input: &UnifiedResourceInput{
 				ID:   "storage-1",
 				Type: "storage",
@@ -152,7 +153,7 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 		},
 		{
 			name:    "PBS CPU above threshold creates alert",
-			alertID: "pbs-1-cpu",
+			alertID: canonicalMetricStateID("pbs-1", "cpu"),
 			input: &UnifiedResourceInput{
 				ID:   "pbs-1",
 				Type: "pbs",
@@ -182,7 +183,7 @@ func TestCheckUnifiedResourceRejectsLegacyGuestTypeAlias(t *testing.T) {
 		CPU:  &UnifiedResourceMetric{Percent: 95},
 	})
 
-	assertAlertMissing(t, m, "legacy-ct-200-cpu")
+	assertAlertMissing(t, m, canonicalMetricStateID("legacy-ct-200", "cpu"))
 }
 
 func TestCheckUnifiedResourceOverrideLowerThresholdCreatesAlert(t *testing.T) {
@@ -200,7 +201,7 @@ func TestCheckUnifiedResourceOverrideLowerThresholdCreatesAlert(t *testing.T) {
 		CPU:  &UnifiedResourceMetric{Percent: 65},
 	})
 
-	assertAlertPresent(t, m, "vm-override-cpu")
+	assertAlertPresent(t, m, canonicalMetricStateID("vm-override", "cpu"))
 }
 
 func TestCheckUnifiedResourceNilInputNoPanic(t *testing.T) {
@@ -229,7 +230,7 @@ func TestCheckUnifiedResourceDisabledThresholdsNoAlert(t *testing.T) {
 		CPU:  &UnifiedResourceMetric{Percent: 95},
 	})
 
-	assertAlertMissing(t, m, "vm-disabled-cpu")
+	assertAlertMissing(t, m, canonicalMetricStateID("vm-disabled", "cpu"))
 }
 
 func TestCheckUnifiedResourceAnnotatesMetricAlertsWithCanonicalSpecMetadata(t *testing.T) {
@@ -244,25 +245,26 @@ func TestCheckUnifiedResourceAnnotatesMetricAlertsWithCanonicalSpecMetadata(t *t
 	})
 
 	m.mu.RLock()
-	alert := testRequireActiveAlert(t, m, "vm-annotated-cpu")
+	alertID := canonicalMetricStateID("vm-annotated", "cpu")
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if alert == nil {
-		t.Fatal("expected vm-annotated-cpu alert")
+		t.Fatalf("expected %s alert", alertID)
 	}
-	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
-		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	if got := alert.Metadata["canonicalAlertKind"]; got != string(alertspecs.AlertSpecKindMetricThreshold) {
+		t.Fatalf("canonicalAlertKind = %v, want %s", got, alertspecs.AlertSpecKindMetricThreshold)
 	}
-	if got := alert.Metadata["canonicalSpecID"]; got != "vm-annotated-cpu" {
-		t.Fatalf("canonicalSpecID = %v, want vm-annotated-cpu", got)
+	if got := alert.Metadata["canonicalSpecID"]; got != canonicalMetricSpecID("vm-annotated", "cpu") {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, canonicalMetricSpecID("vm-annotated", "cpu"))
 	}
-	if alert.CanonicalSpecID != "vm-annotated-cpu" {
-		t.Fatalf("CanonicalSpecID = %q, want vm-annotated-cpu", alert.CanonicalSpecID)
+	if alert.CanonicalSpecID != canonicalMetricSpecID("vm-annotated", "cpu") {
+		t.Fatalf("CanonicalSpecID = %q, want %s", alert.CanonicalSpecID, canonicalMetricSpecID("vm-annotated", "cpu"))
 	}
-	if alert.CanonicalKind != "metric-threshold" {
-		t.Fatalf("CanonicalKind = %q, want metric-threshold", alert.CanonicalKind)
+	if alert.CanonicalKind != string(alertspecs.AlertSpecKindMetricThreshold) {
+		t.Fatalf("CanonicalKind = %q, want %s", alert.CanonicalKind, alertspecs.AlertSpecKindMetricThreshold)
 	}
-	if alert.CanonicalState != "vm-annotated::vm-annotated-cpu" {
-		t.Fatalf("CanonicalState = %q, want vm-annotated::vm-annotated-cpu", alert.CanonicalState)
+	if alert.CanonicalState != canonicalMetricStateID("vm-annotated", "cpu") {
+		t.Fatalf("CanonicalState = %q, want %s", alert.CanonicalState, canonicalMetricStateID("vm-annotated", "cpu"))
 	}
 }
 
@@ -293,18 +295,19 @@ func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
 		},
 	}, "pve1")
 
-	alertID := guestID + "-disk-scsi0-disk"
+	resourceID := guestID + "-disk-scsi0"
+	alertID := canonicalMetricStateID(resourceID, "disk")
 	m.mu.RLock()
 	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if alert == nil {
 		t.Fatalf("expected guest disk alert %q", alertID)
 	}
-	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
-		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	if got := alert.Metadata["canonicalAlertKind"]; got != string(alertspecs.AlertSpecKindMetricThreshold) {
+		t.Fatalf("canonicalAlertKind = %v, want %s", got, alertspecs.AlertSpecKindMetricThreshold)
 	}
-	if got := alert.Metadata["canonicalSpecID"]; got != alertID {
-		t.Fatalf("canonicalSpecID = %v, want %s", got, alertID)
+	if got := alert.Metadata["canonicalSpecID"]; got != canonicalMetricSpecID(resourceID, "disk") {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, canonicalMetricSpecID(resourceID, "disk"))
 	}
 }
 
@@ -327,16 +330,17 @@ func TestCheckNodeTemperatureAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	})
 
 	m.mu.RLock()
-	alert := testRequireActiveAlert(t, m, "node/pve-1-temperature")
+	alertID := canonicalMetricStateID("node/pve-1", "temperature")
+	alert := testRequireActiveAlert(t, m, alertID)
 	m.mu.RUnlock()
 	if alert == nil {
 		t.Fatal("expected node temperature alert")
 	}
-	if got := alert.Metadata["canonicalAlertKind"]; got != "metric-threshold" {
-		t.Fatalf("canonicalAlertKind = %v, want metric-threshold", got)
+	if got := alert.Metadata["canonicalAlertKind"]; got != string(alertspecs.AlertSpecKindMetricThreshold) {
+		t.Fatalf("canonicalAlertKind = %v, want %s", got, alertspecs.AlertSpecKindMetricThreshold)
 	}
-	if got := alert.Metadata["canonicalSpecID"]; got != "node/pve-1-temperature" {
-		t.Fatalf("canonicalSpecID = %v, want node/pve-1-temperature", got)
+	if got := alert.Metadata["canonicalSpecID"]; got != canonicalMetricSpecID("node/pve-1", "temperature") {
+		t.Fatalf("canonicalSpecID = %v, want %s", got, canonicalMetricSpecID("node/pve-1", "temperature"))
 	}
 }
 
@@ -382,7 +386,7 @@ func TestCheckNodeOfflineAnnotatesCanonicalSpecMetadata(t *testing.T) {
 		ConnectionHealth: "failed",
 	})
 
-	alert := activeAlert(t, m, "node-offline-node/pve-1")
+	alert := activeAlert(t, m, buildCanonicalStateID("node/pve-1", "node/pve-1-connectivity"))
 	if got := alert.Metadata["canonicalAlertKind"]; got != "connectivity" {
 		t.Fatalf("canonicalAlertKind = %v, want connectivity", got)
 	}

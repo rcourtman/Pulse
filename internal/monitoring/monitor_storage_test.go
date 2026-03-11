@@ -220,8 +220,7 @@ func TestPollStorageWithNodesOptimizedRecordsMetricsAndAlerts(t *testing.T) {
 			alert.Node == "node1" &&
 			(alert.ResourceID == "inst1-node1-local" ||
 				alert.ResourceName == "local" ||
-				alert.ID == "inst1-node1-local-usage" ||
-				alert.LegacyID == "inst1-node1-local-usage") {
+				alert.ID == "inst1-node1-local::inst1-node1-local-usage") {
 			found = true
 			break
 		}

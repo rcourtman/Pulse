@@ -40,7 +40,6 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 	active := []alerts.Alert{
 		{
 			ID:           "a1",
-			LegacyID:     "legacy-a1",
 			Type:         "node_cpu",
 			Level:        alerts.AlertLevelCritical,
 			ResourceID:   "node:pve1",
@@ -65,7 +64,6 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 		{
 			Alert: models.Alert{
 				ID:           "r1",
-				LegacyID:     "legacy-r1",
 				Type:         "storage_usage",
 				Level:        "critical",
 				ResourceID:   "storage:local",
@@ -96,9 +94,6 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 	if gotActive[0].ResourceType != "node" {
 		t.Fatalf("ResourceType = %q, want node", gotActive[0].ResourceType)
 	}
-	if gotActive[0].LegacyID != "legacy-a1" {
-		t.Fatalf("LegacyID = %q, want legacy-a1", gotActive[0].LegacyID)
-	}
 	if gotActive[1].Duration == "" {
 		t.Fatalf("expected Duration to be populated")
 	}
@@ -112,10 +107,6 @@ func TestAlertManagerAdapter_ConvertsAndFilters(t *testing.T) {
 	if len(gotRecent) != 1 || gotRecent[0].ID != "r1" {
 		t.Fatalf("GetRecentlyResolved = %+v", gotRecent)
 	}
-	if gotRecent[0].LegacyID != "legacy-r1" {
-		t.Fatalf("resolved LegacyID = %q, want legacy-r1", gotRecent[0].LegacyID)
-	}
-
 	gotHistory := a.GetAlertHistory("storage:local", 1)
 	if len(gotHistory) != 1 || gotHistory[0].ID != "r1" {
 		t.Fatalf("GetAlertHistory = %+v", gotHistory)

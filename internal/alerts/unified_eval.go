@@ -181,7 +181,7 @@ func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds Thresh
 
 func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedresources.ResourceType, metricType string, threshold *HysteresisThreshold) (alertspecs.ResourceAlertSpec, error) {
 	spec := alertspecs.ResourceAlertSpec{
-		ID:           resourceID + "-" + metricType,
+		ID:           canonicalMetricSpecID(resourceID, metricType),
 		ResourceID:   resourceID,
 		ResourceType: resourceType,
 		Kind:         alertspecs.AlertSpecKindMetricThreshold,

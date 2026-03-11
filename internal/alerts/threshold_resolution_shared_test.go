@@ -3,6 +3,7 @@ package alerts
 import (
 	"testing"
 
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -142,7 +143,7 @@ func TestCheckUnifiedResourceUsesCanonicalGuestOverrideKey(t *testing.T) {
 		CPU:      &UnifiedResourceMetric{Percent: 65},
 	})
 
-	exists := testHasActiveAlert(t, m, resourceID+"-cpu")
+	exists := testHasActiveAlert(t, m, canonicalMetricStateID(resourceID, "cpu"))
 
 	if !exists {
 		t.Fatalf("expected canonical resource ID %q to be used for override lookup and alert IDs", resourceID)
@@ -163,16 +164,18 @@ func TestCheckNodeDisabledOverrideClearsExistingAlerts(t *testing.T) {
 	m.config.Overrides = map[string]ThresholdConfig{
 		node.ID: {Disabled: true},
 	}
-	m.activeAlerts[node.ID+"-cpu"] = &Alert{ID: node.ID + "-cpu"}
-	m.activeAlerts["node-offline-"+node.ID] = &Alert{ID: "node-offline-" + node.ID}
+	cpuState, cpuAlert := testNewCanonicalAlert(node.ID, canonicalMetricSpecID(node.ID, "cpu"), string(alertspecs.AlertSpecKindMetricThreshold), "cpu")
+	offlineState, offlineAlert := testNewCanonicalAlert(node.ID, canonicalConnectivitySpecID(node.ID), string(alertspecs.AlertSpecKindConnectivity), "offline")
+	m.setActiveAlertNoLock(cpuState, cpuAlert)
+	m.setActiveAlertNoLock(offlineState, offlineAlert)
 	m.nodeOfflineCount[node.ID] = 3
 	m.mu.Unlock()
 
 	m.CheckNode(node)
 
 	m.mu.RLock()
-	_, cpuExists := m.activeAlerts[node.ID+"-cpu"]
-	_, offlineExists := m.activeAlerts["node-offline-"+node.ID]
+	_, cpuExists := m.activeAlerts[cpuState]
+	_, offlineExists := m.activeAlerts[offlineState]
 	_, countExists := m.nodeOfflineCount[node.ID]
 	m.mu.RUnlock()
 

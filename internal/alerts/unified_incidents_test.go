@@ -34,7 +34,7 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 
 	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
 
-	alertID := "unified-incident-storage-tank-truenas-alert-1-truenas-volume-status"
+	alertID := buildCanonicalStateID(resource.ID, "alertspec:provider-incident:6d90d4cfe0dab6cc")
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()

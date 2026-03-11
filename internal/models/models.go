@@ -53,7 +53,6 @@ var (
 // Alert represents an active alert (simplified for State)
 type Alert struct {
 	ID              string     `json:"id"`
-	LegacyID        string     `json:"legacyId,omitempty"`
 	Type            string     `json:"type"`
 	Level           string     `json:"level"`
 	ResourceID      string     `json:"resourceId"`

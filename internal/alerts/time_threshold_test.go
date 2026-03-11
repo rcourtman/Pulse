@@ -101,20 +101,21 @@ func TestCheckMetricUsesPendingStartTime(t *testing.T) {
 		t.Fatalf("expected no active alerts after initial exceedance")
 	}
 
-	if _, ok := manager.pendingAlerts["guest-123-cpu"]; !ok {
+	if _, ok := manager.pendingAlerts[buildCanonicalStateID("guest-123", "metric-threshold:cpu")]; !ok {
 		manager.mu.Unlock()
 		t.Fatalf("expected pending alert tracking to be started")
 	}
 
 	forcedStart := time.Now().Add(-3 * time.Second)
-	manager.pendingAlerts["guest-123-cpu"] = forcedStart
+	manager.pendingAlerts[buildCanonicalStateID("guest-123", "metric-threshold:cpu")] = forcedStart
 	manager.mu.Unlock()
 
 	// Second exceedance should trigger the alert using the pending start time.
 	manager.checkMetric("guest-123", "test-vm", "node1", "qemu/123", "VM", "cpu", 90, threshold, nil)
 
 	manager.mu.Lock()
-	alert, exists := manager.activeAlerts["guest-123-cpu"]
+	canonicalState := buildCanonicalStateID("guest-123", "metric-threshold:cpu")
+	alert, exists := manager.activeAlerts[canonicalState]
 	manager.mu.Unlock()
 
 	if !exists {

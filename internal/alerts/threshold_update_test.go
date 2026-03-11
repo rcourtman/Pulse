@@ -32,12 +32,13 @@ func TestReevaluateActiveAlertsOnThresholdChange(t *testing.T) {
 	manager.UpdateConfig(initialConfig)
 
 	// Manually create an active alert for a VM with 91% CPU
-	alertID := "test-vm-101-cpu"
+	resourceID := "test-vm-101"
+	alertID := canonicalMetricStateID(resourceID, "cpu")
 	alert := &Alert{
 		ID:           alertID,
 		Type:         "cpu",
 		Level:        AlertLevelWarning,
-		ResourceID:   "test-vm-101",
+		ResourceID:   resourceID,
 		ResourceName: "test-vm",
 		Node:         "pve1",
 		Instance:     "qemu/101",
@@ -69,7 +70,7 @@ func TestReevaluateActiveAlertsOnThresholdChange(t *testing.T) {
 	// Check if the alert was resolved
 	manager.mu.RLock()
 	finalAlertCount := len(manager.activeAlerts)
-	_, alertStillActive := manager.activeAlerts[alertID]
+	_, alertStillActive := testLookupActiveAlert(t, manager, alertID)
 	manager.mu.RUnlock()
 
 	if alertStillActive {
@@ -82,7 +83,7 @@ func TestReevaluateActiveAlertsOnThresholdChange(t *testing.T) {
 
 	// Verify the alert was added to recently resolved
 	manager.resolvedMutex.RLock()
-	_, wasResolved := manager.recentlyResolved[alertID]
+	_, wasResolved := manager.recentlyResolved[canonicalMetricStateID(resourceID, "cpu")]
 	manager.resolvedMutex.RUnlock()
 
 	if !wasResolved {
@@ -114,8 +115,8 @@ func TestReevaluateActiveAlertsWithOverride(t *testing.T) {
 	manager.UpdateConfig(initialConfig)
 
 	// Create an active alert for a specific VM with 91% CPU
-	alertID := "test-vm-202-cpu"
 	resourceID := "test-vm-202"
+	alertID := canonicalMetricStateID(resourceID, "cpu")
 	alert := &Alert{
 		ID:           alertID,
 		Type:         "cpu",
@@ -147,7 +148,7 @@ func TestReevaluateActiveAlertsWithOverride(t *testing.T) {
 
 	// Check if the alert was resolved
 	manager.mu.RLock()
-	_, alertStillActive := manager.activeAlerts[alertID]
+	_, alertStillActive := testLookupActiveAlert(t, manager, alertID)
 	manager.mu.RUnlock()
 
 	if alertStillActive {
@@ -179,12 +180,13 @@ func TestReevaluateActiveAlertsStillAboveThreshold(t *testing.T) {
 	manager.UpdateConfig(initialConfig)
 
 	// Create an active alert with 96% CPU
-	alertID := "test-vm-303-cpu"
+	resourceID := "test-vm-303"
+	alertID := canonicalMetricStateID(resourceID, "cpu")
 	alert := &Alert{
 		ID:           alertID,
 		Type:         "cpu",
 		Level:        AlertLevelWarning,
-		ResourceID:   "test-vm-303",
+		ResourceID:   resourceID,
 		ResourceName: "test-vm",
 		Node:         "pve1",
 		Instance:     "qemu/101",
@@ -209,7 +211,7 @@ func TestReevaluateActiveAlertsStillAboveThreshold(t *testing.T) {
 
 	// Alert should still be active since 96% > 90% trigger
 	manager.mu.RLock()
-	_, alertStillActive := manager.activeAlerts[alertID]
+	_, alertStillActive := testLookupActiveAlert(t, manager, alertID)
 	manager.mu.RUnlock()
 
 	if !alertStillActive {

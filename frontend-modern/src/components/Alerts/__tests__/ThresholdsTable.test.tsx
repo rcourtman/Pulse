@@ -519,7 +519,6 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     expect(
       predicate({
         id: 'docker:docker-source-123::connectivity',
-        legacyId: 'docker-host-offline-docker-source-123',
         type: 'offline',
         level: 'critical',
         resourceId: 'docker:docker-source-123',
@@ -559,7 +558,6 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     expect(
       predicate({
         id: 'pbs:pbs-main::connectivity',
-        legacyId: 'pbs-offline-pbs-main',
         type: 'offline',
         level: 'critical',
         resourceId: 'pbs-main',

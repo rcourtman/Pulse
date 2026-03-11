@@ -3,7 +3,6 @@ package monitoring
 import (
 	"strings"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -25,7 +24,6 @@ func (m *Monitor) syncAlertsToState() {
 	for _, alert := range activeAlerts {
 		modelAlerts = append(modelAlerts, models.Alert{
 			ID:              alert.ID,
-			LegacyID:        alert.LegacyID,
 			Type:            alert.Type,
 			Level:           string(alert.Level),
 			ResourceID:      alert.ResourceID,
@@ -104,7 +102,7 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 
 		switch {
 		case alert.Type == "docker-host-offline":
-			hostID = strings.TrimPrefix(alertCompatID(alert), "docker-host-offline-")
+			hostID = strings.TrimPrefix(strings.TrimSpace(alert.ResourceID), "docker:")
 		case strings.HasPrefix(alert.ResourceID, "docker:"):
 			resource := strings.TrimPrefix(alert.ResourceID, "docker:")
 			if idx := strings.Index(resource, "/"); idx >= 0 {
@@ -146,11 +144,4 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 	}
 
 	return cleared
-}
-
-func alertCompatID(alert alerts.Alert) string {
-	if strings.TrimSpace(alert.LegacyID) != "" {
-		return alert.LegacyID
-	}
-	return alert.ID
 }
