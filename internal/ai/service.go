@@ -3869,11 +3869,7 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 	alertID := ""
 	resourceID := req.TargetID
 	if req.Context != nil {
-		if val, ok := req.Context["alertId"].(string); ok && val != "" {
-			alertID = val
-		} else if val, ok := req.Context["alert_id"].(string); ok && val != "" {
-			alertID = val
-		}
+		alertID = extractAlertID(req.Context)
 
 		if resourceID == "" {
 			if val, ok := req.Context["resourceId"].(string); ok && val != "" {
@@ -4436,6 +4432,9 @@ func (s *Service) RecordIncidentRunbook(alertID, runbookID, title string, outcom
 func extractAlertID(ctx map[string]interface{}) string {
 	if ctx == nil {
 		return ""
+	}
+	if alertID, ok := ctx["alertIdentifier"].(string); ok && alertID != "" {
+		return alertID
 	}
 	if alertID, ok := ctx["alertId"].(string); ok && alertID != "" {
 		return alertID

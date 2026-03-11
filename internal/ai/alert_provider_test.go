@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -227,5 +228,65 @@ func TestGenerateAlertInvestigationPrompt(t *testing.T) {
 		!strings.Contains(out, "**Resource:** pve1 (node)") ||
 		!strings.Contains(out, "**Node:** pve1") {
 		t.Fatalf("unexpected prompt: %s", out)
+	}
+}
+
+func TestAlertInvestigationRequestJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+	req := AlertInvestigationRequest{
+		AlertID:      "instance:node:100::metric/cpu",
+		ResourceID:   "agent-1",
+		ResourceName: "node-1",
+		ResourceType: "node",
+		AlertType:    "cpu",
+		Level:        "warning",
+		Message:      "high cpu",
+	}
+
+	raw, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["alertIdentifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier, got %#v", payload["alertIdentifier"])
+	}
+	if payload["alert_id"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility alert_id, got %#v", payload["alert_id"])
+	}
+
+	var decodedCanonical AlertInvestigationRequest
+	if err := json.Unmarshal([]byte(`{
+		"alertIdentifier":"instance:node:100::metric/cpu",
+		"resource_id":"agent-1",
+		"resource_name":"node-1",
+		"resource_type":"node",
+		"alert_type":"cpu",
+		"level":"warning",
+		"message":"high cpu"
+	}`), &decodedCanonical); err != nil {
+		t.Fatalf("unmarshal canonical request: %v", err)
+	}
+	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier to load, got %q", decodedCanonical.AlertID)
+	}
+
+	var decodedLegacy AlertInvestigationRequest
+	if err := json.Unmarshal([]byte(`{
+		"alert_id":"legacy-alert-id",
+		"resource_id":"agent-1",
+		"resource_name":"node-1",
+		"resource_type":"node",
+		"alert_type":"cpu",
+		"level":"warning",
+		"message":"high cpu"
+	}`), &decodedLegacy); err != nil {
+		t.Fatalf("unmarshal legacy request: %v", err)
+	}
+	if decodedLegacy.AlertID != "legacy-alert-id" {
+		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertID)
 	}
 }

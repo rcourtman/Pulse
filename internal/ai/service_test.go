@@ -169,6 +169,30 @@ func TestService_ClearCostHistory_NoStore(t *testing.T) {
 	}
 }
 
+func TestExtractAlertIDPrefersCanonicalIdentifier(t *testing.T) {
+	ctx := map[string]interface{}{
+		"alertIdentifier": "instance:node:100::metric/cpu",
+		"alertId":         "legacy-alert-id",
+		"alert_id":        "legacy-alert-id-2",
+	}
+
+	if got := extractAlertID(ctx); got != "instance:node:100::metric/cpu" {
+		t.Fatalf("extractAlertID canonical preference = %q", got)
+	}
+}
+
+func TestExtractAlertIDFallsBackToLegacyAliases(t *testing.T) {
+	if got := extractAlertID(map[string]interface{}{"alertId": "legacy-alert-id"}); got != "legacy-alert-id" {
+		t.Fatalf("extractAlertID alertId fallback = %q", got)
+	}
+	if got := extractAlertID(map[string]interface{}{"alert_id": "legacy-alert-id-2"}); got != "legacy-alert-id-2" {
+		t.Fatalf("extractAlertID alert_id fallback = %q", got)
+	}
+	if got := extractAlertID(nil); got != "" {
+		t.Fatalf("extractAlertID nil context = %q", got)
+	}
+}
+
 func TestService_AcquireExecutionSlot(t *testing.T) {
 	svc := NewService(nil, nil)
 

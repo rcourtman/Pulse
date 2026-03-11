@@ -2,6 +2,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -211,7 +212,7 @@ func formatTimeAgo(t time.Time) string {
 
 // AlertInvestigationRequest represents a request to investigate an alert
 type AlertInvestigationRequest struct {
-	AlertID      string  `json:"alert_id"`
+	AlertID      string  `json:"-"`
 	ResourceID   string  `json:"resource_id"`
 	ResourceName string  `json:"resource_name"`
 	ResourceType string  `json:"resource_type"` // canonical v6 resource type
@@ -223,6 +224,69 @@ type AlertInvestigationRequest struct {
 	Duration     string  `json:"duration"` // How long the alert has been active
 	Node         string  `json:"node,omitempty"`
 	VMID         int     `json:"vmid,omitempty"`
+}
+
+type alertInvestigationRequestJSON struct {
+	AlertIdentifier string  `json:"alertIdentifier,omitempty"`
+	AlertID         string  `json:"alert_id,omitempty"`
+	ResourceID      string  `json:"resource_id"`
+	ResourceName    string  `json:"resource_name"`
+	ResourceType    string  `json:"resource_type"`
+	AlertType       string  `json:"alert_type"`
+	Level           string  `json:"level"`
+	Value           float64 `json:"value"`
+	Threshold       float64 `json:"threshold"`
+	Message         string  `json:"message"`
+	Duration        string  `json:"duration"`
+	Node            string  `json:"node,omitempty"`
+	VMID            int     `json:"vmid,omitempty"`
+}
+
+func (r AlertInvestigationRequest) MarshalJSON() ([]byte, error) {
+	alertIdentifier := strings.TrimSpace(r.AlertID)
+	return json.Marshal(alertInvestigationRequestJSON{
+		AlertIdentifier: alertIdentifier,
+		AlertID:         alertIdentifier,
+		ResourceID:      r.ResourceID,
+		ResourceName:    r.ResourceName,
+		ResourceType:    r.ResourceType,
+		AlertType:       r.AlertType,
+		Level:           r.Level,
+		Value:           r.Value,
+		Threshold:       r.Threshold,
+		Message:         r.Message,
+		Duration:        r.Duration,
+		Node:            r.Node,
+		VMID:            r.VMID,
+	})
+}
+
+func (r *AlertInvestigationRequest) UnmarshalJSON(data []byte) error {
+	var payload alertInvestigationRequestJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
+	if alertIdentifier == "" {
+		alertIdentifier = strings.TrimSpace(payload.AlertID)
+	}
+
+	*r = AlertInvestigationRequest{
+		AlertID:      alertIdentifier,
+		ResourceID:   payload.ResourceID,
+		ResourceName: payload.ResourceName,
+		ResourceType: payload.ResourceType,
+		AlertType:    payload.AlertType,
+		Level:        payload.Level,
+		Value:        payload.Value,
+		Threshold:    payload.Threshold,
+		Message:      payload.Message,
+		Duration:     payload.Duration,
+		Node:         payload.Node,
+		VMID:         payload.VMID,
+	}
+	return nil
 }
 
 // GenerateAlertInvestigationPrompt creates a focused prompt for alert investigation
