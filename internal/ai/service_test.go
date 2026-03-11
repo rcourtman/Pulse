@@ -169,25 +169,25 @@ func TestService_ClearCostHistory_NoStore(t *testing.T) {
 	}
 }
 
-func TestExtractAlertIDPrefersCanonicalIdentifier(t *testing.T) {
+func TestExtractAlertIdentifierPrefersCanonicalIdentifier(t *testing.T) {
 	ctx := map[string]interface{}{
 		"alertIdentifier": "instance:node:100::metric/cpu",
 	}
 
-	if got := extractAlertID(ctx); got != "instance:node:100::metric/cpu" {
-		t.Fatalf("extractAlertID canonical preference = %q", got)
+	if got := extractAlertIdentifier(ctx); got != "instance:node:100::metric/cpu" {
+		t.Fatalf("extractAlertIdentifier canonical preference = %q", got)
 	}
 }
 
-func TestExtractAlertIDRequiresCanonicalIdentifier(t *testing.T) {
-	if got := extractAlertID(map[string]interface{}{"alertId": "legacy-alert-id"}); got != "" {
-		t.Fatalf("extractAlertID legacy alertId should be ignored, got %q", got)
+func TestExtractAlertIdentifierRequiresCanonicalIdentifier(t *testing.T) {
+	if got := extractAlertIdentifier(map[string]interface{}{"alertId": "legacy-alert-id"}); got != "" {
+		t.Fatalf("extractAlertIdentifier legacy alertId should be ignored, got %q", got)
 	}
-	if got := extractAlertID(map[string]interface{}{"alert_id": "legacy-alert-id-2"}); got != "" {
-		t.Fatalf("extractAlertID legacy alert_id should be ignored, got %q", got)
+	if got := extractAlertIdentifier(map[string]interface{}{"alert_id": "legacy-alert-id-2"}); got != "" {
+		t.Fatalf("extractAlertIdentifier legacy alert_id should be ignored, got %q", got)
 	}
-	if got := extractAlertID(nil); got != "" {
-		t.Fatalf("extractAlertID nil context = %q", got)
+	if got := extractAlertIdentifier(nil); got != "" {
+		t.Fatalf("extractAlertIdentifier nil context = %q", got)
 	}
 }
 

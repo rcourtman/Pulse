@@ -2999,8 +2999,8 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		// Execute via agent
 		result, err := s.executeOnAgent(ctx, execReq, command)
 		recordIncident := func(success bool, output string) {
-			alertID := extractAlertID(req.Context)
-			if alertID == "" {
+			alertIdentifier := extractAlertIdentifier(req.Context)
+			if alertIdentifier == "" {
 				return
 			}
 			s.mu.RLock()
@@ -3017,7 +3017,7 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			if targetHost != "" {
 				details["target_host"] = targetHost
 			}
-			incidentStore.RecordCommand(alertID, command, success, output, details)
+			incidentStore.RecordCommand(alertIdentifier, command, success, output, details)
 		}
 		if err != nil {
 			recordIncident(false, result)
@@ -3866,10 +3866,10 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 	prompt += s.buildAlertContext()
 
 	// Add incident memory for alert or resource context
-	alertID := ""
+	alertIdentifier := ""
 	resourceID := req.TargetID
 	if req.Context != nil {
-		alertID = extractAlertID(req.Context)
+		alertIdentifier = extractAlertIdentifier(req.Context)
 
 		if resourceID == "" {
 			if val, ok := req.Context["resourceId"].(string); ok && val != "" {
@@ -3882,7 +3882,7 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`
 		}
 	}
 
-	if incidentContext := s.buildIncidentContext(resourceID, alertID); incidentContext != "" {
+	if incidentContext := s.buildIncidentContext(resourceID, alertIdentifier); incidentContext != "" {
 		prompt += incidentContext
 	}
 
@@ -4383,7 +4383,7 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 }
 
 // buildIncidentContext adds incident timeline context for alerts/resources.
-func (s *Service) buildIncidentContext(resourceID, alertID string) string {
+func (s *Service) buildIncidentContext(resourceID, alertIdentifier string) string {
 	s.mu.RLock()
 	store := s.incidentStore
 	s.mu.RUnlock()
@@ -4392,8 +4392,8 @@ func (s *Service) buildIncidentContext(resourceID, alertID string) string {
 		return ""
 	}
 
-	if alertID != "" {
-		return store.FormatForAlert(alertID, 8)
+	if alertIdentifier != "" {
+		return store.FormatForAlert(alertIdentifier, 8)
 	}
 	if resourceID != "" {
 		return store.FormatForResource(resourceID, 4)
@@ -4402,8 +4402,8 @@ func (s *Service) buildIncidentContext(resourceID, alertID string) string {
 }
 
 // RecordIncidentAnalysis stores an AI analysis event for an alert.
-func (s *Service) RecordIncidentAnalysis(alertID, summary string, details map[string]interface{}) {
-	if alertID == "" {
+func (s *Service) RecordIncidentAnalysis(alertIdentifier, summary string, details map[string]interface{}) {
+	if alertIdentifier == "" {
 		return
 	}
 	s.mu.RLock()
@@ -4412,12 +4412,12 @@ func (s *Service) RecordIncidentAnalysis(alertID, summary string, details map[st
 	if store == nil {
 		return
 	}
-	store.RecordAnalysis(alertID, summary, details)
+	store.RecordAnalysis(alertIdentifier, summary, details)
 }
 
 // RecordIncidentRunbook stores a runbook execution event for an alert.
-func (s *Service) RecordIncidentRunbook(alertID, runbookID, title string, outcome memory.Outcome, automatic bool, message string) {
-	if alertID == "" || runbookID == "" {
+func (s *Service) RecordIncidentRunbook(alertIdentifier, runbookID, title string, outcome memory.Outcome, automatic bool, message string) {
+	if alertIdentifier == "" || runbookID == "" {
 		return
 	}
 	s.mu.RLock()
@@ -4426,15 +4426,15 @@ func (s *Service) RecordIncidentRunbook(alertID, runbookID, title string, outcom
 	if store == nil {
 		return
 	}
-	store.RecordRunbook(alertID, runbookID, title, string(outcome), automatic, message)
+	store.RecordRunbook(alertIdentifier, runbookID, title, string(outcome), automatic, message)
 }
 
-func extractAlertID(ctx map[string]interface{}) string {
+func extractAlertIdentifier(ctx map[string]interface{}) string {
 	if ctx == nil {
 		return ""
 	}
-	if alertID, ok := ctx["alertIdentifier"].(string); ok && alertID != "" {
-		return alertID
+	if alertIdentifier, ok := ctx["alertIdentifier"].(string); ok && alertIdentifier != "" {
+		return alertIdentifier
 	}
 	return ""
 }
