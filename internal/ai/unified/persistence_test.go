@@ -1,11 +1,78 @@
 package unified
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestUnifiedFindingJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+	finding := UnifiedFinding{
+		ID:         "f1",
+		Source:     SourceThreshold,
+		Severity:   SeverityWarning,
+		Category:   CategoryPerformance,
+		ResourceID: "res-1",
+		Title:      "High CPU",
+		AlertID:    "instance:node:100::metric/cpu",
+		DetectedAt: time.Now(),
+		LastSeenAt: time.Now(),
+	}
+
+	raw, err := json.Marshal(finding)
+	if err != nil {
+		t.Fatalf("marshal unified finding: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode unified finding payload: %v", err)
+	}
+	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
+	}
+	if payload["alert_id"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility alert_id, got %#v", payload["alert_id"])
+	}
+
+	var decodedCanonical UnifiedFinding
+	if err := json.Unmarshal([]byte(`{
+		"id":"f1",
+		"source":"threshold",
+		"severity":"warning",
+		"category":"performance",
+		"resource_id":"res-1",
+		"title":"High CPU",
+		"detected_at":"2026-03-11T00:00:00Z",
+		"last_seen_at":"2026-03-11T00:00:00Z",
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decodedCanonical); err != nil {
+		t.Fatalf("unmarshal canonical unified finding: %v", err)
+	}
+	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertID)
+	}
+
+	var decodedLegacy UnifiedFinding
+	if err := json.Unmarshal([]byte(`{
+		"id":"f1",
+		"source":"threshold",
+		"severity":"warning",
+		"category":"performance",
+		"resource_id":"res-1",
+		"title":"High CPU",
+		"detected_at":"2026-03-11T00:00:00Z",
+		"last_seen_at":"2026-03-11T00:00:00Z",
+		"alert_id":"legacy-alert-id"
+	}`), &decodedLegacy); err != nil {
+		t.Fatalf("unmarshal legacy unified finding: %v", err)
+	}
+	if decodedLegacy.AlertID != "legacy-alert-id" {
+		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertID)
+	}
+}
 
 func TestFilePersistence_SaveLoad(t *testing.T) {
 	dir := t.TempDir()

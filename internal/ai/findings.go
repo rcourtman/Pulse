@@ -2,6 +2,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -122,7 +123,7 @@ type Finding struct {
 	AcknowledgedAt *time.Time      `json:"acknowledged_at,omitempty"`
 	SnoozedUntil   *time.Time      `json:"snoozed_until,omitempty"` // Finding hidden until this time
 	// Link to alert if this finding was triggered by or attached to an alert
-	AlertID string `json:"alert_id,omitempty"`
+	AlertID string `json:"-"`
 
 	// User feedback fields - enables LLM "memory" by tracking how users respond
 	// This helps prevent the LLM from repeatedly raising the same dismissed issues
@@ -141,6 +142,135 @@ type Finding struct {
 	Lifecycle              []FindingLifecycleEvent `json:"lifecycle,omitempty"`                // Bounded, append-only lifecycle log
 	RegressionCount        int                     `json:"regression_count,omitempty"`         // Times the issue reappeared after resolution
 	LastRegressionAt       *time.Time              `json:"last_regression_at,omitempty"`       // Timestamp of most recent regression
+}
+
+type findingJSON struct {
+	ID                     string                  `json:"id"`
+	Key                    string                  `json:"key,omitempty"`
+	Severity               FindingSeverity         `json:"severity"`
+	Category               FindingCategory         `json:"category"`
+	ResourceID             string                  `json:"resource_id"`
+	ResourceName           string                  `json:"resource_name"`
+	ResourceType           string                  `json:"resource_type"`
+	Node                   string                  `json:"node,omitempty"`
+	Title                  string                  `json:"title"`
+	Description            string                  `json:"description"`
+	Recommendation         string                  `json:"recommendation,omitempty"`
+	Evidence               string                  `json:"evidence,omitempty"`
+	Source                 string                  `json:"source,omitempty"`
+	DetectedAt             time.Time               `json:"detected_at"`
+	LastSeenAt             time.Time               `json:"last_seen_at"`
+	ResolvedAt             *time.Time              `json:"resolved_at,omitempty"`
+	AutoResolved           bool                    `json:"auto_resolved"`
+	ResolveReason          string                  `json:"resolve_reason,omitempty"`
+	AcknowledgedAt         *time.Time              `json:"acknowledged_at,omitempty"`
+	SnoozedUntil           *time.Time              `json:"snoozed_until,omitempty"`
+	AlertIdentifier        string                  `json:"alert_identifier,omitempty"`
+	AlertID                string                  `json:"alert_id,omitempty"`
+	DismissedReason        string                  `json:"dismissed_reason,omitempty"`
+	UserNote               string                  `json:"user_note,omitempty"`
+	TimesRaised            int                     `json:"times_raised"`
+	Suppressed             bool                    `json:"suppressed"`
+	InvestigationSessionID string                  `json:"investigation_session_id,omitempty"`
+	InvestigationStatus    string                  `json:"investigation_status,omitempty"`
+	InvestigationOutcome   string                  `json:"investigation_outcome,omitempty"`
+	LastInvestigatedAt     *time.Time              `json:"last_investigated_at,omitempty"`
+	InvestigationAttempts  int                     `json:"investigation_attempts"`
+	LoopState              string                  `json:"loop_state,omitempty"`
+	Lifecycle              []FindingLifecycleEvent `json:"lifecycle,omitempty"`
+	RegressionCount        int                     `json:"regression_count,omitempty"`
+	LastRegressionAt       *time.Time              `json:"last_regression_at,omitempty"`
+}
+
+func (f Finding) MarshalJSON() ([]byte, error) {
+	alertIdentifier := strings.TrimSpace(f.AlertID)
+	return json.Marshal(findingJSON{
+		ID:                     f.ID,
+		Key:                    f.Key,
+		Severity:               f.Severity,
+		Category:               f.Category,
+		ResourceID:             f.ResourceID,
+		ResourceName:           f.ResourceName,
+		ResourceType:           f.ResourceType,
+		Node:                   f.Node,
+		Title:                  f.Title,
+		Description:            f.Description,
+		Recommendation:         f.Recommendation,
+		Evidence:               f.Evidence,
+		Source:                 f.Source,
+		DetectedAt:             f.DetectedAt,
+		LastSeenAt:             f.LastSeenAt,
+		ResolvedAt:             f.ResolvedAt,
+		AutoResolved:           f.AutoResolved,
+		ResolveReason:          f.ResolveReason,
+		AcknowledgedAt:         f.AcknowledgedAt,
+		SnoozedUntil:           f.SnoozedUntil,
+		AlertIdentifier:        alertIdentifier,
+		AlertID:                alertIdentifier,
+		DismissedReason:        f.DismissedReason,
+		UserNote:               f.UserNote,
+		TimesRaised:            f.TimesRaised,
+		Suppressed:             f.Suppressed,
+		InvestigationSessionID: f.InvestigationSessionID,
+		InvestigationStatus:    f.InvestigationStatus,
+		InvestigationOutcome:   f.InvestigationOutcome,
+		LastInvestigatedAt:     f.LastInvestigatedAt,
+		InvestigationAttempts:  f.InvestigationAttempts,
+		LoopState:              f.LoopState,
+		Lifecycle:              f.Lifecycle,
+		RegressionCount:        f.RegressionCount,
+		LastRegressionAt:       f.LastRegressionAt,
+	})
+}
+
+func (f *Finding) UnmarshalJSON(data []byte) error {
+	var payload findingJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
+	if alertIdentifier == "" {
+		alertIdentifier = strings.TrimSpace(payload.AlertID)
+	}
+
+	*f = Finding{
+		ID:                     payload.ID,
+		Key:                    payload.Key,
+		Severity:               payload.Severity,
+		Category:               payload.Category,
+		ResourceID:             payload.ResourceID,
+		ResourceName:           payload.ResourceName,
+		ResourceType:           payload.ResourceType,
+		Node:                   payload.Node,
+		Title:                  payload.Title,
+		Description:            payload.Description,
+		Recommendation:         payload.Recommendation,
+		Evidence:               payload.Evidence,
+		Source:                 payload.Source,
+		DetectedAt:             payload.DetectedAt,
+		LastSeenAt:             payload.LastSeenAt,
+		ResolvedAt:             payload.ResolvedAt,
+		AutoResolved:           payload.AutoResolved,
+		ResolveReason:          payload.ResolveReason,
+		AcknowledgedAt:         payload.AcknowledgedAt,
+		SnoozedUntil:           payload.SnoozedUntil,
+		AlertID:                alertIdentifier,
+		DismissedReason:        payload.DismissedReason,
+		UserNote:               payload.UserNote,
+		TimesRaised:            payload.TimesRaised,
+		Suppressed:             payload.Suppressed,
+		InvestigationSessionID: payload.InvestigationSessionID,
+		InvestigationStatus:    payload.InvestigationStatus,
+		InvestigationOutcome:   payload.InvestigationOutcome,
+		LastInvestigatedAt:     payload.LastInvestigatedAt,
+		InvestigationAttempts:  payload.InvestigationAttempts,
+		LoopState:              payload.LoopState,
+		Lifecycle:              payload.Lifecycle,
+		RegressionCount:        payload.RegressionCount,
+		LastRegressionAt:       payload.LastRegressionAt,
+	}
+	return nil
 }
 
 // IsActive returns true if the finding is still active (not resolved, not snoozed, not suppressed, not dismissed)
