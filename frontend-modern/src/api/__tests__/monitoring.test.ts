@@ -174,6 +174,37 @@ describe('MonitoringAPI', () => {
     });
   });
 
+  describe('updateDockerContainer', () => {
+    it('returns canonical success when the backend omits a payload body', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(new Response('', { status: 200 }));
+
+      const result = await MonitoringAPI.updateDockerContainer('agent-1', 'container-1', 'nginx');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/docker/containers/update',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            agentId: 'agent-1',
+            containerId: 'container-1',
+            containerName: 'nginx',
+          }),
+        }),
+      );
+      expect(result).toEqual({ success: true });
+    });
+
+    it('returns parsed command payloads when present', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, commandId: 'cmd-1' }), { status: 200 }),
+      );
+
+      const result = await MonitoringAPI.updateDockerContainer('agent-1', 'container-1', 'nginx');
+
+      expect(result).toEqual({ success: true, commandId: 'cmd-1' });
+    });
+  });
+
   describe('agent management', () => {
     it('deletes agent via unified backend route', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({
@@ -392,6 +423,54 @@ describe('MonitoringAPI', () => {
       await expect(
         MonitoringAPI.markKubernetesClusterPendingUninstall('cluster-1'),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('checkDockerUpdates', () => {
+    it('returns canonical success when the backend omits a payload body', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(new Response('', { status: 200 }));
+
+      const result = await MonitoringAPI.checkDockerUpdates('agent-1');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/docker/runtimes/agent-1/check-updates',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(result).toEqual({ success: true });
+    });
+
+    it('returns parsed command payloads when present', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, commandId: 'cmd-2' }), { status: 200 }),
+      );
+
+      const result = await MonitoringAPI.checkDockerUpdates('agent-1');
+
+      expect(result).toEqual({ success: true, commandId: 'cmd-2' });
+    });
+  });
+
+  describe('updateAllDockerContainers', () => {
+    it('returns canonical success when the backend omits a payload body', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(new Response('', { status: 200 }));
+
+      const result = await MonitoringAPI.updateAllDockerContainers('agent-1');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/docker/runtimes/agent-1/update-all',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(result).toEqual({ success: true });
+    });
+
+    it('returns parsed command payloads when present', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, commandId: 'cmd-3' }), { status: 200 }),
+      );
+
+      const result = await MonitoringAPI.updateAllDockerContainers('agent-1');
+
+      expect(result).toEqual({ success: true, commandId: 'cmd-3' });
     });
   });
 });

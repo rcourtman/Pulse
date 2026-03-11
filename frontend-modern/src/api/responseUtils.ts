@@ -111,6 +111,23 @@ export async function parseOptionalAPIResponse<T>(
   return parseOptionalJSON(response, emptyValue, parseErrorMessage);
 }
 
+export async function parseOptionalSuccessAPIResponse<
+  T extends {
+    success?: boolean;
+  },
+>(
+  response: Response,
+  requestErrorMessage: string,
+  parseErrorMessage: string,
+): Promise<T & { success: boolean }> {
+  return parseOptionalAPIResponse<T & { success: boolean }>(
+    response,
+    { success: true } as T & { success: boolean },
+    requestErrorMessage,
+    parseErrorMessage,
+  );
+}
+
 export async function parseOptionalAPIResponseOrAllowedStatus<T>(
   response: Response,
   allowedStatuses: number | number[],

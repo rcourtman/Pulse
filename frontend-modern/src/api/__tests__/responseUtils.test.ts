@@ -18,6 +18,7 @@ import {
   parseOptionalAPIResponse,
   parseOptionalAPIResponseOrAllowedStatus,
   parseOptionalAPIResponseOrNull,
+  parseOptionalSuccessAPIResponse,
   parseOptionalJSON,
   parseRequiredAPIResponse,
   parseRequiredAPIResponseOrNull,
@@ -184,6 +185,24 @@ describe('parseOptionalAPIResponse', () => {
     await expect(
       parseOptionalAPIResponse(response, [], 'Request failed', 'Parse failed'),
     ).rejects.toThrow('Request failed');
+  });
+});
+
+describe('parseOptionalSuccessAPIResponse', () => {
+  it('returns success true for empty successful responses', async () => {
+    await expect(
+      parseOptionalSuccessAPIResponse(new Response('', { status: 200 }), 'Request failed', 'Parse failed'),
+    ).resolves.toEqual({ success: true });
+  });
+
+  it('parses valid payloads when present', async () => {
+    await expect(
+      parseOptionalSuccessAPIResponse<{ success?: boolean; commandId?: string }>(
+        new Response(JSON.stringify({ success: true, commandId: 'cmd-1' }), { status: 200 }),
+        'Request failed',
+        'Parse failed',
+      ),
+    ).resolves.toEqual({ success: true, commandId: 'cmd-1' });
   });
 });
 

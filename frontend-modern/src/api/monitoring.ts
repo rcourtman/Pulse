@@ -13,6 +13,7 @@ import {
   coerceTimestampMillis,
   parseOptionalAPIResponse,
   parseOptionalAPIResponseOrAllowedStatus,
+  parseOptionalSuccessAPIResponse,
   parseOptionalAPIResponseOrNull,
 } from './responseUtils';
 
@@ -290,9 +291,8 @@ export class MonitoringAPI {
       body: JSON.stringify({ agentId, containerId, containerName }),
     });
 
-    return parseOptionalAPIResponse(
+    return parseOptionalSuccessAPIResponse<UpdateDockerContainerResponse>(
       response,
-      { success: true },
       `Failed with status ${response.status}`,
       'Failed to parse update container response',
     );
@@ -310,9 +310,8 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    return parseOptionalAPIResponse(
+    return parseOptionalSuccessAPIResponse<{ success: boolean; commandId?: string }>(
       response,
-      { success: true },
       `Failed with status ${response.status}`,
       'Failed to parse check updates response',
     );
@@ -330,9 +329,8 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    return parseOptionalAPIResponse(
+    return parseOptionalSuccessAPIResponse<{ success: boolean; commandId?: string }>(
       response,
-      { success: true },
       `Failed with status ${response.status}`,
       'Failed to parse update all response',
     );

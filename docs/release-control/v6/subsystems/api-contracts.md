@@ -38,7 +38,7 @@ Own canonical runtime payload shapes between backend and frontend.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes
 3. Add dedicated contract tests for new stable payloads
-4. Route frontend API-client parsed error propagation, allowed-status handling, custom status-specific error handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+4. Route frontend API-client parsed error propagation, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 
 ## Forbidden Paths
 
@@ -59,6 +59,7 @@ Own canonical runtime payload shapes between backend and frontend.
 15. AI stream clients duplicating SSE reader, timeout, chunk-splitting, and JSON event parsing loops instead of using one shared stream consumer
 16. Monitoring delete and idempotent mutate clients open-coding `404`/`204` allowed-status branches instead of using canonical shared allowed-status helpers
 17. Governed frontend API clients open-coding `if (!response.ok) { if (isAPIResponseStatus(...)) throw new Error(...) }` status-to-user-message branches instead of using canonical shared custom-status error helpers
+18. Monitoring command-trigger clients open-coding `parseOptionalAPIResponse(response, { success: true }, ...)` success-envelope fallbacks instead of using a canonical shared success-envelope helper
 
 ## Completion Obligations
 
@@ -163,6 +164,10 @@ route custom `503` and `404` user-facing error promotion through shared
 custom-status error helpers in `frontend-modern/src/api/responseUtils.ts`
 instead of open-coding local `if (!response.ok) { if (isAPIResponseStatus(...))
 throw new Error(...) }` stacks.
+Monitoring command-trigger clients must now also route empty-body
+`{ success: true }` fallback behavior through a shared success-envelope helper
+in `frontend-modern/src/api/responseUtils.ts` instead of open-coding
+`parseOptionalAPIResponse(response, { success: true }, ...)` in each method.
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.
