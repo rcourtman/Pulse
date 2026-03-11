@@ -27,6 +27,8 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export async function assertAPIResponseOK');
     expect(responseUtilsSource).toContain('export async function parseRequiredAPIResponse');
     expect(responseUtilsSource).toContain('export async function parseOptionalAPIResponse');
+    expect(responseUtilsSource).toContain('export async function parseRequiredAPIResponseOrNull');
+    expect(responseUtilsSource).toContain('export async function parseOptionalAPIResponseOrNull');
     expect(responseUtilsSource).toContain('export async function parseRequiredJSON');
     expect(responseUtilsSource).toContain('export async function parseJSONSafe');
     expect(responseUtilsSource).toContain('export function parseJSONTextSafe');
@@ -82,14 +84,14 @@ describe('API error-status guardrails', () => {
     expect(agentProfilesSource).not.toContain('readAPIErrorMessage(');
 
     expect(monitoringSource).toContain('parseOptionalAPIResponse(');
+    expect(monitoringSource).toContain('parseOptionalAPIResponseOrNull<AgentLookupResponse>(');
     expect(monitoringSource).toContain('assertAPIResponseOK(response,');
     expect(monitoringSource).toContain('isAPIResponseStatus(response, 404)');
-    expect(monitoringSource).toContain('parseOptionalAPIResponse<AgentLookupResponse | null>(');
     expect(monitoringSource).toContain('coerceTimestampMillis(identity.lastSeen, Date.now())');
     expect(monitoringSource).toContain("'Failed to parse agent lookup response'");
-    expect(discoverySource).toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).toContain('assertAPIResponseOK(response,');
     expect(discoverySource).toContain('parseRequiredAPIResponse(');
+    expect(discoverySource).toContain('parseRequiredAPIResponseOrNull(');
     expect(discoverySource).toContain('buildTypedDiscoveryPath(');
     expect(discoverySource).toContain('buildAgentDiscoveryCollectionPath(');
     expect(discoverySource).toContain('buildAgentDiscoveryDetailPath(');
@@ -103,6 +105,7 @@ describe('API error-status guardrails', () => {
     expect(discoverySource).not.toContain('const isAgentResourceType =');
     expect(discoverySource).not.toContain('const agentCollectionBasePath =');
     expect(discoverySource).not.toContain('parseRequiredJSON(response,');
+    expect(discoverySource).not.toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).not.toContain('readAPIErrorMessage(');
 
     expect(hostedSignupSource).toContain('parseJSONSafe<');
@@ -170,7 +173,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, and discovery route alias drift', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, and discovery route alias drift', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -230,6 +233,11 @@ describe('API error-status guardrails', () => {
     );
     const rawAssertThenParsePattern =
       /assertAPIResponseOK\((response|agentListResponse),[\s\S]{0,160}?parse(?:Required|Optional)JSON\(\1,/;
+    const governedNullLookupEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:discovery|monitoring)\.ts$/.test(path),
+    );
+    const rawNullLookupPattern =
+      /if\s*\(\s*isAPIResponseStatus\(response,\s*404\)\s*\)\s*\{\s*return null;\s*\}/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -306,6 +314,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const rawNullLookupOffenders = governedNullLookupEntries
+      .filter(([, source]) => rawNullLookupPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -319,6 +332,7 @@ describe('API error-status guardrails', () => {
     expect(noOpAiAliasOffenders).toEqual([]);
     expect(rawParsedErrorThrowOffenders).toEqual([]);
     expect(rawAssertThenParseOffenders).toEqual([]);
+    expect(rawNullLookupOffenders).toEqual([]);
     expect(discoveryRouteAliasOffenders).toEqual([]);
   });
 });

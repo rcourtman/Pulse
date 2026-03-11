@@ -1,8 +1,8 @@
 import { apiFetch } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
-  isAPIResponseStatus,
   parseRequiredAPIResponse,
+  parseRequiredAPIResponseOrNull,
 } from './responseUtils';
 import type {
   ResourceType,
@@ -125,17 +125,21 @@ export async function getDiscovery(
     const response = await apiFetch(
       buildAgentDiscoveryDetailPath(resolvedAgentId, resolvedAgentDiscovery.resource_id),
     );
-    if (isAPIResponseStatus(response, 404)) {
-      return null;
-    }
-    return parseRequiredAPIResponse(response, 'Failed to get discovery', 'Failed to parse discovery');
+    return parseRequiredAPIResponseOrNull(
+      response,
+      404,
+      'Failed to get discovery',
+      'Failed to parse discovery',
+    );
   }
 
   const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId));
-  if (isAPIResponseStatus(response, 404)) {
-    return null;
-  }
-  return parseRequiredAPIResponse(response, 'Failed to get discovery', 'Failed to parse discovery');
+  return parseRequiredAPIResponseOrNull(
+    response,
+    404,
+    'Failed to get discovery',
+    'Failed to parse discovery',
+  );
 }
 
 /**

@@ -14,8 +14,10 @@ import {
   parseJSONSafe,
   parseJSONTextSafe,
   parseOptionalAPIResponse,
+  parseOptionalAPIResponseOrNull,
   parseOptionalJSON,
   parseRequiredAPIResponse,
+  parseRequiredAPIResponseOrNull,
   parseRequiredJSON,
   promoteLegacyAlertIdentifier,
   readAPIErrorMessage,
@@ -134,6 +136,48 @@ describe('parseOptionalAPIResponse', () => {
     await expect(
       parseOptionalAPIResponse(response, [], 'Request failed', 'Parse failed'),
     ).rejects.toThrow('Request failed');
+  });
+});
+
+describe('parseRequiredAPIResponseOrNull', () => {
+  it('returns null when the response matches the null status', async () => {
+    const response = new Response('', { status: 404 });
+    await expect(
+      parseRequiredAPIResponseOrNull(response, 404, 'Request failed', 'Parse failed'),
+    ).resolves.toBeNull();
+  });
+
+  it('parses valid JSON payloads for non-null statuses', async () => {
+    const response = new Response(JSON.stringify({ ok: true }), { status: 200 });
+    await expect(
+      parseRequiredAPIResponseOrNull<{ ok: boolean }>(
+        response,
+        404,
+        'Request failed',
+        'Parse failed',
+      ),
+    ).resolves.toEqual({ ok: true });
+  });
+});
+
+describe('parseOptionalAPIResponseOrNull', () => {
+  it('returns null when the response matches the null status', async () => {
+    const response = new Response('', { status: 404 });
+    await expect(
+      parseOptionalAPIResponseOrNull(response, 404, 'Request failed', 'Parse failed'),
+    ).resolves.toBeNull();
+  });
+
+  it('parses valid JSON payloads for non-null statuses', async () => {
+    const response = new Response(JSON.stringify({ ok: true }), { status: 200 });
+    await expect(
+      parseOptionalAPIResponseOrNull<{ ok: boolean }>(
+        response,
+        404,
+        'Request failed',
+        'Parse failed',
+      ),
+    ).resolves.toEqual({ ok: true });
   });
 });
 

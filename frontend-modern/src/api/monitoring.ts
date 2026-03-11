@@ -11,6 +11,7 @@ import {
   coerceTimestampMillis,
   isAPIResponseStatus,
   parseOptionalAPIResponse,
+  parseOptionalAPIResponseOrNull,
 } from './responseUtils';
 
 export class MonitoringAPI {
@@ -297,15 +298,9 @@ export class MonitoringAPI {
     const url = `${this.baseUrl}/agents/agent/lookup?${search.toString()}`;
     const response = await apiFetch(url);
 
-    if (isAPIResponseStatus(response, 404)) {
-      return null;
-    }
-
-    await assertAPIResponseOK(response, `Lookup failed with status ${response.status}`);
-
-    const data = await parseOptionalAPIResponse<AgentLookupResponse | null>(
+    const data = await parseOptionalAPIResponseOrNull<AgentLookupResponse>(
       response,
-      null,
+      404,
       `Lookup failed with status ${response.status}`,
       'Failed to parse agent lookup response',
     );

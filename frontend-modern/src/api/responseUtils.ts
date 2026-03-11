@@ -78,6 +78,32 @@ export async function parseOptionalAPIResponse<T>(
   return parseOptionalJSON(response, emptyValue, parseErrorMessage);
 }
 
+export async function parseRequiredAPIResponseOrNull<T>(
+  response: Response,
+  nullStatus: number,
+  requestErrorMessage: string,
+  parseErrorMessage: string,
+): Promise<T | null> {
+  if (isAPIResponseStatus(response, nullStatus)) {
+    return null;
+  }
+
+  return parseRequiredAPIResponse(response, requestErrorMessage, parseErrorMessage);
+}
+
+export async function parseOptionalAPIResponseOrNull<T>(
+  response: Response,
+  nullStatus: number,
+  requestErrorMessage: string,
+  parseErrorMessage: string,
+): Promise<T | null> {
+  if (isAPIResponseStatus(response, nullStatus)) {
+    return null;
+  }
+
+  return parseOptionalAPIResponse(response, null, requestErrorMessage, parseErrorMessage);
+}
+
 export function apiErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== 'object') {
     return null;
