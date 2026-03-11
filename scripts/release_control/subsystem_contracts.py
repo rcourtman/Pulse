@@ -44,6 +44,26 @@ PATH_SUFFIXES = (
 )
 
 
+def tracked_contract_paths(*, staged: bool = False) -> list[str]:
+    if staged:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "--", CONTRACTS_DIR.relative_to(REPO_ROOT).as_posix()],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=False,
+        )
+        return sorted(
+            entry.decode("utf-8")
+            for entry in result.stdout.split(b"\x00")
+            if entry and entry.decode("utf-8").endswith(".md")
+        )
+    return sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in CONTRACTS_DIR.glob("*.md")
+    )
+
+
 def staged_contract_text(rel: str) -> str:
     result = subprocess.run(
         ["git", "show", f":{rel}"],
@@ -57,15 +77,14 @@ def staged_contract_text(rel: str) -> str:
 
 def tracked_contract_files(*, staged: bool = False) -> dict[str, str]:
     payload: dict[str, str] = {}
-    for path in sorted(CONTRACTS_DIR.glob("*.md")):
-        rel = path.relative_to(REPO_ROOT).as_posix()
+    for rel in tracked_contract_paths(staged=staged):
         if staged:
             try:
                 payload[rel] = staged_contract_text(rel)
                 continue
             except subprocess.CalledProcessError:
                 pass
-        payload[rel] = path.read_text(encoding="utf-8")
+        payload[rel] = (REPO_ROOT / rel).read_text(encoding="utf-8")
     return payload
 
 

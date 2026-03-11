@@ -9,6 +9,7 @@ from subsystem_contracts import (
     load_contract_graph,
     parse_contract_text,
     referenced_contracts_for_path,
+    tracked_contract_paths,
     tracked_contract_files,
 )
 
@@ -157,7 +158,34 @@ Stable.
                 patch("subsystem_contracts.CONTRACTS_DIR", contracts_dir),
             ):
                 self.assertEqual(tracked_contract_files()[contract_rel], "# working tree version\n")
+                self.assertEqual(tracked_contract_paths(staged=True), [contract_rel])
                 self.assertEqual(tracked_contract_files(staged=True)[contract_rel], "# staged version\n")
+
+    def test_tracked_contract_paths_staged_ignores_untracked_working_tree_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            contracts_dir = repo_root / "docs" / "release-control" / "v6" / "subsystems"
+            contracts_dir.mkdir(parents=True, exist_ok=True)
+            tracked_rel = "docs/release-control/v6/subsystems/tracked.md"
+            untracked_rel = "docs/release-control/v6/subsystems/untracked.md"
+
+            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+            (repo_root / tracked_rel).write_text("# tracked\n", encoding="utf-8")
+            subprocess.run(["git", "add", tracked_rel], cwd=repo_root, check=True, capture_output=True, text=True)
+            (repo_root / untracked_rel).write_text("# untracked\n", encoding="utf-8")
+
+            with (
+                patch("subsystem_contracts.REPO_ROOT", repo_root),
+                patch("subsystem_contracts.CONTRACTS_DIR", contracts_dir),
+            ):
+                self.assertEqual(
+                    tracked_contract_paths(staged=True),
+                    [tracked_rel],
+                )
+                self.assertEqual(
+                    sorted(tracked_contract_paths()),
+                    [tracked_rel, untracked_rel],
+                )
 
 
 if __name__ == "__main__":
