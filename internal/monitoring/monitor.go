@@ -2605,7 +2605,27 @@ func (m *Monitor) NodesSnapshot() []models.Node {
 
 // DockerHostsSnapshot returns the current Docker hosts.
 func (m *Monitor) DockerHostsSnapshot() []models.DockerHost {
-	return m.GetState().DockerHosts
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	dockerViews := readState.DockerHosts()
+	if len(dockerViews) == 0 {
+		return nil
+	}
+
+	hosts := make([]models.DockerHost, 0, len(dockerViews))
+	for _, host := range dockerViews {
+		if host == nil {
+			continue
+		}
+		hosts = append(hosts, dockerHostFromReadStateView(host))
+	}
+	return hosts
 }
 
 // StorageSnapshot returns the current storage pools.
@@ -3048,6 +3068,83 @@ func hostCephFromReadStateView(ceph *unifiedresources.HostCephMeta) *models.Host
 		}
 	}
 	return out
+}
+
+func dockerHostFromReadStateView(view *unifiedresources.DockerHostView) models.DockerHost {
+	if view == nil {
+		return models.DockerHost{}
+	}
+
+	totalMemory := view.TotalMemoryBytes()
+	if totalMemory == 0 {
+		totalMemory = view.MemoryTotal()
+	}
+	usedMemory := view.MemoryUsed()
+	freeMemory := maxInt64(0, totalMemory-usedMemory)
+
+	return models.DockerHost{
+		ID:                firstNonEmptyString(view.HostSourceID(), view.ID()),
+		AgentID:           view.AgentID(),
+		Hostname:          view.Hostname(),
+		DisplayName:       view.DisplayName(),
+		CustomDisplayName: view.CustomDisplayName(),
+		MachineID:         view.MachineID(),
+		OS:                view.OS(),
+		KernelVersion:     view.KernelVersion(),
+		Architecture:      view.Architecture(),
+		Runtime:           view.Runtime(),
+		RuntimeVersion:    view.RuntimeVersion(),
+		DockerVersion:     view.DockerVersion(),
+		CPUs:              view.CPUs(),
+		TotalMemoryBytes:  totalMemory,
+		UptimeSeconds:     view.UptimeSeconds(),
+		CPUUsage:          view.CPUPercent(),
+		LoadAverage:       view.LoadAverage(),
+		Memory: models.Memory{
+			Total: totalMemory,
+			Used:  usedMemory,
+			Free:  freeMemory,
+			Usage: view.MemoryPercent(),
+		},
+		Disks:             hostDisksFromReadStateView(view.Disks()),
+		NetworkInterfaces: hostNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		Status:            string(view.Status()),
+		LastSeen:          view.LastSeen(),
+		IntervalSeconds:   view.IntervalSeconds(),
+		AgentVersion:      view.AgentVersion(),
+		Containers:        view.Containers(),
+		Services:          view.Services(),
+		Tasks:             view.Tasks(),
+		Swarm:             dockerSwarmFromReadStateView(view.Swarm()),
+		TokenID:           view.TokenID(),
+		TokenName:         view.TokenName(),
+		TokenHint:         view.TokenHint(),
+		TokenLastUsedAt:   view.TokenLastUsedAt(),
+		Hidden:            view.Hidden(),
+		PendingUninstall:  view.PendingUninstall(),
+		Command:           view.Command(),
+		IsLegacy:          view.IsLegacy(),
+		NetInRate:         view.NetInRate(),
+		NetOutRate:        view.NetOutRate(),
+		DiskReadRate:      view.DiskReadRate(),
+		DiskWriteRate:     view.DiskWriteRate(),
+	}
+}
+
+func dockerSwarmFromReadStateView(in *unifiedresources.DockerSwarmInfo) *models.DockerSwarmInfo {
+	if in == nil {
+		return nil
+	}
+	return &models.DockerSwarmInfo{
+		NodeID:           in.NodeID,
+		NodeRole:         in.NodeRole,
+		LocalState:       in.LocalState,
+		ControlAvailable: in.ControlAvailable,
+		ClusterID:        in.ClusterID,
+		ClusterName:      in.ClusterName,
+		Scope:            in.Scope,
+		Error:            in.Error,
+	}
 }
 
 func maxInt64(a, b int64) int64 {

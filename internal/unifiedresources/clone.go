@@ -170,6 +170,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	}
 	out := *in
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
+	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)
 	out.TokenLastUsedAt = cloneTimePtr(in.TokenLastUsedAt)
 	out.Ports = cloneDockerPortMetaSlice(in.Ports)
 	out.Labels = cloneStringMap(in.Labels)
@@ -180,6 +181,9 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Swarm = cloneDockerSwarmInfo(in.Swarm)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
 	out.Disks = cloneDiskInfos(in.Disks)
+	out.Containers = append([]models.DockerContainer(nil), in.Containers...)
+	out.Services = append([]models.DockerService(nil), in.Services...)
+	out.Tasks = append([]models.DockerTask(nil), in.Tasks...)
 	return &out
 }
 

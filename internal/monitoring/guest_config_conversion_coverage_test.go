@@ -797,6 +797,117 @@ func TestMonitorHostsSnapshot(t *testing.T) {
 	})
 }
 
+func TestMonitorDockerHostsSnapshot(t *testing.T) {
+	t.Run("nil monitor", func(t *testing.T) {
+		var m *Monitor
+		hosts := m.DockerHostsSnapshot()
+		if len(hosts) != 0 {
+			t.Fatalf("expected empty docker hosts for nil monitor, got %#v", hosts)
+		}
+	})
+
+	t.Run("prefers canonical read state docker hosts over legacy snapshot", func(t *testing.T) {
+		now := time.Date(2026, 3, 11, 13, 0, 0, 0, time.UTC)
+		tokenLastUsed := now.Add(-10 * time.Minute)
+		canonicalState := models.StateSnapshot{
+			DockerHosts: []models.DockerHost{{
+				ID:                "docker-host-1",
+				AgentID:           "agent-docker-1",
+				Hostname:          "docker-1.local",
+				DisplayName:       "Docker One",
+				CustomDisplayName: "Custom Docker One",
+				MachineID:         "machine-docker-1",
+				OS:                "Ubuntu",
+				KernelVersion:     "6.8.0",
+				Architecture:      "amd64",
+				Runtime:           "docker",
+				RuntimeVersion:    "1.7.0",
+				DockerVersion:     "25.0.0",
+				CPUs:              12,
+				TotalMemoryBytes:  32768,
+				UptimeSeconds:     7200,
+				CPUUsage:          22,
+				LoadAverage:       []float64{0.4, 0.5, 0.6},
+				Memory:            models.Memory{Total: 32768, Used: 8192, Free: 24576, Usage: 25},
+				Disks:             []models.Disk{{Device: "/dev/nvme0n1p1", Total: 1000, Used: 100, Free: 900, Usage: 10}},
+				NetworkInterfaces: []models.HostNetworkInterface{{Name: "eno1", Addresses: []string{"10.0.0.40/24"}}},
+				Status:            "warning",
+				LastSeen:          now,
+				IntervalSeconds:   20,
+				AgentVersion:      "2.0.0",
+				Containers:        []models.DockerContainer{{ID: "ctr-1", Name: "app"}},
+				Services:          []models.DockerService{{ID: "svc-1", Name: "svc"}},
+				Tasks:             []models.DockerTask{{ID: "task-1", DesiredState: "running"}},
+				Swarm:             &models.DockerSwarmInfo{ClusterID: "swarm-1", ClusterName: "prod", NodeRole: "manager"},
+				TokenID:           "token-1",
+				TokenName:         "docker-token",
+				TokenHint:         "docke...123",
+				TokenLastUsedAt:   &tokenLastUsed,
+				Hidden:            true,
+				PendingUninstall:  true,
+				Command:           &models.DockerHostCommandStatus{ID: "cmd-1", Status: "queued"},
+				IsLegacy:          true,
+				NetInRate:         101.5,
+				NetOutRate:        102.5,
+				DiskReadRate:      103.5,
+				DiskWriteRate:     104.5,
+			}},
+		}
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(canonicalState)
+
+		legacyState := models.NewState()
+		legacyState.DockerHosts = []models.DockerHost{{ID: "legacy-docker", Hostname: "legacy"}}
+
+		m := &Monitor{
+			state:         legacyState,
+			resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		}
+
+		hosts := m.DockerHostsSnapshot()
+		if len(hosts) != 1 {
+			t.Fatalf("expected one docker host entry from read-state, got %d", len(hosts))
+		}
+		host := hosts[0]
+		if host.ID != "docker-host-1" || host.Hostname != "docker-1.local" || host.CustomDisplayName != "Custom Docker One" {
+			t.Fatalf("expected canonical docker host identity, got %#v", host)
+		}
+		if host.Runtime != "docker" || host.CPUs != 12 || host.TotalMemoryBytes != 32768 || host.IntervalSeconds != 20 {
+			t.Fatalf("expected canonical runtime/cpu/memory/interval fields, got runtime=%q cpus=%d memory=%d interval=%d", host.Runtime, host.CPUs, host.TotalMemoryBytes, host.IntervalSeconds)
+		}
+		if len(host.Containers) != 1 || host.Containers[0].ID != "ctr-1" || len(host.Services) != 1 || len(host.Tasks) != 1 {
+			t.Fatalf("expected canonical containers/services/tasks, got containers=%+v services=%+v tasks=%+v", host.Containers, host.Services, host.Tasks)
+		}
+		if host.Swarm == nil || host.Swarm.ClusterID != "swarm-1" {
+			t.Fatalf("expected canonical swarm info, got %+v", host.Swarm)
+		}
+		if host.TokenLastUsedAt == nil || !host.TokenLastUsedAt.Equal(tokenLastUsed) {
+			t.Fatalf("expected token last used at %v, got %+v", tokenLastUsed, host.TokenLastUsedAt)
+		}
+		if !host.Hidden || !host.PendingUninstall || host.Command == nil || host.Command.ID != "cmd-1" || !host.IsLegacy {
+			t.Fatalf("expected canonical host flags/command, got hidden=%v pending=%v command=%+v legacy=%v", host.Hidden, host.PendingUninstall, host.Command, host.IsLegacy)
+		}
+		if host.NetInRate != 101.5 || host.NetOutRate != 102.5 || host.DiskReadRate != 103.5 || host.DiskWriteRate != 104.5 {
+			t.Fatalf("expected canonical host rates, got netIn=%v netOut=%v diskRead=%v diskWrite=%v", host.NetInRate, host.NetOutRate, host.DiskReadRate, host.DiskWriteRate)
+		}
+	})
+
+	t.Run("does not fall back to stale snapshot when live read state is empty", func(t *testing.T) {
+		state := models.NewState()
+		state.DockerHosts = []models.DockerHost{{ID: "legacy-docker", Hostname: "legacy"}}
+
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		}
+
+		hosts := m.DockerHostsSnapshot()
+		if len(hosts) != 0 {
+			t.Fatalf("expected empty docker hosts from live canonical read-state, got %#v", hosts)
+		}
+	})
+}
+
 func TestMonitorWorkloadSnapshots(t *testing.T) {
 	t.Run("nil monitor", func(t *testing.T) {
 		var m *Monitor

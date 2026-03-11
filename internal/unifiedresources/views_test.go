@@ -696,28 +696,42 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 		Tags:       []string{"docker"},
 		ChildCount: 2,
 		Docker: &DockerData{
-			Hostname:         "docker-host-1",
-			AgentID:          "agent-docker-1",
-			DockerVersion:    "25.0.0",
-			RuntimeVersion:   "1.7.0",
-			OS:               "Ubuntu",
-			KernelVersion:    "6.8.0",
-			Architecture:     "amd64",
-			AgentVersion:     "2.0.0",
-			TokenID:          "token-1",
-			TokenName:        "docker-token",
-			TokenHint:        "docke...123",
-			TokenLastUsedAt:  &tokenLastUsedAt,
-			UptimeSeconds:    7200,
-			Temperature:      &temp,
-			PendingUninstall: true,
-			IsLegacy:         true,
-			Command:          command,
-			Swarm:            swarm,
+			HostSourceID:      "docker-source-1",
+			Hostname:          "docker-host-1",
+			DisplayName:       "Docker Host One",
+			CustomDisplayName: "Custom Docker Host",
+			AgentID:           "agent-docker-1",
+			MachineID:         "machine-docker-1",
+			DockerVersion:     "25.0.0",
+			Runtime:           "docker",
+			RuntimeVersion:    "1.7.0",
+			OS:                "Ubuntu",
+			KernelVersion:     "6.8.0",
+			Architecture:      "amd64",
+			AgentVersion:      "2.0.0",
+			CPUs:              12,
+			TotalMemoryBytes:  32768,
+			TokenID:           "token-1",
+			TokenName:         "docker-token",
+			TokenHint:         "docke...123",
+			TokenLastUsedAt:   &tokenLastUsedAt,
+			UptimeSeconds:     7200,
+			IntervalSeconds:   20,
+			LoadAverage:       []float64{0.7, 0.8, 0.9},
+			Temperature:       &temp,
+			PendingUninstall:  true,
+			IsLegacy:          true,
+			Command:           command,
+			Swarm:             swarm,
+			NetInRate:         101.5,
+			NetOutRate:        102.5,
+			DiskReadRate:      103.5,
+			DiskWriteRate:     104.5,
 			NetworkInterfaces: []NetworkInterface{
 				{Name: "eno1", Addresses: []string{"10.0.0.40/24"}, SpeedMbps: &speed},
 			},
-			Disks: []DiskInfo{{Device: "/dev/nvme0n1p1", Total: 1000, Used: 100, Free: 900}},
+			Disks:      []DiskInfo{{Device: "/dev/nvme0n1p1", Total: 1000, Used: 100, Free: 900}},
+			Containers: []models.DockerContainer{{ID: "ctr-1", Name: "app"}},
 		},
 		Metrics: &ResourceMetrics{
 			CPU:    &MetricValue{Percent: 22},
@@ -732,11 +746,14 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	if v.Hostname() != "docker-host-1" || v.DockerVersion() != "25.0.0" || v.RuntimeVersion() != "1.7.0" || v.OS() != "Ubuntu" {
 		t.Fatalf("expected docker accessors to match, got hostname=%q docker=%q runtime=%q os=%q", v.Hostname(), v.DockerVersion(), v.RuntimeVersion(), v.OS())
 	}
+	if v.HostSourceID() != "docker-source-1" || v.DisplayName() != "Docker Host One" || v.CustomDisplayName() != "Custom Docker Host" || v.MachineID() != "machine-docker-1" || v.Runtime() != "docker" {
+		t.Fatalf("expected docker identity/runtime accessors to match, got source=%q display=%q custom=%q machine=%q runtime=%q", v.HostSourceID(), v.DisplayName(), v.CustomDisplayName(), v.MachineID(), v.Runtime())
+	}
 	if v.AgentID() != "agent-docker-1" {
 		t.Fatalf("expected agent id accessor to match, got %q", v.AgentID())
 	}
-	if v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" || v.AgentVersion() != "2.0.0" {
-		t.Fatalf("expected kernel/arch/agentVersion to match, got kernel=%q arch=%q agent=%q", v.KernelVersion(), v.Architecture(), v.AgentVersion())
+	if v.KernelVersion() != "6.8.0" || v.Architecture() != "amd64" || v.AgentVersion() != "2.0.0" || v.CPUs() != 12 || v.TotalMemoryBytes() != 32768 {
+		t.Fatalf("expected kernel/arch/agentVersion/cpus/memory to match, got kernel=%q arch=%q agent=%q cpus=%d memory=%d", v.KernelVersion(), v.Architecture(), v.AgentVersion(), v.CPUs(), v.TotalMemoryBytes())
 	}
 	if v.TokenID() != "token-1" || v.TokenName() != "docker-token" || v.TokenHint() != "docke...123" {
 		t.Fatalf("expected token fields to match, got id=%q name=%q hint=%q", v.TokenID(), v.TokenName(), v.TokenHint())
@@ -744,9 +761,10 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	if v.TokenLastUsedAt() == nil || !v.TokenLastUsedAt().Equal(tokenLastUsedAt) {
 		t.Fatalf("expected token last used at %v, got %v", tokenLastUsedAt, v.TokenLastUsedAt())
 	}
-	if v.UptimeSeconds() != 7200 {
-		t.Fatalf("expected uptime %d, got %d", 7200, v.UptimeSeconds())
+	if v.UptimeSeconds() != 7200 || v.IntervalSeconds() != 20 {
+		t.Fatalf("expected uptime/interval %d/%d, got %d/%d", 7200, 20, v.UptimeSeconds(), v.IntervalSeconds())
 	}
+	assertFloatSlice(t, v.LoadAverage(), []float64{0.7, 0.8, 0.9})
 	if v.Temperature() != temp || !v.HasTemperature() {
 		t.Fatalf("expected temperature=%v and HasTemperature=true, got temperature=%v has=%v", temp, v.Temperature(), v.HasTemperature())
 	}
@@ -759,12 +777,15 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	if len(v.Disks()) != 1 || v.Disks()[0].Device != "/dev/nvme0n1p1" {
 		t.Fatalf("expected disk data, got %+v", v.Disks())
 	}
+	if len(v.Containers()) != 1 || v.Containers()[0].ID != "ctr-1" {
+		t.Fatalf("expected container list, got %+v", v.Containers())
+	}
 	assertStringSlice(t, v.Tags(), []string{"docker"})
 	if !v.LastSeen().Equal(now) {
 		t.Fatalf("expected LastSeen %v, got %v", now, v.LastSeen())
 	}
-	if v.CPUPercent() != 22 || v.MemoryPercent() != 33 {
-		t.Fatalf("expected cpu/memory percents %v/%v, got %v/%v", 22.0, 33.0, v.CPUPercent(), v.MemoryPercent())
+	if v.CPUPercent() != 22 || v.MemoryPercent() != 33 || v.MemoryUsed() != 0 || v.MemoryTotal() != 0 || v.NetInRate() != 101.5 || v.NetOutRate() != 102.5 || v.DiskReadRate() != 103.5 || v.DiskWriteRate() != 104.5 {
+		t.Fatalf("expected cpu/memory/rates, got cpu=%v memPct=%v memUsed=%d memTotal=%d netIn=%v netOut=%v diskRead=%v diskWrite=%v", v.CPUPercent(), v.MemoryPercent(), v.MemoryUsed(), v.MemoryTotal(), v.NetInRate(), v.NetOutRate(), v.DiskReadRate(), v.DiskWriteRate())
 	}
 	if v.ChildCount() != 2 {
 		t.Fatalf("expected ChildCount %d, got %d", 2, v.ChildCount())

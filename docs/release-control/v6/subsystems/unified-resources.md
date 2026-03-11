@@ -49,3 +49,9 @@ Canonical host-agent metadata now carries host-only runtime fields such as CPU
 count, load average, machine/report identity, command capability, exclude
 patterns, and host I/O rates so monitoring can derive `models.Host` from
 unified views without depending on legacy snapshot ownership.
+
+Canonical Docker host metadata now carries Docker-host-only runtime fields such
+as display-name identity, CPU/memory sizing, interval/load averages, raw
+container membership, and host I/O rates so monitoring can derive
+`models.DockerHost` from unified views without depending on legacy snapshot
+ownership.

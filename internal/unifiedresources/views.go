@@ -1253,6 +1253,20 @@ func (v DockerHostView) Hostname() string {
 	return v.r.Docker.Hostname
 }
 
+func (v DockerHostView) DisplayName() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.DisplayName
+}
+
+func (v DockerHostView) CustomDisplayName() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.CustomDisplayName
+}
+
 func (v DockerHostView) MachineID() string {
 	if v.r == nil || v.r.Docker == nil {
 		return ""
@@ -1272,6 +1286,13 @@ func (v DockerHostView) DockerVersion() string {
 		return ""
 	}
 	return v.r.Docker.DockerVersion
+}
+
+func (v DockerHostView) Runtime() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Runtime
 }
 
 func (v DockerHostView) RuntimeVersion() string {
@@ -1307,6 +1328,20 @@ func (v DockerHostView) AgentVersion() string {
 		return ""
 	}
 	return v.r.Docker.AgentVersion
+}
+
+func (v DockerHostView) CPUs() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.CPUs
+}
+
+func (v DockerHostView) TotalMemoryBytes() int64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.TotalMemoryBytes
 }
 
 func (v DockerHostView) TokenID() string {
@@ -1345,6 +1380,20 @@ func (v DockerHostView) UptimeSeconds() int64 {
 	return v.r.Docker.UptimeSeconds
 }
 
+func (v DockerHostView) IntervalSeconds() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.IntervalSeconds
+}
+
+func (v DockerHostView) LoadAverage() []float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneFloat64Slice(v.r.Docker.LoadAverage)
+}
+
 func (v DockerHostView) Temperature() float64 {
 	if v.r == nil || v.r.Docker == nil || v.r.Docker.Temperature == nil {
 		return 0
@@ -1363,11 +1412,17 @@ func (v DockerHostView) Swarm() *DockerSwarmInfo {
 	return cloneDockerSwarmInfo(v.r.Docker.Swarm)
 }
 
+func (v DockerHostView) Containers() []models.DockerContainer {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return append([]models.DockerContainer(nil), v.r.Docker.Containers...)
+}
+
 func (v DockerHostView) Services() []models.DockerService {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	// Note: these are not deep-cloned since this package doesn't define clones for models.DockerService
 	return append([]models.DockerService(nil), v.r.Docker.Services...)
 }
 
@@ -1391,6 +1446,20 @@ func (v DockerHostView) Disks() []DiskInfo {
 		return nil
 	}
 	return cloneDiskInfos(v.r.Docker.Disks)
+}
+
+func (v DockerHostView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerHostView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
 }
 
 func (v DockerHostView) Status() ResourceStatus {
@@ -1426,6 +1495,34 @@ func (v DockerHostView) MemoryPercent() float64 {
 		return 0
 	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerHostView) NetInRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.NetInRate
+}
+
+func (v DockerHostView) NetOutRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.NetOutRate
+}
+
+func (v DockerHostView) DiskReadRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.DiskReadRate
+}
+
+func (v DockerHostView) DiskWriteRate() float64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.DiskWriteRate
 }
 
 func (v DockerHostView) ChildCount() int {

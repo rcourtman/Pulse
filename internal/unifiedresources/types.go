@@ -680,21 +680,31 @@ type DockerServicePortMeta struct {
 
 // DockerData contains Docker host- and container-specific data.
 type DockerData struct {
-	HostSourceID   string   `json:"hostSourceId,omitempty"` // raw model ID for the docker host
-	AgentID        string   `json:"agentId,omitempty"`
-	ContainerID    string   `json:"containerId,omitempty"`
-	Hostname       string   `json:"hostname,omitempty"`
-	MachineID      string   `json:"machineId,omitempty"`
-	Image          string   `json:"image,omitempty"`
-	Temperature    *float64 `json:"temperature,omitempty"`
-	Runtime        string   `json:"runtime,omitempty"`
-	RuntimeVersion string   `json:"runtimeVersion,omitempty"`
-	DockerVersion  string   `json:"dockerVersion,omitempty"`
-	OS             string   `json:"os,omitempty"`
-	KernelVersion  string   `json:"kernelVersion,omitempty"`
-	Architecture   string   `json:"architecture,omitempty"`
-	AgentVersion   string   `json:"agentVersion,omitempty"`
-	UptimeSeconds  int64    `json:"uptimeSeconds,omitempty"`
+	HostSourceID      string    `json:"hostSourceId,omitempty"` // raw model ID for the docker host
+	AgentID           string    `json:"agentId,omitempty"`
+	ContainerID       string    `json:"containerId,omitempty"`
+	Hostname          string    `json:"hostname,omitempty"`
+	DisplayName       string    `json:"displayName,omitempty"`
+	CustomDisplayName string    `json:"customDisplayName,omitempty"`
+	MachineID         string    `json:"machineId,omitempty"`
+	Image             string    `json:"image,omitempty"`
+	Temperature       *float64  `json:"temperature,omitempty"`
+	Runtime           string    `json:"runtime,omitempty"`
+	RuntimeVersion    string    `json:"runtimeVersion,omitempty"`
+	DockerVersion     string    `json:"dockerVersion,omitempty"`
+	OS                string    `json:"os,omitempty"`
+	KernelVersion     string    `json:"kernelVersion,omitempty"`
+	Architecture      string    `json:"architecture,omitempty"`
+	AgentVersion      string    `json:"agentVersion,omitempty"`
+	CPUs              int       `json:"cpus,omitempty"`
+	TotalMemoryBytes  int64     `json:"totalMemoryBytes,omitempty"`
+	UptimeSeconds     int64     `json:"uptimeSeconds,omitempty"`
+	LoadAverage       []float64 `json:"loadAverage,omitempty"`
+	IntervalSeconds   int       `json:"intervalSeconds,omitempty"`
+	NetInRate         float64   `json:"netInRate,omitempty"`
+	NetOutRate        float64   `json:"netOutRate,omitempty"`
+	DiskReadRate      float64   `json:"diskReadRate,omitempty"`
+	DiskWriteRate     float64   `json:"diskWriteRate,omitempty"`
 
 	// Host-level summary fields (populated when Resource.Type == ResourceTypeAgent and Docker != nil)
 	ContainerCount        int                             `json:"containerCount,omitempty"`
@@ -735,8 +745,9 @@ type DockerData struct {
 	Disks             []DiskInfo         `json:"disks,omitempty"`
 
 	// These hold raw data for tools access
-	Services []models.DockerService `json:"-"`
-	Tasks    []models.DockerTask    `json:"-"`
+	Containers []models.DockerContainer `json:"-"`
+	Services   []models.DockerService   `json:"-"`
+	Tasks      []models.DockerTask      `json:"-"`
 }
 
 // PBSData contains Proxmox Backup Server data.

@@ -31,6 +31,9 @@ package unifiedresources
 //
 //   - internal/monitoring/, internal/mock/, internal/models/,
 //     internal/websocket/: Exempt (producer/wire-format packages).
+//     Monitoring remains a producer package, but snapshot-shaped export
+//     helpers are progressively derived from ReadState-backed canonical data
+//     rather than treated as state-owned truth.
 //
 //   - All state.* field access patterns and GetState() calls are
 //     enforced as hard bans (SRC-04b). Migration is complete — zero
