@@ -570,6 +570,20 @@ func (v NodeView) HostURL() string {
 	return v.r.Proxmox.HostURL
 }
 
+func (v NodeView) GuestURL() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.GuestURL
+}
+
+func (v NodeView) ConnectionHealth() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.ConnectionHealth
+}
+
 func (v NodeView) PVEVersion() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -601,6 +615,17 @@ func (v NodeView) CPUs() int {
 	return v.r.Proxmox.CPUs
 }
 
+func (v NodeView) CPUInfo() models.CPUInfo {
+	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.CPUInfo == nil {
+		return models.CPUInfo{}
+	}
+	return models.CPUInfo{
+		Model:   v.r.Proxmox.CPUInfo.Model,
+		Cores:   v.r.Proxmox.CPUInfo.Cores,
+		Sockets: v.r.Proxmox.CPUInfo.Sockets,
+	}
+}
+
 func (v NodeView) Temperature() float64 {
 	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.Temperature == nil {
 		return 0
@@ -610,6 +635,13 @@ func (v NodeView) Temperature() float64 {
 
 func (v NodeView) HasTemperature() bool {
 	return v.r != nil && v.r.Proxmox != nil && v.r.Proxmox.Temperature != nil
+}
+
+func (v NodeView) TemperatureDetails() *models.Temperature {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneTemperature(v.r.Proxmox.TemperatureDetails)
 }
 
 func (v NodeView) LoadAverage() []float64 {
@@ -624,6 +656,20 @@ func (v NodeView) PendingUpdates() int {
 		return 0
 	}
 	return v.r.Proxmox.PendingUpdates
+}
+
+func (v NodeView) TemperatureMonitoringEnabled() *bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneBoolPtr(v.r.Proxmox.TemperatureMonitoringEnabled)
+}
+
+func (v NodeView) PendingUpdatesCheckedAt() time.Time {
+	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.PendingUpdatesCheckedAt == nil {
+		return time.Time{}
+	}
+	return *v.r.Proxmox.PendingUpdatesCheckedAt
 }
 
 func (v NodeView) CPUPercent() float64 {

@@ -699,6 +699,89 @@ func TestMonitorNodesSnapshot(t *testing.T) {
 			t.Fatalf("unexpected node id: %q", nodes[0].ID)
 		}
 	})
+
+	t.Run("prefers canonical read state nodes over legacy snapshot", func(t *testing.T) {
+		now := time.Date(2026, 3, 11, 12, 0, 0, 0, time.UTC)
+		tempEnabled := true
+		checkedAt := now.Add(-15 * time.Minute)
+		canonicalState := models.StateSnapshot{
+			Nodes: []models.Node{{
+				ID:                           "node-source-1",
+				Name:                         "pve-1",
+				DisplayName:                  "PVE One",
+				Instance:                     "lab",
+				Host:                         "https://pve-1.example:8006",
+				GuestURL:                     "https://pve-1-guest.example:8006",
+				Status:                       "online",
+				Type:                         "node",
+				CPU:                          12,
+				Memory:                       models.Memory{Used: 32, Total: 64, Free: 32, Usage: 50},
+				Disk:                         models.Disk{Used: 100, Total: 200, Free: 100, Usage: 50},
+				Uptime:                       3600,
+				LoadAverage:                  []float64{0.1, 0.2, 0.3},
+				KernelVersion:                "6.8.0",
+				PVEVersion:                   "8.2.2",
+				CPUInfo:                      models.CPUInfo{Model: "Xeon", Cores: 8, Sockets: 2},
+				Temperature:                  &models.Temperature{CPUPackage: 64.5, CPUMax: 66.6, Available: true, HasCPU: true, LastUpdate: now},
+				TemperatureMonitoringEnabled: &tempEnabled,
+				LastSeen:                     now,
+				ConnectionHealth:             "healthy",
+				IsClusterMember:              true,
+				ClusterName:                  "cluster-a",
+				PendingUpdates:               4,
+				PendingUpdatesCheckedAt:      checkedAt,
+				LinkedAgentID:                "agent-1",
+			}},
+		}
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(canonicalState)
+
+		legacyState := models.NewState()
+		legacyState.Nodes = []models.Node{{ID: "legacy-node", Name: "legacy"}}
+
+		m := &Monitor{
+			state:         legacyState,
+			resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		}
+
+		nodes := m.NodesSnapshot()
+		if len(nodes) != 1 {
+			t.Fatalf("expected one node entry from read-state, got %d", len(nodes))
+		}
+		if nodes[0].ID != "node-source-1" || nodes[0].Name != "pve-1" || nodes[0].DisplayName != "PVE One" {
+			t.Fatalf("expected canonical node identity, got %#v", nodes[0])
+		}
+		if nodes[0].GuestURL != "https://pve-1-guest.example:8006" || nodes[0].ConnectionHealth != "healthy" {
+			t.Fatalf("expected guest URL and connection health from canonical state, got guest=%q health=%q", nodes[0].GuestURL, nodes[0].ConnectionHealth)
+		}
+		if nodes[0].Temperature == nil || !nodes[0].Temperature.Available || nodes[0].Temperature.CPUMax != 66.6 {
+			t.Fatalf("expected temperature details from canonical state, got %+v", nodes[0].Temperature)
+		}
+		if nodes[0].TemperatureMonitoringEnabled == nil || !*nodes[0].TemperatureMonitoringEnabled {
+			t.Fatalf("expected temperature monitoring flag from canonical state, got %+v", nodes[0].TemperatureMonitoringEnabled)
+		}
+		if !nodes[0].PendingUpdatesCheckedAt.Equal(checkedAt) {
+			t.Fatalf("expected pending updates checked at %v, got %v", checkedAt, nodes[0].PendingUpdatesCheckedAt)
+		}
+		if nodes[0].LinkedAgentID != "agent-1" {
+			t.Fatalf("expected linked agent id from canonical state, got %q", nodes[0].LinkedAgentID)
+		}
+	})
+
+	t.Run("does not fall back to stale snapshot when live read state is empty", func(t *testing.T) {
+		state := models.NewState()
+		state.Nodes = []models.Node{{ID: "legacy-node", Name: "legacy"}}
+
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		}
+
+		nodes := m.NodesSnapshot()
+		if len(nodes) != 0 {
+			t.Fatalf("expected empty nodes from live canonical read-state, got %#v", nodes)
+		}
+	})
 }
 
 func TestMonitorStorageSnapshot(t *testing.T) {

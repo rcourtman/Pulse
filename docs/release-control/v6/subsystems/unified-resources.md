@@ -39,3 +39,8 @@ frontend/API consumers are still being tightened around it.
 Canonical storage metadata now carries runtime `enabled` and `active` flags so
 monitoring and API export paths can derive `models.Storage` from unified views
 without depending on legacy snapshot ownership.
+
+Canonical Proxmox node metadata now carries node-only boundary fields such as
+guest URL, connection health, temperature details, and pending-update metadata
+so monitoring can derive `models.Node` from unified views without depending on
+legacy snapshot ownership.

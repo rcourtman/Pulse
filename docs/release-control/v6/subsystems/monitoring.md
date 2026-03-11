@@ -40,3 +40,7 @@ remaining architecture-coherence lane.
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary
 artifact for that path.
+
+Node export is now derived from canonical `ReadState.Nodes()` instead of
+`GetState().Nodes`; `models.Node` is treated as a boundary artifact for that
+path.

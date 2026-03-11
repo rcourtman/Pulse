@@ -2563,7 +2563,24 @@ func (m *Monitor) NodesSnapshot() []models.Node {
 	if m == nil {
 		return nil
 	}
-	return m.GetState().Nodes
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	nodeViews := readState.Nodes()
+	if len(nodeViews) == 0 {
+		return nil
+	}
+
+	nodes := make([]models.Node, 0, len(nodeViews))
+	for _, node := range nodeViews {
+		if node == nil {
+			continue
+		}
+		nodes = append(nodes, nodeFromReadStateView(node))
+	}
+	return nodes
 }
 
 // DockerHostsSnapshot returns the current Docker hosts.
@@ -2636,6 +2653,62 @@ func storageFromReadStateView(view *unifiedresources.StoragePoolView) models.Sto
 		Active:    view.Active(),
 		ZFSPool:   storageZFSPoolFromReadStateView(view),
 	}
+}
+
+func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
+	if view == nil {
+		return models.Node{}
+	}
+
+	name := view.NodeName()
+	displayName := ""
+	if trimmed := strings.TrimSpace(view.Name()); trimmed != "" && trimmed != name {
+		displayName = trimmed
+	}
+
+	return models.Node{
+		ID:                           firstNonEmptyString(view.SourceID(), view.ID()),
+		Name:                         name,
+		DisplayName:                  displayName,
+		Instance:                     view.Instance(),
+		Host:                         view.HostURL(),
+		GuestURL:                     view.GuestURL(),
+		Status:                       string(view.Status()),
+		Type:                         "node",
+		CPU:                          view.CPUPercent(),
+		Memory:                       models.Memory{Used: view.MemoryUsed(), Total: view.MemoryTotal(), Free: maxInt64(0, view.MemoryTotal()-view.MemoryUsed()), Usage: view.MemoryPercent()},
+		Disk:                         models.Disk{Used: view.DiskUsed(), Total: view.DiskTotal(), Free: maxInt64(0, view.DiskTotal()-view.DiskUsed()), Usage: view.DiskPercent()},
+		Uptime:                       view.Uptime(),
+		LoadAverage:                  view.LoadAverage(),
+		KernelVersion:                view.KernelVersion(),
+		PVEVersion:                   view.PVEVersion(),
+		CPUInfo:                      view.CPUInfo(),
+		Temperature:                  view.TemperatureDetails(),
+		TemperatureMonitoringEnabled: view.TemperatureMonitoringEnabled(),
+		LastSeen:                     view.LastSeen(),
+		ConnectionHealth:             view.ConnectionHealth(),
+		IsClusterMember:              view.IsClusterMember(),
+		ClusterName:                  view.ClusterName(),
+		PendingUpdates:               view.PendingUpdates(),
+		PendingUpdatesCheckedAt:      view.PendingUpdatesCheckedAt(),
+		LinkedAgentID:                view.LinkedAgentID(),
+	}
+}
+
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func storageZFSPoolFromReadStateView(view *unifiedresources.StoragePoolView) *models.ZFSPool {

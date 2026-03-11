@@ -106,8 +106,11 @@ func cloneProxmoxData(in *ProxmoxData) *ProxmoxData {
 	}
 	out := *in
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
+	out.TemperatureDetails = cloneTemperature(in.TemperatureDetails)
 	out.CPUInfo = cloneCPUInfo(in.CPUInfo)
 	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)
+	out.TemperatureMonitoringEnabled = cloneBoolPtr(in.TemperatureMonitoringEnabled)
+	out.PendingUpdatesCheckedAt = cloneTimePtr(in.PendingUpdatesCheckedAt)
 	return &out
 }
 
@@ -693,5 +696,33 @@ func cloneFloat64Ptr(in *float64) *float64 {
 		return nil
 	}
 	out := *in
+	return &out
+}
+
+func cloneBoolPtr(in *bool) *bool {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func cloneTemperature(in *models.Temperature) *models.Temperature {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Cores = append([]models.CoreTemp(nil), in.Cores...)
+	out.GPU = append([]models.GPUTemp(nil), in.GPU...)
+	out.NVMe = append([]models.NVMeTemp(nil), in.NVMe...)
+	out.SMART = append([]models.DiskTemp(nil), in.SMART...)
+	return &out
+}
+
+func zeroTimeToPtr(in time.Time) *time.Time {
+	if in.IsZero() {
+		return nil
+	}
+	out := in
 	return &out
 }

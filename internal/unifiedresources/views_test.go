@@ -395,6 +395,8 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 func TestView_NodeViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 2, 0, 0, time.UTC)
 	temp := 66.6
+	tempEnabled := true
+	updatesCheckedAt := now.Add(-30 * time.Minute)
 
 	r := &Resource{
 		ID:       "node-1",
@@ -404,19 +406,25 @@ func TestView_NodeViewAccessors(t *testing.T) {
 		LastSeen: now,
 		Tags:     []string{"pve", "rack:1"},
 		Proxmox: &ProxmoxData{
-			SourceID:       "node/pve1",
-			NodeName:       "pve-1",
-			ClusterName:    "cluster-a",
-			Instance:       "lab",
-			PVEVersion:     "8.2.2",
-			KernelVersion:  "6.8.0",
-			Uptime:         999,
-			Temperature:    &temp,
-			CPUInfo:        &CPUInfo{Model: "Xeon", Cores: 8, Sockets: 2},
-			LoadAverage:    []float64{0.12, 0.34, 0.56},
-			PendingUpdates: 7,
-			LinkedAgentID:  "agent-123",
-			CPUs:           4, // should be ignored when CPUInfo is valid
+			SourceID:                     "node/pve1",
+			NodeName:                     "pve-1",
+			ClusterName:                  "cluster-a",
+			Instance:                     "lab",
+			HostURL:                      "https://pve-1.example:8006",
+			GuestURL:                     "https://pve-1-guest.example:8006",
+			ConnectionHealth:             "healthy",
+			PVEVersion:                   "8.2.2",
+			KernelVersion:                "6.8.0",
+			Uptime:                       999,
+			Temperature:                  &temp,
+			TemperatureDetails:           &models.Temperature{CPUPackage: 65.5, CPUMax: 66.6, Available: true, HasCPU: true, LastUpdate: now},
+			CPUInfo:                      &CPUInfo{Model: "Xeon", Cores: 8, Sockets: 2},
+			LoadAverage:                  []float64{0.12, 0.34, 0.56},
+			PendingUpdates:               7,
+			TemperatureMonitoringEnabled: &tempEnabled,
+			PendingUpdatesCheckedAt:      &updatesCheckedAt,
+			LinkedAgentID:                "agent-123",
+			CPUs:                         4, // should be ignored when CPUInfo is valid
 		},
 		Metrics: &ResourceMetrics{
 			CPU:    &MetricValue{Percent: 91},
@@ -435,18 +443,33 @@ func TestView_NodeViewAccessors(t *testing.T) {
 	if v.NodeName() != "pve-1" || v.ClusterName() != "cluster-a" || v.Instance() != "lab" {
 		t.Fatalf("expected proxmox name/cluster/instance accessors to match, got nodeName=%q clusterName=%q instance=%q", v.NodeName(), v.ClusterName(), v.Instance())
 	}
+	if v.HostURL() != "https://pve-1.example:8006" || v.GuestURL() != "https://pve-1-guest.example:8006" || v.ConnectionHealth() != "healthy" {
+		t.Fatalf("expected host/guest/connection accessors to match, got host=%q guest=%q health=%q", v.HostURL(), v.GuestURL(), v.ConnectionHealth())
+	}
 	if v.PVEVersion() != "8.2.2" || v.KernelVersion() != "6.8.0" || v.Uptime() != 999 {
 		t.Fatalf("expected version/uptime accessors to match, got pve=%q kernel=%q uptime=%d", v.PVEVersion(), v.KernelVersion(), v.Uptime())
 	}
 	if v.CPUs() != 16 {
 		t.Fatalf("expected CPUs() to return cores*sockets=%d, got %d", 16, v.CPUs())
 	}
+	if cpuInfo := v.CPUInfo(); cpuInfo.Model != "Xeon" || cpuInfo.Cores != 8 || cpuInfo.Sockets != 2 {
+		t.Fatalf("expected CPUInfo to match, got %+v", cpuInfo)
+	}
 	if v.Temperature() != temp || !v.HasTemperature() {
 		t.Fatalf("expected temperature=%v and HasTemperature=true, got temperature=%v has=%v", temp, v.Temperature(), v.HasTemperature())
+	}
+	if details := v.TemperatureDetails(); details == nil || !details.Available || details.CPUMax != 66.6 {
+		t.Fatalf("expected detailed temperature payload, got %+v", details)
 	}
 	assertFloatSlice(t, v.LoadAverage(), []float64{0.12, 0.34, 0.56})
 	if v.PendingUpdates() != 7 {
 		t.Fatalf("expected PendingUpdates %d, got %d", 7, v.PendingUpdates())
+	}
+	if got := v.TemperatureMonitoringEnabled(); got == nil || !*got {
+		t.Fatalf("expected TemperatureMonitoringEnabled true, got %+v", got)
+	}
+	if !v.PendingUpdatesCheckedAt().Equal(updatesCheckedAt) {
+		t.Fatalf("expected PendingUpdatesCheckedAt %v, got %v", updatesCheckedAt, v.PendingUpdatesCheckedAt())
 	}
 	if v.LinkedAgentID() != "agent-123" {
 		t.Fatalf("expected LinkedAgentID %q, got %q", "agent-123", v.LinkedAgentID())

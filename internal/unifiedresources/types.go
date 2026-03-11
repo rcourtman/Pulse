@@ -193,30 +193,35 @@ type MetricValue struct {
 
 // ProxmoxData contains Proxmox-specific data for a resource.
 type ProxmoxData struct {
-	SourceID        string     `json:"sourceId,omitempty"` // raw model ID from source snapshot
-	NodeName        string     `json:"nodeName,omitempty"`
-	ClusterName     string     `json:"clusterName,omitempty"`
-	IsClusterMember bool       `json:"isClusterMember,omitempty"`
-	Instance        string     `json:"instance,omitempty"`
-	HostURL         string     `json:"host,omitempty"`
-	VMID            int        `json:"vmid,omitempty"`
-	ContainerType   string     `json:"containerType,omitempty"`
-	IsOCI           bool       `json:"isOci,omitempty"`
-	CPUs            int        `json:"cpus,omitempty"`
-	Template        bool       `json:"template,omitempty"`
-	Temperature     *float64   `json:"temperature,omitempty"` // Max node CPU temp in Celsius
-	PVEVersion      string     `json:"pveVersion,omitempty"`
-	KernelVersion   string     `json:"kernelVersion,omitempty"`
-	Uptime          int64      `json:"uptime,omitempty"`
-	LastBackup      time.Time  `json:"lastBackup,omitempty"`
-	CPUInfo         *CPUInfo   `json:"cpuInfo,omitempty"`
-	LoadAverage     []float64  `json:"loadAverage,omitempty"`
-	PendingUpdates  int        `json:"pendingUpdates,omitempty"`
-	Disks           []DiskInfo `json:"disks,omitempty"`
-	SwapUsed        int64      `json:"swapUsed,omitempty"`
-	SwapTotal       int64      `json:"swapTotal,omitempty"`
-	Balloon         int64      `json:"balloon,omitempty"`
-	Lock            string     `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+	SourceID                     string              `json:"sourceId,omitempty"` // raw model ID from source snapshot
+	NodeName                     string              `json:"nodeName,omitempty"`
+	ClusterName                  string              `json:"clusterName,omitempty"`
+	IsClusterMember              bool                `json:"isClusterMember,omitempty"`
+	Instance                     string              `json:"instance,omitempty"`
+	HostURL                      string              `json:"host,omitempty"`
+	GuestURL                     string              `json:"guestUrl,omitempty"`
+	ConnectionHealth             string              `json:"connectionHealth,omitempty"`
+	VMID                         int                 `json:"vmid,omitempty"`
+	ContainerType                string              `json:"containerType,omitempty"`
+	IsOCI                        bool                `json:"isOci,omitempty"`
+	CPUs                         int                 `json:"cpus,omitempty"`
+	Template                     bool                `json:"template,omitempty"`
+	Temperature                  *float64            `json:"temperature,omitempty"` // Max node CPU temp in Celsius
+	TemperatureDetails           *models.Temperature `json:"temperatureDetails,omitempty"`
+	PVEVersion                   string              `json:"pveVersion,omitempty"`
+	KernelVersion                string              `json:"kernelVersion,omitempty"`
+	Uptime                       int64               `json:"uptime,omitempty"`
+	LastBackup                   time.Time           `json:"lastBackup,omitempty"`
+	CPUInfo                      *CPUInfo            `json:"cpuInfo,omitempty"`
+	LoadAverage                  []float64           `json:"loadAverage,omitempty"`
+	PendingUpdates               int                 `json:"pendingUpdates,omitempty"`
+	TemperatureMonitoringEnabled *bool               `json:"temperatureMonitoringEnabled,omitempty"`
+	PendingUpdatesCheckedAt      *time.Time          `json:"pendingUpdatesCheckedAt,omitempty"`
+	Disks                        []DiskInfo          `json:"disks,omitempty"`
+	SwapUsed                     int64               `json:"swapUsed,omitempty"`
+	SwapTotal                    int64               `json:"swapTotal,omitempty"`
+	Balloon                      int64               `json:"balloon,omitempty"`
+	Lock                         string              `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
 	// Internal link hint to a host agent resource.
 	LinkedAgentID string `json:"-"`
 }
