@@ -124,3 +124,67 @@ func TestVerifyEntitlementLeaseTokenHostMismatch(t *testing.T) {
 		t.Fatalf("VerifyEntitlementLeaseToken() error=%v, want %v", err, ErrTrialActivationHostMismatch)
 	}
 }
+
+func TestEntitlementLeaseCanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	token, err := SignEntitlementLeaseToken(priv, EntitlementLeaseClaims{
+		OrgID:             "default",
+		InstanceHost:      "pulse.example.com",
+		PlanVersion:       " cloud_v1 ",
+		SubscriptionState: SubStateActive,
+		Limits:            map[string]int64{"max_agents": 999},
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken: %v", err)
+	}
+
+	claims, err := VerifyEntitlementLeaseToken(token, pub, "pulse.example.com", time.Now())
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.PlanVersion != "cloud_starter" {
+		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_starter")
+	}
+	if got := claims.Limits["max_agents"]; got != 10 {
+		t.Fatalf("claims.Limits[max_agents]=%d, want %d", got, 10)
+	}
+}
+
+func TestEntitlementLeasePreservesNonCloudLimits(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	token, err := SignEntitlementLeaseToken(priv, EntitlementLeaseClaims{
+		OrgID:             "default",
+		InstanceHost:      "pulse.example.com",
+		PlanVersion:       "pro-v2",
+		SubscriptionState: SubStateActive,
+		Limits:            map[string]int64{"max_agents": 42},
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken: %v", err)
+	}
+
+	claims, err := VerifyEntitlementLeaseToken(token, pub, "pulse.example.com", time.Now())
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.PlanVersion != "pro-v2" {
+		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "pro-v2")
+	}
+	if got := claims.Limits["max_agents"]; got != 42 {
+		t.Fatalf("claims.Limits[max_agents]=%d, want %d", got, 42)
+	}
+}

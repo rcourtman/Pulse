@@ -47,3 +47,7 @@ Stripe control-plane fallback paths are also part of the boundary: when
 subscription or workspace provisioning logic reuses an already stored
 `plan_version`, it must canonicalize that value before persisting tenant,
 Stripe-account, or billing-state updates.
+Signed hosted entitlement leases are part of the same boundary: lease signing
+and verification must canonicalize recognized Cloud plan aliases and reconcile
+lease `limits.max_agents` to the authoritative per-plan contract instead of
+trusting stale embedded values.

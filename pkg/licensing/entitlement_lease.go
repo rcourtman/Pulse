@@ -42,6 +42,28 @@ type EntitlementLeaseClaims struct {
 	jwt.RegisteredClaims
 }
 
+func normalizeEntitlementLeaseClaims(claims *EntitlementLeaseClaims) {
+	if claims == nil {
+		return
+	}
+
+	claims.PlanVersion = CanonicalizePlanVersion(strings.TrimSpace(claims.PlanVersion))
+	claims.Capabilities = cloneStringSlice(claims.Capabilities)
+	claims.Limits = cloneInt64Map(claims.Limits)
+	claims.MetersEnabled = cloneStringSlice(claims.MetersEnabled)
+	claims.TrialStartedAt = cloneInt64Ptr(claims.TrialStartedAt)
+	claims.TrialEndsAt = cloneInt64Ptr(claims.TrialEndsAt)
+	if claims.PlanVersion == "" && claims.SubscriptionState != "" {
+		claims.PlanVersion = string(claims.SubscriptionState)
+	}
+	if limit, known := CloudPlanAgentLimits[claims.PlanVersion]; known {
+		if claims.Limits == nil {
+			claims.Limits = map[string]int64{}
+		}
+		claims.Limits["max_agents"] = int64(limit)
+	}
+}
+
 // SignEntitlementLeaseToken signs a hosted entitlement lease JWT.
 func SignEntitlementLeaseToken(privateKey ed25519.PrivateKey, claims EntitlementLeaseClaims) (string, error) {
 	if len(privateKey) != ed25519.PrivateKeySize {
@@ -55,13 +77,7 @@ func SignEntitlementLeaseToken(privateKey ed25519.PrivateKey, claims Entitlement
 	if claims.InstanceHost == "" {
 		return "", ErrEntitlementLeaseInstanceMissing
 	}
-	claims.PlanVersion = strings.TrimSpace(claims.PlanVersion)
-	claims.Capabilities = cloneStringSlice(claims.Capabilities)
-	claims.Limits = cloneInt64Map(claims.Limits)
-	claims.MetersEnabled = cloneStringSlice(claims.MetersEnabled)
-	if claims.PlanVersion == "" && claims.SubscriptionState != "" {
-		claims.PlanVersion = string(claims.SubscriptionState)
-	}
+	normalizeEntitlementLeaseClaims(&claims)
 
 	now := time.Now().UTC()
 	if claims.IssuedAt == nil {
@@ -151,15 +167,7 @@ func parseEntitlementLeaseToken(token string, publicKey ed25519.PublicKey, expec
 	if expected != "" && !strings.EqualFold(claims.InstanceHost, expected) {
 		return nil, ErrTrialActivationHostMismatch
 	}
-	claims.PlanVersion = strings.TrimSpace(claims.PlanVersion)
-	claims.Capabilities = cloneStringSlice(claims.Capabilities)
-	claims.Limits = cloneInt64Map(claims.Limits)
-	claims.MetersEnabled = cloneStringSlice(claims.MetersEnabled)
-	claims.TrialStartedAt = cloneInt64Ptr(claims.TrialStartedAt)
-	claims.TrialEndsAt = cloneInt64Ptr(claims.TrialEndsAt)
-	if claims.PlanVersion == "" && claims.SubscriptionState != "" {
-		claims.PlanVersion = string(claims.SubscriptionState)
-	}
+	normalizeEntitlementLeaseClaims(claims)
 	return claims, nil
 }
 
