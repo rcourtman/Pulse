@@ -202,11 +202,25 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 	})
 }
 
+func TestSubsystemRegistrySchemaExistsAndDeclaresOwnershipContract(t *testing.T) {
+	rel := "docs/release-control/v6/subsystems/registry.schema.json"
+	content := readRepoFile(t, rel)
+	assertContainsAll(t, rel, content, []string{
+		"\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"",
+		"\"title\": \"Pulse v6 Subsystem Registry Schema\"",
+		"\"verification\"",
+		"\"path_policy\"",
+		"\"lane\"",
+		"\"owned_prefixes\"",
+	})
+}
+
 func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	readme := readRepoFile(t, "docs/release-control/v6/README.md")
 	assertContainsAll(t, "docs/release-control/v6/README.md", readme, []string{
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"status.schema.json",
+		"registry.schema.json",
 		"subsystems/*.md",
 		"structured evidence references",
 	})
@@ -215,6 +229,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	assertContainsAll(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md", source, []string{
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"status.schema.json",
+		"registry.schema.json",
 		"docs/release-control/v6/subsystems/",
 		"## Development Governance",
 	})
@@ -601,9 +616,12 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"Running canonical completion guard...",
 		"Running status audit...",
 		"status_audit.py --check",
+		"Running registry audit...",
+		"registry_audit.py --check",
 		"Running governance guardrail tests...",
 		"go test ./internal/repoctl -count=1",
 		"canonical_completion_guard_test.py",
+		"registry_audit_test.py",
 		"status_audit_test.py",
 		"subsystem_lookup_test.py",
 	})
@@ -632,6 +650,16 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"--check",
 	})
 
+	registryAudit := readRepoFile(t, "scripts/release_control/registry_audit.py")
+	assertContainsAll(t, "scripts/release_control/registry_audit.py", registryAudit, []string{
+		"REGISTRY_PATH",
+		"REGISTRY_SCHEMA_PATH",
+		"audit_registry_payload",
+		"require_explicit_path_policy_coverage",
+		"tracked_repo_files",
+		"--check",
+	})
+
 	lookup := readRepoFile(t, "scripts/release_control/subsystem_lookup.py")
 	assertContainsAll(t, "scripts/release_control/subsystem_lookup.py", lookup, []string{
 		"lookup_paths",
@@ -656,8 +684,10 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"PULSE_REPO_ROOT_PULSE_MOBILE",
 		"python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin",
 		"python3 scripts/release_control/status_audit.py --check",
+		"python3 scripts/release_control/registry_audit.py --check",
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
+		"python3 scripts/release_control/registry_audit_test.py",
 		"python3 scripts/release_control/status_audit_test.py",
 		"python3 scripts/release_control/subsystem_lookup_test.py",
 	})

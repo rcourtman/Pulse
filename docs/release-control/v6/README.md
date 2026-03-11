@@ -7,6 +7,8 @@ This folder is the canonical execution control layer for Pulse v6.
 1. `SOURCE_OF_TRUTH.md` (stable human governance and locked decisions)
 2. `status.json` (live lane state, structured evidence references, and typed operational decision records)
 3. `status.schema.json` (machine-readable contract for the `status.json` shape)
+4. `subsystems/registry.json` (machine-readable subsystem ownership and proof routing)
+5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape)
 
 Supporting governance file:
 
@@ -18,6 +20,7 @@ Supporting governance file:
 Useful helper tools:
 
 - `python3 scripts/release_control/status_audit.py --check`
+- `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, and relevant decision records
 
 The old release-control orchestrator and loop tooling are retired. Direct,

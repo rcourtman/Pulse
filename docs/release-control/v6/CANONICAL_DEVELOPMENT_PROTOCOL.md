@@ -24,20 +24,26 @@ For v6 work, agents must treat these files as the execution entry point:
 3. `docs/release-control/v6/status.schema.json`
 4. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
 5. `docs/release-control/v6/subsystems/registry.json`
-6. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
-7. `scripts/release_control/subsystem_lookup.py` when ownership or proof routing is not obvious
+6. `docs/release-control/v6/subsystems/registry.schema.json`
+7. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
+8. `scripts/release_control/subsystem_lookup.py` when ownership or proof routing is not obvious
 
 The first two files answer release priority and current lane state.
 `SOURCE_OF_TRUTH.md` owns stable governance, scope, and locked decisions.
 `status.json` owns live lane state, structured evidence references, and typed
 operational decision records.
 `status.schema.json` owns the machine-readable status contract.
+`subsystems/registry.schema.json` owns the machine-readable subsystem registry
+contract.
 The protocol, subsystem registry, and subsystem contracts answer how work must
 be done.
 
 `scripts/release_control/status_audit.py --check` is the machine audit entry
 point for validating live lane evidence references, typed decision records, and
 derived evidence health.
+`scripts/release_control/registry_audit.py --check` is the machine audit entry
+point for validating subsystem ownership, proof routing, and registry lane
+bindings.
 
 ## Subsystem Contracts
 

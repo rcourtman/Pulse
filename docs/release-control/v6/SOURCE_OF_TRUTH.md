@@ -33,7 +33,9 @@ This file must not contain:
    Repo-wide change rules for canonical work.
 4. `docs/release-control/v6/subsystems/registry.json`
    Machine-readable subsystem ownership and proof requirements.
-5. `docs/release-control/v6/subsystems/*.md`
+5. `docs/release-control/v6/subsystems/registry.schema.json`
+   Machine-readable contract for the subsystem registry shape.
+6. `docs/release-control/v6/subsystems/*.md`
    Per-subsystem contracts: truth, extension points, forbidden paths, and
    completion obligations.
 
@@ -123,7 +125,9 @@ If conflicts appear, resolve by domain:
    evidence references, and typed operational decision records.
 3. `docs/release-control/v6/status.schema.json` owns the machine-readable shape
    contract for `status.json`.
-4. This file owns stable governance, repo scope, release gates, and locked
+4. `docs/release-control/v6/subsystems/registry.schema.json` owns the
+   machine-readable shape contract for the subsystem registry.
+5. This file owns stable governance, repo scope, release gates, and locked
    decisions.
-5. Supporting architecture and release docs are evidence only. They do not
+6. Supporting architecture and release docs are evidence only. They do not
    override the files above.

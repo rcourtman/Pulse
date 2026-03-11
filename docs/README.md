@@ -12,8 +12,10 @@ Use:
 1. `docs/release-control/v6/SOURCE_OF_TRUTH.md` for stable human governance and locked decisions
 2. `docs/release-control/v6/status.json` for live lane state, structured evidence references, and typed operational decision records
 3. `docs/release-control/v6/status.schema.json` for the machine-readable status contract
-4. `python3 scripts/release_control/status_audit.py --check` if you need a machine-derived evidence health audit
-5. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, and relevant decision records for a change
+4. `docs/release-control/v6/subsystems/registry.json` and `docs/release-control/v6/subsystems/registry.schema.json` for subsystem ownership and proof-routing rules
+5. `python3 scripts/release_control/status_audit.py --check` if you need a machine-derived evidence health audit
+6. `python3 scripts/release_control/registry_audit.py --check` if you need a machine-derived subsystem registry audit
+7. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, and relevant decision records for a change
 
 All other documents are supporting references unless explicitly required for evidence.
 

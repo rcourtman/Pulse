@@ -202,11 +202,14 @@ docs/release-control/v6/*
 !docs/release-control/v6/subsystems/
 !docs/release-control/v6/subsystems/*.md
 !docs/release-control/v6/subsystems/registry.json
+!docs/release-control/v6/subsystems/registry.schema.json
 scripts/release_control/
 !scripts/release_control/
 scripts/release_control/*
 !scripts/release_control/canonical_completion_guard.py
 !scripts/release_control/canonical_completion_guard_test.py
+!scripts/release_control/registry_audit.py
+!scripts/release_control/registry_audit_test.py
 !scripts/release_control/status_audit.py
 !scripts/release_control/status_audit_test.py
 !scripts/release_control/subsystem_lookup.py

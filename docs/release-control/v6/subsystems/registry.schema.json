@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pulse.local/docs/release-control/v6/subsystems/registry.schema.json",
+  "title": "Pulse v6 Subsystem Registry Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "subsystems"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 10
+    },
+    "subsystems": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/subsystem"
+      }
+    }
+  },
+  "$defs": {
+    "subsystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "lane",
+        "contract",
+        "owned_prefixes",
+        "owned_files",
+        "verification"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lane": {
+          "type": "string",
+          "pattern": "^L[0-9]+$"
+        },
+        "contract": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owned_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "owned_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "verification": {
+          "$ref": "#/$defs/verification"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allow_same_subsystem_tests",
+        "test_prefixes",
+        "exact_files",
+        "path_policies"
+      ],
+      "properties": {
+        "allow_same_subsystem_tests": {
+          "type": "boolean"
+        },
+        "test_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "exact_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "require_explicit_path_policy_coverage": {
+          "type": "boolean"
+        },
+        "path_policies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path_policy"
+          }
+        }
+      }
+    },
+    "path_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "match_prefixes",
+        "match_files",
+        "allow_same_subsystem_tests",
+        "test_prefixes",
+        "exact_files"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "match_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "match_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allow_same_subsystem_tests": {
+          "type": "boolean"
+        },
+        "test_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "exact_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
