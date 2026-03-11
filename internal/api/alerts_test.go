@@ -324,24 +324,7 @@ func TestSaveAlertIncidentNote(t *testing.T) {
 	alert := &alerts.Alert{ID: "a1", Type: "test"}
 	mockStore.RecordAlertFired(alert)
 
-	body := `{"alert_id": "a1", "note": "test note", "user": "admin"}`
-	req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(body))
-	w := httptest.NewRecorder()
-	h.SaveAlertIncidentNote(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestSaveAlertIncidentNote_AcceptsLegacyAlertIDCompatibilityField(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
-	mockMonitor.On("GetIncidentStore").Return(mockStore)
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	alert := &alerts.Alert{ID: "a1", Type: "test"}
-	mockStore.RecordAlertFired(alert)
-
-	body := `{"legacyAlertId": "a1", "note": "test note", "user": "admin"}`
+	body := `{"alertIdentifier": "a1", "note": "test note", "user": "admin"}`
 	req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.SaveAlertIncidentNote(w, req)
@@ -366,7 +349,7 @@ func TestGetAlertIncidentTimeline_ExportsCanonicalAlertIdentifier(t *testing.T) 
 	}
 	mockStore.RecordAlertFired(alert)
 
-	req := httptest.NewRequest("GET", "/api/alerts/incidents?alert_identifier=canonical:a1", nil)
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alertIdentifier=canonical:a1", nil)
 	w := httptest.NewRecorder()
 	h.GetAlertIncidentTimeline(w, req)
 
@@ -443,7 +426,7 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
 	mockManager.On("AcknowledgeAlert", "a2", testifymock.Anything).Return(fmt.Errorf("error"))
 
-	body := `{"alertIds": ["a1", "a2"], "user": "admin"}`
+	body := `{"alertIdentifiers": ["a1", "a2"], "user": "admin"}`
 	req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.BulkAcknowledgeAlerts(w, req)
@@ -454,24 +437,6 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	}
 	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp.Results, 2)
-}
-
-func TestBulkAcknowledgeAlerts_AcceptsLegacyAlertIDsCompatibilityField(t *testing.T) {
-	mockMonitor := new(MockAlertMonitor)
-	mockManager := new(MockAlertManager)
-	mockMonitor.On("GetAlertManager").Return(mockManager)
-	mockMonitor.On("SyncAlertState").Return()
-	h := NewAlertHandlers(nil, mockMonitor, nil)
-
-	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
-	mockManager.On("AcknowledgeAlert", "a2", testifymock.Anything).Return(nil)
-
-	body := `{"legacyAlertIds": ["a1", "a2"], "user": "admin"}`
-	req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(body))
-	w := httptest.NewRecorder()
-	h.BulkAcknowledgeAlerts(w, req)
-
-	assert.Equal(t, 200, w.Code)
 }
 
 func TestHandleAlerts(t *testing.T) {
@@ -531,11 +496,11 @@ func TestHandleAlerts(t *testing.T) {
 			var body []byte
 			if rt.method == "POST" || rt.method == "PUT" || rt.method == "DELETE" {
 				if strings.Contains(rt.path, "bulk") {
-					body = []byte(`{"alertIds": ["a1"]}`)
+					body = []byte(`{"alertIdentifiers": ["a1"]}`)
 				} else if strings.Contains(rt.path, "note") {
-					body = []byte(`{"alert_id": "a1", "note": "test"}`)
+					body = []byte(`{"alertIdentifier": "a1", "note": "test"}`)
 				} else {
-					body = []byte(`{"legacyAlertId": "a1", "user": "admin"}`)
+					body = []byte(`{"alertIdentifier": "a1", "user": "admin"}`)
 				}
 			}
 			req := httptest.NewRequest(rt.method, rt.path, bytes.NewReader(body))
@@ -562,7 +527,7 @@ func TestBulkClearAlerts(t *testing.T) {
 	mockManager.On("ClearAlert", "a1").Return(true)
 	mockManager.On("ClearAlert", "a2").Return(false)
 
-	body := `{"alertIds": ["a1", "a2"]}`
+	body := `{"alertIdentifiers": ["a1", "a2"]}`
 	req := httptest.NewRequest("POST", "/api/alerts/bulk/clear", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.BulkClearAlerts(w, req)
@@ -579,7 +544,7 @@ func TestAcknowledgeAlertByBody_Success(t *testing.T) {
 
 	mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(nil)
 
-	body := `{"id": "a1", "user": "admin"}`
+	body := `{"alertIdentifier": "a1", "user": "admin"}`
 	req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.AcknowledgeAlertByBody(w, req)
@@ -613,7 +578,7 @@ func TestUnacknowledgeAlertByBody_Success(t *testing.T) {
 
 	mockManager.On("UnacknowledgeAlert", "a1").Return(nil)
 
-	body := `{"id": "a1"}`
+	body := `{"alertIdentifier": "a1"}`
 	req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.UnacknowledgeAlertByBody(w, req)
@@ -647,7 +612,7 @@ func TestClearAlertByBody_Success(t *testing.T) {
 
 	mockManager.On("ClearAlert", "a1").Return(true)
 
-	body := `{"id": "a1"}`
+	body := `{"alertIdentifier": "a1"}`
 	req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.ClearAlertByBody(w, req)
@@ -686,14 +651,14 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("AcknowledgeAlertByBody_MissingID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"id": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"alertIdentifier": ""}`))
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("AcknowledgeAlertByBody_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"id": "bad\x01"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"alertIdentifier": "bad\x01"}`))
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -701,35 +666,35 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 
 	t.Run("AcknowledgeAlertByBody_ManagerError", func(t *testing.T) {
 		mockManager.On("AcknowledgeAlert", "a1", testifymock.Anything).Return(fmt.Errorf("error")).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"id": "a1", "user": "admin"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"alertIdentifier": "a1", "user": "admin"}`))
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
 		assert.Equal(t, 404, w.Code)
 	})
 
 	t.Run("UnacknowledgeAlertByBody_MissingID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"id": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"alertIdentifier": ""}`))
 		w := httptest.NewRecorder()
 		h.UnacknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("UnacknowledgeAlertByBody_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"id": "bad\x01"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/unacknowledge", strings.NewReader(`{"alertIdentifier": "bad\x01"}`))
 		w := httptest.NewRecorder()
 		h.UnacknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("ClearAlertByBody_MissingID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"id": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"alertIdentifier": ""}`))
 		w := httptest.NewRecorder()
 		h.ClearAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
 	})
 
 	t.Run("ClearAlertByBody_InvalidID", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"id": "bad\x01"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"alertIdentifier": "bad\x01"}`))
 		w := httptest.NewRecorder()
 		h.ClearAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -737,7 +702,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 
 	t.Run("ClearAlertByBody_NotFound", func(t *testing.T) {
 		mockManager.On("ClearAlert", "unknown").Return(false).Once()
-		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"id": "unknown"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/clear", strings.NewReader(`{"alertIdentifier": "unknown"}`))
 		w := httptest.NewRecorder()
 		h.ClearAlertByBody(w, req)
 		assert.Equal(t, 404, w.Code)
@@ -751,7 +716,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("BulkAcknowledgeAlerts_NoIDs", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIds": []}`))
+		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIdentifiers": []}`))
 		w := httptest.NewRecorder()
 		h.BulkAcknowledgeAlerts(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -761,15 +726,6 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		mockManager.On("AcknowledgeAlert", "canonical:a1", testifymock.Anything).Return(nil).Once()
 		mockMonitor.On("SyncAlertState").Return().Once()
 		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"alertIdentifiers": ["canonical:a1"]}`))
-		w := httptest.NewRecorder()
-		h.BulkAcknowledgeAlerts(w, req)
-		assert.Equal(t, 200, w.Code)
-	})
-
-	t.Run("BulkAcknowledgeAlerts_LegacyCompatibilityIdentifiers", func(t *testing.T) {
-		mockManager.On("AcknowledgeAlert", "legacy:a1", testifymock.Anything).Return(nil).Once()
-		mockMonitor.On("SyncAlertState").Return().Once()
-		req := httptest.NewRequest("POST", "/api/alerts/bulk/acknowledge", strings.NewReader(`{"legacyAlertIds": ["legacy:a1"]}`))
 		w := httptest.NewRecorder()
 		h.BulkAcknowledgeAlerts(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -841,7 +797,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	t.Run("SaveAlertIncidentNote_InvalidAlertID", func(t *testing.T) {
 		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 		mockMonitor.On("GetIncidentStore").Return(mockStore)
-		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alert_id": "bad\x01", "note": "test"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "bad\x01", "note": "test"}`))
 		w := httptest.NewRecorder()
 		h.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -850,7 +806,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	t.Run("SaveAlertIncidentNote_MissingNote", func(t *testing.T) {
 		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 		mockMonitor.On("GetIncidentStore").Return(mockStore)
-		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alert_id": "a1", "note": ""}`))
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "a1", "note": ""}`))
 		w := httptest.NewRecorder()
 		h.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 400, w.Code)
@@ -859,8 +815,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 	t.Run("SaveAlertIncidentNote_NotFound", func(t *testing.T) {
 		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 		mockMonitor.On("GetIncidentStore").Return(mockStore)
-		// alert_id non-existent in store
-		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alert_id": "none", "note": "test"}`))
+		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "none", "note": "test"}`))
 		w := httptest.NewRecorder()
 		h.SaveAlertIncidentNote(w, req)
 		assert.Equal(t, 400, w.Code)

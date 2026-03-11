@@ -218,6 +218,8 @@ describe('AlertsAPI', () => {
 
       const result = await AlertsAPI.getIncidentTimeline('canonical:a1');
 
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/incidents?alertIdentifier=canonical%3Aa1');
+
       expect(result).toMatchObject({
         alertIdentifier: 'canonical:a1',
         alertId: 'canonical:a1',

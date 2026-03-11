@@ -65,7 +65,7 @@ export class AlertsAPI {
   }
 
   static async getIncidentTimeline(alertId: string, startedAt?: string): Promise<Incident | null> {
-    const query = new URLSearchParams({ alert_identifier: alertId });
+    const query = new URLSearchParams({ alertIdentifier: alertId });
     if (startedAt) {
       query.set('started_at', startedAt);
     }

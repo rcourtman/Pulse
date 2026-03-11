@@ -157,7 +157,7 @@ func TestAlertsEndpoints(t *testing.T) {
 
 	// 7. Acknowledge Alert (Single)
 	t.Run("AcknowledgeAlert", func(t *testing.T) {
-		body := map[string]string{"id": "test-alert-id"}
+		body := map[string]string{"alertIdentifier": "test-alert-id"}
 		jsonBody, _ := json.Marshal(body)
 
 		req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/acknowledge", bytes.NewBuffer(jsonBody))
@@ -181,7 +181,7 @@ func TestAlertsEndpoints(t *testing.T) {
 	// 8. Bulk Acknowledge
 	t.Run("BulkAcknowledge", func(t *testing.T) {
 		body := map[string]interface{}{
-			"alertIds": []string{"alert-1", "alert-2"},
+			"alertIdentifiers": []string{"alert-1", "alert-2"},
 		}
 		jsonBody, _ := json.Marshal(body)
 
@@ -205,7 +205,7 @@ func TestAlertsEndpoints(t *testing.T) {
 	// 9. Bulk Clear
 	t.Run("BulkClear", func(t *testing.T) {
 		body := map[string]interface{}{
-			"alertIds": []string{"alert-1", "alert-2"},
+			"alertIdentifiers": []string{"alert-1", "alert-2"},
 		}
 		jsonBody, _ := json.Marshal(body)
 
@@ -240,7 +240,7 @@ func TestAlertsEndpoints(t *testing.T) {
 		}
 
 		// Test specific alert timeline
-		res2, err := http.Get(srv.server.URL + "/api/alerts/incidents?alert_identifier=test-alert")
+		res2, err := http.Get(srv.server.URL + "/api/alerts/incidents?alertIdentifier=test-alert")
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}

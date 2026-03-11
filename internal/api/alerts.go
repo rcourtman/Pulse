@@ -459,12 +459,6 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 
 	query := r.URL.Query()
 	alertID := strings.TrimSpace(query.Get("alertIdentifier"))
-	if alertID == "" {
-		alertID = strings.TrimSpace(query.Get("alert_identifier"))
-	}
-	if alertID == "" {
-		alertID = strings.TrimSpace(query.Get("alert_id"))
-	}
 	resourceID := strings.TrimSpace(query.Get("resource_id"))
 	startedAtRaw := strings.TrimSpace(query.Get("started_at"))
 	if startedAtRaw == "" {
@@ -516,7 +510,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		return
 	}
 
-	http.Error(w, "Missing alert_identifier or resource_id", http.StatusBadRequest)
+	http.Error(w, "Missing alertIdentifier or resource_id", http.StatusBadRequest)
 }
 
 // SaveAlertIncidentNote stores a user note in the incident timeline.
@@ -535,8 +529,6 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req struct {
 		AlertIdentifier string `json:"alertIdentifier"`
-		LegacyAlertID   string `json:"legacyAlertId"`
-		AlertID         string `json:"alert_id"`
 		IncidentID      string `json:"incident_id"`
 		Note            string `json:"note"`
 		User            string `json:"user,omitempty"`
@@ -547,19 +539,11 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	}
 
 	req.AlertIdentifier = strings.TrimSpace(req.AlertIdentifier)
-	req.LegacyAlertID = strings.TrimSpace(req.LegacyAlertID)
-	req.AlertID = strings.TrimSpace(req.AlertID)
 	req.IncidentID = strings.TrimSpace(req.IncidentID)
 	req.Note = strings.TrimSpace(req.Note)
 	req.User = strings.TrimSpace(req.User)
 
 	alertIdentifier := req.AlertIdentifier
-	if alertIdentifier == "" {
-		alertIdentifier = req.LegacyAlertID
-	}
-	if alertIdentifier == "" {
-		alertIdentifier = req.AlertID
-	}
 
 	if alertIdentifier == "" && req.IncidentID == "" {
 		http.Error(w, "alertIdentifier or incident_id is required", http.StatusBadRequest)
@@ -678,39 +662,22 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// alertIdentifierRequest is used for endpoints that accept one alert identifier in the request body.
-// Canonical v6 clients should send `alertIdentifier`; `id` remains as a compatibility alias.
+// alertIdentifierRequest is used for endpoints that accept one canonical alert identifier in the request body.
 type alertIdentifierRequest struct {
 	AlertIdentifier string `json:"alertIdentifier"`
-	LegacyAlertID   string `json:"legacyAlertId"`
-	ID              string `json:"id"`
 }
 
 func (r alertIdentifierRequest) identifier() string {
-	if identifier := strings.TrimSpace(r.AlertIdentifier); identifier != "" {
-		return identifier
-	}
-	if identifier := strings.TrimSpace(r.LegacyAlertID); identifier != "" {
-		return identifier
-	}
-	return strings.TrimSpace(r.ID)
+	return strings.TrimSpace(r.AlertIdentifier)
 }
 
 type alertIdentifiersRequest struct {
 	AlertIdentifiers []string `json:"alertIdentifiers"`
-	LegacyAlertIDs   []string `json:"legacyAlertIds"`
-	AlertIDs         []string `json:"alertIds"`
 	User             string   `json:"user,omitempty"`
 }
 
 func (r alertIdentifiersRequest) identifiers() []string {
 	raw := r.AlertIdentifiers
-	if len(raw) == 0 {
-		raw = r.LegacyAlertIDs
-	}
-	if len(raw) == 0 {
-		raw = r.AlertIDs
-	}
 	identifiers := make([]string, 0, len(raw))
 	for _, identifier := range raw {
 		trimmed := strings.TrimSpace(identifier)
