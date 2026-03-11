@@ -34,10 +34,10 @@ func ShouldGrantPaidCapabilities(state SubscriptionState) bool {
 func DeriveStripePlanVersion(metadata map[string]string, priceID string) string {
 	if metadata != nil {
 		if v := strings.TrimSpace(metadata["plan_version"]); v != "" {
-			return v
+			return canonicalizeStripePlanVersion(v)
 		}
 		if v := strings.TrimSpace(metadata["plan"]); v != "" {
-			return v
+			return canonicalizeStripePlanVersion(v)
 		}
 	}
 	trimmedPrice := strings.TrimSpace(priceID)
@@ -49,4 +49,20 @@ func DeriveStripePlanVersion(metadata map[string]string, priceID string) string 
 		return "stripe_price:" + trimmedPrice
 	}
 	return "stripe"
+}
+
+func canonicalizeStripePlanVersion(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	switch strings.ToLower(trimmed) {
+	case "cloud", "starter", "cloud-v1", "cloud_v1", "cloud-starter", "cloud_starter":
+		return "cloud_starter"
+	case "power", "cloud-power", "cloud_power":
+		return "cloud_power"
+	case "max", "cloud-max", "cloud_max":
+		return "cloud_max"
+	case "founding", "cloud-founding", "cloud_founding":
+		return "cloud_founding"
+	default:
+		return trimmed
+	}
 }

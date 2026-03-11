@@ -251,6 +251,9 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 	if state.SubscriptionState != entitlements.SubStateActive {
 		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateActive)
 	}
+	if state.PlanVersion != "cloud_starter" {
+		t.Fatalf("plan_version=%q, want %q", state.PlanVersion, "cloud_starter")
+	}
 	if state.StripeCustomerID != "cus_abc" {
 		t.Fatalf("stripe_customer_id=%q, want %q", state.StripeCustomerID, "cus_abc")
 	}

@@ -64,6 +64,8 @@ func TestDerivePlanVersion(t *testing.T) {
 		priceID  string
 		want     string
 	}{
+		{"legacy cloud alias canonicalizes", map[string]string{"plan_version": "cloud-v1"}, "", "cloud_starter"},
+		{"cloud shorthand canonicalizes", map[string]string{"plan": "max"}, "", "cloud_max"},
 		{"plan_version in metadata", map[string]string{"plan_version": "v2"}, "", "v2"},
 		{"plan in metadata", map[string]string{"plan": "pro"}, "", "pro"},
 		{"plan_version takes priority", map[string]string{"plan_version": "v3", "plan": "pro"}, "", "v3"},

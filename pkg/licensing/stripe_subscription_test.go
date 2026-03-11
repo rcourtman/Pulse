@@ -66,6 +66,18 @@ func TestDeriveStripePlanVersion(t *testing.T) {
 			want:     "cloud_v6",
 		},
 		{
+			name:     "legacy cloud v1 metadata canonicalizes to starter",
+			metadata: map[string]string{"plan_version": "cloud-v1"},
+			priceID:  "price_123",
+			want:     "cloud_starter",
+		},
+		{
+			name:     "shorthand plan metadata canonicalizes to cloud tier",
+			metadata: map[string]string{"plan": "power"},
+			priceID:  "price_123",
+			want:     "cloud_power",
+		},
+		{
 			name:     "plan fallback",
 			metadata: map[string]string{"plan": "cloud_v5"},
 			priceID:  "price_123",
