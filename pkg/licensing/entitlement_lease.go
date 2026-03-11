@@ -53,9 +53,6 @@ func normalizeEntitlementLeaseClaims(claims *EntitlementLeaseClaims) {
 	claims.MetersEnabled = cloneStringSlice(claims.MetersEnabled)
 	claims.TrialStartedAt = cloneInt64Ptr(claims.TrialStartedAt)
 	claims.TrialEndsAt = cloneInt64Ptr(claims.TrialEndsAt)
-	if claims.PlanVersion == "" && claims.SubscriptionState != "" {
-		claims.PlanVersion = string(claims.SubscriptionState)
-	}
 	if limit, known := CloudPlanAgentLimits[claims.PlanVersion]; known {
 		if claims.Limits == nil {
 			claims.Limits = map[string]int64{}

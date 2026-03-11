@@ -339,6 +339,50 @@ func TestDatabaseSourceLeaseOnlyStateResolvesTrialEntitlement(t *testing.T) {
 	}
 }
 
+func TestDatabaseSourceLeaseOnlyStatePreservesMissingPlanVersion(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	embeddedBefore := EmbeddedPublicKey
+	EmbeddedPublicKey = ""
+	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
+	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	now := time.Now().UTC()
+	token, err := SignEntitlementLeaseToken(priv, EntitlementLeaseClaims{
+		OrgID:             "org-1",
+		InstanceHost:      "pulse.example.com",
+		PlanVersion:       "   ",
+		SubscriptionState: SubStateActive,
+		Limits:            map[string]int64{"max_agents": 42},
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken: %v", err)
+	}
+
+	store := &mockBillingStore{
+		state: &BillingState{
+			EntitlementJWT: token,
+		},
+	}
+	source := NewDatabaseSource(store, "org-1", time.Hour).WithExpectedInstanceHost("pulse.example.com")
+
+	if got := source.PlanVersion(); got != "" {
+		t.Fatalf("expected empty plan_version, got %q", got)
+	}
+	if got := source.SubscriptionState(); got != SubStateActive {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateActive, got)
+	}
+	if got := source.Limits(); !reflect.DeepEqual(got, map[string]int64{"max_agents": 42}) {
+		t.Fatalf("expected limits %v, got %v", map[string]int64{"max_agents": 42}, got)
+	}
+}
+
 func TestDatabaseSourceLeaseHostMismatchFailsClosed(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {

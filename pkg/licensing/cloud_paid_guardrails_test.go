@@ -20,3 +20,19 @@ func TestNormalizeBillingStatePreservesMissingPlanVersion(t *testing.T) {
 		t.Fatalf("limits[max_agents]=%d, want %d", got, 42)
 	}
 }
+
+func TestNormalizeEntitlementLeaseClaimsPreservesMissingPlanVersion(t *testing.T) {
+	claims := &EntitlementLeaseClaims{
+		PlanVersion:       "   ",
+		SubscriptionState: SubStateActive,
+		Limits:            map[string]int64{"max_agents": 42},
+	}
+
+	normalizeEntitlementLeaseClaims(claims)
+	if claims.PlanVersion != "" {
+		t.Fatalf("plan_version=%q, want empty", claims.PlanVersion)
+	}
+	if got := claims.Limits["max_agents"]; got != 42 {
+		t.Fatalf("limits[max_agents]=%d, want %d", got, 42)
+	}
+}

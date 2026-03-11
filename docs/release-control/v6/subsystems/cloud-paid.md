@@ -54,7 +54,8 @@ Stripe-account, or billing-state updates.
 Signed hosted entitlement leases are part of the same boundary: lease signing
 and verification must canonicalize recognized Cloud plan aliases and reconcile
 lease `limits.max_agents` to the authoritative per-plan contract instead of
-trusting stale embedded values.
+trusting stale embedded values. They also must not fabricate `plan_version`
+from bare `subscription_state` when the signed lease claim label is absent.
 The control-plane registry is also canonical: tenant and Stripe-account
 `plan_version` rows must canonicalize recognized Cloud aliases on read and
 write so stored legacy values cannot re-enter provisioning, entitlement, or

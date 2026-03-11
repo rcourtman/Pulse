@@ -397,6 +397,43 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_cloud_paid_entitlement_lease_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/entitlement_lease.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "entitlement-lease-boundary",
+                    "label": "hosted entitlement lease proof",
+                    "touched_runtime_files": ["pkg/licensing/entitlement_lease.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/cloud_paid_guardrails_test.go",
+                        "pkg/licensing/database_source_test.go",
+                        "pkg/licensing/entitlement_lease_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_entitlement_lease_rejects_arbitrary_same_subsystem_test(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirement = build_verification_requirements(
+            rule,
+            ["pkg/licensing/entitlement_lease.go"],
+        )[0]
+        matches = staged_verification_files_for_requirement(
+            rule,
+            requirement,
+            ["pkg/licensing/service_activate_test.go"],
+        )
+        self.assertEqual(matches, [])
+
     def test_api_backend_runtime_can_use_types_file_as_proof(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
         requirement = build_verification_requirements(
