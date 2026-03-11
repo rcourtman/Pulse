@@ -444,6 +444,77 @@ func TestRefreshGrantOnce_PersistsState(t *testing.T) {
 	}
 }
 
+func TestRefreshGrantOnce_MissingCloudPlanFailsClosed(t *testing.T) {
+	setupTestPublicKey(t)
+
+	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID: "lic_cloud_unknown_plan",
+		Tier:      "cloud",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(RefreshGrantResponse{
+			Grant: GrantEnvelope{
+				JWT:       newGrantJWT,
+				JTI:       "grant_cloud_unknown",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID: "lic_initial",
+		Tier:      "pro",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	svc := NewService()
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+	state := &ActivationState{
+		InstallationID:      "inst_cloud_unknown",
+		InstallationToken:   "pit_live_cloud_unknown",
+		LicenseID:           "lic_initial",
+		GrantJWT:            initialGrantJWT,
+		GrantJTI:            "grant_old",
+		InstanceFingerprint: "fp-cloud-unknown",
+	}
+	svc.mu.Lock()
+	svc.activationState = state
+	svc.mu.Unlock()
+	if err := svc.RestoreActivation(state); err != nil {
+		t.Fatalf("RestoreActivation: %v", err)
+	}
+
+	if err := svc.refreshGrantOnce(context.Background()); err != nil {
+		t.Fatalf("refreshGrantOnce: %v", err)
+	}
+
+	lic := svc.Current()
+	if lic == nil {
+		t.Fatal("expected current license after refresh")
+	}
+	if got := lic.Claims.EntitlementPlanVersion(); got != "" {
+		t.Fatalf("EntitlementPlanVersion()=%q, want empty", got)
+	}
+	if got := lic.Claims.EffectiveLimits()["max_agents"]; got != int64(UnknownPlanDefaultAgentLimit) {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, UnknownPlanDefaultAgentLimit)
+	}
+
+	status := svc.Status()
+	if status.PlanVersion != "" {
+		t.Fatalf("status.PlanVersion=%q, want empty", status.PlanVersion)
+	}
+	if status.MaxAgents != UnknownPlanDefaultAgentLimit {
+		t.Fatalf("status.MaxAgents=%d, want %d", status.MaxAgents, UnknownPlanDefaultAgentLimit)
+	}
+}
+
 func TestRefreshGrantOnce_CallsLicenseChangeCallback(t *testing.T) {
 	setupTestPublicKey(t)
 

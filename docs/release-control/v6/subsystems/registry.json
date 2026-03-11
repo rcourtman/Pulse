@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "subsystems": [
     {
       "id": "alerts",
@@ -351,6 +351,66 @@
               "pkg/licensing/cloud_paid_guardrails_test.go",
               "pkg/licensing/database_source_test.go",
               "pkg/licensing/entitlement_lease_test.go"
+            ]
+          },
+          {
+            "id": "activation-service-runtime",
+            "label": "activation service runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/service.go",
+              "pkg/licensing/grant_refresh.go",
+              "pkg/licensing/revocation_poll.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/grant_refresh_test.go",
+              "pkg/licensing/revocation_poll_test.go",
+              "pkg/licensing/service_activate_test.go"
+            ]
+          },
+          {
+            "id": "license-server-transport",
+            "label": "license server transport proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/license_server_client.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/license_server_client_test.go",
+              "pkg/licensing/revocation_poll_test.go"
+            ]
+          },
+          {
+            "id": "activation-state-persistence",
+            "label": "activation state persistence proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/persistence.go",
+              "pkg/licensing/activation_store.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/activation_store_test.go",
+              "pkg/licensing/persistence_test.go"
+            ]
+          },
+          {
+            "id": "hosted-trial-activation",
+            "label": "hosted trial activation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/trial_activation.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/trial_activation_test.go"
             ]
           },
           {

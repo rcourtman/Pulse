@@ -17,11 +17,17 @@ agreement, and cloud-specific enforcement rules.
 8. `pkg/licensing/entitlement_payload.go`
 9. `pkg/licensing/hosted_subscription.go`
 10. `pkg/licensing/service.go`
-11. `pkg/licensing/stripe_subscription.go`
-12. `internal/cloudcp/entitlements/service.go`
-13. `internal/cloudcp/registry/registry.go`
-14. `internal/cloudcp/stripe/provisioner.go`
-15. `frontend-modern/src/pages/CloudPricing.tsx`
+11. `pkg/licensing/grant_refresh.go`
+12. `pkg/licensing/revocation_poll.go`
+13. `pkg/licensing/license_server_client.go`
+14. `pkg/licensing/persistence.go`
+15. `pkg/licensing/activation_store.go`
+16. `pkg/licensing/trial_activation.go`
+17. `pkg/licensing/stripe_subscription.go`
+18. `internal/cloudcp/entitlements/service.go`
+19. `internal/cloudcp/registry/registry.go`
+20. `internal/cloudcp/stripe/provisioner.go`
+21. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Extension Points
 
@@ -29,8 +35,12 @@ agreement, and cloud-specific enforcement rules.
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
 3. Add or change control-plane plan storage through `internal/cloudcp/registry/registry.go`
 4. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
-5. Add or change cloud plan presentation through `CloudPricing.tsx`
-6. Add contract tests where runtime and pricing need to stay aligned
+5. Add or change activation/grant lifecycle through `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
+6. Add or change license-server transport through `pkg/licensing/license_server_client.go`
+7. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
+8. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
+9. Add or change cloud plan presentation through `CloudPricing.tsx`
+10. Add contract tests where runtime and pricing need to stay aligned
 
 ## Forbidden Paths
 
@@ -110,3 +120,10 @@ The runtime entitlement surface now follows the same rule: evaluator/token
 source accessors, hosted-subscription validity rules, and frontend entitlement
 payload construction should move behind explicit proof routes rather than being
 implicitly trusted as part of the catch-all cloud runtime layer.
+Activation service runtime, license-server transport, encrypted activation
+persistence, and hosted trial activation now follow the same ratchet. Changes
+to `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`,
+`pkg/licensing/revocation_poll.go`, `pkg/licensing/license_server_client.go`,
+`pkg/licensing/persistence.go`, `pkg/licensing/activation_store.go`, and
+`pkg/licensing/trial_activation.go` should carry their dedicated proof files
+instead of relying only on the generic cloud runtime policy.

@@ -95,7 +95,7 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 	rel := "docs/release-control/v6/subsystems/registry.json"
 	content := readRepoFile(t, rel)
 	assertContainsAll(t, rel, content, []string{
-		"\"version\": 8",
+		"\"version\": 9",
 		"\"subsystems\":",
 		"\"verification\":",
 		"\"allow_same_subsystem_tests\":",
@@ -113,6 +113,13 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 		"pkg/licensing/stripe_subscription.go",
 		"pkg/licensing/models.go",
 		"pkg/licensing/activation_types.go",
+		"pkg/licensing/service.go",
+		"pkg/licensing/grant_refresh.go",
+		"pkg/licensing/revocation_poll.go",
+		"pkg/licensing/license_server_client.go",
+		"pkg/licensing/persistence.go",
+		"pkg/licensing/activation_store.go",
+		"pkg/licensing/trial_activation.go",
 		"internal/cloudcp/entitlements/service.go",
 		"internal/cloudcp/registry/registry.go",
 		"internal/cloudcp/stripe/provisioner.go",

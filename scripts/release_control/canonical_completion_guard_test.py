@@ -669,6 +669,110 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_cloud_paid_activation_service_runtime_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            [
+                "pkg/licensing/service.go",
+                "pkg/licensing/grant_refresh.go",
+                "pkg/licensing/revocation_poll.go",
+            ],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "activation-service-runtime",
+                    "label": "activation service runtime proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/service.go",
+                        "pkg/licensing/grant_refresh.go",
+                        "pkg/licensing/revocation_poll.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/cloud_paid_guardrails_test.go",
+                        "pkg/licensing/grant_refresh_test.go",
+                        "pkg/licensing/revocation_poll_test.go",
+                        "pkg/licensing/service_activate_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_license_server_transport_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/license_server_client.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "license-server-transport",
+                    "label": "license server transport proof",
+                    "touched_runtime_files": ["pkg/licensing/license_server_client.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/license_server_client_test.go",
+                        "pkg/licensing/revocation_poll_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_activation_state_persistence_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/persistence.go", "pkg/licensing/activation_store.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "activation-state-persistence",
+                    "label": "activation state persistence proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/persistence.go",
+                        "pkg/licensing/activation_store.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/activation_store_test.go",
+                        "pkg/licensing/persistence_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_trial_activation_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/trial_activation.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "hosted-trial-activation",
+                    "label": "hosted trial activation proof",
+                    "touched_runtime_files": ["pkg/licensing/trial_activation.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/trial_activation_test.go",
+                    ],
+                }
+            ],
+        )
+
     def test_api_backend_runtime_can_use_types_file_as_proof(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
         requirement = build_verification_requirements(

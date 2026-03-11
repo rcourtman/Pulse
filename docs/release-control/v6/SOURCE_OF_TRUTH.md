@@ -47,6 +47,14 @@ Recent locked release decision:
   preserves the missing `plan_version` metadata, but claim evaluation and
   `Service.Status()` no longer fall through to the unlimited Cloud/MSP tier
   default in that case.
+- 2026-03-11: Cloud-paid governance now also explicitly owns activation
+  service runtime, license-server transport, encrypted activation persistence,
+  and hosted trial activation. Changes to `pkg/licensing/service.go`,
+  `pkg/licensing/grant_refresh.go`, `pkg/licensing/revocation_poll.go`,
+  `pkg/licensing/license_server_client.go`, `pkg/licensing/persistence.go`,
+  `pkg/licensing/activation_store.go`, and `pkg/licensing/trial_activation.go`
+  now require dedicated proof routes instead of falling through the generic
+  cloud runtime policy.
 - 2026-03-11: Canonical governance now runs in both local hooks and CI.
   `scripts/release_control/canonical_completion_guard.py` can validate either
   staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`
