@@ -67,7 +67,9 @@ describe('AIAPI', () => {
           title: 'CPU',
           description: 'high',
           detected_at: '2026-03-01T00:00:00Z',
-          alert_id: 'canonical-alert-1',
+          alert_identifier: 'canonical-alert-1',
+          legacy_alert_id: 'legacy-alert-1',
+          alert_id: 'legacy-alert-1',
         },
       ],
       count: 1,
@@ -76,8 +78,12 @@ describe('AIAPI', () => {
     const result = await AIAPI.getUnifiedFindings();
 
     expect(result.findings[0]).toMatchObject({
+      alertIdentifier: 'canonical-alert-1',
+      legacyAlertId: 'legacy-alert-1',
+      alertId: 'legacy-alert-1',
       alert_identifier: 'canonical-alert-1',
-      alert_id: 'canonical-alert-1',
+      legacy_alert_id: 'legacy-alert-1',
+      alert_id: 'legacy-alert-1',
     });
   });
 
