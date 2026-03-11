@@ -164,6 +164,14 @@ describe('MonitoringAPI', () => {
         }),
       );
     });
+
+    it('throws the canonical missing-runtime message on 404', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+
+      await expect(
+        MonitoringAPI.setDockerRuntimeDisplayName('agent-1', 'New Name'),
+      ).rejects.toThrow('Container runtime not found');
+    });
   });
 
   describe('agent management', () => {
@@ -339,6 +347,30 @@ describe('MonitoringAPI', () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
 
       await expect(MonitoringAPI.unhideKubernetesCluster('cluster-1')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('setKubernetesClusterDisplayName', () => {
+    it('sets display name', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
+
+      await MonitoringAPI.setKubernetesClusterDisplayName('cluster-1', 'New Name');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/kubernetes/clusters/cluster-1/display-name',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ displayName: 'New Name' }),
+        }),
+      );
+    });
+
+    it('throws the canonical missing-cluster message on 404', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+
+      await expect(
+        MonitoringAPI.setKubernetesClusterDisplayName('cluster-1', 'New Name'),
+      ).rejects.toThrow('Kubernetes cluster not found');
     });
   });
 

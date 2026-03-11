@@ -9,8 +9,8 @@ import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
   assertAPIResponseOKOrAllowedStatus,
+  assertAPIResponseOKOrThrowStatus,
   coerceTimestampMillis,
-  isAPIResponseStatus,
   parseOptionalAPIResponse,
   parseOptionalAPIResponseOrAllowedStatus,
   parseOptionalAPIResponseOrNull,
@@ -90,13 +90,12 @@ export class MonitoringAPI {
       body: JSON.stringify({ displayName }),
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        throw new Error('Container runtime not found');
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
+    await assertAPIResponseOKOrThrowStatus(
+      response,
+      404,
+      'Container runtime not found',
+      `Failed with status ${response.status}`,
+    );
   }
 
   static async allowDockerRuntimeReenroll(agentId: string): Promise<void> {
@@ -161,13 +160,12 @@ export class MonitoringAPI {
       body: JSON.stringify({ displayName }),
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        throw new Error('Kubernetes cluster not found');
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
+    await assertAPIResponseOKOrThrowStatus(
+      response,
+      404,
+      'Kubernetes cluster not found',
+      `Failed with status ${response.status}`,
+    );
   }
 
   static async allowKubernetesClusterReenroll(clusterId: string): Promise<void> {

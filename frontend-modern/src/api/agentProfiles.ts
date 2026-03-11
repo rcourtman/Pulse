@@ -2,9 +2,9 @@ import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
   assertAPIResponseOKOrAllowedStatus,
+  assertAPIResponseOKOrThrowStatus,
   arrayOrEmpty,
   isAPIErrorStatus,
-  isAPIResponseStatus,
   objectArrayFieldOrEmpty,
   parseRequiredAPIResponse,
 } from './responseUtils';
@@ -242,14 +242,12 @@ export class AgentProfilesAPI {
       body: JSON.stringify(request),
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 503)) {
-        throw new Error(
-          'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
-        );
-      }
-      await assertAPIResponseOK(response, `Failed to get suggestion: ${response.status}`);
-    }
+    await assertAPIResponseOKOrThrowStatus(
+      response,
+      503,
+      'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
+      `Failed to get suggestion: ${response.status}`,
+    );
 
     return parseRequiredAPIResponse(
       response,

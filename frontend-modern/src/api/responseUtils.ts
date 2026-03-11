@@ -79,6 +79,19 @@ export async function assertAPIResponseOKOrAllowedStatus(
   await assertAPIResponseOK(response, fallback);
 }
 
+export async function assertAPIResponseOKOrThrowStatus(
+  response: Response,
+  throwStatus: number,
+  throwMessage: string,
+  fallback: string,
+): Promise<void> {
+  if (isAPIResponseStatus(response, throwStatus)) {
+    throw new Error(throwMessage);
+  }
+
+  await assertAPIResponseOK(response, fallback);
+}
+
 export async function parseRequiredAPIResponse<T>(
   response: Response,
   requestErrorMessage: string,

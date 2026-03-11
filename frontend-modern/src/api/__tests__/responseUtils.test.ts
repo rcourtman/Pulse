@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   assertAPIResponseOK,
   assertAPIResponseOKOrAllowedStatus,
+  assertAPIResponseOKOrThrowStatus,
   arrayOrUndefined,
   arrayOrEmpty,
   apiErrorStatus,
@@ -124,6 +125,30 @@ describe('assertAPIResponseOKOrAllowedStatus', () => {
       assertAPIResponseOKOrAllowedStatus(
         new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 }),
         404,
+        'Fallback',
+      ),
+    ).rejects.toThrow('Bad request');
+  });
+});
+
+describe('assertAPIResponseOKOrThrowStatus', () => {
+  it('throws the explicit message for the configured status', async () => {
+    await expect(
+      assertAPIResponseOKOrThrowStatus(
+        new Response('', { status: 404 }),
+        404,
+        'Custom missing resource message',
+        'Fallback',
+      ),
+    ).rejects.toThrow('Custom missing resource message');
+  });
+
+  it('falls back to the canonical parsed error for other non-ok responses', async () => {
+    await expect(
+      assertAPIResponseOKOrThrowStatus(
+        new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 }),
+        404,
+        'Custom missing resource message',
         'Fallback',
       ),
     ).rejects.toThrow('Bad request');

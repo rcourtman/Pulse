@@ -4,9 +4,9 @@ import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
   assertAPIResponseOKOrAllowedStatus,
+  assertAPIResponseOKOrThrowStatus,
   arrayOrEmpty,
   isAPIErrorStatus,
-  isAPIResponseStatus,
   objectArrayFieldOrEmpty,
   parseRequiredAPIResponse,
 } from '../responseUtils';
@@ -19,9 +19,9 @@ vi.mock('@/utils/apiClient', () => ({
 vi.mock('../responseUtils', () => ({
   assertAPIResponseOK: vi.fn(),
   assertAPIResponseOKOrAllowedStatus: vi.fn(),
+  assertAPIResponseOKOrThrowStatus: vi.fn(),
   arrayOrEmpty: vi.fn(),
   isAPIErrorStatus: vi.fn(),
-  isAPIResponseStatus: vi.fn(),
   objectArrayFieldOrEmpty: vi.fn(),
   parseRequiredAPIResponse: vi.fn(),
 }));
@@ -32,12 +32,10 @@ describe('AgentProfilesAPI', () => {
     vi.mocked(isAPIErrorStatus).mockImplementation((error, expectedStatus) => {
       return (error as { status?: number } | null)?.status === expectedStatus;
     });
-    vi.mocked(isAPIResponseStatus).mockImplementation((response, expectedStatus) => {
-      return (response as { status?: number } | null)?.status === expectedStatus;
-    });
     vi.mocked(arrayOrEmpty).mockImplementation((value) => (Array.isArray(value) ? value : []));
     vi.mocked(assertAPIResponseOK).mockResolvedValue(undefined);
     vi.mocked(assertAPIResponseOKOrAllowedStatus).mockResolvedValue(undefined);
+    vi.mocked(assertAPIResponseOKOrThrowStatus).mockResolvedValue(undefined);
     vi.mocked(objectArrayFieldOrEmpty).mockImplementation((value, field) => {
       if (!value || typeof value !== 'object') {
         return [];
@@ -282,19 +280,34 @@ describe('AgentProfilesAPI', () => {
     it('throws on 503', async () => {
       const mockResponse = { ok: false, status: 503 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
+      vi.mocked(assertAPIResponseOKOrThrowStatus).mockRejectedValueOnce(
+        new Error('Pulse Assistant service is not available. Please check Pulse Assistant settings.'),
+      );
 
       await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow(
         'Pulse Assistant service is not available',
+      );
+      expect(assertAPIResponseOKOrThrowStatus).toHaveBeenCalledWith(
+        mockResponse,
+        503,
+        'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
+        'Failed to get suggestion: 503',
       );
     });
 
     it('does not infer service-unavailable status from arbitrary responses', async () => {
       const mockResponse = { ok: false, status: 500 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
-      vi.mocked(assertAPIResponseOK).mockRejectedValueOnce(new Error('Server error'));
+      vi.mocked(assertAPIResponseOKOrThrowStatus).mockRejectedValueOnce(new Error('Server error'));
 
       await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow(
         'Server error',
+      );
+      expect(assertAPIResponseOKOrThrowStatus).toHaveBeenCalledWith(
+        mockResponse,
+        503,
+        'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
+        'Failed to get suggestion: 500',
       );
     });
 
