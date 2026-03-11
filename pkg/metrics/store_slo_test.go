@@ -23,6 +23,7 @@ import (
 //   - Query(1000 pts):     ~400µs → SLO 5ms
 //   - QueryAll(4×500 pts): ~1.8ms → SLO 15ms
 //   - QueryAllBatch(50×4×100): ~18ms → SLO 40ms
+//   - rollupTier(50×2×20): ~2.1ms → SLO 15ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
 const (
 	// SLOWriteBatchP95 is the p95 target for WriteBatchSync with 100 metrics —
@@ -44,6 +45,11 @@ const (
 	// SLOQueryManyResourcesP95 is the p95 target for Query with 100 resources
 	// in the table — validates that index isolation prevents full table scans.
 	SLOQueryManyResourcesP95 = 500 * time.Microsecond
+
+	// SLORollupTierBatchedP95 is the p95 target for the production batched
+	// rollupTier path (50 resources × 2 metrics × 20 raw points), which must
+	// stay fast enough to prevent periodic aggregation from becoming a backlog.
+	SLORollupTierBatchedP95 = 15 * time.Millisecond
 )
 
 const sloIterations = 200
@@ -399,5 +405,65 @@ func TestSLO_QueryManyResources(t *testing.T) {
 
 	if p95 > SLOQueryManyResourcesP95 {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOQueryManyResourcesP95)
+	}
+}
+
+// TestSLO_RollupTierBatched validates the production rollupTier path that
+// aggregates all resource/metric combinations in a single SQL statement.
+func TestSLO_RollupTierBatched(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newSLOStore(t)
+	rawBase := time.Now().Add(-30 * time.Minute).Unix()
+	base := time.Unix((rawBase/60)*60, 0)
+
+	const numResources = 50
+	const metricsPerResource = 2
+	const pointsPerMetric = 20
+	metricTypes := []string{"cpu", "mem"}
+
+	batch := make([]WriteMetric, 0, numResources*metricsPerResource*pointsPerMetric)
+	for r := 0; r < numResources; r++ {
+		for _, mt := range metricTypes[:metricsPerResource] {
+			for p := 0; p < pointsPerMetric; p++ {
+				batch = append(batch, WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   fmt.Sprintf("vm-%d", r),
+					MetricType:   mt,
+					Value:        float64((r + p) % 100),
+					Timestamp:    base.Add(time.Duration(p) * time.Second),
+					Tier:         TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+
+	metaKey := "rollup:raw:minute"
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	var minuteCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM metrics WHERE tier = ?`, string(TierMinute)).Scan(&minuteCount); err != nil {
+		t.Fatalf("sanity minute-tier count query: %v", err)
+	}
+	if minuteCount == 0 {
+		t.Fatal("sanity: expected minute-tier rows after rollupTier")
+	}
+	if checkpoint, ok := store.getMetaInt(metaKey); !ok || checkpoint <= 0 {
+		t.Fatalf("sanity: expected rollup checkpoint for %s to advance, got %d (ok=%v)", metaKey, checkpoint, ok)
+	}
+
+	latencies := measureLatencies(t, func() {
+		_ = store.setMetaInt(metaKey, 0)
+		store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+	})
+
+	p95 := pct(latencies, 0.95)
+	t.Logf("rollupTier(50x2x20) p50=%v p95=%v p99=%v SLO=%v",
+		pct(latencies, 0.50), p95, pct(latencies, 0.99), SLORollupTierBatchedP95)
+
+	if p95 > SLORollupTierBatchedP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLORollupTierBatchedP95)
 	}
 }
