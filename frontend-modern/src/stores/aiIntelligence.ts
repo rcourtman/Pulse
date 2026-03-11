@@ -90,6 +90,8 @@ export interface UnifiedFinding {
   resourceId: string;
   resourceName: string;
   resourceType: string;
+  alertIdentifier?: string;
+  legacyAlertId?: string;
   alertId?: string;
   alertType?: string;
   isThreshold?: boolean;
@@ -189,6 +191,7 @@ export const aiIntelligenceStore = {
       const now = Date.now();
 
       const findings = (resp.findings || []).map((item: UnifiedFindingRecord): UnifiedFinding => {
+        const alertIdentifier = item.alert_identifier ?? item.alert_id;
         let status = item.status as UnifiedFinding['status'] | undefined;
         if (!status) {
           if (item.resolved_at) {
@@ -208,7 +211,9 @@ export const aiIntelligenceStore = {
           resourceId: item.resource_id,
           resourceName: item.resource_name || item.resource_id,
           resourceType: item.resource_type || 'unknown',
-          alertId: item.alert_id,
+          alertIdentifier,
+          legacyAlertId: item.legacy_alert_id ?? alertIdentifier,
+          alertId: item.alert_id ?? alertIdentifier,
           isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
           category: item.category || 'general',
           severity: validateSeverity(item.severity),
