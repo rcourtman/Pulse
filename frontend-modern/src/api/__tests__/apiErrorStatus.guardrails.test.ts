@@ -35,6 +35,8 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function strictBoolean');
     expect(responseUtilsSource).toContain('export function finiteNumberOrUndefined');
     expect(responseUtilsSource).toContain('export function stringArray');
+    expect(responseUtilsSource).toContain('export function stringRecordOrUndefined');
+    expect(responseUtilsSource).toContain('export function normalizeStructuredAPIError');
     expect(responseUtilsSource).toContain('(error as APIErrorLike).status');
     expect(responseUtilsSource).toContain('response.status');
   });
@@ -72,7 +74,11 @@ describe('API error-status guardrails', () => {
     expect(discoverySource).not.toContain('return response.json()');
 
     expect(hostedSignupSource).toContain('parseJSONSafe<');
+    expect(hostedSignupSource).toContain('normalizeStructuredAPIError(body, response.status)');
     expect(hostedSignupSource).not.toContain('response.json()');
+    expect(hostedSignupSource).not.toContain('function normalizeHostedError(');
+    expect(hostedSignupSource).not.toContain("typeof obj.code === 'string'");
+    expect(hostedSignupSource).not.toContain("typeof obj.message === 'string'");
   });
 
   it('routes canonical collection normalization through responseUtils', () => {
@@ -124,7 +130,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, and module-local scalar helper stacks', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, and module-local structured error normalization', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -145,6 +151,11 @@ describe('API error-status guardrails', () => {
     );
     const rawScalarHelperPattern =
       /(?:const\s+asString\s*=|const\s+asOptionalString\s*=|const\s+asBoolean\s*=|private\s+static\s+readString\(|private\s+static\s+readBoolean\(|private\s+static\s+readNumber\(|private\s+static\s+readStringArray\()/;
+    const governedStructuredErrorEntries = runtimeEntries.filter(([path]) =>
+      /\/hostedSignup\.ts$/.test(path),
+    );
+    const rawStructuredErrorPattern =
+      /(?:function\s+normalizeHostedError\(|typeof\s+obj\.code\s*===\s*'string'|typeof\s+obj\.message\s*===\s*'string')/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -179,11 +190,17 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const structuredErrorOffenders = governedStructuredErrorEntries
+      .filter(([, source]) => rawStructuredErrorPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
     expect(manualJSONParseOffenders).toEqual([]);
     expect(arrayFallbackOffenders).toEqual([]);
     expect(scalarHelperOffenders).toEqual([]);
+    expect(structuredErrorOffenders).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import {
   finiteNumberOrUndefined,
   isAPIErrorStatus,
   isAPIResponseStatus,
+  normalizeStructuredAPIError,
   objectArrayFieldOrEmpty,
   parseJSONSafe,
   parseJSONTextSafe,
@@ -15,6 +16,7 @@ import {
   optionalTrimmedString,
   strictBoolean,
   strictString,
+  stringRecordOrUndefined,
   stringArray,
   trimmedString,
 } from '@/api/responseUtils';
@@ -246,6 +248,55 @@ describe('stringArray', () => {
 
   it('returns empty array for non-array values', () => {
     expect(stringArray('a')).toEqual([]);
+  });
+});
+
+describe('stringRecordOrUndefined', () => {
+  it('returns only string fields from object values', () => {
+    expect(stringRecordOrUndefined({ a: 'one', b: 2, c: 'three' })).toEqual({
+      a: 'one',
+      c: 'three',
+    });
+  });
+
+  it('returns undefined for invalid or empty records', () => {
+    expect(stringRecordOrUndefined(null)).toBeUndefined();
+    expect(stringRecordOrUndefined({ a: 1, b: false })).toBeUndefined();
+  });
+});
+
+describe('normalizeStructuredAPIError', () => {
+  it('normalizes code, message, and string details through shared helpers', () => {
+    expect(
+      normalizeStructuredAPIError(
+        {
+          code: ' invalid_email ',
+          message: ' Invalid email format ',
+          details: {
+            field: 'email',
+            ignored: 42,
+          },
+        },
+        400,
+      ),
+    ).toEqual({
+      code: 'invalid_email',
+      message: 'Invalid email format',
+      details: {
+        field: 'email',
+      },
+    });
+  });
+
+  it('falls back when payload fields are missing or invalid', () => {
+    expect(normalizeStructuredAPIError(null, 502)).toEqual({
+      code: 'request_failed',
+      message: 'Request failed (502)',
+    });
+    expect(normalizeStructuredAPIError({ code: '   ', message: '' }, 503)).toEqual({
+      code: 'request_failed',
+      message: 'Request failed (503)',
+    });
   });
 });
 

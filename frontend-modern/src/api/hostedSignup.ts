@@ -1,5 +1,5 @@
 import { apiClient } from '@/utils/apiClient';
-import { parseJSONSafe } from './responseUtils';
+import { normalizeStructuredAPIError, parseJSONSafe } from './responseUtils';
 
 export interface HostedSignupRequest {
   email: string;
@@ -29,27 +29,6 @@ export type HostedAPIResult<T> =
   | { ok: true; status: number; data: T }
   | { ok: false; status: number; error: HostedAPIError };
 
-function normalizeHostedError(payload: unknown, fallbackStatus: number): HostedAPIError {
-  if (payload && typeof payload === 'object') {
-    const obj = payload as Record<string, unknown>;
-    const code =
-      typeof obj.code === 'string' && obj.code.trim() !== '' ? obj.code : 'request_failed';
-    const message =
-      typeof obj.message === 'string' && obj.message.trim() !== ''
-        ? obj.message
-        : `Request failed (${fallbackStatus})`;
-    const details =
-      obj.details && typeof obj.details === 'object'
-        ? (obj.details as Record<string, string>)
-        : undefined;
-    return { code, message, details };
-  }
-  return {
-    code: 'request_failed',
-    message: `Request failed (${fallbackStatus})`,
-  };
-}
-
 export class HostedSignupAPI {
   static async signup(
     payload: HostedSignupRequest,
@@ -76,7 +55,7 @@ export class HostedSignupAPI {
     return {
       ok: false,
       status: response.status,
-      error: normalizeHostedError(body, response.status),
+      error: normalizeStructuredAPIError(body, response.status),
     };
   }
 
@@ -103,7 +82,7 @@ export class HostedSignupAPI {
     return {
       ok: false,
       status: response.status,
-      error: normalizeHostedError(body, response.status),
+      error: normalizeStructuredAPIError(body, response.status),
     };
   }
 }

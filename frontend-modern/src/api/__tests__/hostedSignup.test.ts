@@ -60,8 +60,12 @@ describe('HostedSignupAPI', () => {
     vi.mocked(apiClient.fetch).mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          code: 'invalid_email',
-          message: 'Invalid email format',
+          code: ' invalid_email ',
+          message: ' Invalid email format ',
+          details: {
+            field: 'email',
+            ignored: 123,
+          },
         }),
         { status: 400 },
       ),
@@ -79,6 +83,9 @@ describe('HostedSignupAPI', () => {
       error: {
         code: 'invalid_email',
         message: 'Invalid email format',
+        details: {
+          field: 'email',
+        },
       },
     });
   });

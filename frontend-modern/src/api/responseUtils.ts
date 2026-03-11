@@ -125,6 +125,41 @@ export function stringArray(value: unknown): string[] {
   return arrayOrEmpty<unknown>(value).filter((item): item is string => typeof item === 'string');
 }
 
+export function stringRecordOrUndefined(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const entries = Object.entries(value).filter(([, item]): item is string => typeof item === 'string');
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(entries);
+}
+
+export function normalizeStructuredAPIError(
+  payload: unknown,
+  fallbackStatus: number,
+  fallbackCode = 'request_failed',
+): { code: string; message: string; details?: Record<string, string> } {
+  const fallbackMessage = `Request failed (${fallbackStatus})`;
+  if (!payload || typeof payload !== 'object') {
+    return {
+      code: fallbackCode,
+      message: fallbackMessage,
+    };
+  }
+
+  const record = payload as APIRecordLike;
+
+  return {
+    code: optionalTrimmedString(record.code) ?? fallbackCode,
+    message: optionalTrimmedString(record.message) ?? fallbackMessage,
+    details: stringRecordOrUndefined(record.details),
+  };
+}
+
 export function parseJSONTextSafe<T>(text: string): T | null {
   if (!text.trim()) {
     return null;
