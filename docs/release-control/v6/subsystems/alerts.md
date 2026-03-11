@@ -59,3 +59,8 @@ Frontend alert surfaces and backend alert-support files now require explicit
 registry path-policy coverage, so new alert-owned runtime files must be mapped
 to a concrete proof route instead of silently inheriting subsystem-default
 verification.
+
+The alerts schedule surface now also routes quiet-hour suppress-category card
+styling through `frontend-modern/src/utils/alertSchedulePresentation.ts`
+instead of leaving that selectable-card presentation inline in
+`frontend-modern/src/pages/Alerts.tsx`.

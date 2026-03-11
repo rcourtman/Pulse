@@ -2067,6 +2067,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertGroupingCardClass');
     expect(alertsPageSource).toContain('getAlertGroupingCheckboxClass');
     expect(alertsPageSource).toContain('getAlertQuietDayButtonClass');
+    expect(alertsPageSource).toContain('getAlertQuietSuppressCardClass');
+    expect(alertsPageSource).toContain('getAlertQuietSuppressCheckboxClass');
     expect(alertsPageSource).toContain('getAlertConfigUnsavedChangesLabel');
     expect(alertsPageSource).toContain('getAlertConfigSaveChangesLabel');
     expect(alertsPageSource).toContain('getAlertConfigResetDefaultsLabel');
@@ -2151,6 +2153,12 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertsPageSource).not.toContain(
       "quietHours().days[day.id] ? 'rounded-md bg-blue-500 text-white shadow-sm' : 'rounded-md text-muted hover:bg-surface-hover '",
+    );
+    expect(alertsPageSource).not.toContain(
+      "quietHours().suppress[option.key]\n                            ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'",
+    );
+    expect(alertsPageSource).not.toContain(
+      "quietHours().suppress[option.key]\n                              ? 'border-blue-500 bg-blue-500'",
     );
     expect(alertsPageSource).not.toContain('Search alerts...');
     expect(alertsPageSource).not.toContain('No alerts found');
@@ -2262,6 +2270,12 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertSchedulePresentationSource).toContain(
       'export function getAlertQuietDayButtonClass',
+    );
+    expect(alertSchedulePresentationSource).toContain(
+      'export function getAlertQuietSuppressCardClass',
+    );
+    expect(alertSchedulePresentationSource).toContain(
+      'export function getAlertQuietSuppressCheckboxClass',
     );
     expect(configuredNodeTablesSource).toContain('getConfiguredNodeCapabilityBadges');
     expect(configuredNodeTablesSource).toContain('resolveConfiguredPveNodeStatusIndicator');

@@ -20,6 +20,10 @@ import {
   normalizeMetricDelayMap,
   unifiedTypeToAlertDisplayType,
 } from '@/features/alerts/helpers';
+import {
+  getAlertQuietSuppressCardClass,
+  getAlertQuietSuppressCheckboxClass,
+} from '@/utils/alertSchedulePresentation';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type { ResourceType } from '@/types/resource';
 
@@ -141,6 +145,20 @@ describe('default schedule helpers', () => {
       enabled: false,
       levels: [],
     });
+  });
+});
+
+describe('quiet suppress presentation helpers', () => {
+  it('returns the selected quiet suppress card presentation', () => {
+    expect(getAlertQuietSuppressCardClass(true)).toBe(
+      'flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500',
+    );
+  });
+
+  it('returns the selected quiet suppress checkbox presentation', () => {
+    expect(getAlertQuietSuppressCheckboxClass(true)).toBe(
+      'mt-1 flex h-4 w-4 items-center justify-center rounded border-2 border-blue-500 bg-blue-500',
+    );
   });
 });
 

@@ -118,7 +118,11 @@ import {
   getAlertGroupingCardClass,
   getAlertGroupingCheckboxClass,
 } from '@/utils/alertGroupingPresentation';
-import { getAlertQuietDayButtonClass } from '@/utils/alertSchedulePresentation';
+import {
+  getAlertQuietDayButtonClass,
+  getAlertQuietSuppressCardClass,
+  getAlertQuietSuppressCheckboxClass,
+} from '@/utils/alertSchedulePresentation';
 import {
   getAlertDestinationsConfigLoadError,
   getAlertDestinationsLoadErrorBanner,
@@ -3328,11 +3332,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <For each={quietHourSuppressOptions}>
                     {(option) => (
                       <label
-                        class={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${
-                          quietHours().suppress[option.key]
-                            ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'
-                            : 'border-border hover:bg-surface-hover'
-                        }`}
+                        class={getAlertQuietSuppressCardClass(quietHours().suppress[option.key])}
                       >
                         <input
                           type="checkbox"
@@ -3350,11 +3350,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                           class="sr-only"
                         />
                         <div
-                          class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${
-                            quietHours().suppress[option.key]
-                              ? 'border-blue-500 bg-blue-500'
-                              : 'border-border'
-                          }`}
+                          class={getAlertQuietSuppressCheckboxClass(
+                            quietHours().suppress[option.key],
+                          )}
                         >
                           <Show when={quietHours().suppress[option.key]}>
                             <svg
