@@ -4,7 +4,7 @@
  */
 
 import { apiFetchJSON } from '@/utils/apiClient';
-import { arrayOrEmpty } from './responseUtils';
+import { arrayOrEmpty, promoteLegacyAlertIdentifier } from './responseUtils';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory =
@@ -433,17 +433,6 @@ function normalizeHistoryLimit(limit: number): number {
   return normalized;
 }
 
-function normalizePatrolRunRecord(run: PatrolRunRecord): PatrolRunRecord {
-  const alertIdentifier = run.alert_identifier;
-  const { alert_identifier: _alertIdentifier, ...rest } = run as PatrolRunRecord & {
-    alert_identifier?: string;
-  };
-  return {
-    ...rest,
-    ...(alertIdentifier ? { alertIdentifier } : {}),
-  };
-}
-
 /**
  * Get patrol run history
  * @param limit Maximum number of runs to return (default: 30)
@@ -453,7 +442,9 @@ export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRun
     limit: String(normalizeHistoryLimit(limit)),
   });
   const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) => normalizePatrolRunRecord(run));
+  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) =>
+    promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string }),
+  );
 }
 
 /**
@@ -468,7 +459,9 @@ export async function getPatrolRunHistoryWithToolCalls(
     limit: String(normalizeHistoryLimit(limit)),
   });
   const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) => normalizePatrolRunRecord(run));
+  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) =>
+    promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string }),
+  );
 }
 
 /** SSE event from /api/ai/patrol/stream */

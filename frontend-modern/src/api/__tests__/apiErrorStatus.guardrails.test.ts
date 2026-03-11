@@ -39,6 +39,7 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function stringArray');
     expect(responseUtilsSource).toContain('export function stringRecordOrUndefined');
     expect(responseUtilsSource).toContain('export function normalizeStructuredAPIError');
+    expect(responseUtilsSource).toContain('export function promoteLegacyAlertIdentifier');
     expect(responseUtilsSource).toContain('(error as APIErrorLike).status');
     expect(responseUtilsSource).toContain('response.status');
   });
@@ -47,9 +48,11 @@ describe('API error-status guardrails', () => {
     expect(aiSource).toContain('isAPIErrorStatus(error, 402)');
     expect(aiSource).toContain('isAPIErrorStatus(error, 404)');
     expect(aiSource).toContain('parseJSONTextSafe<AIStreamEvent>(');
+    expect(aiSource).toContain('promoteLegacyAlertIdentifier(');
     expect(aiSource).not.toContain("message.includes('402')");
     expect(aiSource).not.toContain('JSON.parse(');
     expect(aiSource).not.toContain('} catch {\n      return null;');
+    expect(aiSource).not.toContain('normalizeUnifiedFinding(');
 
     expect(aiChatSource).toContain('parseJSONTextSafe<StreamEvent>(');
     expect(aiChatSource).not.toContain('JSON.parse(');
@@ -111,7 +114,9 @@ describe('API error-status guardrails', () => {
     expect(nodesSource).not.toContain('Array.isArray(node.clusterEndpoints)');
 
     expect(patrolSource).toContain('arrayOrEmpty<PatrolRunRecord>(runs)');
+    expect(patrolSource).toContain('promoteLegacyAlertIdentifier(');
     expect(patrolSource).not.toContain('runs || []');
+    expect(patrolSource).not.toContain('normalizePatrolRunRecord(');
 
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfile>(response)');
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfileAssignment>(response)');
@@ -141,7 +146,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, and no-op governed payload wrappers', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, and duplicate legacy alert_identifier promotion', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -176,6 +181,11 @@ describe('API error-status guardrails', () => {
     const governedWrapperEntries = runtimeEntries.filter(([path]) => /\/alerts\.ts$/.test(path));
     const noOpWrapperPattern =
       /(?:normalizeAlertResult\(|normalizeIncident\(|normalizeIncidents\()/;
+    const governedAlertIdentifierEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:ai|patrol)\.ts$/.test(path),
+    );
+    const duplicateAlertIdentifierPattern =
+      /(?:normalizeUnifiedFinding\(|normalizePatrolRunRecord\(|alert_identifier:\s*_alertIdentifier|const\s+alertIdentifier\s*=\s*.+alert_identifier)/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -227,6 +237,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const duplicateAlertIdentifierOffenders = governedAlertIdentifierEntries
+      .filter(([, source]) => duplicateAlertIdentifierPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -236,5 +251,6 @@ describe('API error-status guardrails', () => {
     expect(structuredErrorOffenders).toEqual([]);
     expect(timestampCoercionOffenders).toEqual([]);
     expect(noOpWrapperOffenders).toEqual([]);
+    expect(duplicateAlertIdentifierOffenders).toEqual([]);
   });
 });

@@ -4,6 +4,7 @@ import {
   isAPIErrorStatus,
   objectArrayFieldOrEmpty,
   parseJSONTextSafe,
+  promoteLegacyAlertIdentifier,
   readAPIErrorMessage,
 } from './responseUtils';
 import { logger } from '@/utils/logger';
@@ -25,17 +26,6 @@ export class AIAPI {
 
   private static isPaymentRequiredError(error: unknown): boolean {
     return isAPIErrorStatus(error, 402);
-  }
-
-  private static normalizeUnifiedFinding(finding: UnifiedFindingRecord): UnifiedFindingRecord {
-    const alertIdentifier = finding.alert_identifier;
-    const { alert_identifier: _alertIdentifier, ...rest } = finding as UnifiedFindingRecord & {
-      alert_identifier?: string;
-    };
-    return {
-      ...rest,
-      ...(alertIdentifier ? { alertIdentifier } : {}),
-    };
   }
 
   // Get AI settings
@@ -123,7 +113,7 @@ export class AIAPI {
     return {
       ...response,
       findings: arrayOrEmpty<UnifiedFindingRecord>(response.findings).map((finding) =>
-        this.normalizeUnifiedFinding(finding),
+        promoteLegacyAlertIdentifier(finding as UnifiedFindingRecord & { alert_identifier?: string }),
       ),
     };
   }

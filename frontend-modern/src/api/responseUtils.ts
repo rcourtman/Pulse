@@ -180,6 +180,16 @@ export function normalizeStructuredAPIError(
   };
 }
 
+export function promoteLegacyAlertIdentifier<
+  T extends { alertIdentifier?: string } & Record<string, unknown>,
+>(record: T & { alert_identifier?: string }): T {
+  const alertIdentifier =
+    optionalTrimmedString(record.alertIdentifier) ??
+    optionalTrimmedString(record.alert_identifier);
+  const { alert_identifier: _alertIdentifier, ...rest } = record;
+  return alertIdentifier ? ({ ...rest, alertIdentifier } as T) : (rest as T);
+}
+
 export function parseJSONTextSafe<T>(text: string): T | null {
   if (!text.trim()) {
     return null;

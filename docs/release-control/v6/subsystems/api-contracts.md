@@ -102,6 +102,10 @@ so `frontend-modern/src/api/nodes.ts` does not own its own
 Canonical alert incident and bulk-acknowledge result payloads must now also
 flow through frontend API clients without no-op per-module wrapper
 normalization when the backend shape is already canonical.
+Legacy `alert_identifier` compatibility promotion in unified finding and patrol
+run payloads must now also route through one shared helper in
+`frontend-modern/src/api/responseUtils.ts` rather than duplicated per-module
+record wrappers.
 Notifications email config parsing and node cluster endpoint normalization must
 now also route through shared scalar coercion helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through per-module

@@ -14,6 +14,7 @@ import {
   parseJSONTextSafe,
   parseOptionalJSON,
   parseRequiredJSON,
+  promoteLegacyAlertIdentifier,
   readAPIErrorMessage,
   optionalTrimmedString,
   strictBoolean,
@@ -323,6 +324,33 @@ describe('normalizeStructuredAPIError', () => {
     expect(normalizeStructuredAPIError({ code: '   ', message: '' }, 503)).toEqual({
       code: 'request_failed',
       message: 'Request failed (503)',
+    });
+  });
+});
+
+describe('promoteLegacyAlertIdentifier', () => {
+  it('promotes legacy alert_identifier into canonical alertIdentifier', () => {
+    expect(
+      promoteLegacyAlertIdentifier({
+        id: 'finding-1',
+        alert_identifier: ' legacy-alert ',
+      }),
+    ).toEqual({
+      id: 'finding-1',
+      alertIdentifier: 'legacy-alert',
+    });
+  });
+
+  it('prefers canonical alertIdentifier when already present', () => {
+    expect(
+      promoteLegacyAlertIdentifier({
+        id: 'finding-2',
+        alertIdentifier: 'canonical-alert',
+        alert_identifier: ' legacy-alert ',
+      }),
+    ).toEqual({
+      id: 'finding-2',
+      alertIdentifier: 'canonical-alert',
     });
   });
 });
