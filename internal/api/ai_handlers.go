@@ -5768,12 +5768,6 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 		}
 	}
 
-	for i := range runs {
-		if strings.TrimSpace(runs[i].AlertIdentifier) == "" {
-			runs[i].AlertIdentifier = strings.TrimSpace(runs[i].AlertID)
-		}
-	}
-
 	if err := utils.WriteJSONResponse(w, runs); err != nil {
 		log.Error().Err(err).Msg("Failed to write patrol run history response")
 	}

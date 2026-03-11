@@ -359,6 +359,9 @@ func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
 	if history[0]["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", history[0]["alert_identifier"])
 	}
+	if history[0]["legacy_alert_id"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility legacy_alert_id, got %#v", history[0]["legacy_alert_id"])
+	}
 	if history[0]["alert_id"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected compatibility alert_id, got %#v", history[0]["alert_id"])
 	}
