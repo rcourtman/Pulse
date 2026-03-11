@@ -30,44 +30,45 @@ func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunR
 	// Convert from ai.PatrolRunRecord to config.PatrolRunRecord
 	records := make([]config.PatrolRunRecord, len(runs))
 	for i, r := range runs {
-		durationMs := r.DurationMs
-		if durationMs == 0 && r.Duration > 0 {
-			durationMs = int64(r.Duration / time.Millisecond)
+		normalized := normalizePatrolRunRecord(r)
+		durationMs := normalized.DurationMs
+		if durationMs == 0 && normalized.Duration > 0 {
+			durationMs = int64(normalized.Duration / time.Millisecond)
 		}
 		records[i] = config.PatrolRunRecord{
-			ID:                        r.ID,
-			StartedAt:                 r.StartedAt,
-			CompletedAt:               r.CompletedAt,
+			ID:                        normalized.ID,
+			StartedAt:                 normalized.StartedAt,
+			CompletedAt:               normalized.CompletedAt,
 			DurationMs:                durationMs,
-			Type:                      r.Type,
-			TriggerReason:             r.TriggerReason,
-			ScopeResourceIDs:          r.ScopeResourceIDs,
-			EffectiveScopeResourceIDs: r.EffectiveScopeResourceIDs,
-			ScopeResourceTypes:        r.ScopeResourceTypes,
-			ScopeContext:              r.ScopeContext,
-			AlertID:                   r.AlertID,
-			FindingID:                 r.FindingID,
-			ResourcesChecked:          r.ResourcesChecked,
-			NodesChecked:              r.NodesChecked,
-			GuestsChecked:             r.GuestsChecked,
-			DockerChecked:             r.DockerChecked,
-			StorageChecked:            r.StorageChecked,
-			HostsChecked:              r.HostsChecked,
-			PBSChecked:                r.PBSChecked,
-			KubernetesChecked:         r.KubernetesChecked,
-			NewFindings:               r.NewFindings,
-			ExistingFindings:          r.ExistingFindings,
-			ResolvedFindings:          r.ResolvedFindings,
-			AutoFixCount:              r.AutoFixCount,
-			FindingsSummary:           r.FindingsSummary,
-			FindingIDs:                r.FindingIDs,
-			ErrorCount:                r.ErrorCount,
-			Status:                    r.Status,
-			AIAnalysis:                r.AIAnalysis,
-			InputTokens:               r.InputTokens,
-			OutputTokens:              r.OutputTokens,
-			ToolCalls:                 convertAIToolCallsToConfig(r.ToolCalls),
-			ToolCallCount:             r.ToolCallCount,
+			Type:                      normalized.Type,
+			TriggerReason:             normalized.TriggerReason,
+			ScopeResourceIDs:          normalized.ScopeResourceIDs,
+			EffectiveScopeResourceIDs: normalized.EffectiveScopeResourceIDs,
+			ScopeResourceTypes:        normalized.ScopeResourceTypes,
+			ScopeContext:              normalized.ScopeContext,
+			AlertID:                   normalized.AlertIdentifier,
+			FindingID:                 normalized.FindingID,
+			ResourcesChecked:          normalized.ResourcesChecked,
+			NodesChecked:              normalized.NodesChecked,
+			GuestsChecked:             normalized.GuestsChecked,
+			DockerChecked:             normalized.DockerChecked,
+			StorageChecked:            normalized.StorageChecked,
+			HostsChecked:              normalized.HostsChecked,
+			PBSChecked:                normalized.PBSChecked,
+			KubernetesChecked:         normalized.KubernetesChecked,
+			NewFindings:               normalized.NewFindings,
+			ExistingFindings:          normalized.ExistingFindings,
+			ResolvedFindings:          normalized.ResolvedFindings,
+			AutoFixCount:              normalized.AutoFixCount,
+			FindingsSummary:           normalized.FindingsSummary,
+			FindingIDs:                normalized.FindingIDs,
+			ErrorCount:                normalized.ErrorCount,
+			Status:                    normalized.Status,
+			AIAnalysis:                normalized.AIAnalysis,
+			InputTokens:               normalized.InputTokens,
+			OutputTokens:              normalized.OutputTokens,
+			ToolCalls:                 convertAIToolCallsToConfig(normalized.ToolCalls),
+			ToolCallCount:             normalized.ToolCallCount,
 		}
 	}
 	return a.config.SavePatrolRunHistory(records)
@@ -83,7 +84,7 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 	// Convert from config.PatrolRunRecord to ai.PatrolRunRecord
 	runs := make([]PatrolRunRecord, len(data.Runs))
 	for i, r := range data.Runs {
-		runs[i] = PatrolRunRecord{
+		runs[i] = normalizePatrolRunRecord(PatrolRunRecord{
 			ID:                        r.ID,
 			StartedAt:                 r.StartedAt,
 			CompletedAt:               r.CompletedAt,
@@ -118,7 +119,7 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 			OutputTokens:              r.OutputTokens,
 			ToolCalls:                 convertConfigToolCallsToAI(r.ToolCalls),
 			ToolCallCount:             r.ToolCallCount,
-		}
+		})
 	}
 	return runs, nil
 }

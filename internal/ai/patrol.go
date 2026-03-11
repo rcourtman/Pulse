@@ -38,6 +38,8 @@
 package ai
 
 import (
+	"encoding/json"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -142,6 +144,165 @@ type PatrolRunRecord struct {
 	// Tool call traces
 	ToolCalls     []ToolCallRecord `json:"tool_calls,omitempty"`
 	ToolCallCount int              `json:"tool_call_count"`
+}
+
+type patrolRunRecordJSON struct {
+	ID                        string           `json:"id"`
+	StartedAt                 time.Time        `json:"started_at"`
+	CompletedAt               time.Time        `json:"completed_at"`
+	DurationMs                int64            `json:"duration_ms"`
+	Type                      string           `json:"type"`
+	TriggerReason             string           `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          []string         `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs []string         `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        []string         `json:"scope_resource_types,omitempty"`
+	ScopeContext              string           `json:"scope_context,omitempty"`
+	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
+	LegacyAlertID             string           `json:"legacy_alert_id,omitempty"`
+	AlertID                   string           `json:"alert_id,omitempty"`
+	FindingID                 string           `json:"finding_id,omitempty"`
+	ResourcesChecked          int              `json:"resources_checked"`
+	NodesChecked              int              `json:"nodes_checked"`
+	GuestsChecked             int              `json:"guests_checked"`
+	DockerChecked             int              `json:"docker_checked"`
+	StorageChecked            int              `json:"storage_checked"`
+	HostsChecked              int              `json:"hosts_checked"`
+	PBSChecked                int              `json:"pbs_checked"`
+	PMGChecked                int              `json:"pmg_checked"`
+	KubernetesChecked         int              `json:"kubernetes_checked"`
+	NewFindings               int              `json:"new_findings"`
+	ExistingFindings          int              `json:"existing_findings"`
+	RejectedFindings          int              `json:"rejected_findings"`
+	ResolvedFindings          int              `json:"resolved_findings"`
+	AutoFixCount              int              `json:"auto_fix_count,omitempty"`
+	FindingsSummary           string           `json:"findings_summary"`
+	FindingIDs                []string         `json:"finding_ids"`
+	ErrorCount                int              `json:"error_count"`
+	Status                    string           `json:"status"`
+	TriageFlags               int              `json:"triage_flags"`
+	TriageSkippedLLM          bool             `json:"triage_skipped_llm,omitempty"`
+	AIAnalysis                string           `json:"ai_analysis,omitempty"`
+	InputTokens               int              `json:"input_tokens,omitempty"`
+	OutputTokens              int              `json:"output_tokens,omitempty"`
+	ToolCalls                 []ToolCallRecord `json:"tool_calls,omitempty"`
+	ToolCallCount             int              `json:"tool_call_count"`
+}
+
+func canonicalPatrolAlertIdentifier(alertIdentifier, legacyAlertID, alertID string) string {
+	if normalized := strings.TrimSpace(alertIdentifier); normalized != "" {
+		return normalized
+	}
+	if normalized := strings.TrimSpace(alertID); normalized != "" {
+		return normalized
+	}
+	return strings.TrimSpace(legacyAlertID)
+}
+
+func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
+	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier, record.LegacyAlertID, record.AlertID)
+	if strings.TrimSpace(record.LegacyAlertID) == "" {
+		record.LegacyAlertID = strings.TrimSpace(record.AlertID)
+	}
+	if strings.TrimSpace(record.AlertID) == "" {
+		record.AlertID = record.AlertIdentifier
+	}
+	return record
+}
+
+func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
+	normalized := normalizePatrolRunRecord(r)
+	return json.Marshal(patrolRunRecordJSON{
+		ID:                        normalized.ID,
+		StartedAt:                 normalized.StartedAt,
+		CompletedAt:               normalized.CompletedAt,
+		DurationMs:                normalized.DurationMs,
+		Type:                      normalized.Type,
+		TriggerReason:             normalized.TriggerReason,
+		ScopeResourceIDs:          normalized.ScopeResourceIDs,
+		EffectiveScopeResourceIDs: normalized.EffectiveScopeResourceIDs,
+		ScopeResourceTypes:        normalized.ScopeResourceTypes,
+		ScopeContext:              normalized.ScopeContext,
+		AlertIdentifier:           normalized.AlertIdentifier,
+		LegacyAlertID:             normalized.LegacyAlertID,
+		AlertID:                   normalized.AlertID,
+		FindingID:                 normalized.FindingID,
+		ResourcesChecked:          normalized.ResourcesChecked,
+		NodesChecked:              normalized.NodesChecked,
+		GuestsChecked:             normalized.GuestsChecked,
+		DockerChecked:             normalized.DockerChecked,
+		StorageChecked:            normalized.StorageChecked,
+		HostsChecked:              normalized.HostsChecked,
+		PBSChecked:                normalized.PBSChecked,
+		PMGChecked:                normalized.PMGChecked,
+		KubernetesChecked:         normalized.KubernetesChecked,
+		NewFindings:               normalized.NewFindings,
+		ExistingFindings:          normalized.ExistingFindings,
+		RejectedFindings:          normalized.RejectedFindings,
+		ResolvedFindings:          normalized.ResolvedFindings,
+		AutoFixCount:              normalized.AutoFixCount,
+		FindingsSummary:           normalized.FindingsSummary,
+		FindingIDs:                normalized.FindingIDs,
+		ErrorCount:                normalized.ErrorCount,
+		Status:                    normalized.Status,
+		TriageFlags:               normalized.TriageFlags,
+		TriageSkippedLLM:          normalized.TriageSkippedLLM,
+		AIAnalysis:                normalized.AIAnalysis,
+		InputTokens:               normalized.InputTokens,
+		OutputTokens:              normalized.OutputTokens,
+		ToolCalls:                 normalized.ToolCalls,
+		ToolCallCount:             normalized.ToolCallCount,
+	})
+}
+
+func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
+	var payload patrolRunRecordJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	*r = normalizePatrolRunRecord(PatrolRunRecord{
+		ID:                        payload.ID,
+		StartedAt:                 payload.StartedAt,
+		CompletedAt:               payload.CompletedAt,
+		Duration:                  time.Duration(payload.DurationMs) * time.Millisecond,
+		DurationMs:                payload.DurationMs,
+		Type:                      payload.Type,
+		TriggerReason:             payload.TriggerReason,
+		ScopeResourceIDs:          payload.ScopeResourceIDs,
+		EffectiveScopeResourceIDs: payload.EffectiveScopeResourceIDs,
+		ScopeResourceTypes:        payload.ScopeResourceTypes,
+		ScopeContext:              payload.ScopeContext,
+		AlertIdentifier:           payload.AlertIdentifier,
+		LegacyAlertID:             payload.LegacyAlertID,
+		AlertID:                   payload.AlertID,
+		FindingID:                 payload.FindingID,
+		ResourcesChecked:          payload.ResourcesChecked,
+		NodesChecked:              payload.NodesChecked,
+		GuestsChecked:             payload.GuestsChecked,
+		DockerChecked:             payload.DockerChecked,
+		StorageChecked:            payload.StorageChecked,
+		HostsChecked:              payload.HostsChecked,
+		PBSChecked:                payload.PBSChecked,
+		PMGChecked:                payload.PMGChecked,
+		KubernetesChecked:         payload.KubernetesChecked,
+		NewFindings:               payload.NewFindings,
+		ExistingFindings:          payload.ExistingFindings,
+		RejectedFindings:          payload.RejectedFindings,
+		ResolvedFindings:          payload.ResolvedFindings,
+		AutoFixCount:              payload.AutoFixCount,
+		FindingsSummary:           payload.FindingsSummary,
+		FindingIDs:                payload.FindingIDs,
+		ErrorCount:                payload.ErrorCount,
+		Status:                    payload.Status,
+		TriageFlags:               payload.TriageFlags,
+		TriageSkippedLLM:          payload.TriageSkippedLLM,
+		AIAnalysis:                payload.AIAnalysis,
+		InputTokens:               payload.InputTokens,
+		OutputTokens:              payload.OutputTokens,
+		ToolCalls:                 payload.ToolCalls,
+		ToolCallCount:             payload.ToolCallCount,
+	})
+	return nil
 }
 
 // MaxPatrolRunHistory is the maximum number of patrol runs to keep in history

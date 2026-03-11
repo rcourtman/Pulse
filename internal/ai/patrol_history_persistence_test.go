@@ -217,6 +217,45 @@ func TestPatrolRunHistoryStore_SetPersistence(t *testing.T) {
 	}
 }
 
+func TestPatrolHistoryPersistenceAdapter_NormalizesAlertIdentity(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+
+	runs := []PatrolRunRecord{
+		{
+			ID:              "run-1",
+			StartedAt:       time.Now().Add(-time.Minute),
+			CompletedAt:     time.Now(),
+			DurationMs:      60000,
+			AlertIdentifier: "instance:node:100::metric/cpu",
+			LegacyAlertID:   "legacy-alert-id",
+			AlertID:         "legacy-alert-id",
+		},
+	}
+
+	if err := adapter.SavePatrolRunHistory(runs); err != nil {
+		t.Fatalf("save patrol run history: %v", err)
+	}
+
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load patrol run history: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 loaded patrol run, got %d", len(loaded))
+	}
+	if loaded[0].AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert identifier after load, got %q", loaded[0].AlertIdentifier)
+	}
+	if loaded[0].AlertID != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility alert_id to be canonical after load, got %q", loaded[0].AlertID)
+	}
+	if loaded[0].LegacyAlertID != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected legacy_alert_id mirror to be populated after load, got %q", loaded[0].LegacyAlertID)
+	}
+}
+
 func TestPatrolRunHistoryStore_PersistenceStatusAndErrors(t *testing.T) {
 	store := NewPatrolRunHistoryStore(5)
 	store.saveDebounce = 0

@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -529,6 +530,66 @@ func TestPatrolRunRecord(t *testing.T) {
 	}
 	if record.Status != "issues_found" {
 		t.Errorf("Expected status 'issues_found', got '%s'", record.Status)
+	}
+}
+
+func TestPatrolRunRecordJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+	record := PatrolRunRecord{
+		ID:              "run-1",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		LegacyAlertID:   "legacy-alert-id",
+		StartedAt:       time.Now(),
+		CompletedAt:     time.Now(),
+	}
+
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("marshal patrol run record: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode patrol run payload: %v", err)
+	}
+	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
+	}
+	if payload["legacy_alert_id"] != "legacy-alert-id" {
+		t.Fatalf("expected legacy_alert_id, got %#v", payload["legacy_alert_id"])
+	}
+	if payload["alert_id"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility alert_id, got %#v", payload["alert_id"])
+	}
+
+	var decodedCanonical PatrolRunRecord
+	if err := json.Unmarshal([]byte(`{
+		"id":"run-1",
+		"started_at":"2026-03-11T00:00:00Z",
+		"completed_at":"2026-03-11T00:01:00Z",
+		"duration_ms":60000,
+		"alert_identifier":"instance:node:100::metric/cpu"
+	}`), &decodedCanonical); err != nil {
+		t.Fatalf("unmarshal canonical patrol run: %v", err)
+	}
+	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
+	}
+	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected alert_id compatibility field to mirror canonical ID, got %q", decodedCanonical.AlertID)
+	}
+
+	var decodedLegacy PatrolRunRecord
+	if err := json.Unmarshal([]byte(`{
+		"id":"run-1",
+		"started_at":"2026-03-11T00:00:00Z",
+		"completed_at":"2026-03-11T00:01:00Z",
+		"duration_ms":60000,
+		"alert_id":"legacy-alert-id"
+	}`), &decodedLegacy); err != nil {
+		t.Fatalf("unmarshal legacy patrol run: %v", err)
+	}
+	if decodedLegacy.AlertIdentifier != "legacy-alert-id" {
+		t.Fatalf("expected legacy alert_id to populate canonical field, got %q", decodedLegacy.AlertIdentifier)
 	}
 }
 
