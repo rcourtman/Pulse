@@ -28,6 +28,7 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export async function parseJSONSafe');
     expect(responseUtilsSource).toContain('export function parseJSONTextSafe');
     expect(responseUtilsSource).toContain('export function arrayOrEmpty');
+    expect(responseUtilsSource).toContain('export function arrayOrUndefined');
     expect(responseUtilsSource).toContain('export function objectArrayFieldOrEmpty');
     expect(responseUtilsSource).toContain('export function trimmedString');
     expect(responseUtilsSource).toContain('export function optionalTrimmedString');
@@ -103,6 +104,9 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).toContain('arrayOrEmpty<Webhook>(data)');
     expect(notificationsSource).not.toContain('Array.isArray(data) ? data : []');
 
+    expect(nodesSource).toContain('arrayOrUndefined<RawClusterEndpoint>(node.clusterEndpoints)');
+    expect(nodesSource).not.toContain('Array.isArray(node.clusterEndpoints)');
+
     expect(patrolSource).toContain('arrayOrEmpty<PatrolRunRecord>(runs)');
     expect(patrolSource).not.toContain('runs || []');
 
@@ -146,10 +150,11 @@ describe('API error-status guardrails', () => {
     const rawResponseJSONPattern = /(?:return\s+)?(?:await\s+)?response\.json\(/;
     const rawManualJSONParsePattern = /JSON\.parse\(/;
     const governedCollectionEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:ai|alerts|agentProfiles|notifications|patrol|security)\.ts$/.test(path),
+      /\/(?:ai|alerts|agentProfiles|nodes|notifications|patrol|security)\.ts$/.test(path),
     );
     const rawArrayFallbackPattern = /(?:\|\||\?\?)\s*\[\]/;
     const rawArrayIsArrayFallbackPattern = /Array\.isArray\(.+\)\s*\?\s*.+:\s*\[\]/;
+    const rawOptionalArrayNormalizationPattern = /Array\.isArray\(node\.clusterEndpoints\)/;
     const governedScalarEntries = runtimeEntries.filter(([path]) =>
       /\/(?:nodes|notifications)\.ts$/.test(path),
     );
@@ -189,7 +194,9 @@ describe('API error-status guardrails', () => {
     const arrayFallbackOffenders = governedCollectionEntries
       .filter(
         ([, source]) =>
-          rawArrayFallbackPattern.test(source) || rawArrayIsArrayFallbackPattern.test(source),
+          rawArrayFallbackPattern.test(source) ||
+          rawArrayIsArrayFallbackPattern.test(source) ||
+          rawOptionalArrayNormalizationPattern.test(source),
       )
       .map(([path]) => path)
       .sort();

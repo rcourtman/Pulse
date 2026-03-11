@@ -92,6 +92,10 @@ export function arrayOrEmpty<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
+export function arrayOrUndefined<T>(value: unknown): T[] | undefined {
+  return Array.isArray(value) ? (value as T[]) : undefined;
+}
+
 export function objectArrayFieldOrEmpty<T>(value: unknown, field: string): T[] {
   if (!value || typeof value !== 'object') {
     return [];

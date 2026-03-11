@@ -108,6 +108,22 @@ describe('NodesAPI', () => {
         pulseReachable: false,
       });
     });
+
+    it('preserves nodes without array clusterEndpoints', async () => {
+      const mockNodes = [
+        {
+          id: 'pve-3',
+          type: 'pve',
+          name: 'PVE 3',
+          clusterEndpoints: 'not-an-array',
+        } as unknown as NodeConfig,
+      ];
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockNodes);
+
+      const result = await NodesAPI.getNodes();
+
+      expect(result).toEqual(mockNodes);
+    });
   });
 
   describe('addNode', () => {

@@ -96,6 +96,9 @@ now also route through shared collection-normalization helpers in
 That rule now also covers patrol run history responses so malformed or legacy
 run collections collapse through the shared helper instead of per-module
 fallback lists.
+The same rule now also covers optional nested node cluster endpoint collections
+so `frontend-modern/src/api/nodes.ts` does not own its own
+`Array.isArray(node.clusterEndpoints)` response-shape branch.
 Notifications email config parsing and node cluster endpoint normalization must
 now also route through shared scalar coercion helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through per-module

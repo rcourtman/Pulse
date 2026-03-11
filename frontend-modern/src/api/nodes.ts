@@ -1,6 +1,7 @@
 import type { ClusterEndpoint, NodeConfig } from '../types/nodes';
 import { apiFetchJSON } from '@/utils/apiClient';
 import {
+  arrayOrUndefined,
   optionalTrimmedString,
   strictBoolean,
   trimmedString,
@@ -24,10 +25,11 @@ const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint
 });
 
 const normalizeNodeConfig = (node: NodeConfig): NodeConfig => {
-  if (!('clusterEndpoints' in node) || !Array.isArray(node.clusterEndpoints)) return node;
+  const clusterEndpoints = arrayOrUndefined<RawClusterEndpoint>(node.clusterEndpoints);
+  if (!clusterEndpoints) return node;
   return {
     ...node,
-    clusterEndpoints: node.clusterEndpoints.map((endpoint) =>
+    clusterEndpoints: clusterEndpoints.map((endpoint) =>
       normalizeClusterEndpoint(endpoint as RawClusterEndpoint),
     ),
   };

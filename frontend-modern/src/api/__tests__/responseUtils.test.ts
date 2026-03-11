@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  arrayOrUndefined,
   arrayOrEmpty,
   apiErrorStatus,
   apiResponseStatus,
@@ -183,6 +184,17 @@ describe('arrayOrEmpty', () => {
   it('returns empty array for non-array values', () => {
     expect(arrayOrEmpty<string>(null)).toEqual([]);
     expect(arrayOrEmpty<string>({ items: ['a'] })).toEqual([]);
+  });
+});
+
+describe('arrayOrUndefined', () => {
+  it('returns arrays unchanged', () => {
+    expect(arrayOrUndefined<string>(['a', 'b'])).toEqual(['a', 'b']);
+  });
+
+  it('returns undefined for non-array values', () => {
+    expect(arrayOrUndefined<string>(null)).toBeUndefined();
+    expect(arrayOrUndefined<string>({ items: ['a'] })).toBeUndefined();
   });
 });
 
