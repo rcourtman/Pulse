@@ -1208,7 +1208,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			Description:            f.Description,
 			Recommendation:         f.Recommendation,
 			Evidence:               f.Evidence,
-			AlertIdentifier:        f.AlertID,
+			AlertIdentifier:        f.AlertIdentifier,
 			AlertType:              f.AlertType,
 			Value:                  f.Value,
 			Threshold:              f.Threshold,

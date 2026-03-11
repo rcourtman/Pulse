@@ -55,7 +55,7 @@ func TestAlertBridge_StartStopAndSync(t *testing.T) {
 	if !stats.Running {
 		t.Fatalf("expected bridge running")
 	}
-	if store.GetByAlert("alert-1") == nil {
+	if store.GetByAlertIdentifier("alert-1") == nil {
 		t.Fatalf("expected alert to be synced into store")
 	}
 

@@ -80,11 +80,11 @@ type UnifiedFinding struct {
 	Evidence       string          `json:"evidence,omitempty"`
 
 	// Threshold-specific fields (when Source == "threshold")
-	AlertID     string  `json:"-"`
-	AlertType   string  `json:"alert_type,omitempty"` // cpu, memory, disk, etc.
-	Value       float64 `json:"value,omitempty"`
-	Threshold   float64 `json:"threshold,omitempty"`
-	IsThreshold bool    `json:"is_threshold"`
+	AlertIdentifier string  `json:"-"`
+	AlertType       string  `json:"alert_type,omitempty"` // cpu, memory, disk, etc.
+	Value           float64 `json:"value,omitempty"`
+	Threshold       float64 `json:"threshold,omitempty"`
+	IsThreshold     bool    `json:"is_threshold"`
 
 	// AI enhancement fields
 	AIContext     string     `json:"ai_context,omitempty"`     // AI-added context/explanation
@@ -134,7 +134,7 @@ type unifiedFindingJSON struct {
 	Recommendation         string                         `json:"recommendation,omitempty"`
 	Evidence               string                         `json:"evidence,omitempty"`
 	AlertIdentifier        string                         `json:"alert_identifier,omitempty"`
-	AlertID                string                         `json:"alert_id,omitempty"`
+	LegacyAlertID          string                         `json:"alert_id,omitempty"`
 	AlertType              string                         `json:"alert_type,omitempty"`
 	Value                  float64                        `json:"value,omitempty"`
 	Threshold              float64                        `json:"threshold,omitempty"`
@@ -167,7 +167,7 @@ type unifiedFindingJSON struct {
 }
 
 func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
-	alertIdentifier := strings.TrimSpace(f.AlertID)
+	alertIdentifier := strings.TrimSpace(f.AlertIdentifier)
 	return json.Marshal(unifiedFindingJSON{
 		ID:                     f.ID,
 		Source:                 f.Source,
@@ -222,7 +222,7 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 
 	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
 	if alertIdentifier == "" {
-		alertIdentifier = strings.TrimSpace(payload.AlertID)
+		alertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
 	}
 
 	*f = UnifiedFinding{
@@ -238,7 +238,7 @@ func (f *UnifiedFinding) UnmarshalJSON(data []byte) error {
 		Description:            payload.Description,
 		Recommendation:         payload.Recommendation,
 		Evidence:               payload.Evidence,
-		AlertID:                alertIdentifier,
+		AlertIdentifier:        alertIdentifier,
 		AlertType:              payload.AlertType,
 		Value:                  payload.Value,
 		Threshold:              payload.Threshold,
@@ -357,10 +357,10 @@ type AlertAdapter interface {
 type UnifiedStore struct {
 	mu sync.RWMutex
 
-	findings   map[string]*UnifiedFinding
-	byResource map[string][]string // resource_id -> []finding_id
-	byAlert    map[string]string   // alert_id -> finding_id
-	bySource   map[FindingSource][]string
+	findings          map[string]*UnifiedFinding
+	byResource        map[string][]string // resource_id -> []finding_id
+	byAlertIdentifier map[string]string   // alert_identifier -> finding_id
+	bySource          map[FindingSource][]string
 
 	config AlertToFindingConfig
 
@@ -384,11 +384,11 @@ type UnifiedPersistence interface {
 // NewUnifiedStore creates a new unified store
 func NewUnifiedStore(config AlertToFindingConfig) *UnifiedStore {
 	return &UnifiedStore{
-		findings:   make(map[string]*UnifiedFinding),
-		byResource: make(map[string][]string),
-		byAlert:    make(map[string]string),
-		bySource:   make(map[FindingSource][]string),
-		config:     config,
+		findings:          make(map[string]*UnifiedFinding),
+		byResource:        make(map[string][]string),
+		byAlertIdentifier: make(map[string]string),
+		bySource:          make(map[FindingSource][]string),
+		config:            config,
 	}
 }
 
@@ -408,8 +408,8 @@ func (s *UnifiedStore) SetPersistence(p UnifiedPersistence) error {
 			for id, f := range findings {
 				s.findings[id] = f
 				s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], id)
-				if f.AlertID != "" {
-					s.byAlert[f.AlertID] = id
+				if f.AlertIdentifier != "" {
+					s.byAlertIdentifier[f.AlertIdentifier] = id
 				}
 				s.bySource[f.Source] = append(s.bySource[f.Source], id)
 			}
@@ -465,24 +465,24 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 
 	// Create the finding
 	finding := &UnifiedFinding{
-		ID:           findingID,
-		Source:       SourceThreshold,
-		Severity:     severity,
-		Category:     category,
-		ResourceID:   alert.GetResourceID(),
-		ResourceName: alert.GetResourceName(),
-		ResourceType: resourceType,
-		Node:         alert.GetNode(),
-		Title:        generateTitle(alertType, alert.GetResourceName(), alert.GetValue(), alert.GetThreshold()),
-		Description:  alert.GetMessage(),
-		AlertID:      alertID,
-		AlertType:    alertType,
-		Value:        alert.GetValue(),
-		Threshold:    alert.GetThreshold(),
-		IsThreshold:  true,
-		DetectedAt:   alert.GetStartTime(),
-		LastSeenAt:   alert.GetLastSeen(),
-		TimesRaised:  1,
+		ID:              findingID,
+		Source:          SourceThreshold,
+		Severity:        severity,
+		Category:        category,
+		ResourceID:      alert.GetResourceID(),
+		ResourceName:    alert.GetResourceName(),
+		ResourceType:    resourceType,
+		Node:            alert.GetNode(),
+		Title:           generateTitle(alertType, alert.GetResourceName(), alert.GetValue(), alert.GetThreshold()),
+		Description:     alert.GetMessage(),
+		AlertIdentifier: alertID,
+		AlertType:       alertType,
+		Value:           alert.GetValue(),
+		Threshold:       alert.GetThreshold(),
+		IsThreshold:     true,
+		DetectedAt:      alert.GetStartTime(),
+		LastSeenAt:      alert.GetLastSeen(),
+		TimesRaised:     1,
 	}
 
 	// Generate evidence
@@ -504,7 +504,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 	s.mu.Lock()
 
 	// Check if we already have a finding for this alert
-	if existingID, ok := s.byAlert[alertID]; ok {
+	if existingID, ok := s.byAlertIdentifier[alertID]; ok {
 		if existing := s.findings[existingID]; existing != nil {
 			// Update existing finding
 			existing.LastSeenAt = alert.GetLastSeen()
@@ -539,7 +539,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 	finding := s.ConvertAlert(alert)
 	s.findings[finding.ID] = finding
 	s.byResource[finding.ResourceID] = append(s.byResource[finding.ResourceID], finding.ID)
-	s.byAlert[alertID] = finding.ID
+	s.byAlertIdentifier[alertID] = finding.ID
 	s.bySource[SourceThreshold] = append(s.bySource[SourceThreshold], finding.ID)
 
 	callback := s.onNewFinding
@@ -682,11 +682,11 @@ func (s *UnifiedStore) AddFromAI(finding *UnifiedFinding) (*UnifiedFinding, bool
 	return finding, true
 }
 
-// ResolveByAlert resolves a finding by its alert ID
-func (s *UnifiedStore) ResolveByAlert(alertID string) bool {
+// ResolveByAlertIdentifier resolves a finding by its canonical alert identifier.
+func (s *UnifiedStore) ResolveByAlertIdentifier(alertID string) bool {
 	s.mu.Lock()
 
-	findingID, ok := s.byAlert[alertID]
+	findingID, ok := s.byAlertIdentifier[alertID]
 	if !ok {
 		s.mu.Unlock()
 		return false
@@ -780,12 +780,12 @@ func (s *UnifiedStore) Get(findingID string) *UnifiedFinding {
 	return nil
 }
 
-// GetByAlert returns a finding by its alert ID
-func (s *UnifiedStore) GetByAlert(alertID string) *UnifiedFinding {
+// GetByAlertIdentifier returns a finding by its canonical alert identifier.
+func (s *UnifiedStore) GetByAlertIdentifier(alertID string) *UnifiedFinding {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if findingID, ok := s.byAlert[alertID]; ok {
+	if findingID, ok := s.byAlertIdentifier[alertID]; ok {
 		if f, ok := s.findings[findingID]; ok {
 			copy := *f
 			return &copy

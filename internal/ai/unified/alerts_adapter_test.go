@@ -320,8 +320,8 @@ func TestConvertAlert_FieldMappingContract(t *testing.T) {
 	if finding.Node != "pve-1" {
 		t.Fatalf("node mismatch: got %q want %q", finding.Node, "pve-1")
 	}
-	if finding.AlertID != "cluster/qemu/100-cpu" {
-		t.Fatalf("alert ID mismatch: got %q want %q", finding.AlertID, "cluster/qemu/100-cpu")
+	if finding.AlertIdentifier != "cluster/qemu/100-cpu" {
+		t.Fatalf("alert identifier mismatch: got %q want %q", finding.AlertIdentifier, "cluster/qemu/100-cpu")
 	}
 	if finding.AlertType != "cpu" {
 		t.Fatalf("alert type mismatch: got %q want %q", finding.AlertType, "cpu")

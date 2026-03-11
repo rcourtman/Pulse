@@ -223,10 +223,10 @@ func (b *AlertBridge) handleAlertResolved(alertID string) {
 	}
 
 	// Get the finding before resolving
-	finding := b.store.GetByAlert(alertID)
+	finding := b.store.GetByAlertIdentifier(alertID)
 
 	// Resolve the unified finding
-	if b.store.ResolveByAlert(alertID) {
+	if b.store.ResolveByAlertIdentifier(alertID) {
 		log.Info().
 			Str("alert_identifier", alertID).
 			Msg("Resolved unified finding from alert")
@@ -281,7 +281,7 @@ func (b *AlertBridge) cancelEnhancement(alertID string) {
 	defer b.mu.Unlock()
 
 	// Find the finding ID for this alert
-	finding := b.store.GetByAlert(alertID)
+	finding := b.store.GetByAlertIdentifier(alertID)
 	if finding == nil {
 		return
 	}

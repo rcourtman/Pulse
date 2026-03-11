@@ -32,10 +32,10 @@ func TestUnifiedStore_SetPersistence_LoadsFindings(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 	loaded := map[string]*UnifiedFinding{
 		"f1": {
-			ID:         "f1",
-			Source:     SourceThreshold,
-			ResourceID: "r1",
-			AlertID:    "a1",
+			ID:              "f1",
+			Source:          SourceThreshold,
+			ResourceID:      "r1",
+			AlertIdentifier: "a1",
 		},
 		"f2": {
 			ID:         "f2",
@@ -51,7 +51,7 @@ func TestUnifiedStore_SetPersistence_LoadsFindings(t *testing.T) {
 	if store.Get("f1") == nil {
 		t.Fatalf("expected finding f1 to load")
 	}
-	if store.GetByAlert("a1") == nil {
+	if store.GetByAlertIdentifier("a1") == nil {
 		t.Fatalf("expected alert index to load")
 	}
 	byResource := store.GetByResource("r1")
@@ -175,7 +175,7 @@ func TestUnifiedStore_BasicMutations(t *testing.T) {
 	}
 	finding, _ := store.AddFromAlert(alert)
 
-	if store.ResolveByAlert("missing") {
+	if store.ResolveByAlertIdentifier("missing") {
 		t.Fatalf("expected resolve to fail for missing alert")
 	}
 	if store.EnhanceWithAI("missing", "ctx", 0.5, "", nil) {

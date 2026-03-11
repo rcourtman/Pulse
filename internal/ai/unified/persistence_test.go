@@ -10,15 +10,15 @@ import (
 
 func TestUnifiedFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	finding := UnifiedFinding{
-		ID:         "f1",
-		Source:     SourceThreshold,
-		Severity:   SeverityWarning,
-		Category:   CategoryPerformance,
-		ResourceID: "res-1",
-		Title:      "High CPU",
-		AlertID:    "instance:node:100::metric/cpu",
-		DetectedAt: time.Now(),
-		LastSeenAt: time.Now(),
+		ID:              "f1",
+		Source:          SourceThreshold,
+		Severity:        SeverityWarning,
+		Category:        CategoryPerformance,
+		ResourceID:      "res-1",
+		Title:           "High CPU",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		DetectedAt:      time.Now(),
+		LastSeenAt:      time.Now(),
 	}
 
 	raw, err := json.Marshal(finding)
@@ -51,8 +51,8 @@ func TestUnifiedFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing
 	}`), &decodedCanonical); err != nil {
 		t.Fatalf("unmarshal canonical unified finding: %v", err)
 	}
-	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertID)
+	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
 	}
 
 	var decodedLegacy UnifiedFinding
@@ -69,8 +69,8 @@ func TestUnifiedFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing
 	}`), &decodedLegacy); err != nil {
 		t.Fatalf("unmarshal legacy unified finding: %v", err)
 	}
-	if decodedLegacy.AlertID != "legacy-alert-id" {
-		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertID)
+	if decodedLegacy.AlertIdentifier != "legacy-alert-id" {
+		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertIdentifier)
 	}
 }
 

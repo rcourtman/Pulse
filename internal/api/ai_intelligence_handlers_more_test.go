@@ -200,18 +200,18 @@ func TestHandleGetLearningPreferences_WithStore(t *testing.T) {
 func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	store := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
 	store.AddFromAI(&unified.UnifiedFinding{
-		ID:           "finding-1",
-		Source:       unified.SourceAIPatrol,
-		Severity:     unified.SeverityCritical,
-		Category:     unified.CategoryPerformance,
-		ResourceID:   "vm-1",
-		ResourceName: "vm-one",
-		ResourceType: "vm",
-		Title:        "CPU high",
-		Description:  "cpu usage high",
-		AlertID:      "instance:node:100::metric/cpu",
-		DetectedAt:   time.Now(),
-		LastSeenAt:   time.Now(),
+		ID:              "finding-1",
+		Source:          unified.SourceAIPatrol,
+		Severity:        unified.SeverityCritical,
+		Category:        unified.CategoryPerformance,
+		ResourceID:      "vm-1",
+		ResourceName:    "vm-one",
+		ResourceType:    "vm",
+		Title:           "CPU high",
+		Description:     "cpu usage high",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		DetectedAt:      time.Now(),
+		LastSeenAt:      time.Now(),
 	})
 
 	handler := &AISettingsHandler{}

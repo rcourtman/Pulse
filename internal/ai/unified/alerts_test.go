@@ -36,8 +36,8 @@ func TestUnifiedStore_AddFromAlert(t *testing.T) {
 		t.Errorf("Expected source %s, got %s", SourceThreshold, finding.Source)
 	}
 
-	if finding.AlertID != "alert-1" {
-		t.Errorf("Expected alert ID alert-1, got %s", finding.AlertID)
+	if finding.AlertIdentifier != "alert-1" {
+		t.Errorf("Expected alert identifier alert-1, got %s", finding.AlertIdentifier)
 	}
 
 	if finding.Category != CategoryPerformance {
@@ -111,19 +111,19 @@ func TestUnifiedStore_ResolveByAlert(t *testing.T) {
 	store.AddFromAlert(alert)
 
 	// Resolve the alert
-	resolved := store.ResolveByAlert("alert-1")
+	resolved := store.ResolveByAlertIdentifier("alert-1")
 	if !resolved {
 		t.Error("Expected resolve to succeed")
 	}
 
 	// Check finding is resolved
-	finding := store.GetByAlert("alert-1")
+	finding := store.GetByAlertIdentifier("alert-1")
 	if finding.ResolvedAt == nil {
 		t.Error("Expected finding to be resolved")
 	}
 
 	// Resolving again should return false
-	resolved2 := store.ResolveByAlert("alert-1")
+	resolved2 := store.ResolveByAlertIdentifier("alert-1")
 	if resolved2 {
 		t.Error("Expected resolve to fail on already resolved finding")
 	}
