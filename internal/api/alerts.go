@@ -581,8 +581,6 @@ type incidentEventView struct {
 type incidentView struct {
 	ID              string                `json:"id"`
 	AlertIdentifier string                `json:"alertIdentifier"`
-	LegacyAlertID   string                `json:"legacyAlertId,omitempty"`
-	AlertID         string                `json:"alertId"`
 	AlertType       string                `json:"alertType"`
 	Level           string                `json:"level"`
 	ResourceID      string                `json:"resourceId"`
@@ -618,7 +616,6 @@ func exportIncident(incident *memory.Incident) *incidentView {
 	return &incidentView{
 		ID:              incident.ID,
 		AlertIdentifier: alertIdentifier,
-		AlertID:         alertIdentifier,
 		AlertType:       incident.AlertType,
 		Level:           incident.Level,
 		ResourceID:      incident.ResourceID,
@@ -688,9 +685,8 @@ func (r alertIdentifiersRequest) identifiers() []string {
 	return identifiers
 }
 
-// AcknowledgeAlertByBody acknowledges an alert using ID from request body
-// POST /api/alerts/acknowledge with {"id": "alert-id"}
-// This is the preferred method as it avoids URL encoding issues with reverse proxies
+// AcknowledgeAlertByBody acknowledges an alert using a canonical alert identifier from the request body.
+// POST /api/alerts/acknowledge with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
 	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -739,8 +735,8 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 	}
 }
 
-// UnacknowledgeAlertByBody unacknowledges an alert using ID from request body
-// POST /api/alerts/unacknowledge with {"id": "alert-id"}
+// UnacknowledgeAlertByBody unacknowledges an alert using a canonical alert identifier from the request body.
+// POST /api/alerts/unacknowledge with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
 	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -783,8 +779,8 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 	}
 }
 
-// ClearAlertByBody clears an alert using ID from request body
-// POST /api/alerts/clear with {"id": "alert-id"}
+// ClearAlertByBody clears an alert using a canonical alert identifier from the request body.
+// POST /api/alerts/clear with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request) {
 	var req alertIdentifierRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -857,7 +853,6 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
 			"alertIdentifier": alertID,
-			"alertId":         alertID,
 			"success":         true,
 		}
 		if err := h.getMonitor(r.Context()).GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
@@ -916,7 +911,6 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	for _, alertID := range alertIdentifiers {
 		result := map[string]interface{}{
 			"alertIdentifier": alertID,
-			"alertId":         alertID,
 			"success":         true,
 		}
 		if h.getMonitor(r.Context()).GetAlertManager().ClearAlert(alertID) {

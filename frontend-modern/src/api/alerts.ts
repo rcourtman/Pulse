@@ -6,34 +6,22 @@ export class AlertsAPI {
   private static baseUrl = '/api/alerts';
 
   private static normalizeAlertResult(result: {
-    alertIdentifier?: string;
-    alertId?: string;
+    alertIdentifier: string;
     success: boolean;
     error?: string;
   }): {
-    alertIdentifier?: string;
-    alertId?: string;
+    alertIdentifier: string;
     success: boolean;
     error?: string;
   } {
-    const alertIdentifier = result.alertIdentifier ?? result.alertId;
-    return {
-      ...result,
-      ...(alertIdentifier ? { alertIdentifier } : {}),
-      ...(result.alertId ?? alertIdentifier ? { alertId: result.alertId ?? alertIdentifier } : {}),
-    };
+    return { ...result };
   }
 
   private static normalizeIncident(incident: Incident | null): Incident | null {
     if (!incident) {
       return null;
     }
-    const alertIdentifier = incident.alertIdentifier ?? incident.alertId;
-    return {
-      ...incident,
-      ...(alertIdentifier ? { alertIdentifier } : {}),
-      ...(incident.alertId ?? alertIdentifier ? { alertId: incident.alertId ?? alertIdentifier } : {}),
-    };
+    return { ...incident };
   }
 
   private static normalizeIncidents(incidents: Incident[]): Incident[] {
@@ -64,8 +52,8 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/history?${queryParams}`);
   }
 
-  static async getIncidentTimeline(alertId: string, startedAt?: string): Promise<Incident | null> {
-    const query = new URLSearchParams({ alertIdentifier: alertId });
+  static async getIncidentTimeline(alertIdentifier: string, startedAt?: string): Promise<Incident | null> {
+    const query = new URLSearchParams({ alertIdentifier });
     if (startedAt) {
       query.set('started_at', startedAt);
     }
@@ -85,7 +73,7 @@ export class AlertsAPI {
   }
 
   static async addIncidentNote(params: {
-    alertId?: string;
+    alertIdentifier?: string;
     incidentId?: string;
     note: string;
     user?: string;
@@ -93,7 +81,7 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/incidents/note`, {
       method: 'POST',
       body: JSON.stringify({
-        alertIdentifier: params.alertId,
+        alertIdentifier: params.alertIdentifier,
         incident_id: params.incidentId,
         note: params.note,
         user: params.user,
@@ -101,19 +89,19 @@ export class AlertsAPI {
     }) as Promise<{ success: boolean }>;
   }
 
-  static async acknowledge(alertId: string, user?: string): Promise<{ success: boolean }> {
+  static async acknowledge(alertIdentifier: string, user?: string): Promise<{ success: boolean }> {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
     return apiFetchJSON(`${this.baseUrl}/acknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ alertIdentifier: alertId, user }),
+      body: JSON.stringify({ alertIdentifier, user }),
     });
   }
 
-  static async unacknowledge(alertId: string): Promise<{ success: boolean }> {
+  static async unacknowledge(alertIdentifier: string): Promise<{ success: boolean }> {
     // Use body-based endpoint to avoid URL encoding issues with reverse proxies
     return apiFetchJSON(`${this.baseUrl}/unacknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ alertIdentifier: alertId }),
+      body: JSON.stringify({ alertIdentifier }),
     });
   }
 
@@ -142,18 +130,17 @@ export class AlertsAPI {
   }
 
   static async bulkAcknowledge(
-    alertIds: string[],
+    alertIdentifiers: string[],
     user?: string,
   ): Promise<{
-    results: Array<{ alertIdentifier?: string; alertId?: string; success: boolean; error?: string }>;
+    results: Array<{ alertIdentifier: string; success: boolean; error?: string }>;
   }> {
     const response = (await apiFetchJSON(`${this.baseUrl}/bulk/acknowledge`, {
       method: 'POST',
-      body: JSON.stringify({ alertIdentifiers: alertIds, user }),
+      body: JSON.stringify({ alertIdentifiers, user }),
     })) as {
       results?: Array<{
-        alertIdentifier?: string;
-        alertId?: string;
+        alertIdentifier: string;
         success: boolean;
         error?: string;
       }>;

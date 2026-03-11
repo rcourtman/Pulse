@@ -357,7 +357,6 @@ func TestGetAlertIncidentTimeline_ExportsCanonicalAlertIdentifier(t *testing.T) 
 	var incident map[string]interface{}
 	_ = json.NewDecoder(w.Body).Decode(&incident)
 	assert.Equal(t, "canonical:a1", incident["alertIdentifier"])
-	assert.Equal(t, "canonical:a1", incident["alertId"])
 }
 
 func TestGetAlertIncidentTimeline_AcceptsCamelCaseAlertIdentifierQuery(t *testing.T) {
@@ -413,7 +412,6 @@ func TestGetAlertIncidentTimeline_ListExportsCanonicalAlertIdentifier(t *testing
 	_ = json.NewDecoder(w.Body).Decode(&incidents)
 	assert.Len(t, incidents, 1)
 	assert.Equal(t, "canonical:a1", incidents[0]["alertIdentifier"])
-	assert.Equal(t, "canonical:a1", incidents[0]["alertId"])
 }
 
 func TestBulkAcknowledgeAlerts(t *testing.T) {

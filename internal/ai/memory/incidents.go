@@ -48,7 +48,7 @@ type IncidentEvent struct {
 // Incident captures an alert occurrence and its timeline.
 type Incident struct {
 	ID           string          `json:"id"`
-	AlertID      string          `json:"alertId"`
+	AlertID      string          `json:"alertIdentifier"`
 	AlertType    string          `json:"alertType"`
 	Level        string          `json:"level"`
 	ResourceID   string          `json:"resourceId"`
@@ -92,7 +92,6 @@ func (i Incident) MarshalJSON() ([]byte, error) {
 	return json.Marshal(incidentJSON{
 		ID:              i.ID,
 		AlertIdentifier: alertIdentifier,
-		AlertID:         alertIdentifier,
 		AlertType:       i.AlertType,
 		Level:           i.Level,
 		ResourceID:      i.ResourceID,

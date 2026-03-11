@@ -143,47 +143,47 @@ export function OverviewTab(props: {
     processingReleaseTimers.clear();
   });
 
-  const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
-    setIncidentLoading((prev) => ({ ...prev, [alertId]: true }));
+  const loadIncidentTimeline = async (alertIdentifier: string, startedAt?: string) => {
+    setIncidentLoading((prev) => ({ ...prev, [alertIdentifier]: true }));
     try {
-      const timeline = await AlertsAPI.getIncidentTimeline(alertId, startedAt);
-      setIncidentTimelines((prev) => ({ ...prev, [alertId]: timeline }));
-      setIncidentErrors((prev) => ({ ...prev, [alertId]: false }));
+      const timeline = await AlertsAPI.getIncidentTimeline(alertIdentifier, startedAt);
+      setIncidentTimelines((prev) => ({ ...prev, [alertIdentifier]: timeline }));
+      setIncidentErrors((prev) => ({ ...prev, [alertIdentifier]: false }));
     } catch (error) {
       logger.error('Failed to load incident timeline', error);
       notificationStore.error('Failed to load incident timeline');
-      setIncidentErrors((prev) => ({ ...prev, [alertId]: true }));
+      setIncidentErrors((prev) => ({ ...prev, [alertIdentifier]: true }));
     } finally {
-      setIncidentLoading((prev) => ({ ...prev, [alertId]: false }));
+      setIncidentLoading((prev) => ({ ...prev, [alertIdentifier]: false }));
     }
   };
 
-  const toggleIncidentTimeline = async (alertId: string, startedAt?: string) => {
+  const toggleIncidentTimeline = async (alertIdentifier: string, startedAt?: string) => {
     const expanded = expandedIncidents();
     const next = new Set(expanded);
-    if (next.has(alertId)) {
-      next.delete(alertId);
+    if (next.has(alertIdentifier)) {
+      next.delete(alertIdentifier);
       setExpandedIncidents(next);
       return;
     }
-    next.add(alertId);
+    next.add(alertIdentifier);
     setExpandedIncidents(next);
-    if (!(alertId in incidentTimelines())) {
-      await loadIncidentTimeline(alertId, startedAt);
+    if (!(alertIdentifier in incidentTimelines())) {
+      await loadIncidentTimeline(alertIdentifier, startedAt);
     }
   };
 
-  const saveIncidentNote = async (alertId: string, startedAt?: string) => {
-    const note = (incidentNoteDrafts()[alertId] || '').trim();
+  const saveIncidentNote = async (alertIdentifier: string, startedAt?: string) => {
+    const note = (incidentNoteDrafts()[alertIdentifier] || '').trim();
     if (!note) {
       return;
     }
-    setIncidentNoteSaving((prev) => new Set(prev).add(alertId));
+    setIncidentNoteSaving((prev) => new Set(prev).add(alertIdentifier));
     try {
-      const incidentId = incidentTimelines()[alertId]?.id;
-      await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
-      setIncidentNoteDrafts((prev) => ({ ...prev, [alertId]: '' }));
-      await loadIncidentTimeline(alertId, startedAt);
+      const incidentId = incidentTimelines()[alertIdentifier]?.id;
+      await AlertsAPI.addIncidentNote({ alertIdentifier, incidentId, note });
+      setIncidentNoteDrafts((prev) => ({ ...prev, [alertIdentifier]: '' }));
+      await loadIncidentTimeline(alertIdentifier, startedAt);
       notificationStore.success('Incident note saved');
     } catch (error) {
       logger.error('Failed to save incident note', error);
@@ -191,7 +191,7 @@ export function OverviewTab(props: {
     } finally {
       setIncidentNoteSaving((prev) => {
         const next = new Set(prev);
-        next.delete(alertId);
+        next.delete(alertIdentifier);
         return next;
       });
     }
@@ -456,7 +456,7 @@ export function OverviewTab(props: {
                       const failures = result.results.filter((r) => !r.success);
 
                       successes.forEach((res) => {
-                        props.updateAlert(res.alertId, {
+                        props.updateAlert(res.alertIdentifier, {
                           acknowledged: true,
                           ackTime: new Date().toISOString(),
                         });

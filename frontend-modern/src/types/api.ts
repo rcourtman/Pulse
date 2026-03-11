@@ -1002,7 +1002,6 @@ export interface Incident {
   id: string;
   alertIdentifier: string;
   legacyAlertId?: string;
-  alertId?: string;
   alertType: string;
   level: string;
   resourceId: string;
@@ -1029,7 +1028,7 @@ export type WSMessage =
   | { type: 'pong'; data?: unknown }
   | { type: 'welcome'; data?: unknown }
   | { type: 'alert'; data: Alert }
-  | { type: 'alertResolved'; data: { alertIdentifier: string; alertId?: string } }
+  | { type: 'alertResolved'; data: { alertIdentifier: string } }
   | { type: 'settingsUpdate'; data: { theme?: string } }
   | {
       type: 'update:progress';

@@ -9,7 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
-func TestIncidentJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+func TestIncidentJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now().UTC().Truncate(time.Second)
@@ -36,8 +36,8 @@ func TestIncidentJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	if payload["alertIdentifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alertIdentifier, got %#v", payload["alertIdentifier"])
 	}
-	if payload["alertId"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alertId, got %#v", payload["alertId"])
+	if _, ok := payload["alertId"]; ok {
+		t.Fatalf("did not expect legacy alertId in canonical payload, got %#v", payload["alertId"])
 	}
 
 	var decoded Incident
