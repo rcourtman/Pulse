@@ -2597,7 +2597,7 @@ func (m *Monitor) PVEBackupsSnapshot() models.PVEBackups {
 // BuildFrontendState returns the current state converted to frontend format.
 // This replaces the GetState().ToFrontend() pattern in consumer code.
 func (m *Monitor) BuildFrontendState() models.StateFrontend {
-	return buildFrontendStateFromSnapshot(m.GetState())
+	return m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
 }
 
 // BuildBroadcastFrontendState returns frontend state ready for websocket
@@ -2614,8 +2614,10 @@ func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateF
 func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
 	m.updateResourceStore(snapshot)
-	if liveAlerts := m.activeAlertsSnapshot(); len(liveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
-		frontendState.ActiveAlerts = liveAlerts
+	if m != nil && m.alertManager != nil {
+		if liveAlerts := m.activeAlertsSnapshot(); len(liveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
+			frontendState.ActiveAlerts = liveAlerts
+		}
 	}
 	frontendState.Resources = m.getResourcesForBroadcast()
 	if freshness := m.currentUnifiedResourceFreshness(); !freshness.IsZero() {

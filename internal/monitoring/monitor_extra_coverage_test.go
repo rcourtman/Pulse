@@ -889,6 +889,46 @@ func TestMonitor_BuildBroadcastFrontendState_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_BuildFrontendState_UsesCanonicalResources(t *testing.T) {
+	m := &Monitor{
+		state: models.NewState(),
+	}
+	stateUpdate := time.Now().Add(-time.Minute).UTC()
+	m.state.UpdateNodes([]models.Node{{ID: "node-1", Name: "Node One", Status: "online", LastSeen: stateUpdate}})
+
+	storeFreshness := time.Now().UTC()
+	store := &mockResourceStoreExtra{
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "node-1",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "Node One",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: time.Now().UTC(),
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName: "node1",
+					Instance: "p1",
+				},
+			},
+		},
+		freshness: storeFreshness,
+	}
+	m.resourceStore = store
+
+	frontendState := m.BuildFrontendState()
+
+	if len(store.snapshots) != 1 {
+		t.Fatalf("expected resource store population once, got %d", len(store.snapshots))
+	}
+	if len(frontendState.Resources) != 1 {
+		t.Fatalf("expected frontend resources to be populated, got %#v", frontendState.Resources)
+	}
+	if frontendState.LastUpdate != storeFreshness.UnixMilli() {
+		t.Fatalf("expected frontend lastUpdate %d from unified store freshness, got %d", storeFreshness.UnixMilli(), frontendState.LastUpdate)
+	}
+}
+
 func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),

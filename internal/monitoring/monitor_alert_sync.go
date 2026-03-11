@@ -40,8 +40,14 @@ func (m *Monitor) SyncAlertState() {
 }
 
 func (m *Monitor) activeAlertsSnapshot() []models.Alert {
-	if m == nil || m.alertManager == nil {
+	if m == nil {
 		return nil
+	}
+	if m.alertManager == nil {
+		if m.state == nil {
+			return nil
+		}
+		return m.state.GetSnapshot().ActiveAlerts
 	}
 
 	activeAlerts := m.alertManager.GetActiveAlerts()
@@ -69,8 +75,14 @@ func (m *Monitor) activeAlertsSnapshot() []models.Alert {
 }
 
 func (m *Monitor) recentlyResolvedAlertsSnapshot() []models.ResolvedAlert {
-	if m == nil || m.alertManager == nil {
+	if m == nil {
 		return nil
+	}
+	if m.alertManager == nil {
+		if m.state == nil {
+			return nil
+		}
+		return m.state.GetSnapshot().RecentlyResolved
 	}
 
 	return m.alertManager.GetRecentlyResolved()

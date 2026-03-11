@@ -626,6 +626,30 @@ func TestRecentlyResolvedSnapshotPrefersLiveAlertManagerOverStateSnapshot(t *tes
 	}
 }
 
+func TestBuildBroadcastFrontendStatePreservesSnapshotAlertsWithoutAlertManager(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+	}
+
+	snapshot := models.StateSnapshot{
+		ActiveAlerts: []models.Alert{{
+			ID:           "snapshot-only-1",
+			Type:         "offline",
+			ResourceID:   "snapshot-resource",
+			ResourceName: "snapshot-resource",
+			Message:      "snapshot-only alert",
+		}},
+	}
+
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(snapshot)
+	if len(frontend.ActiveAlerts) != 1 {
+		t.Fatalf("expected snapshot alert to be preserved, got %#v", frontend.ActiveAlerts)
+	}
+	if got := frontend.ActiveAlerts[0].ID; got != "snapshot-only-1" {
+		t.Fatalf("alert id = %q, want snapshot-only-1", got)
+	}
+}
+
 func TestRecordTaskResult_Success(t *testing.T) {
 	m := &Monitor{
 		pollStatusMap:   make(map[string]*pollStatus),
