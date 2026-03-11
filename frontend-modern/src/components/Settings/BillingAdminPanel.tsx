@@ -104,13 +104,14 @@ export const BillingAdminPanel: Component = () => {
     try {
       const current =
         (await ensureBillingState(orgID)) ?? (await BillingAdminAPI.getBillingState(orgID));
+      const planVersion = current.plan_version?.trim() || undefined;
       const payload: BillingState = {
         ...current,
         subscription_state: nextState,
-        plan_version: current.plan_version || current.subscription_state || nextState,
         capabilities: Array.isArray(current.capabilities) ? current.capabilities : [],
         limits: current.limits ?? {},
         meters_enabled: Array.isArray(current.meters_enabled) ? current.meters_enabled : [],
+        ...(planVersion ? { plan_version: planVersion } : {}),
       };
 
       const saved = await BillingAdminAPI.putBillingState(orgID, payload);

@@ -59,3 +59,7 @@ JWT-backed entitlement claims are also canonical: when runtime evaluation uses
 claim `plan_version` and `limits`, recognized Cloud plan aliases must
 canonicalize and `max_agents` must reconcile to the authoritative per-plan
 contract instead of trusting stale embedded claim values.
+Frontend billing/admin surfaces must not synthesize `plan_version` from
+subscription lifecycle state. When a hosted billing record lacks a plan label,
+the UI must preserve that absence instead of fabricating values like `active`
+or `suspended` into the canonical plan field.
