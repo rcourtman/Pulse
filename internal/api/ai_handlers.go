@@ -4051,18 +4051,18 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	// Build investigation prompt
 	alertIdentifier := req.alertIdentifier()
 	investigationPrompt := ai.GenerateAlertInvestigationPrompt(ai.AlertInvestigationRequest{
-		AlertID:      alertIdentifier,
-		ResourceID:   req.ResourceID,
-		ResourceName: req.ResourceName,
-		ResourceType: req.ResourceType,
-		AlertType:    req.AlertType,
-		Level:        req.Level,
-		Value:        req.Value,
-		Threshold:    req.Threshold,
-		Message:      req.Message,
-		Duration:     req.Duration,
-		Node:         req.Node,
-		VMID:         req.VMID,
+		AlertIdentifier: alertIdentifier,
+		ResourceID:      req.ResourceID,
+		ResourceName:    req.ResourceName,
+		ResourceType:    req.ResourceType,
+		AlertType:       req.AlertType,
+		Level:           req.Level,
+		Value:           req.Value,
+		Threshold:       req.Threshold,
+		Message:         req.Message,
+		Duration:        req.Duration,
+		Node:            req.Node,
+		VMID:            req.VMID,
 	})
 
 	log.Info().

@@ -233,13 +233,13 @@ func TestGenerateAlertInvestigationPrompt(t *testing.T) {
 
 func TestAlertInvestigationRequestJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	req := AlertInvestigationRequest{
-		AlertID:      "instance:node:100::metric/cpu",
-		ResourceID:   "agent-1",
-		ResourceName: "node-1",
-		ResourceType: "node",
-		AlertType:    "cpu",
-		Level:        "warning",
-		Message:      "high cpu",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		ResourceID:      "agent-1",
+		ResourceName:    "node-1",
+		ResourceType:    "node",
+		AlertType:       "cpu",
+		Level:           "warning",
+		Message:         "high cpu",
 	}
 
 	raw, err := json.Marshal(req)
@@ -270,8 +270,8 @@ func TestAlertInvestigationRequestJSONCanonicalAndLegacyCompatibility(t *testing
 	}`), &decodedCanonical); err != nil {
 		t.Fatalf("unmarshal canonical request: %v", err)
 	}
-	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected canonical alertIdentifier to load, got %q", decodedCanonical.AlertID)
+	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier to load, got %q", decodedCanonical.AlertIdentifier)
 	}
 
 	var decodedLegacy AlertInvestigationRequest
@@ -286,7 +286,7 @@ func TestAlertInvestigationRequestJSONCanonicalAndLegacyCompatibility(t *testing
 	}`), &decodedLegacy); err != nil {
 		t.Fatalf("unmarshal legacy request: %v", err)
 	}
-	if decodedLegacy.AlertID != "legacy-alert-id" {
-		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertID)
+	if decodedLegacy.AlertIdentifier != "legacy-alert-id" {
+		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertIdentifier)
 	}
 }

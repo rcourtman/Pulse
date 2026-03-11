@@ -212,23 +212,23 @@ func formatTimeAgo(t time.Time) string {
 
 // AlertInvestigationRequest represents a request to investigate an alert
 type AlertInvestigationRequest struct {
-	AlertID      string  `json:"-"`
-	ResourceID   string  `json:"resource_id"`
-	ResourceName string  `json:"resource_name"`
-	ResourceType string  `json:"resource_type"` // canonical v6 resource type
-	AlertType    string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
-	Level        string  `json:"level"`         // warning, critical
-	Value        float64 `json:"value"`
-	Threshold    float64 `json:"threshold"`
-	Message      string  `json:"message"`
-	Duration     string  `json:"duration"` // How long the alert has been active
-	Node         string  `json:"node,omitempty"`
-	VMID         int     `json:"vmid,omitempty"`
+	AlertIdentifier string  `json:"-"`
+	ResourceID      string  `json:"resource_id"`
+	ResourceName    string  `json:"resource_name"`
+	ResourceType    string  `json:"resource_type"` // canonical v6 resource type
+	AlertType       string  `json:"alert_type"`    // cpu, memory, disk, offline, etc.
+	Level           string  `json:"level"`         // warning, critical
+	Value           float64 `json:"value"`
+	Threshold       float64 `json:"threshold"`
+	Message         string  `json:"message"`
+	Duration        string  `json:"duration"` // How long the alert has been active
+	Node            string  `json:"node,omitempty"`
+	VMID            int     `json:"vmid,omitempty"`
 }
 
 type alertInvestigationRequestJSON struct {
 	AlertIdentifier string  `json:"alertIdentifier,omitempty"`
-	AlertID         string  `json:"alert_id,omitempty"`
+	LegacyAlertID   string  `json:"alert_id,omitempty"`
 	ResourceID      string  `json:"resource_id"`
 	ResourceName    string  `json:"resource_name"`
 	ResourceType    string  `json:"resource_type"`
@@ -243,7 +243,7 @@ type alertInvestigationRequestJSON struct {
 }
 
 func (r AlertInvestigationRequest) MarshalJSON() ([]byte, error) {
-	alertIdentifier := strings.TrimSpace(r.AlertID)
+	alertIdentifier := strings.TrimSpace(r.AlertIdentifier)
 	return json.Marshal(alertInvestigationRequestJSON{
 		AlertIdentifier: alertIdentifier,
 		ResourceID:      r.ResourceID,
@@ -268,22 +268,22 @@ func (r *AlertInvestigationRequest) UnmarshalJSON(data []byte) error {
 
 	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
 	if alertIdentifier == "" {
-		alertIdentifier = strings.TrimSpace(payload.AlertID)
+		alertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
 	}
 
 	*r = AlertInvestigationRequest{
-		AlertID:      alertIdentifier,
-		ResourceID:   payload.ResourceID,
-		ResourceName: payload.ResourceName,
-		ResourceType: payload.ResourceType,
-		AlertType:    payload.AlertType,
-		Level:        payload.Level,
-		Value:        payload.Value,
-		Threshold:    payload.Threshold,
-		Message:      payload.Message,
-		Duration:     payload.Duration,
-		Node:         payload.Node,
-		VMID:         payload.VMID,
+		AlertIdentifier: alertIdentifier,
+		ResourceID:      payload.ResourceID,
+		ResourceName:    payload.ResourceName,
+		ResourceType:    payload.ResourceType,
+		AlertType:       payload.AlertType,
+		Level:           payload.Level,
+		Value:           payload.Value,
+		Threshold:       payload.Threshold,
+		Message:         payload.Message,
+		Duration:        payload.Duration,
+		Node:            payload.Node,
+		VMID:            payload.VMID,
 	}
 	return nil
 }
