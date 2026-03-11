@@ -587,6 +587,42 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_cloud_paid_runtime_entitlement_surface_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            [
+                "pkg/licensing/evaluator.go",
+                "pkg/licensing/token_source.go",
+                "pkg/licensing/entitlement_payload.go",
+                "pkg/licensing/hosted_subscription.go",
+            ],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "runtime-entitlement-surface",
+                    "label": "runtime entitlement surface proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/evaluator.go",
+                        "pkg/licensing/token_source.go",
+                        "pkg/licensing/entitlement_payload.go",
+                        "pkg/licensing/hosted_subscription.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/cloud_paid_guardrails_test.go",
+                        "pkg/licensing/entitlement_payload_test.go",
+                        "pkg/licensing/evaluator_test.go",
+                        "pkg/licensing/hosted_subscription_test.go",
+                        "pkg/licensing/token_source_test.go",
+                    ],
+                }
+            ],
+        )
+
     def test_cloud_paid_cloud_plan_contracts_use_specific_guardrails(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
         requirements = build_verification_requirements(

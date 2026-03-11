@@ -36,6 +36,12 @@ Recent locked release decision:
   `pkg/licensing/database_source.go`, `pkg/licensing/features.go`, and
   `pkg/licensing/stripe_subscription.go` now require dedicated proof routes
   instead of relying only on the generic cloud runtime policy.
+- 2026-03-11: Cloud-paid governance now also explicitly owns the runtime
+  entitlement surface. Changes to `pkg/licensing/evaluator.go`,
+  `pkg/licensing/token_source.go`, `pkg/licensing/entitlement_payload.go`, and
+  `pkg/licensing/hosted_subscription.go` now require dedicated proof routes,
+  and `pkg/licensing/token_source.go` now has direct coverage instead of being
+  implicitly trusted through broader package tests.
 - 2026-03-11: Canonical governance now runs in both local hooks and CI.
   `scripts/release_control/canonical_completion_guard.py` can validate either
   staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`

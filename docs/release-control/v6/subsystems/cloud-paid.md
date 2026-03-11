@@ -13,12 +13,15 @@ agreement, and cloud-specific enforcement rules.
 4. `pkg/licensing/evaluator.go`
 5. `pkg/licensing/models.go`
 6. `pkg/licensing/activation_types.go`
-7. `pkg/licensing/service.go`
-8. `pkg/licensing/stripe_subscription.go`
-9. `internal/cloudcp/entitlements/service.go`
-10. `internal/cloudcp/registry/registry.go`
-11. `internal/cloudcp/stripe/provisioner.go`
-12. `frontend-modern/src/pages/CloudPricing.tsx`
+7. `pkg/licensing/token_source.go`
+8. `pkg/licensing/entitlement_payload.go`
+9. `pkg/licensing/hosted_subscription.go`
+10. `pkg/licensing/service.go`
+11. `pkg/licensing/stripe_subscription.go`
+12. `internal/cloudcp/entitlements/service.go`
+13. `internal/cloudcp/registry/registry.go`
+14. `internal/cloudcp/stripe/provisioner.go`
+15. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Extension Points
 
@@ -100,3 +103,7 @@ Persisted billing-state normalization, hosted database-source loading, Stripe
 plan derivation, and the cloud plan/limit tables now follow the same ratchet:
 they are expected to move behind path-specific proof routes rather than staying
 indistinguishable inside the generic cloud runtime policy.
+The runtime entitlement surface now follows the same rule: evaluator/token
+source accessors, hosted-subscription validity rules, and frontend entitlement
+payload construction should move behind explicit proof routes rather than being
+implicitly trusted as part of the catch-all cloud runtime layer.

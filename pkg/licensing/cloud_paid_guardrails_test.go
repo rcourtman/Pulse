@@ -51,3 +51,21 @@ func TestClaimsPreserveMissingPlanVersion(t *testing.T) {
 		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, 42)
 	}
 }
+
+func TestTokenSourcePreservesMissingPlanVersionContract(t *testing.T) {
+	source := NewTokenSource(stubTokenClaims{
+		planVersion:       "",
+		subscriptionState: SubStateActive,
+		limits:            map[string]int64{"max_agents": 42},
+	})
+
+	if got := source.PlanVersion(); got != "" {
+		t.Fatalf("PlanVersion()=%q, want empty", got)
+	}
+	if got := source.SubscriptionState(); got != SubStateActive {
+		t.Fatalf("SubscriptionState()=%q, want %q", got, SubStateActive)
+	}
+	if got := source.Limits()["max_agents"]; got != 42 {
+		t.Fatalf("Limits()[max_agents]=%d, want %d", got, 42)
+	}
+}

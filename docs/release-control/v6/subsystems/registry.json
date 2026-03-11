@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "subsystems": [
     {
       "id": "alerts",
@@ -201,6 +201,26 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "runtime-entitlement-surface",
+            "label": "runtime entitlement surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/evaluator.go",
+              "pkg/licensing/token_source.go",
+              "pkg/licensing/entitlement_payload.go",
+              "pkg/licensing/hosted_subscription.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/entitlement_payload_test.go",
+              "pkg/licensing/evaluator_test.go",
+              "pkg/licensing/hosted_subscription_test.go",
+              "pkg/licensing/token_source_test.go"
+            ]
+          },
           {
             "id": "billing-state-canonicalization",
             "label": "billing state canonicalization proof",
