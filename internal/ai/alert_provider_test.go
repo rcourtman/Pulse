@@ -254,8 +254,8 @@ func TestAlertInvestigationRequestJSONCanonicalAndLegacyCompatibility(t *testing
 	if payload["alertIdentifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alertIdentifier, got %#v", payload["alertIdentifier"])
 	}
-	if payload["alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alert_id, got %#v", payload["alert_id"])
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect legacy alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
 	var decodedCanonical AlertInvestigationRequest

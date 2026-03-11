@@ -1656,7 +1656,7 @@ func TestHandleInvestigateAlert_RejectsLegacyHostResourceType(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	body := []byte(`{"alert_id":"alert-1","resource_id":"agent-1","resource_name":"node-1","resource_type":"host","alert_type":"cpu","level":"warning","message":"high cpu"}`)
+	body := []byte(`{"alertIdentifier":"alert-1","resource_id":"agent-1","resource_name":"node-1","resource_type":"host","alert_type":"cpu","level":"warning","message":"high cpu"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleInvestigateAlert(rec, req)
@@ -1677,26 +1677,6 @@ func TestHandleInvestigateAlert_AcceptsCanonicalAlertIdentifier(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"alertIdentifier":"instance:node:100::metric/cpu","resource_id":"agent-1","resource_name":"node-1","resource_type":"host","alert_type":"cpu","level":"warning","message":"high cpu"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	handler.HandleInvestigateAlert(rec, req)
-
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Contains(t, rec.Body.String(), `unsupported resource_type "host"`)
-	require.NotContains(t, rec.Header().Get("Content-Type"), "text/event-stream")
-}
-
-func TestHandleInvestigateAlert_AcceptsLegacyAlertIDCompatibilityField(t *testing.T) {
-	t.Parallel()
-
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	saveEnabledTestAIConfig(t, persistence)
-
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
-
-	body := []byte(`{"legacyAlertId":"instance:node:100::metric/cpu","resource_id":"agent-1","resource_name":"node-1","resource_type":"host","alert_type":"cpu","level":"warning","message":"high cpu"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleInvestigateAlert(rec, req)

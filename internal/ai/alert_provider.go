@@ -246,7 +246,6 @@ func (r AlertInvestigationRequest) MarshalJSON() ([]byte, error) {
 	alertIdentifier := strings.TrimSpace(r.AlertID)
 	return json.Marshal(alertInvestigationRequestJSON{
 		AlertIdentifier: alertIdentifier,
-		AlertID:         alertIdentifier,
 		ResourceID:      r.ResourceID,
 		ResourceName:    r.ResourceName,
 		ResourceType:    r.ResourceType,

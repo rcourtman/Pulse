@@ -3980,8 +3980,6 @@ func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *h
 // AIInvestigateAlertRequest is the request body for POST /api/ai/investigate-alert
 type AIInvestigateAlertRequest struct {
 	AlertIdentifier string  `json:"alertIdentifier"`
-	LegacyAlertID   string  `json:"legacyAlertId"`
-	CompatibilityID string  `json:"alert_id"`
 	ResourceID      string  `json:"resource_id"`
 	ResourceName    string  `json:"resource_name"`
 	ResourceType    string  `json:"resource_type"` // canonical v6 resource type
@@ -3996,13 +3994,7 @@ type AIInvestigateAlertRequest struct {
 }
 
 func (r AIInvestigateAlertRequest) alertIdentifier() string {
-	if id := strings.TrimSpace(r.AlertIdentifier); id != "" {
-		return id
-	}
-	if id := strings.TrimSpace(r.LegacyAlertID); id != "" {
-		return id
-	}
-	return strings.TrimSpace(r.CompatibilityID)
+	return strings.TrimSpace(r.AlertIdentifier)
 }
 
 func normalizeInvestigateAlertTargetType(raw string) (string, error) {
@@ -4191,7 +4183,6 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		TargetID:   targetID,
 		Context: map[string]interface{}{
 			"alertIdentifier": alertIdentifier,
-			"alertId":         alertIdentifier,
 			"alertType":       req.AlertType,
 			"alertLevel":      req.Level,
 			"alertMessage":    req.Message,

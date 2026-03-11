@@ -242,8 +242,7 @@ describe('InvestigateAlertButton', () => {
         targetType: 'vm',
         targetId: 'vm-101',
         context: {
-          alertId: 'alert-1',
-          legacyAlertId: 'legacy-alert-1',
+          alertIdentifier: 'alert-1',
           alertType: 'cpu',
           alertLevel: 'warning',
           alertMessage: 'CPU usage is high',
