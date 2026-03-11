@@ -255,7 +255,6 @@ func GetWebhookTemplates() []WebhookTemplate {
 					"class": "{{.Type}}",
 					"custom_details": {
 						"alert_identifier": "{{.ID}}",
-						"alert_id": "{{.ID}}",
 						"resource_type": "{{.Type}}",
 						"current_value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}",
 						"threshold": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}",
