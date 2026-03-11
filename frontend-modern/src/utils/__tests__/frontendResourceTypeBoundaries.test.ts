@@ -2045,6 +2045,10 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertIncidentEventFilterContainerClass');
     expect(alertsPageSource).toContain('getAlertIncidentEventFilterActionButtonClass');
     expect(alertsPageSource).toContain('getAlertIncidentEventFilterChipClass');
+    expect(alertsPageSource).toContain('getAlertIncidentAcknowledgedBadgeClass');
+    expect(alertsPageSource).toContain('getAlertIncidentTimelineEventCardClass');
+    expect(alertsPageSource).toContain('getAlertIncidentNoteTextareaClass');
+    expect(alertsPageSource).toContain('getAlertIncidentNoteSaveButtonClass');
     expect(alertsPageSource).toContain('getAlertBucketCountLabel');
     expect(alertsPageSource).toContain('getAlertHistorySearchPlaceholder');
     expect(alertsPageSource).toContain('getAlertsPageHeaderMeta');
@@ -2681,6 +2685,10 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertTimelineFailureState');
     expect(alertOverviewTabSource).toContain('getAlertIncidentEventFilterContainerClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentEventFilterChipClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentAcknowledgedBadgeClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineEventCardClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentNoteTextareaClass');
+    expect(alertOverviewTabSource).toContain('getAlertIncidentNoteSaveButtonClass');
     expect(alertOverviewTabSource).not.toContain('Loading timeline...');
     expect(alertOverviewTabSource).not.toContain(
       'No timeline events match the selected filters.',
@@ -2714,6 +2722,18 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertIncidentPresentationSource).toContain(
       'export function getAlertIncidentEventFilterChipClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentAcknowledgedBadgeClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentTimelineEventCardClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentNoteTextareaClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertIncidentNoteSaveButtonClass',
     );
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertHistoryEmptyState',

@@ -82,3 +82,8 @@ through the shared presentation helpers in
 `frontend-modern/src/pages/Alerts.tsx` and
 `frontend-modern/src/features/alerts/OverviewTab.tsx` to fork their own filter
 button styling.
+
+Alert incident acknowledged badges, event cards, and note-editor controls must
+also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
+instead of letting the alerts page and overview timeline maintain duplicate
+inline incident-detail styling.

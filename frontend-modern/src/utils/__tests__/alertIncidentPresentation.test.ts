@@ -27,6 +27,10 @@ import {
   getAlertIncidentEventFilterChipClass,
   getAlertIncidentEventFilterContainerClass,
   getAlertIncidentEventFilterLabelClass,
+  getAlertIncidentAcknowledgedBadgeClass,
+  getAlertIncidentNoteSaveButtonClass,
+  getAlertIncidentNoteTextareaClass,
+  getAlertIncidentTimelineEventCardClass,
   normalizeAlertIncidentStatus,
 } from '@/utils/alertIncidentPresentation';
 
@@ -147,6 +151,24 @@ describe('alertIncidentPresentation', () => {
     );
     expect(getAlertIncidentEventFilterChipClass(false, 'panel')).toBe(
       'px-2 py-0.5 rounded border text-[10px] transition-colors font-medium border-border text-muted hover:bg-surface-alt',
+    );
+  });
+
+  it('returns canonical incident timeline presentation classes', () => {
+    expect(getAlertIncidentAcknowledgedBadgeClass()).toBe(
+      'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    );
+    expect(getAlertIncidentTimelineEventCardClass('alt')).toBe(
+      'rounded border border-border bg-surface-alt p-2',
+    );
+    expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
+      'rounded border border-border bg-surface p-2',
+    );
+    expect(getAlertIncidentNoteTextareaClass()).toBe(
+      'w-full rounded border border-border bg-surface p-2 text-xs text-base-content',
+    );
+    expect(getAlertIncidentNoteSaveButtonClass()).toBe(
+      'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed',
     );
   });
 });

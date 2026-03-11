@@ -21,9 +21,13 @@ import {
   unifiedTypeToAlertDisplayType,
 } from '@/features/alerts/helpers';
 import {
+  getAlertIncidentAcknowledgedBadgeClass,
   getAlertIncidentEventFilterActionButtonClass,
   getAlertIncidentEventFilterChipClass,
   getAlertIncidentEventFilterContainerClass,
+  getAlertIncidentNoteSaveButtonClass,
+  getAlertIncidentNoteTextareaClass,
+  getAlertIncidentTimelineEventCardClass,
 } from '@/utils/alertIncidentPresentation';
 import {
   getAlertQuietSuppressCardClass,
@@ -183,6 +187,29 @@ describe('incident event filter presentation helpers', () => {
   it('returns the selected compact chip presentation', () => {
     expect(getAlertIncidentEventFilterChipClass(true, 'compact')).toBe(
       'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+    );
+  });
+});
+
+describe('incident timeline presentation helpers', () => {
+  it('returns the acknowledged badge presentation', () => {
+    expect(getAlertIncidentAcknowledgedBadgeClass()).toBe(
+      'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    );
+  });
+
+  it('returns the surface event-card presentation', () => {
+    expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
+      'rounded border border-border bg-surface p-2',
+    );
+  });
+
+  it('returns the note editor presentation', () => {
+    expect(getAlertIncidentNoteTextareaClass()).toBe(
+      'w-full rounded border border-border bg-surface p-2 text-xs text-base-content',
+    );
+    expect(getAlertIncidentNoteSaveButtonClass()).toBe(
+      'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed',
     );
   });
 });

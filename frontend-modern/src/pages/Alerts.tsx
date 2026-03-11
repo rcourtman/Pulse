@@ -66,11 +66,15 @@ import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
 import {
   getAlertHistoryStatusPresentation,
+  getAlertIncidentAcknowledgedBadgeClass,
   getAlertIncidentEventFilterActionButtonClass,
   getAlertIncidentEventFilterChipClass,
   getAlertIncidentEventFilterContainerClass,
   getAlertIncidentEventFilterLabelClass,
   getAlertIncidentLevelBadgeClass,
+  getAlertIncidentNoteSaveButtonClass,
+  getAlertIncidentNoteTextareaClass,
+  getAlertIncidentTimelineEventCardClass,
   getAlertResourceIncidentAcknowledgedByLabel,
   getAlertResourceIncidentCountLabel,
   getAlertResourceIncidentEmptyState,
@@ -5394,7 +5398,9 @@ function HistoryTab(props: {
                                                   </span>
                                                   <span>{timeline().status}</span>
                                                   <Show when={timeline().acknowledged}>
-                                                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                                                    <span
+                                                      class={getAlertIncidentAcknowledgedBadgeClass()}
+                                                    >
                                                       acknowledged
                                                     </span>
                                                   </Show>
@@ -5435,7 +5441,11 @@ function HistoryTab(props: {
                                                         <div class="space-y-2">
                                                           <For each={filteredEvents}>
                                                             {(event) => (
-                                                              <div class="rounded border border-border bg-surface p-2">
+                                                              <div
+                                                                class={getAlertIncidentTimelineEventCardClass(
+                                                                  'surface',
+                                                                )}
+                                                              >
                                                                 <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                                                                   <span class="font-medium text-base-content">
                                                                     {event.summary}
@@ -5531,7 +5541,7 @@ function HistoryTab(props: {
                                                 })()}
                                                 <div class="flex flex-col gap-2">
                                                   <textarea
-                                                    class="w-full rounded border border-border bg-surface p-2 text-xs text-base-content"
+                                                    class={getAlertIncidentNoteTextareaClass()}
                                                     rows={2}
                                                     placeholder={getAlertResourceIncidentNotePlaceholder()}
                                                     value={incidentNoteDrafts()[rowKey] || ''}
@@ -5545,7 +5555,7 @@ function HistoryTab(props: {
                                                   />
                                                   <div class="flex justify-end">
                                                     <button
-                                                      class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                                                      class={getAlertIncidentNoteSaveButtonClass()}
                                                       disabled={
                                                         incidentNoteSaving().has(rowKey) ||
                                                         !(incidentNoteDrafts()[rowKey] || '').trim()

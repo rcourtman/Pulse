@@ -214,3 +214,19 @@ export function getAlertIncidentEventFilterChipClass(
 
   return `${ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE} border-border text-slate-500`;
 }
+
+export function getAlertIncidentAcknowledgedBadgeClass(): string {
+  return 'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300';
+}
+
+export function getAlertIncidentTimelineEventCardClass(variant: 'surface' | 'alt'): string {
+  return `rounded border border-border ${variant === 'alt' ? 'bg-surface-alt' : 'bg-surface'} p-2`;
+}
+
+export function getAlertIncidentNoteTextareaClass(): string {
+  return 'w-full rounded border border-border bg-surface p-2 text-xs text-base-content';
+}
+
+export function getAlertIncidentNoteSaveButtonClass(): string {
+  return 'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed';
+}

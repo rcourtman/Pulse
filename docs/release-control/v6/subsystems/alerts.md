@@ -70,3 +70,8 @@ Incident-event filter chip and filter-action styling now routes through
 `frontend-modern/src/pages/Alerts.tsx` and
 `frontend-modern/src/features/alerts/OverviewTab.tsx` instead of allowing
 those alert timeline surfaces to fork their own filter presentation.
+
+Alert incident acknowledged badges, timeline event cards, and note-editor
+presentation now also route through
+`frontend-modern/src/utils/alertIncidentPresentation.ts` instead of remaining
+duplicated inline across the alerts page and overview timeline surfaces.
