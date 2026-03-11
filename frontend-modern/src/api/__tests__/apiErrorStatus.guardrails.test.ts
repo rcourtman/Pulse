@@ -7,6 +7,7 @@ import discoverySource from '@/api/discovery.ts?raw';
 import hostedSignupSource from '@/api/hostedSignup.ts?raw';
 import monitoringSource from '@/api/monitoring.ts?raw';
 import notificationsSource from '@/api/notifications.ts?raw';
+import patrolSource from '@/api/patrol.ts?raw';
 import responseUtilsSource from '@/api/responseUtils.ts?raw';
 import securitySource from '@/api/security.ts?raw';
 
@@ -85,6 +86,9 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).toContain('arrayOrEmpty<Webhook>(data)');
     expect(notificationsSource).not.toContain('Array.isArray(data) ? data : []');
 
+    expect(patrolSource).toContain('arrayOrEmpty<PatrolRunRecord>(runs)');
+    expect(patrolSource).not.toContain('runs || []');
+
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfile>(response)');
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfileAssignment>(response)');
     expect(agentProfilesSource).toContain('arrayOrEmpty<ConfigKeyDefinitionResponse>(response)');
@@ -107,7 +111,7 @@ describe('API error-status guardrails', () => {
     const rawResponseJSONPattern = /(?:return\s+)?(?:await\s+)?response\.json\(/;
     const rawManualJSONParsePattern = /JSON\.parse\(/;
     const governedCollectionEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:ai|alerts|agentProfiles|notifications|security)\.ts$/.test(path),
+      /\/(?:ai|alerts|agentProfiles|notifications|patrol|security)\.ts$/.test(path),
     );
     const rawArrayFallbackPattern = /(?:\|\||\?\?)\s*\[\]/;
     const rawArrayIsArrayFallbackPattern = /Array\.isArray\(.+\)\s*\?\s*.+:\s*\[\]/;

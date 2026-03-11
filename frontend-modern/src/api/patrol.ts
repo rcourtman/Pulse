@@ -4,6 +4,7 @@
  */
 
 import { apiFetchJSON } from '@/utils/apiClient';
+import { arrayOrEmpty } from './responseUtils';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory =
@@ -452,7 +453,7 @@ export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRun
     limit: String(normalizeHistoryLimit(limit)),
   });
   const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return (runs || []).map((run) => normalizePatrolRunRecord(run));
+  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) => normalizePatrolRunRecord(run));
 }
 
 /**
@@ -467,7 +468,7 @@ export async function getPatrolRunHistoryWithToolCalls(
     limit: String(normalizeHistoryLimit(limit)),
   });
   const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return (runs || []).map((run) => normalizePatrolRunRecord(run));
+  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) => normalizePatrolRunRecord(run));
 }
 
 /** SSE event from /api/ai/patrol/stream */

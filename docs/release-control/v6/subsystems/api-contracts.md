@@ -91,6 +91,9 @@ Nullable or legacy collection payloads in governed frontend API clients must
 now also route through shared collection-normalization helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through module-local
 `|| []`, `?? []`, or `Array.isArray(...)` fallback branches.
+That rule now also covers patrol run history responses so malformed or legacy
+run collections collapse through the shared helper instead of per-module
+fallback lists.
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.

@@ -66,4 +66,16 @@ describe('patrol api', () => {
       alertIdentifier: 'canonical-alert-1',
     });
   });
+
+  it('normalizes malformed patrol history payloads to empty arrays', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ runs: [] } as any);
+
+    await expect(getPatrolRunHistory()).resolves.toEqual([]);
+  });
+
+  it('normalizes malformed tool-call patrol history payloads to empty arrays', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce(null as any);
+
+    await expect(getPatrolRunHistoryWithToolCalls()).resolves.toEqual([]);
+  });
 });
