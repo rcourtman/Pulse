@@ -30,7 +30,8 @@ class ContractAuditTest(unittest.TestCase):
   "lane": "L6",
   "contract_file": "docs/release-control/v6/subsystems/alerts.md",
   "status_file": "docs/release-control/v6/status.json",
-  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
 }
 ```
 
@@ -96,7 +97,8 @@ Canonical alert identity is live runtime truth.
   "lane": "L3",
   "contract_file": "docs/release-control/v6/subsystems/monitoring.md",
   "status_file": "docs/release-control/v6/status.json",
-  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
 }
 ```
 
@@ -166,7 +168,8 @@ Canonical alert identity is live runtime truth.
   "lane": "L6",
   "contract_file": "docs/release-control/v6/subsystems/alerts.md",
   "status_file": "docs/release-control/v6/status.json",
-  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
 }
 ```
 
@@ -229,7 +232,8 @@ Canonical alert identity is live runtime truth.
   "lane": "L6",
   "contract_file": "docs/release-control/v6/subsystems/alerts.md",
   "status_file": "docs/release-control/v6/status.json",
-  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
 }
 ```
 
@@ -292,7 +296,8 @@ Canonical alert identity is live runtime truth.
   "lane": "L6",
   "contract_file": "docs/release-control/v6/subsystems/alerts.md",
   "status_file": "docs/release-control/v6/status.json",
-  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
 }
 ```
 
@@ -330,6 +335,231 @@ Canonical alert identity is live runtime truth.
 
         self.assertIn(
             "docs/release-control/v6/subsystems/alerts.md ## Extension Points references missing path 'internal/alerts/specs/missing/'",
+            "\n".join(report["errors"]),
+        )
+
+    def test_audit_contract_payload_requires_declared_cross_subsystem_dependencies(self) -> None:
+        registry_payload = {
+            "subsystems": [
+                {
+                    "id": "monitoring",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/monitoring.md",
+                    "owned_prefixes": ["internal/monitoring/"],
+                    "owned_files": [],
+                },
+                {
+                    "id": "unified-resources",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/unified-resources.md",
+                    "owned_prefixes": ["internal/unifiedresources/"],
+                    "owned_files": [],
+                },
+            ]
+        }
+        status_payload = {"lanes": [{"id": "L6"}]}
+        contract_texts = {
+            "docs/release-control/v6/subsystems/monitoring.md": """# Monitoring Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "monitoring",
+  "lane": "L6",
+  "contract_file": "docs/release-control/v6/subsystems/monitoring.md",
+  "status_file": "docs/release-control/v6/status.json",
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}
+```
+
+## Purpose
+
+Own monitoring truth.
+
+## Canonical Files
+
+1. `internal/monitoring/monitor.go`
+2. `internal/unifiedresources/views.go`
+
+## Extension Points
+
+1. Add typed read access through `internal/unifiedresources/views.go`
+
+## Forbidden Paths
+
+1. New ad hoc snapshot truth
+
+## Completion Obligations
+
+1. Update contract and tests together
+
+## Current State
+
+Canonical monitoring still depends on unified read-state truth.
+""",
+            "docs/release-control/v6/subsystems/unified-resources.md": """# Unified Resources Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "unified-resources",
+  "lane": "L6",
+  "contract_file": "docs/release-control/v6/subsystems/unified-resources.md",
+  "status_file": "docs/release-control/v6/status.json",
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}
+```
+
+## Purpose
+
+Own unified resource truth.
+
+## Canonical Files
+
+1. `internal/unifiedresources/views.go`
+
+## Extension Points
+
+1. Add view adapters through `internal/unifiedresources/`
+
+## Forbidden Paths
+
+1. New parallel runtime registries
+
+## Completion Obligations
+
+1. Update contract and tests together
+
+## Current State
+
+Canonical read state owns the live view layer.
+""",
+        }
+
+        report = audit_contract_payload(
+            registry_payload=registry_payload,
+            status_payload=status_payload,
+            contract_texts=contract_texts,
+        )
+
+        self.assertIn(
+            "docs/release-control/v6/subsystems/monitoring.md contract metadata dependency_subsystem_ids = [], want ['unified-resources']",
+            "\n".join(report["errors"]),
+        )
+
+    def test_audit_contract_payload_rejects_stale_declared_dependencies(self) -> None:
+        registry_payload = {
+            "subsystems": [
+                {
+                    "id": "alerts",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/alerts.md",
+                    "owned_prefixes": ["internal/alerts/"],
+                    "owned_files": [],
+                },
+                {
+                    "id": "monitoring",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/monitoring.md",
+                    "owned_prefixes": ["internal/monitoring/"],
+                    "owned_files": [],
+                },
+            ]
+        }
+        status_payload = {"lanes": [{"id": "L6"}]}
+        contract_texts = {
+            "docs/release-control/v6/subsystems/alerts.md": """# Alerts Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "alerts",
+  "lane": "L6",
+  "contract_file": "docs/release-control/v6/subsystems/alerts.md",
+  "status_file": "docs/release-control/v6/status.json",
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": ["monitoring"]
+}
+```
+
+## Purpose
+
+Own alert truth.
+
+## Canonical Files
+
+1. `internal/alerts/specs/types.go`
+
+## Extension Points
+
+1. Add new alert rule kinds in `internal/alerts/specs/`
+
+## Forbidden Paths
+
+1. New ad hoc evaluator logic
+
+## Completion Obligations
+
+1. Update contract and tests together
+
+## Current State
+
+Canonical alert identity is live runtime truth.
+""",
+            "docs/release-control/v6/subsystems/monitoring.md": """# Monitoring Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "monitoring",
+  "lane": "L6",
+  "contract_file": "docs/release-control/v6/subsystems/monitoring.md",
+  "status_file": "docs/release-control/v6/status.json",
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}
+```
+
+## Purpose
+
+Own monitoring truth.
+
+## Canonical Files
+
+1. `internal/monitoring/monitor.go`
+
+## Extension Points
+
+1. Add pollers in `internal/monitoring/`
+
+## Forbidden Paths
+
+1. New snapshot-only paths
+
+## Completion Obligations
+
+1. Update contract and tests together
+
+## Current State
+
+Canonical monitoring truth is still being consolidated.
+""",
+        }
+
+        report = audit_contract_payload(
+            registry_payload=registry_payload,
+            status_payload=status_payload,
+            contract_texts=contract_texts,
+        )
+
+        self.assertIn(
+            "docs/release-control/v6/subsystems/alerts.md contract metadata dependency_subsystem_ids = ['monitoring'], want []",
             "\n".join(report["errors"]),
         )
 

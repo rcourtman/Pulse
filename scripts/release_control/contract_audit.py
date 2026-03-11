@@ -10,7 +10,7 @@ import re
 import sys
 from typing import Any
 
-from canonical_completion_guard import REPO_ROOT
+from canonical_completion_guard import REPO_ROOT, subsystem_matches_path
 
 
 CONTRACTS_DIR = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems"
@@ -40,6 +40,14 @@ METADATA_REQUIRED_FIELDS = {
     "contract_file",
     "status_file",
     "registry_file",
+    "dependency_subsystem_ids",
+}
+METADATA_REQUIRED_STRING_FIELDS = {
+    "subsystem_id",
+    "lane",
+    "contract_file",
+    "status_file",
+    "registry_file",
 }
 PATH_SUFFIXES = (
     ".go",
@@ -53,6 +61,10 @@ PATH_SUFFIXES = (
     ".yaml",
     ".yml",
 )
+
+
+def sorted_casefold(values: list[str]) -> list[str]:
+    return sorted(values, key=lambda value: value.casefold())
 
 
 def load_registry_payload() -> dict[str, Any]:
@@ -145,6 +157,7 @@ def parse_contract_metadata(body_lines: list[str]) -> tuple[dict[str, Any] | Non
 
 def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
+    path_references: list[dict[str, str]] = []
     lines = content.splitlines()
     if not lines or not lines[0].startswith("# "):
         errors.append(f"{rel} must start with a level-1 heading")
@@ -190,16 +203,28 @@ def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
                         continue
                     for token in path_tokens:
                         validate_repo_path_token(token, rel=rel, heading=heading, errors=errors)
+                        path_references.append({"heading": heading, "path": token})
             if heading == "## Extension Points":
                 for _, item in items:
                     for token in re.findall(r"`([^`]+)`", item):
                         if looks_like_repo_path(token):
                             validate_repo_path_token(token, rel=rel, heading=heading, errors=errors)
+                            path_references.append({"heading": heading, "path": token})
 
     return {
         "title": lines[0].strip() if lines else "",
         "metadata": metadata,
+        "path_references": path_references,
     }, errors
+
+
+def path_owner_ids(registry_subsystems: list[dict[str, Any]], path: str) -> list[str]:
+    return [
+        str(subsystem.get("id", "")).strip()
+        for subsystem in registry_subsystems
+        if isinstance(subsystem, dict)
+        if subsystem_matches_path(subsystem, path)
+    ]
 
 
 def audit_contract_payload(
@@ -230,6 +255,11 @@ def audit_contract_payload(
         for subsystem in registry_subsystems
         if isinstance(subsystem, dict) and isinstance(subsystem.get("contract"), str)
     }
+    expected_subsystem_ids = {
+        str(subsystem.get("id", "")).strip()
+        for subsystem in registry_subsystems
+        if isinstance(subsystem, dict) and isinstance(subsystem.get("id"), str)
+    }
 
     actual_contracts = {rel for rel in contract_texts if rel.endswith(".md") and rel != TEMPLATE_REL}
     missing_contracts = sorted(set(expected_contracts) - actual_contracts)
@@ -257,7 +287,7 @@ def audit_contract_payload(
                 f"{rel} contract metadata keys = {sorted(metadata_keys)!r}, want {sorted(METADATA_REQUIRED_FIELDS)!r}"
             )
 
-        for field in sorted(METADATA_REQUIRED_FIELDS):
+        for field in sorted(METADATA_REQUIRED_STRING_FIELDS):
             value = metadata.get(field)
             if not isinstance(value, str) or not value.strip():
                 errors.append(f"{rel} contract metadata field {field!r} must be a non-empty string")
@@ -267,6 +297,23 @@ def audit_contract_payload(
         contract_file = str(metadata.get("contract_file", "")).strip()
         status_file = str(metadata.get("status_file", "")).strip()
         registry_file = str(metadata.get("registry_file", "")).strip()
+        dependency_subsystem_ids = metadata.get("dependency_subsystem_ids")
+
+        normalized_dependencies: list[str] = []
+        if not isinstance(dependency_subsystem_ids, list):
+            errors.append(f"{rel} contract metadata field 'dependency_subsystem_ids' must be a list")
+        else:
+            if len(dependency_subsystem_ids) != len(set(dependency_subsystem_ids)):
+                errors.append(f"{rel} contract metadata dependency_subsystem_ids must not contain duplicates")
+            for index, dependency in enumerate(dependency_subsystem_ids):
+                if not isinstance(dependency, str) or not dependency.strip():
+                    errors.append(
+                        f"{rel} contract metadata dependency_subsystem_ids[{index}] must be a non-empty string"
+                    )
+                    continue
+                normalized_dependencies.append(dependency.strip())
+            if normalized_dependencies != sorted_casefold(normalized_dependencies):
+                errors.append(f"{rel} contract metadata dependency_subsystem_ids must be sorted lexicographically")
 
         if subsystem_id:
             if subsystem_id in seen_subsystem_ids:
@@ -280,6 +327,11 @@ def audit_contract_payload(
             errors.append(f"{rel} contract metadata registry_file must be {REGISTRY_REL!r}")
         if lane and lane not in status_lanes:
             errors.append(f"{rel} contract metadata references unknown lane {lane!r}")
+        if subsystem_id and subsystem_id in normalized_dependencies:
+            errors.append(f"{rel} contract metadata must not declare self dependency {subsystem_id!r}")
+        for dependency in normalized_dependencies:
+            if dependency not in expected_subsystem_ids:
+                errors.append(f"{rel} contract metadata references unknown dependency subsystem {dependency!r}")
 
         if subsystem is None:
             errors.append(f"{rel} is not registered in registry.json")
@@ -291,20 +343,38 @@ def audit_contract_payload(
             if lane and lane != expected_lane:
                 errors.append(f"{rel} contract metadata lane = {lane!r}, want {expected_lane!r}")
 
+        actual_dependency_ids: set[str] = set()
+        for reference in parsed.get("path_references", []):
+            heading = str(reference.get("heading", "")).strip()
+            path = str(reference.get("path", "")).strip()
+            if not heading or not path:
+                continue
+            owner_ids = path_owner_ids(registry_subsystems, path)
+            if subsystem_id and subsystem_id in owner_ids:
+                continue
+            if len(owner_ids) > 1:
+                errors.append(f"{rel} {heading} path {path!r} resolves to multiple subsystem owners {owner_ids!r}")
+                continue
+            if not owner_ids:
+                continue
+            owner_id = owner_ids[0]
+            actual_dependency_ids.add(owner_id)
+
+        expected_dependencies = sorted_casefold(list(actual_dependency_ids))
+        if normalized_dependencies != expected_dependencies:
+            errors.append(
+                f"{rel} contract metadata dependency_subsystem_ids = {normalized_dependencies!r}, want {expected_dependencies!r}"
+            )
+
         contract_summaries.append(
             {
                 "contract": rel,
                 "subsystem_id": subsystem_id,
                 "lane": lane,
+                "dependency_subsystem_ids": normalized_dependencies,
                 "title": parsed.get("title", ""),
             }
         )
-
-    expected_subsystem_ids = {
-        str(subsystem.get("id", "")).strip()
-        for subsystem in registry_subsystems
-        if isinstance(subsystem, dict) and isinstance(subsystem.get("id"), str)
-    }
     if seen_subsystem_ids != expected_subsystem_ids:
         missing_ids = sorted(expected_subsystem_ids - seen_subsystem_ids)
         extra_ids = sorted(seen_subsystem_ids - expected_subsystem_ids)

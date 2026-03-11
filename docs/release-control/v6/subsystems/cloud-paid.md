@@ -8,7 +8,8 @@
   "lane": "L3",
   "contract_file": "docs/release-control/v6/subsystems/cloud-paid.md",
   "status_file": "docs/release-control/v6/status.json",
-  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+  "registry_file": "docs/release-control/v6/subsystems/registry.json",
+  "dependency_subsystem_ids": []
 }
 ```
 

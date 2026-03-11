@@ -49,8 +49,8 @@ bindings, canonical ordering for unordered registry lists, and path-policy
 reachability under first-match precedence.
 `scripts/release_control/contract_audit.py --check` is the machine audit entry
 point for validating structured contract metadata, section presence/order,
-registry/status linkage, and canonical path references inside subsystem
-contracts.
+registry/status linkage, explicit cross-subsystem dependency declarations, and
+canonical path references inside subsystem contracts.
 
 ## Subsystem Contracts
 
@@ -80,7 +80,9 @@ work is incomplete.
 The machine-readable ownership map for those subsystem contracts lives in
 `docs/release-control/v6/subsystems/registry.json`.
 Each contract must also carry structured metadata that binds the markdown file
-to its registry subsystem id and owning lane in `status.json`.
+to its registry subsystem id, owning lane in `status.json`, and exact declared
+cross-subsystem dependencies implied by its canonical-file and extension-point
+references.
 
 ## Task Completion Protocol
 

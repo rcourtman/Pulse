@@ -15,8 +15,8 @@ Use:
 4. `docs/release-control/v6/subsystems/registry.json` and `docs/release-control/v6/subsystems/registry.schema.json` for subsystem ownership and proof-routing rules
 5. `python3 scripts/release_control/status_audit.py --check` if you need a machine-derived evidence health audit
 6. `python3 scripts/release_control/registry_audit.py --check` if you need a machine-derived subsystem registry audit
-7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit
-7. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, and relevant decision records for a change
+7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit, including explicit cross-subsystem dependency checks
+8. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, and relevant decision records for a change
 
 All other documents are supporting references unless explicitly required for evidence.
 
