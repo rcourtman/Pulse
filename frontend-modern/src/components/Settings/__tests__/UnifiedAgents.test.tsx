@@ -306,6 +306,31 @@ const setupComponent = (
   ));
 };
 
+const setupWithResources = (resources: any[]) => {
+  setMockResources(resources);
+
+  const [state] = createStore({
+    hosts: [],
+    dockerHosts: [],
+    kubernetesClusters: [],
+    removedDockerHosts: [],
+    removedKubernetesClusters: [],
+  });
+
+  mockWsStore = {
+    state,
+    connected: () => true,
+    reconnecting: () => false,
+    activeAlerts: [],
+  };
+
+  return render(() => (
+    <Router>
+      <Route path="/" component={() => <UnifiedAgents />} />
+    </Router>
+  ));
+};
+
 beforeEach(() => {
   lookupMock.mockReset();
   createTokenMock.mockReset();
@@ -532,6 +557,43 @@ describe('UnifiedAgents managed agents table', () => {
     expect(detailsRow).not.toBeNull();
     const details = within(detailsRow as HTMLElement);
     expect(details.getByText('Docker')).toBeInTheDocument();
+  });
+
+  it('includes canonical agent-facet resources without a legacy top-level agent payload', async () => {
+    setupWithResources([
+      {
+        id: 'resource-agent-platform-only',
+        type: 'agent',
+        platformType: 'proxmox-pve',
+        sourceType: 'hybrid',
+        name: 'tower',
+        displayName: 'Tower',
+        status: 'online',
+        lastSeen: Date.now(),
+        identity: { hostname: 'tower.local' },
+        platformData: {
+          agent: {
+            agentId: 'agent-platform-only',
+            agentVersion: '1.2.3',
+          },
+          agentId: 'agent-platform-only',
+        },
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected infrastructure')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Tower')).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: /details for Tower/i });
+    fireEvent.click(toggle);
+
+    const detailsRow = document.getElementById('agent-details-agent-resource-agent-platform-only');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+    expect(details.getByText('Agent')).toBeInTheDocument();
   });
 
   it('shows empty state when no agents are installed', async () => {

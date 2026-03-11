@@ -37,6 +37,16 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
+  getActionableAgentIdFromResource,
+  getActionableDockerRuntimeIdFromResource,
+  getActionableKubernetesClusterIdFromResource,
+  getExplicitAgentIdFromResource,
+  getPlatformAgentRecord,
+  getPlatformDataRecord,
+  hasAgentFacet,
+  hasDockerWorkloadsScope,
+} from '@/utils/agentResources';
+import {
   getAgentCapabilityBadgeClass,
   getAgentCapabilityLabel,
   type AgentCapability,
@@ -71,10 +81,6 @@ import {
   trackAgentInstallTokenGenerated,
 } from '@/utils/upgradeMetrics';
 import type { Resource } from '@/types/resource';
-import {
-  getAgentDiscoveryResourceId,
-  isAppContainerDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
 const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
@@ -281,67 +287,31 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
   const { byType, resources, mutate: mutateResources, refetch: refetchResources } = useResources();
   const navigate = useNavigate();
 
-  const pd = (r: Resource) =>
-    r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
+  const pd = (r: Resource) => {
+    const platformData = getPlatformDataRecord(r);
+    return platformData ? unwrap(platformData) : undefined;
+  };
   const asRecord = (value: unknown) =>
     value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
   const asString = (value: unknown) =>
     typeof value === 'string' && value.trim() ? value.trim() : undefined;
   const asBoolean = (value: unknown) => (typeof value === 'boolean' ? value : undefined);
-  const platformAgent = (r: Resource) => asRecord(pd(r)?.agent);
+  const platformAgent = (r: Resource) => asRecord(getPlatformAgentRecord(r));
   const platformDocker = (r: Resource) => asRecord(pd(r)?.docker);
   const platformKubernetes = (r: Resource) => asRecord(pd(r)?.kubernetes);
 
-  const getAgentId = (r: Resource) => {
-    const platformData = pd(r);
-    return (
-      r.agent?.agentId ||
-      asString(platformAgent(r)?.agentId) ||
-      asString(platformData?.agentId) ||
-      r.discoveryTarget?.resourceId ||
-      r.discoveryTarget?.agentId
-    );
-  };
+  const getAgentId = (r: Resource) => getExplicitAgentIdFromResource(r);
 
-  const getAgentActionId = (r: Resource) => {
-    const discoveryAgentId = getAgentDiscoveryResourceId(r.discoveryTarget);
-    if (discoveryAgentId) return discoveryAgentId;
-    if (r.discoveryTarget?.agentId) {
-      return r.discoveryTarget.agentId;
-    }
-    return getAgentId(r);
-  };
+  const getAgentActionId = (r: Resource) => getActionableAgentIdFromResource(r);
 
-  const getDockerActionId = (r: Resource) => {
-    const platformData = pd(r);
-    if (
-      isAppContainerDiscoveryResourceType(r.discoveryTarget?.resourceType) &&
-      r.discoveryTarget.resourceId
-    ) {
-      return r.discoveryTarget.resourceId;
-    }
-    return (
-      asString(platformDocker(r)?.hostSourceId) ||
-      asString(platformData?.hostSourceId) ||
-      (r.type === 'docker-host' ? r.discoveryTarget?.agentId || r.id : undefined)
-    );
-  };
+  const getDockerActionId = (r: Resource) => getActionableDockerRuntimeIdFromResource(r);
 
-  const getKubernetesActionId = (r: Resource) => {
-    const platformData = pd(r);
-    const kubernetes = platformKubernetes(r);
-    if (r.discoveryTarget?.resourceType === 'k8s' && r.discoveryTarget.resourceId) {
-      return r.discoveryTarget.resourceId;
-    }
-    return asString(kubernetes?.clusterId) || asString(platformData?.clusterId) || r.id;
-  };
+  const getKubernetesActionId = (r: Resource) => getActionableKubernetesClusterIdFromResource(r);
 
-  const getKubernetesAgentId = (r: Resource) => {
-    const kubernetes = platformKubernetes(r);
-    return (
-      asString(kubernetes?.agentId) || r.discoveryTarget?.agentId || asString(kubernetes?.clusterId)
-    );
-  };
+  const getKubernetesAgentId = (r: Resource) =>
+    getExplicitAgentIdFromResource(r) ||
+    getActionableAgentIdFromResource(r) ||
+    getActionableKubernetesClusterIdFromResource(r);
 
   const getAgentVersion = (r: Resource) => {
     const platformData = pd(r);
@@ -372,11 +342,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
 
   const getLinkedNodeId = (r: Resource) => asString(pd(r)?.linkedNodeId);
   const getIsOutdatedBinary = (r: Resource) => asBoolean(pd(r)?.isLegacy);
-  const hasDockerSource = (r: Resource) =>
-    r.type === 'docker-host' ||
-    r.platformType === 'docker' ||
-    Boolean(platformDocker(r)) ||
-    Boolean(getDockerActionId(r));
+  const hasDockerSource = (r: Resource) => hasDockerWorkloadsScope(r);
 
   let hasLoggedSecurityStatusError = false;
 
@@ -602,7 +568,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
   /** Derive agent capabilities from a v6 unified resource. */
   const getCapabilities = (r: Resource): AgentCapability[] => {
     const caps: AgentCapability[] = [];
-    if (r.agent) caps.push('agent');
+    if (hasAgentFacet(r)) caps.push('agent');
     if (hasDockerSource(r)) caps.push('docker');
     if (r.type === 'agent' || r.type === 'pbs' || r.type === 'pmg' || r.proxmox)
       caps.push('proxmox');
@@ -673,7 +639,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
    */
   const agentResources = createMemo(() => {
     return resources()
-      .filter((r) => r.agent != null || r.type === 'docker-host')
+      .filter((r) => r.type !== 'k8s-cluster' && (hasAgentFacet(r) || hasDockerWorkloadsScope(r)))
       .sort((a, b) =>
         (getPreferredResourceHostname(a) || '').localeCompare(
           getPreferredResourceHostname(b) || '',
@@ -686,7 +652,7 @@ export const UnifiedAgents: Component<UnifiedAgentsProps> = (props) => {
     // Only include resources with an agent facet (not docker-only resources)
     // to avoid polluting the command config sync lookup.
     for (const agentResource of agentResources()) {
-      if (!agentResource.agent) continue;
+      if (!hasAgentFacet(agentResource)) continue;
       const actionId = getAgentActionId(agentResource);
       if (!actionId || map.has(actionId)) continue;
       map.set(actionId, agentResource);
