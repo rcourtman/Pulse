@@ -12,6 +12,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
+const legacyCamelAlertIdentifierField = "alertId"
+
 func TestSendResolvedAppriseCLI(t *testing.T) {
 	manager := NewNotificationManager("")
 	defer manager.Stop()
@@ -180,8 +182,12 @@ func TestSendResolvedWebhookHTTP(t *testing.T) {
 	if payload["alertIdentifier"] != "a1" {
 		t.Fatalf("expected alertIdentifier a1, got %v", payload["alertIdentifier"])
 	}
-	if _, ok := payload["alertId"]; ok {
-		t.Fatalf("did not expect legacy alertId in resolved payload, got %v", payload["alertId"])
+	if _, ok := payload[legacyCamelAlertIdentifierField]; ok {
+		t.Fatalf(
+			"did not expect legacy %s in resolved payload, got %v",
+			legacyCamelAlertIdentifierField,
+			payload[legacyCamelAlertIdentifierField],
+		)
 	}
 }
 

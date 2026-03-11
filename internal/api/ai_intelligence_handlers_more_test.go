@@ -14,6 +14,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+const legacyFindingAlertIDField = "alert_id"
+
 type snapshotStateProvider struct {
 	state models.StateSnapshot
 }
@@ -243,7 +245,11 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	if finding["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", finding["alert_identifier"])
 	}
-	if _, ok := finding["alert_id"]; ok {
-		t.Fatalf("did not expect alert_id in findings response, got %#v", finding["alert_id"])
+	if _, ok := finding[legacyFindingAlertIDField]; ok {
+		t.Fatalf(
+			"did not expect %s in findings response, got %#v",
+			legacyFindingAlertIDField,
+			finding[legacyFindingAlertIDField],
+		)
 	}
 }

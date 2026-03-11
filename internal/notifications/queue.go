@@ -21,6 +21,11 @@ import (
 // before a notification is moved to the dead-letter queue.
 const defaultQueueMaxAttempts = 3
 
+const (
+	notificationAuditAlertIdentifiersColumn       = "alert_identifiers"
+	legacyNotificationAuditAlertIdentifiersColumn = "alert_ids"
+)
+
 // NotificationQueueStatus represents the status of a queued notification
 type NotificationQueueStatus string
 
@@ -198,12 +203,22 @@ func (nq *NotificationQueue) migrateAlertIdentifierColumns() error {
 	if err != nil {
 		return err
 	}
-	if columns["alert_identifiers"] || !columns["alert_ids"] {
+	if columns[notificationAuditAlertIdentifiersColumn] || !columns[legacyNotificationAuditAlertIdentifiersColumn] {
 		return nil
 	}
 
-	if _, err := nq.db.Exec(`ALTER TABLE notification_audit RENAME COLUMN alert_ids TO alert_identifiers`); err != nil {
-		return fmt.Errorf("rename notification_audit.alert_ids: %w", err)
+	if _, err := nq.db.Exec(
+		`ALTER TABLE notification_audit RENAME COLUMN ` +
+			legacyNotificationAuditAlertIdentifiersColumn +
+			` TO ` +
+			notificationAuditAlertIdentifiersColumn,
+	); err != nil {
+		return fmt.Errorf(
+			"rename notification_audit.%s to %s: %w",
+			legacyNotificationAuditAlertIdentifiersColumn,
+			notificationAuditAlertIdentifiersColumn,
+			err,
+		)
 	}
 
 	return nil

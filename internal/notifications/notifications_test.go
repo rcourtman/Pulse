@@ -13,6 +13,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
+const legacySnakeAlertIdentifierField = "alert_id"
+
 func flushPending(n *NotificationManager) {
 	n.mu.Lock()
 	if n.queue != nil {
@@ -3644,8 +3646,12 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		if payload["alertIdentifier"] != testAlert.ID {
 			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
 		}
-		if _, ok := payload["alertId"]; ok {
-			t.Errorf("did not expect legacy alertId in generic payload, got %v", payload["alertId"])
+		if _, ok := payload[legacyCamelAlertIdentifierField]; ok {
+			t.Errorf(
+				"did not expect legacy %s in generic payload, got %v",
+				legacyCamelAlertIdentifierField,
+				payload[legacyCamelAlertIdentifierField],
+			)
 		}
 	})
 
@@ -3684,8 +3690,12 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		if payload["alertIdentifier"] != testAlert.ID {
 			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
 		}
-		if _, ok := payload["alertId"]; ok {
-			t.Errorf("did not expect legacy alertId in generic explicit payload, got %v", payload["alertId"])
+		if _, ok := payload[legacyCamelAlertIdentifierField]; ok {
+			t.Errorf(
+				"did not expect legacy %s in generic explicit payload, got %v",
+				legacyCamelAlertIdentifierField,
+				payload[legacyCamelAlertIdentifierField],
+			)
 		}
 	})
 
@@ -3706,7 +3716,7 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 			URL:      server.URL + "/custom",
 			Enabled:  true,
 			Service:  "discord",
-			Template: `{"custom": true, "event": "{{.Event}}", "alert_identifier": "{{.ID}}"}`,
+			Template: `{"custom": true, "event": "{{.Event}}", "` + "alert_identifier" + `": "{{.ID}}"}`,
 		}
 
 		err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{testAlert}, resolvedAt)

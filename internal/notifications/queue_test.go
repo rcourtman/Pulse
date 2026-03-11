@@ -459,11 +459,15 @@ func TestNewNotificationQueue_MigratesAuditAlertIdentifiersColumn(t *testing.T) 
 	if err != nil {
 		t.Fatalf("tableColumns(notification_audit) failed: %v", err)
 	}
-	if !columns["alert_identifiers"] {
+	if !columns[notificationAuditAlertIdentifiersColumn] {
 		t.Fatalf("expected migrated alert_identifiers column, got %#v", columns)
 	}
-	if columns["alert_ids"] {
-		t.Fatalf("did not expect legacy alert_ids column after migration, got %#v", columns)
+	if columns[legacyNotificationAuditAlertIdentifiersColumn] {
+		t.Fatalf(
+			"did not expect legacy %s column after migration, got %#v",
+			legacyNotificationAuditAlertIdentifiersColumn,
+			columns,
+		)
 	}
 }
 

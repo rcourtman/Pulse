@@ -12,6 +12,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
+const (
+	legacyPatrolAlertIdentifierField = "legacy_alert_id"
+	legacyPatrolAlertIDField         = "alert_id"
+)
+
 func TestHandleGetPatrolStatus_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 	handler := createTestAIHandler(t)
@@ -359,11 +364,19 @@ func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
 	if history[0]["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", history[0]["alert_identifier"])
 	}
-	if _, ok := history[0]["legacy_alert_id"]; ok {
-		t.Fatalf("did not expect legacy_alert_id in patrol history response, got %#v", history[0]["legacy_alert_id"])
+	if _, ok := history[0][legacyPatrolAlertIdentifierField]; ok {
+		t.Fatalf(
+			"did not expect %s in patrol history response, got %#v",
+			legacyPatrolAlertIdentifierField,
+			history[0][legacyPatrolAlertIdentifierField],
+		)
 	}
-	if _, ok := history[0]["alert_id"]; ok {
-		t.Fatalf("did not expect alert_id in patrol history response, got %#v", history[0]["alert_id"])
+	if _, ok := history[0][legacyPatrolAlertIDField]; ok {
+		t.Fatalf(
+			"did not expect %s in patrol history response, got %#v",
+			legacyPatrolAlertIDField,
+			history[0][legacyPatrolAlertIDField],
+		)
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"text/template"
 )
 
+const legacyPagerDutyAlertIdentifierField = `"alert_id": "{{.ID}}"`
+
 func TestGetEmailProviders(t *testing.T) {
 	providers := GetEmailProviders()
 
@@ -348,7 +350,7 @@ func TestGetWebhookTemplates_PagerDutySettings(t *testing.T) {
 	if !strings.Contains(pagerduty.PayloadTemplate, `"alert_identifier": "{{.ID}}"`) {
 		t.Error("PagerDuty PayloadTemplate should contain canonical 'alert_identifier'")
 	}
-	if strings.Contains(pagerduty.PayloadTemplate, `"alert_id": "{{.ID}}"`) {
+	if strings.Contains(pagerduty.PayloadTemplate, legacyPagerDutyAlertIdentifierField) {
 		t.Error("PagerDuty PayloadTemplate should not contain legacy 'alert_id'")
 	}
 }
