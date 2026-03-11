@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pulse.local/docs/release-control/v6/status.schema.json",
+  "title": "Pulse v6 Status Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "updated_at",
+    "scope",
+    "source_precedence",
+    "execution_model",
+    "evidence_reference_policy",
+    "priority_engine",
+    "lanes",
+    "open_decisions",
+    "source_of_truth_file",
+    "resolved_decisions"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "6.0"
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "source_precedence": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "execution_model": {
+      "type": "string",
+      "const": "direct-repo-sessions"
+    },
+    "evidence_reference_policy": {
+      "$ref": "#/$defs/evidence_reference_policy"
+    },
+    "priority_engine": {
+      "$ref": "#/$defs/priority_engine"
+    },
+    "lanes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/lane"
+      }
+    },
+    "open_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/open_decision"
+      }
+    },
+    "source_of_truth_file": {
+      "type": "string",
+      "const": "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+    },
+    "resolved_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resolved_decision"
+      }
+    }
+  },
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_repos",
+        "ignored_repos"
+      ],
+      "properties": {
+        "active_repos": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "ignored_repos": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "evidence_reference_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "allowed_kinds",
+        "absolute_paths_forbidden",
+        "local_repo"
+      ],
+      "properties": {
+        "format": {
+          "type": "string",
+          "const": "repo-qualified-relative-paths"
+        },
+        "allowed_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "file",
+              "dir"
+            ]
+          }
+        },
+        "absolute_paths_forbidden": {
+          "type": "boolean",
+          "const": true
+        },
+        "local_repo": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "priority_engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formula",
+        "floor_rule",
+        "weights"
+      ],
+      "properties": {
+        "formula": {
+          "type": "string",
+          "minLength": 1
+        },
+        "floor_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "release_critical_lanes",
+            "minimum_score"
+          ],
+          "properties": {
+            "release_critical_lanes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^L[0-9]+$"
+              }
+            },
+            "minimum_score": {
+              "type": "number"
+            }
+          }
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "gap_multiplier",
+            "criticality_range",
+            "staleness_range",
+            "dependency_range"
+          ],
+          "properties": {
+            "gap_multiplier": {
+              "type": "number"
+            },
+            "criticality_range": {
+              "type": "string",
+              "minLength": 1
+            },
+            "staleness_range": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dependency_range": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "target_score",
+        "current_score",
+        "status",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^L[0-9]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "current_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "not-started",
+            "partial",
+            "target-met",
+            "blocked"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "evidence_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo",
+        "path",
+        "kind"
+      ],
+      "properties": {
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "file",
+            "dir"
+          ]
+        }
+      }
+    },
+    "open_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "owner",
+        "status",
+        "opened_at",
+        "lane_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "blocked",
+            "owner-action"
+          ]
+        },
+        "opened_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        }
+      }
+    },
+    "resolved_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "kind",
+        "decided_at",
+        "lane_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "architecture",
+            "contract",
+            "governance",
+            "migration",
+            "pricing",
+            "release-policy"
+          ]
+        },
+        "decided_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        }
+      }
+    }
+  }
+}

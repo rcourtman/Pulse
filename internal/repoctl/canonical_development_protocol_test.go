@@ -206,6 +206,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	readme := readRepoFile(t, "docs/release-control/v6/README.md")
 	assertContainsAll(t, "docs/release-control/v6/README.md", readme, []string{
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
+		"status.schema.json",
 		"subsystems/*.md",
 		"structured evidence references",
 	})
@@ -213,8 +214,22 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
 	assertContainsAll(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md", source, []string{
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
+		"status.schema.json",
 		"docs/release-control/v6/subsystems/",
 		"## Development Governance",
+	})
+}
+
+func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
+	rel := "docs/release-control/v6/status.schema.json"
+	content := readRepoFile(t, rel)
+	assertContainsAll(t, rel, content, []string{
+		"\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"",
+		"\"title\": \"Pulse v6 Status Schema\"",
+		"\"open_decision\"",
+		"\"resolved_decision\"",
+		"\"lane_ids\"",
+		"\"direct-repo-sessions\"",
 	})
 }
 
@@ -307,6 +322,7 @@ func TestStatusJSONSourcePrecedenceIncludesCanonicalGovernanceFiles(t *testing.T
 	wantPrefix := []string{
 		"docs/release-control/v6/SOURCE_OF_TRUTH.md",
 		"docs/release-control/v6/status.json",
+		"docs/release-control/v6/status.schema.json",
 		"docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"docs/release-control/v6/subsystems/registry.json",
 	}
@@ -607,6 +623,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 	statusAudit := readRepoFile(t, "scripts/release_control/status_audit.py")
 	assertContainsAll(t, "scripts/release_control/status_audit.py", statusAudit, []string{
 		"STATUS_PATH",
+		"STATUS_SCHEMA_PATH",
 		"repo_root_for_name",
 		"audit_status_payload",
 		"open_decisions",

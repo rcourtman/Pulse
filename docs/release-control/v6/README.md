@@ -2,10 +2,11 @@
 
 This folder is the canonical execution control layer for Pulse v6.
 
-## Start With These Two Files
+## Start With These Control Files
 
 1. `SOURCE_OF_TRUTH.md` (stable human governance and locked decisions)
 2. `status.json` (live lane state, structured evidence references, and typed operational decision records)
+3. `status.schema.json` (machine-readable contract for the `status.json` shape)
 
 Supporting governance file:
 

@@ -21,15 +21,17 @@ For v6 work, agents must treat these files as the execution entry point:
 
 1. `docs/release-control/v6/SOURCE_OF_TRUTH.md`
 2. `docs/release-control/v6/status.json`
-3. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
-4. `docs/release-control/v6/subsystems/registry.json`
-5. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
-6. `scripts/release_control/subsystem_lookup.py` when ownership or proof routing is not obvious
+3. `docs/release-control/v6/status.schema.json`
+4. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
+5. `docs/release-control/v6/subsystems/registry.json`
+6. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
+7. `scripts/release_control/subsystem_lookup.py` when ownership or proof routing is not obvious
 
 The first two files answer release priority and current lane state.
 `SOURCE_OF_TRUTH.md` owns stable governance, scope, and locked decisions.
 `status.json` owns live lane state, structured evidence references, and typed
 operational decision records.
+`status.schema.json` owns the machine-readable status contract.
 The protocol, subsystem registry, and subsystem contracts answer how work must
 be done.
 

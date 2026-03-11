@@ -25,13 +25,15 @@ This file must not contain:
 ## Canonical Control Files
 
 1. `docs/release-control/v6/status.json`
-   Live lane state, structured evidence references, and open operational
+   Live lane state, structured evidence references, and typed operational
    decision records.
-2. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
+2. `docs/release-control/v6/status.schema.json`
+   Machine-readable contract for the `status.json` shape.
+3. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
    Repo-wide change rules for canonical work.
-3. `docs/release-control/v6/subsystems/registry.json`
+4. `docs/release-control/v6/subsystems/registry.json`
    Machine-readable subsystem ownership and proof requirements.
-4. `docs/release-control/v6/subsystems/*.md`
+5. `docs/release-control/v6/subsystems/*.md`
    Per-subsystem contracts: truth, extension points, forbidden paths, and
    completion obligations.
 
@@ -103,7 +105,7 @@ For canonical subsystem work:
 3. Then read `docs/release-control/v6/subsystems/registry.json`.
 4. Then read the relevant subsystem contract under
    `docs/release-control/v6/subsystems/`.
-5. Update `status.json` when live lane state, evidence references, or open
+5. Update `status.json` when live lane state, evidence references, or typed
    operational decision records change.
 6. Update this file only when stable governance, scope, or locked decisions
    change.
@@ -119,7 +121,9 @@ If conflicts appear, resolve by domain:
    subsystem contract own implementation rules.
 2. `docs/release-control/v6/status.json` owns live lane state, structured
    evidence references, and typed operational decision records.
-3. This file owns stable governance, repo scope, release gates, and locked
+3. `docs/release-control/v6/status.schema.json` owns the machine-readable shape
+   contract for `status.json`.
+4. This file owns stable governance, repo scope, release gates, and locked
    decisions.
-4. Supporting architecture and release docs are evidence only. They do not
+5. Supporting architecture and release docs are evidence only. They do not
    override the files above.

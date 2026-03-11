@@ -28,6 +28,7 @@ class StatusAuditTest(unittest.TestCase):
                 "source_precedence": [
                     "docs/release-control/v6/SOURCE_OF_TRUTH.md",
                     "docs/release-control/v6/status.json",
+                    "docs/release-control/v6/status.schema.json",
                     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
                     "docs/release-control/v6/subsystems/registry.json",
                 ],
@@ -114,6 +115,7 @@ class StatusAuditTest(unittest.TestCase):
                 "source_precedence": [
                     "docs/release-control/v6/SOURCE_OF_TRUTH.md",
                     "docs/release-control/v6/status.json",
+                    "docs/release-control/v6/status.schema.json",
                     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
                     "docs/release-control/v6/subsystems/registry.json",
                 ],

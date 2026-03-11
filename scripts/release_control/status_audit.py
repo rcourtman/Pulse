@@ -18,24 +18,37 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATUS_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.json"
+STATUS_SCHEMA_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.schema.json"
 SOURCE_OF_TRUTH_FILE = "docs/release-control/v6/SOURCE_OF_TRUTH.md"
-VALID_LANE_STATUSES = {"not-started", "partial", "target-met", "blocked"}
-VALID_OPEN_DECISION_STATUSES = {"open", "blocked", "owner-action"}
-VALID_RESOLVED_DECISION_KINDS = {
-    "architecture",
-    "contract",
-    "governance",
-    "migration",
-    "pricing",
-    "release-policy",
-}
 REQUIRED_SOURCE_PRECEDENCE_PREFIX = [
     SOURCE_OF_TRUTH_FILE,
     "docs/release-control/v6/status.json",
+    "docs/release-control/v6/status.schema.json",
     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
     "docs/release-control/v6/subsystems/registry.json",
 ]
 DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+
+
+def load_status_schema() -> dict[str, Any]:
+    return json.loads(STATUS_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
+def schema_enum(schema: dict[str, Any], definition: str, property_name: str) -> set[str]:
+    properties = schema["$defs"][definition]["properties"]
+    return set(properties[property_name]["enum"])
+
+
+def schema_required(schema: dict[str, Any], definition: str | None = None) -> set[str]:
+    target = schema if definition is None else schema["$defs"][definition]
+    return set(target["required"])
+
+
+STATUS_SCHEMA = load_status_schema()
+VALID_LANE_STATUSES = schema_enum(STATUS_SCHEMA, "lane", "status")
+VALID_OPEN_DECISION_STATUSES = schema_enum(STATUS_SCHEMA, "open_decision", "status")
+VALID_RESOLVED_DECISION_KINDS = schema_enum(STATUS_SCHEMA, "resolved_decision", "kind")
+REQUIRED_TOP_LEVEL_FIELDS = schema_required(STATUS_SCHEMA)
 
 
 def env_key_for_repo(repo_name: str) -> str:
@@ -422,6 +435,10 @@ def validate_resolved_decisions(
 def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
+
+    for field in sorted(REQUIRED_TOP_LEVEL_FIELDS):
+        if field not in payload:
+            errors.append(f"status.json missing required field {field}")
 
     version = _require_string(payload, "version", errors, context="status.json")
     if version and version != "6.0":
