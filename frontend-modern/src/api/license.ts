@@ -10,8 +10,6 @@ export interface LicenseStatus {
   days_remaining: number;
   features: string[];
   max_agents?: number;
-  /** @deprecated Use max_agents. Kept for backwards compat with cached responses. */
-  max_nodes?: number;
   max_guests?: number;
   in_grace_period?: boolean;
   grace_period_end?: string | null;
