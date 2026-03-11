@@ -178,6 +178,30 @@ func TestGrantClaimsToLicense(t *testing.T) {
 	})
 }
 
+func TestGrantClaimsToClaimsCanonicalizesCloudPlanAtEntitlementBoundary(t *testing.T) {
+	gc := &GrantClaims{
+		LicenseID:  "lic_cloud",
+		State:      "active",
+		Tier:       string(TierCloud),
+		PlanKey:    "cloud_v1",
+		MaxAgents:  999,
+		IssuedAt:   time.Now().Unix(),
+		ExpiresAt:  time.Now().Add(72 * time.Hour).Unix(),
+		GraceUntil: 0,
+	}
+
+	claims := grantClaimsToClaims(gc)
+	if got := claims.EntitlementPlanVersion(); got != "cloud_starter" {
+		t.Fatalf("EntitlementPlanVersion()=%q, want %q", got, "cloud_starter")
+	}
+	if got := claims.EffectiveLimits()["max_agents"]; got != 10 {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, 10)
+	}
+	if got := claims.EntitlementSubscriptionState(); got != SubStateActive {
+		t.Fatalf("EntitlementSubscriptionState()=%q, want %q", got, SubStateActive)
+	}
+}
+
 func TestParseGrantJWTUnsafe(t *testing.T) {
 	tests := []struct {
 		name    string

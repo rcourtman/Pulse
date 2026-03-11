@@ -36,3 +36,18 @@ func TestNormalizeEntitlementLeaseClaimsPreservesMissingPlanVersion(t *testing.T
 		t.Fatalf("limits[max_agents]=%d, want %d", got, 42)
 	}
 }
+
+func TestClaimsPreserveMissingPlanVersion(t *testing.T) {
+	claims := &Claims{
+		Tier:        TierCloud,
+		PlanVersion: "   ",
+		Limits:      map[string]int64{"max_agents": 42},
+	}
+
+	if got := claims.EntitlementPlanVersion(); got != "" {
+		t.Fatalf("EntitlementPlanVersion()=%q, want empty", got)
+	}
+	if got := claims.EffectiveLimits()["max_agents"]; got != 42 {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, 42)
+	}
+}

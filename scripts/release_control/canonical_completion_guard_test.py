@@ -511,6 +511,54 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             "docs/release-control/v6/subsystems/cloud-paid.md",
         )
 
+    def test_cloud_paid_jwt_claims_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/models.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "jwt-entitlement-claims",
+                    "label": "JWT entitlement claim proof",
+                    "touched_runtime_files": ["pkg/licensing/models.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/cloud_paid_guardrails_test.go",
+                        "pkg/licensing/models_test.go",
+                        "pkg/licensing/service_activate_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_activation_grant_bridge_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/activation_types.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "activation-grant-bridge",
+                    "label": "activation grant bridge proof",
+                    "touched_runtime_files": ["pkg/licensing/activation_types.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/activation_types_test.go",
+                        "pkg/licensing/grant_claims_contract_test.go",
+                        "pkg/licensing/service_activate_test.go",
+                    ],
+                }
+            ],
+        )
+
     def test_api_backend_runtime_can_use_types_file_as_proof(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
         requirement = build_verification_requirements(

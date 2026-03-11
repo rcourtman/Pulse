@@ -9,12 +9,14 @@ agreement, and cloud-specific enforcement rules.
 
 1. `pkg/licensing/features.go`
 2. `pkg/licensing/evaluator.go`
-3. `pkg/licensing/service.go`
-4. `pkg/licensing/stripe_subscription.go`
-5. `internal/cloudcp/entitlements/service.go`
-6. `internal/cloudcp/registry/registry.go`
-7. `internal/cloudcp/stripe/provisioner.go`
-8. `frontend-modern/src/pages/CloudPricing.tsx`
+3. `pkg/licensing/models.go`
+4. `pkg/licensing/activation_types.go`
+5. `pkg/licensing/service.go`
+6. `pkg/licensing/stripe_subscription.go`
+7. `internal/cloudcp/entitlements/service.go`
+8. `internal/cloudcp/registry/registry.go`
+9. `internal/cloudcp/stripe/provisioner.go`
+10. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Extension Points
 
@@ -70,6 +72,10 @@ JWT-backed entitlement claims are also canonical: when runtime evaluation uses
 claim `plan_version` and `limits`, recognized Cloud plan aliases must
 canonicalize and `max_agents` must reconcile to the authoritative per-plan
 contract instead of trusting stale embedded claim values.
+Activation-grant translation is part of the same boundary: when relay/license
+server grants enter the local claims model, Cloud plan keys and lifecycle state
+must still resolve through the canonical entitlement claim accessors rather
+than becoming a parallel truth path.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`
@@ -85,3 +91,6 @@ Hosted control-plane plan resolution is now part of the enforced ownership
 model: changes to hosted entitlement issuance, control-plane registry
 canonicalization, or Stripe provisioning plan resolution must carry this
 contract and the path-specific proof files that verify those boundaries.
+JWT-backed entitlement claim evaluation and activation-grant translation now
+follow the same explicit proof model instead of relying only on the broad cloud
+runtime catch-all policy.

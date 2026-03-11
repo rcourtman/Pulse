@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "subsystems": [
     {
       "id": "alerts",
@@ -201,6 +201,36 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "jwt-entitlement-claims",
+            "label": "JWT entitlement claim proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/models.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/models_test.go",
+              "pkg/licensing/service_activate_test.go"
+            ]
+          },
+          {
+            "id": "activation-grant-bridge",
+            "label": "activation grant bridge proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/activation_types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/activation_types_test.go",
+              "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/service_activate_test.go"
+            ]
+          },
           {
             "id": "hosted-entitlement-issuer",
             "label": "hosted entitlement issuer proof",
