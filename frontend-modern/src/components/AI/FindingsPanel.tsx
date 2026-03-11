@@ -432,7 +432,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 title={
                   finding.alertType
                     ? `Alert: ${finding.alertType}`
-                    : `Alert ID: ${getFindingAlertIdentifier(finding)}`
+                    : `Alert Identifier: ${getFindingAlertIdentifier(finding)}`
                 }
               >
                 Alert-triggered
@@ -626,7 +626,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     <div class="mt-3 pt-3 border-t border-border-subtle">
       <Show when={hasTriggeringAlert(finding)}>
         <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
-          Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • ID{' '}
+          Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
           {getFindingAlertIdentifier(finding)}
         </div>
       </Show>

@@ -78,17 +78,17 @@ export function createWebSocketStore(url: string) {
     applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
   };
 
-  const clearPendingAckTimeout = (alertId: string) => {
-    const timeout = pendingAckTimeouts.get(alertId);
+  const clearPendingAckTimeout = (alertIdentifier: string) => {
+    const timeout = pendingAckTimeouts.get(alertIdentifier);
     if (timeout) {
       window.clearTimeout(timeout);
-      pendingAckTimeouts.delete(alertId);
+      pendingAckTimeouts.delete(alertIdentifier);
     }
   };
 
-  const clearPendingAck = (alertId: string) => {
-    pendingAckChanges.delete(alertId);
-    clearPendingAckTimeout(alertId);
+  const clearPendingAck = (alertIdentifier: string) => {
+    pendingAckChanges.delete(alertIdentifier);
+    clearPendingAckTimeout(alertIdentifier);
   };
 
   const applyActiveAlerts = (alertsMap: Record<string, Alert>) => {
@@ -712,15 +712,15 @@ export function createWebSocketStore(url: string) {
       markTokenRevoked('agents', tokenId, agentIds),
     removeAlerts: (predicate: (alert: Alert) => boolean) => {
       const keysToRemove: string[] = [];
-      Object.entries(activeAlerts).forEach(([alertId, alert]) => {
+      Object.entries(activeAlerts).forEach(([alertIdentifier, alert]) => {
         if (!alert) {
-          keysToRemove.push(alertId);
+          keysToRemove.push(alertIdentifier);
           return;
         }
         try {
           if (predicate(alert)) {
-            clearPendingAck(alertId);
-            keysToRemove.push(alertId);
+            clearPendingAck(alertIdentifier);
+            keysToRemove.push(alertIdentifier);
           }
         } catch (error) {
           logger.error('Failed to evaluate alert removal predicate', error);
@@ -738,31 +738,33 @@ export function createWebSocketStore(url: string) {
       }
     },
     // Method to update an alert locally (e.g., after acknowledgment)
-    updateAlert: (alertId: string, updates: Partial<Alert>) => {
-      const existingAlert = activeAlerts[alertId];
+    updateAlert: (alertIdentifier: string, updates: Partial<Alert>) => {
+      const existingAlert = activeAlerts[alertIdentifier];
       if (existingAlert) {
         // Track this alert as having pending changes if acknowledgment is changing
         if ('acknowledged' in updates) {
           const previousAckTime = existingAlert.ackTime;
-          pendingAckChanges.set(alertId, {
+          pendingAckChanges.set(alertIdentifier, {
             ack: !!updates.acknowledged,
             previousAckTime,
           });
-          clearPendingAckTimeout(alertId);
+          clearPendingAckTimeout(alertIdentifier);
           // Safety valve: if we never hear back from the server (e.g., request failed silently),
           // clear the pending flag after a generous timeout so we eventually resync with reality.
           const pendingTimeout = window.setTimeout(() => {
-            if (pendingAckChanges.has(alertId)) {
-              logger.warn(`Clearing stale pending ack change for alert ${alertId}`);
-              clearPendingAck(alertId);
+            if (pendingAckChanges.has(alertIdentifier)) {
+              logger.warn(
+                `Clearing stale pending ack change for alert ${alertIdentifier}`,
+              );
+              clearPendingAck(alertIdentifier);
               notificationStore.error(
                 'Server did not confirm the alert acknowledgment in time. Re-syncing from latest data.',
               );
             }
           }, 15000);
-          pendingAckTimeouts.set(alertId, pendingTimeout);
+          pendingAckTimeouts.set(alertIdentifier, pendingTimeout);
         }
-        setActiveAlerts(alertId, { ...existingAlert, ...updates });
+        setActiveAlerts(alertIdentifier, { ...existingAlert, ...updates });
       }
     },
   };

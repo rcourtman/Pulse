@@ -97,7 +97,7 @@ function IncidentEventFilters(props: {
 export function OverviewTab(props: {
   overrides: Override[];
   activeAlerts: Record<string, Alert>;
-  updateAlert: (alertId: string, updates: Partial<Alert>) => void;
+  updateAlert: (alertIdentifier: string, updates: Partial<Alert>) => void;
   showQuickTip: () => boolean;
   dismissQuickTip: () => void;
   showAcknowledged: () => boolean;
@@ -129,13 +129,13 @@ export function OverviewTab(props: {
   onCleanup(() => clearInterval(tickInterval));
   const processingReleaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  const clearProcessingReleaseTimer = (alertId: string) => {
-    const timer = processingReleaseTimers.get(alertId);
+  const clearProcessingReleaseTimer = (alertIdentifier: string) => {
+    const timer = processingReleaseTimers.get(alertIdentifier);
     if (timer === undefined) {
       return;
     }
     clearTimeout(timer);
-    processingReleaseTimers.delete(alertId);
+    processingReleaseTimers.delete(alertIdentifier);
   };
 
   onCleanup(() => {
@@ -595,12 +595,14 @@ export function OverviewTab(props: {
                           e.preventDefault();
                           e.stopPropagation();
 
-                          const alertId = getCanonicalAlertId(alert);
+                          const alertIdentifier = getCanonicalAlertId(alert);
 
                           // Prevent double-clicks
-                          if (processingAlerts().has(alertId)) return;
+                          if (processingAlerts().has(alertIdentifier)) return;
 
-                          setProcessingAlerts((prev) => new Set(prev).add(alertId));
+                          setProcessingAlerts(
+                            (prev) => new Set(prev).add(alertIdentifier),
+                          );
 
                           // Store current state to avoid race conditions
                           const wasAcknowledged = alert.acknowledged;
@@ -608,9 +610,9 @@ export function OverviewTab(props: {
                           try {
                             if (wasAcknowledged) {
                               // Call API first, only update local state if successful
-                              await AlertsAPI.unacknowledge(alertId);
+                              await AlertsAPI.unacknowledge(alertIdentifier);
                               // Only update local state after successful API call
-                              props.updateAlert(alertId, {
+                              props.updateAlert(alertIdentifier, {
                                 acknowledged: false,
                                 ackTime: undefined,
                                 ackUser: undefined,
@@ -618,9 +620,9 @@ export function OverviewTab(props: {
                               notificationStore.success('Alert restored');
                             } else {
                               // Call API first, only update local state if successful
-                              await AlertsAPI.acknowledge(alertId);
+                              await AlertsAPI.acknowledge(alertIdentifier);
                               // Only update local state after successful API call
-                              props.updateAlert(alertId, {
+                              props.updateAlert(alertIdentifier, {
                                 acknowledged: true,
                                 ackTime: new Date().toISOString(),
                               });
@@ -637,16 +639,16 @@ export function OverviewTab(props: {
                             // Don't update local state on error - let WebSocket keep the correct state
                           } finally {
                             // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            clearProcessingReleaseTimer(alertId);
+                            clearProcessingReleaseTimer(alertIdentifier);
                             const timer = setTimeout(() => {
-                              processingReleaseTimers.delete(alertId);
+                              processingReleaseTimers.delete(alertIdentifier);
                               setProcessingAlerts((prev) => {
                                 const next = new Set(prev);
-                                next.delete(alertId);
+                                next.delete(alertIdentifier);
                                 return next;
                               });
                             }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                            processingReleaseTimers.set(alertId, timer);
+                            processingReleaseTimers.set(alertIdentifier, timer);
                           }
                         }}
                       >
