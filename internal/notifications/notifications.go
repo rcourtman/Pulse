@@ -932,7 +932,7 @@ func (n *NotificationManager) CancelAlert(alertID string) {
 
 	// Cancel any queued notifications containing this alert
 	if n.queue != nil {
-		if err := n.queue.CancelByAlertIDs([]string{alertID}); err != nil {
+		if err := n.queue.CancelByAlertIdentifiers([]string{alertID}); err != nil {
 			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
 		}
 	}

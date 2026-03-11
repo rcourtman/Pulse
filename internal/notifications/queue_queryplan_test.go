@@ -144,7 +144,7 @@ func newNotificationPlanTestQueue(t *testing.T) (*NotificationQueue, time.Time) 
 
 	auditStmt, err := tx.Prepare(`
 		INSERT INTO notification_audit
-		(notification_id, type, method, status, alert_ids, alert_count, attempts, success, error_message, payload_size, timestamp)
+		(notification_id, type, method, status, alert_identifiers, alert_count, attempts, success, error_message, payload_size, timestamp)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {

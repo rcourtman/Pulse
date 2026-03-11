@@ -312,7 +312,7 @@ func TestQueuedNotification_ZeroValues(t *testing.T) {
 	}
 }
 
-func TestCancelByAlertIDs_EmptyInput(t *testing.T) {
+func TestCancelByAlertIdentifiers_EmptyInput(t *testing.T) {
 	// Create a temporary queue for testing
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
@@ -321,19 +321,19 @@ func TestCancelByAlertIDs_EmptyInput(t *testing.T) {
 	}
 
 	// Empty slice should return nil without error
-	err = nq.CancelByAlertIDs([]string{})
+	err = nq.CancelByAlertIdentifiers([]string{})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs with empty slice returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers with empty slice returned error: %v", err)
 	}
 
 	// Nil slice should also return nil without error
-	err = nq.CancelByAlertIDs(nil)
+	err = nq.CancelByAlertIdentifiers(nil)
 	if err != nil {
-		t.Errorf("CancelByAlertIDs with nil slice returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers with nil slice returned error: %v", err)
 	}
 }
 
-func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
+func TestCancelByAlertIdentifiers_NoMatchingNotifications(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
@@ -357,9 +357,9 @@ func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
 	}
 
 	// Cancel with non-matching alert ID
-	err = nq.CancelByAlertIDs([]string{"alert-2"})
+	err = nq.CancelByAlertIdentifiers([]string{"alert-2"})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	// Verify the notification is still pending using GetQueueStats
@@ -399,7 +399,75 @@ func TestNewNotificationQueueCreatesSecureDirectory(t *testing.T) {
 	}
 }
 
-func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
+func TestNewNotificationQueue_MigratesAuditAlertIdentifiersColumn(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "notification_queue.db")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+
+	legacySchema := `
+	CREATE TABLE notification_queue (
+		id TEXT PRIMARY KEY,
+		type TEXT NOT NULL,
+		method TEXT,
+		status TEXT NOT NULL,
+		alerts TEXT NOT NULL,
+		config TEXT NOT NULL,
+		attempts INTEGER NOT NULL DEFAULT 0,
+		max_attempts INTEGER NOT NULL DEFAULT 3,
+		last_attempt INTEGER,
+		last_error TEXT,
+		created_at INTEGER NOT NULL,
+		next_retry_at INTEGER,
+		completed_at INTEGER,
+		payload_bytes INTEGER
+	);
+
+	CREATE TABLE notification_audit (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		notification_id TEXT NOT NULL,
+		type TEXT NOT NULL,
+		method TEXT,
+		status TEXT NOT NULL,
+		alert_ids TEXT,
+		alert_count INTEGER,
+		attempts INTEGER,
+		success BOOLEAN,
+		error_message TEXT,
+		payload_size INTEGER,
+		timestamp INTEGER NOT NULL
+	);
+	`
+	if _, err := db.Exec(legacySchema); err != nil {
+		_ = db.Close()
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy db: %v", err)
+	}
+
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("NewNotificationQueue failed: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	columns, err := nq.tableColumns("notification_audit")
+	if err != nil {
+		t.Fatalf("tableColumns(notification_audit) failed: %v", err)
+	}
+	if !columns["alert_identifiers"] {
+		t.Fatalf("expected migrated alert_identifiers column, got %#v", columns)
+	}
+	if columns["alert_ids"] {
+		t.Fatalf("did not expect legacy alert_ids column after migration, got %#v", columns)
+	}
+}
+
+func TestCancelByAlertIdentifiers_MatchingNotificationCancelled(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
@@ -423,9 +491,9 @@ func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
 	}
 
 	// Cancel with matching alert ID
-	err = nq.CancelByAlertIDs([]string{"alert-1"})
+	err = nq.CancelByAlertIdentifiers([]string{"alert-1"})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	// Verify the notification is now cancelled using GetQueueStats
@@ -450,7 +518,7 @@ func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
 	}
 }
 
-func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
+func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
@@ -477,9 +545,9 @@ func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 
 	// Cancel with only one matching alert ID - should still cancel the notification
-	err = nq.CancelByAlertIDs([]string{"alert-1"})
+	err = nq.CancelByAlertIdentifiers([]string{"alert-1"})
 	if err != nil {
-		t.Errorf("CancelByAlertIDs returned error: %v", err)
+		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	// Verify the notification is cancelled (any matching alert should cancel)
@@ -495,7 +563,7 @@ func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 }
 
-func TestCancelByAlertIDs_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
+func TestCancelByAlertIdentifiers_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
 	if err != nil {
@@ -517,8 +585,8 @@ func TestCancelByAlertIDs_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
 		t.Fatalf("Failed to enqueue: %v", err)
 	}
 
-	if err := nq.CancelByAlertIDs([]string{"alert-1"}); err != nil {
-		t.Fatalf("CancelByAlertIDs returned error: %v", err)
+	if err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	var status string

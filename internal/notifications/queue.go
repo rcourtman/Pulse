@@ -171,7 +171,7 @@ func (nq *NotificationQueue) initSchema() error {
 		type TEXT NOT NULL,
 		method TEXT,
 		status TEXT NOT NULL,
-		alert_ids TEXT,
+		alert_identifiers TEXT,
 		alert_count INTEGER,
 		attempts INTEGER,
 		success BOOLEAN,
@@ -186,8 +186,56 @@ func (nq *NotificationQueue) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_audit_status ON notification_audit(status);
 	`
 
-	_, err := nq.db.Exec(schema)
-	return err
+	if _, err := nq.db.Exec(schema); err != nil {
+		return err
+	}
+
+	return nq.migrateAlertIdentifierColumns()
+}
+
+func (nq *NotificationQueue) migrateAlertIdentifierColumns() error {
+	columns, err := nq.tableColumns("notification_audit")
+	if err != nil {
+		return err
+	}
+	if columns["alert_identifiers"] || !columns["alert_ids"] {
+		return nil
+	}
+
+	if _, err := nq.db.Exec(`ALTER TABLE notification_audit RENAME COLUMN alert_ids TO alert_identifiers`); err != nil {
+		return fmt.Errorf("rename notification_audit.alert_ids: %w", err)
+	}
+
+	return nil
+}
+
+func (nq *NotificationQueue) tableColumns(table string) (map[string]bool, error) {
+	rows, err := nq.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return nil, fmt.Errorf("inspect columns for %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			columnType string
+			notNull    int
+			defaultVal sql.NullString
+			pk         int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &pk); err != nil {
+			return nil, fmt.Errorf("scan column for %s: %w", table, err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate columns for %s: %w", table, err)
+	}
+
+	return columns, nil
 }
 
 // Enqueue adds a notification to the queue
@@ -508,15 +556,15 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
-	alertIDs := make([]string, len(notif.Alerts))
+	alertIdentifiers := make([]string, len(notif.Alerts))
 	for i, alert := range notif.Alerts {
-		alertIDs[i] = alert.ID
+		alertIdentifiers[i] = alert.ID
 	}
-	alertIDsJSON, _ := json.Marshal(alertIDs)
+	alertIdentifiersJSON, _ := json.Marshal(alertIdentifiers)
 
 	query := `
 		INSERT INTO notification_audit
-		(notification_id, type, method, status, alert_ids, alert_count, attempts, success, error_message, payload_size, timestamp)
+		(notification_id, type, method, status, alert_identifiers, alert_count, attempts, success, error_message, payload_size, timestamp)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -525,7 +573,7 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		notif.Type,
 		notif.Method,
 		notif.Status,
-		string(alertIDsJSON),
+		string(alertIdentifiersJSON),
 		len(notif.Alerts),
 		notif.Attempts,
 		success,
@@ -916,9 +964,9 @@ func calculateBackoff(attempt int) time.Duration {
 	return backoff
 }
 
-// CancelByAlertIDs marks all queued notifications containing any of the given alert IDs as cancelled
-func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
-	if len(alertIDs) == 0 {
+// CancelByAlertIdentifiers marks all queued notifications containing any of the given alert identifiers as cancelled.
+func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string) error {
+	if len(alertIdentifiers) == 0 {
 		return nil
 	}
 
@@ -938,9 +986,9 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 	}
 
 	var toCancelIDs []string
-	alertIDSet := make(map[string]struct{})
-	for _, id := range alertIDs {
-		alertIDSet[id] = struct{}{}
+	alertIdentifierSet := make(map[string]struct{})
+	for _, id := range alertIdentifiers {
+		alertIdentifierSet[id] = struct{}{}
 	}
 
 	for rows.Next() {
@@ -968,7 +1016,7 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 
 		// Check if any alert in this notification matches
 		for _, alert := range alerts {
-			if _, exists := alertIDSet[alert.ID]; exists {
+			if _, exists := alertIdentifierSet[alert.ID]; exists {
 				toCancelIDs = append(toCancelIDs, notifID)
 				break
 			}
@@ -1002,10 +1050,10 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 
 		log.Info().
 			Str("component", "notification_queue").
-			Str("action", "cancel_alert_ids").
+			Str("action", "cancel_alert_identifiers").
 			Int("count", len(toCancelIDs)).
-			Strs("alertIDs", alertIDs).
-			Msg("cancelled queued notifications for resolved alerts")
+			Strs("alertIdentifiers", alertIdentifiers).
+			Msg("cancelled queued notifications for resolved alert identifiers")
 	}
 
 	return nil

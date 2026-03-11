@@ -61,7 +61,7 @@ func TestGetDLQLogsStructuredContextOnScanFailure(t *testing.T) {
 	}
 }
 
-func TestCancelByAlertIDsLogsStructuredContextOnAlertUnmarshalFailure(t *testing.T) {
+func TestCancelByAlertIdentifiersLogsStructuredContextOnAlertUnmarshalFailure(t *testing.T) {
 	nq, err := NewNotificationQueue(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewNotificationQueue failed: %v", err)
@@ -88,8 +88,8 @@ func TestCancelByAlertIDsLogsStructuredContextOnAlertUnmarshalFailure(t *testing
 	}
 
 	logOutput := captureNotificationQueueLogs(t)
-	if err := nq.CancelByAlertIDs([]string{"alert-1"}); err != nil {
-		t.Fatalf("CancelByAlertIDs returned error: %v", err)
+	if err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 
 	for _, expected := range []string{
