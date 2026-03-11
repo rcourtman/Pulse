@@ -2524,7 +2524,27 @@ func (m *Monitor) BackupsSnapshot() models.Backups {
 
 // PBSInstancesSnapshot returns the current PBS instances.
 func (m *Monitor) PBSInstancesSnapshot() []models.PBSInstance {
-	return m.GetState().PBSInstances
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	pbsViews := readState.PBSInstances()
+	if len(pbsViews) == 0 {
+		return nil
+	}
+
+	instances := make([]models.PBSInstance, 0, len(pbsViews))
+	for _, instance := range pbsViews {
+		if instance == nil {
+			continue
+		}
+		instances = append(instances, pbsInstanceFromReadStateView(instance))
+	}
+	return instances
 }
 
 // ReplicationJobsSnapshot returns the current replication jobs.
@@ -2943,6 +2963,34 @@ func guestNetworkInterfacesFromReadStateView(interfaces []unifiedresources.Netwo
 		})
 	}
 	return out
+}
+
+func pbsInstanceFromReadStateView(view *unifiedresources.PBSInstanceView) models.PBSInstance {
+	if view == nil {
+		return models.PBSInstance{}
+	}
+
+	return models.PBSInstance{
+		ID:               firstNonEmptyString(view.InstanceID(), view.ID()),
+		Name:             view.Name(),
+		Host:             view.HostURL(),
+		GuestURL:         view.GuestURL(),
+		Status:           string(view.Status()),
+		Version:          view.Version(),
+		CPU:              view.CPUPercent(),
+		Memory:           view.MemoryPercent(),
+		MemoryUsed:       view.MemoryUsed(),
+		MemoryTotal:      view.MemoryTotal(),
+		Uptime:           view.UptimeSeconds(),
+		Datastores:       view.DatastoreDetails(),
+		BackupJobs:       view.BackupJobs(),
+		SyncJobs:         view.SyncJobs(),
+		VerifyJobs:       view.VerifyJobs(),
+		PruneJobs:        view.PruneJobs(),
+		GarbageJobs:      view.GarbageJobs(),
+		ConnectionHealth: view.ConnectionHealth(),
+		LastSeen:         view.LastSeen(),
+	}
 }
 
 func hostMemoryFromReadStateView(view *unifiedresources.HostView) models.Memory {

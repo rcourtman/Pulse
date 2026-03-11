@@ -963,10 +963,24 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			Tags:                  []string{"backup"},
 			CustomURL:             "https://pbs.example/ui",
 			PBS: &PBSData{
-				Hostname:                 "pbs.example",
-				Version:                  "3.2",
-				UptimeSeconds:            100,
-				DatastoreCount:           2,
+				InstanceID:     "pbs-instance-1",
+				Hostname:       "pbs.example",
+				HostURL:        "https://pbs.example:8007",
+				GuestURL:       "https://pbs-guest.example:8007",
+				Version:        "3.2",
+				UptimeSeconds:  100,
+				DatastoreCount: 2,
+				DatastoreDetails: []models.PBSDatastore{{
+					Name:                "fast",
+					Total:               100,
+					Used:                96,
+					Free:                4,
+					Usage:               96,
+					Status:              "online",
+					Error:               "",
+					Namespaces:          []models.PBSNamespace{{Path: "prod", Parent: "", Depth: 0}},
+					DeduplicationFactor: 1.6,
+				}},
 				AffectedDatastoreCount:   1,
 				AffectedDatastores:       []string{"fast"},
 				AffectedDatastoreSummary: "Affects 1 backup datastore: fast",
@@ -976,15 +990,20 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 				ProtectedWorkloadSummary: "Puts backups for 2 protected workloads at risk: app01, media01",
 				PostureSummary:           "Affects 1 backup datastore: fast. Puts backups for 2 protected workloads at risk: app01, media01",
 				BackupJobCount:           3,
+				BackupJobs:               []models.PBSBackupJob{{ID: "backup-1", Store: "fast", Type: "vm", VMID: "100", Status: "ok"}},
 				SyncJobCount:             4,
+				SyncJobs:                 []models.PBSSyncJob{{ID: "sync-1", Store: "fast", Remote: "remote-a", Status: "ok"}},
 				VerifyJobCount:           5,
+				VerifyJobs:               []models.PBSVerifyJob{{ID: "verify-1", Store: "fast", Status: "ok"}},
 				PruneJobCount:            6,
+				PruneJobs:                []models.PBSPruneJob{{ID: "prune-1", Store: "fast", Status: "ok"}},
 				GarbageJobCount:          7,
+				GarbageJobs:              []models.PBSGarbageJob{{ID: "gc-1", Store: "fast", Status: "ok", RemovedBytes: 1234}},
 				ConnectionHealth:         "online",
 			},
 			Metrics: &ResourceMetrics{
 				CPU:    &MetricValue{Percent: 1},
-				Memory: &MetricValue{Percent: 2},
+				Memory: &MetricValue{Used: ptrInt64(200), Total: ptrInt64(400), Percent: 50},
 				Disk:   &MetricValue{Percent: 3},
 			},
 		}
@@ -998,9 +1017,30 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		if v.Hostname() != "pbs.example" || v.Version() != "3.2" || v.UptimeSeconds() != 100 {
 			t.Fatalf("expected hostname/version/uptime to match, got %q/%q/%d", v.Hostname(), v.Version(), v.UptimeSeconds())
 		}
+		if v.InstanceID() != "pbs-instance-1" || v.HostURL() != "https://pbs.example:8007" || v.GuestURL() != "https://pbs-guest.example:8007" {
+			t.Fatalf("expected canonical instance/host/guest URLs, got id=%q host=%q guest=%q", v.InstanceID(), v.HostURL(), v.GuestURL())
+		}
 		if v.DatastoreCount() != 2 || v.BackupJobCount() != 3 || v.SyncJobCount() != 4 || v.VerifyJobCount() != 5 || v.PruneJobCount() != 6 || v.GarbageJobCount() != 7 {
 			t.Fatalf("expected pbs job/datastore counts to match, got ds=%d backup=%d sync=%d verify=%d prune=%d garbage=%d",
 				v.DatastoreCount(), v.BackupJobCount(), v.SyncJobCount(), v.VerifyJobCount(), v.PruneJobCount(), v.GarbageJobCount())
+		}
+		if ds := v.DatastoreDetails(); len(ds) != 1 || ds[0].Name != "fast" || len(ds[0].Namespaces) != 1 || ds[0].Namespaces[0].Path != "prod" {
+			t.Fatalf("expected datastore detail payload, got %+v", ds)
+		}
+		if jobs := v.BackupJobs(); len(jobs) != 1 || jobs[0].ID != "backup-1" {
+			t.Fatalf("expected backup jobs payload, got %+v", jobs)
+		}
+		if jobs := v.SyncJobs(); len(jobs) != 1 || jobs[0].ID != "sync-1" {
+			t.Fatalf("expected sync jobs payload, got %+v", jobs)
+		}
+		if jobs := v.VerifyJobs(); len(jobs) != 1 || jobs[0].ID != "verify-1" {
+			t.Fatalf("expected verify jobs payload, got %+v", jobs)
+		}
+		if jobs := v.PruneJobs(); len(jobs) != 1 || jobs[0].ID != "prune-1" {
+			t.Fatalf("expected prune jobs payload, got %+v", jobs)
+		}
+		if jobs := v.GarbageJobs(); len(jobs) != 1 || jobs[0].ID != "gc-1" {
+			t.Fatalf("expected garbage jobs payload, got %+v", jobs)
 		}
 		if v.ProtectedWorkloadCount() != 2 || v.AffectedDatastoreCount() != 1 {
 			t.Fatalf("expected protected workload / affected datastore counts to match, got workloads=%d datastores=%d",
@@ -1021,8 +1061,8 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		if v.ConnectionHealth() != "online" {
 			t.Fatalf("expected connection health %q, got %q", "online", v.ConnectionHealth())
 		}
-		if v.CPUPercent() != 1 || v.MemoryPercent() != 2 || v.DiskPercent() != 3 {
-			t.Fatalf("expected cpu/memory/disk percents 1/2/3, got %v/%v/%v", v.CPUPercent(), v.MemoryPercent(), v.DiskPercent())
+		if v.CPUPercent() != 1 || v.MemoryPercent() != 50 || v.MemoryUsed() != 200 || v.MemoryTotal() != 400 || v.DiskPercent() != 3 {
+			t.Fatalf("expected cpu/memory/disk metrics 1/50/200/400/3, got %v/%v/%d/%d/%v", v.CPUPercent(), v.MemoryPercent(), v.MemoryUsed(), v.MemoryTotal(), v.DiskPercent())
 		}
 		assertStringSlice(t, v.Tags(), []string{"backup"})
 		if !v.LastSeen().Equal(now) {

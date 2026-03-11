@@ -195,10 +195,16 @@ func clonePBSData(in *PBSData) *PBSData {
 	}
 	out := *in
 	out.Datastores = clonePBSDatastoreMetaSlice(in.Datastores)
+	out.DatastoreDetails = clonePBSDatastores(in.DatastoreDetails)
 	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
 	out.AffectedDatastores = cloneStringSlice(in.AffectedDatastores)
 	out.ProtectedWorkloadTypes = cloneStringSlice(in.ProtectedWorkloadTypes)
 	out.ProtectedWorkloadNames = cloneStringSlice(in.ProtectedWorkloadNames)
+	out.BackupJobs = append([]models.PBSBackupJob(nil), in.BackupJobs...)
+	out.SyncJobs = append([]models.PBSSyncJob(nil), in.SyncJobs...)
+	out.VerifyJobs = append([]models.PBSVerifyJob(nil), in.VerifyJobs...)
+	out.PruneJobs = append([]models.PBSPruneJob(nil), in.PruneJobs...)
+	out.GarbageJobs = append([]models.PBSGarbageJob(nil), in.GarbageJobs...)
 	return &out
 }
 
@@ -573,6 +579,20 @@ func clonePBSDatastoreMetaSlice(in []PBSDatastoreMeta) []PBSDatastoreMeta {
 	}
 	out := make([]PBSDatastoreMeta, len(in))
 	copy(out, in)
+	return out
+}
+
+func clonePBSDatastores(in []models.PBSDatastore) []models.PBSDatastore {
+	if in == nil {
+		return nil
+	}
+	out := make([]models.PBSDatastore, len(in))
+	for i := range in {
+		out[i] = in[i]
+		if len(in[i].Namespaces) > 0 {
+			out[i].Namespaces = append([]models.PBSNamespace(nil), in[i].Namespaces...)
+		}
+	}
 	return out
 }
 

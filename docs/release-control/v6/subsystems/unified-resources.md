@@ -61,3 +61,8 @@ guest OS identity, guest agent version, guest network interfaces, VM disk
 status reason, and container OCI/Docker-detection metadata so monitoring can
 derive `models.VM` and `models.Container` from unified views without depending
 on legacy snapshot ownership.
+
+Canonical PBS metadata now carries full instance boundary payload such as host
+and guest URLs, full datastore details, and PBS job arrays so monitoring can
+derive `models.PBSInstance` from unified views without depending on legacy
+snapshot ownership.

@@ -1045,6 +1045,91 @@ func TestMonitorWorkloadSnapshots(t *testing.T) {
 	})
 }
 
+func TestMonitorPBSInstancesSnapshot(t *testing.T) {
+	t.Run("nil monitor", func(t *testing.T) {
+		var m *Monitor
+		if got := m.PBSInstancesSnapshot(); len(got) != 0 {
+			t.Fatalf("expected empty PBS instances for nil monitor, got %#v", got)
+		}
+	})
+
+	t.Run("returns canonical pbs instances", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePBSInstances([]models.PBSInstance{{ID: "legacy-pbs", Name: "legacy-pbs"}})
+
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(models.StateSnapshot{
+			PBSInstances: []models.PBSInstance{{
+				ID:          "pbs-1",
+				Name:        "pbs-a",
+				Host:        "https://pbs.example:8007",
+				GuestURL:    "https://pbs-guest.example:8007",
+				Status:      "online",
+				Version:     "3.4",
+				CPU:         12.5,
+				Memory:      40,
+				MemoryUsed:  4 * 1024,
+				MemoryTotal: 10 * 1024,
+				Uptime:      999,
+				Datastores: []models.PBSDatastore{{
+					Name:                "fast",
+					Total:               1000,
+					Used:                250,
+					Free:                750,
+					Usage:               25,
+					Status:              "online",
+					Namespaces:          []models.PBSNamespace{{Path: "prod", Depth: 0}},
+					DeduplicationFactor: 1.8,
+				}},
+				BackupJobs:       []models.PBSBackupJob{{ID: "backup-1", Store: "fast", Type: "vm", VMID: "100", Status: "ok"}},
+				SyncJobs:         []models.PBSSyncJob{{ID: "sync-1", Store: "fast", Remote: "remote-a", Status: "ok"}},
+				VerifyJobs:       []models.PBSVerifyJob{{ID: "verify-1", Store: "fast", Status: "ok"}},
+				PruneJobs:        []models.PBSPruneJob{{ID: "prune-1", Store: "fast", Status: "ok"}},
+				GarbageJobs:      []models.PBSGarbageJob{{ID: "gc-1", Store: "fast", Status: "ok", RemovedBytes: 1234}},
+				ConnectionHealth: "healthy",
+				LastSeen:         time.Date(2026, 3, 11, 9, 0, 0, 0, time.UTC),
+			}},
+		})
+
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		}
+
+		instances := m.PBSInstancesSnapshot()
+		if len(instances) != 1 {
+			t.Fatalf("expected one PBS instance, got %d", len(instances))
+		}
+		got := instances[0]
+		if got.ID != "pbs-1" || got.Host != "https://pbs.example:8007" || got.GuestURL != "https://pbs-guest.example:8007" {
+			t.Fatalf("expected canonical PBS identity/URLs, got %+v", got)
+		}
+		if got.MemoryUsed != 4*1024 || got.MemoryTotal != 10*1024 || got.ConnectionHealth != "healthy" {
+			t.Fatalf("expected canonical PBS metrics/health, got %+v", got)
+		}
+		if len(got.Datastores) != 1 || got.Datastores[0].Name != "fast" || len(got.Datastores[0].Namespaces) != 1 {
+			t.Fatalf("expected canonical datastore details, got %+v", got.Datastores)
+		}
+		if len(got.BackupJobs) != 1 || len(got.SyncJobs) != 1 || len(got.VerifyJobs) != 1 || len(got.PruneJobs) != 1 || len(got.GarbageJobs) != 1 {
+			t.Fatalf("expected canonical PBS job payloads, got backup=%d sync=%d verify=%d prune=%d garbage=%d", len(got.BackupJobs), len(got.SyncJobs), len(got.VerifyJobs), len(got.PruneJobs), len(got.GarbageJobs))
+		}
+	})
+
+	t.Run("does not fall back to stale snapshot when live canonical pbs state is empty", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdatePBSInstances([]models.PBSInstance{{ID: "legacy-pbs", Name: "legacy-pbs"}})
+
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		}
+
+		if got := m.PBSInstancesSnapshot(); len(got) != 0 {
+			t.Fatalf("expected empty PBS instances from live canonical read-state, got %#v", got)
+		}
+	})
+}
+
 func TestMonitorNodesSnapshot(t *testing.T) {
 	t.Run("nil monitor", func(t *testing.T) {
 		var m *Monitor

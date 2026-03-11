@@ -2161,6 +2161,27 @@ func (v PBSInstanceView) Hostname() string {
 	return v.r.PBS.Hostname
 }
 
+func (v PBSInstanceView) InstanceID() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.InstanceID
+}
+
+func (v PBSInstanceView) HostURL() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.HostURL
+}
+
+func (v PBSInstanceView) GuestURL() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.GuestURL
+}
+
 func (v PBSInstanceView) Version() string {
 	if v.r == nil || v.r.PBS == nil {
 		return ""
@@ -2187,6 +2208,13 @@ func (v PBSInstanceView) Datastores() []PBSDatastoreMeta {
 		return nil
 	}
 	return clonePBSDatastoreMetaSlice(v.r.PBS.Datastores)
+}
+
+func (v PBSInstanceView) DatastoreDetails() []models.PBSDatastore {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return clonePBSDatastores(v.r.PBS.DatastoreDetails)
 }
 
 func (v PBSInstanceView) ProtectedWorkloadCount() int {
@@ -2252,11 +2280,25 @@ func (v PBSInstanceView) BackupJobCount() int {
 	return v.r.PBS.BackupJobCount
 }
 
+func (v PBSInstanceView) BackupJobs() []models.PBSBackupJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSBackupJob(nil), v.r.PBS.BackupJobs...)
+}
+
 func (v PBSInstanceView) SyncJobCount() int {
 	if v.r == nil || v.r.PBS == nil {
 		return 0
 	}
 	return v.r.PBS.SyncJobCount
+}
+
+func (v PBSInstanceView) SyncJobs() []models.PBSSyncJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSSyncJob(nil), v.r.PBS.SyncJobs...)
 }
 
 func (v PBSInstanceView) VerifyJobCount() int {
@@ -2266,6 +2308,13 @@ func (v PBSInstanceView) VerifyJobCount() int {
 	return v.r.PBS.VerifyJobCount
 }
 
+func (v PBSInstanceView) VerifyJobs() []models.PBSVerifyJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSVerifyJob(nil), v.r.PBS.VerifyJobs...)
+}
+
 func (v PBSInstanceView) PruneJobCount() int {
 	if v.r == nil || v.r.PBS == nil {
 		return 0
@@ -2273,11 +2322,25 @@ func (v PBSInstanceView) PruneJobCount() int {
 	return v.r.PBS.PruneJobCount
 }
 
+func (v PBSInstanceView) PruneJobs() []models.PBSPruneJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSPruneJob(nil), v.r.PBS.PruneJobs...)
+}
+
 func (v PBSInstanceView) GarbageJobCount() int {
 	if v.r == nil || v.r.PBS == nil {
 		return 0
 	}
 	return v.r.PBS.GarbageJobCount
+}
+
+func (v PBSInstanceView) GarbageJobs() []models.PBSGarbageJob {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return append([]models.PBSGarbageJob(nil), v.r.PBS.GarbageJobs...)
 }
 
 func (v PBSInstanceView) ConnectionHealth() string {
@@ -2299,6 +2362,20 @@ func (v PBSInstanceView) MemoryPercent() float64 {
 		return 0
 	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PBSInstanceView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PBSInstanceView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
 }
 
 func (v PBSInstanceView) DiskPercent() float64 {
