@@ -130,6 +130,17 @@ export function AIIntelligence() {
     }
   };
 
+  // Fetch patrol status (license_required reflects auto-fix, not patrol access)
+  const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(
+    async () => {
+      try {
+        return await getPatrolStatus();
+      } catch {
+        return null;
+      }
+    },
+  );
+
   // Live patrol streaming
   const patrolStream = usePatrolStream({
     running: () =>
@@ -445,17 +456,6 @@ export function AIIntelligence() {
       setIsUpdatingSettings(false);
     }
   }
-
-  // Fetch patrol status (license_required reflects auto-fix, not patrol access)
-  const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(
-    async () => {
-      try {
-        return await getPatrolStatus();
-      } catch {
-        return null;
-      }
-    },
-  );
 
   const [patrolRunHistory] = createResource(
     () => activityRefreshTrigger(),
