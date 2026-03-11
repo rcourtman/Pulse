@@ -225,7 +225,7 @@ func TestGetActiveAlerts(t *testing.T) {
 	assert.Equal(t, "a1", resp[0].ID)
 }
 
-func TestValidateAlertID(t *testing.T) {
+func TestValidateAlertIdentifier(t *testing.T) {
 	testCases := []struct {
 		name  string
 		id    string
@@ -242,8 +242,8 @@ func TestValidateAlertID(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		if got := validateAlertID(tc.id); got != tc.valid {
-			t.Errorf("validateAlertID(%s) = %v, want %v", tc.name, got, tc.valid)
+		if got := validateAlertIdentifier(tc.id); got != tc.valid {
+			t.Errorf("validateAlertIdentifier(%s) = %v, want %v", tc.name, got, tc.valid)
 		}
 	}
 }
@@ -792,7 +792,7 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 	})
 
-	t.Run("SaveAlertIncidentNote_InvalidAlertID", func(t *testing.T) {
+	t.Run("SaveAlertIncidentNote_InvalidAlertIdentifier", func(t *testing.T) {
 		mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 		mockMonitor.On("GetIncidentStore").Return(mockStore)
 		req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(`{"alertIdentifier": "bad\x01", "note": "test"}`))

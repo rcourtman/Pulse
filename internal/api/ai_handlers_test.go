@@ -1628,7 +1628,7 @@ func TestHandleInvestigateAlert_InvalidBody(t *testing.T) {
 	}
 }
 
-func TestHandleInvestigateAlert_MissingAlertID(t *testing.T) {
+func TestHandleInvestigateAlert_MissingAlertIdentifier(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()

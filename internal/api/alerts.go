@@ -126,31 +126,31 @@ func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
 	h.wsHub.BroadcastState(frontendState)
 }
 
-// validateAlertID validates an alert ID for security.
-// Alert IDs may contain user-supplied data (e.g., Docker hostnames), so we allow
+// validateAlertIdentifier validates an alert identifier for security.
+// Alert identifiers may contain user-supplied data (e.g., Docker hostnames), so we allow
 // printable ASCII characters while blocking control characters and path traversal.
-func validateAlertID(alertID string) bool {
+func validateAlertIdentifier(alertIdentifier string) bool {
 	// Guard against empty strings or extremely large payloads that could impact memory usage.
-	if len(alertID) == 0 || len(alertID) > 500 {
+	if len(alertIdentifier) == 0 || len(alertIdentifier) > 500 {
 		return false
 	}
 
 	// Reject attempts to traverse directories via crafted path segments.
-	if strings.Contains(alertID, "../") || strings.Contains(alertID, "/..") {
+	if strings.Contains(alertIdentifier, "../") || strings.Contains(alertIdentifier, "/..") {
 		return false
 	}
 
 	// Allow printable ASCII characters (32-126) to support user-supplied identifiers
 	// like Docker hostnames that may contain parentheses, brackets, etc.
 	// Reject control characters (0-31) and DEL (127) which could cause logging issues.
-	for _, r := range alertID {
+	for _, r := range alertIdentifier {
 		if r < 32 || r > 126 {
 			return false
 		}
 	}
 
 	// Reject IDs that start or end with spaces (likely malformed)
-	if alertID[0] == ' ' || alertID[len(alertID)-1] == ' ' {
+	if alertIdentifier[0] == ' ' || alertIdentifier[len(alertIdentifier)-1] == ' ' {
 		return false
 	}
 
@@ -472,7 +472,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 	}
 
 	if alertID != "" {
-		if !validateAlertID(alertID) {
+		if !validateAlertIdentifier(alertID) {
 			http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 			return
 		}
@@ -549,7 +549,7 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 		http.Error(w, "alertIdentifier or incident_id is required", http.StatusBadRequest)
 		return
 	}
-	if alertIdentifier != "" && !validateAlertID(alertIdentifier) {
+	if alertIdentifier != "" && !validateAlertIdentifier(alertIdentifier) {
 		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
@@ -701,9 +701,9 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !validateAlertID(alertID) {
-		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if !validateAlertIdentifier(alertID) {
+		log.Error().Str("alertIdentifier", alertID).Msg("Invalid alert identifier")
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 
@@ -751,9 +751,9 @@ func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if !validateAlertID(alertID) {
-		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if !validateAlertIdentifier(alertID) {
+		log.Error().Str("alertIdentifier", alertID).Msg("Invalid alert identifier")
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 
@@ -795,9 +795,9 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !validateAlertID(alertID) {
-		log.Error().Str("alertID", alertID).Msg("Invalid alert ID")
-		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+	if !validateAlertIdentifier(alertID) {
+		log.Error().Str("alertIdentifier", alertID).Msg("Invalid alert identifier")
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
 		return
 	}
 
