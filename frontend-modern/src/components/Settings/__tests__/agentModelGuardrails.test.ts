@@ -26,6 +26,7 @@ import loginSource from '@/components/Login.tsx?raw';
 import settingsSource from '../Settings.tsx?raw';
 import aiSettingsSource from '../AISettings.tsx?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
+import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import suggestProfileModalSource from '../SuggestProfileModal.tsx?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
 import aiPatrolSchedulePresentationSource from '@/utils/aiPatrolSchedulePresentation.ts?raw';
@@ -315,6 +316,10 @@ describe('agent model guardrails', () => {
     expect(aiSettingsPresentationSource).toContain(
       'export function getAISettingsRetryLabel',
     );
+    expect(aiSettingsSource).toContain('SelectionCardGroup');
+    expect(aiSettingsSource).toContain('variant="compact"');
+    expect(updatesSettingsPanelSource).toContain('SelectionCardGroup');
+    expect(updatesSettingsPanelSource).toContain('variant="detail"');
     expect(aiSettingsPresentationSource).toContain(
       'export function getAIChatSessionsLoadingState',
     );

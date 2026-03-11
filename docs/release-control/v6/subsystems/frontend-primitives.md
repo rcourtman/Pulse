@@ -67,3 +67,7 @@ Reporting time-range/export selectors and General settings Proxmox VE polling
 presets must now also route through the shared `FilterButtonGroup` prominent
 variant instead of maintaining local blue segmented-control styling forks in
 feature components.
+
+Selectable settings cards for compact provider pickers and detail choice panels
+must now route through the shared `SelectionCardGroup` primitive instead of
+duplicating border-2 active-card styling in feature components.

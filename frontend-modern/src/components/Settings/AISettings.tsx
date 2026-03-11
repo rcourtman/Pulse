@@ -3,6 +3,10 @@ import { createStore } from 'solid-js/store';
 import { useNavigate } from '@solidjs/router';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
+import {
+  SelectionCardGroup,
+  type SelectionCardOption,
+} from '@/components/shared/SelectionCardGroup';
 import { Toggle } from '@/components/shared/Toggle';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
@@ -67,6 +71,15 @@ const AI_PROVIDERS: AIProvider[] = [
   'deepseek',
   'gemini',
   'ollama',
+];
+
+const AI_SETUP_PROVIDER_OPTIONS: SelectionCardOption<AIProvider>[] = [
+  { value: 'anthropic', title: 'Anthropic', description: 'Claude' },
+  { value: 'openai', title: 'OpenAI', description: 'ChatGPT' },
+  { value: 'openrouter', title: 'OpenRouter', description: 'Gateway' },
+  { value: 'deepseek', title: 'DeepSeek', description: 'V3' },
+  { value: 'gemini', title: 'Gemini', description: 'Google' },
+  { value: 'ollama', title: 'Ollama', description: 'Local' },
 ];
 
 type ProviderHealthState = {
@@ -2564,80 +2577,12 @@ export const AISettings: Component = () => {
 
             {/* Provider Selection */}
             <div class="p-6 space-y-4">
-              <div class="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSetupProvider('anthropic')}
-                  class={`p-3 rounded-md border-2 transition-all text-center ${
-                    setupProvider() === 'anthropic'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                      : 'border-border hover:border-blue-300'
-                  }`}
-                >
-                  <div class="text-sm font-medium">Anthropic</div>
-                  <div class="text-xs text-slate-500 mt-0.5">Claude</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSetupProvider('openai')}
-                  class={`p-3 rounded-md border-2 transition-all text-center ${
-                    setupProvider() === 'openai'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                      : 'border-border hover:border-blue-300'
-                  }`}
-                >
-                  <div class="text-sm font-medium">OpenAI</div>
-                  <div class="text-xs text-slate-500 mt-0.5">ChatGPT</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSetupProvider('openrouter')}
-                  class={`p-3 rounded-md border-2 transition-all text-center ${
-                    setupProvider() === 'openrouter'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                      : 'border-border hover:border-blue-300'
-                  }`}
-                >
-                  <div class="text-sm font-medium">OpenRouter</div>
-                  <div class="text-xs text-slate-500 mt-0.5">Gateway</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSetupProvider('deepseek')}
-                  class={`p-3 rounded-md border-2 transition-all text-center ${
-                    setupProvider() === 'deepseek'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                      : 'border-border hover:border-blue-300'
-                  }`}
-                >
-                  <div class="text-sm font-medium">DeepSeek</div>
-                  <div class="text-xs text-slate-500 mt-0.5">V3</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSetupProvider('gemini')}
-                  class={`p-3 rounded-md border-2 transition-all text-center ${
-                    setupProvider() === 'gemini'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                      : 'border-border hover:border-blue-300'
-                  }`}
-                >
-                  <div class="text-sm font-medium">Gemini</div>
-                  <div class="text-xs text-slate-500 mt-0.5">Google</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSetupProvider('ollama')}
-                  class={`p-3 rounded-md border-2 transition-all text-center ${
-                    setupProvider() === 'ollama'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                      : 'border-border hover:border-blue-300'
-                  }`}
-                >
-                  <div class="text-sm font-medium">Ollama</div>
-                  <div class="text-xs text-slate-500 mt-0.5">Local</div>
-                </button>
-              </div>
+              <SelectionCardGroup
+                options={AI_SETUP_PROVIDER_OPTIONS}
+                value={setupProvider()}
+                onChange={setSetupProvider}
+                variant="compact"
+              />
 
               {/* API Key / URL Input */}
               <Show

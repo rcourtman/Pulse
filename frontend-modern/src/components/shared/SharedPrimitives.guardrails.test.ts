@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
+import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
+import aiSettingsSource from '@/components/Settings/AISettings.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
+import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -40,5 +43,21 @@ describe('shared primitive guardrails', () => {
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).not.toContain('getReportingToggleButtonClass');
     expect(reportingPanelSource).not.toContain("<For each={REPORTING_RANGE_OPTIONS}>");
+  });
+
+  it('routes selectable settings cards through SelectionCardGroup', () => {
+    expect(selectionCardGroupSource).toContain(
+      "type SelectionCardGroupVariant = 'compact' | 'detail'",
+    );
+    expect(aiSettingsSource).toContain('SelectionCardGroup');
+    expect(aiSettingsSource).toContain('variant="compact"');
+    expect(aiSettingsSource).not.toContain(
+      'class={`p-3 rounded-md border-2 transition-all text-center',
+    );
+    expect(updatesSettingsPanelSource).toContain('SelectionCardGroup');
+    expect(updatesSettingsPanelSource).toContain('variant="detail"');
+    expect(updatesSettingsPanelSource).not.toContain(
+      'class={`p-4 rounded-md border-2 transition-all text-left',
+    );
   });
 });
