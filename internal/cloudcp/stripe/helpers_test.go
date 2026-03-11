@@ -84,6 +84,29 @@ func TestDerivePlanVersion(t *testing.T) {
 	}
 }
 
+func TestPlanVersionFromMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata map[string]string
+		fallback string
+		want     string
+	}{
+		{"canonicalizes legacy cloud alias", map[string]string{"plan_version": "cloud-v1"}, "msp_hosted_v1", "cloud_starter"},
+		{"uses canonicalized shorthand", map[string]string{"plan": "max"}, "msp_hosted_v1", "cloud_max"},
+		{"falls back when metadata missing", nil, "msp_growth", "msp_growth"},
+		{"falls back when metadata resolves generic stripe", nil, "msp_hosted_v1", "msp_hosted_v1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := planVersionFromMetadata(tt.metadata, tt.fallback)
+			if got != tt.want {
+				t.Errorf("planVersionFromMetadata = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsSafeStripeID(t *testing.T) {
 	tests := []struct {
 		id   string

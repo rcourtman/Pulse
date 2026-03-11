@@ -638,13 +638,8 @@ func applyStripeAccountGraceWindow(sa *registry.StripeAccount, subState pkglicen
 }
 
 func planVersionFromMetadata(metadata map[string]string, fallback string) string {
-	if metadata != nil {
-		if v := strings.TrimSpace(metadata["plan_version"]); v != "" {
-			return v
-		}
-		if v := strings.TrimSpace(metadata["plan"]); v != "" {
-			return v
-		}
+	if derived := DerivePlanVersion(metadata, ""); derived != "" && derived != "stripe" {
+		return derived
 	}
 	return strings.TrimSpace(fallback)
 }
