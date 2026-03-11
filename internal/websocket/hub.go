@@ -1125,7 +1125,10 @@ func (h *Hub) BroadcastAlertResolved(alertID string) {
 	log.Info().Str("alertID", alertID).Msg("broadcasting alert resolved to WebSocket clients")
 	msg := Message{
 		Type: "alertResolved",
-		Data: map[string]string{"alertId": alertID},
+		Data: map[string]string{
+			"alertIdentifier": alertID,
+			"alertId":         alertID,
+		},
 	}
 	h.BroadcastMessage(msg)
 }
@@ -1167,7 +1170,10 @@ func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
 	log.Info().Str("org_id", orgID).Str("alertID", alertID).Msg("broadcasting alert resolved to tenant WebSocket clients")
 	msg := Message{
 		Type: "alertResolved",
-		Data: map[string]string{"alertId": alertID},
+		Data: map[string]string{
+			"alertIdentifier": alertID,
+			"alertId":         alertID,
+		},
 	}
 	if h.isStopping() {
 		log.Debug().Str("org_id", orgID).Msg("Skipping tenant alert resolved broadcast while hub is stopping")

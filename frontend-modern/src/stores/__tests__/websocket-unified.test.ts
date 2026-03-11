@@ -177,6 +177,25 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('accepts canonical alertResolved websocket payloads', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'alertResolved',
+        data: {
+          alertIdentifier: 'instance:node:100::metric/cpu',
+          alertId: 'instance:node:100::metric/cpu',
+        },
+      });
+
+      expect(store.state.resources).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not create a delayed reconnect socket after store disposal', async () => {
     const { dispose } = await createStoreHarness();
     try {

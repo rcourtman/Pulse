@@ -472,8 +472,10 @@ export function createWebSocketStore(url: string) {
           logger.warn('New alert received (will sync with next state update)', message.data);
         } else if (message.type === 'alertResolved') {
           // Individual alert resolution now handled via state sync
+          const alertIdentifier = message.data.alertIdentifier || message.data.alertId;
           logger.info('Alert resolved (will sync with next state update)', {
-            alertId: message.data.alertId,
+            alertIdentifier,
+            alertId: message.data.alertId || alertIdentifier,
           });
         } else if (message.type === 'update:progress') {
           // Update progress event

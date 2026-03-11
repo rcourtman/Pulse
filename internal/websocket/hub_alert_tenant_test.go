@@ -117,6 +117,9 @@ func TestAlertResolvedBroadcastTenantIsolation(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected map payload, got %T", msg.Data)
 	}
+	if payload["alertIdentifier"] != "alert-1" {
+		t.Fatalf("expected alertIdentifier alert-1, got %v", payload["alertIdentifier"])
+	}
 	if payload["alertId"] != "alert-1" {
 		t.Fatalf("expected alertId alert-1, got %v", payload["alertId"])
 	}
@@ -163,6 +166,16 @@ func TestAlertResolvedEmptyOrgTargetsDefaultTenantOnly(t *testing.T) {
 	msgDefault := readClientMessage(t, defaultClient, 300*time.Millisecond)
 	if msgDefault.Type != "alertResolved" {
 		t.Fatalf("expected default tenant alertResolved type, got %q", msgDefault.Type)
+	}
+	payload, ok := msgDefault.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map payload, got %T", msgDefault.Data)
+	}
+	if payload["alertIdentifier"] != "alert-default" {
+		t.Fatalf("expected alertIdentifier alert-default, got %v", payload["alertIdentifier"])
+	}
+	if payload["alertId"] != "alert-default" {
+		t.Fatalf("expected alertId alert-default, got %v", payload["alertId"])
 	}
 	assertNoClientMessage(t, orgAClient, 200*time.Millisecond)
 	assertNoClientMessage(t, orgBClient, 200*time.Millisecond)

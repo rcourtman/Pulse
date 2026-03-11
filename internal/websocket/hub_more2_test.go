@@ -47,6 +47,9 @@ func TestBroadcastAlertResolvedAndCustom(t *testing.T) {
 			t.Fatalf("unexpected type: %s", msg.Type)
 		}
 		payload := msg.Data.(map[string]interface{})
+		if payload["alertIdentifier"] != "alert-1" {
+			t.Fatalf("unexpected alertIdentifier: %v", payload["alertIdentifier"])
+		}
 		if payload["alertId"] != "alert-1" {
 			t.Fatalf("unexpected alertId: %v", payload["alertId"])
 		}
