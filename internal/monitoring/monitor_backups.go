@@ -270,8 +270,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	m.state.SyncGuestBackupTimes()
 
 	if m.alertManager != nil {
-		snapshot := m.state.GetSnapshot()
-		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
+		guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
 		rollups, err := m.listBackupRollupsForAlerts(ctx)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
@@ -383,51 +382,65 @@ func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnap
 	return current, storages
 }
 
-func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
+func buildGuestLookupsFromReadState(readState unifiedresources.ReadState, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
 	byKey := make(map[string]alerts.GuestLookup)
 	byVMID := make(map[string][]alerts.GuestLookup)
 
-	for _, vm := range snapshot.VMs {
-		info := alerts.GuestLookup{
-			ResourceID: makeGuestID(vm.Instance, vm.Node, vm.VMID),
-			Name:       vm.Name,
-			Instance:   vm.Instance,
-			Node:       vm.Node,
-			Type:       vm.Type,
-			VMID:       vm.VMID,
+	if readState == nil {
+		if metadataStore != nil {
+			enrichWithPersistedMetadata(metadataStore, byVMID)
 		}
-		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
+		return byKey, byVMID
+	}
+
+	for _, vm := range readState.VMs() {
+		if vm == nil {
+			continue
+		}
+		info := alerts.GuestLookup{
+			ResourceID: makeGuestID(vm.Instance(), vm.Node(), vm.VMID()),
+			Name:       vm.Name(),
+			Instance:   vm.Instance(),
+			Node:       vm.Node(),
+			Type:       "qemu",
+			VMID:       vm.VMID(),
+		}
+		key := alerts.BuildGuestKey(vm.Instance(), vm.Node(), vm.VMID())
 		byKey[key] = info
 
-		vmidKey := strconv.Itoa(vm.VMID)
+		vmidKey := strconv.Itoa(vm.VMID())
 		byVMID[vmidKey] = append(byVMID[vmidKey], info)
 
 		// Persist last-known name and type for this guest
-		if metadataStore != nil && vm.Name != "" {
-			persistGuestIdentity(metadataStore, key, vm.Name, vm.Type)
+		if metadataStore != nil && vm.Name() != "" {
+			persistGuestIdentity(metadataStore, key, vm.Name(), info.Type)
 		}
 	}
 
-	for _, ct := range snapshot.Containers {
-		info := alerts.GuestLookup{
-			ResourceID: makeGuestID(ct.Instance, ct.Node, ct.VMID),
-			Name:       ct.Name,
-			Instance:   ct.Instance,
-			Node:       ct.Node,
-			Type:       ct.Type,
-			VMID:       ct.VMID,
+	for _, ct := range readState.Containers() {
+		if ct == nil {
+			continue
 		}
-		key := alerts.BuildGuestKey(ct.Instance, ct.Node, ct.VMID)
+		guestType := firstNonEmptyString(ct.ContainerType(), "lxc")
+		info := alerts.GuestLookup{
+			ResourceID: makeGuestID(ct.Instance(), ct.Node(), ct.VMID()),
+			Name:       ct.Name(),
+			Instance:   ct.Instance(),
+			Node:       ct.Node(),
+			Type:       guestType,
+			VMID:       ct.VMID(),
+		}
+		key := alerts.BuildGuestKey(ct.Instance(), ct.Node(), ct.VMID())
 		if _, exists := byKey[key]; !exists {
 			byKey[key] = info
 		}
 
-		vmidKey := strconv.Itoa(ct.VMID)
+		vmidKey := strconv.Itoa(ct.VMID())
 		byVMID[vmidKey] = append(byVMID[vmidKey], info)
 
 		// Persist last-known name and type for this guest
-		if metadataStore != nil && ct.Name != "" {
-			persistGuestIdentity(metadataStore, key, ct.Name, ct.Type)
+		if metadataStore != nil && ct.Name() != "" {
+			persistGuestIdentity(metadataStore, key, ct.Name(), guestType)
 		}
 	}
 
@@ -437,6 +450,12 @@ func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.Gues
 	}
 
 	return byKey, byVMID
+}
+
+func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	return buildGuestLookupsFromReadState(registry, metadataStore)
 }
 
 // enrichWithPersistedMetadata adds entries from the metadata store for guests
@@ -1284,8 +1303,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	m.state.SyncGuestBackupTimes()
 
 	if m.alertManager != nil {
-		snapshot := m.state.GetSnapshot()
-		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
+		guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
 		rollups, err := m.listBackupRollupsForAlerts(context.Background())
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")

@@ -7,6 +7,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestPersistGuestIdentity_Concurrent(t *testing.T) {
@@ -102,5 +104,72 @@ func TestEnrichWithPersistedMetadata_Detail(t *testing.T) {
 	// 101 should not be duplicated (it was live)
 	if len(lookup["101"]) != 1 {
 		t.Error("VM 101 should not be duplicated")
+	}
+}
+
+func TestBuildGuestLookupsFromReadState_PrefersCanonicalWorkloads(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "guest_lookup_read_state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store := config.NewGuestMetadataStore(tmpDir, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{{
+			ID:       "vm-1",
+			Name:     "canonical-vm",
+			Instance: "pve1",
+			Node:     "node1",
+			VMID:     100,
+			Type:     "qemu",
+		}},
+		Containers: []models.Container{{
+			ID:       "ct-1",
+			Name:     "canonical-ct",
+			Instance: "pve1",
+			Node:     "node2",
+			VMID:     101,
+			Type:     "oci",
+			IsOCI:    true,
+		}},
+	})
+
+	byKey, byVMID := buildGuestLookupsFromReadState(registry, store)
+
+	vmKey := alerts.BuildGuestKey("pve1", "node1", 100)
+	if got := byKey[vmKey]; got.Name != "canonical-vm" || got.Type != "qemu" {
+		t.Fatalf("expected canonical vm lookup, got %+v", got)
+	}
+	ctKey := alerts.BuildGuestKey("pve1", "node2", 101)
+	if got := byKey[ctKey]; got.Name != "canonical-ct" || got.Type != "oci" {
+		t.Fatalf("expected canonical container lookup, got %+v", got)
+	}
+	if len(byVMID["100"]) != 1 || byVMID["100"][0].Name != "canonical-vm" {
+		t.Fatalf("expected vmid lookup for VM 100, got %+v", byVMID["100"])
+	}
+	if len(byVMID["101"]) != 1 || byVMID["101"][0].Name != "canonical-ct" {
+		t.Fatalf("expected vmid lookup for container 101, got %+v", byVMID["101"])
+	}
+}
+
+func TestBuildGuestLookupsFromReadState_UsesPersistedMetadataWhenCanonicalStateEmpty(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "guest_lookup_persisted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store := config.NewGuestMetadataStore(tmpDir, nil)
+	_ = store.Set("pve1:node1:100", &config.GuestMetadata{ID: "pve1:node1:100", LastKnownName: "persisted-vm", LastKnownType: "qemu"})
+
+	byKey, byVMID := buildGuestLookupsFromReadState(unifiedresources.NewRegistry(nil), store)
+
+	if len(byKey) != 0 {
+		t.Fatalf("expected no direct byKey entries without live canonical workloads, got %+v", byKey)
+	}
+	if len(byVMID["100"]) != 1 || byVMID["100"][0].Name != "persisted-vm" || byVMID["100"][0].Type != "qemu" {
+		t.Fatalf("expected persisted metadata fallback, got %+v", byVMID["100"])
 	}
 }

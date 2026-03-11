@@ -61,3 +61,8 @@ paths.
 PBS instance export is now derived from canonical `ReadState.PBSInstances()`
 instead of `GetState().PBSInstances`; `models.PBSInstance` is treated as a
 boundary artifact for that path.
+
+Backup-alert guest lookup assembly now derives VM/container identity from
+canonical `ReadState` workload views instead of from snapshot-owned guest
+arrays, so backup alert resolution follows unified runtime truth when a live
+resource registry exists.

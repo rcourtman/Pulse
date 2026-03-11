@@ -37,7 +37,9 @@ package unifiedresources
 //     (VMsSnapshot/ContainersSnapshot) now also derive from ReadState-backed
 //     canonical data instead of from StateSnapshot-owned guest arrays. PBS
 //     instance export helpers now follow the same rule via
-//     ReadState.PBSInstances().
+//     ReadState.PBSInstances(). Backup-alert guest lookup assembly now also
+//     derives VM/container identity from ReadState workload views instead of
+//     from snapshot-owned guest arrays.
 //
 //   - All state.* field access patterns and GetState() calls are
 //     enforced as hard bans (SRC-04b). Migration is complete — zero

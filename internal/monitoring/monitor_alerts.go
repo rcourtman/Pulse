@@ -196,7 +196,7 @@ func (m *Monitor) checkMockAlerts() {
 		Msg("Collecting resources for alert cleanup in mock mode")
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
 
-	guestsByKey, guestsByVMID := buildGuestLookups(state, m.guestMetadataStore)
+	guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
 	rollups, err := m.listBackupRollupsForAlerts(context.Background())
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
