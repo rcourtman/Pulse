@@ -294,6 +294,44 @@ func BenchmarkLoadTest500Nodes_RollupAtScale(b *testing.B) {
 	}
 }
 
+// BenchmarkLoadTest500Nodes_RollupTierBatched measures the production batched
+// rollupTier path at 500-node scale. This is the real aggregation path used in
+// the store: one INSERT...SELECT...GROUP BY across all node/metric series.
+func BenchmarkLoadTest500Nodes_RollupTierBatched(b *testing.B) {
+	suppressLogs(b)
+	store := newBenchStore(b)
+
+	rawBase := time.Now().Add(-30 * time.Minute).Unix()
+	base := time.Unix((rawBase/60)*60, 0)
+
+	batch := make([]WriteMetric, 0, loadTestSeries*loadTestSeedPoints)
+	for n := 0; n < loadTestNodes; n++ {
+		nodeID := fmt.Sprintf("node-%d", n)
+		for _, mt := range loadTestMetricTypes {
+			for p := 0; p < loadTestSeedPoints; p++ {
+				batch = append(batch, WriteMetric{
+					ResourceType: "node",
+					ResourceID:   nodeID,
+					MetricType:   mt,
+					Value:        float64((n + p) % 100),
+					Timestamp:    base.Add(time.Duration(p) * 5 * time.Second),
+					Tier:         TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+
+	metaKey := "rollup:raw:minute"
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = store.setMetaInt(metaKey, 0)
+		store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+	}
+}
+
 // BenchmarkLoadTest500Nodes_QueryAllBatchDashboard measures QueryAllBatch
 // latency at 500-node scale — the production hot path when the dashboard
 // loads charts for all nodes in a single batched SQL call. Contrasts with
