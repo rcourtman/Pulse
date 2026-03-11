@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-03-07
+Last updated: 2026-03-11
 Status: ACTIVE
 
 This is the canonical human source for v6 execution.
@@ -11,6 +11,12 @@ Machine companion:
 
 Recent locked release decision:
 
+- 2026-03-11: Canonical development protocol is now part of v6 governance.
+  Substantial subsystem work must follow
+  `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md` and update the
+  relevant contract under `docs/release-control/v6/subsystems/`. Repo guardrail
+  tests now fail if the protocol file or required subsystem contracts disappear
+  or lose their required sections.
 - 2026-03-07: Embedded frontend drift protection is now in place.
   `npm --prefix frontend-modern run build` syncs
   `internal/api/frontend-modern/dist`, and
@@ -81,6 +87,18 @@ Pulse v6 is ready when these outcomes land together:
 2. Do not ship when paywalls and runtime gates disagree.
 3. Do not ship hosted flows that break signup/auth/provision/revocation.
 4. Do not keep polishing strong lanes while weak lanes remain behind.
+
+## Development Governance
+
+For canonical subsystem work:
+
+1. Read `docs/release-control/v6/SOURCE_OF_TRUTH.md` and
+   `docs/release-control/v6/status.json` first.
+2. Then read `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`.
+3. Then read the relevant subsystem contract under
+   `docs/release-control/v6/subsystems/`.
+4. When a canonical path replaces an old path, add or tighten a guardrail so
+   the old path cannot silently return.
 
 ## Repo Ownership Map
 
