@@ -280,6 +280,43 @@ func TestBillingState_NoKeyGracefulDegradation(t *testing.T) {
 	assert.Empty(t, loaded.Integrity)
 }
 
+func TestBillingState_SaveCanonicalizesCloudPlanContract(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	store := NewFileBillingStore(dir)
+	state := &entitlements.BillingState{
+		PlanVersion: "cloud-v1",
+		Limits: map[string]int64{
+			"max_agents": 999,
+			"max_nodes":  5,
+		},
+	}
+
+	require.NoError(t, store.SaveBillingState("default", state))
+
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, "cloud_starter", loaded.PlanVersion)
+	assert.Equal(t, int64(10), loaded.Limits["max_agents"])
+	_, hasOld := loaded.Limits["max_nodes"]
+	assert.False(t, hasOld)
+
+	data, err := os.ReadFile(filepath.Join(dir, "billing.json"))
+	require.NoError(t, err)
+
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(data, &raw))
+	assert.Equal(t, "cloud_starter", raw["plan_version"])
+	rawLimits, ok := raw["limits"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(10), rawLimits["max_agents"])
+	_, hasOld = rawLimits["max_nodes"]
+	assert.False(t, hasOld)
+}
+
 func TestBillingState_CapabilityOrderIndependent(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))

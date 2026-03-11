@@ -284,3 +284,41 @@ func TestNormalizeBillingState_MaxNodesToMaxAgentsMigration(t *testing.T) {
 		}
 	})
 }
+
+func TestNormalizeBillingState_CanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
+	state := &BillingState{
+		PlanVersion: " cloud-v1 ",
+		Limits: map[string]int64{
+			"max_agents": 999,
+			"max_nodes":  5,
+		},
+	}
+
+	normalized := NormalizeBillingState(state)
+	if normalized.PlanVersion != "cloud_starter" {
+		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, "cloud_starter")
+	}
+	if got := normalized.Limits["max_agents"]; got != 10 {
+		t.Fatalf("limits[max_agents]=%d, want %d", got, 10)
+	}
+	if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
+		t.Fatal("expected max_nodes to be deleted during normalization")
+	}
+}
+
+func TestNormalizeBillingState_PreservesNonCloudPlanLimits(t *testing.T) {
+	state := &BillingState{
+		PlanVersion: "pro-v2",
+		Limits: map[string]int64{
+			"max_agents": 50,
+		},
+	}
+
+	normalized := NormalizeBillingState(state)
+	if normalized.PlanVersion != "pro-v2" {
+		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, "pro-v2")
+	}
+	if got := normalized.Limits["max_agents"]; got != 50 {
+		t.Fatalf("limits[max_agents]=%d, want %d", got, 50)
+	}
+}

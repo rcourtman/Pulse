@@ -39,3 +39,7 @@ Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
 contract not only when Stripe metadata is parsed, but also when persisted plan
 versions are consumed at hosted entitlement and workspace-limit enforcement
 boundaries.
+Persisted billing state is now also part of that canonical boundary: when a
+recognized Cloud/MSP plan version is loaded or saved, the stored `plan_version`
+must canonicalize and `limits.max_agents` must reconcile to the authoritative
+per-plan contract rather than preserving stale ad hoc values.

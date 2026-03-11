@@ -112,9 +112,9 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 
 	if strings.TrimSpace(state.EntitlementJWT) != "" {
 		resolved := pkglicensing.ResolveEntitlementLeaseBillingState(state, "", time.Now().UTC())
-		return &resolved, nil
+		return pkglicensing.NormalizeBillingState(&resolved), nil
 	}
-	return &state, nil
+	return pkglicensing.NormalizeBillingState(&state), nil
 }
 
 // SaveBillingState persists billing state for an org to billing.json.
@@ -122,6 +122,8 @@ func (s *FileBillingStore) SaveBillingState(orgID string, state *pkglicensing.Bi
 	if state == nil {
 		return errors.New("billing state is required")
 	}
+	normalized := pkglicensing.NormalizeBillingState(state)
+	*state = *normalized
 
 	// Compute integrity HMAC if encryption key is available.
 	if hmacKey, err := s.loadHMACKey(); err == nil {

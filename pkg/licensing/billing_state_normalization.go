@@ -69,6 +69,10 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	if normalized.PlanVersion == "" && normalized.SubscriptionState != "" {
 		normalized.PlanVersion = string(normalized.SubscriptionState)
 	}
+	normalized.PlanVersion = CanonicalizePlanVersion(normalized.PlanVersion)
+	if limit, known := CloudPlanAgentLimits[normalized.PlanVersion]; known {
+		normalized.Limits["max_agents"] = int64(limit)
+	}
 
 	return normalized
 }
