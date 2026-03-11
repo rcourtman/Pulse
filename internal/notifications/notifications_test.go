@@ -3084,6 +3084,37 @@ func TestAddWebhookDelivery(t *testing.T) {
 	}
 }
 
+func TestAddWebhookDelivery_PreservesCanonicalAlertIdentifier(t *testing.T) {
+	nm := &NotificationManager{
+		webhookHistory: make([]WebhookDelivery, 0),
+	}
+
+	delivery := WebhookDelivery{
+		WebhookName:     "enhanced-webhook",
+		WebhookURL:      "https://example.com/enhanced",
+		AlertIdentifier: "resource:vm:100::service-gap",
+		AlertID:         "legacy-alert-id",
+		Timestamp:       time.Now(),
+		Success:         true,
+		StatusCode:      200,
+	}
+
+	nm.addWebhookDelivery(delivery)
+
+	if len(nm.webhookHistory) != 1 {
+		t.Fatalf("expected 1 delivery in history, got %d", len(nm.webhookHistory))
+	}
+	if nm.webhookHistory[0].AlertIdentifier != "resource:vm:100::service-gap" {
+		t.Fatalf(
+			"expected canonical alertIdentifier to be preserved, got %q",
+			nm.webhookHistory[0].AlertIdentifier,
+		)
+	}
+	if nm.webhookHistory[0].AlertID != "legacy-alert-id" {
+		t.Fatalf("expected legacy alertId to be preserved, got %q", nm.webhookHistory[0].AlertID)
+	}
+}
+
 func TestAddWebhookDelivery_TrimsToMax100(t *testing.T) {
 	nm := &NotificationManager{
 		webhookHistory: make([]WebhookDelivery, 0),
