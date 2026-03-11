@@ -4512,10 +4512,14 @@ function HistoryTab(props: {
     };
   });
 
-  const loadIncidentTimeline = async (rowKey: string, alertId: string, startedAt?: string) => {
+  const loadIncidentTimeline = async (
+    rowKey: string,
+    alertIdentifier: string,
+    startedAt?: string,
+  ) => {
     setIncidentLoading((prev) => ({ ...prev, [rowKey]: true }));
     try {
-      const timeline = await AlertsAPI.getIncidentTimeline(alertId, startedAt);
+      const timeline = await AlertsAPI.getIncidentTimeline(alertIdentifier, startedAt);
       setIncidentTimelines((prev) => ({ ...prev, [rowKey]: timeline }));
       setIncidentErrors((prev) => ({ ...prev, [rowKey]: false }));
     } catch (error) {
@@ -4527,7 +4531,11 @@ function HistoryTab(props: {
     }
   };
 
-  const toggleIncidentTimeline = async (rowKey: string, alertId: string, startedAt?: string) => {
+  const toggleIncidentTimeline = async (
+    rowKey: string,
+    alertIdentifier: string,
+    startedAt?: string,
+  ) => {
     const expanded = expandedIncidents();
     const next = new Set(expanded);
     if (next.has(rowKey)) {
@@ -4538,11 +4546,15 @@ function HistoryTab(props: {
     next.add(rowKey);
     setExpandedIncidents(next);
     if (!(rowKey in incidentTimelines())) {
-      await loadIncidentTimeline(rowKey, alertId, startedAt);
+      await loadIncidentTimeline(rowKey, alertIdentifier, startedAt);
     }
   };
 
-  const saveIncidentNote = async (rowKey: string, alertId: string, startedAt?: string) => {
+  const saveIncidentNote = async (
+    rowKey: string,
+    alertIdentifier: string,
+    startedAt?: string,
+  ) => {
     const note = (incidentNoteDrafts()[rowKey] || '').trim();
     if (!note) {
       return;
@@ -4550,9 +4562,9 @@ function HistoryTab(props: {
     setIncidentNoteSaving((prev) => new Set(prev).add(rowKey));
     try {
       const incidentId = incidentTimelines()[rowKey]?.id;
-      await AlertsAPI.addIncidentNote({ alertId, incidentId, note });
+      await AlertsAPI.addIncidentNote({ alertIdentifier, incidentId, note });
       setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: '' }));
-      await loadIncidentTimeline(rowKey, alertId, startedAt);
+      await loadIncidentTimeline(rowKey, alertIdentifier, startedAt);
       notificationStore.success(getAlertResourceIncidentNoteSavedLabel());
     } catch (error) {
       logger.error(getAlertResourceIncidentNoteSaveFailure(), error);

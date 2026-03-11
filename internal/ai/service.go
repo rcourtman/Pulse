@@ -4436,12 +4436,6 @@ func extractAlertID(ctx map[string]interface{}) string {
 	if alertID, ok := ctx["alertIdentifier"].(string); ok && alertID != "" {
 		return alertID
 	}
-	if alertID, ok := ctx["alertId"].(string); ok && alertID != "" {
-		return alertID
-	}
-	if alertID, ok := ctx["alert_id"].(string); ok && alertID != "" {
-		return alertID
-	}
 	return ""
 }
 
