@@ -7,93 +7,20 @@ matching subsystem contract file is not staged in the same commit.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Dict, Iterable, List, Sequence, Set
+from typing import Dict, List, Sequence, Set
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SUBSYSTEM_REGISTRY = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems" / "registry.json"
 
-
-@dataclass(frozen=True)
-class SubsystemRule:
-    name: str
-    contract: str
-    prefixes: tuple[str, ...] = ()
-    exact_files: tuple[str, ...] = ()
-
-
-SUBSYSTEM_RULES: tuple[SubsystemRule, ...] = (
-    SubsystemRule(
-        name="alerts",
-        contract="docs/release-control/v6/subsystems/alerts.md",
-        prefixes=(
-            "internal/alerts/",
-            "frontend-modern/src/features/alerts/",
-            "frontend-modern/src/components/Alerts/",
-        ),
-        exact_files=("frontend-modern/src/pages/Alerts.tsx",),
-    ),
-    SubsystemRule(
-        name="monitoring",
-        contract="docs/release-control/v6/subsystems/monitoring.md",
-        prefixes=("internal/monitoring/",),
-    ),
-    SubsystemRule(
-        name="unified-resources",
-        contract="docs/release-control/v6/subsystems/unified-resources.md",
-        prefixes=("internal/unifiedresources/",),
-        exact_files=(
-            "internal/api/resources.go",
-            "frontend-modern/src/types/resource.ts",
-            "frontend-modern/src/hooks/useUnifiedResources.ts",
-            "frontend-modern/src/pages/Infrastructure.tsx",
-            "frontend-modern/src/hooks/useDashboardTrends.ts",
-            "frontend-modern/src/routing/resourceLinks.ts",
-        ),
-    ),
-    SubsystemRule(
-        name="cloud-paid",
-        contract="docs/release-control/v6/subsystems/cloud-paid.md",
-        prefixes=(
-            "pkg/licensing/",
-            "internal/api/licensing_",
-            "internal/api/payments_",
-            "internal/api/stripe_",
-        ),
-        exact_files=(
-            "frontend-modern/src/pages/CloudPricing.tsx",
-            "frontend-modern/src/pages/HostedSignup.tsx",
-        ),
-    ),
-    SubsystemRule(
-        name="api-contracts",
-        contract="docs/release-control/v6/subsystems/api-contracts.md",
-        prefixes=(
-            "internal/api/",
-            "frontend-modern/src/api/",
-        ),
-        exact_files=("frontend-modern/src/types/api.ts",),
-    ),
-    SubsystemRule(
-        name="frontend-primitives",
-        contract="docs/release-control/v6/subsystems/frontend-primitives.md",
-        prefixes=("frontend-modern/src/components/shared/",),
-    ),
-    SubsystemRule(
-        name="performance-and-scalability",
-        contract="docs/release-control/v6/subsystems/performance-and-scalability.md",
-        prefixes=("pkg/metrics/",),
-        exact_files=(
-            "internal/api/slo.go",
-            "internal/api/slo_bench_test.go",
-            "internal/api/router_bench_test.go",
-        ),
-    ),
-)
-
+def load_subsystem_rules() -> List[dict]:
+    with SUBSYSTEM_REGISTRY.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return list(payload.get("subsystems", []))
 
 IGNORED_PREFIXES: tuple[str, ...] = (
     "docs/release-control/v6/",
@@ -132,17 +59,21 @@ def is_ignored_runtime_file(path: str) -> bool:
 
 def infer_required_contracts(staged_files: Sequence[str]) -> Dict[str, List[str]]:
     required: Dict[str, List[str]] = {}
+    rules = load_subsystem_rules()
 
     for path in staged_files:
         if is_ignored_runtime_file(path) or is_test_or_fixture(path):
             continue
 
-        for rule in SUBSYSTEM_RULES:
-            matches_prefix = any(path.startswith(prefix) for prefix in rule.prefixes)
-            matches_exact = path in rule.exact_files
+        for rule in rules:
+            prefixes = tuple(rule.get("owned_prefixes", []))
+            exact_files = tuple(rule.get("owned_files", []))
+            contract = str(rule["contract"])
+            matches_prefix = any(path.startswith(prefix) for prefix in prefixes)
+            matches_exact = path in exact_files
             if not matches_prefix and not matches_exact:
                 continue
-            required.setdefault(rule.contract, []).append(path)
+            required.setdefault(contract, []).append(path)
 
     return required
 

@@ -67,6 +67,22 @@ func TestSubsystemContractsExistWithRequiredSections(t *testing.T) {
 	}
 }
 
+func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
+	rel := "docs/release-control/v6/subsystems/registry.json"
+	content := readRepoFile(t, rel)
+	assertContainsAll(t, rel, content, []string{
+		"\"version\": 1",
+		"\"subsystems\":",
+		"docs/release-control/v6/subsystems/alerts.md",
+		"docs/release-control/v6/subsystems/monitoring.md",
+		"docs/release-control/v6/subsystems/unified-resources.md",
+		"docs/release-control/v6/subsystems/cloud-paid.md",
+		"docs/release-control/v6/subsystems/api-contracts.md",
+		"docs/release-control/v6/subsystems/frontend-primitives.md",
+		"docs/release-control/v6/subsystems/performance-and-scalability.md",
+	})
+}
+
 func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	readme := readRepoFile(t, "docs/release-control/v6/README.md")
 	assertContainsAll(t, "docs/release-control/v6/README.md", readme, []string{
@@ -91,7 +107,8 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 
 	script := readRepoFile(t, "scripts/release_control/canonical_completion_guard.py")
 	assertContainsAll(t, "scripts/release_control/canonical_completion_guard.py", script, []string{
-		"SUBSYSTEM_RULES",
+		"SUBSYSTEM_REGISTRY",
+		"load_subsystem_rules",
 		"check_staged_contracts",
 		"docs/release-control/v6/subsystems/",
 	})

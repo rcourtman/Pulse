@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "subsystems": [
+    {
+      "id": "alerts",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/alerts.md",
+      "owned_prefixes": [
+        "internal/alerts/",
+        "frontend-modern/src/features/alerts/",
+        "frontend-modern/src/components/Alerts/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/pages/Alerts.tsx"
+      ],
+      "guardrail_files": [
+        "internal/alerts/migration_characterization_test.go",
+        "internal/alerts/specs/evaluator_test.go",
+        "internal/alerts/specs/types_test.go"
+      ]
+    },
+    {
+      "id": "monitoring",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/monitoring.md",
+      "owned_prefixes": [
+        "internal/monitoring/"
+      ],
+      "owned_files": [],
+      "guardrail_files": [
+        "internal/unifiedresources/code_standards_test.go"
+      ]
+    },
+    {
+      "id": "unified-resources",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/unified-resources.md",
+      "owned_prefixes": [
+        "internal/unifiedresources/"
+      ],
+      "owned_files": [
+        "internal/api/resources.go",
+        "frontend-modern/src/types/resource.ts",
+        "frontend-modern/src/hooks/useUnifiedResources.ts",
+        "frontend-modern/src/pages/Infrastructure.tsx",
+        "frontend-modern/src/hooks/useDashboardTrends.ts",
+        "frontend-modern/src/routing/resourceLinks.ts"
+      ],
+      "guardrail_files": [
+        "internal/unifiedresources/code_standards_test.go",
+        "frontend-modern/src/stores/__tests__/websocket-unified.test.ts"
+      ]
+    },
+    {
+      "id": "cloud-paid",
+      "lane": "L3",
+      "contract": "docs/release-control/v6/subsystems/cloud-paid.md",
+      "owned_prefixes": [
+        "pkg/licensing/",
+        "internal/api/licensing_",
+        "internal/api/payments_",
+        "internal/api/stripe_"
+      ],
+      "owned_files": [
+        "frontend-modern/src/pages/CloudPricing.tsx",
+        "frontend-modern/src/pages/HostedSignup.tsx"
+      ],
+      "guardrail_files": [
+        "pkg/licensing/grant_claims_contract_test.go",
+        "internal/api/contract_test.go"
+      ]
+    },
+    {
+      "id": "api-contracts",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/api-contracts.md",
+      "owned_prefixes": [
+        "internal/api/",
+        "frontend-modern/src/api/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/types/api.ts"
+      ],
+      "guardrail_files": [
+        "internal/api/contract_test.go"
+      ]
+    },
+    {
+      "id": "frontend-primitives",
+      "lane": "L8",
+      "contract": "docs/release-control/v6/subsystems/frontend-primitives.md",
+      "owned_prefixes": [
+        "frontend-modern/src/components/shared/"
+      ],
+      "owned_files": [],
+      "guardrail_files": [
+        "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+        "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+      ]
+    },
+    {
+      "id": "performance-and-scalability",
+      "lane": "L10",
+      "contract": "docs/release-control/v6/subsystems/performance-and-scalability.md",
+      "owned_prefixes": [
+        "pkg/metrics/"
+      ],
+      "owned_files": [
+        "internal/api/slo.go",
+        "internal/api/slo_bench_test.go",
+        "internal/api/router_bench_test.go"
+      ],
+      "guardrail_files": [
+        "pkg/metrics/store_query_plan_test.go",
+        "pkg/metrics/store_slo_test.go",
+        "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx"
+      ]
+    }
+  ]
+}

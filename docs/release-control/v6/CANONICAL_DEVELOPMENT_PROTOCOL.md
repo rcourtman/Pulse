@@ -22,10 +22,11 @@ For v6 work, agents must treat these files as the execution entry point:
 1. `docs/release-control/v6/SOURCE_OF_TRUTH.md`
 2. `docs/release-control/v6/status.json`
 3. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
-4. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
+4. `docs/release-control/v6/subsystems/registry.json`
+5. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
 
 The first two files answer release priority and current lane state.
-The protocol and subsystem contracts answer how work must be done.
+The protocol, subsystem registry, and subsystem contracts answer how work must be done.
 
 ## Subsystem Contracts
 
@@ -50,6 +51,9 @@ Current required subsystem contracts:
 
 If a major subsystem is refactored and does not have one of these files, the
 work is incomplete.
+
+The machine-readable ownership map for those subsystem contracts lives in
+`docs/release-control/v6/subsystems/registry.json`.
 
 ## Task Completion Protocol
 
