@@ -11,6 +11,11 @@ Machine companion:
 
 Recent locked release decision:
 
+- 2026-03-11: The v6 release-control orchestrator, loop tooling, and
+  automation state are retired. Pulse now executes through direct repo-aware
+  sessions using `AGENTS.md`, `CLAUDE.md`, this file, `status.json`, the
+  canonical development protocol, subsystem contracts, and commit/CI
+  guardrails instead of background orchestration.
 - 2026-03-11: Monitoring, frontend-primitives, and cloud-paid now ratchet
   toward no-default governance. Their subsystem registry entries require
   explicit path-policy coverage, monitoring/frontend guardrail tests now fail
@@ -185,13 +190,12 @@ Cross-repo contracts that must not drift:
 
 ### Lane Scoring Rubrics
 
-Each score level describes concrete, verifiable criteria. The orchestrator should
-propose a score bump only when **all** criteria for the new level are met.
-Items marked **(human)** require final user-facing deployment and cannot be completed
-by the automation orchestrator — flag these via `needs_human_decision` when they
-are the only remaining blocker for a score level. Most operational/preparation
-tasks (Stripe product creation, server config, price ID insertion) are allowed
-per the autonomy policy and do NOT require `(human)` tagging.
+Each score level describes concrete, verifiable criteria. A score should move
+only when **all** criteria for the new level are met. Items marked **(human)**
+require final user-facing deployment and remain owner-only steps. Most
+operational/preparation tasks (Stripe product creation, server config, price ID
+insertion) are allowed per the autonomy policy and do NOT require `(human)`
+tagging.
 
 #### L1 — Self-hosted release confidence
 
@@ -230,7 +234,7 @@ Evidence: `docs/architecture/release-readiness-guiding-light-2026-02.md`
 | Score | Criteria |
 |-------|----------|
 | 5 | Architecture locked. Account model, RBAC, tenant switching, billing model all approved. Exit criteria defined. Dependencies on Cloud control plane (P2-1, P2-2) identified. |
-| 6 | MSP portal implementation requires Cloud control plane to be functional (P2-1/P2-2 dependency). Build account/tenant CRUD endpoint scaffolding, integration test skeletons, and wire into existing control plane. Cloud control plane is deployed at cloud.pulserelay.pro — SSH and deploy access available in pulse-pro (see OPERATIONS.md). Flag `needs_human_decision` only if a true external account creation (e.g. third-party vendor signup) is required. |
+| 6 | MSP portal implementation requires Cloud control plane to be functional (P2-1/P2-2 dependency). Build account/tenant CRUD endpoint scaffolding, integration test skeletons, and wire into existing control plane. Cloud control plane is deployed at cloud.pulserelay.pro — SSH and deploy access available in pulse-pro (see OPERATIONS.md). Escalate to an owner-only decision only if a true external account creation (e.g. third-party vendor signup) is required. |
 
 #### L5 — Mobile go-live readiness
 
@@ -240,7 +244,7 @@ Evidence: `V6_LAUNCH_CHECKLIST.md`, `pulse-mobile/store/listing.md`
 |-------|----------|
 | 6 | Store listing metadata complete (name, description, keywords, privacy policy, screenshots). Mobile app feature-gated behind Pro license. Relay protocol wire compatibility verified. |
 | 7 | Mobile-specific code hardening complete: error handling for relay disconnects, offline states, biometric auth edge cases tested. Any mobile-side test gaps closed. |
-| 8 | All code-side mobile readiness complete. App Store Connect and Google Play Console listings created, builds submitted for review via EAS CLI. Apple Developer account (Team ID `UJD57YVK2B`) and EAS project are configured in pulse-mobile. Flag `needs_human_decision` only if store account creation or manual portal steps are required that cannot be completed via CLI. |
+| 8 | All code-side mobile readiness complete. App Store Connect and Google Play Console listings created, builds submitted for review via EAS CLI. Apple Developer account (Team ID `UJD57YVK2B`) and EAS project are configured in pulse-mobile. Escalate to an owner-only decision only if store account creation or manual portal steps are required that cannot be completed via CLI. |
 
 #### L6 — Architecture coherence
 
@@ -267,7 +271,7 @@ Evidence: `pulse-pro/relay-server/`, `pulse/internal/relay/`, `pulse-mobile/src/
 Evidence: `frontend/src/pages/setup/`, `frontend/src/pages/settings/`, `tests/integration/`
 
 **SCOPE RESTRICTION:** This lane covers **test coverage, error handling, and verification** only.
-The orchestrator must NEVER change visual styling, layouts, colors, spacing, animations, component structure, or any user-visible UI behavior. All visual/UX design decisions are reserved for the project owner. Allowed work: adding E2E tests, adding missing error/loading state checks in existing code, fixing flash-of-content bugs (logic-only, not visual), and running responsive audits (reporting results, not changing CSS).
+Agents must NEVER change visual styling, layouts, colors, spacing, animations, component structure, or any user-visible UI behavior in this lane. All visual/UX design decisions are reserved for the project owner. Allowed work: adding E2E tests, adding missing error/loading state checks in existing code, fixing flash-of-content bugs (logic-only, not visual), and running responsive audits (reporting results, not changing CSS).
 
 | Score | Criteria |
 |-------|----------|
@@ -324,8 +328,8 @@ Evidence: `tests/integration/tests/journeys/`
 
 | Score | Criteria |
 |-------|----------|
-| 0 | Lane defined, no orchestrator integration. |
-| 1 | Orchestrator plumbing complete (allowlist, lane requirements, runner command). |
+| 0 | Lane defined, no stable journey execution contract yet. |
+| 1 | Journey harness, allowlist, and runner command locked. |
 | 2 | Stable smoke journeys green: bootstrap → first login → dashboard renders. |
 | 3 | TrueNAS node addition → pools/datasets visible. Relay pairing → mobile connection → live data. |
 | 4 | Agent install → registration → host visible in UI/API. |
@@ -334,7 +338,7 @@ Evidence: `tests/integration/tests/journeys/`
 | 7 | AI patrol → finding → approval → fix → verify resolved (closed-loop). |
 | 8 | Full journey set green with stability SLO (>=95% pass rate over 7 consecutive runs). |
 
-**Lane-specific prompt guidance for orchestrator:**
+**Lane-specific execution guidance:**
 
 Test authoring:
 - Tests live in `tests/integration/tests/journeys/` with naming `XX-journey-name.spec.ts`.
@@ -428,70 +432,23 @@ Every session ends with:
 3. Lane score delta
 4. Next best task
 
-## Product Review Sweep
+## Execution Model
 
-### Purpose
+There is no supported release-control orchestrator.
 
-Periodic sweep where the orchestrator adopts a user persona, reviews a UI area
-through that persona's lens, and reports objective UX defects. Findings feed back
-into the implementation loop — objective defects can be auto-fixed (when enabled),
-subjective improvements are logged for human approval.
+Pulse v6 execution is now direct:
 
-### Personas
-
-| Persona | Focus |
-|---------|-------|
-| `first_time_user` | Onboarding, discoverability, empty states |
-| `infra_admin` | Efficiency, clarity under pressure, actionability |
-| `product_designer` | Hierarchy, consistency, error recovery, flows |
-| `architect` | Abstractions, naming, complexity exposure |
-| `buyer_evaluator` | Value perception, trial experience, upgrade motivation |
-
-Personas rotate each sweep (configurable in `loop.config.json`).
-
-### Scheduling
-
-- Runs every N cycles (default: 12), configurable via `product_review_sweep.every_n_cycles`.
-- Priority: assessment > discovery > product review > implementation.
-- Skipped during hardening mode.
-
-### Finding Lifecycle
-
-`detected → triaged → (accepted_auto | pending_human | rejected) → queued → in_progress → fixed_pending_verification → verified_closed`
-
-Side paths: `reopened`, `deferred`.
-
-### Tiers
-
-- **auto_fix**: Objective defect in a safe change class (loading/error/empty state, recovery CTA, guard logic). All six auto-fix criteria must be met.
-- **human_review**: Everything else — subjective, structural, risky.
-
-### Auto-Fix Rubric (all must be true)
-
-1. Reproducible with evidence (specific code path)
-2. User harm is objective (dead-end, missing state, raw error, broken recovery)
-3. Fix is in a safe change class
-4. No structural UX change (no layout/IA/nav/pricing/copy)
-5. Small blast radius (few files, no API contract changes)
-6. High confidence
-
-### Anti-Churn Controls
-
-1. **Fingerprint dedup** — same finding cannot be created twice
-2. **Area cooldown** — reviewed area skipped for N cycles (default: 8)
-3. **Reopen limit** — 3 reopens forces human decision
-4. **Auto-fix budget** — max 2 per 10-cycle window
-5. **Codex admission gate** — when wired, findings must pass quality review (currently stubbed: findings auto-admit with `gate_pending_not_wired` verdict)
-6. **Persona rotation** — different perspective each sweep
-7. **Max findings per sweep** — capped at 3, quality over quantity
-
-### Configuration
-
-See `loop.config.json` key `product_review_sweep`. `auto_fix_enabled` is `false` by default — starts read-only. Enable after reviewing finding quality.
-
-### Storage
-
-Findings stored in `tmp/release-control/product-review-findings.json`.
+1. Start from this file and `docs/release-control/v6/status.json`.
+2. For governed subsystem work, read
+   `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`,
+   `docs/release-control/v6/subsystems/registry.json`, and the relevant
+   subsystem contract before editing code.
+3. Execute the smallest complete task that moves the lane without inventing new
+   local workflow rules.
+4. Let the repo-native guardrails enforce contract/proof updates in the same
+   change.
+5. Do not rely on loop configs, automation state, background schedulers, or
+   out-of-band orchestration notes.
 
 ## Autonomy Policy
 
@@ -515,7 +472,7 @@ Allowed preparation operations (v6 prep that current users never see):
 
 All operations credentials and SSH access are in `pulse-pro/OPERATIONS.md`.
 
-PROHIBITED — autonomous cycles must NEVER do these (no exceptions):
+PROHIBITED — agent sessions must NEVER do these (no exceptions):
 
 1. Push to remote repositories (no `git push`, `gh pr create`, or similar).
 2. Deploy user-facing pages (no landing page deploys, no marketing site updates).
@@ -526,7 +483,7 @@ PROHIBITED — autonomous cycles must NEVER do these (no exceptions):
 
 Rule: the line is "can current users see or be affected by this change?" If yes, don't do it. If no, proceed.
 
-Requires manual session (not autonomous):
+Requires direct owner session:
 
 1. Final launch deployment (flipping v6 live for users).
 2. Customer migration communications.
@@ -599,73 +556,6 @@ If conflicts appear, resolve in this order:
 5. `docs/architecture/ENTITLEMENT_MATRIX.md` (evidence/spec)
 6. `docs/architecture/v6-acceptance-tests.md` (evidence/spec)
 7. Other supporting docs
-
-## Parallel Execution
-
-The orchestrator supports parallel execution of independent work items via the
-`parallel` section in `loop.config.json`.
-
-### Worker Classes
-
-| Worker | Max Concurrent | Cycle Types | Rationale |
-|--------|---------------|-------------|-----------|
-| `mutating` | 1 | implementation, discovery | Writes git, may update scores |
-| `readonly` | 1 | assessment, product review | Read-only, but each runs Claude |
-| `sweep` | 1 | regression (`go test`), discovery sweep | CPU-bound subprocesses |
-
-A `claude_semaphore` (default max=2) caps concurrent Claude API calls across
-mutating + readonly workers to control spend and rate limits.
-
-**Current phase**: Only sweep-level parallelism is active — sweeps are
-dispatched to the sweep pool after the primary cycle completes and run
-concurrently with the *next* iteration's primary cycle. Concurrent
-mutating + readonly cycles (e.g., implementation + assessment in the same
-iteration) require git worktree isolation because assessment/product_review
-enforce HEAD-stability checks that would fail if implementation commits
-during their run. This is planned for phase 2.
-
-### State Applier (Single-Writer)
-
-A dedicated `StateApplier` thread receives `CycleResult` objects via a queue
-and applies them sequentially. Optimistic concurrency via `status_version`
-prevents stale results from overwriting newer state.
-
-**Current phase**: The infrastructure is in place but `run_single_cycle` /
-`_finalize_cycle` still write `status.json` directly. The applier will be
-wired as the exclusive write path in a follow-up change once the concurrent
-worker pools are proven stable.
-
-### Runtime Index
-
-Per-run state files live under `tmp/release-control/runtime/runs/<run_id>.json`.
-An `index.json` tracks active run IDs. For backward compatibility with
-`loopctl.sh`, the most recently active run is projected into the legacy
-`tmp/release-control/runtime.json` format.
-
-### Graceful Shutdown
-
-On stop signal (`stop-after-cycle` file or SIGTERM):
-1. `scheduler.stop_event` is set (interrupts sleep)
-2. No new work is accepted
-3. Active runs drain up to `graceful_shutdown_timeout_seconds` (default 120s)
-4. `StateApplier` queue is drained
-5. Exit 0
-
-### Config
-
-```json
-"parallel": {
-    "enabled": true,
-    "max_claude_concurrent": 2,
-    "max_mutating_concurrent": 1,
-    "max_readonly_concurrent": 1,
-    "max_sweep_concurrent": 1,
-    "graceful_shutdown_timeout_seconds": 120
-}
-```
-
-When `enabled: false`, the orchestrator runs sequentially (identical to the
-pre-parallel behaviour).
 
 ## Lean-Mode Rule For Agents
 

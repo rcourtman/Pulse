@@ -11,10 +11,11 @@ Supporting governance file:
 
 - `CONSOLIDATION_MAP.md` (legacy-doc demotion and archival map)
 - `RETIREMENT_AUDIT_2026-02-27.md` (file-by-file audited retirement decisions)
-- `loop.config.json` (automation loop runtime config)
-- `AUTOMATION_LOOP.md` (operator runbook for autonomous cycles)
 - `CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
 - `subsystems/*.md` (per-subsystem contracts: truth, extension points, forbidden paths, completion obligations)
+
+The old release-control orchestrator and loop tooling are retired. Direct,
+repo-aware sessions are now the only supported v6 execution path.
 
 ## Active Repo Scope
 

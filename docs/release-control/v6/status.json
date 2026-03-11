@@ -201,93 +201,7 @@
     "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings."
   ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
-  "automation_state": {
-    "last_cycle_at": "2026-03-08T22:42:57+00:00",
-    "last_trigger": "stop-hook",
-    "last_outcome": "parse-failed",
-    "selected_lane": "L10",
-    "selected_lane_name": "Performance & scalability",
-    "selected_lane_behind_score": 14,
-    "codex_verdict": "not-run",
-    "verification_verdict": "not-run",
-    "needs_human_decision": false,
-    "human_decision_note": "",
-    "last_log": "tmp/release-control/cycle-20260308T222127374965Z-stop-hook.json",
-    "lane_ranking": [
-      {
-        "id": "L10",
-        "behind_score": 14,
-        "current_score": 6,
-        "target_score": 8
-      },
-      {
-        "id": "L3",
-        "behind_score": 10,
-        "current_score": 7,
-        "target_score": 8
-      },
-      {
-        "id": "L5",
-        "behind_score": 9,
-        "current_score": 7,
-        "target_score": 8
-      },
-      {
-        "id": "L6",
-        "behind_score": 9,
-        "current_score": 7,
-        "target_score": 8
-      },
-      {
-        "id": "L1",
-        "behind_score": 6,
-        "current_score": 9,
-        "target_score": 9
-      },
-      {
-        "id": "L11",
-        "behind_score": 6,
-        "current_score": 8,
-        "target_score": 8
-      },
-      {
-        "id": "L12",
-        "behind_score": 6,
-        "current_score": 8,
-        "target_score": 8
-      },
-      {
-        "id": "L2",
-        "behind_score": 6,
-        "current_score": 9,
-        "target_score": 9
-      },
-      {
-        "id": "L7",
-        "behind_score": 6,
-        "current_score": 9,
-        "target_score": 9
-      },
-      {
-        "id": "L8",
-        "behind_score": 6,
-        "current_score": 8,
-        "target_score": 8
-      },
-      {
-        "id": "L9",
-        "behind_score": 6,
-        "current_score": 8,
-        "target_score": 8
-      },
-      {
-        "id": "L4",
-        "behind_score": 5,
-        "current_score": 6,
-        "target_score": 6
-      }
-    ]
-  },
+  "execution_model": "direct-repo-sessions",
   "resolved_decisions": [
     "2026-02-27: staged release policy locked; L4 Hosted MSP full portal is post-GA and not a GA floor gate.",
     "2026-02-27: MSP pricing locked at Starter/Growth/Scale = $149/$249/$399 monthly (10/25/50 workspace breakpoints).",
@@ -296,6 +210,7 @@
     "2026-03-06: v5-to-v6 license migration bridge landed; persisted v5 Pro/Lifetime licenses auto-exchange on upgrade startup, valid v5 Pro/Lifetime keys are accepted as migration input in activation, and public migration guidance is now aligned without requiring a public CHANGELOG.md.",
     "2026-03-07: v5 commercial migration truth table is now owned by v6 release-control, unresolved paid-license migration states persist in v6 billing/entitlements, and the migration suite covers startup failure classes that must block trial start while preserving downgrade safety.",
     "2026-03-07: browser-level proof exists for unresolved v5 commercial migration states via tests/integration/tests/12-v5-commercial-migration.spec.ts against an upgraded fixture.",
-    "2026-03-07: embedded frontend drift protection landed; frontend-modern build now syncs internal/api/frontend-modern/dist, internal/api/frontend_embed_sync_test.go enforces parity, and the disposable CT now proves migration UI states on native embedded assets without PULSE_FRONTEND_DIR."
+    "2026-03-07: embedded frontend drift protection landed; frontend-modern build now syncs internal/api/frontend-modern/dist, internal/api/frontend_embed_sync_test.go enforces parity, and the disposable CT now proves migration UI states on native embedded assets without PULSE_FRONTEND_DIR.",
+    "2026-03-11: v6 release-control orchestration tooling was retired; direct repo-aware sessions plus governance files and commit/CI guardrails are now the only supported execution path."
   ]
 }

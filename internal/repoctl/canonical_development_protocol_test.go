@@ -29,6 +29,28 @@ func assertContainsAll(t *testing.T, rel string, content string, required []stri
 	}
 }
 
+func assertContainsNone(t *testing.T, rel string, content string, forbidden []string) {
+	t.Helper()
+	for _, item := range forbidden {
+		if strings.Contains(content, item) {
+			t.Fatalf("%s contains retired content %q", rel, item)
+		}
+	}
+}
+
+func assertRepoFileMissing(t *testing.T, rel string) {
+	t.Helper()
+
+	path := filepath.Join("..", "..", rel)
+	_, err := os.Stat(path)
+	if err == nil {
+		t.Fatalf("%s should be removed", rel)
+	}
+	if !os.IsNotExist(err) {
+		t.Fatalf("failed to stat %s: %v", rel, err)
+	}
+}
+
 func sourceOfTruthLastUpdated(t *testing.T, content string) string {
 	t.Helper()
 
@@ -225,4 +247,39 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
 	})
+}
+
+func TestLegacyReleaseControlOrchestratorIsRemoved(t *testing.T) {
+	for _, rel := range []string{
+		"docs/release-control/v6/AUTOMATION_LOOP.md",
+		"docs/release-control/v6/loop.config.json",
+		"scripts/release_control/e2e_test.sh",
+		"scripts/release_control/loopctl.sh",
+		"scripts/release_control/orchestrator.py",
+		"scripts/release_control/orchestrator_unit_test.py",
+	} {
+		assertRepoFileMissing(t, rel)
+	}
+
+	readme := readRepoFile(t, "docs/release-control/v6/README.md")
+	assertContainsNone(t, "docs/release-control/v6/README.md", readme, []string{
+		"loop.config.json",
+		"AUTOMATION_LOOP.md",
+	})
+
+	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
+	assertContainsNone(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md", source, []string{
+		"## Product Review Sweep",
+		"## Parallel Execution",
+		"loop.config.json",
+		"loopctl.sh",
+	})
+
+	status := statusJSON(t)
+	if _, ok := status["automation_state"]; ok {
+		t.Fatalf("status.json should not carry legacy automation_state")
+	}
+	if got, ok := status["execution_model"].(string); !ok || got != "direct-repo-sessions" {
+		t.Fatalf("status.json execution_model = %#v, want %q", status["execution_model"], "direct-repo-sessions")
+	}
 }
