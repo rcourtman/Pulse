@@ -44,6 +44,7 @@ REQUIRED_TOP_LEVEL_FIELDS = schema_required(REGISTRY_SCHEMA)
 REQUIRED_SUBSYSTEM_FIELDS = schema_required(REGISTRY_SCHEMA, "subsystem")
 REQUIRED_VERIFICATION_FIELDS = schema_required(REGISTRY_SCHEMA, "verification")
 REQUIRED_PATH_POLICY_FIELDS = schema_required(REGISTRY_SCHEMA, "path_policy")
+REQUIRED_SHARED_OWNERSHIP_FIELDS = schema_required(REGISTRY_SCHEMA, "shared_ownership")
 
 
 def sorted_casefold(values: list[str]) -> list[str]:
@@ -132,6 +133,11 @@ def audit_registry_payload(
     if not isinstance(raw_subsystems, list) or not raw_subsystems:
         errors.append("registry.json missing non-empty subsystems list")
         return {"errors": errors, "warnings": warnings, "summary": {}}
+
+    raw_shared_ownerships = payload.get("shared_ownerships")
+    if not isinstance(raw_shared_ownerships, list):
+        errors.append("registry.json missing shared_ownerships list")
+        raw_shared_ownerships = []
 
     seen_ids: set[str] = set()
     seen_contracts: set[str] = set()
@@ -431,10 +437,91 @@ def audit_registry_payload(
     if subsystem_order != sorted_casefold(subsystem_order):
         errors.append("registry.json subsystems must be sorted by subsystem id")
 
+    overlap_index: dict[str, list[str]] = {}
+    for raw_subsystem in raw_subsystems:
+        if not isinstance(raw_subsystem, dict):
+            continue
+        subsystem_id = raw_subsystem.get("id")
+        if not isinstance(subsystem_id, str) or not subsystem_id.strip():
+            continue
+        for path in owned_runtime_files(raw_subsystem, tracked_files):
+            overlap_index.setdefault(path, []).append(subsystem_id)
+    actual_shared_ownership = {
+        path: sorted_casefold(subsystems)
+        for path, subsystems in overlap_index.items()
+        if len(subsystems) > 1
+    }
+
+    seen_shared_paths: set[str] = set()
+    declared_shared_paths: list[str] = []
+    for index, raw_shared in enumerate(raw_shared_ownerships):
+        context = f"shared_ownerships[{index}]"
+        if not isinstance(raw_shared, dict):
+            errors.append(f"{context} must be an object")
+            continue
+        for field in sorted(REQUIRED_SHARED_OWNERSHIP_FIELDS):
+            if field not in raw_shared:
+                errors.append(f"{context} missing required field {field}")
+
+        path = raw_shared.get("path")
+        if not isinstance(path, str) or not path.strip():
+            errors.append(f"{context}.path must be a non-empty string")
+            continue
+        declared_shared_paths.append(path)
+        validate_path_reference(
+            path,
+            context=f"{context}.path",
+            errors=errors,
+            tracked_files=tracked_files,
+        )
+        if path in seen_shared_paths:
+            errors.append(f"{context}.path duplicates shared ownership entry for {path!r}")
+        seen_shared_paths.add(path)
+
+        rationale = raw_shared.get("rationale")
+        if not isinstance(rationale, str) or not rationale.strip():
+            errors.append(f"{context}.rationale must be a non-empty string")
+
+        subsystems = raw_shared.get("subsystems")
+        normalized_subsystems: list[str] = []
+        if not isinstance(subsystems, list):
+            errors.append(f"{context}.subsystems must be a list")
+            subsystems = []
+        else:
+            if len(subsystems) != len(set(subsystems)):
+                errors.append(f"{context}.subsystems must not contain duplicates")
+        for subsystem_index, subsystem_id in enumerate(subsystems):
+            if not isinstance(subsystem_id, str) or not subsystem_id.strip():
+                errors.append(f"{context}.subsystems[{subsystem_index}] must be a non-empty string")
+                continue
+            normalized_subsystems.append(subsystem_id)
+            if subsystem_id not in seen_ids:
+                errors.append(f"{context}.subsystems[{subsystem_index}] references unknown subsystem {subsystem_id!r}")
+        if normalized_subsystems != sorted_casefold(normalized_subsystems):
+            errors.append(f"{context}.subsystems must be sorted lexicographically")
+
+        actual = actual_shared_ownership.get(path)
+        if actual is None:
+            errors.append(f"{context}.path = {path!r} is not an actual shared-owned runtime file")
+        elif normalized_subsystems and normalized_subsystems != actual:
+            errors.append(f"{context}.subsystems = {normalized_subsystems!r}, want {actual!r}")
+
+    if declared_shared_paths != sorted_casefold(declared_shared_paths):
+        errors.append("registry.json shared_ownerships must be sorted by path")
+
+    declared_shared_ownership = set(declared_shared_paths)
+    for path in sorted(set(actual_shared_ownership) - declared_shared_ownership, key=str.casefold):
+        errors.append(
+            f"registry.json missing shared ownership entry for {path!r} owned by {actual_shared_ownership[path]!r}"
+        )
+    for path in sorted(declared_shared_ownership - set(actual_shared_ownership), key=str.casefold):
+        errors.append(f"registry.json shared ownership entry for {path!r} is stale")
+
     return {
         "errors": errors,
         "warnings": warnings,
         "summary": {
+            "shared_ownership_count": len(actual_shared_ownership),
             "subsystem_count": len(subsystem_summaries),
             "explicit_coverage_subsystems": sum(
                 1
@@ -470,6 +557,7 @@ def render_pretty(report: dict[str, Any]) -> str:
         lines.append(
             "summary: "
             f"subsystems={summary.get('subsystem_count', 0)} "
+            f"shared_ownerships={summary.get('shared_ownership_count', 0)} "
             f"explicit_coverage={summary.get('explicit_coverage_subsystems', 0)}"
         )
     for subsystem in report.get("subsystems", []):

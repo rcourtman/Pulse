@@ -20,6 +20,7 @@ from canonical_completion_guard import (
     subsystem_matches_path,
 )
 from status_audit import audit_status_payload, load_status_payload
+from registry_audit import load_registry_payload
 
 
 def normalize_input_path(raw: str) -> str:
@@ -67,6 +68,12 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
     normalized = [normalize_input_path(path) for path in paths if path.strip()]
     rules = load_subsystem_rules()
     rules_by_id = {str(rule["id"]): rule for rule in rules}
+    registry_payload = load_registry_payload()
+    shared_ownership_by_path = {
+        str(entry["path"]): entry
+        for entry in registry_payload.get("shared_ownerships", [])
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
     status_report = audit_status_payload(load_status_payload())
     impacted = infer_impacted_subsystems(normalized)
     contract_updates = required_contract_updates(normalized, impacted)
@@ -104,6 +111,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
                 "path": path,
                 "classification": classification,
                 "matches": matches,
+                "shared_ownership": shared_ownership_by_path.get(path),
                 "dependent_contract_updates": [
                     contract
                     for contract in contract_updates.values()
@@ -172,6 +180,11 @@ def render_pretty(result: dict[str, Any]) -> str:
                     f"gap={lane['gap']:.0f} derived={lane['derived_status']} "
                     f"open_decisions={len(lane_context['open_decisions'])}"
                 )
+        if entry.get("shared_ownership"):
+            shared = entry["shared_ownership"]
+            lines.append(
+                f"  - shared ownership: {', '.join(shared['subsystems'])} ({shared['rationale']})"
+            )
         for contract in entry.get("dependent_contract_updates", []):
             lines.append(
                 f"  - also update {contract['subsystem']} contract -> {contract['contract']}"

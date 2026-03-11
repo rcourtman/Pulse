@@ -12,7 +12,7 @@ Use:
 1. `docs/release-control/v6/SOURCE_OF_TRUTH.md` for stable human governance and locked decisions
 2. `docs/release-control/v6/status.json` for live lane state, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists
 3. `docs/release-control/v6/status.schema.json` for the machine-readable status contract
-4. `docs/release-control/v6/subsystems/registry.json` and `docs/release-control/v6/subsystems/registry.schema.json` for subsystem ownership and proof-routing rules
+4. `docs/release-control/v6/subsystems/registry.json` and `docs/release-control/v6/subsystems/registry.schema.json` for subsystem ownership, explicit shared-ownership exceptions, and proof-routing rules
 5. `python3 scripts/release_control/status_audit.py --check` if you need a machine-derived evidence health audit
 6. `python3 scripts/release_control/registry_audit.py --check` if you need a machine-derived subsystem registry audit
 7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit, including explicit cross-subsystem dependency checks

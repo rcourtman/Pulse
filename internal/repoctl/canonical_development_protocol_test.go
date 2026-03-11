@@ -161,7 +161,8 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 	rel := "docs/release-control/v6/subsystems/registry.json"
 	content := readRepoFile(t, rel)
 	assertContainsAll(t, rel, content, []string{
-		"\"version\": 10",
+		"\"version\": 11",
+		"\"shared_ownerships\":",
 		"\"subsystems\":",
 		"\"verification\":",
 		"\"allow_same_subsystem_tests\":",
@@ -212,6 +213,7 @@ func TestSubsystemRegistrySchemaExistsAndDeclaresOwnershipContract(t *testing.T)
 		"\"title\": \"Pulse v6 Subsystem Registry Schema\"",
 		"\"verification\"",
 		"\"path_policy\"",
+		"\"shared_ownership\"",
 		"\"lane\"",
 		"\"owned_prefixes\"",
 	})

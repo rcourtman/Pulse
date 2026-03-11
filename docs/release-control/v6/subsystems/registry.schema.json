@@ -6,12 +6,19 @@
   "additionalProperties": false,
   "required": [
     "version",
+    "shared_ownerships",
     "subsystems"
   ],
   "properties": {
     "version": {
       "type": "integer",
-      "const": 10
+      "const": 11
+    },
+    "shared_ownerships": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/shared_ownership"
+      }
     },
     "subsystems": {
       "type": "array",
@@ -159,6 +166,34 @@
         },
         "exact_files": {
           "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "shared_ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "rationale",
+        "subsystems"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subsystems": {
+          "type": "array",
+          "minItems": 2,
           "uniqueItems": true,
           "items": {
             "type": "string",

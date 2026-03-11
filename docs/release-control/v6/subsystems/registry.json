@@ -1,5 +1,47 @@
 {
-  "version": 10,
+  "version": 11,
+  "shared_ownerships": [
+    {
+      "path": "internal/api/licensing_bridge.go",
+      "rationale": "commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
+      "path": "internal/api/licensing_handlers.go",
+      "rationale": "commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
+      "path": "internal/api/payments_webhook_handlers.go",
+      "rationale": "commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
+      "path": "internal/api/resources.go",
+      "rationale": "the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary",
+      "subsystems": [
+        "api-contracts",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "internal/api/slo.go",
+      "rationale": "the SLO endpoint is both an API contract surface and a protected performance hot-path boundary",
+      "subsystems": [
+        "api-contracts",
+        "performance-and-scalability"
+      ]
+    }
+  ],
   "subsystems": [
     {
       "id": "alerts",

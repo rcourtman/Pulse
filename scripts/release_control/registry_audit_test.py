@@ -6,7 +6,8 @@ from registry_audit import audit_registry_payload
 class RegistryAuditTest(unittest.TestCase):
     def test_audit_registry_payload_accepts_valid_minimal_registry(self) -> None:
         payload = {
-            "version": 10,
+            "version": 11,
+            "shared_ownerships": [],
             "subsystems": [
                 {
                     "id": "monitoring",
@@ -44,11 +45,13 @@ class RegistryAuditTest(unittest.TestCase):
 
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["summary"]["subsystem_count"], 1)
+        self.assertEqual(report["summary"]["shared_ownership_count"], 0)
         self.assertEqual(report["subsystems"][0]["default_fallback_count"], 0)
 
     def test_audit_registry_payload_flags_unknown_lane_and_missing_contract(self) -> None:
         payload = {
-            "version": 10,
+            "version": 11,
+            "shared_ownerships": [],
             "subsystems": [
                 {
                     "id": "alerts",
@@ -76,7 +79,8 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_flags_explicit_coverage_gap(self) -> None:
         payload = {
-            "version": 10,
+            "version": 11,
+            "shared_ownerships": [],
             "subsystems": [
                 {
                     "id": "cloud-paid",
@@ -118,7 +122,8 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_requires_explicit_coverage_flag_true(self) -> None:
         payload = {
-            "version": 10,
+            "version": 11,
+            "shared_ownerships": [],
             "subsystems": [
                 {
                     "id": "api-contracts",
@@ -162,7 +167,8 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_rejects_uncanonical_ordering(self) -> None:
         payload = {
-            "version": 10,
+            "version": 11,
+            "shared_ownerships": [],
             "subsystems": [
                 {
                     "id": "monitoring",
@@ -261,7 +267,8 @@ class RegistryAuditTest(unittest.TestCase):
 
     def test_audit_registry_payload_rejects_fully_shadowed_path_policy(self) -> None:
         payload = {
-            "version": 10,
+            "version": 11,
+            "shared_ownerships": [],
             "subsystems": [
                 {
                     "id": "monitoring",
@@ -309,6 +316,167 @@ class RegistryAuditTest(unittest.TestCase):
         self.assertIn(
             "subsystems[0].verification.path_policies[1] is unreachable because earlier path policies already match all owned runtime files",
             "\n".join(report["errors"]),
+        )
+
+    def test_audit_registry_payload_requires_declared_shared_ownership(self) -> None:
+        payload = {
+            "version": 11,
+            "shared_ownerships": [],
+            "subsystems": [
+                {
+                    "id": "api-contracts",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/api-contracts.md",
+                    "owned_prefixes": ["internal/api/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": ["internal/api/contract_test.go"],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "api-runtime",
+                                "label": "api runtime proof",
+                                "match_prefixes": ["internal/api/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/api/contract_test.go"],
+                            }
+                        ],
+                    },
+                },
+                {
+                    "id": "unified-resources",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/unified-resources.md",
+                    "owned_prefixes": ["internal/unifiedresources/"],
+                    "owned_files": ["internal/api/resources.go"],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "resource-api",
+                                "label": "resource api proof",
+                                "match_prefixes": [],
+                                "match_files": ["internal/api/resources.go"],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                            }
+                        ],
+                    },
+                },
+            ],
+        }
+        tracked_files = {
+            "docs/release-control/v6/subsystems/api-contracts.md",
+            "docs/release-control/v6/subsystems/unified-resources.md",
+            "internal/api/contract_test.go",
+            "internal/api/resources.go",
+            "internal/unifiedresources/code_standards_test.go",
+        }
+
+        report = audit_registry_payload(payload, tracked_files=tracked_files, status_lane_ids={"L6"})
+
+        self.assertIn(
+            "registry.json missing shared ownership entry for 'internal/api/resources.go' owned by ['api-contracts', 'unified-resources']",
+            "\n".join(report["errors"]),
+        )
+
+    def test_audit_registry_payload_rejects_stale_or_wrong_shared_ownership(self) -> None:
+        payload = {
+            "version": 11,
+            "shared_ownerships": [
+                {
+                    "path": "internal/api/resources.go",
+                    "rationale": "shared api resource boundary",
+                    "subsystems": ["api-contracts", "monitoring"],
+                },
+                {
+                    "path": "internal/api/stale.go",
+                    "rationale": "stale declaration",
+                    "subsystems": ["api-contracts", "unified-resources"],
+                },
+            ],
+            "subsystems": [
+                {
+                    "id": "api-contracts",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/api-contracts.md",
+                    "owned_prefixes": ["internal/api/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": ["internal/api/contract_test.go"],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "api-runtime",
+                                "label": "api runtime proof",
+                                "match_prefixes": ["internal/api/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/api/contract_test.go"],
+                            }
+                        ],
+                    },
+                },
+                {
+                    "id": "unified-resources",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/unified-resources.md",
+                    "owned_prefixes": ["internal/unifiedresources/"],
+                    "owned_files": ["internal/api/resources.go"],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "resource-api",
+                                "label": "resource api proof",
+                                "match_prefixes": [],
+                                "match_files": ["internal/api/resources.go"],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                            }
+                        ],
+                    },
+                },
+            ],
+        }
+        tracked_files = {
+            "docs/release-control/v6/subsystems/api-contracts.md",
+            "docs/release-control/v6/subsystems/unified-resources.md",
+            "internal/api/contract_test.go",
+            "internal/api/resources.go",
+            "internal/api/stale.go",
+            "internal/unifiedresources/code_standards_test.go",
+        }
+
+        report = audit_registry_payload(payload, tracked_files=tracked_files, status_lane_ids={"L6"})
+
+        joined = "\n".join(report["errors"])
+        self.assertIn(
+            "shared_ownerships[0].subsystems = ['api-contracts', 'monitoring'], want ['api-contracts', 'unified-resources']",
+            joined,
+        )
+        self.assertIn(
+            "shared_ownerships[1].path = 'internal/api/stale.go' is not an actual shared-owned runtime file",
+            joined,
+        )
+        self.assertIn(
+            "registry.json shared ownership entry for 'internal/api/stale.go' is stale",
+            joined,
         )
 
 

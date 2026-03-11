@@ -34,7 +34,8 @@ The first two files answer release priority and current lane state.
 evidence references, and typed lane/subsystem decision records.
 `status.schema.json` owns the machine-readable status contract.
 `subsystems/registry.schema.json` owns the machine-readable subsystem registry
-contract.
+contract, including explicit shared-runtime ownership declarations for
+intentionally multi-owner files.
 The protocol, subsystem registry, and subsystem contracts answer how work must
 be done.
 
@@ -83,6 +84,9 @@ Each contract must also carry structured metadata that binds the markdown file
 to its registry subsystem id, owning lane in `status.json`, and exact declared
 cross-subsystem dependencies implied by its canonical-file and extension-point
 references.
+If a runtime file is intentionally owned by multiple subsystems, that overlap
+must be declared explicitly in `registry.json`; accidental overlap is not an
+allowed registry state.
 
 ## Task Completion Protocol
 

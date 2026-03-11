@@ -16,6 +16,10 @@ class SubsystemLookupTest(unittest.TestCase):
         file_entry = result["files"][0]
         matches = {match["subsystem"] for match in file_entry["matches"]}
         self.assertEqual(matches, {"api-contracts", "unified-resources"})
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["api-contracts", "unified-resources"],
+        )
         for match in file_entry["matches"]:
             self.assertEqual(match["lane_context"]["lane_id"], "L6")
             self.assertEqual(match["lane_context"]["lane"]["id"], "L6")
