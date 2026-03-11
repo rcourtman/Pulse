@@ -68,6 +68,14 @@ func (m *Monitor) activeAlertsSnapshot() []models.Alert {
 	return modelAlerts
 }
 
+func (m *Monitor) recentlyResolvedAlertsSnapshot() []models.ResolvedAlert {
+	if m == nil || m.alertManager == nil {
+		return nil
+	}
+
+	return m.alertManager.GetRecentlyResolved()
+}
+
 func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.Resource) {
 	if m == nil || m.alertManager == nil {
 		return

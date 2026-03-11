@@ -2581,12 +2581,12 @@ func (m *Monitor) StorageSnapshot() []models.Storage {
 
 // ActiveAlertsSnapshot returns the current active alerts.
 func (m *Monitor) ActiveAlertsSnapshot() []models.Alert {
-	return m.GetState().ActiveAlerts
+	return m.activeAlertsSnapshot()
 }
 
 // RecentlyResolvedSnapshot returns the recently resolved alerts.
 func (m *Monitor) RecentlyResolvedSnapshot() []models.ResolvedAlert {
-	return m.GetState().RecentlyResolved
+	return m.recentlyResolvedAlertsSnapshot()
 }
 
 // PVEBackupsSnapshot returns the current PVE backups.

@@ -531,6 +531,101 @@ func TestBuildBroadcastFrontendStatePrefersLiveAlertManagerOverSnapshotAlerts(t 
 	}
 }
 
+func TestActiveAlertsSnapshotPrefersLiveAlertManagerOverStateSnapshot(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	alertManager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{{
+		ID:      "agent:truenas-live",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "truenas-live",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-live"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "live-active-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Pool tank is FAULTED",
+		}},
+	}})
+
+	state := models.NewState()
+	state.UpdateActiveAlerts([]models.Alert{{
+		ID:           "snapshot-active-1",
+		Type:         "offline",
+		ResourceID:   "snapshot-resource",
+		ResourceName: "snapshot-resource",
+		Message:      "stale snapshot active alert",
+	}})
+
+	monitor := &Monitor{
+		state:        state,
+		alertManager: alertManager,
+	}
+
+	active := monitor.ActiveAlertsSnapshot()
+	if len(active) != 1 {
+		t.Fatalf("expected 1 live active alert, got %d", len(active))
+	}
+	if got := active[0].ID; got == "snapshot-active-1" || got == "" {
+		t.Fatalf("expected live alert manager alert id, got %q", got)
+	}
+	if got := active[0].Type; got != "storage-incident" {
+		t.Fatalf("alert type = %q, want storage-incident", got)
+	}
+}
+
+func TestRecentlyResolvedSnapshotPrefersLiveAlertManagerOverStateSnapshot(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	resource := unifiedresources.Resource{
+		ID:      "agent:truenas-live",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "truenas-live",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-live"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "live-resolved-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Pool tank is FAULTED",
+		}},
+	}
+	alertManager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+	alertManager.SyncUnifiedResourceIncidents(nil)
+
+	state := models.NewState()
+	state.UpdateRecentlyResolved([]models.ResolvedAlert{{
+		Alert: models.Alert{
+			ID:           "snapshot-resolved-1",
+			Type:         "offline",
+			ResourceID:   "snapshot-resource",
+			ResourceName: "snapshot-resource",
+			Message:      "stale snapshot resolved alert",
+		},
+		ResolvedTime: time.Now().UTC(),
+	}})
+
+	monitor := &Monitor{
+		state:        state,
+		alertManager: alertManager,
+	}
+
+	resolved := monitor.RecentlyResolvedSnapshot()
+	if len(resolved) == 0 {
+		t.Fatal("expected recently resolved alert from live alert manager")
+	}
+	if got := resolved[0].ID; got == "snapshot-resolved-1" || got == "" {
+		t.Fatalf("expected live resolved alert id, got %q", got)
+	}
+	if got := resolved[0].Type; got != "storage-incident" {
+		t.Fatalf("resolved alert type = %q, want storage-incident", got)
+	}
+}
+
 func TestRecordTaskResult_Success(t *testing.T) {
 	m := &Monitor{
 		pollStatusMap:   make(map[string]*pollStatus),
