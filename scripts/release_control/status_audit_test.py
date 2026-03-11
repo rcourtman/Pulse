@@ -41,6 +41,7 @@ class StatusAuditTest(unittest.TestCase):
                     },
                     "weights": {
                         "gap_multiplier": 4,
+                        "blocker_bonus": 8,
                         "criticality_range": "0-5",
                         "staleness_range": "0-3",
                         "dependency_range": "0-3",
@@ -135,6 +136,7 @@ class StatusAuditTest(unittest.TestCase):
                     },
                     "weights": {
                         "gap_multiplier": 4,
+                        "blocker_bonus": 8,
                         "criticality_range": "0-5",
                         "staleness_range": "0-3",
                         "dependency_range": "0-3",
@@ -233,6 +235,7 @@ class StatusAuditTest(unittest.TestCase):
                     },
                     "weights": {
                         "gap_multiplier": 4,
+                        "blocker_bonus": 8,
                         "criticality_range": "0-5",
                         "staleness_range": "0-3",
                         "dependency_range": "0-3",
@@ -309,6 +312,7 @@ class StatusAuditTest(unittest.TestCase):
                     },
                     "weights": {
                         "gap_multiplier": 4,
+                        "blocker_bonus": 8,
                         "criticality_range": "0-5",
                         "staleness_range": "0-3",
                         "dependency_range": "0-3",
@@ -359,6 +363,220 @@ class StatusAuditTest(unittest.TestCase):
             self.assertTrue(report["errors"])
             self.assertIn(
                 "open_decisions[0] subsystem_id 'frontend-primitives' belongs to lane 'L8', which is not present in lane_ids ['L3']",
+                "\n".join(report["errors"]),
+            )
+
+    def test_audit_status_payload_rejects_uncanonical_ordering(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pulse = root / "pulse"
+            pulse.mkdir()
+            (pulse / "docs").mkdir()
+            (pulse / "docs" / "a.md").write_text("proof", encoding="utf-8")
+            (pulse / "docs" / "b.md").write_text("proof", encoding="utf-8")
+
+            pulse_pro = root / "pulse-pro"
+            pulse_pro.mkdir()
+            (pulse_pro / "proof.md").write_text("proof", encoding="utf-8")
+
+            payload = {
+                "version": "6.0",
+                "updated_at": "2026-03-11",
+                "execution_model": "direct-repo-sessions",
+                "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "scope": {
+                    "active_repos": ["pulse-pro", "pulse"],
+                    "ignored_repos": ["pulse-refactor-streams", "pulse-5.1.x"],
+                },
+                "source_precedence": [
+                    "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                    "docs/release-control/v6/status.json",
+                    "docs/release-control/v6/status.schema.json",
+                    "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+                    "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
+                ],
+                "priority_engine": {
+                    "formula": "gap-first",
+                    "floor_rule": {
+                        "release_critical_lanes": ["L10", "L2"],
+                        "minimum_score": 6,
+                    },
+                    "weights": {
+                        "gap_multiplier": 4,
+                        "blocker_bonus": 8,
+                        "criticality_range": "0-5",
+                        "staleness_range": "0-3",
+                        "dependency_range": "0-3",
+                    },
+                },
+                "evidence_reference_policy": {
+                    "format": "repo-qualified-relative-paths",
+                    "allowed_kinds": ["file", "dir"],
+                    "absolute_paths_forbidden": True,
+                    "local_repo": "pulse",
+                },
+                "lanes": [
+                    {
+                        "id": "L10",
+                        "name": "Performance",
+                        "target_score": 8,
+                        "current_score": 7,
+                        "status": "partial",
+                        "subsystems": [],
+                        "evidence": [
+                            {"repo": "pulse-pro", "path": "proof.md", "kind": "file"},
+                            {"repo": "pulse", "path": "docs/a.md", "kind": "file"},
+                        ],
+                    },
+                    {
+                        "id": "L2",
+                        "name": "Commercial",
+                        "target_score": 9,
+                        "current_score": 8,
+                        "status": "partial",
+                        "subsystems": [],
+                        "evidence": [
+                            {"repo": "pulse", "path": "docs/b.md", "kind": "file"},
+                        ],
+                    },
+                ],
+                "open_decisions": [
+                    {
+                        "id": "d2",
+                        "summary": "Later decision",
+                        "owner": "project-owner",
+                        "status": "open",
+                        "opened_at": "2026-03-11",
+                        "subsystem_ids": [],
+                        "lane_ids": ["L10", "L2"],
+                    },
+                    {
+                        "id": "d1",
+                        "summary": "Earlier decision",
+                        "owner": "project-owner",
+                        "status": "open",
+                        "opened_at": "2026-03-10",
+                        "subsystem_ids": [],
+                        "lane_ids": ["L2"],
+                    },
+                ],
+                "resolved_decisions": [
+                    {
+                        "id": "r2",
+                        "summary": "Later decision",
+                        "kind": "governance",
+                        "decided_at": "2026-03-11",
+                        "subsystem_ids": [],
+                        "lane_ids": ["L10", "L2"],
+                    },
+                    {
+                        "id": "r1",
+                        "summary": "Earlier decision",
+                        "kind": "governance",
+                        "decided_at": "2026-03-10",
+                        "subsystem_ids": [],
+                        "lane_ids": ["L2"],
+                    },
+                ],
+            }
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "PULSE_REPO_ROOT_PULSE": str(pulse),
+                    "PULSE_REPO_ROOT_PULSE_PRO": str(pulse_pro),
+                },
+                clear=False,
+            ), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            joined_errors = "\n".join(report["errors"])
+            self.assertIn("scope.active_repos must be sorted lexicographically", joined_errors)
+            self.assertIn("scope.ignored_repos must be sorted lexicographically", joined_errors)
+            self.assertIn(
+                "priority_engine.floor_rule.release_critical_lanes must be sorted by lane id",
+                joined_errors,
+            )
+            self.assertIn("status.json lanes must be sorted by lane id", joined_errors)
+            self.assertIn("lanes[0].evidence must be sorted by repo, path, then kind", joined_errors)
+            self.assertIn("open_decisions[0].lane_ids must be sorted by lane id", joined_errors)
+            self.assertIn("status.json open_decisions must be sorted by opened_at then id", joined_errors)
+            self.assertIn("resolved_decisions[0].lane_ids must be sorted by lane id", joined_errors)
+            self.assertIn("status.json resolved_decisions must be sorted by decided_at then id", joined_errors)
+
+    def test_audit_status_payload_requires_blocker_bonus(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pulse = root / "pulse"
+            pulse.mkdir()
+            (pulse / "docs").mkdir()
+            (pulse / "docs" / "proof.md").write_text("proof", encoding="utf-8")
+
+            payload = {
+                "version": "6.0",
+                "updated_at": "2026-03-11",
+                "execution_model": "direct-repo-sessions",
+                "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "scope": {
+                    "active_repos": ["pulse"],
+                    "ignored_repos": [],
+                },
+                "source_precedence": [
+                    "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                    "docs/release-control/v6/status.json",
+                    "docs/release-control/v6/status.schema.json",
+                    "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+                    "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
+                ],
+                "priority_engine": {
+                    "formula": "gap-first",
+                    "floor_rule": {
+                        "release_critical_lanes": ["L1"],
+                        "minimum_score": 6,
+                    },
+                    "weights": {
+                        "gap_multiplier": 4,
+                        "criticality_range": "0-5",
+                        "staleness_range": "0-3",
+                        "dependency_range": "0-3",
+                    },
+                },
+                "evidence_reference_policy": {
+                    "format": "repo-qualified-relative-paths",
+                    "allowed_kinds": ["file", "dir"],
+                    "absolute_paths_forbidden": True,
+                    "local_repo": "pulse",
+                },
+                "lanes": [
+                    {
+                        "id": "L1",
+                        "name": "Lane 1",
+                        "target_score": 8,
+                        "current_score": 6,
+                        "status": "partial",
+                        "subsystems": [],
+                        "evidence": [
+                            {"repo": "pulse", "path": "docs/proof.md", "kind": "file"},
+                        ],
+                    }
+                ],
+                "open_decisions": [],
+                "resolved_decisions": [],
+            }
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertIn(
+                "priority_engine.weights missing numeric blocker_bonus",
                 "\n".join(report["errors"]),
             )
 

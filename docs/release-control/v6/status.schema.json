@@ -107,6 +107,7 @@
         "active_repos": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -114,6 +115,7 @@
         },
         "ignored_repos": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -138,6 +140,7 @@
         "allowed_kinds": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "enum": [
@@ -180,6 +183,7 @@
             "release_critical_lanes": {
               "type": "array",
               "minItems": 1,
+              "uniqueItems": true,
               "items": {
                 "type": "string",
                 "pattern": "^L[0-9]+$"
@@ -195,12 +199,16 @@
           "additionalProperties": false,
           "required": [
             "gap_multiplier",
+            "blocker_bonus",
             "criticality_range",
             "staleness_range",
             "dependency_range"
           ],
           "properties": {
             "gap_multiplier": {
+              "type": "number"
+            },
+            "blocker_bonus": {
               "type": "number"
             },
             "criticality_range": {
@@ -342,6 +350,7 @@
         "lane_ids": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "pattern": "^L[0-9]+$"
@@ -395,6 +404,7 @@
         "lane_ids": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "pattern": "^L[0-9]+$"

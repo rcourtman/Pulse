@@ -4,9 +4,9 @@
   "scope": {
     "active_repos": [
       "pulse",
-      "pulse-pro",
       "pulse-enterprise",
-      "pulse-mobile"
+      "pulse-mobile",
+      "pulse-pro"
     ],
     "ignored_repos": [
       "pulse-5.1.x",
@@ -81,12 +81,12 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/architecture/release-readiness-guiding-light-2026-02.md",
+          "path": "docs/architecture/conversion-operations-runbook.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "docs/architecture/conversion-operations-runbook.md",
+          "path": "docs/architecture/release-readiness-guiding-light-2026-02.md",
           "kind": "file"
         },
         {
@@ -137,13 +137,13 @@
       "subsystems": [],
       "evidence": [
         {
-          "repo": "pulse-pro",
-          "path": "V6_LAUNCH_CHECKLIST.md",
+          "repo": "pulse-mobile",
+          "path": "store/listing.md",
           "kind": "file"
         },
         {
-          "repo": "pulse-mobile",
-          "path": "store/listing.md",
+          "repo": "pulse-pro",
+          "path": "V6_LAUNCH_CHECKLIST.md",
           "kind": "file"
         }
       ]
@@ -182,9 +182,9 @@
       "subsystems": [],
       "evidence": [
         {
-          "repo": "pulse-pro",
-          "path": "relay-server",
-          "kind": "dir"
+          "repo": "pulse",
+          "path": "docs/RELAY.md",
+          "kind": "file"
         },
         {
           "repo": "pulse",
@@ -197,9 +197,9 @@
           "kind": "dir"
         },
         {
-          "repo": "pulse",
-          "path": "docs/RELAY.md",
-          "kind": "file"
+          "repo": "pulse-pro",
+          "path": "relay-server",
+          "kind": "dir"
         }
       ]
     },
@@ -215,12 +215,12 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/SetupWizard/steps/CompleteStep.tsx",
+          "path": "frontend-modern/src/components/Settings/Settings.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/Settings.tsx",
+          "path": "frontend-modern/src/components/SetupWizard/steps/CompleteStep.tsx",
           "kind": "file"
         },
         {
@@ -277,17 +277,17 @@
         },
         {
           "repo": "pulse",
-          "path": "tests/integration/tests/02-navigation-perf.spec.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "internal/api/http_metrics.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "pkg/metrics/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/02-navigation-perf.spec.ts",
           "kind": "file"
         }
       ]
@@ -302,42 +302,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "tests/migration/v5_full_upgrade_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "tests/migration/v5_commercial_migration_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "tests/integration/tests/12-v5-commercial-migration.spec.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/api/frontend_embed_sync_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/scripts/sync-embed-dist.mjs",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "tests/migration/v5_to_v6_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "tests/migration/v5_session_db_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/UPGRADE_v6.md",
+          "path": "docs/release-control/v6/LEGACY_HOST_CLASSIFICATION_2026-03-05.md",
           "kind": "file"
         },
         {
@@ -347,7 +312,42 @@
         },
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/LEGACY_HOST_CLASSIFICATION_2026-03-05.md",
+          "path": "docs/UPGRADE_v6.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/scripts/sync-embed-dist.mjs",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/frontend_embed_sync_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/12-v5-commercial-migration.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_commercial_migration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_full_upgrade_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_session_db_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_to_v6_test.go",
           "kind": "file"
         }
       ]
@@ -370,8 +370,8 @@
   ],
   "open_decisions": [
     {
-      "id": "cloud-msp-stripe-prices",
-      "summary": "Create Cloud/MSP Stripe prices in Stripe and record concrete price_* IDs.",
+      "id": "cloud-msp-price-id-propagation",
+      "summary": "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings.",
       "owner": "project-owner",
       "status": "open",
       "opened_at": "2026-02-27",
@@ -385,8 +385,8 @@
       ]
     },
     {
-      "id": "cloud-msp-price-id-propagation",
-      "summary": "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings.",
+      "id": "cloud-msp-stripe-prices",
+      "summary": "Create Cloud/MSP Stripe prices in Stripe and record concrete price_* IDs.",
       "owner": "project-owner",
       "status": "open",
       "opened_at": "2026-02-27",
@@ -454,16 +454,6 @@
       ]
     },
     {
-      "id": "v5-license-bridge-landed",
-      "summary": "The v5-to-v6 license migration bridge landed, including upgrade exchange, activation input acceptance, and aligned public migration guidance.",
-      "kind": "migration",
-      "decided_at": "2026-03-06",
-      "subsystem_ids": [],
-      "lane_ids": [
-        "L11"
-      ]
-    },
-    {
       "id": "trial-authority-saas-controlled",
       "summary": "Trial authority for v6 is SaaS-controlled; hosted signup initiates trial start and local runtime may only redeem signed trial activations.",
       "kind": "contract",
@@ -478,10 +468,10 @@
       ]
     },
     {
-      "id": "commercial-migration-truth-table-owned",
-      "summary": "The v5 commercial migration truth table is owned by v6 release-control and unresolved paid-license states must remain preserved through migration.",
+      "id": "v5-license-bridge-landed",
+      "summary": "The v5-to-v6 license migration bridge landed, including upgrade exchange, activation input acceptance, and aligned public migration guidance.",
       "kind": "migration",
-      "decided_at": "2026-03-07",
+      "decided_at": "2026-03-06",
       "subsystem_ids": [],
       "lane_ids": [
         "L11"
@@ -490,6 +480,16 @@
     {
       "id": "browser-proof-commercial-migration",
       "summary": "Browser-level proof exists for unresolved v5 commercial migration states via the upgraded-fixture commercial migration spec.",
+      "kind": "migration",
+      "decided_at": "2026-03-07",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L11"
+      ]
+    },
+    {
+      "id": "commercial-migration-truth-table-owned",
+      "summary": "The v5 commercial migration truth table is owned by v6 release-control and unresolved paid-license states must remain preserved through migration.",
       "kind": "migration",
       "decided_at": "2026-03-07",
       "subsystem_ids": [],

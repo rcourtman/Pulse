@@ -33,6 +33,23 @@ REQUIRED_SOURCE_PRECEDENCE = [
 DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
 
+def _lane_sort_key(value: str) -> tuple[int, str]:
+    match = re.match(r"^L([0-9]+)$", value)
+    if not match:
+        return (sys.maxsize, value)
+    return (int(match.group(1)), value)
+
+
+def _evidence_sort_key(value: tuple[str, str, str]) -> tuple[str, str, str]:
+    repo, path, kind = value
+    return (repo.casefold(), path.casefold(), kind.casefold())
+
+
+def _decision_sort_key(value: tuple[str, str]) -> tuple[str, str]:
+    date_value, decision_id = value
+    return (date_value, decision_id.casefold())
+
+
 def load_status_schema() -> dict[str, Any]:
     return json.loads(STATUS_SCHEMA_PATH.read_text(encoding="utf-8"))
 
@@ -150,6 +167,14 @@ def validate_scope(payload: dict[str, Any], errors: list[str]) -> tuple[list[str
         return [], []
     active_repos = _require_string_list(scope, "active_repos", errors, context="scope")
     ignored_repos = _require_string_list(scope, "ignored_repos", errors, context="scope")
+    if len(active_repos) != len(set(active_repos)):
+        errors.append("scope.active_repos must not contain duplicates")
+    if active_repos != sorted(active_repos):
+        errors.append("scope.active_repos must be sorted lexicographically")
+    if len(ignored_repos) != len(set(ignored_repos)):
+        errors.append("scope.ignored_repos must not contain duplicates")
+    if ignored_repos != sorted(ignored_repos):
+        errors.append("scope.ignored_repos must be sorted lexicographically")
     return active_repos, ignored_repos
 
 
@@ -162,18 +187,28 @@ def validate_source_precedence(payload: dict[str, Any], errors: list[str]) -> No
         return
 
 
-def validate_priority_engine(payload: dict[str, Any], errors: list[str]) -> None:
+def validate_priority_engine(payload: dict[str, Any], errors: list[str]) -> list[str]:
     engine = payload.get("priority_engine")
     if not isinstance(engine, dict):
         errors.append("status.json missing priority_engine object")
-        return
+        return []
     _require_string(engine, "formula", errors, context="priority_engine")
 
+    release_critical_lanes: list[str] = []
     floor_rule = engine.get("floor_rule")
     if not isinstance(floor_rule, dict):
         errors.append("priority_engine missing floor_rule object")
     else:
-        _require_string_list(floor_rule, "release_critical_lanes", errors, context="priority_engine.floor_rule")
+        release_critical_lanes = _require_string_list(
+            floor_rule,
+            "release_critical_lanes",
+            errors,
+            context="priority_engine.floor_rule",
+        )
+        if len(release_critical_lanes) != len(set(release_critical_lanes)):
+            errors.append("priority_engine.floor_rule.release_critical_lanes must not contain duplicates")
+        if release_critical_lanes != sorted(release_critical_lanes, key=_lane_sort_key):
+            errors.append("priority_engine.floor_rule.release_critical_lanes must be sorted by lane id")
         minimum_score = floor_rule.get("minimum_score")
         if not isinstance(minimum_score, (int, float)):
             errors.append("priority_engine.floor_rule missing numeric minimum_score")
@@ -182,11 +217,12 @@ def validate_priority_engine(payload: dict[str, Any], errors: list[str]) -> None
     if not isinstance(weights, dict):
         errors.append("priority_engine missing weights object")
     else:
-        for key in ("gap_multiplier",):
+        for key in ("gap_multiplier", "blocker_bonus"):
             if not isinstance(weights.get(key), (int, float)):
                 errors.append(f"priority_engine.weights missing numeric {key}")
         for key in ("criticality_range", "staleness_range", "dependency_range"):
             _require_string(weights, key, errors, context="priority_engine.weights")
+    return release_critical_lanes
 
 
 def validate_evidence_policy(payload: dict[str, Any], errors: list[str]) -> tuple[set[str], str | None]:
@@ -236,6 +272,7 @@ def audit_lanes(
     lane_reports: list[dict[str, Any]] = []
     seen_lane_ids: set[str] = set()
     lane_ids: set[str] = set()
+    lane_order: list[str] = []
 
     for index, raw_lane in enumerate(lanes):
         context = f"lanes[{index}]"
@@ -248,6 +285,7 @@ def audit_lanes(
             errors.append(f"{context} duplicates lane id {lane_id}")
         seen_lane_ids.add(lane_id)
         lane_ids.add(lane_id)
+        lane_order.append(lane_id)
 
         lane_name = _require_string(raw_lane, "name", errors, context=context) or lane_id
         target = _require_number(raw_lane, "target_score", errors, context=context) or 0.0
@@ -273,6 +311,7 @@ def audit_lanes(
 
         missing_evidence: list[str] = []
         resolved_evidence: list[str] = []
+        evidence_refs: list[tuple[str, str, str]] = []
         for evidence_index, raw_evidence_ref in enumerate(raw_evidence):
             evidence_context = f"{context}.evidence[{evidence_index}]"
             if not isinstance(raw_evidence_ref, dict):
@@ -284,6 +323,7 @@ def audit_lanes(
             kind = _require_string(raw_evidence_ref, "kind", errors, context=evidence_context)
             if repo is None or path is None or kind is None:
                 continue
+            evidence_refs.append((repo, path, kind))
             if repo not in active_repos:
                 errors.append(f"{evidence_context} repo {repo!r} is not in active_repos")
                 continue
@@ -315,6 +355,11 @@ def audit_lanes(
                 continue
             resolved_evidence.append(f"{repo}:{path}")
 
+        if len(evidence_refs) != len(set(evidence_refs)):
+            errors.append(f"{context}.evidence must not contain duplicate repo/path/kind references")
+        if evidence_refs != sorted(evidence_refs, key=_evidence_sort_key):
+            errors.append(f"{context}.evidence must be sorted by repo, path, then kind")
+
         at_target = current >= target
         all_evidence_present = len(missing_evidence) == 0
         derived_status = _derived_lane_status(
@@ -344,6 +389,9 @@ def audit_lanes(
                 "missing_evidence": missing_evidence,
             }
         )
+
+    if lane_order != sorted(lane_order, key=_lane_sort_key):
+        errors.append("status.json lanes must be sorted by lane id")
 
     return lane_reports, lane_ids
 
@@ -441,6 +489,10 @@ def validate_open_decisions(
             _validate_date(opened_at, errors, context=f"{context}.opened_at")
         if status and status not in VALID_OPEN_DECISION_STATUSES:
             errors.append(f"{context} has invalid status {status!r}")
+        if len(lane_refs) != len(set(lane_refs)):
+            errors.append(f"{context}.lane_ids must not contain duplicates")
+        if lane_refs != sorted(lane_refs, key=_lane_sort_key):
+            errors.append(f"{context}.lane_ids must be sorted by lane id")
         for lane_id in lane_refs:
             if lane_id not in lane_ids:
                 errors.append(f"{context} references unknown lane_id {lane_id!r}")
@@ -464,6 +516,10 @@ def validate_open_decisions(
                     "subsystem_ids": subsystem_refs,
                 }
             )
+
+    order = [(record["opened_at"], record["id"]) for record in records]
+    if len(records) == len(decisions) and order != sorted(order, key=_decision_sort_key):
+        errors.append("status.json open_decisions must be sorted by opened_at then id")
 
     return records
 
@@ -496,6 +552,10 @@ def validate_resolved_decisions(
             errors.append(f"{context} has invalid kind {kind!r}")
         if decided_at:
             _validate_date(decided_at, errors, context=f"{context}.decided_at")
+        if len(lane_refs) != len(set(lane_refs)):
+            errors.append(f"{context}.lane_ids must not contain duplicates")
+        if lane_refs != sorted(lane_refs, key=_lane_sort_key):
+            errors.append(f"{context}.lane_ids must be sorted by lane id")
         for lane_id in lane_refs:
             if lane_id not in lane_ids:
                 errors.append(f"{context} references unknown lane_id {lane_id!r}")
@@ -518,6 +578,10 @@ def validate_resolved_decisions(
                     "subsystem_ids": subsystem_refs,
                 }
             )
+
+    order = [(record["decided_at"], record["id"]) for record in records]
+    if len(records) == len(decisions) and order != sorted(order, key=_decision_sort_key):
+        errors.append("status.json resolved_decisions must be sorted by decided_at then id")
 
     return records
 
@@ -555,7 +619,7 @@ def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
         errors.append("status.json scope must not list the same repo as both active and ignored")
 
     validate_source_precedence(payload, errors)
-    validate_priority_engine(payload, errors)
+    release_critical_lanes = validate_priority_engine(payload, errors)
     allowed_kinds, local_repo = validate_evidence_policy(payload, errors)
     if local_repo and local_repo not in active_repo_set:
         errors.append("status.json evidence_reference_policy.local_repo must be present in active_repos")
@@ -569,6 +633,9 @@ def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
     subsystem_to_lane = subsystem_lane_map()
     validate_lane_subsystem_bindings(lane_reports, errors)
+    for lane_id in release_critical_lanes:
+        if lane_id not in lane_ids:
+            errors.append(f"priority_engine.floor_rule.release_critical_lanes references unknown lane_id {lane_id!r}")
     open_decisions = validate_open_decisions(
         payload,
         lane_ids=lane_ids,
