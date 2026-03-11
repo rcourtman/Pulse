@@ -21,6 +21,7 @@ Useful helper tools:
 
 - `python3 scripts/release_control/contract_audit.py --check` for structured subsystem contract metadata, explicit cross-subsystem dependency declarations, shared-boundary declarations, required sections, and canonical path references
   Shared-boundary entries must match the exact registry-derived sentence shape, not freeform prose.
+  Local pre-commit runs the same audit with `--staged` so contract validation is based on the actual index content being committed.
 - `python3 scripts/release_control/status_audit.py --check`
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations

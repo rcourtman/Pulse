@@ -71,7 +71,7 @@ python3 scripts/release_control/registry_audit.py --check
 
 # Enforce structured subsystem contract integrity
 echo "Running contract audit..."
-python3 scripts/release_control/contract_audit.py --check
+python3 scripts/release_control/contract_audit.py --check --staged
 
 # Enforce release-control and governance file integrity locally too
 echo "Running governance guardrail tests..."

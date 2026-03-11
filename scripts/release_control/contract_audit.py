@@ -11,6 +11,7 @@ import sys
 from typing import Any
 
 from canonical_completion_guard import REPO_ROOT, subsystem_matches_path
+from subsystem_contracts import tracked_contract_files
 
 
 CONTRACTS_DIR = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems"
@@ -75,15 +76,6 @@ def load_registry_payload() -> dict[str, Any]:
 
 def load_status_payload() -> dict[str, Any]:
     return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
-
-
-def tracked_contract_files() -> dict[str, str]:
-    payload: dict[str, str] = {}
-    for path in sorted(CONTRACTS_DIR.glob("*.md")):
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        payload[rel] = path.read_text(encoding="utf-8")
-    return payload
-
 
 def section_body(lines: list[str], heading: str) -> list[str]:
     start = next(index for index, line in enumerate(lines) if line == heading) + 1
@@ -498,6 +490,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Print a concise human-readable summary instead of JSON.",
     )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Read subsystem contracts from the git index instead of the working tree.",
+    )
     return parser.parse_args(argv)
 
 
@@ -526,7 +523,7 @@ def main(argv: list[str] | None = None) -> int:
     report = audit_contract_payload(
         registry_payload=load_registry_payload(),
         status_payload=load_status_payload(),
-        contract_texts=tracked_contract_files(),
+        contract_texts=tracked_contract_files(staged=args.staged),
     )
     output = render_pretty(report) if args.pretty else json.dumps(report, indent=2, sort_keys=True)
     print(output)

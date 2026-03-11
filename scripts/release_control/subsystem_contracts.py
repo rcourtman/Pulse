@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import subprocess
 from typing import Any
 
 
@@ -43,10 +44,27 @@ PATH_SUFFIXES = (
 )
 
 
-def tracked_contract_files() -> dict[str, str]:
+def staged_contract_text(rel: str) -> str:
+    result = subprocess.run(
+        ["git", "show", f":{rel}"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+def tracked_contract_files(*, staged: bool = False) -> dict[str, str]:
     payload: dict[str, str] = {}
     for path in sorted(CONTRACTS_DIR.glob("*.md")):
         rel = path.relative_to(REPO_ROOT).as_posix()
+        if staged:
+            try:
+                payload[rel] = staged_contract_text(rel)
+                continue
+            except subprocess.CalledProcessError:
+                pass
         payload[rel] = path.read_text(encoding="utf-8")
     return payload
 
@@ -143,9 +161,13 @@ def parse_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
     }, errors
 
 
-def load_contract_graph(contract_texts: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
+def load_contract_graph(
+    contract_texts: dict[str, str] | None = None,
+    *,
+    staged: bool = False,
+) -> dict[str, dict[str, Any]]:
     graph: dict[str, dict[str, Any]] = {}
-    for rel, content in (contract_texts or tracked_contract_files()).items():
+    for rel, content in (contract_texts or tracked_contract_files(staged=staged)).items():
         if rel == TEMPLATE_REL or not rel.endswith(".md"):
             continue
         parsed, _ = parse_contract_text(rel, content)

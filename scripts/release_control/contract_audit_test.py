@@ -1,9 +1,14 @@
 import unittest
 
-from contract_audit import audit_contract_payload
+from contract_audit import audit_contract_payload, parse_args
 
 
 class ContractAuditTest(unittest.TestCase):
+    def test_parse_args_accepts_staged_flag(self) -> None:
+        args = parse_args(["--check", "--staged"])
+        self.assertTrue(args.check)
+        self.assertTrue(args.staged)
+
     def test_audit_contract_payload_accepts_valid_contracts(self) -> None:
         registry_payload = {
             "subsystems": [

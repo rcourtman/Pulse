@@ -246,10 +246,12 @@ def infer_impacted_subsystems(staged_files: Sequence[str]) -> Dict[str, dict]:
 def required_contract_updates(
     staged_files: Sequence[str],
     impacted: Dict[str, dict] | None = None,
+    *,
+    use_staged_contract_graph: bool = False,
 ) -> Dict[str, dict]:
     impacted_subsystems = impacted if impacted is not None else infer_impacted_subsystems(staged_files)
     required: Dict[str, dict] = {}
-    contract_graph = load_contract_graph()
+    contract_graph = load_contract_graph(staged=use_staged_contract_graph)
 
     for subsystem_id, data in impacted_subsystems.items():
         required[data["contract"]] = {
@@ -448,7 +450,11 @@ def format_missing_requirements(
 def check_staged_contracts(staged_files: Sequence[str]) -> int:
     staged_set: Set[str] = set(staged_files)
     impacted = infer_impacted_subsystems(staged_files)
-    required_contracts = required_contract_updates(staged_files, impacted)
+    required_contracts = required_contract_updates(
+        staged_files,
+        impacted,
+        use_staged_contract_graph=True,
+    )
     missing_contracts = {
         contract_path: data
         for contract_path, data in required_contracts.items()
