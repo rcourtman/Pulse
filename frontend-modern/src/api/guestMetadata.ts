@@ -1,25 +1,19 @@
 // Guest Metadata API
-import { apiFetchJSON } from '@/utils/apiClient';
+import { buildMetadataAPI, type ResourceMetadataRecord } from './metadataClient';
 
-export interface GuestMetadata {
-  id: string;
-  customUrl?: string;
-  description?: string;
-  tags?: string[];
-  notes?: string[]; // User annotations for AI context
-}
+export interface GuestMetadata extends ResourceMetadataRecord {}
+
+const guestMetadataAPI = buildMetadataAPI<GuestMetadata>('/api/guests/metadata');
 
 export class GuestMetadataAPI {
-  private static baseUrl = '/api/guests/metadata';
-
   // Get metadata for a specific guest
   static async getMetadata(guestId: string): Promise<GuestMetadata> {
-    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(guestId)}`);
+    return guestMetadataAPI.getMetadata(guestId);
   }
 
   // Get all guest metadata
   static async getAllMetadata(): Promise<Record<string, GuestMetadata>> {
-    return apiFetchJSON(this.baseUrl);
+    return guestMetadataAPI.getAllMetadata();
   }
 
   // Update metadata for a guest
@@ -27,16 +21,11 @@ export class GuestMetadataAPI {
     guestId: string,
     metadata: Partial<GuestMetadata>,
   ): Promise<GuestMetadata> {
-    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(guestId)}`, {
-      method: 'PUT',
-      body: JSON.stringify(metadata),
-    });
+    return guestMetadataAPI.updateMetadata(guestId, metadata);
   }
 
   // Delete metadata for a guest
   static async deleteMetadata(guestId: string): Promise<void> {
-    await apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(guestId)}`, {
-      method: 'DELETE',
-    });
+    await guestMetadataAPI.deleteMetadata(guestId);
   }
 }

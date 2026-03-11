@@ -38,7 +38,7 @@ Own canonical runtime payload shapes between backend and frontend.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes
 3. Add dedicated contract tests for new stable payloads
-4. Route frontend API-client parsed error propagation, shared response parsing pipelines, missing-resource lookup handling, response status, collection normalization, scalar payload coercion, and structured error normalization through `frontend-modern/src/api/responseUtils.ts`
+4. Route frontend API-client parsed error propagation, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 
 ## Forbidden Paths
 
@@ -55,6 +55,7 @@ Own canonical runtime payload shapes between backend and frontend.
 11. Frontend API clients open-coding parsed non-OK response throwing with `throw new Error(await readAPIErrorMessage(...))` instead of the shared response assertion helper
 12. Frontend API clients open-coding governed `assertAPIResponseOK(...); parseRequiredJSON(...)` or `parseOptionalJSON(...)` tandems instead of shared response pipeline helpers
 13. Frontend API clients open-coding governed `404 => null` response branches for resource lookups instead of shared missing-resource response helpers
+14. Agent and guest metadata clients duplicating the same CRUD transport logic instead of using one shared metadata client
 
 ## Completion Obligations
 
@@ -139,6 +140,9 @@ Canonical missing-resource lookups in governed frontend API clients must now
 also route `404 => null` response handling through shared response helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than open-coding local
 status branches in discovery and monitoring clients.
+Agent and guest metadata CRUD clients must now also route through one shared
+metadata client in `frontend-modern/src/api/metadataClient.ts` rather than
+duplicating the same `get/update/delete/list` transport logic in two files.
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.
