@@ -713,6 +713,58 @@ func TestView_HostViewAccessors(t *testing.T) {
 	}
 }
 
+func TestView_PhysicalDiskViewAccessors(t *testing.T) {
+	now := time.Date(2026, 2, 10, 12, 5, 0, 0, time.UTC)
+	parentID := "node-parent-1"
+	r := &Resource{
+		ID:       "disk-1",
+		Type:     ResourceTypePhysicalDisk,
+		Name:     "Samsung 990 PRO",
+		Status:   StatusOnline,
+		LastSeen: now,
+		ParentID: &parentID,
+		Proxmox: &ProxmoxData{
+			NodeName: "pve-a",
+			Instance: "lab",
+		},
+		PhysicalDisk: &PhysicalDiskMeta{
+			DevPath:     "/dev/nvme0n1",
+			Model:       "Samsung 990 PRO",
+			Serial:      "SER123",
+			WWN:         "wwn-123",
+			DiskType:    "nvme",
+			SizeBytes:   1000,
+			Health:      "PASSED",
+			Wearout:     3,
+			Temperature: 41,
+			RPM:         0,
+			Used:        "zfs",
+			SMART:       &SMARTMeta{PowerOnHours: 10, MediaErrors: 2},
+		},
+	}
+
+	v := NewPhysicalDiskView(r)
+
+	if v.ID() != "disk-1" || v.Name() != "Samsung 990 PRO" || v.Status() != StatusOnline {
+		t.Fatalf("expected basic accessors to match, got id=%q name=%q status=%q", v.ID(), v.Name(), v.Status())
+	}
+	if v.DevPath() != "/dev/nvme0n1" || v.Model() != "Samsung 990 PRO" || v.Serial() != "SER123" || v.WWN() != "wwn-123" {
+		t.Fatalf("expected identity metadata to match, got dev=%q model=%q serial=%q wwn=%q", v.DevPath(), v.Model(), v.Serial(), v.WWN())
+	}
+	if v.Node() != "pve-a" || v.Instance() != "lab" || v.DiskType() != "nvme" || v.SizeBytes() != 1000 {
+		t.Fatalf("expected proxmox metadata to match, got node=%q instance=%q type=%q size=%d", v.Node(), v.Instance(), v.DiskType(), v.SizeBytes())
+	}
+	if v.Health() != "PASSED" || v.Wearout() != 3 || v.Temperature() != 41 || v.RPM() != 0 || v.Used() != "zfs" {
+		t.Fatalf("expected disk state to match, got health=%q wearout=%d temp=%d rpm=%d used=%q", v.Health(), v.Wearout(), v.Temperature(), v.RPM(), v.Used())
+	}
+	if smart := v.SMART(); smart == nil || smart.PowerOnHours != 10 || smart.MediaErrors != 2 {
+		t.Fatalf("expected SMART metadata to match, got %+v", smart)
+	}
+	if !v.LastSeen().Equal(now) || v.ParentID() != parentID || v.ParentName() != "" {
+		t.Fatalf("expected timing/parent accessors to match, got lastSeen=%v parentID=%q parentName=%q", v.LastSeen(), v.ParentID(), v.ParentName())
+	}
+}
+
 func TestView_DockerHostViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 4, 0, 0, time.UTC)
 	temp := 44.4

@@ -1841,6 +1841,48 @@ func (v PhysicalDiskView) Model() string {
 	return v.r.PhysicalDisk.Model
 }
 
+func (v PhysicalDiskView) Serial() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Serial
+}
+
+func (v PhysicalDiskView) WWN() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.WWN
+}
+
+func (v PhysicalDiskView) DiskType() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.DiskType
+}
+
+func (v PhysicalDiskView) SizeBytes() int64 {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.SizeBytes
+}
+
+func (v PhysicalDiskView) Health() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Health
+}
+
+func (v PhysicalDiskView) Wearout() int {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.Wearout
+}
+
 func (v PhysicalDiskView) Node() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -1860,6 +1902,27 @@ func (v PhysicalDiskView) Temperature() int {
 		return 0
 	}
 	return v.r.PhysicalDisk.Temperature
+}
+
+func (v PhysicalDiskView) RPM() int {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return 0
+	}
+	return v.r.PhysicalDisk.RPM
+}
+
+func (v PhysicalDiskView) Used() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return v.r.PhysicalDisk.Used
+}
+
+func (v PhysicalDiskView) SMART() *SMARTMeta {
+	if v.r == nil || v.r.PhysicalDisk == nil || v.r.PhysicalDisk.SMART == nil {
+		return nil
+	}
+	return cloneSMARTMeta(v.r.PhysicalDisk.SMART)
 }
 
 func (v PhysicalDiskView) MetricResourceID() string {

@@ -747,6 +747,68 @@ func TestMonitor_GuestMetadata_Extra(t *testing.T) {
 	}
 }
 
+func TestMaybePollPhysicalDisksAsync_UsesCanonicalReadStateForRefresh(t *testing.T) {
+	m := &Monitor{
+		state:                models.NewState(),
+		lastPhysicalDiskPoll: map[string]time.Time{"pve1": time.Now()},
+	}
+
+	m.state.UpdatePhysicalDisks("pve1", []models.PhysicalDisk{{ID: "legacy-disk", Instance: "pve1", Node: "node1", DevPath: "/dev/nvme0n1"}})
+	m.state.UpdateNodesForInstance("pve1", []models.Node{{ID: "legacy-node", Name: "node1", Instance: "pve1"}})
+	m.state.UpsertHost(models.Host{ID: "legacy-host", Hostname: "legacy"})
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "node-1",
+			Name:          "node1",
+			Instance:      "pve1",
+			LinkedAgentID: "host-1",
+			Temperature: &models.Temperature{
+				Available: true,
+				SMART: []models.DiskTemp{{
+					Device:      "/dev/nvme0n1",
+					Temperature: 41,
+				}},
+			},
+		}},
+		Hosts: []models.Host{{
+			ID:       "host-1",
+			Hostname: "host1",
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{{
+					Device:      "/dev/nvme0n1",
+					Temperature: 44,
+					Attributes:  &models.SMARTAttributes{PowerOnHours: int64PtrExtra(123)},
+				}},
+			},
+		}},
+		PhysicalDisks: []models.PhysicalDisk{{
+			ID:       "disk-1",
+			Instance: "pve1",
+			Node:     "node1",
+			DevPath:  "/dev/nvme0n1",
+		}},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	client := &mockPVEClientExtra{}
+	m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, client, []proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, []models.Node{{Name: "node1"}})
+
+	disks := m.state.GetSnapshot().PhysicalDisks
+	if len(disks) != 1 || disks[0].DevPath != "/dev/nvme0n1" || disks[0].Instance != "pve1" {
+		t.Fatalf("expected refreshed physical disks from canonical read-state, got %+v", disks)
+	}
+	if disks[0].Temperature != 41 {
+		t.Fatalf("expected canonical node temperature merge, got %+v", disks[0])
+	}
+	if disks[0].SmartAttributes == nil || disks[0].SmartAttributes.PowerOnHours == nil || *disks[0].SmartAttributes.PowerOnHours != 123 {
+		t.Fatalf("expected SMART attributes merged from canonical linked host, got %+v", disks[0].SmartAttributes)
+	}
+}
+
+func int64PtrExtra(v int64) *int64 { return &v }
+
 func TestMonitor_BackupTimeout_Extra(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),

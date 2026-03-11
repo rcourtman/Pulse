@@ -694,19 +694,13 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			Dur("interval", pollingInterval).
 			Msg("Skipping physical disk poll - interval not elapsed")
 		// Refresh NVMe temperatures using the latest sensor data even when we skip the disk poll
-		currentState := m.state.GetSnapshot()
-		existing := make([]models.PhysicalDisk, 0)
-		for _, disk := range currentState.PhysicalDisks {
-			if disk.Instance == instanceName {
-				existing = append(existing, disk)
-			}
-		}
+		readState := m.GetUnifiedReadStateOrSnapshot()
+		existing := physicalDisksForInstanceFromReadState(readState, instanceName)
 		if len(existing) > 0 {
-			// Use nodes from state snapshot - they have LinkedAgentID populated
-			// (the local modelNodes variable doesn't have this field set)
-			updated := mergeNVMeTempsIntoDisks(existing, currentState.Nodes)
-			// Also merge SMART data from linked host agents
-			updated = mergeHostAgentSMARTIntoDisks(updated, currentState.Nodes, currentState.Hosts)
+			nodes := nodesForInstanceFromReadState(readState, instanceName)
+			hosts := hostsFromReadState(readState)
+			updated := mergeNVMeTempsIntoDisks(existing, nodes)
+			updated = mergeHostAgentSMARTIntoDisks(updated, nodes, hosts)
 			m.state.UpdatePhysicalDisks(instanceName, updated)
 		}
 		return
@@ -735,9 +729,11 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			Msg("Starting disk health polling")
 
 		// Get existing disks from state to preserve data for offline nodes
-		currentState := m.state.GetSnapshot()
+		readState := m.GetUnifiedReadStateOrSnapshot()
+		nodesFromState := nodesForInstanceFromReadState(readState, inst)
+		hosts := hostsFromReadState(readState)
 		existingDisksMap := make(map[string]models.PhysicalDisk)
-		for _, disk := range currentState.PhysicalDisks {
+		for _, disk := range physicalDisksForInstanceFromReadState(readState, inst) {
 			if disk.Instance == inst {
 				existingDisksMap[disk.ID] = disk
 			}
@@ -747,11 +743,11 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		// cross-referencing linked host agents. This lets --disk-exclude on the
 		// agent suppress server-side Proxmox disk health/wearout alerts.
 		diskExcludeByNode := make(map[string][]string)
-		hostByID := make(map[string]models.Host, len(currentState.Hosts))
-		for _, h := range currentState.Hosts {
+		hostByID := make(map[string]models.Host, len(hosts))
+		for _, h := range hosts {
 			hostByID[h.ID] = h
 		}
-		for _, n := range currentState.Nodes {
+		for _, n := range nodesFromState {
 			if n.LinkedAgentID == "" || n.Instance != inst {
 				continue
 			}
@@ -892,11 +888,8 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			}
 		}
 
-		// Use nodes from state snapshot - they have LinkedAgentID populated
-		// (modelNodesCopy passed to this goroutine doesn't have this field set)
-		allDisks = mergeNVMeTempsIntoDisks(allDisks, currentState.Nodes)
-		// Also merge SMART data from linked host agents
-		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, currentState.Nodes, currentState.Hosts)
+		allDisks = mergeNVMeTempsIntoDisks(allDisks, nodesFromState)
+		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)
 
 		// Write SMART metrics to persistent store
 		if m.metricsStore != nil {

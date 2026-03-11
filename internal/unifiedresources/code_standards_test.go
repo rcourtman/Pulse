@@ -39,7 +39,9 @@ package unifiedresources
 //     instance export helpers now follow the same rule via
 //     ReadState.PBSInstances(). Backup-alert guest lookup assembly now also
 //     derives VM/container identity from ReadState workload views instead of
-//     from snapshot-owned guest arrays.
+//     from snapshot-owned guest arrays. Physical-disk refresh/merge paths now
+//     also derive disk, node, and linked host context from ReadState instead
+//     of from snapshot-owned physical-disk arrays.
 //
 //   - All state.* field access patterns and GetState() calls are
 //     enforced as hard bans (SRC-04b). Migration is complete — zero

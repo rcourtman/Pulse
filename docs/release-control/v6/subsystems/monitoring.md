@@ -66,3 +66,8 @@ Backup-alert guest lookup assembly now derives VM/container identity from
 canonical `ReadState` workload views instead of from snapshot-owned guest
 arrays, so backup alert resolution follows unified runtime truth when a live
 resource registry exists.
+
+Physical-disk refresh/merge logic now derives physical disks, nodes, and linked
+host-agent context from canonical `ReadState` before applying NVMe temperature
+and SMART merges, so skipped or background disk refresh no longer treats the
+snapshot as internal truth for that path.

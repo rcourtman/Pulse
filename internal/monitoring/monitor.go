@@ -520,6 +520,137 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	return updated
 }
 
+func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) models.PhysicalDisk {
+	if view == nil {
+		return models.PhysicalDisk{}
+	}
+
+	return models.PhysicalDisk{
+		ID:              view.ID(),
+		Node:            view.Node(),
+		Instance:        view.Instance(),
+		DevPath:         view.DevPath(),
+		Model:           view.Model(),
+		Serial:          view.Serial(),
+		WWN:             view.WWN(),
+		Type:            view.DiskType(),
+		Size:            view.SizeBytes(),
+		Health:          view.Health(),
+		Wearout:         view.Wearout(),
+		Temperature:     view.Temperature(),
+		RPM:             view.RPM(),
+		Used:            view.Used(),
+		SmartAttributes: smartAttributesFromUnifiedMeta(view.SMART()),
+		LastChecked:     view.LastSeen(),
+	}
+}
+
+func smartAttributesFromUnifiedMeta(in *unifiedresources.SMARTMeta) *models.SMARTAttributes {
+	if in == nil {
+		return nil
+	}
+
+	out := &models.SMARTAttributes{}
+	if in.PowerOnHours != 0 {
+		value := in.PowerOnHours
+		out.PowerOnHours = &value
+	}
+	if in.PowerCycles != 0 {
+		value := in.PowerCycles
+		out.PowerCycles = &value
+	}
+	if in.ReallocatedSectors != 0 {
+		value := in.ReallocatedSectors
+		out.ReallocatedSectors = &value
+	}
+	if in.PendingSectors != 0 {
+		value := in.PendingSectors
+		out.PendingSectors = &value
+	}
+	if in.OfflineUncorrectable != 0 {
+		value := in.OfflineUncorrectable
+		out.OfflineUncorrectable = &value
+	}
+	if in.UDMACRCErrors != 0 {
+		value := in.UDMACRCErrors
+		out.UDMACRCErrors = &value
+	}
+	if in.PercentageUsed != 0 {
+		value := in.PercentageUsed
+		out.PercentageUsed = &value
+	}
+	if in.AvailableSpare != 0 {
+		value := in.AvailableSpare
+		out.AvailableSpare = &value
+	}
+	if in.MediaErrors != 0 {
+		value := in.MediaErrors
+		out.MediaErrors = &value
+	}
+	if in.UnsafeShutdowns != 0 {
+		value := in.UnsafeShutdowns
+		out.UnsafeShutdowns = &value
+	}
+	if out.PowerOnHours == nil &&
+		out.PowerCycles == nil &&
+		out.ReallocatedSectors == nil &&
+		out.PendingSectors == nil &&
+		out.OfflineUncorrectable == nil &&
+		out.UDMACRCErrors == nil &&
+		out.PercentageUsed == nil &&
+		out.AvailableSpare == nil &&
+		out.MediaErrors == nil &&
+		out.UnsafeShutdowns == nil {
+		return nil
+	}
+	return out
+}
+
+func physicalDisksForInstanceFromReadState(readState unifiedresources.ReadState, instance string) []models.PhysicalDisk {
+	if readState == nil {
+		return nil
+	}
+
+	out := make([]models.PhysicalDisk, 0)
+	for _, disk := range readState.PhysicalDisks() {
+		if disk == nil || disk.Instance() != instance {
+			continue
+		}
+		out = append(out, physicalDiskFromReadStateView(disk))
+	}
+	return out
+}
+
+func nodesForInstanceFromReadState(readState unifiedresources.ReadState, instance string) []models.Node {
+	if readState == nil {
+		return nil
+	}
+
+	out := make([]models.Node, 0)
+	for _, node := range readState.Nodes() {
+		if node == nil || node.Instance() != instance {
+			continue
+		}
+		out = append(out, nodeFromReadStateView(node))
+	}
+	return out
+}
+
+func hostsFromReadState(readState unifiedresources.ReadState) []models.Host {
+	if readState == nil {
+		return nil
+	}
+
+	out := make([]models.Host, 0)
+	for _, host := range readState.Hosts() {
+		if host == nil {
+			continue
+		}
+		out = append(out, hostFromReadStateView(host))
+	}
+	return out
+}
+
 // writeSMARTMetrics writes SMART attribute metrics to the persistent metrics store for a single disk.
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	resourceID := unifiedresources.PhysicalDiskMetricID(disk)

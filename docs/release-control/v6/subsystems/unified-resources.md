@@ -66,3 +66,8 @@ Canonical PBS metadata now carries full instance boundary payload such as host
 and guest URLs, full datastore details, and PBS job arrays so monitoring can
 derive `models.PBSInstance` from unified views without depending on legacy
 snapshot ownership.
+
+Canonical physical-disk views now expose the full disk identity and SMART
+metadata needed by monitoring refresh paths, so physical-disk temperature and
+SMART merges can run from unified `ReadState` instead of from snapshot-owned
+disk arrays.
