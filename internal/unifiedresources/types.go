@@ -585,6 +585,7 @@ type AgentData struct {
 	AgentID               string             `json:"agentId,omitempty"`
 	AgentVersion          string             `json:"agentVersion,omitempty"`
 	Hostname              string             `json:"hostname,omitempty"`
+	MachineID             string             `json:"machineId,omitempty"`
 	TokenID               string             `json:"tokenId,omitempty"`
 	TokenName             string             `json:"tokenName,omitempty"`
 	TokenHint             string             `json:"tokenHint,omitempty"`
@@ -594,7 +595,10 @@ type AgentData struct {
 	OSVersion             string             `json:"osVersion,omitempty"`
 	KernelVersion         string             `json:"kernelVersion,omitempty"`
 	Architecture          string             `json:"architecture,omitempty"`
+	CPUCount              int                `json:"cpuCount,omitempty"`
+	LoadAverage           []float64          `json:"loadAverage,omitempty"`
 	UptimeSeconds         int64              `json:"uptimeSeconds,omitempty"`
+	IntervalSeconds       int                `json:"intervalSeconds,omitempty"`
 	Temperature           *float64           `json:"temperature,omitempty"` // Max CPU temp in Celsius
 	NetworkInterfaces     []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks                 []DiskInfo         `json:"disks,omitempty"`
@@ -611,6 +615,14 @@ type AgentData struct {
 	ProtectionSummary     string             `json:"protectionSummary,omitempty"`
 	RebuildInProgress     bool               `json:"rebuildInProgress,omitempty"`
 	RebuildSummary        string             `json:"rebuildSummary,omitempty"`
+	CommandsEnabled       bool               `json:"commandsEnabled,omitempty"`
+	ReportIP              string             `json:"reportIp,omitempty"`
+	DiskExclude           []string           `json:"diskExclude,omitempty"`
+	IsLegacy              bool               `json:"isLegacy,omitempty"`
+	NetInRate             float64            `json:"netInRate,omitempty"`
+	NetOutRate            float64            `json:"netOutRate,omitempty"`
+	DiskReadRate          float64            `json:"diskReadRate,omitempty"`
+	DiskWriteRate         float64            `json:"diskWriteRate,omitempty"`
 	// Internal link hints to proxmox resources.
 	LinkedNodeID      string `json:"-"`
 	LinkedVMID        string `json:"-"`

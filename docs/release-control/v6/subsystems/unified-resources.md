@@ -44,3 +44,8 @@ Canonical Proxmox node metadata now carries node-only boundary fields such as
 guest URL, connection health, temperature details, and pending-update metadata
 so monitoring can derive `models.Node` from unified views without depending on
 legacy snapshot ownership.
+
+Canonical host-agent metadata now carries host-only runtime fields such as CPU
+count, load average, machine/report identity, command capability, exclude
+patterns, and host I/O rates so monitoring can derive `models.Host` from
+unified views without depending on legacy snapshot ownership.

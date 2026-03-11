@@ -2539,7 +2539,27 @@ func (m *Monitor) ConnectionHealthSnapshot() map[string]bool {
 
 // HostsSnapshot returns the current hosts.
 func (m *Monitor) HostsSnapshot() []models.Host {
-	return m.GetState().Hosts
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	hostViews := readState.Hosts()
+	if len(hostViews) == 0 {
+		return nil
+	}
+
+	hosts := make([]models.Host, 0, len(hostViews))
+	for _, host := range hostViews {
+		if host == nil {
+			continue
+		}
+		hosts = append(hosts, hostFromReadStateView(host))
+	}
+	return hosts
 }
 
 // VMsSnapshot returns the current VMs.
@@ -2695,11 +2715,378 @@ func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
 	}
 }
 
+func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
+	if view == nil {
+		return models.Host{}
+	}
+
+	displayName := ""
+	if trimmed := strings.TrimSpace(view.Name()); trimmed != "" && trimmed != view.Hostname() {
+		displayName = trimmed
+	}
+
+	return models.Host{
+		ID:                firstNonEmptyString(view.AgentID(), view.ID()),
+		Hostname:          view.Hostname(),
+		DisplayName:       displayName,
+		Platform:          view.Platform(),
+		OSName:            view.OSName(),
+		OSVersion:         view.OSVersion(),
+		KernelVersion:     view.KernelVersion(),
+		Architecture:      view.Architecture(),
+		CPUCount:          view.CPUCount(),
+		CPUUsage:          view.CPUPercent(),
+		Memory:            hostMemoryFromReadStateView(view),
+		LoadAverage:       view.LoadAverage(),
+		Disks:             hostDisksFromReadStateView(view.Disks()),
+		DiskIO:            hostDiskIOFromReadStateView(view.DiskIO()),
+		NetworkInterfaces: hostNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		Sensors:           hostSensorsFromReadStateView(view.Sensors()),
+		RAID:              hostRAIDFromReadStateView(view.RAID()),
+		Unraid:            hostUnraidFromReadStateView(view.Unraid()),
+		Ceph:              hostCephFromReadStateView(view.Ceph()),
+		Status:            string(view.Status()),
+		UptimeSeconds:     view.UptimeSeconds(),
+		IntervalSeconds:   view.IntervalSeconds(),
+		LastSeen:          view.LastSeen(),
+		AgentVersion:      view.AgentVersion(),
+		MachineID:         view.MachineID(),
+		CommandsEnabled:   view.CommandsEnabled(),
+		ReportIP:          view.ReportIP(),
+		TokenID:           view.TokenID(),
+		TokenName:         view.TokenName(),
+		TokenHint:         view.TokenHint(),
+		TokenLastUsedAt:   view.TokenLastUsedAt(),
+		Tags:              view.Tags(),
+		DiskExclude:       view.DiskExclude(),
+		IsLegacy:          view.IsLegacy(),
+		NetInRate:         view.NetInRate(),
+		NetOutRate:        view.NetOutRate(),
+		DiskReadRate:      view.DiskReadRate(),
+		DiskWriteRate:     view.DiskWriteRate(),
+		LinkedNodeID:      view.LinkedNodeID(),
+		LinkedVMID:        view.LinkedVMID(),
+		LinkedContainerID: view.LinkedContainerID(),
+	}
+}
+
+func hostMemoryFromReadStateView(view *unifiedresources.HostView) models.Memory {
+	if view == nil {
+		return models.Memory{}
+	}
+	total := view.MemoryTotal()
+	used := view.MemoryUsed()
+	return models.Memory{
+		Total:     total,
+		Used:      used,
+		Free:      maxInt64(0, total-used),
+		Usage:     view.MemoryPercent(),
+		SwapUsed:  view.SwapUsed(),
+		SwapTotal: view.SwapTotal(),
+	}
+}
+
+func hostDisksFromReadStateView(disks []unifiedresources.DiskInfo) []models.Disk {
+	if len(disks) == 0 {
+		return nil
+	}
+	out := make([]models.Disk, 0, len(disks))
+	for _, disk := range disks {
+		out = append(out, models.Disk{
+			Total:      disk.Total,
+			Used:       disk.Used,
+			Free:       disk.Free,
+			Usage:      disk.Usage,
+			Mountpoint: disk.Mountpoint,
+			Type:       disk.Filesystem,
+			Device:     disk.Device,
+		})
+	}
+	return out
+}
+
+func hostDiskIOFromReadStateView(diskIO []unifiedresources.HostDiskIOMeta) []models.DiskIO {
+	if len(diskIO) == 0 {
+		return nil
+	}
+	out := make([]models.DiskIO, 0, len(diskIO))
+	for _, entry := range diskIO {
+		out = append(out, models.DiskIO{
+			Device:     entry.Device,
+			ReadBytes:  entry.ReadBytes,
+			WriteBytes: entry.WriteBytes,
+			ReadOps:    entry.ReadOps,
+			WriteOps:   entry.WriteOps,
+			IOTime:     entry.IOTimeMs,
+		})
+	}
+	return out
+}
+
+func hostNetworkInterfacesFromReadStateView(interfaces []unifiedresources.NetworkInterface) []models.HostNetworkInterface {
+	if len(interfaces) == 0 {
+		return nil
+	}
+	out := make([]models.HostNetworkInterface, 0, len(interfaces))
+	for _, iface := range interfaces {
+		out = append(out, models.HostNetworkInterface{
+			Name:      iface.Name,
+			MAC:       iface.MAC,
+			Addresses: append([]string(nil), iface.Addresses...),
+			RXBytes:   iface.RXBytes,
+			TXBytes:   iface.TXBytes,
+			SpeedMbps: int64PtrCopy(iface.SpeedMbps),
+		})
+	}
+	return out
+}
+
+func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) models.HostSensorSummary {
+	if sensors == nil {
+		return models.HostSensorSummary{}
+	}
+	out := models.HostSensorSummary{}
+	if len(sensors.TemperatureCelsius) > 0 {
+		out.TemperatureCelsius = make(map[string]float64, len(sensors.TemperatureCelsius))
+		for k, v := range sensors.TemperatureCelsius {
+			out.TemperatureCelsius[k] = v
+		}
+	}
+	if len(sensors.FanRPM) > 0 {
+		out.FanRPM = make(map[string]float64, len(sensors.FanRPM))
+		for k, v := range sensors.FanRPM {
+			out.FanRPM[k] = v
+		}
+	}
+	if len(sensors.Additional) > 0 {
+		out.Additional = make(map[string]float64, len(sensors.Additional))
+		for k, v := range sensors.Additional {
+			out.Additional[k] = v
+		}
+	}
+	if len(sensors.SMART) > 0 {
+		out.SMART = make([]models.HostDiskSMART, 0, len(sensors.SMART))
+		for _, smart := range sensors.SMART {
+			out.SMART = append(out.SMART, models.HostDiskSMART{
+				Device:      smart.Device,
+				Model:       smart.Model,
+				Serial:      smart.Serial,
+				WWN:         smart.WWN,
+				Type:        smart.Type,
+				Temperature: smart.Temperature,
+				Health:      smart.Health,
+				Standby:     smart.Standby,
+				Attributes:  smartAttributesCopy(smart.Attributes),
+			})
+		}
+	}
+	return out
+}
+
+func hostRAIDFromReadStateView(raid []unifiedresources.HostRAIDMeta) []models.HostRAIDArray {
+	if len(raid) == 0 {
+		return nil
+	}
+	out := make([]models.HostRAIDArray, 0, len(raid))
+	for _, entry := range raid {
+		devices := make([]models.HostRAIDDevice, 0, len(entry.Devices))
+		for _, device := range entry.Devices {
+			devices = append(devices, models.HostRAIDDevice{
+				Device: device.Device,
+				State:  device.State,
+				Slot:   device.Slot,
+			})
+		}
+		out = append(out, models.HostRAIDArray{
+			Device:         entry.Device,
+			Name:           entry.Name,
+			Level:          entry.Level,
+			State:          entry.State,
+			TotalDevices:   entry.TotalDevices,
+			ActiveDevices:  entry.ActiveDevices,
+			WorkingDevices: entry.WorkingDevices,
+			FailedDevices:  entry.FailedDevices,
+			SpareDevices:   entry.SpareDevices,
+			UUID:           entry.UUID,
+			Devices:        devices,
+			RebuildPercent: entry.RebuildPercent,
+			RebuildSpeed:   entry.RebuildSpeed,
+		})
+	}
+	return out
+}
+
+func hostUnraidFromReadStateView(unraid *unifiedresources.HostUnraidMeta) *models.HostUnraidStorage {
+	if unraid == nil {
+		return nil
+	}
+	out := &models.HostUnraidStorage{
+		ArrayStarted: unraid.ArrayStarted,
+		ArrayState:   unraid.ArrayState,
+		SyncAction:   unraid.SyncAction,
+		SyncProgress: unraid.SyncProgress,
+		SyncErrors:   unraid.SyncErrors,
+		NumProtected: unraid.NumProtected,
+		NumDisabled:  unraid.NumDisabled,
+		NumInvalid:   unraid.NumInvalid,
+		NumMissing:   unraid.NumMissing,
+	}
+	if len(unraid.Disks) > 0 {
+		out.Disks = make([]models.HostUnraidDisk, 0, len(unraid.Disks))
+		for _, disk := range unraid.Disks {
+			out.Disks = append(out.Disks, models.HostUnraidDisk{
+				Name:       disk.Name,
+				Device:     disk.Device,
+				Role:       disk.Role,
+				Status:     disk.Status,
+				RawStatus:  disk.RawStatus,
+				Serial:     disk.Serial,
+				Filesystem: disk.Filesystem,
+				SizeBytes:  disk.SizeBytes,
+				Slot:       disk.Slot,
+			})
+		}
+	}
+	return out
+}
+
+func hostCephFromReadStateView(ceph *unifiedresources.HostCephMeta) *models.HostCephCluster {
+	if ceph == nil {
+		return nil
+	}
+	out := &models.HostCephCluster{
+		FSID: ceph.FSID,
+		Health: models.HostCephHealth{
+			Status: ceph.Health.Status,
+		},
+		MonMap: models.HostCephMonitorMap{
+			Epoch:   ceph.MonMap.Epoch,
+			NumMons: ceph.MonMap.NumMons,
+		},
+		MgrMap: models.HostCephManagerMap{
+			Available: ceph.MgrMap.Available,
+			NumMgrs:   ceph.MgrMap.NumMgrs,
+			ActiveMgr: ceph.MgrMap.ActiveMgr,
+			Standbys:  ceph.MgrMap.Standbys,
+		},
+		OSDMap: models.HostCephOSDMap{
+			Epoch:   ceph.OSDMap.Epoch,
+			NumOSDs: ceph.OSDMap.NumOSDs,
+			NumUp:   ceph.OSDMap.NumUp,
+			NumIn:   ceph.OSDMap.NumIn,
+			NumDown: ceph.OSDMap.NumDown,
+			NumOut:  ceph.OSDMap.NumOut,
+		},
+		PGMap: models.HostCephPGMap{
+			NumPGs:           ceph.PGMap.NumPGs,
+			BytesTotal:       ceph.PGMap.BytesTotal,
+			BytesUsed:        ceph.PGMap.BytesUsed,
+			BytesAvailable:   ceph.PGMap.BytesAvailable,
+			DataBytes:        ceph.PGMap.DataBytes,
+			UsagePercent:     ceph.PGMap.UsagePercent,
+			DegradedRatio:    ceph.PGMap.DegradedRatio,
+			MisplacedRatio:   ceph.PGMap.MisplacedRatio,
+			ReadBytesPerSec:  ceph.PGMap.ReadBytesPerSec,
+			WriteBytesPerSec: ceph.PGMap.WriteBytesPerSec,
+			ReadOpsPerSec:    ceph.PGMap.ReadOpsPerSec,
+			WriteOpsPerSec:   ceph.PGMap.WriteOpsPerSec,
+		},
+		CollectedAt: ceph.CollectedAt,
+	}
+	if len(ceph.Health.Summary) > 0 {
+		out.Health.Summary = make([]models.HostCephHealthSummary, 0, len(ceph.Health.Summary))
+		for _, summary := range ceph.Health.Summary {
+			out.Health.Summary = append(out.Health.Summary, models.HostCephHealthSummary{
+				Severity: summary.Severity,
+				Message:  summary.Message,
+			})
+		}
+	}
+	if len(ceph.Health.Checks) > 0 {
+		out.Health.Checks = make(map[string]models.HostCephCheck, len(ceph.Health.Checks))
+		for name, check := range ceph.Health.Checks {
+			out.Health.Checks[name] = models.HostCephCheck{
+				Severity: check.Severity,
+				Message:  check.Message,
+				Detail:   append([]string(nil), check.Detail...),
+			}
+		}
+	}
+	if len(ceph.MonMap.Monitors) > 0 {
+		out.MonMap.Monitors = make([]models.HostCephMonitor, 0, len(ceph.MonMap.Monitors))
+		for _, monitor := range ceph.MonMap.Monitors {
+			out.MonMap.Monitors = append(out.MonMap.Monitors, models.HostCephMonitor{
+				Name:   monitor.Name,
+				Rank:   monitor.Rank,
+				Addr:   monitor.Addr,
+				Status: monitor.Status,
+			})
+		}
+	}
+	if len(ceph.Pools) > 0 {
+		out.Pools = make([]models.HostCephPool, 0, len(ceph.Pools))
+		for _, pool := range ceph.Pools {
+			out.Pools = append(out.Pools, models.HostCephPool{
+				ID:             pool.ID,
+				Name:           pool.Name,
+				BytesUsed:      pool.BytesUsed,
+				BytesAvailable: pool.BytesAvailable,
+				Objects:        pool.Objects,
+				PercentUsed:    pool.PercentUsed,
+			})
+		}
+	}
+	if len(ceph.Services) > 0 {
+		out.Services = make([]models.HostCephService, 0, len(ceph.Services))
+		for _, service := range ceph.Services {
+			out.Services = append(out.Services, models.HostCephService{
+				Type:    service.Type,
+				Running: service.Running,
+				Total:   service.Total,
+				Daemons: append([]string(nil), service.Daemons...),
+			})
+		}
+	}
+	return out
+}
+
 func maxInt64(a, b int64) int64 {
 	if a > b {
 		return a
 	}
 	return b
+}
+
+func int64PtrCopy(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func smartAttributesCopy(in *models.SMARTAttributes) *models.SMARTAttributes {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.PowerOnHours = int64PtrCopy(in.PowerOnHours)
+	out.PowerCycles = int64PtrCopy(in.PowerCycles)
+	out.ReallocatedSectors = int64PtrCopy(in.ReallocatedSectors)
+	out.PendingSectors = int64PtrCopy(in.PendingSectors)
+	out.OfflineUncorrectable = int64PtrCopy(in.OfflineUncorrectable)
+	out.UDMACRCErrors = int64PtrCopy(in.UDMACRCErrors)
+	if in.PercentageUsed != nil {
+		value := *in.PercentageUsed
+		out.PercentageUsed = &value
+	}
+	if in.AvailableSpare != nil {
+		value := *in.AvailableSpare
+		out.AvailableSpare = &value
+	}
+	out.MediaErrors = int64PtrCopy(in.MediaErrors)
+	out.UnsafeShutdowns = int64PtrCopy(in.UnsafeShutdowns)
+	return &out
 }
 
 func firstNonEmptyString(values ...string) string {

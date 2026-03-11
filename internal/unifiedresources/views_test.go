@@ -519,19 +519,23 @@ func TestView_HostViewAccessors(t *testing.T) {
 		LastSeen:              now,
 		Tags:                  []string{"linux", "site:1"},
 		Agent: &AgentData{
-			AgentID:       "agent-1",
-			AgentVersion:  "1.2.3",
-			Hostname:      "agent-host-1",
-			TokenID:       "token-1",
-			TokenName:     "Agent Token",
-			TokenHint:     "agt_1234",
-			Platform:      "linux",
-			OSName:        "Ubuntu",
-			OSVersion:     "24.04",
-			KernelVersion: "6.8.0",
-			Architecture:  "amd64",
-			UptimeSeconds: 3600,
-			Temperature:   &temp,
+			AgentID:         "agent-1",
+			AgentVersion:    "1.2.3",
+			Hostname:        "agent-host-1",
+			MachineID:       "machine-1",
+			TokenID:         "token-1",
+			TokenName:       "Agent Token",
+			TokenHint:       "agt_1234",
+			Platform:        "linux",
+			OSName:          "Ubuntu",
+			OSVersion:       "24.04",
+			KernelVersion:   "6.8.0",
+			Architecture:    "amd64",
+			CPUCount:        16,
+			LoadAverage:     []float64{0.4, 0.5, 0.6},
+			UptimeSeconds:   3600,
+			IntervalSeconds: 15,
+			Temperature:     &temp,
 			NetworkInterfaces: []NetworkInterface{
 				{Name: "eth0", MAC: "aa:bb:cc:dd:ee:ff", Addresses: []string{"10.0.0.30/24"}, SpeedMbps: &speed, Status: "up"},
 			},
@@ -559,6 +563,14 @@ func TestView_HostViewAccessors(t *testing.T) {
 			StoragePostureSummary: "Unraid parity protection is unavailable",
 			ProtectionReduced:     true,
 			ProtectionSummary:     "Unraid parity protection is unavailable",
+			CommandsEnabled:       true,
+			ReportIP:              "10.0.0.99",
+			DiskExclude:           []string{"/dev/loop*", "/dev/sr0"},
+			IsLegacy:              true,
+			NetInRate:             10.5,
+			NetOutRate:            11.5,
+			DiskReadRate:          12.5,
+			DiskWriteRate:         13.5,
 			Unraid: &HostUnraidMeta{
 				ArrayStarted:      true,
 				ArrayState:        "STARTED",
@@ -595,14 +607,18 @@ func TestView_HostViewAccessors(t *testing.T) {
 		t.Fatalf("expected agent OS accessors to match, got hostname=%q platform=%q os=%q %q kernel=%q arch=%q",
 			v.Hostname(), v.Platform(), v.OSName(), v.OSVersion(), v.KernelVersion(), v.Architecture())
 	}
+	if v.MachineID() != "machine-1" || v.CPUCount() != 16 {
+		t.Fatalf("expected machine id/cpu count to match, got machine=%q cpus=%d", v.MachineID(), v.CPUCount())
+	}
+	assertFloatSlice(t, v.LoadAverage(), []float64{0.4, 0.5, 0.6})
 	if v.TokenID() != "token-1" || v.TokenName() != "Agent Token" || v.TokenHint() != "agt_1234" {
 		t.Fatalf("expected token accessors to match, got id=%q name=%q hint=%q", v.TokenID(), v.TokenName(), v.TokenHint())
 	}
 	if v.AgentVersion() != "1.2.3" || v.AgentID() != "agent-1" {
 		t.Fatalf("expected AgentVersion/AgentID to match, got version=%q id=%q", v.AgentVersion(), v.AgentID())
 	}
-	if v.UptimeSeconds() != 3600 {
-		t.Fatalf("expected UptimeSeconds %d, got %d", 3600, v.UptimeSeconds())
+	if v.UptimeSeconds() != 3600 || v.IntervalSeconds() != 15 {
+		t.Fatalf("expected UptimeSeconds/IntervalSeconds %d/%d, got %d/%d", 3600, 15, v.UptimeSeconds(), v.IntervalSeconds())
 	}
 	if v.Temperature() != temp || !v.HasTemperature() {
 		t.Fatalf("expected temperature=%v and HasTemperature=true, got temperature=%v has=%v", temp, v.Temperature(), v.HasTemperature())
@@ -619,6 +635,10 @@ func TestView_HostViewAccessors(t *testing.T) {
 	if v.LinkedNodeID() != "node-99" || v.LinkedVMID() != "vm-99" || v.LinkedContainerID() != "ct-99" {
 		t.Fatalf("expected linked IDs to match, got node=%q vm=%q ct=%q", v.LinkedNodeID(), v.LinkedVMID(), v.LinkedContainerID())
 	}
+	if !v.CommandsEnabled() || v.ReportIP() != "10.0.0.99" || !v.IsLegacy() {
+		t.Fatalf("expected commands/reportIP/isLegacy to match, got commands=%v reportIP=%q isLegacy=%v", v.CommandsEnabled(), v.ReportIP(), v.IsLegacy())
+	}
+	assertStringSlice(t, v.DiskExclude(), []string{"/dev/loop*", "/dev/sr0"})
 	if v.Status() != StatusOnline {
 		t.Fatalf("expected Status %q, got %q", StatusOnline, v.Status())
 	}
@@ -632,6 +652,12 @@ func TestView_HostViewAccessors(t *testing.T) {
 	if v.CPUPercent() != 7.7 || v.MemoryUsed() != 1 || v.MemoryTotal() != 4 || v.MemoryPercent() != 25 || v.DiskPercent() != 66 {
 		t.Fatalf("expected metric accessors to match, got cpu=%v memUsed=%d memTotal=%d memPct=%v diskPct=%v",
 			v.CPUPercent(), v.MemoryUsed(), v.MemoryTotal(), v.MemoryPercent(), v.DiskPercent())
+	}
+	if v.SwapUsed() != 0 || v.SwapTotal() != 0 {
+		t.Fatalf("expected zero swap metrics for test fixture, got used=%d total=%d", v.SwapUsed(), v.SwapTotal())
+	}
+	if v.NetInRate() != 10.5 || v.NetOutRate() != 11.5 || v.DiskReadRate() != 12.5 || v.DiskWriteRate() != 13.5 {
+		t.Fatalf("expected host rates to match, got netIn=%v netOut=%v diskRead=%v diskWrite=%v", v.NetInRate(), v.NetOutRate(), v.DiskReadRate(), v.DiskWriteRate())
 	}
 	if risk := v.StorageRisk(); risk == nil || risk.Level != storagehealth.RiskCritical {
 		t.Fatalf("expected host storage risk accessor, got %+v", risk)

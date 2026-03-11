@@ -44,3 +44,7 @@ artifact for that path.
 Node export is now derived from canonical `ReadState.Nodes()` instead of
 `GetState().Nodes`; `models.Node` is treated as a boundary artifact for that
 path.
+
+Host export is now derived from canonical `ReadState.Hosts()` instead of
+`GetState().Hosts`; `models.Host` is treated as a boundary artifact for that
+path.

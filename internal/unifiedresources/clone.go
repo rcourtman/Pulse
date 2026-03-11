@@ -151,6 +151,7 @@ func cloneAgentData(in *AgentData) *AgentData {
 	}
 	out := *in
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
+	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
 	out.Disks = cloneDiskInfos(in.Disks)
 	out.Sensors = cloneHostSensorMeta(in.Sensors)
@@ -159,6 +160,7 @@ func cloneAgentData(in *AgentData) *AgentData {
 	out.DiskIO = cloneHostDiskIOMetaSlice(in.DiskIO)
 	out.Ceph = cloneHostCephMeta(in.Ceph)
 	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
+	out.DiskExclude = cloneStringSlice(in.DiskExclude)
 	return &out
 }
 

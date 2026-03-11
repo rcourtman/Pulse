@@ -770,6 +770,13 @@ func (v HostView) Hostname() string {
 	return v.r.Agent.Hostname
 }
 
+func (v HostView) MachineID() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.MachineID
+}
+
 func (v HostView) TokenID() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""
@@ -834,6 +841,20 @@ func (v HostView) Architecture() string {
 	return v.r.Agent.Architecture
 }
 
+func (v HostView) CPUCount() int {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.CPUCount
+}
+
+func (v HostView) LoadAverage() []float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneFloat64Slice(v.r.Agent.LoadAverage)
+}
+
 func (v HostView) AgentVersion() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""
@@ -853,6 +874,13 @@ func (v HostView) UptimeSeconds() int64 {
 		return 0
 	}
 	return v.r.Agent.UptimeSeconds
+}
+
+func (v HostView) IntervalSeconds() int {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.IntervalSeconds
 }
 
 func (v HostView) Temperature() float64 {
@@ -899,6 +927,34 @@ func (v HostView) LinkedContainerID() string {
 		return ""
 	}
 	return v.r.Agent.LinkedContainerID
+}
+
+func (v HostView) CommandsEnabled() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.CommandsEnabled
+}
+
+func (v HostView) ReportIP() string {
+	if v.r == nil || v.r.Agent == nil {
+		return ""
+	}
+	return v.r.Agent.ReportIP
+}
+
+func (v HostView) DiskExclude() []string {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Agent.DiskExclude)
+}
+
+func (v HostView) IsLegacy() bool {
+	if v.r == nil || v.r.Agent == nil {
+		return false
+	}
+	return v.r.Agent.IsLegacy
 }
 
 func (v HostView) Status() ResourceStatus {
@@ -1013,6 +1069,20 @@ func (v HostView) MemoryTotal() int64 {
 	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
 }
 
+func (v HostView) SwapUsed() int64 {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.Memory == nil {
+		return 0
+	}
+	return v.r.Agent.Memory.SwapUsed
+}
+
+func (v HostView) SwapTotal() int64 {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.Memory == nil {
+		return 0
+	}
+	return v.r.Agent.Memory.SwapTotal
+}
+
 func (v HostView) MemoryPercent() float64 {
 	if v.r == nil {
 		return 0
@@ -1025,6 +1095,34 @@ func (v HostView) DiskPercent() float64 {
 		return 0
 	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
+}
+
+func (v HostView) NetInRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.NetInRate
+}
+
+func (v HostView) NetOutRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.NetOutRate
+}
+
+func (v HostView) DiskReadRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.DiskReadRate
+}
+
+func (v HostView) DiskWriteRate() float64 {
+	if v.r == nil || v.r.Agent == nil {
+		return 0
+	}
+	return v.r.Agent.DiskWriteRate
 }
 
 func (v HostView) StorageRisk() *StorageRisk {

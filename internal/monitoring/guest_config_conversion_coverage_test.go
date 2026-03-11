@@ -642,6 +642,161 @@ func TestMonitorGetLiveHostsSnapshot(t *testing.T) {
 	})
 }
 
+func TestMonitorHostsSnapshot(t *testing.T) {
+	t.Run("nil monitor", func(t *testing.T) {
+		var m *Monitor
+		hosts := m.HostsSnapshot()
+		if len(hosts) != 0 {
+			t.Fatalf("expected empty hosts for nil monitor, got %#v", hosts)
+		}
+	})
+
+	t.Run("prefers canonical read state hosts over legacy snapshot", func(t *testing.T) {
+		now := time.Date(2026, 3, 11, 12, 30, 0, 0, time.UTC)
+		tokenLastUsed := now.Add(-5 * time.Minute)
+		canonicalState := models.StateSnapshot{
+			Hosts: []models.Host{{
+				ID:            "host-1",
+				Hostname:      "host-1.local",
+				DisplayName:   "Host One",
+				Platform:      "linux",
+				OSName:        "Ubuntu",
+				OSVersion:     "24.04",
+				KernelVersion: "6.8.0",
+				Architecture:  "amd64",
+				CPUCount:      16,
+				CPUUsage:      15.5,
+				Memory:        models.Memory{Total: 64, Used: 16, Free: 48, Usage: 25, SwapUsed: 2, SwapTotal: 8},
+				LoadAverage:   []float64{0.2, 0.3, 0.4},
+				Disks:         []models.Disk{{Device: "/dev/sda1", Mountpoint: "/", Type: "ext4", Total: 100, Used: 60, Free: 40, Usage: 60}},
+				DiskIO:        []models.DiskIO{{Device: "/dev/sda", ReadBytes: 1, WriteBytes: 2, ReadOps: 3, WriteOps: 4, IOTime: 5}},
+				NetworkInterfaces: []models.HostNetworkInterface{{
+					Name:      "eth0",
+					MAC:       "aa:bb:cc:dd:ee:ff",
+					Addresses: []string{"10.0.0.5/24"},
+				}},
+				Sensors: models.HostSensorSummary{
+					TemperatureCelsius: map[string]float64{"cpu_package": 55.5},
+					SMART: []models.HostDiskSMART{{
+						Device:      "sda",
+						Model:       "Samsung",
+						Serial:      "serial-1",
+						Temperature: 39,
+						Health:      "PASSED",
+					}},
+				},
+				RAID: []models.HostRAIDArray{{
+					Device: "/dev/md0",
+					Level:  "raid1",
+					State:  "clean",
+				}},
+				Unraid: &models.HostUnraidStorage{
+					ArrayStarted: true,
+					ArrayState:   "STARTED",
+				},
+				Ceph: &models.HostCephCluster{
+					FSID: "fsid-1",
+					Health: models.HostCephHealth{
+						Status: "HEALTH_OK",
+					},
+				},
+				Status:            "online",
+				UptimeSeconds:     7200,
+				IntervalSeconds:   15,
+				LastSeen:          now,
+				AgentVersion:      "1.2.3",
+				MachineID:         "machine-1",
+				CommandsEnabled:   true,
+				ReportIP:          "10.0.0.99",
+				TokenID:           "token-1",
+				TokenName:         "Agent Token",
+				TokenHint:         "agt_1234",
+				TokenLastUsedAt:   &tokenLastUsed,
+				Tags:              []string{"linux", "site:1"},
+				DiskExclude:       []string{"/dev/loop*"},
+				IsLegacy:          true,
+				NetInRate:         10.5,
+				NetOutRate:        11.5,
+				DiskReadRate:      12.5,
+				DiskWriteRate:     13.5,
+				LinkedNodeID:      "node-1",
+				LinkedVMID:        "vm-1",
+				LinkedContainerID: "ct-1",
+			}},
+		}
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(canonicalState)
+
+		legacyState := models.NewState()
+		legacyState.Hosts = []models.Host{{ID: "legacy-host", Hostname: "legacy"}}
+
+		m := &Monitor{
+			state:         legacyState,
+			resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		}
+
+		hosts := m.HostsSnapshot()
+		if len(hosts) != 1 {
+			t.Fatalf("expected one host entry from read-state, got %d", len(hosts))
+		}
+		host := hosts[0]
+		if host.ID != "host-1" || host.Hostname != "host-1.local" || host.DisplayName != "Host One" {
+			t.Fatalf("expected canonical host identity, got %#v", host)
+		}
+		if host.CPUCount != 16 || host.CPUUsage != 15.5 || host.IntervalSeconds != 15 {
+			t.Fatalf("expected canonical cpu/interval fields, got cpuCount=%d cpuUsage=%v interval=%d", host.CPUCount, host.CPUUsage, host.IntervalSeconds)
+		}
+		if host.MachineID != "machine-1" || !host.CommandsEnabled || host.ReportIP != "10.0.0.99" {
+			t.Fatalf("expected canonical machine/command/report fields, got machine=%q commands=%v reportIP=%q", host.MachineID, host.CommandsEnabled, host.ReportIP)
+		}
+		if len(host.LoadAverage) != 3 || host.LoadAverage[0] != 0.2 {
+			t.Fatalf("expected canonical load average, got %v", host.LoadAverage)
+		}
+		if len(host.Disks) != 1 || host.Disks[0].Type != "ext4" {
+			t.Fatalf("expected canonical disks, got %+v", host.Disks)
+		}
+		if len(host.DiskIO) != 1 || host.DiskIO[0].IOTime != 5 {
+			t.Fatalf("expected canonical disk io, got %+v", host.DiskIO)
+		}
+		if len(host.NetworkInterfaces) != 1 || host.NetworkInterfaces[0].Name != "eth0" {
+			t.Fatalf("expected canonical network interfaces, got %+v", host.NetworkInterfaces)
+		}
+		if len(host.Sensors.SMART) != 1 || host.Sensors.SMART[0].Device != "sda" {
+			t.Fatalf("expected canonical sensor smart data, got %+v", host.Sensors)
+		}
+		if host.Unraid == nil || host.Ceph == nil {
+			t.Fatalf("expected canonical unraid and ceph data, got unraid=%+v ceph=%+v", host.Unraid, host.Ceph)
+		}
+		if host.TokenLastUsedAt == nil || !host.TokenLastUsedAt.Equal(tokenLastUsed) {
+			t.Fatalf("expected token last used at %v, got %+v", tokenLastUsed, host.TokenLastUsedAt)
+		}
+		if len(host.DiskExclude) != 1 || host.DiskExclude[0] != "/dev/loop*" {
+			t.Fatalf("expected canonical disk exclude patterns, got %v", host.DiskExclude)
+		}
+		if host.NetInRate != 10.5 || host.NetOutRate != 11.5 || host.DiskReadRate != 12.5 || host.DiskWriteRate != 13.5 {
+			t.Fatalf("expected canonical host rates, got netIn=%v netOut=%v diskRead=%v diskWrite=%v", host.NetInRate, host.NetOutRate, host.DiskReadRate, host.DiskWriteRate)
+		}
+		if host.LinkedNodeID != "node-1" || host.LinkedVMID != "vm-1" || host.LinkedContainerID != "ct-1" {
+			t.Fatalf("expected canonical linked IDs, got node=%q vm=%q ct=%q", host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
+		}
+	})
+
+	t.Run("does not fall back to stale snapshot when live read state is empty", func(t *testing.T) {
+		state := models.NewState()
+		state.Hosts = []models.Host{{ID: "legacy-host", Hostname: "legacy"}}
+
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		}
+
+		hosts := m.HostsSnapshot()
+		if len(hosts) != 0 {
+			t.Fatalf("expected empty hosts from live canonical read-state, got %#v", hosts)
+		}
+	})
+}
+
 func TestMonitorWorkloadSnapshots(t *testing.T) {
 	t.Run("nil monitor", func(t *testing.T) {
 		var m *Monitor
