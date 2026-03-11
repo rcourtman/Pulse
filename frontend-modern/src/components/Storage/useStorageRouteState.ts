@@ -2,7 +2,7 @@ import { Accessor, createEffect, onCleanup, untrack } from 'solid-js';
 import { STORAGE_QUERY_PARAMS, parseStorageLinkSearch } from '@/routing/resourceLinks';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
 
-type StorageManagedQueryKey =
+export type StorageManagedQueryKey =
   | 'tab'
   | 'group'
   | 'source'
@@ -12,16 +12,20 @@ type StorageManagedQueryKey =
   | 'sort'
   | 'order';
 
-type StoragePathOptions = Partial<Record<StorageManagedQueryKey, string | null>>;
+export type StoragePathOptions = Partial<Record<StorageManagedQueryKey, string | null>>;
 
-type ParsedStorageSearch = ReturnType<typeof parseStorageLinkSearch>;
+export type ParsedStorageSearch = ReturnType<typeof parseStorageLinkSearch>;
 
-type StorageRouteStateField<T = any> = {
+export type StorageRouteStateField<T = any> = {
   get: Accessor<T>;
   set: (value: T) => unknown;
   read: (parsed: ParsedStorageSearch) => T;
   write?: (value: T) => string | null;
 };
+
+export type StorageRouteStateFields = Partial<
+  Record<StorageManagedQueryKey, StorageRouteStateField>
+>;
 
 type StorageRouteStateConfig = {
   location: {
@@ -30,7 +34,7 @@ type StorageRouteStateConfig = {
   };
   navigate: (path: string, options: { replace: true }) => void;
   buildPath: (options: StoragePathOptions) => string;
-  fields: Partial<Record<StorageManagedQueryKey, StorageRouteStateField>>;
+  fields: StorageRouteStateFields;
   isReadEnabled?: () => boolean;
   isWriteEnabled?: () => boolean;
   useCurrentPathForNavigation?: boolean;

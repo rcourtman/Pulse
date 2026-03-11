@@ -16,13 +16,26 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 
 // Stub HTMLCanvasElement.getContext for jsdom (used by HistoryChart canvas rendering)
 if (typeof HTMLCanvasElement.prototype.getContext === 'function') {
-  const original = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, ...args: unknown[]) {
-    try {
-      return original.apply(this, args as Parameters<typeof original>);
-    } catch {
-      return null;
-    }
+  const fakeGradient = { addColorStop: () => {} };
+  const fakeContext = {
+    setTransform: () => {},
+    clearRect: () => {},
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    stroke: () => {},
+    fill: () => {},
+    fillText: () => {},
+    measureText: () => ({ width: 0 }),
+    createLinearGradient: () => fakeGradient,
+    setLineDash: () => {},
+    save: () => {},
+    restore: () => {},
+    arc: () => {},
+    closePath: () => {},
+  };
+  HTMLCanvasElement.prototype.getContext = function () {
+    return fakeContext as unknown as ReturnType<typeof HTMLCanvasElement.prototype.getContext>;
   } as typeof HTMLCanvasElement.prototype.getContext;
 }
 
@@ -45,6 +58,25 @@ let hookResources: Resource[] = [];
 let hookLoading = false;
 let hookError: unknown = undefined;
 let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'active';
+const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  if (url.includes('/api/license/entitlements')) {
+    return new Response(JSON.stringify({ entitlements: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (url.includes('/api/metrics-store/history')) {
+    return new Response(JSON.stringify({ points: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  return new Response(JSON.stringify({}), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+});
 
 let nodeResources: Resource[] = [
   {
@@ -262,6 +294,8 @@ vi.mock('@/components/Storage/DiskList', () => ({
 
 describe('Storage', () => {
   beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockClear();
     mockLocationPath = '/storage';
     mockLocationSearch = '';
     navigateSpy.mockReset();
@@ -778,7 +812,7 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Physical Disks' }));
+    fireEvent.click(screen.getAllByRole('tab', { name: 'Physical Disks' })[0]!);
 
     const options = screen
       .getAllByRole('option')
@@ -826,15 +860,15 @@ describe('Storage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
     });
-    expect(screen.getByLabelText('Node')).toHaveValue('all');
+    expect(screen.getAllByLabelText('Node')[0]).toHaveValue('all');
   });
 
   it('renders the storage view as canonical subtabs', () => {
     render(() => <Storage />);
 
-    expect(screen.getByRole('tablist', { name: 'Storage view' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Pools' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
+    expect(screen.getAllByRole('tablist', { name: 'Storage view' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('tab', { name: 'Pools' })[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('tab', { name: 'Physical Disks' })[0]).toHaveAttribute(
       'aria-selected',
       'false',
     );

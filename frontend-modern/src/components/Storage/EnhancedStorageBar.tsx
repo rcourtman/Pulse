@@ -1,10 +1,35 @@
-import { Show, createMemo } from 'solid-js';
-import { formatBytes, formatPercent } from '@/utils/format';
+import { For, Show } from 'solid-js';
+import {
+  getZfsPoolErrorOverlayClass,
+  getZfsPoolStateTextClass,
+} from '@/features/storageBackups/zfsPresentation';
+import {
+  getZfsErrorTextClass,
+  getZfsScanTextClass,
+} from '@/features/storageBackups/storagePoolDetailPresentation';
+import {
+  STORAGE_BAR_LABEL_TEXT_CLASS,
+  STORAGE_BAR_LABEL_WRAP_CLASS,
+  STORAGE_BAR_PROGRESS_CLASS,
+  STORAGE_BAR_PULSE_OVERLAY_CLASS,
+  STORAGE_BAR_ROOT_CLASS,
+  STORAGE_BAR_TOOLTIP_LABEL_CLASS,
+  STORAGE_BAR_TOOLTIP_TITLE_CLASS,
+  STORAGE_BAR_TOOLTIP_VALUE_CLASS,
+  STORAGE_BAR_TOOLTIP_WRAP_CLASS,
+  STORAGE_BAR_ZFS_HEADING_CLASS,
+  STORAGE_BAR_ZFS_SECTION_CLASS,
+  STORAGE_BAR_ZFS_STATE_LABEL_CLASS,
+  STORAGE_BAR_ZFS_STATE_ROW_CLASS,
+  getStorageBarTooltipRowClass,
+  getStorageBarTooltipTitle,
+  getStorageBarZfsHeadingLabel,
+} from '@/features/storageBackups/storageBarPresentation';
 import { useTooltip } from '@/hooks/useTooltip';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
-import { getMetricColorClass } from '@/utils/metricThresholds';
 import type { ZFSPool } from '@/types/api';
+import { useEnhancedStorageBarModel } from './useEnhancedStorageBarModel';
 
 interface EnhancedStorageBarProps {
   used: number;
@@ -15,54 +40,36 @@ interface EnhancedStorageBarProps {
 
 export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
   const tip = useTooltip();
-
-  const usagePercent = createMemo(() => {
-    if (props.total <= 0) return 0;
-    return (props.used / props.total) * 100;
-  });
-
-  const barColor = createMemo(() => getMetricColorClass(usagePercent(), 'disk'));
-
-  const isScrubbing = createMemo(() => {
-    return props.zfsPool?.scan?.toLowerCase().includes('scrub') ?? false;
-  });
-
-  const isResilvering = createMemo(() => {
-    return props.zfsPool?.scan?.toLowerCase().includes('resilver') ?? false;
-  });
-
-  const hasErrors = createMemo(() => {
-    if (!props.zfsPool) return false;
-    return (
-      props.zfsPool.readErrors > 0 ||
-      props.zfsPool.writeErrors > 0 ||
-      props.zfsPool.checksumErrors > 0
-    );
+  const { usagePercent, barColor, label, tooltipRows, zfsSummary } = useEnhancedStorageBarModel({
+    used: () => props.used,
+    total: () => props.total,
+    free: () => props.free,
+    zfsPool: () => props.zfsPool,
   });
 
   return (
-    <div class="metric-text w-full h-5 flex items-center min-w-0">
+    <div class={STORAGE_BAR_ROOT_CLASS}>
       <ProgressBar
         value={usagePercent()}
-        class="h-full"
+        class={STORAGE_BAR_PROGRESS_CLASS}
         fillClass={barColor()}
         onMouseEnter={tip.onMouseEnter}
         onMouseLeave={tip.onMouseLeave}
         overlays={
           <>
-            <Show when={isScrubbing() || isResilvering()}>
-              <div class="absolute inset-0 w-full h-full animate-pulse" />
+            <Show when={zfsSummary()?.isScrubbing || zfsSummary()?.isResilvering}>
+              <div class={STORAGE_BAR_PULSE_OVERLAY_CLASS} />
             </Show>
 
-            <Show when={hasErrors()}>
-              <div class="absolute inset-0 rounded border-2 border-red-500 animate-pulse" />
+            <Show when={zfsSummary()?.hasErrors}>
+              <div class={getZfsPoolErrorOverlayClass(Boolean(zfsSummary()?.hasErrors))} />
             </Show>
           </>
         }
         label={
-          <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
-            <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
-              {formatPercent(usagePercent())} ({formatBytes(props.used)}/{formatBytes(props.total)})
+          <span class={STORAGE_BAR_LABEL_WRAP_CLASS}>
+            <span class={STORAGE_BAR_LABEL_TEXT_CLASS}>
+              {label()}
             </span>
           </span>
         }
@@ -70,42 +77,37 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
 
       {/* Tooltip */}
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
-        <div class="min-w-[160px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
-            Storage Details
+        <div class={STORAGE_BAR_TOOLTIP_WRAP_CLASS}>
+          <div class={STORAGE_BAR_TOOLTIP_TITLE_CLASS}>
+            {getStorageBarTooltipTitle()}
           </div>
 
-          <div class="flex justify-between gap-3 py-0.5">
-            <span class="text-slate-400">Used</span>
-            <span class="text-base-content">{formatBytes(props.used)}</span>
-          </div>
-          <div class="flex justify-between gap-3 py-0.5">
-            <span class="text-slate-400">Free</span>
-            <span class="text-base-content">{formatBytes(props.free)}</span>
-          </div>
-          <div class="flex justify-between gap-3 py-0.5 border-t border-border mt-0.5 pt-0.5">
-            <span class="text-slate-400">Total</span>
-            <span class="text-base-content">{formatBytes(props.total)}</span>
-          </div>
+          <For each={tooltipRows()}>
+            {(row) => (
+              <div class={getStorageBarTooltipRowClass(row.bordered)}>
+                <span class={STORAGE_BAR_TOOLTIP_LABEL_CLASS}>{row.label}</span>
+                <span class={STORAGE_BAR_TOOLTIP_VALUE_CLASS}>{row.value}</span>
+              </div>
+            )}
+          </For>
 
-          <Show when={props.zfsPool}>
-            <div class="mt-1 pt-1 border-t border-slate-600">
-              <div class="font-medium mb-0.5 text-blue-300">ZFS Status</div>
-              <div class="flex justify-between gap-3 py-0.5">
-                <span class="text-slate-400">State</span>
-                <span class={hasErrors() ? 'text-red-400 font-bold' : 'text-green-400'}>
-                  {props.zfsPool?.state}
+          <Show when={zfsSummary()}>
+            <div class={STORAGE_BAR_ZFS_SECTION_CLASS}>
+              <div class={STORAGE_BAR_ZFS_HEADING_CLASS}>{getStorageBarZfsHeadingLabel()}</div>
+              <div class={STORAGE_BAR_ZFS_STATE_ROW_CLASS}>
+                <span class={STORAGE_BAR_ZFS_STATE_LABEL_CLASS}>State</span>
+                <span class={getZfsPoolStateTextClass(Boolean(zfsSummary()?.hasErrors))}>
+                  {zfsSummary()?.state}
                 </span>
               </div>
-              <Show when={props.zfsPool?.scan && props.zfsPool.scan !== 'none'}>
-                <div class="text-yellow-400 italic mt-0.5 max-w-[200px] break-words">
-                  {props.zfsPool?.scan}
+              <Show when={zfsSummary()?.scan}>
+                <div class={`${getZfsScanTextClass()} mt-0.5 max-w-[200px] break-words`}>
+                  {zfsSummary()?.scan}
                 </div>
               </Show>
-              <Show when={hasErrors()}>
-                <div class="text-red-400 mt-0.5 font-bold">
-                  Errors: R:{props.zfsPool?.readErrors} W:{props.zfsPool?.writeErrors} C:
-                  {props.zfsPool?.checksumErrors}
+              <Show when={zfsSummary()?.errorSummary}>
+                <div class={`${getZfsErrorTextClass()} mt-0.5`}>
+                  {zfsSummary()?.errorSummary}
                 </div>
               </Show>
             </div>

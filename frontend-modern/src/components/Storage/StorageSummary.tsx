@@ -13,10 +13,10 @@ import {
   SUMMARY_TIME_RANGE_LABEL,
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
-import { RESOURCE_COLORS } from '@/pages/DashboardPanels/resourceColors';
 import { formatBytes } from '@/utils/format';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
+import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 
 // ---------------------------------------------------------------------------
 // Cache (org-scoped to prevent cross-tenant data leakage)
@@ -173,7 +173,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       .map(([id, pool], i) => ({
         id,
         name: pool.name || id,
-        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        color: getChartSeriesColor(i),
         data: pool.usage as MetricPoint[],
       }));
   });
@@ -187,7 +187,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       .map(([id, pool], i) => ({
         id,
         name: pool.name || id,
-        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        color: getChartSeriesColor(i),
         data: pool.used as MetricPoint[],
       }));
   });
@@ -201,7 +201,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       .map(([id, pool], i) => ({
         id,
         name: pool.name || id,
-        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        color: getChartSeriesColor(i),
         data: pool.avail as MetricPoint[],
       }));
   });
@@ -215,7 +215,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       .map(([id, disk], i) => ({
         id,
         name: disk.name || id,
-        color: RESOURCE_COLORS[i % RESOURCE_COLORS.length],
+        color: getChartSeriesColor(i),
         data: disk.temperature as MetricPoint[],
       }));
   });

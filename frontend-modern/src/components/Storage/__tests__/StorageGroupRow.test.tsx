@@ -46,6 +46,7 @@ describe('StorageGroupRow', () => {
 
     expect(screen.getByText('tower')).toBeInTheDocument();
     expect(screen.getByText('2 pools')).toBeInTheDocument();
+    expect(screen.getByText('40%')).toBeInTheDocument();
     expect(container.querySelector('.bg-green-500')).toBeInTheDocument();
     expect(container.querySelector('.bg-yellow-500')).toBeInTheDocument();
     expect(container.querySelector('.bg-red-500')).toBeInTheDocument();

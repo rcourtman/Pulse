@@ -1,25 +1,43 @@
 import { Component, Show, createMemo } from 'solid-js';
 import type { StorageRecord } from '@/features/storageBackups/models';
+import {
+  getStoragePoolIssueTextClass,
+  getStoragePoolProtectionTextClass,
+} from '@/features/storageBackups/rowPresentation';
+import {
+  buildStoragePoolRowModel,
+  getStoragePoolExpandIconClass,
+  getStoragePoolImpactTextClass,
+  STORAGE_POOL_ROW_CLASS,
+  STORAGE_POOL_ROW_EXPANDED_CLASS,
+  STORAGE_POOL_ROW_EXPAND_BUTTON_CLASS,
+  STORAGE_POOL_ROW_EXPAND_CELL_CLASS,
+  STORAGE_POOL_ROW_PLACEHOLDER_CLASS,
+  STORAGE_POOL_ROW_HOST_CELL_CLASS,
+  STORAGE_POOL_ROW_IMPACT_CELL_CLASS,
+  STORAGE_POOL_ROW_ISSUE_CELL_CLASS,
+  STORAGE_POOL_ROW_ISSUE_TEXT_CLASS,
+  STORAGE_POOL_ROW_NAME_CELL_CLASS,
+  STORAGE_POOL_ROW_NAME_TEXT_CLASS,
+  STORAGE_POOL_ROW_PROTECTION_CELL_CLASS,
+  STORAGE_POOL_ROW_PROTECTION_TEXT_CLASS,
+  STORAGE_POOL_ROW_SOURCE_BADGE_CLASS,
+  STORAGE_POOL_ROW_SOURCE_CELL_CLASS,
+  STORAGE_POOL_ROW_STYLE,
+  STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS,
+  STORAGE_POOL_ROW_TYPE_CELL_CLASS,
+  STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS,
+  STORAGE_POOL_ROW_USAGE_BAR_WRAP_CLASS,
+  STORAGE_POOL_ROW_USAGE_CELL_CLASS,
+  STORAGE_POOL_ROW_USAGE_WRAP_CLASS,
+} from '@/features/storageBackups/storagePoolRowPresentation';
 import type { Resource } from '@/types/resource';
-import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
-import {
-  getRecordHostLabel,
-  getRecordImpactSummary,
-  getRecordIssueLabel,
-  getRecordIssueSummary,
-  getRecordPlatformLabel,
-  getRecordProtectionLabel,
-  getRecordTopologyLabel,
-  getRecordUsagePercent,
-  getRecordZfsPool,
-} from './useStorageModel';
 
 interface StoragePoolRowProps {
   record: StorageRecord;
   expanded: boolean;
-  groupExpanded: boolean;
   onToggleExpand: () => void;
   rowClass: string;
   rowStyle: Record<string, string>;
@@ -32,201 +50,98 @@ interface StoragePoolRowProps {
   };
 }
 
-const protectionTextClass = (record: StorageRecord): string => {
-  if (record.rebuildInProgress) {
-    return 'text-blue-700 dark:text-blue-300';
-  }
-  if (record.protectionReduced || record.incidentCategory === 'recoverability') {
-    return 'text-red-700 dark:text-red-300';
-  }
-  return 'text-base-content';
-};
-
-const issueTextClass = (record: StorageRecord): string => {
-  const severity = (record.incidentSeverity || record.health || '').trim().toLowerCase();
-  if (severity === 'critical' || severity === 'offline') {
-    return 'text-red-700 dark:text-red-300';
-  }
-  if (severity === 'warning') {
-    return 'text-amber-700 dark:text-amber-300';
-  }
-  return 'text-base-content';
-};
-
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
-  const zfsPool = createMemo(() => getRecordZfsPool(props.record));
-  const totalBytes = createMemo(() => props.record.capacity.totalBytes || 0);
-  const usedBytes = createMemo(() => props.record.capacity.usedBytes || 0);
-  const freeBytes = createMemo(
-    () =>
-      props.record.capacity.freeBytes ??
-      (totalBytes() > 0 ? Math.max(totalBytes() - usedBytes(), 0) : 0),
-  );
-  const usagePercent = createMemo(() => getRecordUsagePercent(props.record));
-  const platformLabel = createMemo(() => getRecordPlatformLabel(props.record));
-  const platformBadge = createMemo(
-    () => getSourcePlatformBadge(props.record.source.platform) || null,
-  );
-  const hostLabel = createMemo(() => getRecordHostLabel(props.record));
-  const topologyLabel = createMemo(() => getRecordTopologyLabel(props.record));
-  const protectionLabel = createMemo(() => getRecordProtectionLabel(props.record));
-  const issueLabel = createMemo(() => getRecordIssueLabel(props.record));
-  const issueSummary = createMemo(() => getRecordIssueSummary(props.record));
-  const impactSummary = createMemo(() => getRecordImpactSummary(props.record));
-  const normalizedStatus = createMemo(() => (props.record.statusLabel || '').trim().toLowerCase());
-
-  const compactProtection = createMemo(() => {
-    if (props.record.rebuildInProgress || props.record.protectionReduced) {
-      return protectionLabel();
-    }
-    const label = protectionLabel().trim();
-    if (label && label.toLowerCase() !== 'healthy') {
-      return label;
-    }
-    return '—';
-  });
-
-  const compactImpact = createMemo(() => {
-    if (
-      (props.record.consumerCount || 0) > 0 ||
-      (props.record.protectedWorkloadCount || 0) > 0 ||
-      (props.record.affectedDatastoreCount || 0) > 0
-    ) {
-      return impactSummary();
-    }
-    return '—';
-  });
-
-  const compactIssue = createMemo(() => {
-    const label = issueLabel().trim();
-    if (label && label.toLowerCase() !== 'healthy') {
-      const protection = compactProtection().trim();
-      if (protection && protection !== '—' && protection.toLowerCase() === label.toLowerCase()) {
-        return '—';
-      }
-      return label;
-    }
-    if (zfsPool() && zfsPool()!.state !== 'ONLINE') {
-      return zfsPool()!.state;
-    }
-    if (
-      normalizedStatus() &&
-      !['online', 'available', 'running', 'healthy'].includes(normalizedStatus())
-    ) {
-      return props.record.statusLabel || 'Issue';
-    }
-    return '—';
-  });
-
-  const compactIssueSummary = createMemo(() => {
-    if (compactIssue() === '—') return '';
-    const summary = issueSummary().trim();
-    if (summary && summary.toLowerCase() !== 'healthy') {
-      return summary;
-    }
-    const pool = zfsPool();
-    if (!pool) return '';
-    const errorParts: string[] = [];
-    if ((pool.readErrors || 0) > 0) errorParts.push(`${pool.readErrors} read`);
-    if ((pool.writeErrors || 0) > 0) errorParts.push(`${pool.writeErrors} write`);
-    if ((pool.checksumErrors || 0) > 0) errorParts.push(`${pool.checksumErrors} checksum`);
-    return errorParts.length > 0 ? `${errorParts.join(', ')} errors` : '';
-  });
+  const row = createMemo(() => buildStoragePoolRowModel(props.record));
 
   return (
     <>
       <tr
-        class={`group cursor-pointer ${props.rowClass} ${props.expanded ? 'bg-surface-alt' : ''}`}
-        style={{ ...props.rowStyle, height: '38px' }}
+        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`}
+        style={{ ...props.rowStyle, ...STORAGE_POOL_ROW_STYLE }}
         onClick={props.onToggleExpand}
         {...props.alertDataAttrs}
       >
-        <td class="px-2 py-1 align-middle text-base-content">
-          <span class="block truncate text-[12px] font-semibold" title={props.record.name}>
+        <td class={STORAGE_POOL_ROW_NAME_CELL_CLASS}>
+          <span class={STORAGE_POOL_ROW_NAME_TEXT_CLASS} title={props.record.name}>
             {props.record.name}
           </span>
         </td>
 
-        <td class="px-2 py-1 align-middle text-[11px]">
+        <td class={STORAGE_POOL_ROW_SOURCE_CELL_CLASS}>
           <span
-            class={`${platformBadge()?.classes || 'text-base-content'} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
+            class={`${row().platformToneClass} ${STORAGE_POOL_ROW_SOURCE_BADGE_CLASS}`}
           >
-            {platformBadge()?.label || platformLabel()}
+            {row().platformLabel}
           </span>
         </td>
 
-        <td class="hidden xl:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
-          <span class="block truncate" title={topologyLabel()}>
-            {topologyLabel()}
+        <td class={STORAGE_POOL_ROW_TYPE_CELL_CLASS}>
+          <span class={STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} title={row().topologyLabel}>
+            {row().topologyLabel}
           </span>
         </td>
 
-        <td class="px-2 py-1 align-middle text-[11px] text-base-content">
-          <span class="block truncate" title={hostLabel()}>
-            {hostLabel()}
+        <td class={STORAGE_POOL_ROW_HOST_CELL_CLASS}>
+          <span class={STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} title={row().hostLabel}>
+            {row().hostLabel}
           </span>
         </td>
 
-        <td class="px-2 py-1 align-middle text-[11px]">
-          <Show when={compactProtection() !== '—'} fallback={<span class="text-muted">—</span>}>
+        <td class={STORAGE_POOL_ROW_PROTECTION_CELL_CLASS}>
+          <Show when={row().compactProtection !== '—'} fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}>
             <span
-              class={`block truncate font-semibold ${protectionTextClass(props.record)}`}
-              title={compactProtection()}
+              class={`${STORAGE_POOL_ROW_PROTECTION_TEXT_CLASS} ${getStoragePoolProtectionTextClass(props.record)}`}
+              title={row().compactProtectionTitle || row().compactProtection}
             >
-              {compactProtection()}
+              {row().compactProtection}
             </span>
           </Show>
         </td>
 
-        <td class="px-2 py-1 align-middle md:min-w-[190px] xl:min-w-[220px]">
-          <Show when={totalBytes() > 0} fallback={<span class="text-[11px] text-muted">n/a</span>}>
-            <div class="flex items-center whitespace-nowrap text-[11px]">
-              <div class="min-w-[120px] flex-1">
+        <td class={STORAGE_POOL_ROW_USAGE_CELL_CLASS}>
+          <Show when={row().totalBytes > 0} fallback={<span class={STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS}>n/a</span>}>
+            <div class={STORAGE_POOL_ROW_USAGE_WRAP_CLASS}>
+              <div class={STORAGE_POOL_ROW_USAGE_BAR_WRAP_CLASS}>
                 <EnhancedStorageBar
-                  used={usedBytes()}
-                  total={Math.max(totalBytes(), 0)}
-                  free={Math.max(freeBytes(), 0)}
-                  zfsPool={zfsPool() || undefined}
+                  used={row().usedBytes}
+                  total={Math.max(row().totalBytes, 0)}
+                  free={Math.max(row().freeBytes, 0)}
+                  zfsPool={row().zfsPool || undefined}
                 />
               </div>
             </div>
           </Show>
         </td>
 
-        <td class="hidden lg:table-cell px-2 py-1 align-middle text-[11px] text-base-content">
-          <span
-            class={`block truncate ${compactImpact() === '—' ? 'text-muted' : ''}`}
-            title={compactImpact()}
-          >
-            {compactImpact()}
+        <td class={STORAGE_POOL_ROW_IMPACT_CELL_CLASS}>
+          <span class={getStoragePoolImpactTextClass(row().compactImpact)} title={row().compactImpact}>
+            {row().compactImpact}
           </span>
         </td>
 
-        <td class="px-2 py-1 align-middle text-[11px]">
-          <Show when={compactIssue() !== '—'} fallback={<span class="text-muted">—</span>}>
+        <td class={STORAGE_POOL_ROW_ISSUE_CELL_CLASS}>
+          <Show when={row().compactIssue !== '—'} fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}>
             <span
-              class={`block truncate text-[11px] font-semibold ${issueTextClass(props.record)}`}
-              title={compactIssueSummary() || compactIssue()}
+              class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${getStoragePoolIssueTextClass(props.record)}`}
+              title={row().compactIssueSummary || row().compactIssue}
             >
-              {compactIssue()}
+              {row().compactIssue}
             </span>
           </Show>
         </td>
 
-        <td class="px-1.5 py-1 align-middle text-right">
+        <td class={STORAGE_POOL_ROW_EXPAND_CELL_CLASS}>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               props.onToggleExpand();
             }}
-            class="rounded p-1 hover:bg-surface-hover transition-colors"
+            class={STORAGE_POOL_ROW_EXPAND_BUTTON_CLASS}
             aria-label={`Toggle details for ${props.record.name}`}
           >
             <svg
-              class={`h-3.5 w-3.5 text-muted transition-transform duration-150 ${
-                props.expanded ? 'rotate-90' : ''
-              }`}
+              class={getStoragePoolExpandIconClass(props.expanded)}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

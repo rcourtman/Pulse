@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { getLinkedAgentId, getProxmoxData } from '@/utils/resourcePlatformData';
 
 type DiskPlatformData = {
   proxmox?: {
@@ -47,4 +48,27 @@ export const matchesPhysicalDiskNode = (
   }
 
   return diskInstance === targetInstance;
+};
+
+export const resolvePhysicalDiskMetricResourceId = (
+  disk: Resource,
+  nodes: Resource[],
+  devPath: string,
+): string | null => {
+  if (disk.metricsTarget?.resourceId) {
+    return disk.metricsTarget.resourceId;
+  }
+
+  const node = nodes.find((candidate) =>
+    matchesPhysicalDiskNode(disk, {
+      id: candidate.id,
+      name: candidate.name,
+      instance: getProxmoxData(candidate)?.instance,
+    }),
+  );
+  const agentId = node ? getLinkedAgentId(node) : undefined;
+
+  if (!agentId) return null;
+  const deviceName = devPath.replace('/dev/', '');
+  return `${agentId}:${deviceName}`;
 };

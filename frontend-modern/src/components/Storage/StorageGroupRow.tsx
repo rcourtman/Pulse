@@ -1,8 +1,21 @@
-import { Component, Show } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
-import { formatPercent } from '@/utils/format';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
-import { getStorageHealthPresentation } from '@/features/storageBackups/healthPresentation';
+import {
+  buildStorageGroupRowPresentation,
+  STORAGE_GROUP_ROW_CELL_CLASS,
+  STORAGE_GROUP_ROW_CLASS,
+  STORAGE_GROUP_ROW_CONTENT_CLASS,
+  STORAGE_GROUP_ROW_HEALTH_COUNT_CLASS,
+  STORAGE_GROUP_ROW_HEALTH_DOT_CLASS,
+  STORAGE_GROUP_ROW_HEALTH_ITEM_CLASS,
+  STORAGE_GROUP_ROW_HEALTH_WRAP_CLASS,
+  STORAGE_GROUP_ROW_LABEL_CLASS,
+  STORAGE_GROUP_ROW_POOL_COUNT_CLASS,
+  STORAGE_GROUP_ROW_USAGE_LABEL_CLASS,
+  STORAGE_GROUP_ROW_USAGE_WRAP_CLASS,
+  getStorageGroupChevronClass,
+} from '@/features/storageBackups/groupPresentation';
 
 interface StorageGroupRowProps {
   group: StorageGroupedRecords;
@@ -12,18 +25,18 @@ interface StorageGroupRowProps {
 }
 
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
+  const row = () => buildStorageGroupRowPresentation(props.group);
+
   return (
     <tr
-      class="cursor-pointer select-none bg-surface-alt hover:bg-surface-hover transition-colors border-b border-border"
+      class={STORAGE_GROUP_ROW_CLASS}
       onClick={() => props.onToggle()}
     >
-      <td colSpan={99} class="px-1.5 sm:px-2 py-0.5">
-        <div class="flex items-center gap-3">
+      <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
+        <div class={STORAGE_GROUP_ROW_CONTENT_CLASS}>
           {/* Expand chevron */}
           <svg
-            class={`w-3.5 h-3.5 text-muted transition-transform duration-150 flex-shrink-0 ${
-              props.expanded ? 'rotate-90' : ''
-            }`}
+            class={getStorageGroupChevronClass(props.expanded)}
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -35,86 +48,41 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
           </svg>
 
           {/* Group label */}
-          <span class="text-[11px] font-semibold text-base-content w-[140px] flex-shrink-0 truncate">
-            {props.group.key}
+          <span class={STORAGE_GROUP_ROW_LABEL_CLASS}>
+            {row().label}
           </span>
 
           {/* Aggregate capacity bar */}
-          <Show when={props.group.stats.totalBytes > 0}>
-            <div class="w-48 flex-shrink-0 hidden sm:block">
+          <Show when={row().showUsage}>
+            <div class={STORAGE_GROUP_ROW_USAGE_WRAP_CLASS}>
               <EnhancedStorageBar
                 used={props.group.stats.usedBytes}
                 total={props.group.stats.totalBytes}
                 free={Math.max(0, props.group.stats.totalBytes - props.group.stats.usedBytes)}
               />
             </div>
-            <span class="text-xs font-medium text-muted hidden sm:inline">
-              {formatPercent(props.group.stats.usagePercent)}
+            <span class={STORAGE_GROUP_ROW_USAGE_LABEL_CLASS}>
+              {row().usagePercentLabel}
             </span>
           </Show>
 
           {/* Pool count */}
-          <span class="text-xs text-muted whitespace-nowrap">
-            {props.group.items.length} {props.group.items.length === 1 ? 'pool' : 'pools'}
+          <span class={STORAGE_GROUP_ROW_POOL_COUNT_CLASS}>
+            {row().poolCountLabel}
           </span>
 
           {/* Health dots */}
-          <div class="flex items-center gap-1.5 ml-auto">
-            <Show when={props.group.stats.byHealth.healthy > 0}>
-              <span class="flex items-center gap-0.5">
-                <span
-                  class={`w-2 h-2 rounded-full ${getStorageHealthPresentation('healthy').dotClass}`}
-                  title={getStorageHealthPresentation('healthy').label}
-                />
-                <span class={`text-[10px] ${getStorageHealthPresentation('healthy').countClass}`}>
-                  {props.group.stats.byHealth.healthy}
+          <div class={STORAGE_GROUP_ROW_HEALTH_WRAP_CLASS}>
+            <For each={row().healthCounts}>
+              {(item) => (
+                <span class={STORAGE_GROUP_ROW_HEALTH_ITEM_CLASS}>
+                  <span class={`${STORAGE_GROUP_ROW_HEALTH_DOT_CLASS} ${item.dotClass}`} title={item.label} />
+                  <span class={`${STORAGE_GROUP_ROW_HEALTH_COUNT_CLASS} ${item.countClass}`}>
+                    {item.count}
+                  </span>
                 </span>
-              </span>
-            </Show>
-            <Show when={props.group.stats.byHealth.warning > 0}>
-              <span class="flex items-center gap-0.5">
-                <span
-                  class={`w-2 h-2 rounded-full ${getStorageHealthPresentation('warning').dotClass}`}
-                  title={getStorageHealthPresentation('warning').label}
-                />
-                <span class={`text-[10px] ${getStorageHealthPresentation('warning').countClass}`}>
-                  {props.group.stats.byHealth.warning}
-                </span>
-              </span>
-            </Show>
-            <Show when={props.group.stats.byHealth.critical > 0}>
-              <span class="flex items-center gap-0.5">
-                <span
-                  class={`w-2 h-2 rounded-full ${getStorageHealthPresentation('critical').dotClass}`}
-                  title={getStorageHealthPresentation('critical').label}
-                />
-                <span class={`text-[10px] ${getStorageHealthPresentation('critical').countClass}`}>
-                  {props.group.stats.byHealth.critical}
-                </span>
-              </span>
-            </Show>
-            <Show when={props.group.stats.byHealth.offline > 0}>
-              <span class="flex items-center gap-0.5">
-                <span
-                  class={`w-2 h-2 rounded-full ${getStorageHealthPresentation('offline').dotClass}`}
-                  title={getStorageHealthPresentation('offline').label}
-                />
-                <span class={`text-[10px] ${getStorageHealthPresentation('offline').countClass}`}>
-                  {props.group.stats.byHealth.offline}
-                </span>
-              </span>
-            </Show>
-            <Show when={props.group.stats.byHealth.unknown > 0}>
-              <span class="flex items-center gap-0.5">
-                <span
-                  class={`w-2 h-2 rounded-full ${getStorageHealthPresentation('unknown').dotClass}`}
-                  title={getStorageHealthPresentation('unknown').label}
-                />
-                <span class={`text-[10px] ${getStorageHealthPresentation('unknown').countClass}`}>
-                  {props.group.stats.byHealth.unknown}
-                </span>
-              </span>
-            </Show>
+              )}
+            </For>
           </div>
         </div>
       </td>
