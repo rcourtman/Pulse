@@ -1,6 +1,7 @@
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
+  assertAPIResponseOKOrAllowedStatus,
   arrayOrEmpty,
   isAPIErrorStatus,
   isAPIResponseStatus,
@@ -180,9 +181,11 @@ export class AgentProfilesAPI {
       method: 'DELETE',
     });
 
-    if (!isAPIResponseStatus(response, 204)) {
-      await assertAPIResponseOK(response, `Failed to delete profile: ${response.status}`);
-    }
+    await assertAPIResponseOKOrAllowedStatus(
+      response,
+      204,
+      `Failed to delete profile: ${response.status}`,
+    );
   }
 
   /**
@@ -221,9 +224,11 @@ export class AgentProfilesAPI {
       method: 'DELETE',
     });
 
-    if (!isAPIResponseStatus(response, 204)) {
-      await assertAPIResponseOK(response, `Failed to unassign profile: ${response.status}`);
-    }
+    await assertAPIResponseOKOrAllowedStatus(
+      response,
+      204,
+      `Failed to unassign profile: ${response.status}`,
+    );
   }
 
   /**

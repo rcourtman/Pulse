@@ -3,6 +3,7 @@ import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
+  assertAPIResponseOKOrAllowedStatus,
   arrayOrEmpty,
   isAPIErrorStatus,
   isAPIResponseStatus,
@@ -17,6 +18,7 @@ vi.mock('@/utils/apiClient', () => ({
 
 vi.mock('../responseUtils', () => ({
   assertAPIResponseOK: vi.fn(),
+  assertAPIResponseOKOrAllowedStatus: vi.fn(),
   arrayOrEmpty: vi.fn(),
   isAPIErrorStatus: vi.fn(),
   isAPIResponseStatus: vi.fn(),
@@ -35,6 +37,7 @@ describe('AgentProfilesAPI', () => {
     });
     vi.mocked(arrayOrEmpty).mockImplementation((value) => (Array.isArray(value) ? value : []));
     vi.mocked(assertAPIResponseOK).mockResolvedValue(undefined);
+    vi.mocked(assertAPIResponseOKOrAllowedStatus).mockResolvedValue(undefined);
     vi.mocked(objectArrayFieldOrEmpty).mockImplementation((value, field) => {
       if (!value || typeof value !== 'object') {
         return [];
@@ -152,12 +155,23 @@ describe('AgentProfilesAPI', () => {
         '/api/admin/profiles/p1',
         expect.objectContaining({ method: 'DELETE' }),
       );
+      expect(assertAPIResponseOKOrAllowedStatus).toHaveBeenCalledWith(
+        mockResponse,
+        204,
+        'Failed to delete profile: 204',
+      );
     });
 
     it('treats canonical 204 delete responses as success even when ok is false-like', async () => {
-      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 204 } as unknown as Response);
+      const mockResponse = { ok: false, status: 204 } as unknown as Response;
+      vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
       await expect(AgentProfilesAPI.deleteProfile('p1')).resolves.toBeUndefined();
+      expect(assertAPIResponseOKOrAllowedStatus).toHaveBeenCalledWith(
+        mockResponse,
+        204,
+        'Failed to delete profile: 204',
+      );
     });
   });
 
@@ -216,12 +230,23 @@ describe('AgentProfilesAPI', () => {
         '/api/admin/profiles/assignments/agent-1',
         expect.objectContaining({ method: 'DELETE' }),
       );
+      expect(assertAPIResponseOKOrAllowedStatus).toHaveBeenCalledWith(
+        mockResponse,
+        204,
+        'Failed to unassign profile: 204',
+      );
     });
 
     it('treats canonical 204 unassign responses as success even when ok is false-like', async () => {
-      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 204 } as unknown as Response);
+      const mockResponse = { ok: false, status: 204 } as unknown as Response;
+      vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
 
       await expect(AgentProfilesAPI.unassignProfile('agent-1')).resolves.toBeUndefined();
+      expect(assertAPIResponseOKOrAllowedStatus).toHaveBeenCalledWith(
+        mockResponse,
+        204,
+        'Failed to unassign profile: 204',
+      );
     });
   });
 

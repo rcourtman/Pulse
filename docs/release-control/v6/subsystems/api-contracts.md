@@ -153,6 +153,10 @@ Monitoring delete and idempotent mutate clients must now also route `404`/`204`
 success cases through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
 status-branch stacks in each method.
+Agent profile delete and unassign clients must now also route canonical `204`
+success handling through shared allowed-status helpers in
+`frontend-modern/src/api/responseUtils.ts` instead of open-coding local
+`if (!isAPIResponseStatus(response, 204))` branches.
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.
