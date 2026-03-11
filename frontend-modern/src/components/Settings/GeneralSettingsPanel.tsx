@@ -2,6 +2,7 @@ import { Component, Show, For, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
+import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import Activity from 'lucide-solid/icons/activity';
@@ -14,6 +15,17 @@ import { layoutStore } from '@/utils/layout';
 import { PVE_POLLING_PRESETS } from '@/utils/systemSettingsPresentation';
 
 import Laptop from 'lucide-solid/icons/laptop';
+
+const THEME_PREFERENCE_OPTIONS: FilterOption<'light' | 'dark' | 'system'>[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Laptop },
+];
+
+const TEMPERATURE_UNIT_OPTIONS: FilterOption<'celsius' | 'fahrenheit'>[] = [
+  { value: 'celsius', label: 'Celsius' },
+  { value: 'fahrenheit', label: 'Fahrenheit' },
+];
 
 interface GeneralSettingsPanelProps {
   darkMode: Accessor<boolean>;
@@ -79,44 +91,13 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </p>
             </div>
           </div>
-          <div class="shrink-0 flex self-start sm:self-auto items-center gap-1 bg-surface-alt rounded-md p-1 ml-12 sm:ml-0">
-            <button
-              type="button"
-              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${
-                props.themePreference() === 'light'
-                  ? 'bg-surface text-base-content shadow-sm'
-                  : 'text-muted hover:text-base-content'
-              }`}
-              onClick={() => props.setThemePreference('light')}
-            >
-              <Sun class="w-4 h-4" strokeWidth={2.5} />
-              <span class="hidden lg:inline">Light</span>
-            </button>
-            <button
-              type="button"
-              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${
-                props.themePreference() === 'dark'
-                  ? 'bg-surface text-base-content shadow-sm'
-                  : 'text-muted hover:text-base-content'
-              }`}
-              onClick={() => props.setThemePreference('dark')}
-            >
-              <Moon class="w-4 h-4" strokeWidth={2.5} />
-              <span class="hidden lg:inline">Dark</span>
-            </button>
-            <button
-              type="button"
-              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${
-                props.themePreference() === 'system'
-                  ? 'bg-surface text-base-content shadow-sm'
-                  : 'text-muted hover:text-base-content'
-              }`}
-              onClick={() => props.setThemePreference('system')}
-            >
-              <Laptop class="w-4 h-4" strokeWidth={2.5} />
-              <span class="hidden lg:inline">System</span>
-            </button>
-          </div>
+          <FilterButtonGroup
+            class="shrink-0 self-start sm:self-auto ml-12 sm:ml-0"
+            options={THEME_PREFERENCE_OPTIONS}
+            value={props.themePreference()}
+            onChange={props.setThemePreference}
+            variant="settings"
+          />
         </div>
 
         {/* Temperature Unit Selector */}
@@ -132,30 +113,13 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </p>
             </div>
           </div>
-          <div class="shrink-0 flex items-center gap-1 bg-surface-alt rounded-md p-1">
-            <button
-              type="button"
-              class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${
-                temperatureStore.unit() === 'celsius'
-                  ? 'bg-surface text-base-content shadow-sm'
-                  : 'text-muted hover:text-base-content'
-              }`}
-              onClick={() => temperatureStore.setUnit('celsius')}
-            >
-              °C
-            </button>
-            <button
-              type="button"
-              class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 text-sm rounded-md transition-all ${
-                temperatureStore.unit() === 'fahrenheit'
-                  ? 'bg-surface text-base-content shadow-sm'
-                  : 'text-muted hover:text-base-content'
-              }`}
-              onClick={() => temperatureStore.setUnit('fahrenheit')}
-            >
-              °F
-            </button>
-          </div>
+          <FilterButtonGroup
+            class="shrink-0"
+            options={TEMPERATURE_UNIT_OPTIONS}
+            value={temperatureStore.unit()}
+            onChange={(value) => temperatureStore.setUnit(value)}
+            variant="settings"
+          />
         </div>
 
         {/* Full-width Mode Toggle */}

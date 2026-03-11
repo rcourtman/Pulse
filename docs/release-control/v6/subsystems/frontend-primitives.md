@@ -57,3 +57,8 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+
+General settings segmented selectors for theme preference and temperature unit
+must now also route through the shared `FilterButtonGroup` primitive instead of
+maintaining local button-group styling forks inside
+`frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`.

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
+import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -22,5 +24,13 @@ describe('shared primitive guardrails', () => {
       './InfrastructureSummaryTable.tsx',
       './PulseDataGrid.tsx',
     ]);
+  });
+
+  it('routes canonical settings segmented selectors through FilterButtonGroup', () => {
+    expect(filterButtonGroupSource).toContain("variant?: 'default' | 'settings'");
+    expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
+    expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(2);
+    expect(generalSettingsPanelSource).not.toContain("props.themePreference() === 'light'");
+    expect(generalSettingsPanelSource).not.toContain("temperatureStore.unit() === 'celsius'");
   });
 });
