@@ -200,6 +200,8 @@ type ProxmoxData struct {
 	Instance        string     `json:"instance,omitempty"`
 	HostURL         string     `json:"host,omitempty"`
 	VMID            int        `json:"vmid,omitempty"`
+	ContainerType   string     `json:"containerType,omitempty"`
+	IsOCI           bool       `json:"isOci,omitempty"`
 	CPUs            int        `json:"cpus,omitempty"`
 	Template        bool       `json:"template,omitempty"`
 	Temperature     *float64   `json:"temperature,omitempty"` // Max node CPU temp in Celsius

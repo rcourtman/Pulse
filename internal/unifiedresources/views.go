@@ -334,6 +334,17 @@ func (v ContainerView) Instance() string {
 	return v.r.Proxmox.Instance
 }
 
+func (v ContainerView) ContainerType() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.ContainerType
+}
+
+func (v ContainerView) IsOCI() bool {
+	return v.r != nil && v.r.Proxmox != nil && v.r.Proxmox.IsOCI
+}
+
 func (v ContainerView) Template() bool {
 	if v.r == nil || v.r.Proxmox == nil {
 		return false

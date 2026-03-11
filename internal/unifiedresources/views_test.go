@@ -255,16 +255,18 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 		ParentID: &parentID,
 		Identity: ResourceIdentity{IPAddresses: []string{"10.0.0.20"}},
 		Proxmox: &ProxmoxData{
-			SourceID:   "ct-source-1",
-			NodeName:   "pve-b",
-			Instance:   "lab",
-			VMID:       201,
-			CPUs:       2,
-			Uptime:     888,
-			Template:   true,
-			LastBackup: lastBackup,
-			Disks:      []DiskInfo{{Device: "mp0", Filesystem: "xfs", Total: 200, Used: 25, Free: 175, Mountpoint: "/data"}},
-			Lock:       "migrate",
+			SourceID:      "ct-source-1",
+			NodeName:      "pve-b",
+			Instance:      "lab",
+			VMID:          201,
+			ContainerType: "oci",
+			IsOCI:         true,
+			CPUs:          2,
+			Uptime:        888,
+			Template:      true,
+			LastBackup:    lastBackup,
+			Disks:         []DiskInfo{{Device: "mp0", Filesystem: "xfs", Total: 200, Used: 25, Free: 175, Mountpoint: "/data"}},
+			Lock:          "migrate",
 		},
 		Metrics: &ResourceMetrics{
 			CPU:       &MetricValue{Percent: 3},
@@ -284,6 +286,9 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 	}
 	if v.VMID() != 201 || v.Node() != "pve-b" || v.Instance() != "lab" || v.Template() != true || v.CPUs() != 2 || v.Uptime() != 888 {
 		t.Fatalf("expected proxmox accessors to match, got vmid=%d node=%q instance=%q template=%v cpus=%d uptime=%d", v.VMID(), v.Node(), v.Instance(), v.Template(), v.CPUs(), v.Uptime())
+	}
+	if v.ContainerType() != "oci" || !v.IsOCI() {
+		t.Fatalf("expected container kind accessors to match, got type=%q isOCI=%v", v.ContainerType(), v.IsOCI())
 	}
 	if v.SourceID() != "ct-source-1" {
 		t.Fatalf("expected SourceID %q, got %q", "ct-source-1", v.SourceID())
@@ -324,6 +329,8 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			zero.VMID() != 0 ||
 			zero.Node() != "" ||
 			zero.Instance() != "" ||
+			zero.ContainerType() != "" ||
+			zero.IsOCI() != false ||
 			zero.Template() != false ||
 			zero.CPUs() != 0 ||
 			zero.Uptime() != 0 ||
