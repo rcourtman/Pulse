@@ -102,6 +102,35 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 			args: []any{int64(60), int64(60), int64(60), "vm", "vm-1", "raw", int64(0), farFuture},
 		},
 		{
+			name: "multi-resource multi-metric lookup (QueryAllBatch)",
+			query: `SELECT resource_id, metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
+				FROM metrics
+				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND tier = ?
+				AND timestamp >= ? AND timestamp <= ?
+				ORDER BY resource_id, metric_type, timestamp ASC`,
+			args: []any{"vm", "vm-1", "vm-2", "vm-3", "raw", int64(0), farFuture},
+			// QueryAllBatch is the anti-N+1 dashboard path. The planner may choose
+			// idx_metrics_query_all, idx_metrics_unique, or idx_metrics_lookup
+			// depending on statistics; the invariant is an indexed SEARCH rather
+			// than a full table scan.
+		},
+		{
+			name: "multi-resource multi-metric with downsampling (QueryAllBatch)",
+			query: `SELECT
+				resource_id,
+				metric_type,
+				(timestamp / ?) * ? + (? / 2) as bucket_ts,
+				AVG(value),
+				MIN(COALESCE(min_value, value)),
+				MAX(COALESCE(max_value, value))
+				FROM metrics
+				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND tier = ?
+				AND timestamp >= ? AND timestamp <= ?
+				GROUP BY resource_id, metric_type, bucket_ts
+				ORDER BY resource_id, metric_type, bucket_ts ASC`,
+			args: []any{int64(60), int64(60), int64(60), "vm", "vm-1", "vm-2", "vm-3", "raw", int64(0), farFuture},
+		},
+		{
 			name:      "retention delete by tier+time",
 			query:     `DELETE FROM metrics WHERE tier = ? AND timestamp < ?`,
 			args:      []any{"raw", farFuture},
