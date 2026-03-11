@@ -332,6 +332,23 @@ func TestSaveAlertIncidentNote(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+func TestSaveAlertIncidentNote_AcceptsLegacyAlertIDCompatibilityField(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	mockMonitor.On("GetIncidentStore").Return(mockStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alert := &alerts.Alert{ID: "a1", Type: "test"}
+	mockStore.RecordAlertFired(alert)
+
+	body := `{"legacyAlertId": "a1", "note": "test note", "user": "admin"}`
+	req := httptest.NewRequest("POST", "/api/alerts/note", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.SaveAlertIncidentNote(w, req)
+
+	assert.Equal(t, 200, w.Code)
+}
+
 func TestGetAlertIncidentTimeline_ExportsCanonicalAlertIdentifier(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
@@ -473,7 +490,7 @@ func TestHandleAlerts(t *testing.T) {
 				} else if strings.Contains(rt.path, "note") {
 					body = []byte(`{"alert_id": "a1", "note": "test"}`)
 				} else {
-					body = []byte(`{"id": "a1", "user": "admin"}`)
+					body = []byte(`{"legacyAlertId": "a1", "user": "admin"}`)
 				}
 			}
 			req := httptest.NewRequest(rt.method, rt.path, bytes.NewReader(body))

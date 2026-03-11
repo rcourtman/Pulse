@@ -532,6 +532,7 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req struct {
 		AlertIdentifier string `json:"alertIdentifier"`
+		LegacyAlertID   string `json:"legacyAlertId"`
 		AlertID         string `json:"alert_id"`
 		IncidentID      string `json:"incident_id"`
 		Note            string `json:"note"`
@@ -543,12 +544,16 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	}
 
 	req.AlertIdentifier = strings.TrimSpace(req.AlertIdentifier)
+	req.LegacyAlertID = strings.TrimSpace(req.LegacyAlertID)
 	req.AlertID = strings.TrimSpace(req.AlertID)
 	req.IncidentID = strings.TrimSpace(req.IncidentID)
 	req.Note = strings.TrimSpace(req.Note)
 	req.User = strings.TrimSpace(req.User)
 
 	alertIdentifier := req.AlertIdentifier
+	if alertIdentifier == "" {
+		alertIdentifier = req.LegacyAlertID
+	}
 	if alertIdentifier == "" {
 		alertIdentifier = req.AlertID
 	}
@@ -674,11 +679,15 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 // Canonical v6 clients should send `alertIdentifier`; `id` remains as a compatibility alias.
 type alertIdentifierRequest struct {
 	AlertIdentifier string `json:"alertIdentifier"`
+	LegacyAlertID   string `json:"legacyAlertId"`
 	ID              string `json:"id"`
 }
 
 func (r alertIdentifierRequest) identifier() string {
 	if identifier := strings.TrimSpace(r.AlertIdentifier); identifier != "" {
+		return identifier
+	}
+	if identifier := strings.TrimSpace(r.LegacyAlertID); identifier != "" {
 		return identifier
 	}
 	return strings.TrimSpace(r.ID)
