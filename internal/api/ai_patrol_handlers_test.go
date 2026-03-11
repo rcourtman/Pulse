@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -314,6 +316,51 @@ func TestHandleGetPatrolRunHistory_NoPatrolService(t *testing.T) {
 	}
 	if len(history) != 0 {
 		t.Errorf("expected empty history, got %d", len(history))
+	}
+}
+
+func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
+	t.Parallel()
+
+	handler := createTestAIHandler(t)
+	patrol := &ai.PatrolService{}
+	store := ai.NewPatrolRunHistoryStore(10)
+	store.Add(ai.PatrolRunRecord{
+		ID:               "run-1",
+		StartedAt:        time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+		CompletedAt:      time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC),
+		DurationMs:       60000,
+		Type:             "patrol",
+		AlertID:          "instance:node:100::metric/cpu",
+		ResourcesChecked: 1,
+		FindingsSummary:  "ok",
+		FindingIDs:       []string{},
+		Status:           "healthy",
+	})
+	setUnexportedField(t, patrol, "runHistoryStore", store)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolRunHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var history []map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &history); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected one history item, got %d", len(history))
+	}
+	if history[0]["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", history[0]["alert_identifier"])
+	}
+	if history[0]["alert_id"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility alert_id, got %#v", history[0]["alert_id"])
 	}
 }
 

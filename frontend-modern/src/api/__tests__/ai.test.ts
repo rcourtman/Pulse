@@ -53,6 +53,34 @@ describe('AIAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/cost/summary?days=7');
   });
 
+  it('normalizes unified finding alert identifiers', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'f1',
+          resource_id: 'r1',
+          resource_name: 'res',
+          resource_type: 'vm',
+          source: 'threshold',
+          severity: 'warning',
+          category: 'performance',
+          title: 'CPU',
+          description: 'high',
+          detected_at: '2026-03-01T00:00:00Z',
+          alert_id: 'canonical-alert-1',
+        },
+      ],
+      count: 1,
+    } as any);
+
+    const result = await AIAPI.getUnifiedFindings();
+
+    expect(result.findings[0]).toMatchObject({
+      alert_identifier: 'canonical-alert-1',
+      alert_id: 'canonical-alert-1',
+    });
+  });
+
   it('encodes dynamic provider, approval, finding, and plan identifiers', async () => {
     apiFetchJSONMock.mockResolvedValue({} as any);
 

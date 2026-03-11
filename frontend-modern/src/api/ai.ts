@@ -17,6 +17,15 @@ export class AIAPI {
     return encodeURIComponent(value);
   }
 
+  private static normalizeUnifiedFinding(finding: UnifiedFindingRecord): UnifiedFindingRecord {
+    const alertIdentifier = finding.alert_identifier ?? finding.alert_id;
+    return {
+      ...finding,
+      ...(alertIdentifier ? { alert_identifier: alertIdentifier } : {}),
+      ...(finding.alert_id ?? alertIdentifier ? { alert_id: finding.alert_id ?? alertIdentifier } : {}),
+    };
+  }
+
   // Get AI settings
   static async getSettings(): Promise<AISettings> {
     return apiFetchJSON(`${this.baseUrl}/settings/ai`) as Promise<AISettings>;
@@ -96,9 +105,13 @@ export class AIAPI {
     if (options?.source) params.set('source', options.source);
     if (options?.includeResolved) params.set('include_resolved', '1');
     const query = params.toString();
-    return apiFetchJSON(
+    const response = (await apiFetchJSON(
       `${this.baseUrl}/ai/unified/findings${query ? `?${query}` : ''}`,
-    ) as Promise<UnifiedFindingsResponse>;
+    )) as UnifiedFindingsResponse;
+    return {
+      ...response,
+      findings: (response.findings || []).map((finding) => this.normalizeUnifiedFinding(finding)),
+    };
   }
 
   // Get current anomalies (real-time baseline deviation detection)
@@ -376,6 +389,8 @@ export interface UnifiedFindingRecord {
   description: string;
   recommendation?: string;
   evidence?: string;
+  alert_identifier?: string;
+  legacy_alert_id?: string;
   alert_id?: string;
   alert_type?: string;
   value?: number;

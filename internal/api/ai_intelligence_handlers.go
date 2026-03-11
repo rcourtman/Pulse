@@ -1119,30 +1119,32 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 	}
 
 	type findingView struct {
-		ID             string     `json:"id"`
-		Source         string     `json:"source"`
-		Severity       string     `json:"severity"`
-		Category       string     `json:"category"`
-		ResourceID     string     `json:"resource_id"`
-		ResourceName   string     `json:"resource_name"`
-		ResourceType   string     `json:"resource_type"`
-		Node           string     `json:"node,omitempty"`
-		Title          string     `json:"title"`
-		Description    string     `json:"description"`
-		Recommendation string     `json:"recommendation,omitempty"`
-		Evidence       string     `json:"evidence,omitempty"`
-		AlertID        string     `json:"alert_id,omitempty"`
-		AlertType      string     `json:"alert_type,omitempty"`
-		Value          float64    `json:"value,omitempty"`
-		Threshold      float64    `json:"threshold,omitempty"`
-		IsThreshold    bool       `json:"is_threshold,omitempty"`
-		AIContext      string     `json:"ai_context,omitempty"`
-		RootCauseID    string     `json:"root_cause_id,omitempty"`
-		CorrelatedIDs  []string   `json:"correlated_ids,omitempty"`
-		RemediationID  string     `json:"remediation_id,omitempty"`
-		AIConfidence   float64    `json:"ai_confidence,omitempty"`
-		EnhancedByAI   bool       `json:"enhanced_by_ai,omitempty"`
-		AIEnhancedAt   *time.Time `json:"ai_enhanced_at,omitempty"`
+		ID              string     `json:"id"`
+		Source          string     `json:"source"`
+		Severity        string     `json:"severity"`
+		Category        string     `json:"category"`
+		ResourceID      string     `json:"resource_id"`
+		ResourceName    string     `json:"resource_name"`
+		ResourceType    string     `json:"resource_type"`
+		Node            string     `json:"node,omitempty"`
+		Title           string     `json:"title"`
+		Description     string     `json:"description"`
+		Recommendation  string     `json:"recommendation,omitempty"`
+		Evidence        string     `json:"evidence,omitempty"`
+		AlertIdentifier string     `json:"alert_identifier,omitempty"`
+		LegacyAlertID   string     `json:"legacy_alert_id,omitempty"`
+		AlertID         string     `json:"alert_id,omitempty"`
+		AlertType       string     `json:"alert_type,omitempty"`
+		Value           float64    `json:"value,omitempty"`
+		Threshold       float64    `json:"threshold,omitempty"`
+		IsThreshold     bool       `json:"is_threshold,omitempty"`
+		AIContext       string     `json:"ai_context,omitempty"`
+		RootCauseID     string     `json:"root_cause_id,omitempty"`
+		CorrelatedIDs   []string   `json:"correlated_ids,omitempty"`
+		RemediationID   string     `json:"remediation_id,omitempty"`
+		AIConfidence    float64    `json:"ai_confidence,omitempty"`
+		EnhancedByAI    bool       `json:"enhanced_by_ai,omitempty"`
+		AIEnhancedAt    *time.Time `json:"ai_enhanced_at,omitempty"`
 		// Investigation fields
 		InvestigationSessionID string                                 `json:"investigation_session_id,omitempty"`
 		InvestigationStatus    string                                 `json:"investigation_status,omitempty"`
@@ -1208,6 +1210,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			Description:            f.Description,
 			Recommendation:         f.Recommendation,
 			Evidence:               f.Evidence,
+			AlertIdentifier:        f.AlertID,
 			AlertID:                f.AlertID,
 			AlertType:              f.AlertType,
 			Value:                  f.Value,

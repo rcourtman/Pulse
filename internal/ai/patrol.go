@@ -108,6 +108,8 @@ type PatrolRunRecord struct {
 	EffectiveScopeResourceIDs []string      `json:"effective_scope_resource_ids,omitempty"`
 	ScopeResourceTypes        []string      `json:"scope_resource_types,omitempty"`
 	ScopeContext              string        `json:"scope_context,omitempty"`
+	AlertIdentifier           string        `json:"alert_identifier,omitempty"`
+	LegacyAlertID             string        `json:"legacy_alert_id,omitempty"`
 	AlertID                   string        `json:"alert_id,omitempty"`
 	FindingID                 string        `json:"finding_id,omitempty"`
 	ResourcesChecked          int           `json:"resources_checked"`

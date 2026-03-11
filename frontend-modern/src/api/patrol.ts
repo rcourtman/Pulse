@@ -33,6 +33,8 @@ export interface Finding {
   auto_resolved: boolean;
   acknowledged_at?: string;
   snoozed_until?: string; // Finding hidden until this time
+  alert_identifier?: string;
+  legacy_alert_id?: string;
   alert_id?: string;
   // User feedback fields (LLM memory system)
   dismissed_reason?: 'not_an_issue' | 'expected_behavior' | 'will_fix_later';
@@ -394,6 +396,8 @@ export interface PatrolRunRecord {
   scope_resource_ids?: string[];
   scope_resource_types?: string[];
   scope_context?: string;
+  alert_identifier?: string;
+  legacy_alert_id?: string;
   alert_id?: string;
   finding_id?: string;
   resources_checked: number;
@@ -432,6 +436,15 @@ function normalizeHistoryLimit(limit: number): number {
   return normalized;
 }
 
+function normalizePatrolRunRecord(run: PatrolRunRecord): PatrolRunRecord {
+  const alertIdentifier = run.alert_identifier ?? run.alert_id;
+  return {
+    ...run,
+    ...(alertIdentifier ? { alert_identifier: alertIdentifier } : {}),
+    ...(run.alert_id ?? alertIdentifier ? { alert_id: run.alert_id ?? alertIdentifier } : {}),
+  };
+}
+
 /**
  * Get patrol run history
  * @param limit Maximum number of runs to return (default: 30)
@@ -441,7 +454,7 @@ export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRun
     limit: String(normalizeHistoryLimit(limit)),
   });
   const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return runs || [];
+  return (runs || []).map((run) => normalizePatrolRunRecord(run));
 }
 
 /**
@@ -456,7 +469,7 @@ export async function getPatrolRunHistoryWithToolCalls(
     limit: String(normalizeHistoryLimit(limit)),
   });
   const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return runs || [];
+  return (runs || []).map((run) => normalizePatrolRunRecord(run));
 }
 
 /** SSE event from /api/ai/patrol/stream */

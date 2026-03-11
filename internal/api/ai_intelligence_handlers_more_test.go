@@ -209,6 +209,7 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 		ResourceType: "vm",
 		Title:        "CPU high",
 		Description:  "cpu usage high",
+		AlertID:      "instance:node:100::metric/cpu",
 		DetectedAt:   time.Now(),
 		LastSeenAt:   time.Now(),
 	})
@@ -230,5 +231,19 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	}
 	if payload["count"] == float64(0) {
 		t.Fatalf("expected findings in response")
+	}
+	findings, ok := payload["findings"].([]interface{})
+	if !ok || len(findings) != 1 {
+		t.Fatalf("expected one finding in response, got %#v", payload["findings"])
+	}
+	finding, ok := findings[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected object finding, got %#v", findings[0])
+	}
+	if finding["alert_identifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier, got %#v", finding["alert_identifier"])
+	}
+	if finding["alert_id"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility alert_id, got %#v", finding["alert_id"])
 	}
 }
