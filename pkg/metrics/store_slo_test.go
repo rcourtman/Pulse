@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 //   - rollupTier(50×2×20): ~2.1ms → SLO 15ms
 //   - rollupTier fleet-scale (500×4×20): ~70ms → SLO 75ms
 //   - Query under write contention: ~400µs → SLO 5ms
+//   - 500-node concurrent dashboard load: ~2.9ms → SLO 15ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
 const (
 	// SLOWriteBatchP95 is the p95 target for WriteBatchSync with 100 metrics —
@@ -76,6 +79,11 @@ const (
 	// while a background writer continuously appends batches on the same SQLite
 	// connection pool. This guards dashboard read latency under live ingestion.
 	SLOConcurrentReadWriteP95 = 5 * time.Millisecond
+
+	// SLOConcurrentDashboardLoadP95 is the p95 target for a 500-node scenario
+	// where 10 concurrent dashboard loads each issue QueryAll while background
+	// ingestion continues. This guards fleet-scale read fan-out under write load.
+	SLOConcurrentDashboardLoadP95 = 15 * time.Millisecond
 )
 
 const sloIterations = 200
@@ -765,5 +773,113 @@ func TestSLO_RollupTierBatchedFleet(t *testing.T) {
 
 	if p95 > SLORollupTierBatchedFleetP95 {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLORollupTierBatchedFleetP95)
+	}
+}
+
+// TestSLO_ConcurrentDashboardLoad validates fleet-scale QueryAll latency when
+// 10 concurrent dashboard loads race with continuous ingestion on the same
+// SQLite connection pool.
+func TestSLO_ConcurrentDashboardLoad(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newSLOStore(t)
+	base := time.Now().Add(-30 * time.Minute)
+
+	batch := make([]WriteMetric, 0, loadTestSeries*loadTestSeedPoints)
+	nodeIDs := make([]string, loadTestNodes)
+	for n := 0; n < loadTestNodes; n++ {
+		nodeIDs[n] = fmt.Sprintf("node-%d", n)
+		for _, mt := range loadTestMetricTypes {
+			for p := 0; p < loadTestSeedPoints; p++ {
+				batch = append(batch, WriteMetric{
+					ResourceType: "node",
+					ResourceID:   nodeIDs[n],
+					MetricType:   mt,
+					Value:        float64((n + p) % 100),
+					Timestamp:    base.Add(time.Duration(p) * 5 * time.Second),
+					Tier:         TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+
+	start := base.Add(-time.Second)
+	end := base.Add(time.Duration(loadTestSeedPoints) * 5 * time.Second)
+
+	const writerNodesPerBatch = 5
+	const writerBatchSize = writerNodesPerBatch * loadTestMetrics
+	stop := make(chan struct{})
+	writerDone := make(chan struct{})
+	started := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		writeBase := end
+		tick := 0
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			liveBatch := make([]WriteMetric, writerBatchSize)
+			nodeOffset := (tick * writerNodesPerBatch) % loadTestNodes
+			ts := writeBase.Add(time.Duration(tick) * 5 * time.Second)
+			for n := 0; n < writerNodesPerBatch; n++ {
+				for m := 0; m < loadTestMetrics; m++ {
+					liveBatch[n*loadTestMetrics+m] = WriteMetric{
+						ResourceType: "node",
+						ResourceID:   nodeIDs[(nodeOffset+n)%loadTestNodes],
+						MetricType:   loadTestMetricTypes[m],
+						Value:        float64((tick + n + m) % 100),
+						Timestamp:    ts,
+						Tier:         TierRaw,
+					}
+				}
+			}
+			store.WriteBatchSync(liveBatch)
+			if tick == 0 {
+				close(started)
+			}
+			tick++
+		}
+	}()
+	<-started
+	t.Cleanup(func() {
+		close(stop)
+		<-writerDone
+	})
+
+	latencies := measureLatencies(t, func() {
+		var wg sync.WaitGroup
+		var queryErrors atomic.Int32
+		for u := 0; u < 10; u++ {
+			wg.Add(1)
+			go func(userIdx int) {
+				defer wg.Done()
+				nodeIdx := userIdx % loadTestNodes
+				result, err := store.QueryAll("node", nodeIDs[nodeIdx], start, end, 0)
+				if err != nil {
+					queryErrors.Add(1)
+					return
+				}
+				if len(result) != loadTestMetrics {
+					queryErrors.Add(1)
+				}
+			}(u)
+		}
+		wg.Wait()
+		if errs := queryErrors.Load(); errs > 0 {
+			t.Fatalf("%d concurrent QueryAll errors", errs)
+		}
+	})
+
+	p95 := pct(latencies, 0.95)
+	t.Logf("ConcurrentDashboardLoad(500nodes,10users) p50=%v p95=%v p99=%v SLO=%v",
+		pct(latencies, 0.50), p95, pct(latencies, 0.99), SLOConcurrentDashboardLoadP95)
+
+	if p95 > SLOConcurrentDashboardLoadP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOConcurrentDashboardLoadP95)
 	}
 }
