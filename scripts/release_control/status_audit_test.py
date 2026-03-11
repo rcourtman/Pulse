@@ -72,6 +72,7 @@ class StatusAuditTest(unittest.TestCase):
                         "owner": "project-owner",
                         "status": "open",
                         "opened_at": "2026-03-11",
+                        "subsystem_ids": [],
                         "lane_ids": ["L1"],
                     }
                 ],
@@ -81,6 +82,7 @@ class StatusAuditTest(unittest.TestCase):
                         "summary": "Locked a thing",
                         "kind": "governance",
                         "decided_at": "2026-03-10",
+                        "subsystem_ids": [],
                         "lane_ids": ["L1"],
                     }
                 ],
@@ -164,6 +166,7 @@ class StatusAuditTest(unittest.TestCase):
                         "owner": "project-owner",
                         "status": "open",
                         "opened_at": "2026-03-11",
+                        "subsystem_ids": [],
                         "lane_ids": ["L2"],
                     }
                 ],
@@ -173,6 +176,7 @@ class StatusAuditTest(unittest.TestCase):
                         "summary": "Locked a thing",
                         "kind": "governance",
                         "decided_at": "2026-03-10",
+                        "subsystem_ids": [],
                         "lane_ids": ["L2"],
                     }
                 ],
@@ -269,6 +273,92 @@ class StatusAuditTest(unittest.TestCase):
             self.assertTrue(report["errors"])
             self.assertIn(
                 "lanes[L6].subsystems = ['monitoring'], want ['alerts', 'monitoring'] from subsystem registry",
+                "\n".join(report["errors"]),
+            )
+
+    def test_audit_status_payload_rejects_decision_subsystem_outside_lane_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pulse = root / "pulse"
+            pulse.mkdir()
+            (pulse / "docs").mkdir()
+            (pulse / "docs" / "proof.md").write_text("proof", encoding="utf-8")
+
+            payload = {
+                "version": "6.0",
+                "updated_at": "2026-03-11",
+                "execution_model": "direct-repo-sessions",
+                "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "scope": {
+                    "active_repos": ["pulse"],
+                    "ignored_repos": [],
+                },
+                "source_precedence": [
+                    "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                    "docs/release-control/v6/status.json",
+                    "docs/release-control/v6/status.schema.json",
+                    "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+                    "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
+                ],
+                "priority_engine": {
+                    "formula": "gap-first",
+                    "floor_rule": {
+                        "release_critical_lanes": ["L3"],
+                        "minimum_score": 6,
+                    },
+                    "weights": {
+                        "gap_multiplier": 4,
+                        "criticality_range": "0-5",
+                        "staleness_range": "0-3",
+                        "dependency_range": "0-3",
+                    },
+                },
+                "evidence_reference_policy": {
+                    "format": "repo-qualified-relative-paths",
+                    "allowed_kinds": ["file", "dir"],
+                    "absolute_paths_forbidden": True,
+                    "local_repo": "pulse",
+                },
+                "lanes": [
+                    {
+                        "id": "L3",
+                        "name": "Cloud paid readiness",
+                        "target_score": 8,
+                        "current_score": 7,
+                        "status": "partial",
+                        "subsystems": ["cloud-paid"],
+                        "evidence": [
+                            {"repo": "pulse", "path": "docs/proof.md", "kind": "file"},
+                        ],
+                    }
+                ],
+                "open_decisions": [
+                    {
+                        "id": "d1",
+                        "summary": "Need a thing",
+                        "owner": "project-owner",
+                        "status": "open",
+                        "opened_at": "2026-03-11",
+                        "subsystem_ids": ["frontend-primitives"],
+                        "lane_ids": ["L3"],
+                    }
+                ],
+                "resolved_decisions": [],
+            }
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[
+                    {"id": "cloud-paid", "lane": "L3"},
+                    {"id": "frontend-primitives", "lane": "L8"},
+                ],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertTrue(report["errors"])
+            self.assertIn(
+                "open_decisions[0] subsystem_id 'frontend-primitives' belongs to lane 'L8', which is not present in lane_ids ['L3']",
                 "\n".join(report["errors"]),
             )
 

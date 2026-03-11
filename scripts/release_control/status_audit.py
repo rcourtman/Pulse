@@ -349,17 +349,7 @@ def audit_lanes(
 
 
 def validate_lane_subsystem_bindings(lane_reports: list[dict[str, Any]], errors: list[str]) -> None:
-    rules = load_subsystem_rules()
-    expected_by_lane: dict[str, list[str]] = {}
-    for rule in rules:
-        lane_id = str(rule.get("lane", "")).strip()
-        subsystem_id = str(rule.get("id", "")).strip()
-        if not lane_id or not subsystem_id:
-            continue
-        expected_by_lane.setdefault(lane_id, []).append(subsystem_id)
-
-    for lane_id in list(expected_by_lane):
-        expected_by_lane[lane_id] = sorted(expected_by_lane[lane_id])
+    expected_by_lane = lane_subsystem_map()
 
     lane_ids = {lane["id"] for lane in lane_reports}
     for lane_id in expected_by_lane:
@@ -381,10 +371,52 @@ def validate_lane_subsystem_bindings(lane_reports: list[dict[str, Any]], errors:
             )
 
 
+def subsystem_lane_map() -> dict[str, str]:
+    return {
+        str(rule["id"]).strip(): str(rule["lane"]).strip()
+        for rule in load_subsystem_rules()
+        if str(rule.get("id", "")).strip() and str(rule.get("lane", "")).strip()
+    }
+
+
+def lane_subsystem_map() -> dict[str, list[str]]:
+    expected_by_lane: dict[str, list[str]] = {}
+    for subsystem_id, lane_id in subsystem_lane_map().items():
+        expected_by_lane.setdefault(lane_id, []).append(subsystem_id)
+    for lane_id in list(expected_by_lane):
+        expected_by_lane[lane_id] = sorted(expected_by_lane[lane_id])
+    return expected_by_lane
+
+
+def validate_decision_subsystems(
+    *,
+    subsystem_ids: list[str],
+    lane_refs: list[str],
+    subsystem_to_lane: dict[str, str],
+    errors: list[str],
+    context: str,
+) -> None:
+    if len(subsystem_ids) != len(set(subsystem_ids)):
+        errors.append(f"{context}.subsystem_ids must not contain duplicates")
+    if subsystem_ids != sorted(subsystem_ids):
+        errors.append(f"{context}.subsystem_ids must be sorted lexicographically")
+    for subsystem_id in subsystem_ids:
+        subsystem_lane = subsystem_to_lane.get(subsystem_id)
+        if subsystem_lane is None:
+            errors.append(f"{context} references unknown subsystem_id {subsystem_id!r}")
+            continue
+        if subsystem_lane not in lane_refs:
+            errors.append(
+                f"{context} subsystem_id {subsystem_id!r} belongs to lane {subsystem_lane!r}, "
+                f"which is not present in lane_ids {lane_refs!r}"
+            )
+
+
 def validate_open_decisions(
     payload: dict[str, Any],
     *,
     lane_ids: set[str],
+    subsystem_to_lane: dict[str, str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
     decisions = _require_object_list(payload, "open_decisions", errors, context="status.json")
@@ -403,6 +435,7 @@ def validate_open_decisions(
         opened_at = _require_string(raw, "opened_at", errors, context=context)
         status = _require_string(raw, "status", errors, context=context)
         lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
+        subsystem_refs = _require_string_list(raw, "subsystem_ids", errors, context=context)
 
         if opened_at:
             _validate_date(opened_at, errors, context=f"{context}.opened_at")
@@ -411,6 +444,13 @@ def validate_open_decisions(
         for lane_id in lane_refs:
             if lane_id not in lane_ids:
                 errors.append(f"{context} references unknown lane_id {lane_id!r}")
+        validate_decision_subsystems(
+            subsystem_ids=subsystem_refs,
+            lane_refs=lane_refs,
+            subsystem_to_lane=subsystem_to_lane,
+            errors=errors,
+            context=context,
+        )
 
         if decision_id and summary and owner and opened_at and status:
             records.append(
@@ -421,6 +461,7 @@ def validate_open_decisions(
                     "status": status,
                     "opened_at": opened_at,
                     "lane_ids": lane_refs,
+                    "subsystem_ids": subsystem_refs,
                 }
             )
 
@@ -431,6 +472,7 @@ def validate_resolved_decisions(
     payload: dict[str, Any],
     *,
     lane_ids: set[str],
+    subsystem_to_lane: dict[str, str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
     decisions = _require_object_list(payload, "resolved_decisions", errors, context="status.json")
@@ -448,6 +490,7 @@ def validate_resolved_decisions(
         kind = _require_string(raw, "kind", errors, context=context)
         decided_at = _require_string(raw, "decided_at", errors, context=context)
         lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
+        subsystem_refs = _require_string_list(raw, "subsystem_ids", errors, context=context)
 
         if kind and kind not in VALID_RESOLVED_DECISION_KINDS:
             errors.append(f"{context} has invalid kind {kind!r}")
@@ -456,6 +499,13 @@ def validate_resolved_decisions(
         for lane_id in lane_refs:
             if lane_id not in lane_ids:
                 errors.append(f"{context} references unknown lane_id {lane_id!r}")
+        validate_decision_subsystems(
+            subsystem_ids=subsystem_refs,
+            lane_refs=lane_refs,
+            subsystem_to_lane=subsystem_to_lane,
+            errors=errors,
+            context=context,
+        )
 
         if decision_id and summary and kind and decided_at:
             records.append(
@@ -465,6 +515,7 @@ def validate_resolved_decisions(
                     "kind": kind,
                     "decided_at": decided_at,
                     "lane_ids": lane_refs,
+                    "subsystem_ids": subsystem_refs,
                 }
             )
 
@@ -516,9 +567,20 @@ def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
         errors=errors,
         warnings=warnings,
     )
+    subsystem_to_lane = subsystem_lane_map()
     validate_lane_subsystem_bindings(lane_reports, errors)
-    open_decisions = validate_open_decisions(payload, lane_ids=lane_ids, errors=errors)
-    resolved_decisions = validate_resolved_decisions(payload, lane_ids=lane_ids, errors=errors)
+    open_decisions = validate_open_decisions(
+        payload,
+        lane_ids=lane_ids,
+        subsystem_to_lane=subsystem_to_lane,
+        errors=errors,
+    )
+    resolved_decisions = validate_resolved_decisions(
+        payload,
+        lane_ids=lane_ids,
+        subsystem_to_lane=subsystem_to_lane,
+        errors=errors,
+    )
 
     return {
         "errors": errors,

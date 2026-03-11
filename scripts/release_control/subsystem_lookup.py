@@ -37,6 +37,7 @@ def verification_requirement_for_path(rule: dict[str, Any], path: str) -> dict[s
 
 def lane_context_for_rule(rule: dict[str, Any], status_report: dict[str, Any]) -> dict[str, Any] | None:
     lane_id = str(rule.get("lane", "")).strip()
+    subsystem_id = str(rule.get("id", "")).strip()
     if not lane_id:
         return None
 
@@ -45,11 +46,13 @@ def lane_context_for_rule(rule: dict[str, Any], status_report: dict[str, Any]) -
         decision
         for decision in status_report.get("open_decisions", [])
         if lane_id in decision.get("lane_ids", [])
+        if not decision.get("subsystem_ids") or subsystem_id in decision.get("subsystem_ids", [])
     ]
     resolved_decisions = [
         decision
         for decision in status_report.get("resolved_decisions", [])
         if lane_id in decision.get("lane_ids", [])
+        if not decision.get("subsystem_ids") or subsystem_id in decision.get("subsystem_ids", [])
     ]
     return {
         "lane_id": lane_id,

@@ -545,6 +545,16 @@ func TestStatusJSONOpenDecisionsAreTypedRecords(t *testing.T) {
 		if !ok || len(rawLaneIDs) == 0 {
 			t.Fatalf("status.json open_decision %q missing lane_ids", id)
 		}
+		if rawSubsystemIDs, ok := decision["subsystem_ids"].([]any); !ok {
+			t.Fatalf("status.json open_decision %q missing subsystem_ids", id)
+		} else {
+			for _, rawSubsystemID := range rawSubsystemIDs {
+				subsystemID, ok := rawSubsystemID.(string)
+				if !ok || subsystemID == "" {
+					t.Fatalf("status.json open_decision %q subsystem_ids contains invalid entry", id)
+				}
+			}
+		}
 		for _, rawLaneID := range rawLaneIDs {
 			laneID, ok := rawLaneID.(string)
 			if !ok || laneID == "" {
@@ -598,6 +608,16 @@ func TestStatusJSONResolvedDecisionsAreTypedRecords(t *testing.T) {
 		if !ok || len(rawLaneIDs) == 0 {
 			t.Fatalf("status.json resolved_decision %q missing lane_ids", id)
 		}
+		if rawSubsystemIDs, ok := decision["subsystem_ids"].([]any); !ok {
+			t.Fatalf("status.json resolved_decision %q missing subsystem_ids", id)
+		} else {
+			for _, rawSubsystemID := range rawSubsystemIDs {
+				subsystemID, ok := rawSubsystemID.(string)
+				if !ok || subsystemID == "" {
+					t.Fatalf("status.json resolved_decision %q subsystem_ids contains invalid entry", id)
+				}
+			}
+		}
 		for _, rawLaneID := range rawLaneIDs {
 			laneID, ok := rawLaneID.(string)
 			if !ok || laneID == "" {
@@ -647,6 +667,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"audit_status_payload",
 		"open_decisions",
 		"resolved_decisions",
+		"subsystem_ids",
 		"derived_status",
 		"--check",
 	})
@@ -668,6 +689,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"lane_context",
 		"status_summary",
 		"open_decisions",
+		"subsystem_ids",
 		"--files-from-stdin",
 		"subsystem_matches_path",
 	})

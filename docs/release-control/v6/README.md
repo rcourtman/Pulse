@@ -5,7 +5,7 @@ This folder is the canonical execution control layer for Pulse v6.
 ## Start With These Control Files
 
 1. `SOURCE_OF_TRUTH.md` (stable human governance and locked decisions)
-2. `status.json` (live lane state, lane-to-subsystem ownership, structured evidence references, and typed operational decision records)
+2. `status.json` (live lane state, lane-to-subsystem ownership, structured evidence references, and typed lane/subsystem decision records)
 3. `status.schema.json` (machine-readable contract for the `status.json` shape)
 4. `subsystems/registry.json` (machine-readable subsystem ownership and proof routing)
 5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape)

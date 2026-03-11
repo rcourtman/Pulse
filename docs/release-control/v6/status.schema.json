@@ -311,7 +311,8 @@
         "owner",
         "status",
         "opened_at",
-        "lane_ids"
+        "lane_ids",
+        "subsystem_ids"
       ],
       "properties": {
         "id": {
@@ -345,6 +346,14 @@
             "type": "string",
             "pattern": "^L[0-9]+$"
           }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -356,7 +365,8 @@
         "summary",
         "kind",
         "decided_at",
-        "lane_ids"
+        "lane_ids",
+        "subsystem_ids"
       ],
       "properties": {
         "id": {
@@ -388,6 +398,14 @@
           "items": {
             "type": "string",
             "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }

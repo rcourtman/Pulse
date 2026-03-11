@@ -53,6 +53,20 @@ class SubsystemLookupTest(unittest.TestCase):
             {"cloud-msp-stripe-prices", "cloud-msp-price-id-propagation"},
         )
 
+    def test_lookup_paths_keeps_cross_cutting_resolved_decisions_for_lane(self) -> None:
+        result = lookup_paths(["internal/monitoring/monitor.go"])
+        match = next(
+            item
+            for item in result["files"][0]["matches"]
+            if item["subsystem"] == "monitoring"
+        )
+        lane_context = match["lane_context"]
+        self.assertEqual(lane_context["lane_id"], "L6")
+        self.assertEqual(
+            {decision["id"] for decision in lane_context["resolved_decisions"]},
+            {"host-type-migration-boundary-audit", "orchestrator-retired", "top-level-governance-split"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

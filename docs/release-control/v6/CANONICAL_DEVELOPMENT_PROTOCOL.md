@@ -31,7 +31,7 @@ For v6 work, agents must treat these files as the execution entry point:
 The first two files answer release priority and current lane state.
 `SOURCE_OF_TRUTH.md` owns stable governance, scope, and locked decisions.
 `status.json` owns live lane state, lane-to-subsystem ownership, structured
-evidence references, and typed operational decision records.
+evidence references, and typed lane/subsystem decision records.
 `status.schema.json` owns the machine-readable status contract.
 `subsystems/registry.schema.json` owns the machine-readable subsystem registry
 contract.
