@@ -16,6 +16,7 @@ vi.mock('@/utils/logger', () => ({
 
 import { AIChatAPI } from '@/api/aiChat';
 import { apiFetch } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 
 describe('AIChatAPI', () => {
   const apiFetchMock = vi.mocked(apiFetch);
@@ -44,5 +45,33 @@ describe('AIChatAPI', () => {
     expect(onEvent).toHaveBeenCalledWith({ type: 'done' });
     expect(clearTimeoutSpy).toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
+  });
+
+  it('ignores invalid chat stream events through the shared JSON-text helper', async () => {
+    const encoder = new TextEncoder();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({
+        done: false,
+        value: encoder.encode('data: not valid json\n\n'),
+      })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+    const onEvent = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat('hello', undefined, undefined, onEvent);
+
+    expect(logger.error).toHaveBeenCalledWith('[AI Chat] Failed to parse event', {
+      line: 'data: not valid json',
+    });
+    expect(onEvent).toHaveBeenCalledWith({ type: 'done' });
+    expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 });

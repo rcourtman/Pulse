@@ -47,7 +47,7 @@ Own canonical runtime payload shapes between backend and frontend.
 3. Frontend-only payload assumptions that are not owned in backend contracts
 4. Frontend API clients inferring canonical HTTP status from `Error.message` text
 5. Frontend API clients branching on raw `response.status` checks for governed status handling instead of the shared response-status helpers
-6. Frontend API clients parsing governed success payloads with raw `response.json()` or ad hoc `response.text()` + `JSON.parse(...)` instead of the shared response parsing helpers
+6. Frontend API clients parsing governed success or stream payloads with raw `response.json()`, ad hoc `response.text()` + `JSON.parse(...)`, or per-module `JSON.parse(...)` stream decoding instead of the shared response parsing helpers
 
 ## Completion Obligations
 
@@ -82,3 +82,6 @@ open-coded `response.json()` calls in each module.
 The same rule now applies to optional success payload parsing, including lookup
 responses that may legitimately return an empty body but must not use ad hoc
 `response.text()` plus `JSON.parse(...)` branches in individual modules.
+Investigation and AI chat SSE event payload parsing must now also route through
+the shared text-to-JSON helper in `frontend-modern/src/api/responseUtils.ts`
+rather than through per-module `JSON.parse(...)` stream decoding.

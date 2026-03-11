@@ -1,5 +1,5 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { readAPIErrorMessage } from './responseUtils';
+import { parseJSONTextSafe, readAPIErrorMessage } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type { AIChatStreamEvent } from './generated/aiChatEvents';
 
@@ -289,19 +289,20 @@ export class AIChatAPI {
 
           const dataLines = message.split('\n').filter((line) => line.startsWith('data: '));
           for (const line of dataLines) {
-            try {
-              const jsonStr = line.slice(6);
-              if (!jsonStr.trim()) continue;
+            const jsonStr = line.slice(6);
+            if (!jsonStr.trim()) continue;
 
-              const event = JSON.parse(jsonStr) as StreamEvent;
-              logger.debug('[AI Chat] Event', { type: event.type });
-              onEvent(event);
+            const event = parseJSONTextSafe<StreamEvent>(jsonStr);
+            if (!event) {
+              logger.error('[AI Chat] Failed to parse event', { line });
+              continue;
+            }
 
-              if (event.type === 'done' || event.type === 'error') {
-                return;
-              }
-            } catch (e) {
-              logger.error('[AI Chat] Failed to parse event', { error: e, line });
+            logger.debug('[AI Chat] Event', { type: event.type });
+            onEvent(event);
+
+            if (event.type === 'done' || event.type === 'error') {
+              return;
             }
           }
         }
@@ -309,13 +310,11 @@ export class AIChatAPI {
 
       // Process remaining buffer
       if (buffer.trim() && buffer.trim().startsWith('data: ')) {
-        try {
-          const jsonStr = buffer.slice(6);
-          if (jsonStr.trim()) {
-            const event = JSON.parse(jsonStr) as StreamEvent;
-            onEvent(event);
-          }
-        } catch {
+        const jsonStr = buffer.slice(6);
+        const event = parseJSONTextSafe<StreamEvent>(jsonStr);
+        if (event) {
+          onEvent(event);
+        } else {
           logger.warn('[AI Chat] Could not parse remaining buffer');
         }
       }

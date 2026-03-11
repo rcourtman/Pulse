@@ -5,6 +5,7 @@ import {
   isAPIErrorStatus,
   isAPIResponseStatus,
   parseJSONSafe,
+  parseJSONTextSafe,
   parseOptionalJSON,
   parseRequiredJSON,
   readAPIErrorMessage,
@@ -146,6 +147,20 @@ describe('parseJSONSafe', () => {
     const response = new Response('not valid json');
     const result = await parseJSONSafe(response);
     expect(result).toBeNull();
+  });
+});
+
+describe('parseJSONTextSafe', () => {
+  it('parses valid JSON text', () => {
+    expect(parseJSONTextSafe<{ ok: boolean }>('{"ok":true}')).toEqual({ ok: true });
+  });
+
+  it('returns null for empty text', () => {
+    expect(parseJSONTextSafe('   ')).toBeNull();
+  });
+
+  it('returns null for invalid JSON text', () => {
+    expect(parseJSONTextSafe('not valid json')).toBeNull();
   });
 });
 

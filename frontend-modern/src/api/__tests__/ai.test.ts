@@ -16,6 +16,7 @@ vi.mock('@/utils/logger', () => ({
 
 import { AIAPI } from '@/api/ai';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 
 describe('AIAPI', () => {
   const apiFetchJSONMock = vi.mocked(apiFetchJSON);
@@ -220,6 +221,48 @@ describe('AIAPI', () => {
     expect(releaseLock).toHaveBeenCalledTimes(1);
     expect(clearTimeoutSpy).toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
+  });
+
+  it('ignores invalid investigateAlert stream events through the shared JSON-text helper', async () => {
+    const encoder = new TextEncoder();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({
+        done: false,
+        value: encoder.encode('data: not valid json\n\n'),
+      })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+    const onEvent = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIAPI.investigateAlert(
+      {
+        alertIdentifier: 'a1',
+        resource_id: 'r1',
+        resource_name: 'res',
+        resource_type: 'vm',
+        alert_type: 'cpu',
+        level: 'warning',
+        value: 1,
+        threshold: 2,
+        message: 'msg',
+        duration: '1m',
+      },
+      onEvent,
+    );
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith('[AI] Failed to parse investigation event:', {
+      line: 'data: not valid json',
+    });
+    expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 
   it('sends canonical alertIdentifier for investigateAlert', async () => {

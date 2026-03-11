@@ -86,6 +86,18 @@ export function isAPIResponseStatus(
   return apiResponseStatus(response) === expectedStatus;
 }
 
+export function parseJSONTextSafe<T>(text: string): T | null {
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function parseOptionalJSON<T>(
   response: Response,
   emptyValue: T,
@@ -121,13 +133,5 @@ export async function parseRequiredJSON<T>(
 
 export async function parseJSONSafe<T>(response: Response): Promise<T | null> {
   const text = await response.text();
-  if (!text.trim()) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
+  return parseJSONTextSafe(text);
 }

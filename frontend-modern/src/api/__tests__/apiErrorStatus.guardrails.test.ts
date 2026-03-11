@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import aiSource from '@/api/ai.ts?raw';
+import aiChatSource from '@/api/aiChat.ts?raw';
 import agentProfilesSource from '@/api/agentProfiles.ts?raw';
 import discoverySource from '@/api/discovery.ts?raw';
 import hostedSignupSource from '@/api/hostedSignup.ts?raw';
@@ -20,13 +21,19 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function isAPIResponseStatus');
     expect(responseUtilsSource).toContain('export async function parseRequiredJSON');
     expect(responseUtilsSource).toContain('export async function parseJSONSafe');
+    expect(responseUtilsSource).toContain('export function parseJSONTextSafe');
     expect(responseUtilsSource).toContain('(error as APIErrorLike).status');
     expect(responseUtilsSource).toContain('response.status');
   });
 
   it('routes canonical status and JSON parsing through responseUtils', () => {
     expect(aiSource).toContain('isAPIErrorStatus(error, 402)');
+    expect(aiSource).toContain('parseJSONTextSafe<AIStreamEvent>(');
     expect(aiSource).not.toContain("message.includes('402')");
+    expect(aiSource).not.toContain('JSON.parse(');
+
+    expect(aiChatSource).toContain('parseJSONTextSafe<StreamEvent>(');
+    expect(aiChatSource).not.toContain('JSON.parse(');
 
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 402)');
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 404)');
@@ -60,7 +67,7 @@ describe('API error-status guardrails', () => {
     const rawStatusHeuristicPattern = /message\.includes\((['"])40[24]\1\)/;
     const rawGovernedResponseStatusPattern = /response\.status\s*(?:===|!==)\s*(?:204|404|503)/;
     const governedParsingEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:agentProfiles|discovery|hostedSignup|monitoring)\.ts$/.test(path),
+      /\/(?:ai|aiChat|agentProfiles|discovery|hostedSignup|monitoring)\.ts$/.test(path),
     );
     const rawResponseJSONPattern = /(?:return\s+)?(?:await\s+)?response\.json\(/;
     const rawManualJSONParsePattern = /JSON\.parse\(/;

@@ -1,5 +1,5 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { isAPIErrorStatus, readAPIErrorMessage } from './responseUtils';
+import { isAPIErrorStatus, parseJSONTextSafe, readAPIErrorMessage } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type {
   AISettings,
@@ -264,14 +264,16 @@ export class AIAPI {
 
           const dataLines = message.split('\n').filter((line) => line.startsWith('data: '));
           for (const line of dataLines) {
-            try {
-              const jsonStr = line.slice(6);
-              if (!jsonStr.trim()) continue;
-              const data = JSON.parse(jsonStr);
-              onEvent(data as AIStreamEvent);
-            } catch (e) {
-              logger.error('[AI] Failed to parse investigation event:', e);
+            const jsonStr = line.slice(6);
+            if (!jsonStr.trim()) continue;
+
+            const data = parseJSONTextSafe<AIStreamEvent>(jsonStr);
+            if (!data) {
+              logger.error('[AI] Failed to parse investigation event:', { line });
+              continue;
             }
+
+            onEvent(data);
           }
         }
       }
