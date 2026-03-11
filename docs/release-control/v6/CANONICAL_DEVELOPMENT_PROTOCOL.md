@@ -118,6 +118,11 @@ For runtime subsystem changes, the same commit must now include:
 2. any dependent subsystem contract whose `Canonical Files` or `Extension Points` explicitly reference a touched runtime path
 3. at least one matching verification artifact update
 
+A staged contract file only counts when the staged diff changes a substantive
+contract section such as `Purpose`, `Canonical Files`, `Extension Points`,
+`Forbidden Paths`, `Completion Obligations`, or `Current State`. Metadata-only
+edits are not sufficient completion proof for runtime changes.
+
 Verification artifacts are subsystem-specific. The allowed proof classes are
 defined in `docs/release-control/v6/subsystems/registry.json` and may include
 explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,

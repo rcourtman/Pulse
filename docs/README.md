@@ -18,6 +18,9 @@ Use:
 7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit, including explicit cross-subsystem dependency checks
 8. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations for a change
 
+For governed runtime changes, a staged subsystem contract only counts if its
+diff updates a substantive contract section rather than metadata alone.
+
 All other documents are supporting references unless explicitly required for evidence.
 
 ---

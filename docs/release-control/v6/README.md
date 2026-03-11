@@ -24,6 +24,9 @@ Useful helper tools:
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations
 
+For governed runtime changes, the completion guard also requires any staged
+contract update to touch a substantive contract section, not just metadata.
+
 The old release-control orchestrator and loop tooling are retired. Direct,
 repo-aware sessions are now the only supported v6 execution path.
 

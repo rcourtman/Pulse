@@ -32,6 +32,14 @@ REQUIRED_PATH_POLICY_FIELDS: tuple[str, ...] = (
     "test_prefixes",
     "exact_files",
 )
+SUBSTANTIVE_CONTRACT_SECTIONS: tuple[str, ...] = (
+    "## Purpose",
+    "## Canonical Files",
+    "## Extension Points",
+    "## Forbidden Paths",
+    "## Completion Obligations",
+    "## Current State",
+)
 
 
 def validate_verification_policy(
@@ -306,7 +314,52 @@ def staged_verification_files_for_requirement(rule: dict, requirement: dict, sta
     return sorted(set(matches))
 
 
-def format_missing_requirements(missing_contracts: Dict[str, dict], missing_verification: Dict[str, dict]) -> str:
+def staged_contract_patch(path: str) -> str:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--unified=1000", "--no-color", "--", path],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+def contract_patch_has_substantive_change(patch_text: str) -> bool:
+    current_section = ""
+    for line in patch_text.splitlines():
+        if line.startswith(("diff --git ", "index ", "--- ", "+++ ", "@@ ")):
+            continue
+        if not line:
+            continue
+        prefix = line[0]
+        if prefix not in {" ", "+", "-"}:
+            continue
+        stripped = line[1:].strip()
+        if stripped.startswith("## "):
+            current_section = stripped
+            continue
+        if prefix == " ":
+            continue
+        if current_section not in SUBSTANTIVE_CONTRACT_SECTIONS:
+            continue
+        if not stripped:
+            continue
+        if stripped in {"```", "```json"}:
+            continue
+        return True
+    return False
+
+
+def staged_contract_has_substantive_change(path: str) -> bool:
+    return contract_patch_has_substantive_change(staged_contract_patch(path))
+
+
+def format_missing_requirements(
+    missing_contracts: Dict[str, dict],
+    insufficient_contract_updates: Dict[str, dict],
+    missing_verification: Dict[str, dict],
+) -> str:
     lines = [
         "BLOCKED: canonical subsystem changes require matching contract and verification updates.",
         "",
@@ -323,6 +376,19 @@ def format_missing_requirements(missing_contracts: Dict[str, dict], missing_veri
             )
         else:
             lines.append(f"- subsystem {data['subsystem']}: missing contract {contract_path}")
+        for path in sorted(data["touched_runtime_files"]):
+            lines.append(f"  touched by {path}")
+        if data.get("reason") == "dependent-reference":
+            for reference in data.get("matched_references", []):
+                lines.append(f"  referenced by {reference}")
+
+    for contract_path, data in sorted(insufficient_contract_updates.items()):
+        lines.append(
+            f"- subsystem {data['subsystem']}: contract {contract_path} is staged but does not include a substantive section update"
+        )
+        lines.append(
+            "  update one of: Purpose, Canonical Files, Extension Points, Forbidden Paths, Completion Obligations, or Current State"
+        )
         for path in sorted(data["touched_runtime_files"]):
             lines.append(f"  touched by {path}")
         if data.get("reason") == "dependent-reference":
@@ -369,6 +435,8 @@ def format_missing_requirements(missing_contracts: Dict[str, dict], missing_veri
             "`docs/release-control/v6/subsystems/` must be updated in the same commit.",
             "If a touched runtime path is also named in another subsystem contract's",
             "`Canonical Files` or `Extension Points`, that dependent contract must be updated too.",
+            "A staged contract file only counts if its staged diff changes a substantive contract section,",
+            "not just `Contract Metadata` or cosmetic noise.",
             "Each touched runtime path must also satisfy the first matching",
             "verification policy from that subsystem's registry entry.",
         ]
@@ -385,6 +453,12 @@ def check_staged_contracts(staged_files: Sequence[str]) -> int:
         for contract_path, data in required_contracts.items()
         if contract_path not in staged_set
     }
+    insufficient_contract_updates = {
+        contract_path: data
+        for contract_path, data in required_contracts.items()
+        if contract_path in staged_set
+        if not staged_contract_has_substantive_change(contract_path)
+    }
     missing_verification: Dict[str, dict] = {}
     for subsystem_id, data in impacted.items():
         missing_requirements = [
@@ -397,10 +471,17 @@ def check_staged_contracts(staged_files: Sequence[str]) -> int:
                 **data,
                 "missing_requirements": missing_requirements,
             }
-    if not missing_contracts and not missing_verification:
+    if not missing_contracts and not insufficient_contract_updates and not missing_verification:
         return 0
 
-    print(format_missing_requirements(missing_contracts, missing_verification), file=sys.stderr)
+    print(
+        format_missing_requirements(
+            missing_contracts,
+            insufficient_contract_updates,
+            missing_verification,
+        ),
+        file=sys.stderr,
+    )
     return 1
 
 

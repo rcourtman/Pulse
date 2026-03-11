@@ -5,6 +5,7 @@ from canonical_completion_guard import (
     REPO_ROOT,
     SUBSYSTEM_REGISTRY,
     build_verification_requirements,
+    contract_patch_has_substantive_change,
     infer_impacted_subsystems,
     is_ignored_runtime_file,
     is_test_or_fixture,
@@ -256,6 +257,40 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 }
             },
         )
+
+    def test_contract_patch_metadata_only_is_not_substantive(self):
+        patch = """diff --git a/docs/release-control/v6/subsystems/monitoring.md b/docs/release-control/v6/subsystems/monitoring.md
+index 1111111..2222222 100644
+--- a/docs/release-control/v6/subsystems/monitoring.md
++++ b/docs/release-control/v6/subsystems/monitoring.md
+@@ -1,12 +1,12 @@
+ # Monitoring Contract
+
+ ## Contract Metadata
+
+ ```json
+ {
+-  "dependency_subsystem_ids": []
++  "dependency_subsystem_ids": ["unified-resources"]
+ }
+ ```
+
+ ## Purpose
+"""
+        self.assertFalse(contract_patch_has_substantive_change(patch))
+
+    def test_contract_patch_current_state_change_is_substantive(self):
+        patch = """diff --git a/docs/release-control/v6/subsystems/monitoring.md b/docs/release-control/v6/subsystems/monitoring.md
+index 1111111..2222222 100644
+--- a/docs/release-control/v6/subsystems/monitoring.md
++++ b/docs/release-control/v6/subsystems/monitoring.md
+@@ -20,8 +20,8 @@
+ ## Current State
+
+-Read-state migration remains partial.
++Read-state migration is now complete for storage-backed workload assembly.
+"""
+        self.assertTrue(contract_patch_has_substantive_change(patch))
 
     def test_alerts_owned_runtime_has_no_default_fallback(self):
         alerts_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "alerts")
