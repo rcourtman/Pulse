@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import aiSettingsSource from '@/components/Settings/AISettings.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
+import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 
@@ -58,6 +60,20 @@ describe('shared primitive guardrails', () => {
     expect(updatesSettingsPanelSource).toContain('variant="detail"');
     expect(updatesSettingsPanelSource).not.toContain(
       'class={`p-4 rounded-md border-2 transition-all text-left',
+    );
+  });
+
+  it('routes settings info callouts through CalloutCard', () => {
+    expect(calloutCardSource).toContain(
+      "type CalloutTone = 'danger' | 'info' | 'success' | 'warning'",
+    );
+    expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
+    expect(proxmoxSettingsPanelSource).not.toContain(
+      'rounded-md border border-blue-200 bg-blue-50 px-4 py-3',
+    );
+    expect(reportingPanelSource).toContain('CalloutCard');
+    expect(reportingPanelSource).not.toContain(
+      'rounded-md border border-blue-200 bg-blue-50 p-6',
     );
   });
 });

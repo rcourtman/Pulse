@@ -9,6 +9,7 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { notificationStore } from '@/stores/notifications';
 import { formatRelativeTime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
@@ -227,14 +228,10 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
       />
 
       <Show when={!props.embedded}>
-        <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900">
-          <div class="flex items-start gap-3">
-            <svg
-              class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+        <CalloutCard
+          class="mb-6"
+          icon={
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -242,25 +239,28 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
                 d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <div class="flex-1">
-              <p class="text-sm text-blue-800 dark:text-blue-200">
+          }
+          description={
+            <>
+              <p>
                 <strong>Recommended:</strong> use the unified agent for Proxmox hosts. It
                 auto-creates the API token, links the host, and unlocks temperature monitoring plus
                 Pulse Patrol automation.
               </p>
-              <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
+              <p class="text-xs text-blue-700 dark:text-blue-300">
                 Use this fallback path only when you cannot install the unified agent on the host.
               </p>
-              <button
-                type="button"
-                onClick={() => navigate('/settings')}
-                class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
-              >
-                Open infrastructure setup →
-              </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <button
+            type="button"
+            onClick={() => navigate('/settings')}
+            class="text-sm font-medium text-blue-700 underline hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+          >
+            Open infrastructure setup →
+          </button>
+        </CalloutCard>
       </Show>
 
       <div class="space-y-6 mt-6">

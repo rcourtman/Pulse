@@ -237,6 +237,7 @@ describe('agent model guardrails', () => {
     expect(relaySettingsPanelSource).not.toContain('const connectionStatusText =');
     expect(relaySettingsPanelSource).not.toContain('Loading configuration...');
     expect(proxmoxSettingsPanelSource).toContain('getSettingsConfigurationLoadingState');
+    expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
     expect(proxmoxSettingsPanelSource).not.toContain('Loading configuration...');
     expect(relayOnboardingCardSource).toContain('@/utils/relayPresentation');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TITLE');
@@ -369,6 +370,7 @@ describe('agent model guardrails', () => {
     );
     expect(reportingPanelSource).toContain('REPORTING_RANGE_OPTIONS');
     expect(reportingPanelSource).toContain('FilterButtonGroup');
+    expect(reportingPanelSource).toContain('CalloutCard');
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');

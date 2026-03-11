@@ -71,3 +71,7 @@ feature components.
 Selectable settings cards for compact provider pickers and detail choice panels
 must now route through the shared `SelectionCardGroup` primitive instead of
 duplicating border-2 active-card styling in feature components.
+
+Settings informational callouts with icon-plus-copy layouts must now route
+through the shared `CalloutCard` primitive instead of maintaining feature-local
+blue bordered wrappers.

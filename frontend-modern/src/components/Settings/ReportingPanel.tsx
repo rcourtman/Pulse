@@ -3,6 +3,7 @@ import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formField, formLabel, formHelpText, formControl } from '@/components/shared/Form';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { showSuccess, showWarning } from '@/utils/toast';
@@ -313,24 +314,12 @@ export function ReportingPanel() {
           </div>
         </OperationsPanel>
 
-        <div class="rounded-md border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900">
-          <div class="flex flex-col sm:flex-row gap-4">
-            <div class="p-3 rounded-md h-fit text-blue-600 dark:text-blue-300 bg-blue-100 dark:bg-blue-900">
-              <BarChart size={24} />
-            </div>
-            <div>
-              <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                Advanced Insights
-              </h3>
-              <p class="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
-                Reports are generated directly from the historical metrics store. PDF reports
-                provide summarized trends (average, minimum, and maximum), while CSV exports provide
-                raw time-series data for deeper analysis in spreadsheets or BI tools. Select
-                multiple resources to generate a fleet-wide summary.
-              </p>
-            </div>
-          </div>
-        </div>
+        <CalloutCard
+          icon={<BarChart size={24} />}
+          title="Advanced Insights"
+          description="Reports are generated directly from the historical metrics store. PDF reports provide summarized trends (average, minimum, and maximum), while CSV exports provide raw time-series data for deeper analysis in spreadsheets or BI tools. Select multiple resources to generate a fleet-wide summary."
+          padding="lg"
+        />
       </Show>
     </div>
   );
