@@ -26,6 +26,8 @@ List the files that contain the subsystem truth.
 ## Shared Boundaries
 
 List any runtime files intentionally shared with other subsystems.
+Use the exact registry-derived item shape:
+`1. \`path\` shared with \`partner-subsystem\`: rationale.`
 If none exist, write `1. None.`
 
 ## Extension Points

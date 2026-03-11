@@ -89,7 +89,8 @@ references.
 If a runtime file is intentionally owned by multiple subsystems, that overlap
 must be declared explicitly in `registry.json` and mirrored in the contract's
 `Shared Boundaries` section; accidental overlap is not an allowed registry
-state.
+state. Shared-boundary entries must use the exact registry-derived sentence
+shape rather than freeform wording.
 
 ## Task Completion Protocol
 

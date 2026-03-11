@@ -248,6 +248,20 @@ def expected_shared_boundaries(
     return sorted(entries, key=lambda entry: str(entry.get("path", "")).casefold())
 
 
+def render_shared_boundary_item(entry: dict[str, Any], subsystem_id: str) -> str:
+    path = str(entry.get("path", "")).strip()
+    rationale = str(entry.get("rationale", "")).strip()
+    partner_ids = sorted_casefold(
+        [
+            other_id
+            for other_id in entry.get("subsystems", [])
+            if isinstance(other_id, str) and other_id != subsystem_id
+        ]
+    )
+    partner_clause = ", ".join(f"`{partner_id}`" for partner_id in partner_ids)
+    return f"`{path}` shared with {partner_clause}: {rationale}."
+
+
 def audit_contract_payload(
     *,
     registry_payload: dict[str, Any],
@@ -394,6 +408,7 @@ def audit_contract_payload(
             for entry in expected_shared
             if isinstance(entry.get("path"), str) and str(entry.get("path", "")).strip()
         ]
+        expected_shared_items = [render_shared_boundary_item(entry, subsystem_id) for entry in expected_shared]
         if not expected_shared_paths:
             if shared_boundary_items != ["None."]:
                 errors.append(
@@ -438,6 +453,10 @@ def audit_contract_payload(
             if actual_shared_paths != expected_shared_paths:
                 errors.append(
                     f"{rel} section '## Shared Boundaries' paths = {actual_shared_paths!r}, want {expected_shared_paths!r}"
+                )
+            if shared_boundary_items != expected_shared_items:
+                errors.append(
+                    f"{rel} section '## Shared Boundaries' items = {shared_boundary_items!r}, want {expected_shared_items!r}"
                 )
 
         contract_summaries.append(
