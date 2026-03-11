@@ -6,6 +6,7 @@ import {
   getActionableKubernetesClusterIdFromResource,
   getExplicitAgentIdFromResource,
   getMetricsChartKeyCandidatesFromResource,
+  hasDockerWorkloadsScope,
   hasAgentFacet,
   isAgentFacetInfrastructureResource,
   isAgentProfileAssignableResource,
@@ -104,6 +105,15 @@ describe('agentResources', () => {
     ).toBe('docker-runtime-1');
 
     expect(
+      getActionableDockerRuntimeIdFromResource(
+        makeResource({
+          type: 'agent',
+          metricsTarget: { resourceType: 'docker-host', resourceId: 'docker-runtime-2' },
+        }),
+      ),
+    ).toBe('docker-runtime-2');
+
+    expect(
       getActionableKubernetesClusterIdFromResource(
         makeResource({
           type: 'k8s-cluster',
@@ -111,6 +121,30 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('cluster-1');
+  });
+
+  it('detects docker workloads scope from explicit docker facets instead of source lists', () => {
+    expect(
+      hasDockerWorkloadsScope(
+        makeResource({
+          type: 'agent',
+          platformData: {
+            docker: { hostname: 'tower' },
+          },
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      hasDockerWorkloadsScope(
+        makeResource({
+          type: 'agent',
+          platformData: {
+            agent: { hostname: 'tower' },
+          },
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('builds canonical metrics chart key candidates for host-family resources', () => {

@@ -334,6 +334,139 @@ func TestSLO_ResourcesList(t *testing.T) {
 	}
 }
 
+// TestSLO_InfrastructureCharts validates the lightweight infrastructure charts
+// endpoint that drives infrastructure summary sparklines. The workload forces
+// the store-backed batch path across nodes, docker hosts, and unified agents.
+func TestSLO_InfrastructureCharts(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newTestMetricsStore(t)
+	const (
+		nodeCount       = 20
+		dockerHostCount = 10
+		agentCount      = 10
+		pointsPerMetric = 240
+	)
+	base := time.Now().Add(-4 * time.Hour)
+
+	seedBatchMetrics := func(resourceType string, ids []string, metricTypes []string) {
+		batch := make([]metrics.WriteMetric, 0, len(ids)*len(metricTypes)*pointsPerMetric)
+		for idx, id := range ids {
+			for _, mt := range metricTypes {
+				for p := 0; p < pointsPerMetric; p++ {
+					batch = append(batch, metrics.WriteMetric{
+						ResourceType: resourceType,
+						ResourceID:   id,
+						MetricType:   mt,
+						Value:        float64((idx + p) % 100),
+						Timestamp:    base.Add(time.Duration(p) * time.Minute),
+						Tier:         metrics.TierMinute,
+					})
+				}
+			}
+		}
+		store.WriteBatchSync(batch)
+	}
+
+	monitor, state, _ := newTestMonitor(t)
+	setTestUnexportedField(t, monitor, "metricsStore", store)
+
+	nodes := make([]models.Node, nodeCount)
+	nodeIDs := make([]string, nodeCount)
+	for i := range nodes {
+		nodeIDs[i] = fmt.Sprintf("node-slo-%d", i)
+		nodes[i] = models.Node{
+			ID:       nodeIDs[i],
+			Name:     fmt.Sprintf("node-%d", i),
+			Instance: "pve1",
+			Status:   "online",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 64 << 30, Used: 32 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 500 << 30, Used: 250 << 30},
+		}
+	}
+	state.Nodes = nodes
+
+	dockerHosts := make([]models.DockerHost, dockerHostCount)
+	dockerHostIDs := make([]string, dockerHostCount)
+	for i := range dockerHosts {
+		dockerHostIDs[i] = fmt.Sprintf("docker-host-slo-%d", i)
+		dockerHosts[i] = models.DockerHost{
+			ID:       dockerHostIDs[i],
+			Runtime:  "docker",
+			Status:   "online",
+			CPUUsage: float64(i%80 + 10),
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 32 << 30, Used: 16 << 30},
+			Disks:    []models.Disk{{Usage: float64(i%40 + 30), Total: 200 << 30, Used: 100 << 30}},
+		}
+	}
+	state.DockerHosts = dockerHosts
+
+	hosts := make([]models.Host, agentCount)
+	agentIDs := make([]string, agentCount)
+	for i := range hosts {
+		agentIDs[i] = fmt.Sprintf("agent-slo-%d", i)
+		hosts[i] = models.Host{
+			ID:       agentIDs[i],
+			Hostname: fmt.Sprintf("agent-host-%d", i),
+			Status:   "online",
+			CPUUsage: float64(i%80 + 10),
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 32 << 30, Used: 16 << 30},
+			Disks:    []models.Disk{{Usage: float64(i%40 + 30), Total: 200 << 30, Used: 100 << 30}},
+		}
+	}
+	state.Hosts = hosts
+	syncTestResourceStore(t, monitor, state)
+
+	seedBatchMetrics("node", nodeIDs, []string{"cpu", "memory", "disk", "netin", "netout"})
+	seedBatchMetrics("dockerHost", dockerHostIDs, []string{"cpu", "memory", "disk"})
+	seedBatchMetrics("agent", agentIDs, []string{"cpu", "memory", "disk"})
+
+	router := &Router{monitor: monitor}
+	url := "/api/charts/infrastructure?range=4h"
+
+	sanityReq := httptest.NewRequest(http.MethodGet, url, nil)
+	sanityRec := httptest.NewRecorder()
+	router.handleInfrastructureCharts(sanityRec, sanityReq)
+	if sanityRec.Code != http.StatusOK {
+		t.Fatalf("sanity check failed: status %d body=%s", sanityRec.Code, sanityRec.Body.String())
+	}
+	var sanityResp InfrastructureChartsResponse
+	if err := json.Unmarshal(sanityRec.Body.Bytes(), &sanityResp); err != nil {
+		t.Fatalf("sanity unmarshal: %v", err)
+	}
+	if len(sanityResp.NodeData) != nodeCount {
+		t.Fatalf("sanity: expected %d nodes, got %d", nodeCount, len(sanityResp.NodeData))
+	}
+	if len(sanityResp.DockerHostData) != dockerHostCount {
+		t.Fatalf("sanity: expected %d docker hosts, got %d", dockerHostCount, len(sanityResp.DockerHostData))
+	}
+	if len(sanityResp.AgentData) != agentCount {
+		t.Fatalf("sanity: expected %d agents, got %d", agentCount, len(sanityResp.AgentData))
+	}
+	if sanityResp.Stats.PrimarySourceHint != "store_or_memory_fallback" {
+		t.Fatalf("sanity: expected store-backed source hint, got %q", sanityResp.Stats.PrimarySourceHint)
+	}
+
+	latencies := measureEndpointLatencies(t, func() {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+		router.handleInfrastructureCharts(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unexpected status %d", rec.Code)
+		}
+	})
+
+	p95 := percentile(latencies, 0.95)
+	t.Logf("charts/infrastructure p50=%v p95=%v p99=%v SLO=%v",
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOInfrastructureChartsP95)
+
+	if p95 > SLOInfrastructureChartsP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOInfrastructureChartsP95)
+	}
+}
+
 // --- Test helpers ---
 
 // skipUnderRace skips the test when the race detector is enabled, since the

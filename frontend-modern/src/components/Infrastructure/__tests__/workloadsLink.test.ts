@@ -244,16 +244,29 @@ describe('buildWorkloadsHref', () => {
       expect(buildWorkloadsHref(resource)).toBe('/workloads?agent=pve-node-3');
     });
 
-    it('routes dual-mode hosts to container workloads when docker capability is present', () => {
+    it('routes dual-mode hosts to container workloads when docker facets are present', () => {
       const resource = makeResource({
         type: 'agent',
-        sources: ['agent', 'docker'],
         platformData: {
           agent: { hostname: 'tower' },
           docker: { hostname: 'tower' },
         },
       });
       expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=tower');
+    });
+
+    it('prefers canonical docker runtime ids for hybrid host workload routes', () => {
+      const resource = makeResource({
+        type: 'agent',
+        metricsTarget: { resourceType: 'docker-host', resourceId: 'docker-host-1' },
+        platformData: {
+          agent: { hostname: 'tower.local' },
+          docker: { hostname: 'tower.local' },
+        },
+      });
+      expect(buildWorkloadsHref(resource)).toBe(
+        '/workloads?type=app-container&agent=docker-host-1',
+      );
     });
 
     it('falls back through the expected chain for node resources', () => {

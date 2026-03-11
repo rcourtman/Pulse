@@ -1,5 +1,9 @@
 import type { Resource } from '@/types/resource';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
+import {
+  getActionableDockerRuntimeIdFromResource,
+  hasDockerWorkloadsScope,
+} from '@/utils/agentResources';
 import { getPreferredWorkloadsAgentHint } from '@/utils/resourceIdentity';
 
 type ProxmoxPlatformData = {
@@ -7,10 +11,6 @@ type ProxmoxPlatformData = {
 };
 
 type AgentPlatformData = {
-  hostname?: string;
-};
-
-type DockerPlatformData = {
   hostname?: string;
 };
 
@@ -23,7 +23,6 @@ type KubernetesPlatformData = {
 type PlatformData = {
   proxmox?: ProxmoxPlatformData;
   agent?: AgentPlatformData;
-  docker?: DockerPlatformData;
   kubernetes?: KubernetesPlatformData;
 };
 
@@ -64,13 +63,8 @@ const resolveHostHint = (resource: Resource): string | undefined => {
   return getPreferredWorkloadsAgentHint(resource);
 };
 
-const hasDockerCapability = (resource: Resource): boolean => {
-  const sources = Array.isArray(resource.sources) ? resource.sources : [];
-  const platformData = resource.platformData as PlatformData | undefined;
-  return (
-    resource.type === 'docker-host' || sources.includes('docker') || Boolean(platformData?.docker)
-  );
-};
+const resolveDockerWorkloadsHint = (resource: Resource): string | undefined =>
+  getActionableDockerRuntimeIdFromResource(resource) || resolveHostHint(resource);
 
 export const buildWorkloadsHref = (resource: Resource): string | null => {
   if (resource.type === 'k8s-cluster' || resource.type === 'k8s-node') {
@@ -79,14 +73,14 @@ export const buildWorkloadsHref = (resource: Resource): string | null => {
   }
 
   if (resource.type === 'docker-host') {
-    const agent = resolveHostHint(resource);
+    const agent = resolveDockerWorkloadsHint(resource);
     return buildWorkloadsPath({ type: 'app-container', agent });
   }
 
   if (resource.type === 'agent') {
     const agent = resolveHostHint(resource);
-    if (hasDockerCapability(resource)) {
-      return buildWorkloadsPath({ type: 'app-container', agent });
+    if (hasDockerWorkloadsScope(resource)) {
+      return buildWorkloadsPath({ type: 'app-container', agent: resolveDockerWorkloadsHint(resource) });
     }
     return buildWorkloadsPath({ agent });
   }

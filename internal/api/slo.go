@@ -37,4 +37,9 @@ const (
 	// (limit=50 per page), including cache lookup, snapshot comparison, filtering,
 	// sorting, pagination, pruning, and JSON encoding.
 	SLOResourcesListP95 = 3 * time.Millisecond
+
+	// SLOInfrastructureChartsP95 is the p95 target for GET /api/charts/infrastructure
+	// with a store-backed 4h window across nodes, docker hosts, and agents.
+	// This is the infrastructure summary sparkline hot path.
+	SLOInfrastructureChartsP95 = 45 * time.Millisecond
 )

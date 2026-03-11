@@ -66,10 +66,16 @@ export const getActionableDockerRuntimeIdFromResource = (
   return (
     asTrimmedString(docker?.hostSourceId) ||
     asTrimmedString(platformData?.hostSourceId) ||
-    (resource.type === 'docker-host'
-      ? asTrimmedString(resource.discoveryTarget?.agentId) || resource.id
-      : undefined)
+    (resource.metricsTarget?.resourceType === 'docker-host'
+      ? asTrimmedString(resource.metricsTarget.resourceId)
+      : undefined) ||
+    (resource.type === 'docker-host' ? asTrimmedString(resource.discoveryTarget?.agentId) : undefined)
   );
+};
+
+export const hasDockerWorkloadsScope = (resource: Resource): boolean => {
+  const platformData = getPlatformDataRecord(resource);
+  return resource.type === 'docker-host' || Boolean(asRecord(platformData?.docker));
 };
 
 export const getActionableKubernetesClusterIdFromResource = (
