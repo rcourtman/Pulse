@@ -689,6 +689,7 @@
         "exact_files": [
           "internal/api/contract_test.go"
         ],
+        "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
             "id": "backend-payload-contracts",
@@ -860,6 +861,7 @@
           "internal/api/router_bench_test.go",
           "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx"
         ],
+        "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
             "id": "metrics-store-hot-paths",

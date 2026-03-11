@@ -30,9 +30,14 @@ regression protection.
 
 1. Update benchmarks, SLOs, or query-plan tests when hot-path behavior changes
 2. Update this contract when a new protected hot path is adopted
-3. Record the evidence source for any claimed performance improvement
+3. Route runtime changes through the explicit performance proof policies in `registry.json`; default fallback proof routing is not allowed
+4. Record the evidence source for any claimed performance improvement
 
 ## Current State
 
 This lane already has strong evidence and guardrails, but it still trails on
 score because critical hot paths need more complete protection and verification.
+
+All governed performance-owned runtime files now require explicit registry
+path-policy coverage, so new protected hot paths must be mapped to a concrete
+proof route instead of falling back to subsystem-default verification.

@@ -27,7 +27,8 @@ Own canonical runtime payload shapes between backend and frontend.
 
 1. Update contract tests when payloads change
 2. Update frontend API types in the same slice
-3. Update this contract when canonical payload ownership changes
+3. Route runtime changes through the explicit API-contract proof policies in `registry.json`; default fallback proof routing is not allowed
+4. Update this contract when canonical payload ownership changes
 
 ## Current State
 
@@ -36,3 +37,5 @@ contract should continue moving toward canonical-only runtime shapes.
 `/api/charts/workloads-summary` now also has a canonical hot-path invariant:
 aggregate workload charts must preserve stable guest counts while batching
 store-backed metric reads across workload types, with no payload shape change.
+That endpoint now also carries an explicit API p95 budget under the same
+store-backed mixed-workload fixture used to verify the batched hot path.

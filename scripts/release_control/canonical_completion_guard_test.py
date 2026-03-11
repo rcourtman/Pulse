@@ -160,6 +160,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         api_contracts = required["api-contracts"]
         self.assertEqual(api_contracts["contract"], "docs/release-control/v6/subsystems/api-contracts.md")
         self.assertEqual(api_contracts["touched_runtime_files"], ["internal/api/resources.go"])
+        self.assertTrue(
+            api_contracts["verification"]["require_explicit_path_policy_coverage"]
+        )
         self.assertEqual(
             api_contracts["verification_requirements"],
             [
@@ -323,6 +326,11 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(matches, ["frontend-modern/src/api/__tests__/alerts.test.ts"])
 
+    def test_api_contracts_owned_runtime_has_no_default_fallback(self):
+        api_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
+        self.assertTrue(api_rule["verification"]["require_explicit_path_policy_coverage"])
+        self.assertEqual(unmatched_owned_runtime_files(api_rule), [])
+
     def test_performance_rejects_non_performance_test(self):
         perf_rule = next(
             rule for rule in load_subsystem_rules() if rule["id"] == "performance-and-scalability"
@@ -337,6 +345,37 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ["internal/api/router_test.go"],
         )
         self.assertEqual(matches, [])
+
+    def test_performance_owned_runtime_has_no_default_fallback(self):
+        perf_rule = next(
+            rule for rule in load_subsystem_rules() if rule["id"] == "performance-and-scalability"
+        )
+        self.assertTrue(perf_rule["verification"]["require_explicit_path_policy_coverage"])
+        self.assertEqual(unmatched_owned_runtime_files(perf_rule), [])
+
+    def test_performance_api_slo_uses_explicit_guardrails(self):
+        perf_rule = next(
+            rule for rule in load_subsystem_rules() if rule["id"] == "performance-and-scalability"
+        )
+        requirements = build_verification_requirements(
+            perf_rule,
+            ["internal/api/slo.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "api-history-slo",
+                    "label": "API history SLO proof",
+                    "touched_runtime_files": ["internal/api/slo.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/slo_bench_test.go",
+                    ],
+                }
+            ],
+        )
 
     def test_monitoring_metrics_hot_path_uses_specific_proof_policy(self):
         monitoring_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "monitoring")
@@ -985,7 +1024,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "monitoring",
                 "unified-resources",
                 "cloud-paid",
+                "api-contracts",
                 "frontend-primitives",
+                "performance-and-scalability",
             },
         )
         for subsystem_id, rule in explicit_rules.items():
