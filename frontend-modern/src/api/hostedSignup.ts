@@ -3,6 +3,7 @@ import { apiClient } from '@/utils/apiClient';
 export interface HostedSignupRequest {
   email: string;
   org_name: string;
+  tier?: 'starter' | 'power' | 'max';
 }
 
 export interface HostedSignupResponse {

@@ -1,9 +1,11 @@
 import { Show, createMemo, createSignal } from 'solid-js';
+import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { HostedSignupAPI, type HostedAPIError } from '@/api/hostedSignup';
 import { getUpgradeActionUrlOrFallback } from '@/stores/license';
 import { logger } from '@/utils/logger';
+import { getCloudPlanForTier } from '@/utils/cloudPlans';
 
 type SignupStatus = 'idle' | 'submitting' | 'success' | 'unavailable' | 'error';
 
@@ -34,6 +36,7 @@ function unavailableError(err: HostedAPIError, status: number): boolean {
 }
 
 export default function HostedSignup() {
+  const location = useLocation();
   const [email, setEmail] = createSignal('');
   const [orgName, setOrgName] = createSignal('');
   const [status, setStatus] = createSignal<SignupStatus>('idle');
@@ -43,6 +46,10 @@ export default function HostedSignup() {
   const [magicLinkEmail, setMagicLinkEmail] = createSignal('');
   const [magicLinkMessage, setMagicLinkMessage] = createSignal('');
 
+  const selectedPlan = createMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return getCloudPlanForTier(params.get('tier'));
+  });
   const cloudPortalURL = createMemo(() => getUpgradeActionUrlOrFallback('cloud'));
 
   const canSubmit = createMemo(() => {
@@ -70,6 +77,7 @@ export default function HostedSignup() {
     const result = await HostedSignupAPI.signup({
       email: cleanEmail,
       org_name: cleanOrgName,
+      tier: selectedPlan().tier,
     });
 
     if (result.ok) {
@@ -122,16 +130,18 @@ export default function HostedSignup() {
   return (
     <div class="space-y-6">
       <PageHeader
-        title="Pulse Cloud Signup"
-        description="Create your hosted Pulse workspace and get a magic-link sign-in email."
+        title={`Pulse Cloud ${selectedPlan().name}`}
+        description={`Start ${selectedPlan().name} Cloud with ${selectedPlan().agents} agents included and get a magic-link sign-in email.`}
       />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card padding="lg" class="space-y-4">
-          <h2 class="text-lg font-semibold text-base-content">Create Hosted Workspace</h2>
+          <h2 class="text-lg font-semibold text-base-content">
+            Create {selectedPlan().name} Hosted Workspace
+          </h2>
           <p class="text-sm text-muted">
-            Use this form to create your hosted organization. After submission, you will receive an
-            email with a sign-in link.
+            This signup is locked to the {selectedPlan().name} Cloud plan: {selectedPlan().agents}{' '}
+            agents, {selectedPlan().support} support, and managed hosting included.
           </p>
 
           <form class="space-y-3" onSubmit={submitSignup}>
@@ -203,9 +213,31 @@ export default function HostedSignup() {
         </Card>
 
         <Card padding="lg" class="space-y-4">
-          <h2 class="text-lg font-semibold text-base-content">What Happens Next</h2>
+          <h2 class="text-lg font-semibold text-base-content">
+            {selectedPlan().name} Cloud Summary
+          </h2>
+          <div class="rounded-md border border-border bg-surface-alt p-4">
+            <div class="flex items-baseline justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-base-content">{selectedPlan().name}</p>
+                <p class="text-xs text-muted">{selectedPlan().subline}</p>
+              </div>
+              <p class="text-sm font-semibold text-base-content">{selectedPlan().price}</p>
+            </div>
+            <dl class="mt-3 grid grid-cols-2 gap-3 text-sm text-base-content">
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-muted">Agents</dt>
+                <dd class="mt-1 font-medium">{selectedPlan().agents}</dd>
+              </div>
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-muted">Support</dt>
+                <dd class="mt-1 font-medium">{selectedPlan().support}</dd>
+              </div>
+            </dl>
+          </div>
+          <h3 class="text-sm font-semibold text-base-content">What Happens Next</h3>
           <ol class="list-decimal space-y-2 pl-5 text-sm text-base-content">
-            <li>Your hosted organization is created and trial billing is initialized.</li>
+            <li>Your hosted organization is created for the {selectedPlan().name} Cloud tier.</li>
             <li>You receive a magic-link email to complete sign-in.</li>
             <li>
               Your workspace is managed from the Pulse Cloud control plane and routed to your tenant

@@ -66,6 +66,8 @@ describe('licensePresentation', () => {
 
   it('formats plan versions and commercial migration notices canonically', () => {
     expect(formatLicensePlanVersion('pro_plus')).toBe('Pro Plus');
+    expect(formatLicensePlanVersion('cloud_founding')).toBe('Cloud Starter (Founding)');
+    expect(formatLicensePlanVersion('msp_growth')).toBe('MSP Growth');
     expect(
       getCommercialMigrationNotice({
         state: 'pending',

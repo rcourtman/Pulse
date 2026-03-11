@@ -28,6 +28,7 @@ describe('HostedSignupAPI', () => {
     const result = await HostedSignupAPI.signup({
       email: 'owner@example.com',
       org_name: 'Acme',
+      tier: 'power',
     });
 
     expect(apiClient.fetch).toHaveBeenCalledWith('/api/public/signup', {
@@ -39,6 +40,7 @@ describe('HostedSignupAPI', () => {
       body: JSON.stringify({
         email: 'owner@example.com',
         org_name: 'Acme',
+        tier: 'power',
       }),
       skipAuth: true,
       skipOrgContext: true,
@@ -68,6 +70,7 @@ describe('HostedSignupAPI', () => {
     const result = await HostedSignupAPI.signup({
       email: 'bad',
       org_name: 'Acme',
+      tier: 'starter',
     });
 
     expect(result).toEqual({

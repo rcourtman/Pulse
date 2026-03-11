@@ -1,5 +1,6 @@
 import type { BillingState, HostedOrganizationSummary } from '@/api/billingAdmin';
 import type { CommercialMigrationStatus, LicenseStatus } from '@/api/license';
+import { CLOUD_PLAN_LABELS } from '@/utils/cloudPlans';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Community',
@@ -86,6 +87,8 @@ export const getFeatureMinTierLabel = (feature?: string | null): string => {
 export const formatLicensePlanVersion = (value?: string | null): string | null => {
   const normalized = (value || '').trim();
   if (!normalized) return null;
+  const canonical = CLOUD_PLAN_LABELS[normalized.toLowerCase()];
+  if (canonical) return canonical;
   return formatTitleCase(normalized);
 };
 

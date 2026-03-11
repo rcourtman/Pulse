@@ -4,50 +4,7 @@ import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { onMount } from 'solid-js';
-
-// ---------------------------------------------------------------------------
-// Cloud tier data (matches guiding-light spec)
-// ---------------------------------------------------------------------------
-
-type CloudTier = {
-  key: string;
-  name: string;
-  price: string;
-  subline: string;
-  hosts: number;
-  support: 'Community' | 'Priority';
-  founding?: string;
-  highlighted?: boolean;
-};
-
-const CLOUD_TIERS: CloudTier[] = [
-  {
-    key: 'starter',
-    name: 'Starter',
-    price: '$29/month',
-    subline: 'or $249/year (save 29%)',
-    hosts: 10,
-    support: 'Community',
-    founding: '$19/mo — Founding Member rate (first 100 signups)',
-    highlighted: true,
-  },
-  {
-    key: 'power',
-    name: 'Power',
-    price: '$49/month',
-    subline: 'or $449/year (save 24%)',
-    hosts: 30,
-    support: 'Priority',
-  },
-  {
-    key: 'max',
-    name: 'Max',
-    price: '$79/month',
-    subline: 'or $699/year (save 26%)',
-    hosts: 75,
-    support: 'Priority',
-  },
-];
+import { CLOUD_PLAN_DEFINITIONS, type CloudPlanDefinition } from '@/utils/cloudPlans';
 
 const INCLUDED_IN_ALL = [
   'All Pro features (AI patrol, auto-fix, RBAC, audit logging, SAML SSO)',
@@ -82,7 +39,7 @@ function FoundingBanner() {
   );
 }
 
-function CloudTierCard(props: { tier: CloudTier }) {
+function CloudTierCard(props: { tier: CloudPlanDefinition }) {
   const t = props.tier;
 
   return (
@@ -104,13 +61,13 @@ function CloudTierCard(props: { tier: CloudTier }) {
 
       <h2 class="text-lg font-semibold text-base-content">{t.name}</h2>
 
-      <Show when={t.founding}>
+      <Show when={t.foundingPrice}>
         <div class="mt-2 text-2xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">
           $19<span class="text-base font-normal text-muted">/month</span>
         </div>
         <div class="text-sm text-muted line-through">{t.price}</div>
       </Show>
-      <Show when={!t.founding}>
+      <Show when={!t.foundingPrice}>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
           {t.price.replace('/month', '')}
           <span class="text-base font-normal text-muted">/month</span>
@@ -121,7 +78,7 @@ function CloudTierCard(props: { tier: CloudTier }) {
       <ul class="mt-4 space-y-2 text-sm text-base-content">
         <li class="flex gap-2">
           <span class="shrink-0 text-emerald-600 dark:text-emerald-400 font-bold">
-            {t.hosts} agents
+            {t.agents} agents
           </span>
         </li>
         <li class="flex gap-2">
@@ -140,10 +97,10 @@ function CloudTierCard(props: { tier: CloudTier }) {
 
       <div class="mt-6">
         <A
-          href="/cloud/signup"
+          href={`/cloud/signup?tier=${t.tier}`}
           class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
         >
-          {t.founding ? 'Claim Founding Rate' : `Get ${t.name}`}
+          {t.foundingPrice ? 'Claim Founding Rate' : `Get ${t.name}`}
         </A>
       </div>
     </Card>
@@ -170,7 +127,7 @@ export default function CloudPricing() {
 
       {/* Tier cards */}
       <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <For each={CLOUD_TIERS}>{(tier) => <CloudTierCard tier={tier} />}</For>
+        <For each={CLOUD_PLAN_DEFINITIONS}>{(tier) => <CloudTierCard tier={tier} />}</For>
       </div>
 
       {/* What's included in all Cloud plans */}
