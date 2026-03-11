@@ -38,7 +38,7 @@ Own canonical runtime payload shapes between backend and frontend.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes
 3. Add dedicated contract tests for new stable payloads
-4. Route frontend API-client parsed error propagation, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+4. Route frontend API-client parsed error propagation, allowed-status handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 
 ## Forbidden Paths
 
@@ -57,6 +57,7 @@ Own canonical runtime payload shapes between backend and frontend.
 13. Frontend API clients open-coding governed `404 => null` response branches for resource lookups instead of shared missing-resource response helpers
 14. Agent and guest metadata clients duplicating the same CRUD transport logic instead of using one shared metadata client
 15. AI stream clients duplicating SSE reader, timeout, chunk-splitting, and JSON event parsing loops instead of using one shared stream consumer
+16. Monitoring delete and idempotent mutate clients open-coding `404`/`204` allowed-status branches instead of using canonical shared allowed-status helpers
 
 ## Completion Obligations
 
@@ -148,6 +149,10 @@ AI investigation and chat stream clients must now also route through one shared
 SSE JSON event consumer in `frontend-modern/src/api/streaming.ts` rather than
 duplicating reader lifecycle, timeout, chunk parsing, and event decoding logic
 in each module.
+Monitoring delete and idempotent mutate clients must now also route `404`/`204`
+success cases through shared allowed-status helpers in
+`frontend-modern/src/api/responseUtils.ts` instead of open-coding local
+status-branch stacks in each method.
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.

@@ -29,8 +29,12 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function apiResponseStatus');
     expect(responseUtilsSource).toContain('export function isAPIResponseStatus');
     expect(responseUtilsSource).toContain('export async function assertAPIResponseOK');
+    expect(responseUtilsSource).toContain('export async function assertAPIResponseOKOrAllowedStatus');
     expect(responseUtilsSource).toContain('export async function parseRequiredAPIResponse');
     expect(responseUtilsSource).toContain('export async function parseOptionalAPIResponse');
+    expect(responseUtilsSource).toContain(
+      'export async function parseOptionalAPIResponseOrAllowedStatus',
+    );
     expect(responseUtilsSource).toContain('export async function parseRequiredAPIResponseOrNull');
     expect(responseUtilsSource).toContain('export async function parseOptionalAPIResponseOrNull');
     expect(responseUtilsSource).toContain('export async function parseRequiredJSON');
@@ -97,8 +101,10 @@ describe('API error-status guardrails', () => {
     expect(agentProfilesSource).not.toContain('readAPIErrorMessage(');
 
     expect(monitoringSource).toContain('parseOptionalAPIResponse(');
+    expect(monitoringSource).toContain('parseOptionalAPIResponseOrAllowedStatus(');
     expect(monitoringSource).toContain('parseOptionalAPIResponseOrNull<AgentLookupResponse>(');
     expect(monitoringSource).toContain('assertAPIResponseOK(response,');
+    expect(monitoringSource).toContain('assertAPIResponseOKOrAllowedStatus(response, 404,');
     expect(monitoringSource).toContain('isAPIResponseStatus(response, 404)');
     expect(monitoringSource).toContain('coerceTimestampMillis(identity.lastSeen, Date.now())');
     expect(monitoringSource).toContain("'Failed to parse agent lookup response'");
@@ -191,7 +197,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, raw duplicated SSE stream readers, and discovery route alias drift', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, raw duplicated SSE stream readers, raw monitoring allowed-status branches, and discovery route alias drift', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -266,6 +272,13 @@ describe('API error-status guardrails', () => {
     );
     const rawStreamReaderPattern =
       /(?:TextDecoder|getReader\(|STREAM_TIMEOUT_MS|Read timeout|split\('\n\n'\)|startsWith\('data: '\))/;
+    const governedMonitoringAllowedStatusEntries = runtimeEntries.filter(([path]) =>
+      /\/monitoring\.ts$/.test(path),
+    );
+    const rawMonitoringAllowedDeletePattern =
+      /if\s*\(!response\.ok\)\s*\{\s*if\s*\(isAPIResponseStatus\(response,\s*404\)\)\s*\{\s*return\s+\{\};\s*\}[\s\S]{0,160}?assertAPIResponseOK\([^\n]+\);\s*\}\s*if\s*\(isAPIResponseStatus\(response,\s*204\)\)\s*\{\s*return\s+\{\};\s*\}/;
+    const rawMonitoringAllowedMutationPattern =
+      /if\s*\(!response\.ok\)\s*\{\s*if\s*\(isAPIResponseStatus\(response,\s*404\)\)\s*\{\s*(?:\/\/[^\n]*\n\s*)?return;\s*\}[\s\S]{0,160}?assertAPIResponseOK\([^\n]+\);\s*\}/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -357,6 +370,15 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const rawMonitoringAllowedStatusOffenders = governedMonitoringAllowedStatusEntries
+      .filter(
+        ([, source]) =>
+          rawMonitoringAllowedDeletePattern.test(source) ||
+          rawMonitoringAllowedMutationPattern.test(source),
+      )
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -373,6 +395,7 @@ describe('API error-status guardrails', () => {
     expect(rawNullLookupOffenders).toEqual([]);
     expect(rawMetadataCrudOffenders).toEqual([]);
     expect(rawStreamReaderOffenders).toEqual([]);
+    expect(rawMonitoringAllowedStatusOffenders).toEqual([]);
     expect(discoveryRouteAliasOffenders).toEqual([]);
   });
 });

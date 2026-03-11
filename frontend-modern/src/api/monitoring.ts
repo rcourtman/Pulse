@@ -8,9 +8,11 @@ import type {
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
+  assertAPIResponseOKOrAllowedStatus,
   coerceTimestampMillis,
   isAPIResponseStatus,
   parseOptionalAPIResponse,
+  parseOptionalAPIResponseOrAllowedStatus,
   parseOptionalAPIResponseOrNull,
 } from './responseUtils';
 
@@ -48,20 +50,9 @@ export class MonitoringAPI {
       method: 'DELETE',
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        return {};
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
-
-    if (isAPIResponseStatus(response, 204)) {
-      return {};
-    }
-
-    return parseOptionalAPIResponse(
+    return parseOptionalAPIResponseOrAllowedStatus(
       response,
+      [204, 404],
       {},
       `Failed with status ${response.status}`,
       'Failed to parse delete container runtime response',
@@ -75,14 +66,7 @@ export class MonitoringAPI {
       method: 'PUT',
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        // Resource already gone; treat as success
-        return;
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
+    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
   }
 
   static async markDockerRuntimePendingUninstall(agentId: string): Promise<void> {
@@ -92,14 +76,7 @@ export class MonitoringAPI {
       method: 'PUT',
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        // Resource already gone; treat as success
-        return;
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
+    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
   }
 
   static async setDockerRuntimeDisplayName(agentId: string, displayName: string): Promise<void> {
@@ -141,20 +118,9 @@ export class MonitoringAPI {
       method: 'DELETE',
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        return {};
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
-
-    if (isAPIResponseStatus(response, 204)) {
-      return {};
-    }
-
-    return parseOptionalAPIResponse(
+    return parseOptionalAPIResponseOrAllowedStatus(
       response,
+      [204, 404],
       {},
       `Failed with status ${response.status}`,
       'Failed to parse delete kubernetes cluster response',
@@ -168,13 +134,7 @@ export class MonitoringAPI {
       method: 'PUT',
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        return;
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
+    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
   }
 
   static async markKubernetesClusterPendingUninstall(clusterId: string): Promise<void> {
@@ -184,13 +144,7 @@ export class MonitoringAPI {
       method: 'PUT',
     });
 
-    if (!response.ok) {
-      if (isAPIResponseStatus(response, 404)) {
-        return;
-      }
-
-      await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-    }
+    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
   }
 
   static async setKubernetesClusterDisplayName(

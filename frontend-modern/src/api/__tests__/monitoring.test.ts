@@ -62,12 +62,13 @@ describe('MonitoringAPI', () => {
     it('deletes docker runtime', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true, status: 204 } as unknown as Response);
 
-      await MonitoringAPI.deleteDockerRuntime('agent-1');
+      const result = await MonitoringAPI.deleteDockerRuntime('agent-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/docker/runtimes/agent-1',
         expect.objectContaining({ method: 'DELETE' }),
       );
+      expect(result).toEqual({});
     });
 
     it('handles hide option', async () => {
@@ -99,6 +100,16 @@ describe('MonitoringAPI', () => {
 
       expect(result).toEqual({});
     });
+
+    it('returns parsed delete payloads when present', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, message: 'queued' }), { status: 200 }),
+      );
+
+      const result = await MonitoringAPI.deleteDockerRuntime('agent-1');
+
+      expect(result).toEqual({ success: true, message: 'queued' });
+    });
   });
 
   describe('unhideDockerRuntime', () => {
@@ -112,6 +123,12 @@ describe('MonitoringAPI', () => {
         expect.objectContaining({ method: 'PUT' }),
       );
     });
+
+    it('treats 404 as idempotent success', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+
+      await expect(MonitoringAPI.unhideDockerRuntime('agent-1')).resolves.toBeUndefined();
+    });
   });
 
   describe('markDockerRuntimePendingUninstall', () => {
@@ -124,6 +141,12 @@ describe('MonitoringAPI', () => {
         '/api/agents/docker/runtimes/agent-1/pending-uninstall',
         expect.objectContaining({ method: 'PUT' }),
       );
+    });
+
+    it('treats 404 as idempotent success', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+
+      await expect(MonitoringAPI.markDockerRuntimePendingUninstall('agent-1')).resolves.toBeUndefined();
     });
   });
 
@@ -282,12 +305,21 @@ describe('MonitoringAPI', () => {
     it('deletes kubernetes cluster', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true, status: 204 } as unknown as Response);
 
-      await MonitoringAPI.deleteKubernetesCluster('cluster-1');
+      const result = await MonitoringAPI.deleteKubernetesCluster('cluster-1');
 
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/agents/kubernetes/clusters/cluster-1',
         expect.objectContaining({ method: 'DELETE' }),
       );
+      expect(result).toEqual({});
+    });
+
+    it('returns empty object on 404', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+
+      const result = await MonitoringAPI.deleteKubernetesCluster('cluster-1');
+
+      expect(result).toEqual({});
     });
   });
 
@@ -301,6 +333,33 @@ describe('MonitoringAPI', () => {
         '/api/agents/kubernetes/clusters/cluster-1/unhide',
         expect.objectContaining({ method: 'PUT' }),
       );
+    });
+
+    it('treats 404 as idempotent success', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+
+      await expect(MonitoringAPI.unhideKubernetesCluster('cluster-1')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('markKubernetesClusterPendingUninstall', () => {
+    it('marks kubernetes cluster for uninstall', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
+
+      await MonitoringAPI.markKubernetesClusterPendingUninstall('cluster-1');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/kubernetes/clusters/cluster-1/pending-uninstall',
+        expect.objectContaining({ method: 'PUT' }),
+      );
+    });
+
+    it('treats 404 as idempotent success', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+
+      await expect(
+        MonitoringAPI.markKubernetesClusterPendingUninstall('cluster-1'),
+      ).resolves.toBeUndefined();
     });
   });
 });

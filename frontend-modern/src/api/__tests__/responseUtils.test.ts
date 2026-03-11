@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   assertAPIResponseOK,
+  assertAPIResponseOKOrAllowedStatus,
   arrayOrUndefined,
   arrayOrEmpty,
   apiErrorStatus,
@@ -14,6 +15,7 @@ import {
   parseJSONSafe,
   parseJSONTextSafe,
   parseOptionalAPIResponse,
+  parseOptionalAPIResponseOrAllowedStatus,
   parseOptionalAPIResponseOrNull,
   parseOptionalJSON,
   parseRequiredAPIResponse,
@@ -107,6 +109,27 @@ describe('assertAPIResponseOK', () => {
   });
 });
 
+describe('assertAPIResponseOKOrAllowedStatus', () => {
+  it('returns for ok responses and allowed statuses', async () => {
+    await expect(
+      assertAPIResponseOKOrAllowedStatus(new Response(null, { status: 204 }), 204, 'Fallback'),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertAPIResponseOKOrAllowedStatus(new Response('', { status: 404 }), [204, 404], 'Fallback'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('throws the canonical parsed error for disallowed non-ok responses', async () => {
+    await expect(
+      assertAPIResponseOKOrAllowedStatus(
+        new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 }),
+        404,
+        'Fallback',
+      ),
+    ).rejects.toThrow('Bad request');
+  });
+});
+
 describe('parseRequiredAPIResponse', () => {
   it('asserts ok and parses valid JSON payloads', async () => {
     const response = new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -136,6 +159,35 @@ describe('parseOptionalAPIResponse', () => {
     await expect(
       parseOptionalAPIResponse(response, [], 'Request failed', 'Parse failed'),
     ).rejects.toThrow('Request failed');
+  });
+});
+
+describe('parseOptionalAPIResponseOrAllowedStatus', () => {
+  it('returns the empty value for allowed statuses', async () => {
+    await expect(
+      parseOptionalAPIResponseOrAllowedStatus(
+        new Response(null, { status: 204 }),
+        [204, 404],
+        {},
+        'Request failed',
+        'Parse failed',
+      ),
+    ).resolves.toEqual({});
+    await expect(
+      parseOptionalAPIResponseOrAllowedStatus(new Response('', { status: 404 }), [204, 404], {}, 'Request failed', 'Parse failed'),
+    ).resolves.toEqual({});
+  });
+
+  it('parses valid JSON payloads for non-allowed statuses', async () => {
+    await expect(
+      parseOptionalAPIResponseOrAllowedStatus(
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        [204, 404],
+        {},
+        'Request failed',
+        'Parse failed',
+      ),
+    ).resolves.toEqual({ ok: true });
   });
 });
 

@@ -59,6 +59,26 @@ export async function assertAPIResponseOK(response: Response, fallback: string):
   throw new Error(await readAPIErrorMessage(response, fallback));
 }
 
+function responseHasAllowedStatus(
+  response: APIResponseLike | null | undefined,
+  allowedStatuses: number | number[],
+): boolean {
+  const statuses = Array.isArray(allowedStatuses) ? allowedStatuses : [allowedStatuses];
+  return statuses.some((status) => isAPIResponseStatus(response, status));
+}
+
+export async function assertAPIResponseOKOrAllowedStatus(
+  response: Response,
+  allowedStatuses: number | number[],
+  fallback: string,
+): Promise<void> {
+  if (responseHasAllowedStatus(response, allowedStatuses)) {
+    return;
+  }
+
+  await assertAPIResponseOK(response, fallback);
+}
+
 export async function parseRequiredAPIResponse<T>(
   response: Response,
   requestErrorMessage: string,
@@ -76,6 +96,20 @@ export async function parseOptionalAPIResponse<T>(
 ): Promise<T> {
   await assertAPIResponseOK(response, requestErrorMessage);
   return parseOptionalJSON(response, emptyValue, parseErrorMessage);
+}
+
+export async function parseOptionalAPIResponseOrAllowedStatus<T>(
+  response: Response,
+  allowedStatuses: number | number[],
+  emptyValue: T,
+  requestErrorMessage: string,
+  parseErrorMessage: string,
+): Promise<T> {
+  if (responseHasAllowedStatus(response, allowedStatuses)) {
+    return emptyValue;
+  }
+
+  return parseOptionalAPIResponse(response, emptyValue, requestErrorMessage, parseErrorMessage);
 }
 
 export async function parseRequiredAPIResponseOrNull<T>(
