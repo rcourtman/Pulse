@@ -144,7 +144,7 @@ describe('useUnifiedResources', () => {
     await waitForResourceCount(() => result!.resources().length);
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/resources?type=agent%2Cpbs%2Cpmg%2Ck8s-cluster%2Ck8s-node&page=1&limit=100',
+      '/api/resources?type=agent%2Cdocker-host%2Cpbs%2Cpmg%2Ck8s-cluster%2Ck8s-node&page=1&limit=100',
       { cache: 'no-store' },
     );
     const originalResourceRef = result!.resources()[0];

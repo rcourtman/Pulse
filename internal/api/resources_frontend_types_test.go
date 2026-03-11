@@ -12,16 +12,16 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func TestFrontendResourceType(t *testing.T) {
+func TestResourceContractType(t *testing.T) {
 	tests := []struct {
 		name string
 		r    unified.Resource
 		want unified.ResourceType
 	}{
 		{
-			name: "proxmox node becomes node",
+			name: "proxmox node stays agent",
 			r:    unified.Resource{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
-			want: "node",
+			want: "agent",
 		},
 		{
 			name: "docker host becomes docker-host",
@@ -53,9 +53,9 @@ func TestFrontendResourceType(t *testing.T) {
 			want: "app-container",
 		},
 		{
-			name: "ceph becomes pool",
+			name: "ceph stays ceph",
 			r:    unified.Resource{Type: unified.ResourceTypeCeph},
-			want: "pool",
+			want: unified.ResourceTypeCeph,
 		},
 		{
 			name: "vm stays vm",
@@ -83,27 +83,27 @@ func TestFrontendResourceType(t *testing.T) {
 			want: unified.ResourceTypePod,
 		},
 		{
-			name: "proxmox node with both proxmox and docker prefers node",
+			name: "proxmox node with both proxmox and docker stays agent",
 			r: unified.Resource{
 				Type:    unified.ResourceTypeAgent,
 				Proxmox: &unified.ProxmoxData{NodeName: "pve1"},
 				Docker:  &unified.DockerData{Hostname: "dock1"},
 			},
-			want: "node",
+			want: "agent",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := frontendResourceType(tt.r)
+			got := resourceContractType(tt.r)
 			if got != tt.want {
-				t.Fatalf("frontendResourceType() = %q, want %q", got, tt.want)
+				t.Fatalf("resourceContractType() = %q, want %q", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestApplyFrontendTypes(t *testing.T) {
+func TestApplyResourceContractTypes(t *testing.T) {
 	resources := []unified.Resource{
 		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
 		{Type: unified.ResourceTypeAgent, Docker: &unified.DockerData{Hostname: "dock1"}},
@@ -113,9 +113,9 @@ func TestApplyFrontendTypes(t *testing.T) {
 		{Type: unified.ResourceTypeSystemContainer},
 	}
 
-	applyFrontendTypes(resources)
+	applyResourceContractTypes(resources)
 
-	expected := []unified.ResourceType{"node", "docker-host", "agent", "agent", "vm", "system-container"}
+	expected := []unified.ResourceType{"agent", "docker-host", "agent", "agent", "vm", "system-container"}
 	for i, want := range expected {
 		if resources[i].Type != want {
 			t.Fatalf("resources[%d].Type = %q, want %q", i, resources[i].Type, want)
@@ -123,7 +123,7 @@ func TestApplyFrontendTypes(t *testing.T) {
 	}
 }
 
-func TestComputeFrontendByType(t *testing.T) {
+func TestComputeResourceContractByType(t *testing.T) {
 	resources := []unified.Resource{
 		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve1"}},
 		{Type: unified.ResourceTypeAgent, Proxmox: &unified.ProxmoxData{NodeName: "pve2"}},
@@ -135,16 +135,13 @@ func TestComputeFrontendByType(t *testing.T) {
 		{Type: unified.ResourceTypeSystemContainer},
 	}
 
-	byType := computeFrontendByType(resources)
+	byType := computeResourceContractByType(resources)
 
-	if byType["node"] != 2 {
-		t.Fatalf("byType[node] = %d, want 2", byType["node"])
+	if byType["agent"] != 4 {
+		t.Fatalf("byType[agent] = %d, want 4", byType["agent"])
 	}
 	if byType["docker-host"] != 1 {
 		t.Fatalf("byType[docker-host] = %d, want 1", byType["docker-host"])
-	}
-	if byType["agent"] != 2 {
-		t.Fatalf("byType[agent] = %d, want 2", byType["agent"])
 	}
 	if byType[unified.ResourceTypeVM] != 2 {
 		t.Fatalf("byType[vm] = %d, want 2", byType[unified.ResourceTypeVM])
@@ -162,7 +159,7 @@ func TestComputeFrontendByType(t *testing.T) {
 	}
 	for i, want := range originalTypes {
 		if resources[i].Type != want {
-			t.Fatalf("computeFrontendByType mutated input: resources[%d].Type = %q, want %q", i, resources[i].Type, want)
+			t.Fatalf("computeResourceContractByType mutated input: resources[%d].Type = %q, want %q", i, resources[i].Type, want)
 		}
 	}
 }
@@ -175,7 +172,7 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 	}{
 		{name: "node", input: "node", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
 		{name: "nodes", input: "nodes", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
-		{name: "docker-host", input: "docker-host", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
+		{name: "docker-host", input: "docker-host", want: map[unified.ResourceType]struct{}{"docker-host": {}}},
 		{name: "agent", input: "agent", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
 		{name: "agents", input: "agents", want: map[unified.ResourceType]struct{}{unified.ResourceTypeAgent: {}}},
 		{name: "unsupported host ignored by parser", input: "host", want: map[unified.ResourceType]struct{}{}},
@@ -268,14 +265,10 @@ func TestUnsupportedResourceTypeFilterTokensRejectsLegacyAliases(t *testing.T) {
 	}
 }
 
-// TestResourceListProxmoxNodeReturnsFrontendNodeType verifies that Proxmox nodes are
-// returned with type "node" (not "agent") from the REST API, matching what the WebSocket
-// path produces. This is the regression test for Known Issue #4.
-//
-// The fixture includes mixed host-family resources (Proxmox node + agent host + Docker host)
-// to verify that ?type=node returns all three (because node/agent/docker-host resolve to the same
-// backend type) and that applyFrontendTypes differentiates them correctly.
-func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
+// TestResourceListUsesCanonicalContractTypes verifies that the REST API returns
+// canonical resource types, even when legacy filter aliases are accepted at the
+// request boundary.
+func TestResourceListUsesCanonicalContractTypes(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		Nodes: []models.Node{
@@ -344,8 +337,8 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	h := NewResourceHandlers(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
 
-	// Test 1: ?type=node resolves to ResourceTypeAgent — returns all host-family resources.
-	// The frontend then uses byType('node') client-side to select only Proxmox nodes.
+	// Test 1: legacy ?type=node is accepted at the request boundary but resolves
+	// to the canonical agent contract.
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=node", nil)
 	h.HandleListResources(rec, req)
@@ -359,25 +352,17 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	// All three host-family resources are returned because "node", "agent", and
-	// "docker-host" are aliases for the same backend type (ResourceTypeAgent).
-	if len(resp.Data) != 3 {
-		t.Fatalf("expected 3 host-family resources for ?type=node, got %d", len(resp.Data))
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 canonical agent resources for ?type=node, got %d", len(resp.Data))
 	}
 
-	// Verify each resource got the correct frontend type.
+	// Verify each resource got the canonical contract type.
 	typeSet := make(map[unified.ResourceType]int)
 	for _, r := range resp.Data {
 		typeSet[r.Type]++
 	}
-	if typeSet["node"] != 1 {
-		t.Fatalf("expected 1 'node' in ?type=node response, got %d (types=%v)", typeSet["node"], typeSet)
-	}
-	if typeSet["agent"] != 1 {
-		t.Fatalf("expected 1 'agent' in ?type=node response, got %d (types=%v)", typeSet["agent"], typeSet)
-	}
-	if typeSet["docker-host"] != 1 {
-		t.Fatalf("expected 1 'docker-host' in ?type=node response, got %d (types=%v)", typeSet["docker-host"], typeSet)
+	if typeSet["agent"] != 2 {
+		t.Fatalf("expected 2 'agent' resources in ?type=node response, got %d (types=%v)", typeSet["agent"], typeSet)
 	}
 
 	// Agent-backed host resources should publish agent metrics targets.
@@ -398,37 +383,16 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("agent metrics target resourceType = %q, want %q", foundAgentHost.MetricsTarget.ResourceType, "agent")
 	}
 
-	var foundDockerHost *unified.Resource
-	for i := range resp.Data {
-		if resp.Data[i].Type == "docker-host" {
-			foundDockerHost = &resp.Data[i]
-			break
-		}
-	}
-	if foundDockerHost == nil {
-		t.Fatalf("expected docker-host resource in response")
-	}
-	if foundDockerHost.MetricsTarget == nil {
-		t.Fatalf("expected metrics target on docker-host resource")
-	}
-	if foundDockerHost.MetricsTarget.ResourceType != "docker-host" {
-		t.Fatalf(
-			"docker-host metrics target resourceType = %q, want %q",
-			foundDockerHost.MetricsTarget.ResourceType,
-			"docker-host",
-		)
-	}
-
-	// Find the Proxmox node resource specifically and verify its metadata.
+	// Find the Proxmox-backed infrastructure resource specifically and verify its metadata.
 	var foundNode *unified.Resource
 	for i := range resp.Data {
-		if resp.Data[i].Type == "node" {
+		if resp.Data[i].Type == "agent" && resp.Data[i].Proxmox != nil {
 			foundNode = &resp.Data[i]
 			break
 		}
 	}
 	if foundNode == nil {
-		t.Fatalf("no resource with type 'node' found")
+		t.Fatalf("no proxmox-backed agent resource found")
 	}
 	if foundNode.Proxmox == nil {
 		t.Fatalf("expected proxmox metadata on node resource")
@@ -437,18 +401,38 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("proxmox.nodeName = %q, want pve1", foundNode.Proxmox.NodeName)
 	}
 
-	// Test 2: Verify ByType aggregation uses frontend type names.
-	if resp.Aggregations.ByType["node"] != 1 {
-		t.Fatalf("aggregations.byType[node] = %d, want 1 (got byType=%v)", resp.Aggregations.ByType["node"], resp.Aggregations.ByType)
+	// Test 2: canonical docker-host filter only returns docker-backed runtime resources.
+	dockerRec := httptest.NewRecorder()
+	dockerReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=docker-host", nil)
+	h.HandleListResources(dockerRec, dockerReq)
+
+	if dockerRec.Code != http.StatusOK {
+		t.Fatalf("docker-host status = %d, body=%s", dockerRec.Code, dockerRec.Body.String())
 	}
-	if resp.Aggregations.ByType["agent"] != 1 {
-		t.Fatalf("aggregations.byType[agent] = %d, want 1 (got byType=%v)", resp.Aggregations.ByType["agent"], resp.Aggregations.ByType)
+
+	var dockerResp ResourcesResponse
+	if err := json.NewDecoder(dockerRec.Body).Decode(&dockerResp); err != nil {
+		t.Fatalf("decode docker-host response: %v", err)
+	}
+	if len(dockerResp.Data) != 1 {
+		t.Fatalf("expected 1 docker-host resource, got %d", len(dockerResp.Data))
+	}
+	if dockerResp.Data[0].Type != "docker-host" {
+		t.Fatalf("docker-host response type = %q, want docker-host", dockerResp.Data[0].Type)
+	}
+	if dockerResp.Data[0].MetricsTarget == nil || dockerResp.Data[0].MetricsTarget.ResourceType != "docker-host" {
+		t.Fatalf("expected docker-host metrics target, got %+v", dockerResp.Data[0].MetricsTarget)
+	}
+
+	// Test 3: Verify ByType aggregation uses canonical contract names.
+	if resp.Aggregations.ByType["agent"] != 2 {
+		t.Fatalf("aggregations.byType[agent] = %d, want 2 (got byType=%v)", resp.Aggregations.ByType["agent"], resp.Aggregations.ByType)
 	}
 	if resp.Aggregations.ByType["docker-host"] != 1 {
 		t.Fatalf("aggregations.byType[docker-host] = %d, want 1 (got byType=%v)", resp.Aggregations.ByType["docker-host"], resp.Aggregations.ByType)
 	}
 
-	// Test 3: Unfiltered response should include all resources with correct frontend types.
+	// Test 4: Unfiltered response should include all resources with canonical contract types.
 	rec2 := httptest.NewRecorder()
 	req2 := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
 	h.HandleListResources(rec2, req2)
@@ -462,9 +446,9 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("decode unfiltered response: %v", err)
 	}
 
-	// 5 resources: node + agent + docker-host + vm + system-container
+	// 5 resources: proxmox agent + agent host + docker-host + vm + system-container
 	if len(resp2.Data) != 5 {
-		t.Fatalf("expected 5 resources (node+agent+docker-host+vm+ct), got %d", len(resp2.Data))
+		t.Fatalf("expected 5 resources (agent+agent+docker-host+vm+ct), got %d", len(resp2.Data))
 	}
 
 	typeSet2 := make(map[unified.ResourceType]int)
@@ -472,11 +456,8 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		typeSet2[r.Type]++
 	}
 
-	if typeSet2["node"] != 1 {
-		t.Fatalf("expected 1 node in unfiltered response, got %d (types=%v)", typeSet2["node"], typeSet2)
-	}
-	if typeSet2["agent"] != 1 {
-		t.Fatalf("expected 1 agent in unfiltered response, got %d (types=%v)", typeSet2["agent"], typeSet2)
+	if typeSet2["agent"] != 2 {
+		t.Fatalf("expected 2 agent resources in unfiltered response, got %d (types=%v)", typeSet2["agent"], typeSet2)
 	}
 	if typeSet2["docker-host"] != 1 {
 		t.Fatalf("expected 1 docker-host in unfiltered response, got %d (types=%v)", typeSet2["docker-host"], typeSet2)
@@ -512,9 +493,9 @@ func TestResourceListProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	}
 }
 
-// TestResourceGetProxmoxNodeReturnsFrontendNodeType verifies that GET /api/resources/{id}
-// also returns type "node" for a Proxmox node resource.
-func TestResourceGetProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
+// TestResourceGetUsesCanonicalContractType verifies that GET /api/resources/{id}
+// returns the canonical resource contract type.
+func TestResourceGetUsesCanonicalContractType(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
 		Nodes: []models.Node{
@@ -549,10 +530,8 @@ func TestResourceGetProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
-	// "node" alias maps to ResourceTypeAgent — returns all host-family resources.
-	// We only have one Proxmox node in this fixture.
 	if len(listResp.Data) != 1 {
-		t.Fatalf("expected 1 host-family resource, got %d", len(listResp.Data))
+		t.Fatalf("expected 1 canonical agent resource, got %d", len(listResp.Data))
 	}
 
 	resourceID := listResp.Data[0].ID
@@ -571,8 +550,8 @@ func TestResourceGetProxmoxNodeReturnsFrontendNodeType(t *testing.T) {
 		t.Fatalf("decode resource: %v", err)
 	}
 
-	if resource.Type != "node" {
-		t.Fatalf("GET resource type = %q, want \"node\"", resource.Type)
+	if resource.Type != "agent" {
+		t.Fatalf("GET resource type = %q, want \"agent\"", resource.Type)
 	}
 	if resource.Proxmox == nil || resource.Proxmox.NodeName != "pve1" {
 		t.Fatalf("expected proxmox.nodeName=pve1, got %+v", resource.Proxmox)

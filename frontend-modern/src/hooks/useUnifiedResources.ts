@@ -22,7 +22,7 @@ import {
 } from '@/utils/sourcePlatforms';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
-const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,pbs,pmg,k8s-cluster,k8s-node';
+const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=agent,docker-host,pbs,pmg,k8s-cluster,k8s-node';
 const STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY =
   'type=storage,pbs,pmg,vm,system-container,pod,agent,k8s-cluster,k8s-node,physical_disk,ceph';
 const UNIFIED_RESOURCES_PAGE_LIMIT = 100;

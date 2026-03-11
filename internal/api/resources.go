@@ -138,11 +138,11 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 
 	// Build aggregations: use registry.Stats() for Total/ByStatus/BySource (unfiltered,
 	// no conversion needed), but recompute ByType from the full registry list so keys
-	// match frontend expectations (for example "node"/"agent").
+	// match the canonical REST resource contract.
 	stats := registry.Stats()
-	stats.ByType = computeFrontendByType(registry.List())
+	stats.ByType = computeResourceContractByType(registry.List())
 
-	applyFrontendTypes(paged)
+	applyResourceContractTypes(paged)
 
 	response := ResourcesResponse{
 		Data:         paged,
@@ -269,7 +269,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	attachDiscoveryTarget(&resourceCopy)
 	attachMetricsTarget(&resourceCopy, registry)
 	attachCanonicalIdentity(&resourceCopy)
-	resourceCopy.Type = frontendResourceType(resourceCopy)
+	resourceCopy.Type = resourceContractType(resourceCopy)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resourceCopy)
@@ -324,7 +324,7 @@ func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Requ
 	}
 
 	children := registry.GetChildren(path)
-	applyFrontendTypes(children)
+	applyResourceContractTypes(children)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"data":  children,
@@ -380,7 +380,7 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := registry.Stats()
-	stats.ByType = computeFrontendByType(registry.List())
+	stats.ByType = computeResourceContractByType(registry.List())
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -900,7 +900,7 @@ func buildStorageSummaryResponse(resources []unified.Resource) StorageSummaryRes
 			platform = "unknown"
 		}
 		response.ByPlatform[platform]++
-		response.ByResourceType[string(frontendResourceType(resource))]++
+		response.ByResourceType[string(resourceContractType(resource))]++
 
 		if storageSummaryProtectionReduced(resource) {
 			response.ProtectionReducedCount++
@@ -1026,7 +1026,7 @@ func buildStorageIncidentsResponse(resources []unified.Resource) StorageIncident
 func buildStorageSummaryIncident(resource unified.Resource) StorageSummaryIncident {
 	return StorageSummaryIncident{
 		ResourceID:            resource.ID,
-		ResourceType:          string(frontendResourceType(resource)),
+		ResourceType:          string(resourceContractType(resource)),
 		Name:                  resource.Name,
 		ParentName:            resource.ParentName,
 		Platform:              storageSummaryPlatform(resource),
@@ -1174,7 +1174,7 @@ func storageSummaryTopology(resource unified.Resource) string {
 			return "nas"
 		}
 	}
-	return string(frontendResourceType(resource))
+	return string(resourceContractType(resource))
 }
 
 func storageSummaryProtectionReduced(resource unified.Resource) bool {
@@ -1277,7 +1277,7 @@ func applyFilters(resources []unified.Resource, filters listFilters) []unified.R
 	out := make([]unified.Resource, 0, len(resources))
 	for _, r := range resources {
 		if len(filters.types) > 0 {
-			if _, ok := filters.types[r.Type]; !ok {
+			if _, ok := filters.types[resourceContractType(r)]; !ok {
 				continue
 			}
 		}
@@ -1430,9 +1430,10 @@ func isSupportedResourceTypeFilterToken(token string) bool {
 
 func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 	switch token {
-	case "agent", "agents", "node", "nodes", "docker-host":
-		// These API facets all resolve to the same canonical host-family type.
+	case "agent", "agents", "node", "nodes":
 		return []unified.ResourceType{unified.ResourceTypeAgent}
+	case "docker-host":
+		return []unified.ResourceType{"docker-host"}
 	case "vm", "vms":
 		return []unified.ResourceType{unified.ResourceTypeVM}
 	case "system-container", "system-containers", "oci-container":
@@ -1456,7 +1457,6 @@ func resourceTypeFilterAdapter(token string) []unified.ResourceType {
 	case "pmg":
 		return []unified.ResourceType{unified.ResourceTypePMG}
 	case "ceph", "pool":
-		// "pool" is the frontend name for Ceph resources.
 		return []unified.ResourceType{unified.ResourceTypeCeph}
 	case "physical_disk", "physical-disk", "physicaldisk", "disk":
 		return []unified.ResourceType{unified.ResourceTypePhysicalDisk}
@@ -1555,16 +1555,13 @@ func attachCanonicalIdentity(resource *unified.Resource) {
 	unified.RefreshCanonicalIdentity(resource)
 }
 
-// frontendResourceType maps backend ResourceType values to API/frontend type
-// strings while preserving canonical v6 workload naming.
-func frontendResourceType(r unified.Resource) unified.ResourceType {
+// resourceContractType maps internal unified resource shapes onto the canonical
+// REST resource-type contract without exposing legacy aliases.
+func resourceContractType(r unified.Resource) unified.ResourceType {
 	canonicalType := unified.CanonicalResourceType(r.Type)
 	switch canonicalType {
 	case unified.ResourceTypeAgent:
-		if r.Proxmox != nil {
-			return "node"
-		}
-		if r.Agent != nil {
+		if r.Proxmox != nil || r.Agent != nil {
 			return "agent"
 		}
 		if r.Docker != nil {
@@ -1575,28 +1572,26 @@ func frontendResourceType(r unified.Resource) unified.ResourceType {
 		return "system-container"
 	case unified.ResourceTypeAppContainer:
 		return "app-container"
-	case unified.ResourceTypeCeph:
-		return "pool"
 	default:
 		// Other resource types already match their canonical API names.
 		return canonicalType
 	}
 }
 
-// applyFrontendTypes rewrites Type fields on the response slice so the REST API
-// returns the same type strings that the WebSocket path produces.
-func applyFrontendTypes(resources []unified.Resource) {
+// applyResourceContractTypes rewrites Type fields on the response slice so the
+// REST API exposes the canonical resource-type contract.
+func applyResourceContractTypes(resources []unified.Resource) {
 	for i := range resources {
-		resources[i].Type = frontendResourceType(resources[i])
+		resources[i].Type = resourceContractType(resources[i])
 	}
 }
 
-// computeFrontendByType builds the ByType aggregation using frontendResourceType()
-// so the keys match frontend expectations. Does not mutate the input slice.
-func computeFrontendByType(resources []unified.Resource) map[unified.ResourceType]int {
+// computeResourceContractByType builds the ByType aggregation using the
+// canonical REST resource-type contract. Does not mutate the input slice.
+func computeResourceContractByType(resources []unified.Resource) map[unified.ResourceType]int {
 	m := make(map[unified.ResourceType]int, 8)
 	for _, r := range resources {
-		m[frontendResourceType(r)]++
+		m[resourceContractType(r)]++
 	}
 	return m
 }
