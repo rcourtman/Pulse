@@ -126,6 +126,7 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 		"## Task Completion Protocol",
 		"## Guardrails",
 		"## Boundary Rule",
+		"contract_audit.py --check",
 	})
 }
 
@@ -141,6 +142,7 @@ func TestSubsystemContractsExistWithRequiredSections(t *testing.T) {
 	}
 
 	requiredSections := []string{
+		"## Contract Metadata",
 		"## Purpose",
 		"## Canonical Files",
 		"## Extension Points",
@@ -639,9 +641,12 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"status_audit.py --check",
 		"Running registry audit...",
 		"registry_audit.py --check",
+		"Running contract audit...",
+		"contract_audit.py --check",
 		"Running governance guardrail tests...",
 		"go test ./internal/repoctl -count=1",
 		"canonical_completion_guard_test.py",
+		"contract_audit_test.py",
 		"registry_audit_test.py",
 		"status_audit_test.py",
 		"subsystem_lookup_test.py",
@@ -682,6 +687,16 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"--check",
 	})
 
+	contractAudit := readRepoFile(t, "scripts/release_control/contract_audit.py")
+	assertContainsAll(t, "scripts/release_control/contract_audit.py", contractAudit, []string{
+		"CONTRACTS_DIR",
+		"TEMPLATE_REL",
+		"Contract Metadata",
+		"audit_contract_payload",
+		"contract metadata",
+		"--check",
+	})
+
 	lookup := readRepoFile(t, "scripts/release_control/subsystem_lookup.py")
 	assertContainsAll(t, "scripts/release_control/subsystem_lookup.py", lookup, []string{
 		"lookup_paths",
@@ -708,8 +723,10 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin",
 		"python3 scripts/release_control/status_audit.py --check",
 		"python3 scripts/release_control/registry_audit.py --check",
+		"python3 scripts/release_control/contract_audit.py --check",
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
+		"python3 scripts/release_control/contract_audit_test.py",
 		"python3 scripts/release_control/registry_audit_test.py",
 		"python3 scripts/release_control/status_audit_test.py",
 		"python3 scripts/release_control/subsystem_lookup_test.py",

@@ -1,5 +1,17 @@
 # Performance And Scalability Contract
 
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "performance-and-scalability",
+  "lane": "L10",
+  "contract_file": "docs/release-control/v6/subsystems/performance-and-scalability.md",
+  "status_file": "docs/release-control/v6/status.json",
+  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+}
+```
+
 ## Purpose
 
 Own measurable performance budgets, query-plan guarantees, and hot-path

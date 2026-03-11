@@ -1,5 +1,17 @@
 # Unified Resources Contract
 
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "unified-resources",
+  "lane": "L6",
+  "contract_file": "docs/release-control/v6/subsystems/unified-resources.md",
+  "status_file": "docs/release-control/v6/status.json",
+  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+}
+```
+
 ## Purpose
 
 Own canonical resource identity, type normalization, typed views, and

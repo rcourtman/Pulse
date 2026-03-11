@@ -1,5 +1,17 @@
 # Alerts Contract
 
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "alerts",
+  "lane": "L6",
+  "contract_file": "docs/release-control/v6/subsystems/alerts.md",
+  "status_file": "docs/release-control/v6/status.json",
+  "registry_file": "docs/release-control/v6/subsystems/registry.json"
+}
+```
+
 ## Purpose
 
 Own alert identity, alert specs, evaluation, persistence semantics, and

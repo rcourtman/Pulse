@@ -83,8 +83,14 @@ jobs:
       - name: Run registry audit
         run: python3 scripts/release_control/registry_audit.py --check
 
+      - name: Run contract audit
+        run: python3 scripts/release_control/contract_audit.py --check
+
       - name: Run canonical completion guard unit tests
         run: python3 scripts/release_control/canonical_completion_guard_test.py
+
+      - name: Run contract audit unit tests
+        run: python3 scripts/release_control/contract_audit_test.py
 
       - name: Run registry audit unit tests
         run: python3 scripts/release_control/registry_audit_test.py

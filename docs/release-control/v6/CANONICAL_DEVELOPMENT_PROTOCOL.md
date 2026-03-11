@@ -47,17 +47,21 @@ do not drift into noisy, hand-arranged variants.
 point for validating subsystem ownership, proof routing, registry lane
 bindings, canonical ordering for unordered registry lists, and path-policy
 reachability under first-match precedence.
+`scripts/release_control/contract_audit.py --check` is the machine audit entry
+point for validating structured contract metadata, section presence/order, and
+registry/status linkage for subsystem contracts.
 
 ## Subsystem Contracts
 
 Each major subsystem contract must define:
 
-1. `Purpose`
-2. `Canonical Files`
-3. `Extension Points`
-4. `Forbidden Paths`
-5. `Completion Obligations`
-6. `Current State`
+1. `Contract Metadata`
+2. `Purpose`
+3. `Canonical Files`
+4. `Extension Points`
+5. `Forbidden Paths`
+6. `Completion Obligations`
+7. `Current State`
 
 Current required subsystem contracts:
 
@@ -74,6 +78,8 @@ work is incomplete.
 
 The machine-readable ownership map for those subsystem contracts lives in
 `docs/release-control/v6/subsystems/registry.json`.
+Each contract must also carry structured metadata that binds the markdown file
+to its registry subsystem id and owning lane in `status.json`.
 
 ## Task Completion Protocol
 
