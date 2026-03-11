@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -561,6 +562,67 @@ func TestQueryAllBatch(t *testing.T) {
 		}
 		if got := len(batch["disk-minute"]["smart_temp"]); got != len(singleMinute["smart_temp"]) {
 			t.Fatalf("disk-minute smart_temp points = %d, want %d", got, len(singleMinute["smart_temp"]))
+		}
+	})
+
+	t.Run("chunked resource lists return complete results beyond sqlite parameter threshold", func(t *testing.T) {
+		chunkedStoreDir := t.TempDir()
+		chunkedCfg := DefaultConfig(chunkedStoreDir)
+		chunkedCfg.DBPath = filepath.Join(chunkedStoreDir, "metrics-batch-chunked.db")
+		chunkedCfg.FlushInterval = time.Hour
+
+		chunkedStore, err := NewStore(chunkedCfg)
+		if err != nil {
+			t.Fatalf("NewStore(chunked): %v", err)
+		}
+		defer chunkedStore.Close()
+
+		resourceCount := queryAllBatchChunkSize + 25
+		metricsBatch := make([]WriteMetric, 0, resourceCount*2)
+		resourceIDs := make([]string, 0, resourceCount+3)
+		for i := 0; i < resourceCount; i++ {
+			id := fmt.Sprintf("disk-chunk-%03d", i)
+			resourceIDs = append(resourceIDs, id)
+			metricsBatch = append(metricsBatch,
+				WriteMetric{
+					ResourceType: "disk",
+					ResourceID:   id,
+					MetricType:   "smart_temp",
+					Value:        float64(30 + (i % 10)),
+					Timestamp:    ts,
+					Tier:         TierRaw,
+				},
+				WriteMetric{
+					ResourceType: "disk",
+					ResourceID:   id,
+					MetricType:   "smart_power_on_hours",
+					Value:        float64(1000 + i),
+					Timestamp:    ts.Add(time.Second),
+					Tier:         TierRaw,
+				},
+			)
+		}
+		chunkedStore.WriteBatchSync(metricsBatch)
+
+		// Add duplicates spanning chunk boundaries to verify dedup remains correct.
+		resourceIDs = append(resourceIDs, "disk-chunk-000", fmt.Sprintf("disk-chunk-%03d", queryAllBatchChunkSize-1), fmt.Sprintf("disk-chunk-%03d", resourceCount-1))
+
+		result, err := chunkedStore.QueryAllBatch("disk", resourceIDs, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch(chunked): %v", err)
+		}
+		if len(result) != resourceCount {
+			t.Fatalf("expected %d unique chunked resources, got %d", resourceCount, len(result))
+		}
+
+		for i := 0; i < resourceCount; i++ {
+			id := fmt.Sprintf("disk-chunk-%03d", i)
+			if got := len(result[id]["smart_temp"]); got != 1 {
+				t.Fatalf("%s smart_temp: expected 1 point, got %d", id, got)
+			}
+			if got := len(result[id]["smart_power_on_hours"]); got != 1 {
+				t.Fatalf("%s smart_power_on_hours: expected 1 point, got %d", id, got)
+			}
 		}
 	})
 }
