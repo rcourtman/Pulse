@@ -85,8 +85,11 @@ For runtime subsystem changes, the same commit must now include:
 1. the matching subsystem contract update
 2. at least one matching verification artifact update
 
-Verification artifacts may be subsystem guardrail tests, contract tests,
-benchmark/SLO tests, or subsystem-owned test/spec files.
+Verification artifacts are subsystem-specific. The allowed proof classes are
+defined in `docs/release-control/v6/subsystems/registry.json` and may include
+explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,
+approved test-prefix matches, or same-subsystem tests only when the registry
+explicitly allows them.
 
 ## Guardrails
 

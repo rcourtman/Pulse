@@ -21,7 +21,17 @@ SUBSYSTEM_REGISTRY = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems
 def load_subsystem_rules() -> List[dict]:
     with SUBSYSTEM_REGISTRY.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
-    return list(payload.get("subsystems", []))
+    rules = list(payload.get("subsystems", []))
+    for rule in rules:
+        verification = rule.get("verification")
+        if not isinstance(verification, dict):
+            raise ValueError(f"subsystem {rule.get('id')} missing verification policy")
+        for field in ("allow_same_subsystem_tests", "test_prefixes", "exact_files"):
+            if field not in verification:
+                raise ValueError(
+                    f"subsystem {rule.get('id')} verification policy missing {field}"
+                )
+    return rules
 
 IGNORED_PREFIXES: tuple[str, ...] = (
     "docs/release-control/v6/",
@@ -81,7 +91,7 @@ def infer_impacted_subsystems(staged_files: Sequence[str]) -> Dict[str, dict]:
                     "id": str(rule["id"]),
                     "contract": str(rule["contract"]),
                     "touched_runtime_files": [],
-                    "guardrail_files": list(rule.get("guardrail_files", [])),
+                    "verification": dict(rule.get("verification", {})),
                 },
             )["touched_runtime_files"].append(path)
 
@@ -89,15 +99,21 @@ def infer_impacted_subsystems(staged_files: Sequence[str]) -> Dict[str, dict]:
 
 
 def staged_verification_files_for_subsystem(rule: dict, staged_files: Sequence[str]) -> List[str]:
-    guardrail_files = set(rule.get("guardrail_files", []))
+    verification = dict(rule.get("verification", {}))
+    exact_files = set(verification.get("exact_files", []))
+    test_prefixes = tuple(verification.get("test_prefixes", []))
+    allow_same_subsystem_tests = bool(verification.get("allow_same_subsystem_tests", False))
     matches: List[str] = []
     for path in staged_files:
-        if path in guardrail_files:
+        if path in exact_files:
             matches.append(path)
             continue
         if not is_test_or_fixture(path):
             continue
-        if subsystem_matches_path(rule, path):
+        if any(path.startswith(prefix) for prefix in test_prefixes):
+            matches.append(path)
+            continue
+        if allow_same_subsystem_tests and subsystem_matches_path(rule, path):
             matches.append(path)
     return sorted(set(matches))
 
@@ -120,10 +136,20 @@ def format_missing_requirements(
         lines.append(f"- subsystem {subsystem_id}: missing verification artifact")
         for path in sorted(data["touched_runtime_files"]):
             lines.append(f"  touched by {path}")
-        if data["guardrail_files"]:
-            lines.append("  acceptable guardrail files include:")
-            for path in sorted(data["guardrail_files"]):
+        verification = dict(data.get("verification", {}))
+        exact_files = sorted(verification.get("exact_files", []))
+        test_prefixes = sorted(verification.get("test_prefixes", []))
+        allow_same_subsystem_tests = bool(verification.get("allow_same_subsystem_tests", False))
+        if exact_files:
+            lines.append("  acceptable exact proof files include:")
+            for path in exact_files:
                 lines.append(f"    {path}")
+        if test_prefixes:
+            lines.append("  acceptable staged test prefixes include:")
+            for prefix in test_prefixes:
+                lines.append(f"    {prefix}")
+        if allow_same_subsystem_tests:
+            lines.append("  same-subsystem test/spec files are also accepted")
 
     lines.extend(
         [
@@ -131,9 +157,8 @@ def format_missing_requirements(
             "Rule:",
             "If a canonical subsystem changes, its contract under",
             "`docs/release-control/v6/subsystems/` must be updated in the same commit.",
-            "Runtime subsystem changes must also stage at least one matching",
-            "verification artifact: a subsystem guardrail, contract test,",
-            "benchmark/SLO test, or subsystem-owned test/spec file.",
+            "Runtime subsystem changes must also stage at least one verification",
+            "artifact allowed by that subsystem's registry policy.",
         ]
     )
     return "\n".join(lines)

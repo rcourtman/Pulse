@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "subsystems": [
     {
       "id": "alerts",
@@ -13,11 +13,15 @@
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx"
       ],
-      "guardrail_files": [
-        "internal/alerts/migration_characterization_test.go",
-        "internal/alerts/specs/evaluator_test.go",
-        "internal/alerts/specs/types_test.go"
-      ]
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/alerts/migration_characterization_test.go",
+          "internal/alerts/specs/evaluator_test.go",
+          "internal/alerts/specs/types_test.go"
+        ]
+      }
     },
     {
       "id": "monitoring",
@@ -27,9 +31,13 @@
         "internal/monitoring/"
       ],
       "owned_files": [],
-      "guardrail_files": [
-        "internal/unifiedresources/code_standards_test.go"
-      ]
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/unifiedresources/code_standards_test.go"
+        ]
+      }
     },
     {
       "id": "unified-resources",
@@ -46,10 +54,14 @@
         "frontend-modern/src/hooks/useDashboardTrends.ts",
         "frontend-modern/src/routing/resourceLinks.ts"
       ],
-      "guardrail_files": [
-        "internal/unifiedresources/code_standards_test.go",
-        "frontend-modern/src/stores/__tests__/websocket-unified.test.ts"
-      ]
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/unifiedresources/code_standards_test.go",
+          "frontend-modern/src/stores/__tests__/websocket-unified.test.ts"
+        ]
+      }
     },
     {
       "id": "cloud-paid",
@@ -65,10 +77,14 @@
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx"
       ],
-      "guardrail_files": [
-        "pkg/licensing/grant_claims_contract_test.go",
-        "internal/api/contract_test.go"
-      ]
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "pkg/licensing/grant_claims_contract_test.go",
+          "internal/api/contract_test.go"
+        ]
+      }
     },
     {
       "id": "api-contracts",
@@ -81,9 +97,15 @@
       "owned_files": [
         "frontend-modern/src/types/api.ts"
       ],
-      "guardrail_files": [
-        "internal/api/contract_test.go"
-      ]
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [
+          "frontend-modern/src/api/__tests__/"
+        ],
+        "exact_files": [
+          "internal/api/contract_test.go"
+        ]
+      }
     },
     {
       "id": "frontend-primitives",
@@ -93,10 +115,14 @@
         "frontend-modern/src/components/shared/"
       ],
       "owned_files": [],
-      "guardrail_files": [
-        "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
-        "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
-      ]
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+          "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+        ]
+      }
     },
     {
       "id": "performance-and-scalability",
@@ -110,11 +136,18 @@
         "internal/api/slo_bench_test.go",
         "internal/api/router_bench_test.go"
       ],
-      "guardrail_files": [
-        "pkg/metrics/store_query_plan_test.go",
-        "pkg/metrics/store_slo_test.go",
-        "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx"
-      ]
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "pkg/metrics/store_bench_test.go",
+          "pkg/metrics/store_query_plan_test.go",
+          "pkg/metrics/store_slo_test.go",
+          "internal/api/slo_bench_test.go",
+          "internal/api/router_bench_test.go",
+          "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx"
+        ]
+      }
     }
   ]
 }
