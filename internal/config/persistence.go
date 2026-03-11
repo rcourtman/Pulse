@@ -1873,27 +1873,27 @@ type AISuppressionRuleRecord struct {
 
 // AIFindingRecord is a persisted finding with full history
 type AIFindingRecord struct {
-	ID             string     `json:"id"`
-	Key            string     `json:"key,omitempty"`
-	Severity       string     `json:"severity"`
-	Category       string     `json:"category"`
-	ResourceID     string     `json:"resource_id"`
-	ResourceName   string     `json:"resource_name"`
-	ResourceType   string     `json:"resource_type"`
-	Node           string     `json:"node,omitempty"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	Recommendation string     `json:"recommendation,omitempty"`
-	Evidence       string     `json:"evidence,omitempty"`
-	Source         string     `json:"source,omitempty"`
-	DetectedAt     time.Time  `json:"detected_at"`
-	LastSeenAt     time.Time  `json:"last_seen_at"`
-	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
-	AutoResolved   bool       `json:"auto_resolved"`
-	ResolveReason  string     `json:"resolve_reason,omitempty"`
-	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
-	SnoozedUntil   *time.Time `json:"snoozed_until,omitempty"`
-	AlertID        string     `json:"alert_id,omitempty"`
+	ID              string     `json:"id"`
+	Key             string     `json:"key,omitempty"`
+	Severity        string     `json:"severity"`
+	Category        string     `json:"category"`
+	ResourceID      string     `json:"resource_id"`
+	ResourceName    string     `json:"resource_name"`
+	ResourceType    string     `json:"resource_type"`
+	Node            string     `json:"node,omitempty"`
+	Title           string     `json:"title"`
+	Description     string     `json:"description"`
+	Recommendation  string     `json:"recommendation,omitempty"`
+	Evidence        string     `json:"evidence,omitempty"`
+	Source          string     `json:"source,omitempty"`
+	DetectedAt      time.Time  `json:"detected_at"`
+	LastSeenAt      time.Time  `json:"last_seen_at"`
+	ResolvedAt      *time.Time `json:"resolved_at,omitempty"`
+	AutoResolved    bool       `json:"auto_resolved"`
+	ResolveReason   string     `json:"resolve_reason,omitempty"`
+	AcknowledgedAt  *time.Time `json:"acknowledged_at,omitempty"`
+	SnoozedUntil    *time.Time `json:"snoozed_until,omitempty"`
+	AlertIdentifier string     `json:"-"`
 	// User feedback fields - enables persistence of dismissal state
 	DismissedReason string `json:"dismissed_reason,omitempty"`
 	UserNote        string `json:"user_note,omitempty"`
@@ -1917,6 +1917,35 @@ type AIFindingRecord struct {
 	} `json:"lifecycle,omitempty"`
 	RegressionCount  int        `json:"regression_count,omitempty"`
 	LastRegressionAt *time.Time `json:"last_regression_at,omitempty"`
+}
+
+type aiFindingRecordAlias AIFindingRecord
+
+type aiFindingRecordJSON struct {
+	aiFindingRecordAlias
+	AlertIdentifier string `json:"alert_identifier,omitempty"`
+	LegacyAlertID   string `json:"alert_id,omitempty"`
+}
+
+func (r AIFindingRecord) MarshalJSON() ([]byte, error) {
+	return json.Marshal(aiFindingRecordJSON{
+		aiFindingRecordAlias: aiFindingRecordAlias(r),
+		AlertIdentifier:      strings.TrimSpace(r.AlertIdentifier),
+	})
+}
+
+func (r *AIFindingRecord) UnmarshalJSON(data []byte) error {
+	var payload aiFindingRecordJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	*r = AIFindingRecord(payload.aiFindingRecordAlias)
+	r.AlertIdentifier = strings.TrimSpace(payload.AlertIdentifier)
+	if r.AlertIdentifier == "" {
+		r.AlertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
+	}
+	return nil
 }
 
 // SaveAIFindings persists AI findings to disk, preserving any existing suppression rules.
