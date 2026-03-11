@@ -109,6 +109,9 @@ record wrappers.
 AI frontend clients must now also call canonical status helpers and direct
 URL-segment encoding behavior without module-local alias wrappers when those
 wrappers add no contract value.
+The discovery frontend client must now also centralize typed and agent route
+construction through dedicated path builders rather than repeating route
+templates or trivial collection-path aliases across each endpoint.
 Notifications email config parsing and node cluster endpoint normalization must
 now also route through shared scalar coercion helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than through per-module

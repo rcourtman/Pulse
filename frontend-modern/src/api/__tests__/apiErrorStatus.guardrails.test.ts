@@ -77,12 +77,17 @@ describe('API error-status guardrails', () => {
     expect(monitoringSource).toContain("'Failed to parse agent lookup response'");
     expect(discoverySource).toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).toContain('parseRequiredJSON(response,');
+    expect(discoverySource).toContain('buildTypedDiscoveryPath(');
+    expect(discoverySource).toContain('buildAgentDiscoveryCollectionPath(');
+    expect(discoverySource).toContain('buildAgentDiscoveryDetailPath(');
     expect(monitoringSource).not.toContain('response.status === 404');
     expect(monitoringSource).not.toContain('JSON.parse(');
     expect(monitoringSource).not.toContain("typeof lastSeen === 'string'");
     expect(monitoringSource).not.toContain('Date.parse(lastSeen)');
     expect(discoverySource).not.toContain('response.status === 404');
     expect(discoverySource).not.toContain('return response.json()');
+    expect(discoverySource).not.toContain('const isAgentResourceType =');
+    expect(discoverySource).not.toContain('const agentCollectionBasePath =');
 
     expect(hostedSignupSource).toContain('parseJSONSafe<');
     expect(hostedSignupSource).toContain('normalizeStructuredAPIError(body, response.status)');
@@ -149,7 +154,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, and no-op AI helper aliases', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, and discovery route alias drift', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -194,6 +199,11 @@ describe('API error-status guardrails', () => {
     );
     const noOpAiAliasPattern =
       /(?:private\s+static\s+encodeSegment\(|private\s+static\s+isPaymentRequiredError\()/;
+    const governedDiscoveryRouteEntries = runtimeEntries.filter(([path]) =>
+      /\/discovery\.ts$/.test(path),
+    );
+    const discoveryRouteAliasPattern =
+      /(?:const\s+isAgentResourceType\s*=|const\s+agentCollectionBasePath\s*=)/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -255,6 +265,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const discoveryRouteAliasOffenders = governedDiscoveryRouteEntries
+      .filter(([, source]) => discoveryRouteAliasPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -266,5 +281,6 @@ describe('API error-status guardrails', () => {
     expect(noOpWrapperOffenders).toEqual([]);
     expect(duplicateAlertIdentifierOffenders).toEqual([]);
     expect(noOpAiAliasOffenders).toEqual([]);
+    expect(discoveryRouteAliasOffenders).toEqual([]);
   });
 });

@@ -13,8 +13,6 @@ import type {
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
 
 const API_BASE = '/api/discovery';
-const isAgentResourceType = (resourceType: ResourceType): boolean => resourceType === 'agent';
-const agentCollectionBasePath = (): string => `${API_BASE}/agent`;
 const resolveAPIResourceType = (resourceType: ResourceType): string =>
   toDiscoveryAPIResourceType(resourceType) || resourceType;
 const resolveDiscoveryAgentId = (discovery: {
@@ -22,6 +20,26 @@ const resolveDiscoveryAgentId = (discovery: {
   agent_id?: string;
   resource_id: string;
 }): string => discovery.agent_id || discovery.target_id || discovery.resource_id;
+const buildDiscoveryTypePath = (resourceType: ResourceType): string =>
+  `${API_BASE}/type/${encodeURIComponent(resolveAPIResourceType(resourceType))}`;
+const buildDiscoveryInfoPath = (resourceType: ResourceType): string =>
+  `${API_BASE}/info/${encodeURIComponent(resolveAPIResourceType(resourceType))}`;
+const buildTypedDiscoveryPath = (
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
+): string =>
+  `${API_BASE}/${encodeURIComponent(resolveAPIResourceType(resourceType))}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`;
+const buildTypedDiscoverySubresourcePath = (
+  resourceType: ResourceType,
+  targetId: string,
+  resourceId: string,
+  subresource: string,
+): string => `${buildTypedDiscoveryPath(resourceType, targetId, resourceId)}/${subresource}`;
+const buildAgentDiscoveryCollectionPath = (agentId: string): string =>
+  `${API_BASE}/agent/${encodeURIComponent(agentId)}`;
+const buildAgentDiscoveryDetailPath = (agentId: string, resourceId: string): string =>
+  `${buildAgentDiscoveryCollectionPath(agentId)}/${encodeURIComponent(resourceId)}`;
 
 /**
  * List all discoveries
@@ -40,9 +58,7 @@ export async function listDiscoveries(): Promise<DiscoveryListResponse> {
 export async function listDiscoveriesByType(
   resourceType: ResourceType,
 ): Promise<DiscoveryListResponse> {
-  const response = await apiFetch(
-    `${API_BASE}/type/${encodeURIComponent(resolveAPIResourceType(resourceType))}`,
-  );
+  const response = await apiFetch(buildDiscoveryTypePath(resourceType));
   if (!response.ok) {
     throw new Error(
       await readAPIErrorMessage(response, `Failed to list discoveries for type ${resourceType}`),
@@ -55,7 +71,7 @@ export async function listDiscoveriesByType(
  * List discoveries by agent
  */
 export async function listDiscoveriesByAgent(agentId: string): Promise<DiscoveryListResponse> {
-  const response = await apiFetch(`${API_BASE}/agent/${encodeURIComponent(agentId)}`);
+  const response = await apiFetch(buildAgentDiscoveryCollectionPath(agentId));
   if (!response.ok) {
     throw new Error(
       await readAPIErrorMessage(response, `Failed to list discoveries for agent ${agentId}`),
@@ -72,13 +88,10 @@ export async function getDiscovery(
   targetId: string,
   resourceId: string,
 ): Promise<ResourceDiscovery | null> {
-  if (isAgentResourceType(resourceType)) {
+  if (resourceType === 'agent') {
     // Agent discovery is frequently absent before first scan. Resolve via list endpoint
     // first to avoid noisy 404s for expected "not discovered yet" states.
-    const collectionBasePath = agentCollectionBasePath();
-    const agentListResponse = await apiFetch(
-      `${collectionBasePath}/${encodeURIComponent(targetId)}`,
-    );
+    const agentListResponse = await apiFetch(buildAgentDiscoveryCollectionPath(targetId));
     if (!agentListResponse.ok) {
       throw new Error(
         await readAPIErrorMessage(agentListResponse, 'Failed to list agent discoveries'),
@@ -112,7 +125,7 @@ export async function getDiscovery(
     }
 
     const response = await apiFetch(
-      `${collectionBasePath}/${encodeURIComponent(resolvedAgentId)}/${encodeURIComponent(resolvedAgentDiscovery.resource_id)}`,
+      buildAgentDiscoveryDetailPath(resolvedAgentId, resolvedAgentDiscovery.resource_id),
     );
     if (isAPIResponseStatus(response, 404)) {
       return null;
@@ -123,10 +136,7 @@ export async function getDiscovery(
     return parseRequiredJSON(response, 'Failed to parse discovery');
   }
 
-  const apiResourceType = resolveAPIResourceType(resourceType);
-  const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
-  );
+  const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId));
   if (isAPIResponseStatus(response, 404)) {
     return null;
   }
@@ -145,17 +155,13 @@ export async function triggerDiscovery(
   resourceId: string,
   options?: TriggerDiscoveryRequest,
 ): Promise<ResourceDiscovery> {
-  const apiResourceType = resolveAPIResourceType(resourceType);
-  const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(options || {}),
+  const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
     },
-  );
+    body: JSON.stringify(options || {}),
+  });
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Discovery failed'));
   }
@@ -170,9 +176,8 @@ export async function getDiscoveryProgress(
   targetId: string,
   resourceId: string,
 ): Promise<DiscoveryProgress> {
-  const apiResourceType = resolveAPIResourceType(resourceType);
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/progress`,
+    buildTypedDiscoverySubresourcePath(resourceType, targetId, resourceId, 'progress'),
   );
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery progress'));
@@ -189,9 +194,8 @@ export async function updateDiscoveryNotes(
   resourceId: string,
   notes: UpdateNotesRequest,
 ): Promise<ResourceDiscovery> {
-  const apiResourceType = resolveAPIResourceType(resourceType);
   const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}/notes`,
+    buildTypedDiscoverySubresourcePath(resourceType, targetId, resourceId, 'notes'),
     {
       method: 'PUT',
       headers: {
@@ -214,13 +218,9 @@ export async function deleteDiscovery(
   targetId: string,
   resourceId: string,
 ): Promise<void> {
-  const apiResourceType = resolveAPIResourceType(resourceType);
-  const response = await apiFetch(
-    `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
-    {
-      method: 'DELETE',
-    },
-  );
+  const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId), {
+    method: 'DELETE',
+  });
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to delete discovery'));
   }
@@ -241,9 +241,7 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
  * Get discovery info for a resource type (AI provider info, commands that will run)
  */
 export async function getDiscoveryInfo(resourceType: ResourceType): Promise<DiscoveryInfo> {
-  const response = await apiFetch(
-    `${API_BASE}/info/${encodeURIComponent(resolveAPIResourceType(resourceType))}`,
-  );
+  const response = await apiFetch(buildDiscoveryInfoPath(resourceType));
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery info'));
   }
