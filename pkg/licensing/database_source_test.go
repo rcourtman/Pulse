@@ -104,6 +104,47 @@ func TestDatabaseSourceLimits_MaxNodesMigration(t *testing.T) {
 	}
 }
 
+func TestDatabaseSourceCanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
+	store := &mockBillingStore{
+		state: &BillingState{
+			PlanVersion:       "cloud_v1",
+			Limits:            map[string]int64{"max_agents": 999},
+			SubscriptionState: SubStateActive,
+		},
+	}
+
+	source := NewDatabaseSource(store, "org-1", time.Hour)
+
+	if got := source.PlanVersion(); got != "cloud_starter" {
+		t.Fatalf("expected plan_version %q, got %q", "cloud_starter", got)
+	}
+	if got := source.Limits()["max_agents"]; got != 10 {
+		t.Fatalf("expected max_agents=%d, got %d", 10, got)
+	}
+}
+
+func TestDatabaseSourcePreservesMissingPlanVersion(t *testing.T) {
+	store := &mockBillingStore{
+		state: &BillingState{
+			PlanVersion:       "   ",
+			Limits:            map[string]int64{"max_agents": 42},
+			SubscriptionState: SubscriptionState(" ACTIVE "),
+		},
+	}
+
+	source := NewDatabaseSource(store, "org-1", time.Hour)
+
+	if got := source.PlanVersion(); got != "" {
+		t.Fatalf("expected missing plan_version to stay empty, got %q", got)
+	}
+	if got := source.SubscriptionState(); got != SubStateActive {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateActive, got)
+	}
+	if got := source.Limits()["max_agents"]; got != 42 {
+		t.Fatalf("expected max_agents=%d, got %d", 42, got)
+	}
+}
+
 func TestDatabaseSourceCacheHit(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{

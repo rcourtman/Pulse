@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCloudClaimPlanVersionNormalizationContract(t *testing.T) {
@@ -43,6 +44,52 @@ func TestMSPPlanAliasCanonicalizationContract(t *testing.T) {
 	if limit, known := WorkspaceLimitForPlan("msp_hosted_v1"); !known || limit != 10 {
 		t.Fatalf("WorkspaceLimitForPlan(msp_hosted_v1) = (%d, %v), want (10, true)", limit, known)
 	}
+}
+
+func TestDatabaseSourceCanonicalBoundaryContract(t *testing.T) {
+	t.Run("canonicalizes_known_plan_and_limit_aliases", func(t *testing.T) {
+		store := &mockBillingStore{
+			state: &BillingState{
+				PlanVersion:       "cloud_v1",
+				Limits:            map[string]int64{"max_nodes": 999},
+				SubscriptionState: SubscriptionState(" ACTIVE "),
+			},
+		}
+
+		source := NewDatabaseSource(store, "org-1", time.Hour)
+
+		if got := source.PlanVersion(); got != "cloud_starter" {
+			t.Fatalf("PlanVersion() = %q, want %q", got, "cloud_starter")
+		}
+		if got := source.SubscriptionState(); got != SubStateActive {
+			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateActive)
+		}
+		if got := source.Limits()["max_agents"]; got != 10 {
+			t.Fatalf("Limits()[max_agents] = %d, want %d", got, 10)
+		}
+		if _, hasLegacy := source.Limits()["max_nodes"]; hasLegacy {
+			t.Fatal("Limits() preserved legacy max_nodes key")
+		}
+	})
+
+	t.Run("preserves_missing_plan_version", func(t *testing.T) {
+		store := &mockBillingStore{
+			state: &BillingState{
+				PlanVersion:       " ",
+				Limits:            map[string]int64{"max_agents": 42},
+				SubscriptionState: SubscriptionState(" ACTIVE "),
+			},
+		}
+
+		source := NewDatabaseSource(store, "org-1", time.Hour)
+
+		if got := source.PlanVersion(); got != "" {
+			t.Fatalf("PlanVersion() = %q, want empty", got)
+		}
+		if got := source.Limits()["max_agents"]; got != 42 {
+			t.Fatalf("Limits()[max_agents] = %d, want %d", got, 42)
+		}
+	})
 }
 
 // grantContractJSONTags lists the JSON field names that MUST exist with

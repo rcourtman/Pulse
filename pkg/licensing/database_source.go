@@ -1,6 +1,7 @@
 package licensing
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -52,23 +53,9 @@ func (d *DatabaseSource) Capabilities() []string {
 	return d.currentState().Capabilities
 }
 
-// Limits returns the current plan limits.
-// Applies backwards-compat migration: if "max_agents" is absent but legacy
-// "max_nodes" is present, returns the value under "max_agents".
+// Limits returns the current normalized plan limits.
 func (d *DatabaseSource) Limits() map[string]int64 {
-	limits := d.currentState().Limits
-	if _, hasNew := limits["max_agents"]; !hasNew {
-		if v, hasOld := limits["max_nodes"]; hasOld {
-			out := make(map[string]int64, len(limits))
-			for k, val := range limits {
-				out[k] = val
-			}
-			out["max_agents"] = v
-			delete(out, "max_nodes")
-			return out
-		}
-	}
-	return limits
+	return d.currentState().Limits
 }
 
 // MetersEnabled returns the enabled metering dimensions.
@@ -104,7 +91,7 @@ func (d *DatabaseSource) OverflowGrantedAt() *int64 {
 func (d *DatabaseSource) currentState() BillingState {
 	defaults := d.defaultState()
 	if d == nil {
-		return normalizeTrialExpiry(defaults, time.Now())
+		return normalizeDatabaseSourceState(normalizeTrialExpiry(defaults, time.Now()))
 	}
 
 	cacheTTL := d.cacheTTL
@@ -181,7 +168,7 @@ func (d *DatabaseSource) defaultState() BillingState {
 		defaults.SubscriptionState = SubStateTrial
 	}
 
-	return defaults
+	return normalizeDatabaseSourceState(defaults)
 }
 
 func cloneBillingState(state BillingState) BillingState {
@@ -241,5 +228,35 @@ func normalizeTrialExpiry(state BillingState, now time.Time) BillingState {
 }
 
 func (d *DatabaseSource) resolveState(state BillingState, now time.Time) BillingState {
-	return ResolveEntitlementLeaseBillingState(state, d.expectedInstanceHost, now)
+	return normalizeDatabaseSourceState(ResolveEntitlementLeaseBillingState(state, d.expectedInstanceHost, now))
+}
+
+func normalizeDatabaseSourceState(state BillingState) BillingState {
+	normalized := cloneBillingState(state)
+	normalized.PlanVersion = CanonicalizePlanVersion(strings.TrimSpace(normalized.PlanVersion))
+	normalized.SubscriptionState = SubscriptionState(strings.ToLower(strings.TrimSpace(string(normalized.SubscriptionState))))
+	normalized.EntitlementJWT = strings.TrimSpace(normalized.EntitlementJWT)
+	normalized.EntitlementRefreshToken = strings.TrimSpace(normalized.EntitlementRefreshToken)
+	normalized.StripeCustomerID = strings.TrimSpace(normalized.StripeCustomerID)
+	normalized.StripeSubscriptionID = strings.TrimSpace(normalized.StripeSubscriptionID)
+	normalized.StripePriceID = strings.TrimSpace(normalized.StripePriceID)
+	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
+
+	if normalized.Limits != nil {
+		if v, hasOld := normalized.Limits[MaxNodesLicenseGateKey]; hasOld {
+			if _, hasNew := normalized.Limits[MaxAgentsLicenseGateKey]; !hasNew {
+				normalized.Limits[MaxAgentsLicenseGateKey] = v
+			}
+			delete(normalized.Limits, MaxNodesLicenseGateKey)
+		}
+	}
+
+	if limit, known := CloudPlanAgentLimits[normalized.PlanVersion]; known {
+		if normalized.Limits == nil {
+			normalized.Limits = map[string]int64{}
+		}
+		normalized.Limits[MaxAgentsLicenseGateKey] = int64(limit)
+	}
+
+	return normalized
 }

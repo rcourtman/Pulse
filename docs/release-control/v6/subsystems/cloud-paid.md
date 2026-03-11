@@ -43,6 +43,10 @@ Persisted billing state is now also part of that canonical boundary: when a
 recognized Cloud/MSP plan version is loaded or saved, the stored `plan_version`
 must canonicalize and `limits.max_agents` must reconcile to the authoritative
 per-plan contract rather than preserving stale ad hoc values.
+Hosted entitlement-source loading follows the same rule: `DatabaseSource` must
+normalize persisted Cloud/MSP plan aliases and legacy limit keys before runtime
+evaluation, but it must not fabricate a canonical `plan_version` from bare
+subscription lifecycle state when the stored plan label is absent.
 Stripe control-plane fallback paths are also part of the boundary: when
 subscription or workspace provisioning logic reuses an already stored
 `plan_version`, it must canonicalize that value before persisting tenant,
