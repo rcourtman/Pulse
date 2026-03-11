@@ -1,5 +1,5 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { readAPIErrorMessage } from './responseUtils';
+import { isAPIErrorStatus, readAPIErrorMessage } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type {
   AISettings,
@@ -18,11 +18,7 @@ export class AIAPI {
   }
 
   private static isPaymentRequiredError(error: unknown): boolean {
-    if (!(error instanceof Error)) {
-      return false;
-    }
-    const status = (error as Error & { status?: number }).status;
-    return status === 402 || error.message.includes('402');
+    return isAPIErrorStatus(error, 402);
   }
 
   private static normalizeUnifiedFinding(finding: UnifiedFindingRecord): UnifiedFindingRecord {

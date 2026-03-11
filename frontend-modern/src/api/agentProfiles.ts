@@ -1,5 +1,5 @@
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
-import { readAPIErrorMessage } from './responseUtils';
+import { isAPIErrorStatus, readAPIErrorMessage } from './responseUtils';
 
 /**
  * Agent profile for centralized configuration management.
@@ -101,8 +101,7 @@ export class AgentProfilesAPI {
       const response = await apiFetchJSON<AgentProfile[]>(`${this.baseUrl}/`);
       return response || [];
     } catch (err) {
-      // Handle 402 gracefully - means not licensed
-      if (err instanceof Error && err.message.includes('402')) {
+      if (isAPIErrorStatus(err, 402)) {
         return [];
       }
       throw err;
@@ -116,7 +115,7 @@ export class AgentProfilesAPI {
     try {
       return await apiFetchJSON<AgentProfile>(`${this.baseUrl}/${encodeURIComponent(id)}`);
     } catch (err) {
-      if (err instanceof Error && err.message.includes('404')) {
+      if (isAPIErrorStatus(err, 404)) {
         return null;
       }
       throw err;
@@ -193,7 +192,7 @@ export class AgentProfilesAPI {
       const response = await apiFetchJSON<AgentProfileAssignment[]>(`${this.baseUrl}/assignments`);
       return response || [];
     } catch (err) {
-      if (err instanceof Error && err.message.includes('402')) {
+      if (isAPIErrorStatus(err, 402)) {
         return [];
       }
       throw err;

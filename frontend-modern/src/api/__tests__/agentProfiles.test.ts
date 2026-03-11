@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '../agentProfiles';
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { readAPIErrorMessage } from '../responseUtils';
+import { isAPIErrorStatus, readAPIErrorMessage } from '../responseUtils';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
@@ -10,11 +10,15 @@ vi.mock('@/utils/apiClient', () => ({
 
 vi.mock('../responseUtils', () => ({
   readAPIErrorMessage: vi.fn().mockResolvedValue('Error'),
+  isAPIErrorStatus: vi.fn(),
 }));
 
 describe('AgentProfilesAPI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isAPIErrorStatus).mockImplementation((error, expectedStatus) => {
+      return (error as { status?: number } | null)?.status === expectedStatus;
+    });
   });
 
   describe('listProfiles', () => {
@@ -31,7 +35,7 @@ describe('AgentProfilesAPI', () => {
     });
 
     it('returns empty array on 402 error', async () => {
-      vi.mocked(apiFetchJSON).mockRejectedValueOnce(new Error('402'));
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
 
       const result = await AgentProfilesAPI.listProfiles();
 
@@ -65,7 +69,7 @@ describe('AgentProfilesAPI', () => {
     });
 
     it('returns null on 404', async () => {
-      vi.mocked(apiFetchJSON).mockRejectedValueOnce(new Error('404'));
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }));
 
       const result = await AgentProfilesAPI.getProfile('p1');
 
@@ -126,7 +130,7 @@ describe('AgentProfilesAPI', () => {
     });
 
     it('returns empty array on 402', async () => {
-      vi.mocked(apiFetchJSON).mockRejectedValueOnce(new Error('402'));
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
 
       const result = await AgentProfilesAPI.listAssignments();
 
@@ -227,5 +231,11 @@ describe('AgentProfilesAPI', () => {
 
       expect(result.valid).toBe(true);
     });
+  });
+
+  it('does not infer API status from raw error message text', async () => {
+    vi.mocked(apiFetchJSON).mockRejectedValueOnce(new Error('402'));
+
+    await expect(AgentProfilesAPI.listProfiles()).rejects.toThrow('402');
   });
 });

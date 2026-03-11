@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readAPIErrorMessage, parseOptionalJSON } from '@/api/responseUtils';
+import {
+  apiErrorStatus,
+  isAPIErrorStatus,
+  parseOptionalJSON,
+  readAPIErrorMessage,
+} from '@/api/responseUtils';
 
 describe('readAPIErrorMessage', () => {
   it('returns fallback for empty response', async () => {
@@ -95,5 +100,31 @@ describe('parseOptionalJSON', () => {
     await expect(parseOptionalJSON(response, {}, 'Custom parse error')).rejects.toThrow(
       'Custom parse error',
     );
+  });
+});
+
+describe('apiErrorStatus', () => {
+  it('returns null for non-errors and missing statuses', () => {
+    expect(apiErrorStatus(null)).toBeNull();
+    expect(apiErrorStatus(new Error('boom'))).toBeNull();
+  });
+
+  it('returns the canonical numeric status from API errors', () => {
+    const error = Object.assign(new Error('Payment Required'), { status: 402 });
+    expect(apiErrorStatus(error)).toBe(402);
+  });
+
+  it('rejects non-http status values', () => {
+    expect(apiErrorStatus({ status: '402' })).toBeNull();
+    expect(apiErrorStatus({ status: 99 })).toBeNull();
+    expect(apiErrorStatus({ status: 600 })).toBeNull();
+  });
+});
+
+describe('isAPIErrorStatus', () => {
+  it('matches canonical status-bearing API errors', () => {
+    const error = Object.assign(new Error('Not Found'), { status: 404 });
+    expect(isAPIErrorStatus(error, 404)).toBe(true);
+    expect(isAPIErrorStatus(error, 402)).toBe(false);
   });
 });

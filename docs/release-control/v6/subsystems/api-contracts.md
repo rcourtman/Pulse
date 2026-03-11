@@ -23,6 +23,7 @@ Own canonical runtime payload shapes between backend and frontend.
 2. `internal/api/resources.go`
 3. `internal/api/alerts.go`
 4. `frontend-modern/src/types/api.ts`
+5. `frontend-modern/src/api/responseUtils.ts`
 
 ## Shared Boundaries
 
@@ -37,12 +38,14 @@ Own canonical runtime payload shapes between backend and frontend.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes
 3. Add dedicated contract tests for new stable payloads
+4. Route frontend API-client status normalization through `frontend-modern/src/api/responseUtils.ts`
 
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test
 2. Untracked compatibility aliases becoming permanent runtime contracts
 3. Frontend-only payload assumptions that are not owned in backend contracts
+4. Frontend API clients inferring canonical HTTP status from `Error.message` text
 
 ## Completion Obligations
 
@@ -63,3 +66,6 @@ store-backed mixed-workload fixture used to verify the batched hot path.
 Frontend AI API clients now also normalize `402 Payment Required` responses for
 optional paywalled collections into explicit empty states, so Pulse Pro gating
 does not become a transport error path during page bootstrap.
+That frontend status handling must now route through the shared
+`frontend-modern/src/api/responseUtils.ts` status helpers rather than through
+message-text heuristics in individual API modules.

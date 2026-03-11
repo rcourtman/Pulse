@@ -116,6 +116,12 @@ describe('AIAPI', () => {
     await expect(AIAPI.getRemediationPlans()).resolves.toEqual({ plans: [] });
   });
 
+  it('does not treat status text without canonical error status as payment required', async () => {
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('402'));
+
+    await expect(AIAPI.getPendingApprovals()).rejects.toThrow('402');
+  });
+
   it('sanitizes runCommand payload consistently', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ output: 'ok', success: true } as any);
     await AIAPI.runCommand({
