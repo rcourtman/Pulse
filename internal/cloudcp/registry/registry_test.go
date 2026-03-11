@@ -106,6 +106,17 @@ func TestNewTenantRegistryMigratesLegacyTenantEntitlementRefreshTokens(t *testin
 	if entitlement.TenantID != "t-LEGACY001" {
 		t.Fatalf("TenantID=%q, want %q", entitlement.TenantID, "t-LEGACY001")
 	}
+
+	tenant, err := reg.Get("t-LEGACY001")
+	if err != nil {
+		t.Fatalf("Get legacy tenant: %v", err)
+	}
+	if tenant == nil {
+		t.Fatal("expected legacy tenant to exist")
+	}
+	if tenant.PlanVersion != "cloud_starter" {
+		t.Fatalf("legacy tenant PlanVersion=%q, want %q", tenant.PlanVersion, "cloud_starter")
+	}
 }
 
 func TestGenerateTenantID(t *testing.T) {
@@ -910,6 +921,91 @@ func TestHostedEntitlementLookupAndIssue(t *testing.T) {
 	}
 	if stored != "etr_paid_three" {
 		t.Fatalf("stored token after revoke = %q, want %q", stored, "etr_paid_three")
+	}
+}
+
+func TestTenantRegistryCanonicalizesTenantPlanVersion(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	tenant := &Tenant{
+		ID:          "t-CANON001",
+		AccountID:   "a_canon_1",
+		DisplayName: "Canonical Tenant",
+		State:       TenantStateActive,
+		PlanVersion: " cloud_v1 ",
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if tenant.PlanVersion != "cloud_starter" {
+		t.Fatalf("tenant.PlanVersion after create=%q, want %q", tenant.PlanVersion, "cloud_starter")
+	}
+
+	loaded, err := reg.Get(tenant.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected tenant to exist")
+	}
+	if loaded.PlanVersion != "cloud_starter" {
+		t.Fatalf("loaded.PlanVersion=%q, want %q", loaded.PlanVersion, "cloud_starter")
+	}
+
+	loaded.PlanVersion = "starter"
+	if err := reg.Update(loaded); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if loaded.PlanVersion != "cloud_starter" {
+		t.Fatalf("tenant.PlanVersion after update=%q, want %q", loaded.PlanVersion, "cloud_starter")
+	}
+}
+
+func TestTenantRegistryCanonicalizesStripeAccountPlanVersion(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{
+		ID:          accountID,
+		Kind:        AccountKindIndividual,
+		DisplayName: "Canonical Account",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	sa := &StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "cus_canon_123",
+		PlanVersion:       "cloud_v1",
+		SubscriptionState: "active",
+	}
+	if err := reg.CreateStripeAccount(sa); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+	if sa.PlanVersion != "cloud_starter" {
+		t.Fatalf("stripe account PlanVersion after create=%q, want %q", sa.PlanVersion, "cloud_starter")
+	}
+
+	loaded, err := reg.GetStripeAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetStripeAccount: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected stripe account to exist")
+	}
+	if loaded.PlanVersion != "cloud_starter" {
+		t.Fatalf("loaded stripe account PlanVersion=%q, want %q", loaded.PlanVersion, "cloud_starter")
+	}
+
+	loaded.PlanVersion = "starter"
+	if err := reg.UpdateStripeAccount(loaded); err != nil {
+		t.Fatalf("UpdateStripeAccount: %v", err)
+	}
+	if loaded.PlanVersion != "cloud_starter" {
+		t.Fatalf("stripe account PlanVersion after update=%q, want %q", loaded.PlanVersion, "cloud_starter")
 	}
 }
 

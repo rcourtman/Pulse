@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	_ "modernc.org/sqlite"
 )
 
@@ -19,6 +20,10 @@ type TenantRegistry struct {
 }
 
 const stripeEventProcessingLeaseSeconds int64 = 120
+
+func canonicalizeRegistryPlanVersion(planVersion string) string {
+	return pkglicensing.CanonicalizePlanVersion(strings.TrimSpace(planVersion))
+}
 
 // NewTenantRegistry opens (or creates) the tenant registry database in dir.
 func NewTenantRegistry(dir string) (*TenantRegistry, error) {
@@ -488,6 +493,7 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = now
 	}
+	t.PlanVersion = canonicalizeRegistryPlanVersion(t.PlanVersion)
 	t.UpdatedAt = now
 
 	_, err := r.db.Exec(`
@@ -535,6 +541,7 @@ func (r *TenantRegistry) Update(t *Tenant) error {
 	if t == nil {
 		return fmt.Errorf("tenant is nil")
 	}
+	t.PlanVersion = canonicalizeRegistryPlanVersion(t.PlanVersion)
 	t.UpdatedAt = time.Now().UTC()
 
 	res, err := r.db.Exec(`
@@ -719,6 +726,7 @@ func scanTenant(s scanner) (*Tenant, error) {
 	}
 
 	t.State = TenantState(state)
+	t.PlanVersion = canonicalizeRegistryPlanVersion(t.PlanVersion)
 	t.CreatedAt = time.Unix(createdAt, 0).UTC()
 	t.UpdatedAt = time.Unix(updatedAt, 0).UTC()
 	if lastHealthCheck.Valid {
@@ -1546,7 +1554,7 @@ func (r *TenantRegistry) CreateStripeAccount(sa *StripeAccount) error {
 	sa.StripeCustomerID = strings.TrimSpace(sa.StripeCustomerID)
 	sa.StripeSubscriptionID = strings.TrimSpace(sa.StripeSubscriptionID)
 	sa.StripeSubItemWorkspacesID = strings.TrimSpace(sa.StripeSubItemWorkspacesID)
-	sa.PlanVersion = strings.TrimSpace(sa.PlanVersion)
+	sa.PlanVersion = canonicalizeRegistryPlanVersion(sa.PlanVersion)
 	sa.SubscriptionState = strings.TrimSpace(sa.SubscriptionState)
 
 	if sa.AccountID == "" {
@@ -1639,7 +1647,7 @@ func (r *TenantRegistry) UpdateStripeAccount(sa *StripeAccount) error {
 	sa.StripeCustomerID = strings.TrimSpace(sa.StripeCustomerID)
 	sa.StripeSubscriptionID = strings.TrimSpace(sa.StripeSubscriptionID)
 	sa.StripeSubItemWorkspacesID = strings.TrimSpace(sa.StripeSubItemWorkspacesID)
-	sa.PlanVersion = strings.TrimSpace(sa.PlanVersion)
+	sa.PlanVersion = canonicalizeRegistryPlanVersion(sa.PlanVersion)
 	sa.SubscriptionState = strings.TrimSpace(sa.SubscriptionState)
 
 	if sa.AccountID == "" {
@@ -1960,5 +1968,6 @@ func scanStripeAccount(s scanner) (*StripeAccount, error) {
 		v := periodEnd.Int64
 		sa.CurrentPeriodEnd = &v
 	}
+	sa.PlanVersion = canonicalizeRegistryPlanVersion(sa.PlanVersion)
 	return &sa, nil
 }
