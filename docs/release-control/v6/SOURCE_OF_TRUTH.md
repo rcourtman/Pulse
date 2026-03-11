@@ -17,6 +17,13 @@ Recent locked release decision:
   on the highest-risk forbidden-path regressions, and hosted billing-state
   normalization now preserves a missing `plan_version` instead of synthesizing
   one from `subscription_state`.
+- 2026-03-11: Cloud-paid governance now explicitly owns the hosted control
+  plane files that issue entitlements, canonicalize stored plan versions, and
+  resolve Stripe provisioning plans. Changes to
+  `internal/cloudcp/entitlements/service.go`,
+  `internal/cloudcp/registry/registry.go`, and
+  `internal/cloudcp/stripe/provisioner.go` now require the cloud-paid contract
+  plus their path-specific proof files in the same slice.
 - 2026-03-11: Canonical governance now runs in both local hooks and CI.
   `scripts/release_control/canonical_completion_guard.py` can validate either
   staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`

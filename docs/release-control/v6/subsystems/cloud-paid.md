@@ -11,13 +11,19 @@ agreement, and cloud-specific enforcement rules.
 2. `pkg/licensing/evaluator.go`
 3. `pkg/licensing/service.go`
 4. `pkg/licensing/stripe_subscription.go`
-5. `frontend-modern/src/pages/CloudPricing.tsx`
+5. `internal/cloudcp/entitlements/service.go`
+6. `internal/cloudcp/registry/registry.go`
+7. `internal/cloudcp/stripe/provisioner.go`
+8. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Extension Points
 
 1. Add or change limits through `pkg/licensing/`
-2. Add or change cloud plan presentation through `CloudPricing.tsx`
-3. Add contract tests where runtime and pricing need to stay aligned
+2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
+3. Add or change control-plane plan storage through `internal/cloudcp/registry/registry.go`
+4. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
+5. Add or change cloud plan presentation through `CloudPricing.tsx`
+6. Add contract tests where runtime and pricing need to stay aligned
 
 ## Forbidden Paths
 
@@ -75,3 +81,7 @@ Legacy MSP plan aliases are input-only compatibility shims. Live runtime
 defaults, fallback provisioning, entitlement issuance, and limit/workspace
 lookups must resolve to canonical `msp_starter` rather than preserving
 `msp_hosted_v1` as an active first-class plan name.
+Hosted control-plane plan resolution is now part of the enforced ownership
+model: changes to hosted entitlement issuance, control-plane registry
+canonicalization, or Stripe provisioning plan resolution must carry this
+contract and the path-specific proof files that verify those boundaries.

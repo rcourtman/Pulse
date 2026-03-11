@@ -434,6 +434,83 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(matches, [])
 
+    def test_cloud_paid_hosted_entitlement_service_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["internal/cloudcp/entitlements/service.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "hosted-entitlement-issuer",
+                    "label": "hosted entitlement issuer proof",
+                    "touched_runtime_files": ["internal/cloudcp/entitlements/service.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/cloudcp/entitlements/service_test.go",
+                        "pkg/licensing/entitlement_lease_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_registry_plan_canonicalization_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["internal/cloudcp/registry/registry.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "control-plane-registry-canonicalization",
+                    "label": "control-plane registry plan proof",
+                    "touched_runtime_files": ["internal/cloudcp/registry/registry.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/cloudcp/registry/registry_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_stripe_plan_resolution_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["internal/cloudcp/stripe/provisioner.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "stripe-plan-resolution",
+                    "label": "stripe plan resolution proof",
+                    "touched_runtime_files": ["internal/cloudcp/stripe/provisioner.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/cloudcp/stripe/cloud_lifecycle_integration_test.go",
+                        "internal/cloudcp/stripe/helpers_test.go",
+                        "internal/cloudcp/stripe/msp_lifecycle_integration_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_control_plane_paths_require_cloud_paid_contract(self):
+        required = infer_impacted_subsystems(["internal/cloudcp/registry/registry.go"])
+        self.assertIn("cloud-paid", required)
+        self.assertEqual(
+            required["cloud-paid"]["contract"],
+            "docs/release-control/v6/subsystems/cloud-paid.md",
+        )
+
     def test_api_backend_runtime_can_use_types_file_as_proof(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
         requirement = build_verification_requirements(

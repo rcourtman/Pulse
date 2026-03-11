@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "subsystems": [
     {
       "id": "alerts",
@@ -186,6 +186,9 @@
         "internal/api/stripe_"
       ],
       "owned_files": [
+        "internal/cloudcp/entitlements/service.go",
+        "internal/cloudcp/registry/registry.go",
+        "internal/cloudcp/stripe/provisioner.go",
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx"
       ],
@@ -198,6 +201,48 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "hosted-entitlement-issuer",
+            "label": "hosted entitlement issuer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/entitlements/service.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/entitlements/service_test.go",
+              "pkg/licensing/entitlement_lease_test.go"
+            ]
+          },
+          {
+            "id": "control-plane-registry-canonicalization",
+            "label": "control-plane registry plan proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/registry/registry.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/registry/registry_test.go"
+            ]
+          },
+          {
+            "id": "stripe-plan-resolution",
+            "label": "stripe plan resolution proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/stripe/provisioner.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/stripe/cloud_lifecycle_integration_test.go",
+              "internal/cloudcp/stripe/helpers_test.go",
+              "internal/cloudcp/stripe/msp_lifecycle_integration_test.go"
+            ]
+          },
           {
             "id": "entitlement-lease-boundary",
             "label": "hosted entitlement lease proof",
