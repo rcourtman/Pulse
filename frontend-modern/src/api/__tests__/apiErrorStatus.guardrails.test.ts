@@ -97,6 +97,9 @@ describe('API error-status guardrails', () => {
     expect(alertsSource).toContain('arrayOrEmpty<{');
     expect(alertsSource).not.toContain('incidents || []');
     expect(alertsSource).not.toContain('response.results || []');
+    expect(alertsSource).not.toContain('normalizeAlertResult(');
+    expect(alertsSource).not.toContain('normalizeIncident(');
+    expect(alertsSource).not.toContain('normalizeIncidents(');
 
     expect(securitySource).toContain("objectArrayFieldOrEmpty<APITokenRecord>(response, 'tokens')");
     expect(securitySource).not.toContain('response.tokens ?? []');
@@ -138,7 +141,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, and module-local timestamp coercion', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, and no-op governed payload wrappers', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -170,6 +173,9 @@ describe('API error-status guardrails', () => {
     );
     const rawTimestampCoercionPattern =
       /(?:typeof\s+lastSeen\s*===\s*'string'|Date\.parse\(lastSeen\)|typeof\s+lastSeen\s*===\s*'number')/;
+    const governedWrapperEntries = runtimeEntries.filter(([path]) => /\/alerts\.ts$/.test(path));
+    const noOpWrapperPattern =
+      /(?:normalizeAlertResult\(|normalizeIncident\(|normalizeIncidents\()/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -216,6 +222,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const noOpWrapperOffenders = governedWrapperEntries
+      .filter(([, source]) => noOpWrapperPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -224,5 +235,6 @@ describe('API error-status guardrails', () => {
     expect(scalarHelperOffenders).toEqual([]);
     expect(structuredErrorOffenders).toEqual([]);
     expect(timestampCoercionOffenders).toEqual([]);
+    expect(noOpWrapperOffenders).toEqual([]);
   });
 });

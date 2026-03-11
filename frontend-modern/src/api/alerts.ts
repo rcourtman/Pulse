@@ -6,29 +6,6 @@ import { arrayOrEmpty } from './responseUtils';
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
 
-  private static normalizeAlertResult(result: {
-    alertIdentifier: string;
-    success: boolean;
-    error?: string;
-  }): {
-    alertIdentifier: string;
-    success: boolean;
-    error?: string;
-  } {
-    return { ...result };
-  }
-
-  private static normalizeIncident(incident: Incident | null): Incident | null {
-    if (!incident) {
-      return null;
-    }
-    return { ...incident };
-  }
-
-  private static normalizeIncidents(incidents: Incident[]): Incident[] {
-    return incidents.map((incident) => this.normalizeIncident(incident) as Incident);
-  }
-
   static async getActive(): Promise<Alert[]> {
     return apiFetchJSON(`${this.baseUrl}/active`);
   }
@@ -61,7 +38,7 @@ export class AlertsAPI {
     const incident = (await apiFetchJSON(
       `${this.baseUrl}/incidents?${query.toString()}`,
     )) as Incident | null;
-    return this.normalizeIncident(incident);
+    return incident;
   }
 
   static async getIncidentsForResource(resourceId: string, limit?: number): Promise<Incident[]> {
@@ -70,7 +47,7 @@ export class AlertsAPI {
     const incidents = (await apiFetchJSON(
       `${this.baseUrl}/incidents?${query.toString()}`,
     )) as Incident[];
-    return this.normalizeIncidents(arrayOrEmpty<Incident>(incidents));
+    return arrayOrEmpty<Incident>(incidents);
   }
 
   static async addIncidentNote(params: {
@@ -152,7 +129,7 @@ export class AlertsAPI {
         alertIdentifier: string;
         success: boolean;
         error?: string;
-      }>(response.results).map((result) => this.normalizeAlertResult(result)),
+      }>(response.results),
     };
   }
 }
