@@ -6616,6 +6616,8 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		return strings.EqualFold(strings.TrimSpace(pod.NodeName()), nodeName)
 	}
 
+	vmList := make([]*unifiedresources.VMView, 0)
+	vmRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, vm := range readState.VMs() {
 		if vm == nil {
 			continue
@@ -6627,8 +6629,14 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		if sourceID == "" {
 			continue
 		}
+		vmList = append(vmList, vm)
+		vmRequests = append(vmRequests, monitoring.GuestChartRequest{InMemoryKey: sourceID, SQLResourceID: sourceID})
+	}
+	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration)
+	for _, vm := range vmList {
+		sourceID := strings.TrimSpace(vm.SourceID())
 		guestCounts.Total++
-		if strings.EqualFold(string(vm.Status()), "running") {
+		if workloadSummaryStatusIsRunning("", vm.Status()) {
 			guestCounts.Running++
 		} else {
 			guestCounts.Stopped++
@@ -6646,7 +6654,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			snapshot.name = sourceID
 		}
 
-		metrics := monitor.GetGuestMetricsForChart(sourceID, "vm", sourceID, duration)
+		metrics := vmBatchMetrics[sourceID]
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
 			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.CPUPercent()}}
@@ -6680,6 +6688,8 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
+	containerList := make([]*unifiedresources.ContainerView, 0)
+	containerRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, ct := range readState.Containers() {
 		if ct == nil {
 			continue
@@ -6691,8 +6701,14 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		if sourceID == "" {
 			continue
 		}
+		containerList = append(containerList, ct)
+		containerRequests = append(containerRequests, monitoring.GuestChartRequest{InMemoryKey: sourceID, SQLResourceID: sourceID})
+	}
+	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration)
+	for _, ct := range containerList {
+		sourceID := strings.TrimSpace(ct.SourceID())
 		guestCounts.Total++
-		if strings.EqualFold(string(ct.Status()), "running") {
+		if workloadSummaryStatusIsRunning("", ct.Status()) {
 			guestCounts.Running++
 		} else {
 			guestCounts.Stopped++
@@ -6710,7 +6726,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			snapshot.name = sourceID
 		}
 
-		metrics := monitor.GetGuestMetricsForChart(sourceID, "container", sourceID, duration)
+		metrics := containerBatchMetrics[sourceID]
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
 			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.CPUPercent()}}
@@ -6744,6 +6760,8 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
+	podList := make([]*unifiedresources.PodView, 0)
+	podRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, pod := range readState.Pods() {
 		if pod == nil {
 			continue
@@ -6756,6 +6774,12 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		if metricKey == "" {
 			continue
 		}
+		podList = append(podList, pod)
+		podRequests = append(podRequests, monitoring.GuestChartRequest{InMemoryKey: metricKey, SQLResourceID: metricKey})
+	}
+	podBatchMetrics := monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration)
+	for _, pod := range podList {
+		metricKey := kubernetesPodMetricIDFromView(pod)
 
 		guestCounts.Total++
 		if strings.EqualFold(pod.PodPhase(), "running") {
@@ -6783,7 +6807,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			snapshot.name = metricKey
 		}
 
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "k8s", metricKey, duration)
+		metrics := podBatchMetrics[metricKey]
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
 			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: pod.CPUPercent()}}
@@ -6845,6 +6869,8 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		dockerHostsByID[host.ID()] = host
 	}
 
+	dockerContainerList := make([]*unifiedresources.DockerContainerView, 0)
+	dockerContainerRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, container := range readState.DockerContainers() {
 		if container == nil {
 			continue
@@ -6859,8 +6885,25 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		if containerID == "" {
 			continue
 		}
+		dockerContainerList = append(dockerContainerList, container)
+		dockerContainerRequests = append(dockerContainerRequests, monitoring.GuestChartRequest{
+			InMemoryKey:   fmt.Sprintf("docker:%s", containerID),
+			SQLResourceID: containerID,
+		})
+	}
+	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration)
+	for _, container := range dockerContainerList {
+		containerID := strings.TrimSpace(container.ContainerID())
 		guestCounts.Total++
-		if strings.EqualFold(container.ContainerState(), "running") {
+		containerState := strings.TrimSpace(container.ContainerState())
+		isRunning := workloadSummaryStatusIsRunning(containerState, container.Status())
+		if !isRunning && containerState == "" {
+			isRunning = container.CPUPercent() > 0 ||
+				container.MemoryPercent() > 0 ||
+				container.NetInRate() > 0 ||
+				container.NetOutRate() > 0
+		}
+		if isRunning {
 			guestCounts.Running++
 		} else {
 			guestCounts.Stopped++
@@ -6878,8 +6921,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			snapshot.name = containerID
 		}
 
-		metricKey := fmt.Sprintf("docker:%s", containerID)
-		metrics := monitor.GetGuestMetricsForChart(metricKey, "dockerContainer", containerID, duration)
+		metrics := dockerContainerBatchMetrics[containerID]
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
 			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: container.CPUPercent()}}
@@ -6986,6 +7028,24 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+}
+
+func workloadSummaryStatusIsRunning(runtimeState string, status unifiedresources.ResourceStatus) bool {
+	switch strings.ToLower(strings.TrimSpace(runtimeState)) {
+	case "running", "online", "ok":
+		return true
+	case "stopped", "offline", "paused", "created", "dead", "exited":
+		return false
+	}
+
+	switch status {
+	case unifiedresources.StatusOnline:
+		return true
+	case unifiedresources.StatusOffline:
+		return false
+	}
+
+	return false
 }
 
 // handleStorageCharts returns pool capacity and physical disk temperature

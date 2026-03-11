@@ -33,3 +33,6 @@ Own canonical runtime payload shapes between backend and frontend.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+`/api/charts/workloads-summary` now also has a canonical hot-path invariant:
+aggregate workload charts must preserve stable guest counts while batching
+store-backed metric reads across workload types, with no payload shape change.
