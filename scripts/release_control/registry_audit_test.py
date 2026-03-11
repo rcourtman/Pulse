@@ -60,6 +60,7 @@ class RegistryAuditTest(unittest.TestCase):
                         "allow_same_subsystem_tests": True,
                         "test_prefixes": [],
                         "exact_files": [],
+                        "require_explicit_path_policy_coverage": True,
                         "path_policies": [],
                     },
                 }
@@ -114,6 +115,50 @@ class RegistryAuditTest(unittest.TestCase):
 
         self.assertTrue(report["errors"])
         self.assertIn("falls back to default verification", "\n".join(report["errors"]))
+
+    def test_audit_registry_payload_requires_explicit_coverage_flag_true(self) -> None:
+        payload = {
+            "version": 10,
+            "subsystems": [
+                {
+                    "id": "api-contracts",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/subsystems/api-contracts.md",
+                    "owned_prefixes": ["internal/api/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": ["internal/api/contract_test.go"],
+                        "require_explicit_path_policy_coverage": False,
+                        "path_policies": [
+                            {
+                                "id": "backend-payload-contracts",
+                                "label": "backend API payload proof",
+                                "match_prefixes": ["internal/api/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/api/contract_test.go"],
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        tracked_files = {
+            "docs/release-control/v6/subsystems/api-contracts.md",
+            "internal/api/alerts.go",
+            "internal/api/contract_test.go",
+        }
+
+        report = audit_registry_payload(payload, tracked_files=tracked_files, status_lane_ids={"L6"})
+
+        self.assertTrue(report["errors"])
+        self.assertIn(
+            "require_explicit_path_policy_coverage must be true",
+            "\n".join(report["errors"]),
+        )
 
 
 if __name__ == "__main__":

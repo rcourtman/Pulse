@@ -72,6 +72,7 @@
         "allow_same_subsystem_tests",
         "test_prefixes",
         "exact_files",
+        "require_explicit_path_policy_coverage",
         "path_policies"
       ],
       "properties": {
@@ -93,7 +94,8 @@
           }
         },
         "require_explicit_path_policy_coverage": {
-          "type": "boolean"
+          "type": "boolean",
+          "const": true
         },
         "path_policies": {
           "type": "array",

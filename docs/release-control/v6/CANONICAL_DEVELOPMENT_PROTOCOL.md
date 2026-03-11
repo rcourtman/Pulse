@@ -115,11 +115,11 @@ tests only when the registry explicitly allows them.
 Absolute machine-local paths are forbidden.
 
 When a subsystem defines ordered `path_policies`, each touched runtime file must
-satisfy the first matching proof policy for that file. The guard still supports
-default subsystem verification as a transitional fallback, but the current v6
-registry requires explicit path-policy coverage for every governed subsystem.
-New owned runtime files must therefore be added to a concrete proof route
-instead of inheriting subsystem-default verification.
+satisfy the first matching proof policy for that file. The v6 registry requires
+explicit path-policy coverage for every governed subsystem, and default
+subsystem verification is no longer a supported governed path. New owned
+runtime files must therefore be added to a concrete proof route instead of
+inheriting subsystem-default verification.
 
 ## Guardrails
 

@@ -211,11 +211,10 @@ def audit_registry_payload(
 
         if not isinstance(verification.get("allow_same_subsystem_tests"), bool):
             errors.append(f"{context}.verification.allow_same_subsystem_tests must be a bool")
-        if "require_explicit_path_policy_coverage" in verification and not isinstance(
-            verification.get("require_explicit_path_policy_coverage"),
-            bool,
-        ):
+        if not isinstance(verification.get("require_explicit_path_policy_coverage"), bool):
             errors.append(f"{context}.verification.require_explicit_path_policy_coverage must be a bool")
+        elif verification.get("require_explicit_path_policy_coverage") is not True:
+            errors.append(f"{context}.verification.require_explicit_path_policy_coverage must be true")
 
         test_prefixes = verification.get("test_prefixes")
         if not isinstance(test_prefixes, list):
@@ -348,15 +347,11 @@ def audit_registry_payload(
             if not any(path_policy_matches(policy, path) for policy in path_policies if isinstance(policy, dict))
         ]
 
-        if verification.get("require_explicit_path_policy_coverage") is True and uncovered_owned_runtime:
+        if uncovered_owned_runtime:
             for path in uncovered_owned_runtime:
                 errors.append(
                     f"{context} requires explicit path policy coverage but {path!r} falls back to default verification"
                 )
-        elif uncovered_owned_runtime:
-            warnings.append(
-                f"{context} leaves {len(uncovered_owned_runtime)} owned runtime paths on default verification"
-            )
 
         subsystem_summaries.append(
             {

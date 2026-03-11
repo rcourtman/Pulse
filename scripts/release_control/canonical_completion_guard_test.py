@@ -93,6 +93,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             self.assertIn("allow_same_subsystem_tests", rule["verification"])
             self.assertIn("test_prefixes", rule["verification"])
             self.assertIn("exact_files", rule["verification"])
+            self.assertIn("require_explicit_path_policy_coverage", rule["verification"])
             self.assertIn("path_policies", rule["verification"])
 
     def test_monitoring_runtime_change_requires_monitoring_contract(self):
@@ -325,6 +326,48 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ["frontend-modern/src/api/__tests__/alerts.test.ts"],
         )
         self.assertEqual(matches, ["frontend-modern/src/api/__tests__/alerts.test.ts"])
+
+    def test_explicit_coverage_gap_uses_registry_path_policy_requirement(self):
+        synthetic_rule = {
+            "id": "synthetic",
+            "verification": {
+                "allow_same_subsystem_tests": False,
+                "test_prefixes": [],
+                "exact_files": ["synthetic/proof_test.go"],
+                "require_explicit_path_policy_coverage": True,
+                "path_policies": [
+                    {
+                        "id": "covered-path",
+                        "label": "covered path proof",
+                        "match_prefixes": ["synthetic/covered/"],
+                        "match_files": [],
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": ["synthetic/proof_test.go"],
+                    }
+                ],
+            },
+        }
+
+        requirements = build_verification_requirements(
+            synthetic_rule,
+            ["synthetic/uncovered/runtime.go"],
+        )
+
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "missing-path-policy-coverage",
+                    "label": "registry path policy coverage",
+                    "touched_runtime_files": ["synthetic/uncovered/runtime.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [],
+                    "path_policy_gap": True,
+                }
+            ],
+        )
 
     def test_api_contracts_owned_runtime_has_no_default_fallback(self):
         api_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")

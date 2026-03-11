@@ -23,13 +23,25 @@ REQUIRED_VERIFICATION_FIELDS: tuple[str, ...] = (
     "allow_same_subsystem_tests",
     "test_prefixes",
     "exact_files",
+    "require_explicit_path_policy_coverage",
+)
+REQUIRED_PATH_POLICY_FIELDS: tuple[str, ...] = (
+    "allow_same_subsystem_tests",
+    "test_prefixes",
+    "exact_files",
 )
 
 
-def validate_verification_policy(subsystem_id: str, policy: dict, *, context: str) -> None:
+def validate_verification_policy(
+    subsystem_id: str,
+    policy: dict,
+    *,
+    context: str,
+    required_fields: tuple[str, ...] = REQUIRED_VERIFICATION_FIELDS,
+) -> None:
     if not isinstance(policy, dict):
         raise ValueError(f"subsystem {subsystem_id} {context} missing verification policy")
-    for field in REQUIRED_VERIFICATION_FIELDS:
+    for field in required_fields:
         if field not in policy:
             raise ValueError(f"subsystem {subsystem_id} {context} missing {field}")
 
@@ -50,6 +62,7 @@ def load_subsystem_rules() -> List[dict]:
                 subsystem_id,
                 policy,
                 context=f"path policy #{index}",
+                required_fields=REQUIRED_PATH_POLICY_FIELDS,
             )
             if "id" not in policy:
                 raise ValueError(f"subsystem {subsystem_id} path policy #{index} missing id")
@@ -134,6 +147,9 @@ def normalize_verification_requirement(
 def build_verification_requirements(rule: dict, touched_runtime_files: Sequence[str]) -> List[dict]:
     verification = dict(rule.get("verification", {}))
     path_policies = list(verification.get("path_policies", []))
+    require_explicit_path_policy_coverage = bool(
+        verification.get("require_explicit_path_policy_coverage", False)
+    )
     requirements: List[dict] = []
     matched_by_policy: Dict[str, dict] = {}
     unmatched_runtime_files: List[str] = []
@@ -158,15 +174,29 @@ def build_verification_requirements(rule: dict, touched_runtime_files: Sequence[
         requirement["touched_runtime_files"].append(path)
 
     if unmatched_runtime_files:
-        requirements.insert(
-            0,
-            normalize_verification_requirement(
-                verification,
-                requirement_id="default",
-                label="default subsystem verification",
-                touched_runtime_files=unmatched_runtime_files,
-            ),
-        )
+        if require_explicit_path_policy_coverage:
+            requirements.insert(
+                0,
+                {
+                    "id": "missing-path-policy-coverage",
+                    "label": "registry path policy coverage",
+                    "touched_runtime_files": list(unmatched_runtime_files),
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [],
+                    "path_policy_gap": True,
+                },
+            )
+        else:
+            requirements.insert(
+                0,
+                normalize_verification_requirement(
+                    verification,
+                    requirement_id="default",
+                    label="default subsystem verification",
+                    touched_runtime_files=unmatched_runtime_files,
+                ),
+            )
 
     return requirements
 
@@ -235,11 +265,22 @@ def format_missing_requirements(missing_contracts: Dict[str, dict], missing_veri
 
     for subsystem_id, data in sorted(missing_verification.items()):
         for requirement in data["missing_requirements"]:
-            lines.append(
-                f"- subsystem {subsystem_id}: missing verification artifact for {requirement['label']}"
-            )
+            if requirement.get("path_policy_gap"):
+                lines.append(
+                    f"- subsystem {subsystem_id}: missing registry path policy coverage for touched runtime files"
+                )
+            else:
+                lines.append(
+                    f"- subsystem {subsystem_id}: missing verification artifact for {requirement['label']}"
+                )
             for path in sorted(requirement["touched_runtime_files"]):
                 lines.append(f"  touched by {path}")
+            if requirement.get("path_policy_gap"):
+                lines.append(
+                    "  update docs/release-control/v6/subsystems/registry.json so each touched path matches an explicit path policy"
+                )
+                lines.append("  default subsystem verification is forbidden for governed v6 subsystems")
+                continue
             exact_files = sorted(requirement.get("exact_files", []))
             test_prefixes = sorted(requirement.get("test_prefixes", []))
             allow_same_subsystem_tests = bool(requirement.get("allow_same_subsystem_tests", False))
