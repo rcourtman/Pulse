@@ -559,6 +559,80 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_cloud_paid_billing_state_canonicalization_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/billing_state_normalization.go", "pkg/licensing/database_source.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "billing-state-canonicalization",
+                    "label": "billing state canonicalization proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/billing_state_normalization.go",
+                        "pkg/licensing/database_source.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/billing_state_normalization_test.go",
+                        "pkg/licensing/cloud_paid_guardrails_test.go",
+                        "pkg/licensing/database_source_test.go",
+                        "pkg/licensing/grant_claims_contract_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_cloud_plan_contracts_use_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/features.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "cloud-plan-contracts",
+                    "label": "cloud plan limit proof",
+                    "touched_runtime_files": ["pkg/licensing/features.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/features_test.go",
+                        "pkg/licensing/grant_claims_contract_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_stripe_plan_derivation_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/stripe_subscription.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "stripe-plan-derivation",
+                    "label": "stripe plan derivation proof",
+                    "touched_runtime_files": ["pkg/licensing/stripe_subscription.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/grant_claims_contract_test.go",
+                        "pkg/licensing/stripe_subscription_test.go",
+                    ],
+                }
+            ],
+        )
+
     def test_api_backend_runtime_can_use_types_file_as_proof(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
         requirement = build_verification_requirements(

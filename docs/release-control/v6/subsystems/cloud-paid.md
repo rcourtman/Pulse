@@ -8,15 +8,17 @@ agreement, and cloud-specific enforcement rules.
 ## Canonical Files
 
 1. `pkg/licensing/features.go`
-2. `pkg/licensing/evaluator.go`
-3. `pkg/licensing/models.go`
-4. `pkg/licensing/activation_types.go`
-5. `pkg/licensing/service.go`
-6. `pkg/licensing/stripe_subscription.go`
-7. `internal/cloudcp/entitlements/service.go`
-8. `internal/cloudcp/registry/registry.go`
-9. `internal/cloudcp/stripe/provisioner.go`
-10. `frontend-modern/src/pages/CloudPricing.tsx`
+2. `pkg/licensing/billing_state_normalization.go`
+3. `pkg/licensing/database_source.go`
+4. `pkg/licensing/evaluator.go`
+5. `pkg/licensing/models.go`
+6. `pkg/licensing/activation_types.go`
+7. `pkg/licensing/service.go`
+8. `pkg/licensing/stripe_subscription.go`
+9. `internal/cloudcp/entitlements/service.go`
+10. `internal/cloudcp/registry/registry.go`
+11. `internal/cloudcp/stripe/provisioner.go`
+12. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Extension Points
 
@@ -94,3 +96,7 @@ contract and the path-specific proof files that verify those boundaries.
 JWT-backed entitlement claim evaluation and activation-grant translation now
 follow the same explicit proof model instead of relying only on the broad cloud
 runtime catch-all policy.
+Persisted billing-state normalization, hosted database-source loading, Stripe
+plan derivation, and the cloud plan/limit tables now follow the same ratchet:
+they are expected to move behind path-specific proof routes rather than staying
+indistinguishable inside the generic cloud runtime policy.

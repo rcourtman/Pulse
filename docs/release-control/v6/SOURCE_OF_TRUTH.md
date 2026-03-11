@@ -29,6 +29,13 @@ Recent locked release decision:
   `pkg/licensing/models.go` and `pkg/licensing/activation_types.go` now require
   the cloud-paid contract plus their dedicated proof files instead of falling
   through the generic cloud runtime policy.
+- 2026-03-11: Cloud-paid governance now also explicitly owns billing-state
+  canonicalization, hosted database-source loading, Stripe plan derivation,
+  and the cloud plan limit table. Changes to
+  `pkg/licensing/billing_state_normalization.go`,
+  `pkg/licensing/database_source.go`, `pkg/licensing/features.go`, and
+  `pkg/licensing/stripe_subscription.go` now require dedicated proof routes
+  instead of relying only on the generic cloud runtime policy.
 - 2026-03-11: Canonical governance now runs in both local hooks and CI.
   `scripts/release_control/canonical_completion_guard.py` can validate either
   staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`

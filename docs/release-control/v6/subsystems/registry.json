@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "subsystems": [
     {
       "id": "alerts",
@@ -201,6 +201,51 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "billing-state-canonicalization",
+            "label": "billing state canonicalization proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/billing_state_normalization.go",
+              "pkg/licensing/database_source.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/billing_state_normalization_test.go",
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/database_source_test.go",
+              "pkg/licensing/grant_claims_contract_test.go"
+            ]
+          },
+          {
+            "id": "cloud-plan-contracts",
+            "label": "cloud plan limit proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/features.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/features_test.go",
+              "pkg/licensing/grant_claims_contract_test.go"
+            ]
+          },
+          {
+            "id": "stripe-plan-derivation",
+            "label": "stripe plan derivation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/stripe_subscription.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/stripe_subscription_test.go"
+            ]
+          },
           {
             "id": "jwt-entitlement-claims",
             "label": "JWT entitlement claim proof",
