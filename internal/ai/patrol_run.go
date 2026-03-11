@@ -177,7 +177,7 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 
 		case alert := <-p.adHocTrigger:
 			// Run immediate targeted patrol for this alert
-			log.Info().Str("alert_id", alert.ID).Msg("patrol triggered by alert")
+			log.Info().Str("alert_identifier", alert.ID).Msg("patrol triggered by alert")
 			p.runTargetedPatrol(ctx, alert)
 
 		case <-configCh:
@@ -2289,7 +2289,7 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 
 	// Gate: skip if event-driven triggers are disabled
 	if !eventTriggersEnabled {
-		log.Debug().Str("alert_id", alert.ID).Msg("alert-triggered patrol skipped: event triggers disabled")
+		log.Debug().Str("alert_identifier", alert.ID).Msg("alert-triggered patrol skipped: event triggers disabled")
 		return
 	}
 
@@ -2298,9 +2298,9 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	if triggerManager != nil {
 		scope := AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, resourceType, alert.Type)
 		if triggerManager.TriggerPatrol(scope) {
-			log.Debug().Str("alert_id", alert.ID).Msg("queued alert-triggered patrol via trigger manager")
+			log.Debug().Str("alert_identifier", alert.ID).Msg("queued alert-triggered patrol via trigger manager")
 		} else {
-			log.Warn().Str("alert_id", alert.ID).Msg("alert-triggered patrol rejected by trigger manager")
+			log.Warn().Str("alert_identifier", alert.ID).Msg("alert-triggered patrol rejected by trigger manager")
 		}
 		return
 	}
@@ -2308,9 +2308,9 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	// Non-blocking send
 	select {
 	case p.adHocTrigger <- alert:
-		log.Debug().Str("alert_id", alert.ID).Msg("queued ad-hoc patrol trigger")
+		log.Debug().Str("alert_identifier", alert.ID).Msg("queued ad-hoc patrol trigger")
 	default:
-		log.Warn().Str("alert_id", alert.ID).Msg("patrol trigger queue full, dropping trigger")
+		log.Warn().Str("alert_identifier", alert.ID).Msg("patrol trigger queue full, dropping trigger")
 	}
 }
 
@@ -2359,7 +2359,7 @@ func (p *PatrolService) endRun() {
 // runTargetedPatrol executes a focused patrol for a specific alert
 func (p *PatrolService) runTargetedPatrol(ctx context.Context, alert *alerts.Alert) {
 	log.Info().
-		Str("alert_id", alert.ID).
+		Str("alert_identifier", alert.ID).
 		Str("resource_id", alert.ResourceID).
 		Msg("Running targeted AI patrol for alert")
 

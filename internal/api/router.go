@@ -2986,7 +2986,7 @@ func (r *Router) WireAlertTriggeredAI() {
 	// 4. Connect Trigger -> Watchdog
 	// When an alert fires, we immediately trigger the Patrol Agent to investigate
 	r.monitor.SetAlertTriggeredAICallback(func(alert *alerts.Alert) {
-		log.Info().Str("alert_id", alert.ID).Msg("Alert fired leading to Patrol Trigger")
+		log.Info().Str("alert_identifier", alert.ID).Msg("Alert fired leading to Patrol Trigger")
 		patrol.TriggerPatrolForAlert(alert)
 
 		// We also trigger the specific analyzer if enabled, as it tracks specific stats
