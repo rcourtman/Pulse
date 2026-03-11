@@ -1029,7 +1029,7 @@ export type WSMessage =
   | { type: 'pong'; data?: unknown }
   | { type: 'welcome'; data?: unknown }
   | { type: 'alert'; data: Alert }
-  | { type: 'alertResolved'; data: { alertIdentifier?: string; alertId?: string } }
+  | { type: 'alertResolved'; data: { alertIdentifier: string; alertId?: string } }
   | { type: 'settingsUpdate'; data: { theme?: string } }
   | {
       type: 'update:progress';
