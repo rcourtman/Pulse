@@ -1,4 +1,5 @@
 import { apiClient } from '@/utils/apiClient';
+import { parseJSONSafe } from './responseUtils';
 
 export interface HostedSignupRequest {
   email: string;
@@ -49,14 +50,6 @@ function normalizeHostedError(payload: unknown, fallbackStatus: number): HostedA
   };
 }
 
-async function parseJSONSafe(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
 export class HostedSignupAPI {
   static async signup(
     payload: HostedSignupRequest,
@@ -72,7 +65,7 @@ export class HostedSignupAPI {
       skipOrgContext: true,
     });
 
-    const body = await parseJSONSafe(response);
+    const body = await parseJSONSafe<HostedSignupResponse | HostedAPIError>(response);
     if (response.ok) {
       return {
         ok: true,
@@ -99,7 +92,7 @@ export class HostedSignupAPI {
       skipOrgContext: true,
     });
 
-    const body = await parseJSONSafe(response);
+    const body = await parseJSONSafe<HostedMagicLinkResponse | HostedAPIError>(response);
     if (response.ok) {
       return {
         ok: true,

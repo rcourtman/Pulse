@@ -102,3 +102,32 @@ export async function parseOptionalJSON<T>(
     throw new Error(parseErrorMessage);
   }
 }
+
+export async function parseRequiredJSON<T>(
+  response: Response,
+  parseErrorMessage: string,
+): Promise<T> {
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(parseErrorMessage);
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(parseErrorMessage);
+  }
+}
+
+export async function parseJSONSafe<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}

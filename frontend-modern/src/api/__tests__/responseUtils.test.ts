@@ -4,7 +4,9 @@ import {
   apiResponseStatus,
   isAPIErrorStatus,
   isAPIResponseStatus,
+  parseJSONSafe,
   parseOptionalJSON,
+  parseRequiredJSON,
   readAPIErrorMessage,
 } from '@/api/responseUtils';
 
@@ -102,6 +104,48 @@ describe('parseOptionalJSON', () => {
     await expect(parseOptionalJSON(response, {}, 'Custom parse error')).rejects.toThrow(
       'Custom parse error',
     );
+  });
+});
+
+describe('parseRequiredJSON', () => {
+  it('parses valid JSON payloads', async () => {
+    const response = new Response(JSON.stringify({ name: 'test', count: 5 }));
+    const result = await parseRequiredJSON(response, 'Parse error');
+    expect(result).toEqual({ name: 'test', count: 5 });
+  });
+
+  it('throws for empty response bodies', async () => {
+    const response = new Response('');
+    await expect(parseRequiredJSON(response, 'Required parse error')).rejects.toThrow(
+      'Required parse error',
+    );
+  });
+
+  it('throws for invalid JSON payloads', async () => {
+    const response = new Response('not valid json');
+    await expect(parseRequiredJSON(response, 'Required parse error')).rejects.toThrow(
+      'Required parse error',
+    );
+  });
+});
+
+describe('parseJSONSafe', () => {
+  it('parses valid JSON payloads', async () => {
+    const response = new Response(JSON.stringify({ ok: true }));
+    const result = await parseJSONSafe<{ ok: boolean }>(response);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('returns null for empty payloads', async () => {
+    const response = new Response('');
+    const result = await parseJSONSafe(response);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for invalid JSON payloads', async () => {
+    const response = new Response('not valid json');
+    const result = await parseJSONSafe(response);
+    expect(result).toBeNull();
   });
 });
 

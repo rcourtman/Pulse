@@ -1,5 +1,10 @@
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
-import { isAPIErrorStatus, isAPIResponseStatus, readAPIErrorMessage } from './responseUtils';
+import {
+  isAPIErrorStatus,
+  isAPIResponseStatus,
+  parseRequiredJSON,
+  readAPIErrorMessage,
+} from './responseUtils';
 
 /**
  * Agent profile for centralized configuration management.
@@ -142,7 +147,7 @@ export class AgentProfilesAPI {
       );
     }
 
-    return response.json();
+    return parseRequiredJSON(response, 'Failed to parse created profile');
   }
 
   /**
@@ -166,7 +171,7 @@ export class AgentProfilesAPI {
       );
     }
 
-    return response.json();
+    return parseRequiredJSON(response, 'Failed to parse updated profile');
   }
 
   /**
@@ -253,7 +258,7 @@ export class AgentProfilesAPI {
       );
     }
 
-    return response.json();
+    return parseRequiredJSON(response, 'Failed to parse profile suggestion');
   }
 
   /**

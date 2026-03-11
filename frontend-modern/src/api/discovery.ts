@@ -1,5 +1,5 @@
 import { apiFetch } from '@/utils/apiClient';
-import { isAPIResponseStatus, readAPIErrorMessage } from './responseUtils';
+import { isAPIResponseStatus, parseRequiredJSON, readAPIErrorMessage } from './responseUtils';
 import type {
   ResourceType,
   ResourceDiscovery,
@@ -31,7 +31,7 @@ export async function listDiscoveries(): Promise<DiscoveryListResponse> {
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to list discoveries'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse discoveries');
 }
 
 /**
@@ -48,7 +48,7 @@ export async function listDiscoveriesByType(
       await readAPIErrorMessage(response, `Failed to list discoveries for type ${resourceType}`),
     );
   }
-  return response.json();
+  return parseRequiredJSON(response, `Failed to parse discoveries for type ${resourceType}`);
 }
 
 /**
@@ -61,7 +61,7 @@ export async function listDiscoveriesByAgent(agentId: string): Promise<Discovery
       await readAPIErrorMessage(response, `Failed to list discoveries for agent ${agentId}`),
     );
   }
-  return response.json();
+  return parseRequiredJSON(response, `Failed to parse discoveries for agent ${agentId}`);
 }
 
 /**
@@ -85,7 +85,10 @@ export async function getDiscovery(
       );
     }
 
-    const agentList = (await agentListResponse.json()) as DiscoveryListResponse;
+    const agentList = await parseRequiredJSON<DiscoveryListResponse>(
+      agentListResponse,
+      'Failed to parse agent discoveries',
+    );
     if (!agentList.discoveries || agentList.discoveries.length === 0) {
       return null;
     }
@@ -117,7 +120,7 @@ export async function getDiscovery(
     if (!response.ok) {
       throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery'));
     }
-    return response.json();
+    return parseRequiredJSON(response, 'Failed to parse discovery');
   }
 
   const apiResourceType = resolveAPIResourceType(resourceType);
@@ -130,7 +133,7 @@ export async function getDiscovery(
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse discovery');
 }
 
 /**
@@ -156,7 +159,7 @@ export async function triggerDiscovery(
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Discovery failed'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse discovery trigger response');
 }
 
 /**
@@ -174,7 +177,7 @@ export async function getDiscoveryProgress(
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery progress'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse discovery progress');
 }
 
 /**
@@ -200,7 +203,7 @@ export async function updateDiscoveryNotes(
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to update notes'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse updated discovery notes');
 }
 
 /**
@@ -231,7 +234,7 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery status'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse discovery status');
 }
 
 /**
@@ -244,7 +247,7 @@ export async function getDiscoveryInfo(resourceType: ResourceType): Promise<Disc
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery info'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse discovery info');
 }
 
 /**
@@ -328,5 +331,5 @@ export async function getConnectedAgents(): Promise<{ count: number; agents: Con
   if (!response.ok) {
     throw new Error(await readAPIErrorMessage(response, 'Failed to get connected agents'));
   }
-  return response.json();
+  return parseRequiredJSON(response, 'Failed to parse connected agents');
 }

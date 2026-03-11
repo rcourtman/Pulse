@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import aiSource from '@/api/ai.ts?raw';
 import agentProfilesSource from '@/api/agentProfiles.ts?raw';
 import discoverySource from '@/api/discovery.ts?raw';
+import hostedSignupSource from '@/api/hostedSignup.ts?raw';
 import monitoringSource from '@/api/monitoring.ts?raw';
 import responseUtilsSource from '@/api/responseUtils.ts?raw';
 
@@ -17,11 +18,13 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function isAPIErrorStatus');
     expect(responseUtilsSource).toContain('export function apiResponseStatus');
     expect(responseUtilsSource).toContain('export function isAPIResponseStatus');
+    expect(responseUtilsSource).toContain('export async function parseRequiredJSON');
+    expect(responseUtilsSource).toContain('export async function parseJSONSafe');
     expect(responseUtilsSource).toContain('(error as APIErrorLike).status');
     expect(responseUtilsSource).toContain('response.status');
   });
 
-  it('routes canonical paywall and not-found API error handling through responseUtils', () => {
+  it('routes canonical status and JSON parsing through responseUtils', () => {
     expect(aiSource).toContain('isAPIErrorStatus(error, 402)');
     expect(aiSource).not.toContain("message.includes('402')");
 
@@ -29,23 +32,34 @@ describe('API error-status guardrails', () => {
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 404)');
     expect(agentProfilesSource).toContain('isAPIResponseStatus(response, 204)');
     expect(agentProfilesSource).toContain('isAPIResponseStatus(response, 503)');
+    expect(agentProfilesSource).toContain('parseRequiredJSON(response,');
     expect(agentProfilesSource).not.toContain("message.includes('402')");
     expect(agentProfilesSource).not.toContain("message.includes('404')");
     expect(agentProfilesSource).not.toContain('response.status !== 204');
     expect(agentProfilesSource).not.toContain('response.status === 503');
+    expect(agentProfilesSource).not.toContain('return response.json()');
 
     expect(monitoringSource).toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).toContain('isAPIResponseStatus(response, 404)');
+    expect(discoverySource).toContain('parseRequiredJSON(response,');
     expect(monitoringSource).not.toContain('response.status === 404');
     expect(discoverySource).not.toContain('response.status === 404');
+    expect(discoverySource).not.toContain('return response.json()');
+
+    expect(hostedSignupSource).toContain('parseJSONSafe<');
+    expect(hostedSignupSource).not.toContain('response.json()');
   });
 
-  it('bans raw message-based 402/404 heuristics and raw governed response-status checks in runtime API modules', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, and raw governed response parsing', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
     const rawStatusHeuristicPattern = /message\.includes\((['"])40[24]\1\)/;
     const rawGovernedResponseStatusPattern = /response\.status\s*(?:===|!==)\s*(?:204|404|503)/;
+    const governedParsingEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:agentProfiles|discovery|hostedSignup)\.ts$/.test(path),
+    );
+    const rawResponseJSONPattern = /(?:return\s+)?(?:await\s+)?response\.json\(/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -57,7 +71,13 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const responseJSONOffenders = governedParsingEntries
+      .filter(([, source]) => rawResponseJSONPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
+    expect(responseJSONOffenders).toEqual([]);
   });
 });

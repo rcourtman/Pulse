@@ -83,6 +83,27 @@ describe('HostedSignupAPI', () => {
     });
   });
 
+  it('fails closed when an error response body is not valid JSON', async () => {
+    vi.mocked(apiClient.fetch).mockResolvedValueOnce(
+      new Response('not valid json', { status: 502 }),
+    );
+
+    const result = await HostedSignupAPI.signup({
+      email: 'owner@example.com',
+      org_name: 'Acme',
+      tier: 'starter',
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: 502,
+      error: {
+        code: 'request_failed',
+        message: 'Request failed (502)',
+      },
+    });
+  });
+
   it('requests public magic link with public request options', async () => {
     vi.mocked(apiClient.fetch).mockResolvedValueOnce(
       new Response(
