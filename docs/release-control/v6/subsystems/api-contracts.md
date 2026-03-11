@@ -160,6 +160,11 @@ Monitoring delete and idempotent mutate clients must now also route `404`/`204`
 success cases through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
 status-branch stacks in each method.
+The docker-runtime and kubernetes-cluster managed-resource clients in
+`frontend-modern/src/api/monitoring.ts` must now also route shared delete,
+allowed-missing mutation, and display-name transport mechanics through
+canonical local helpers in that file rather than duplicating the same
+fetch-and-assert stacks across runtime and cluster variants.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local

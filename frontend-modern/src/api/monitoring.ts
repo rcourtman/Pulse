@@ -17,6 +17,52 @@ import {
   parseOptionalAPIResponseOrNull,
 } from './responseUtils';
 
+async function deleteManagedResource<T extends object>(
+  url: string,
+  parseErrorMessage: string,
+): Promise<T> {
+  const response = await apiFetch(url, {
+    method: 'DELETE',
+  });
+
+  return parseOptionalAPIResponseOrAllowedStatus(
+    response,
+    [204, 404],
+    {} as T,
+    `Failed with status ${response.status}`,
+    parseErrorMessage,
+  );
+}
+
+async function runIdempotentManagedMutation(url: string): Promise<void> {
+  const response = await apiFetch(url, {
+    method: 'PUT',
+  });
+
+  await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
+}
+
+async function setManagedResourceDisplayName(
+  url: string,
+  displayName: string,
+  missingMessage: string,
+): Promise<void> {
+  const response = await apiFetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ displayName }),
+  });
+
+  await assertAPIResponseOKOrThrowStatus(
+    response,
+    404,
+    missingMessage,
+    `Failed with status ${response.status}`,
+  );
+}
+
 export class MonitoringAPI {
   private static baseUrl = '/api';
 
@@ -47,55 +93,28 @@ export class MonitoringAPI {
     const query = params.toString();
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}${query ? `?${query}` : ''}`;
 
-    const response = await apiFetch(url, {
-      method: 'DELETE',
-    });
-
-    return parseOptionalAPIResponseOrAllowedStatus(
-      response,
-      [204, 404],
-      {},
-      `Failed with status ${response.status}`,
+    return deleteManagedResource<DeleteDockerRuntimeResponse>(
+      url,
       'Failed to parse delete container runtime response',
     );
   }
 
   static async unhideDockerRuntime(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/unhide`;
-
-    const response = await apiFetch(url, {
-      method: 'PUT',
-    });
-
-    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
+    await runIdempotentManagedMutation(url);
   }
 
   static async markDockerRuntimePendingUninstall(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/pending-uninstall`;
-
-    const response = await apiFetch(url, {
-      method: 'PUT',
-    });
-
-    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
+    await runIdempotentManagedMutation(url);
   }
 
   static async setDockerRuntimeDisplayName(agentId: string, displayName: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/display-name`;
-
-    const response = await apiFetch(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ displayName }),
-    });
-
-    await assertAPIResponseOKOrThrowStatus(
-      response,
-      404,
+    await setManagedResourceDisplayName(
+      url,
+      displayName,
       'Container runtime not found',
-      `Failed with status ${response.status}`,
     );
   }
 
@@ -113,38 +132,20 @@ export class MonitoringAPI {
     clusterId: string,
   ): Promise<DeleteKubernetesClusterResponse> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}`;
-
-    const response = await apiFetch(url, {
-      method: 'DELETE',
-    });
-
-    return parseOptionalAPIResponseOrAllowedStatus(
-      response,
-      [204, 404],
-      {},
-      `Failed with status ${response.status}`,
+    return deleteManagedResource<DeleteKubernetesClusterResponse>(
+      url,
       'Failed to parse delete kubernetes cluster response',
     );
   }
 
   static async unhideKubernetesCluster(clusterId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/unhide`;
-
-    const response = await apiFetch(url, {
-      method: 'PUT',
-    });
-
-    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
+    await runIdempotentManagedMutation(url);
   }
 
   static async markKubernetesClusterPendingUninstall(clusterId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/pending-uninstall`;
-
-    const response = await apiFetch(url, {
-      method: 'PUT',
-    });
-
-    await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
+    await runIdempotentManagedMutation(url);
   }
 
   static async setKubernetesClusterDisplayName(
@@ -152,20 +153,10 @@ export class MonitoringAPI {
     displayName: string,
   ): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/display-name`;
-
-    const response = await apiFetch(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ displayName }),
-    });
-
-    await assertAPIResponseOKOrThrowStatus(
-      response,
-      404,
+    await setManagedResourceDisplayName(
+      url,
+      displayName,
       'Kubernetes cluster not found',
-      `Failed with status ${response.status}`,
     );
   }
 

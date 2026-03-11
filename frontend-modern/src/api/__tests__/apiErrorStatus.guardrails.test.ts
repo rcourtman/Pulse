@@ -112,11 +112,30 @@ describe('API error-status guardrails', () => {
     expect(monitoringSource).toContain('parseOptionalAPIResponseOrAllowedStatus(');
     expect(monitoringSource).toContain('parseOptionalSuccessAPIResponse<');
     expect(monitoringSource).toContain('parseOptionalAPIResponseOrNull<AgentLookupResponse>(');
+    expect(monitoringSource).toContain('async function deleteManagedResource<');
+    expect(monitoringSource).toContain('async function runIdempotentManagedMutation(url: string)');
+    expect(monitoringSource).toContain('async function setManagedResourceDisplayName(');
     expect(monitoringSource).toContain('assertAPIResponseOK(response,');
     expect(monitoringSource).toContain('assertAPIResponseOKOrAllowedStatus(response, 404,');
     expect(monitoringSource).toContain('assertAPIResponseOKOrThrowStatus(');
     expect(monitoringSource).toContain('coerceTimestampMillis(identity.lastSeen, Date.now())');
     expect(monitoringSource).toContain("'Failed to parse agent lookup response'");
+    expect(
+      monitoringSource.match(
+        /parseOptionalAPIResponseOrAllowedStatus\(\s*response,\s*\[204,\s*404\]/g,
+      ) ?? [],
+    ).toHaveLength(1);
+    expect(
+      monitoringSource.match(
+        /assertAPIResponseOKOrAllowedStatus\(response,\s*404,\s*`Failed with status \$\{response\.status\}`\)/g,
+      ) ?? [],
+    ).toHaveLength(1);
+    expect(
+      monitoringSource.match(/body:\s*JSON\.stringify\(\{\s*displayName\s*\}\)/g) ?? [],
+    ).toHaveLength(1);
+    expect(
+      monitoringSource.match(/assertAPIResponseOKOrThrowStatus\(\s*response,\s*404,/g) ?? [],
+    ).toHaveLength(1);
     expect(discoverySource).toContain('assertAPIResponseOK(response,');
     expect(discoverySource).toContain('parseRequiredAPIResponse(');
     expect(discoverySource).toContain('parseRequiredAPIResponseOrNull(');
