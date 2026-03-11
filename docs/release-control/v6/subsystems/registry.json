@@ -6,9 +6,9 @@
       "lane": "L6",
       "contract": "docs/release-control/v6/subsystems/alerts.md",
       "owned_prefixes": [
-        "internal/alerts/",
+        "frontend-modern/src/components/Alerts/",
         "frontend-modern/src/features/alerts/",
-        "frontend-modern/src/components/Alerts/"
+        "internal/alerts/"
       ],
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx"
@@ -62,8 +62,8 @@
             "id": "alerts-frontend-surface",
             "label": "alerts frontend surface proof",
             "match_prefixes": [
-              "frontend-modern/src/features/alerts/",
-              "frontend-modern/src/components/Alerts/"
+              "frontend-modern/src/components/Alerts/",
+              "frontend-modern/src/features/alerts/"
             ],
             "match_files": [
               "frontend-modern/src/pages/Alerts.tsx"
@@ -71,14 +71,14 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Alerts/EmailProviderSelect.test.tsx",
-              "frontend-modern/src/components/Alerts/ResourceTable.test.tsx",
-              "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
               "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
               "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
               "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
+              "frontend-modern/src/components/Alerts/EmailProviderSelect.test.tsx",
+              "frontend-modern/src/components/Alerts/ResourceTable.test.tsx",
               "frontend-modern/src/components/Alerts/Thresholds/hooks/__tests__/useCollapsedSections.test.ts",
               "frontend-modern/src/components/Alerts/Thresholds/sections/__tests__/CollapsibleSection.test.tsx",
+              "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
@@ -113,164 +113,70 @@
       }
     },
     {
-      "id": "monitoring",
+      "id": "api-contracts",
       "lane": "L6",
-      "contract": "docs/release-control/v6/subsystems/monitoring.md",
+      "contract": "docs/release-control/v6/subsystems/api-contracts.md",
       "owned_prefixes": [
-        "internal/monitoring/"
-      ],
-      "owned_files": [],
-      "verification": {
-        "allow_same_subsystem_tests": true,
-        "test_prefixes": [],
-        "exact_files": [
-          "internal/unifiedresources/code_standards_test.go"
-        ],
-        "require_explicit_path_policy_coverage": true,
-        "path_policies": [
-          {
-            "id": "metrics-hot-path",
-            "label": "monitoring metrics hot-path proof",
-            "match_prefixes": [],
-            "match_files": [
-              "internal/monitoring/monitor_metrics.go"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
-              "internal/monitoring/monitor_metrics_slo_test.go"
-            ]
-          },
-          {
-            "id": "monitoring-runtime",
-            "label": "monitoring runtime proof",
-            "match_prefixes": [
-              "internal/monitoring/"
-            ],
-            "match_files": [],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "internal/monitoring/canonical_guardrails_test.go",
-              "internal/unifiedresources/code_standards_test.go"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "id": "unified-resources",
-      "lane": "L6",
-      "contract": "docs/release-control/v6/subsystems/unified-resources.md",
-      "owned_prefixes": [
-        "internal/unifiedresources/"
+        "frontend-modern/src/api/",
+        "internal/api/"
       ],
       "owned_files": [
-        "internal/api/resources.go",
-        "frontend-modern/src/types/resource.ts",
-        "frontend-modern/src/hooks/useUnifiedResources.ts",
-        "frontend-modern/src/pages/Infrastructure.tsx",
-        "frontend-modern/src/hooks/useDashboardTrends.ts",
-        "frontend-modern/src/routing/resourceLinks.ts"
+        "frontend-modern/src/types/api.ts"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
-        "test_prefixes": [],
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [
+          "frontend-modern/src/api/__tests__/"
+        ],
         "exact_files": [
-          "internal/unifiedresources/code_standards_test.go",
-          "frontend-modern/src/stores/__tests__/websocket-unified.test.ts"
+          "internal/api/contract_test.go"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
-            "id": "identity-canonicalization",
-            "label": "canonical identity proof",
-            "match_prefixes": [],
-            "match_files": [
-              "internal/unifiedresources/canonical_identity.go",
-              "internal/unifiedresources/identity.go",
-              "internal/unifiedresources/ids.go",
-              "internal/unifiedresources/legacy_aliases.go",
-              "internal/unifiedresources/physical_disk_ids.go",
-              "internal/unifiedresources/types.go"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "internal/unifiedresources/canonical_ids_types_test.go",
-              "internal/unifiedresources/canonical_identity_test.go",
-              "internal/unifiedresources/code_standards_test.go",
-              "internal/unifiedresources/identity_test.go",
-              "internal/unifiedresources/ids_test.go"
-            ]
-          },
-          {
-            "id": "read-state-views",
-            "label": "read-state and adapter proof",
-            "match_prefixes": [],
-            "match_files": [
-              "internal/unifiedresources/adapters.go",
-              "internal/unifiedresources/monitor_adapter.go",
-              "internal/unifiedresources/read_state.go",
-              "internal/unifiedresources/views.go"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-              "internal/unifiedresources/adapter_coverage_test.go",
-              "internal/unifiedresources/adapters_test.go",
-              "internal/unifiedresources/monitor_adapter_read_state_test.go",
-              "internal/unifiedresources/views_test.go"
-            ]
-          },
-          {
-            "id": "resource-consumers",
-            "label": "unified resource consumer proof",
-            "match_prefixes": [],
-            "match_files": [
-              "internal/api/resources.go",
-              "frontend-modern/src/types/resource.ts",
-              "frontend-modern/src/hooks/useUnifiedResources.ts",
-              "frontend-modern/src/pages/Infrastructure.tsx",
-              "frontend-modern/src/hooks/useDashboardTrends.ts",
-              "frontend-modern/src/routing/resourceLinks.ts"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
-              "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
-              "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
-              "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
-              "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
-              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-              "frontend-modern/src/types/__tests__/resource.test.ts",
-              "internal/unifiedresources/code_standards_test.go"
-            ]
-          },
-          {
-            "id": "unified-resource-runtime-support",
-            "label": "unified resource runtime support proof",
+            "id": "backend-payload-contracts",
+            "label": "backend API payload proof",
             "match_prefixes": [
-              "internal/unifiedresources/"
+              "internal/api/"
             ],
             "match_files": [],
             "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
             "exact_files": [
-              "internal/unifiedresources/code_standards_test.go",
-              "internal/unifiedresources/kubernetes_registry_test.go",
-              "internal/unifiedresources/metrics_targets_test.go",
-              "internal/unifiedresources/metrics_test.go",
-              "internal/unifiedresources/pbs_pmg_registry_test.go",
-              "internal/unifiedresources/registry_merge_policy_test.go",
-              "internal/unifiedresources/registry_test.go",
-              "internal/unifiedresources/resolve_test.go",
-              "internal/unifiedresources/resolved_host_set_test.go",
-              "internal/unifiedresources/snapshot_source_filter_test.go",
-              "internal/unifiedresources/store_test.go"
+              "frontend-modern/src/types/api.ts",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "frontend-api-clients",
+            "label": "frontend API client proof",
+            "match_prefixes": [
+              "frontend-modern/src/api/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-api-types",
+            "label": "frontend API type sync proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/types/api.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts"
             ]
           }
         ]
@@ -281,24 +187,24 @@
       "lane": "L3",
       "contract": "docs/release-control/v6/subsystems/cloud-paid.md",
       "owned_prefixes": [
-        "pkg/licensing/",
         "internal/api/licensing_",
         "internal/api/payments_",
-        "internal/api/stripe_"
+        "internal/api/stripe_",
+        "pkg/licensing/"
       ],
       "owned_files": [
+        "frontend-modern/src/pages/CloudPricing.tsx",
+        "frontend-modern/src/pages/HostedSignup.tsx",
         "internal/cloudcp/entitlements/service.go",
         "internal/cloudcp/registry/registry.go",
-        "internal/cloudcp/stripe/provisioner.go",
-        "frontend-modern/src/pages/CloudPricing.tsx",
-        "frontend-modern/src/pages/HostedSignup.tsx"
+        "internal/cloudcp/stripe/provisioner.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
         "test_prefixes": [],
         "exact_files": [
-          "pkg/licensing/grant_claims_contract_test.go",
-          "internal/api/contract_test.go"
+          "internal/api/contract_test.go",
+          "pkg/licensing/grant_claims_contract_test.go"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
@@ -307,10 +213,10 @@
             "label": "runtime entitlement surface proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/licensing/evaluator.go",
-              "pkg/licensing/token_source.go",
               "pkg/licensing/entitlement_payload.go",
-              "pkg/licensing/hosted_subscription.go"
+              "pkg/licensing/evaluator.go",
+              "pkg/licensing/hosted_subscription.go",
+              "pkg/licensing/token_source.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -459,9 +365,9 @@
             "label": "activation service runtime proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/licensing/service.go",
               "pkg/licensing/grant_refresh.go",
-              "pkg/licensing/revocation_poll.go"
+              "pkg/licensing/revocation_poll.go",
+              "pkg/licensing/service.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -491,8 +397,8 @@
             "label": "activation state persistence proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/licensing/persistence.go",
-              "pkg/licensing/activation_store.go"
+              "pkg/licensing/activation_store.go",
+              "pkg/licensing/persistence.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -671,76 +577,6 @@
       }
     },
     {
-      "id": "api-contracts",
-      "lane": "L6",
-      "contract": "docs/release-control/v6/subsystems/api-contracts.md",
-      "owned_prefixes": [
-        "internal/api/",
-        "frontend-modern/src/api/"
-      ],
-      "owned_files": [
-        "frontend-modern/src/types/api.ts"
-      ],
-      "verification": {
-        "allow_same_subsystem_tests": false,
-        "test_prefixes": [
-          "frontend-modern/src/api/__tests__/"
-        ],
-        "exact_files": [
-          "internal/api/contract_test.go"
-        ],
-        "require_explicit_path_policy_coverage": true,
-        "path_policies": [
-          {
-            "id": "backend-payload-contracts",
-            "label": "backend API payload proof",
-            "match_prefixes": [
-              "internal/api/"
-            ],
-            "match_files": [],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [
-              "frontend-modern/src/api/__tests__/"
-            ],
-            "exact_files": [
-              "internal/api/contract_test.go",
-              "frontend-modern/src/types/api.ts"
-            ]
-          },
-          {
-            "id": "frontend-api-clients",
-            "label": "frontend API client proof",
-            "match_prefixes": [
-              "frontend-modern/src/api/"
-            ],
-            "match_files": [],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [
-              "frontend-modern/src/api/__tests__/"
-            ],
-            "exact_files": [
-              "frontend-modern/src/types/api.ts"
-            ]
-          },
-          {
-            "id": "frontend-api-types",
-            "label": "frontend API type sync proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/types/api.ts"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [
-              "frontend-modern/src/api/__tests__/"
-            ],
-            "exact_files": [
-              "frontend-modern/src/types/api.ts"
-            ]
-          }
-        ]
-      }
-    },
-    {
       "id": "frontend-primitives",
       "lane": "L8",
       "contract": "docs/release-control/v6/subsystems/frontend-primitives.md",
@@ -820,19 +656,66 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
-              "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
-              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
-              "frontend-modern/src/components/shared/PageControls.test.tsx",
-              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
               "frontend-modern/src/components/shared/__tests__/CommandPaletteModal.test.tsx",
               "frontend-modern/src/components/shared/__tests__/Dialog.test.tsx",
               "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx",
-              "frontend-modern/src/components/shared/__tests__/WhatsNewModal.test.tsx"
+              "frontend-modern/src/components/shared/__tests__/WhatsNewModal.test.tsx",
+              "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
+              "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
+              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+              "frontend-modern/src/components/shared/PageControls.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "monitoring",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/monitoring.md",
+      "owned_prefixes": [
+        "internal/monitoring/"
+      ],
+      "owned_files": [],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/unifiedresources/code_standards_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "metrics-hot-path",
+            "label": "monitoring metrics hot-path proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/monitor_metrics.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
+              "internal/monitoring/monitor_metrics_slo_test.go"
+            ]
+          },
+          {
+            "id": "monitoring-runtime",
+            "label": "monitoring runtime proof",
+            "match_prefixes": [
+              "internal/monitoring/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/canonical_guardrails_test.go",
+              "internal/unifiedresources/code_standards_test.go"
             ]
           }
         ]
@@ -846,20 +729,20 @@
         "pkg/metrics/"
       ],
       "owned_files": [
+        "internal/api/router_bench_test.go",
         "internal/api/slo.go",
-        "internal/api/slo_bench_test.go",
-        "internal/api/router_bench_test.go"
+        "internal/api/slo_bench_test.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
+          "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+          "internal/api/router_bench_test.go",
+          "internal/api/slo_bench_test.go",
           "pkg/metrics/store_bench_test.go",
           "pkg/metrics/store_query_plan_test.go",
-          "pkg/metrics/store_slo_test.go",
-          "internal/api/slo_bench_test.go",
-          "internal/api/router_bench_test.go",
-          "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx"
+          "pkg/metrics/store_slo_test.go"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
@@ -889,6 +772,123 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/slo_bench_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "unified-resources",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/unified-resources.md",
+      "owned_prefixes": [
+        "internal/unifiedresources/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/hooks/useDashboardTrends.ts",
+        "frontend-modern/src/hooks/useUnifiedResources.ts",
+        "frontend-modern/src/pages/Infrastructure.tsx",
+        "frontend-modern/src/routing/resourceLinks.ts",
+        "frontend-modern/src/types/resource.ts",
+        "internal/api/resources.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+          "internal/unifiedresources/code_standards_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "identity-canonicalization",
+            "label": "canonical identity proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/canonical_identity.go",
+              "internal/unifiedresources/identity.go",
+              "internal/unifiedresources/ids.go",
+              "internal/unifiedresources/legacy_aliases.go",
+              "internal/unifiedresources/physical_disk_ids.go",
+              "internal/unifiedresources/types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/canonical_identity_test.go",
+              "internal/unifiedresources/canonical_ids_types_test.go",
+              "internal/unifiedresources/code_standards_test.go",
+              "internal/unifiedresources/identity_test.go",
+              "internal/unifiedresources/ids_test.go"
+            ]
+          },
+          {
+            "id": "read-state-views",
+            "label": "read-state and adapter proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/adapters.go",
+              "internal/unifiedresources/monitor_adapter.go",
+              "internal/unifiedresources/read_state.go",
+              "internal/unifiedresources/views.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "internal/unifiedresources/adapter_coverage_test.go",
+              "internal/unifiedresources/adapters_test.go",
+              "internal/unifiedresources/monitor_adapter_read_state_test.go",
+              "internal/unifiedresources/views_test.go"
+            ]
+          },
+          {
+            "id": "resource-consumers",
+            "label": "unified resource consumer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/hooks/useDashboardTrends.ts",
+              "frontend-modern/src/hooks/useUnifiedResources.ts",
+              "frontend-modern/src/pages/Infrastructure.tsx",
+              "frontend-modern/src/routing/resourceLinks.ts",
+              "frontend-modern/src/types/resource.ts",
+              "internal/api/resources.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
+              "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
+              "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
+              "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
+              "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/types/__tests__/resource.test.ts",
+              "internal/unifiedresources/code_standards_test.go"
+            ]
+          },
+          {
+            "id": "unified-resource-runtime-support",
+            "label": "unified resource runtime support proof",
+            "match_prefixes": [
+              "internal/unifiedresources/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/code_standards_test.go",
+              "internal/unifiedresources/kubernetes_registry_test.go",
+              "internal/unifiedresources/metrics_targets_test.go",
+              "internal/unifiedresources/metrics_test.go",
+              "internal/unifiedresources/pbs_pmg_registry_test.go",
+              "internal/unifiedresources/registry_merge_policy_test.go",
+              "internal/unifiedresources/registry_test.go",
+              "internal/unifiedresources/resolve_test.go",
+              "internal/unifiedresources/resolved_host_set_test.go",
+              "internal/unifiedresources/snapshot_source_filter_test.go",
+              "internal/unifiedresources/store_test.go"
             ]
           }
         ]

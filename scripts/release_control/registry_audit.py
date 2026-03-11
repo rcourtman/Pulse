@@ -46,6 +46,10 @@ REQUIRED_VERIFICATION_FIELDS = schema_required(REGISTRY_SCHEMA, "verification")
 REQUIRED_PATH_POLICY_FIELDS = schema_required(REGISTRY_SCHEMA, "path_policy")
 
 
+def sorted_casefold(values: list[str]) -> list[str]:
+    return sorted(values, key=lambda value: value.casefold())
+
+
 def tracked_repo_files() -> set[str]:
     result = subprocess.run(
         ["git", "ls-files", "-z"],
@@ -132,6 +136,7 @@ def audit_registry_payload(
     seen_ids: set[str] = set()
     seen_contracts: set[str] = set()
     subsystem_summaries: list[dict[str, Any]] = []
+    subsystem_order: list[str] = []
 
     for index, raw_subsystem in enumerate(raw_subsystems):
         context = f"subsystems[{index}]"
@@ -150,6 +155,7 @@ def audit_registry_payload(
         if subsystem_id in seen_ids:
             errors.append(f"{context} duplicates subsystem id {subsystem_id!r}")
         seen_ids.add(subsystem_id)
+        subsystem_order.append(subsystem_id)
 
         lane = raw_subsystem.get("lane")
         if not isinstance(lane, str) or not LANE_RE.match(lane):
@@ -175,6 +181,11 @@ def audit_registry_payload(
         if not isinstance(owned_prefixes, list):
             errors.append(f"{context}.owned_prefixes must be a list")
             owned_prefixes = []
+        else:
+            if len(owned_prefixes) != len(set(owned_prefixes)):
+                errors.append(f"{context}.owned_prefixes must not contain duplicates")
+            if owned_prefixes != sorted_casefold(owned_prefixes):
+                errors.append(f"{context}.owned_prefixes must be sorted lexicographically")
         for prefix_index, prefix in enumerate(owned_prefixes):
             if not isinstance(prefix, str) or not prefix.strip():
                 errors.append(f"{context}.owned_prefixes[{prefix_index}] must be a non-empty string")
@@ -190,6 +201,11 @@ def audit_registry_payload(
         if not isinstance(owned_files, list):
             errors.append(f"{context}.owned_files must be a list")
             owned_files = []
+        else:
+            if len(owned_files) != len(set(owned_files)):
+                errors.append(f"{context}.owned_files must not contain duplicates")
+            if owned_files != sorted_casefold(owned_files):
+                errors.append(f"{context}.owned_files must be sorted lexicographically")
         for file_index, path in enumerate(owned_files):
             if not isinstance(path, str) or not path.strip():
                 errors.append(f"{context}.owned_files[{file_index}] must be a non-empty string")
@@ -220,6 +236,11 @@ def audit_registry_payload(
         if not isinstance(test_prefixes, list):
             errors.append(f"{context}.verification.test_prefixes must be a list")
             test_prefixes = []
+        else:
+            if len(test_prefixes) != len(set(test_prefixes)):
+                errors.append(f"{context}.verification.test_prefixes must not contain duplicates")
+            if test_prefixes != sorted_casefold(test_prefixes):
+                errors.append(f"{context}.verification.test_prefixes must be sorted lexicographically")
         for prefix_index, prefix in enumerate(test_prefixes):
             if not isinstance(prefix, str) or not prefix.strip():
                 errors.append(f"{context}.verification.test_prefixes[{prefix_index}] must be a non-empty string")
@@ -235,6 +256,11 @@ def audit_registry_payload(
         if not isinstance(exact_files, list):
             errors.append(f"{context}.verification.exact_files must be a list")
             exact_files = []
+        else:
+            if len(exact_files) != len(set(exact_files)):
+                errors.append(f"{context}.verification.exact_files must not contain duplicates")
+            if exact_files != sorted_casefold(exact_files):
+                errors.append(f"{context}.verification.exact_files must be sorted lexicographically")
         for file_index, path in enumerate(exact_files):
             if not isinstance(path, str) or not path.strip():
                 errors.append(f"{context}.verification.exact_files[{file_index}] must be a non-empty string")
@@ -252,6 +278,7 @@ def audit_registry_payload(
             path_policies = []
 
         seen_policy_ids: set[str] = set()
+        valid_policies: list[tuple[str, dict[str, Any]]] = []
         for policy_index, raw_policy in enumerate(path_policies):
             policy_context = f"{context}.verification.path_policies[{policy_index}]"
             if not isinstance(raw_policy, dict):
@@ -278,10 +305,20 @@ def audit_registry_payload(
             if not isinstance(match_prefixes, list):
                 errors.append(f"{policy_context}.match_prefixes must be a list")
                 match_prefixes = []
+            else:
+                if len(match_prefixes) != len(set(match_prefixes)):
+                    errors.append(f"{policy_context}.match_prefixes must not contain duplicates")
+                if match_prefixes != sorted_casefold(match_prefixes):
+                    errors.append(f"{policy_context}.match_prefixes must be sorted lexicographically")
             match_files = raw_policy.get("match_files")
             if not isinstance(match_files, list):
                 errors.append(f"{policy_context}.match_files must be a list")
                 match_files = []
+            else:
+                if len(match_files) != len(set(match_files)):
+                    errors.append(f"{policy_context}.match_files must not contain duplicates")
+                if match_files != sorted_casefold(match_files):
+                    errors.append(f"{policy_context}.match_files must be sorted lexicographically")
             if not match_prefixes and not match_files:
                 errors.append(f"{policy_context} must define at least one match_prefix or match_file")
 
@@ -314,6 +351,11 @@ def audit_registry_payload(
             if not isinstance(policy_test_prefixes, list):
                 errors.append(f"{policy_context}.test_prefixes must be a list")
                 policy_test_prefixes = []
+            else:
+                if len(policy_test_prefixes) != len(set(policy_test_prefixes)):
+                    errors.append(f"{policy_context}.test_prefixes must not contain duplicates")
+                if policy_test_prefixes != sorted_casefold(policy_test_prefixes):
+                    errors.append(f"{policy_context}.test_prefixes must be sorted lexicographically")
             for prefix_index, prefix in enumerate(policy_test_prefixes):
                 if not isinstance(prefix, str) or not prefix.strip():
                     errors.append(f"{policy_context}.test_prefixes[{prefix_index}] must be a non-empty string")
@@ -329,6 +371,11 @@ def audit_registry_payload(
             if not isinstance(policy_exact_files, list):
                 errors.append(f"{policy_context}.exact_files must be a list")
                 policy_exact_files = []
+            else:
+                if len(policy_exact_files) != len(set(policy_exact_files)):
+                    errors.append(f"{policy_context}.exact_files must not contain duplicates")
+                if policy_exact_files != sorted_casefold(policy_exact_files):
+                    errors.append(f"{policy_context}.exact_files must be sorted lexicographically")
             for file_index, path in enumerate(policy_exact_files):
                 if not isinstance(path, str) or not path.strip():
                     errors.append(f"{policy_context}.exact_files[{file_index}] must be a non-empty string")
@@ -340,11 +387,29 @@ def audit_registry_payload(
                     tracked_files=tracked_files,
                 )
 
+            valid_policies.append((policy_context, raw_policy))
+
         owned_runtime = owned_runtime_files(raw_subsystem, tracked_files)
+        previous_policies: list[dict[str, Any]] = []
+        for policy_context, policy in valid_policies:
+            matched_owned_runtime = [path for path in owned_runtime if path_policy_matches(policy, path)]
+            if not matched_owned_runtime:
+                errors.append(f"{policy_context} does not match any owned runtime files")
+                previous_policies.append(policy)
+                continue
+            if previous_policies and all(
+                any(path_policy_matches(previous_policy, path) for previous_policy in previous_policies)
+                for path in matched_owned_runtime
+            ):
+                errors.append(
+                    f"{policy_context} is unreachable because earlier path policies already match all owned runtime files"
+                )
+            previous_policies.append(policy)
+
         uncovered_owned_runtime = [
             path
             for path in owned_runtime
-            if not any(path_policy_matches(policy, path) for policy in path_policies if isinstance(policy, dict))
+            if not any(path_policy_matches(policy, path) for _, policy in valid_policies)
         ]
 
         if uncovered_owned_runtime:
@@ -362,6 +427,9 @@ def audit_registry_payload(
                 "path_policy_count": len(path_policies),
             }
         )
+
+    if subsystem_order != sorted_casefold(subsystem_order):
+        errors.append("registry.json subsystems must be sorted by subsystem id")
 
     return {
         "errors": errors,

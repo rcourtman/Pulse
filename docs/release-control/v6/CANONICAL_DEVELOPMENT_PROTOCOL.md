@@ -44,8 +44,9 @@ derived evidence health. It also enforces canonical list ordering inside
 `status.json` so repo scope, lanes, evidence references, and decision timelines
 do not drift into noisy, hand-arranged variants.
 `scripts/release_control/registry_audit.py --check` is the machine audit entry
-point for validating subsystem ownership, proof routing, and registry lane
-bindings.
+point for validating subsystem ownership, proof routing, registry lane
+bindings, canonical ordering for unordered registry lists, and path-policy
+reachability under first-match precedence.
 
 ## Subsystem Contracts
 

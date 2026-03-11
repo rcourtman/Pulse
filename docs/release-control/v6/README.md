@@ -8,7 +8,7 @@ This folder is the canonical execution control layer for Pulse v6.
 2. `status.json` (live lane state, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
 3. `status.schema.json` (machine-readable contract for the `status.json` shape)
 4. `subsystems/registry.json` (machine-readable subsystem ownership and proof routing)
-5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape)
+5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape and unordered-list uniqueness)
 
 Supporting governance file:
 

@@ -137,10 +137,10 @@ def normalize_verification_requirement(
     return {
         "id": requirement_id,
         "label": label,
-        "touched_runtime_files": list(touched_runtime_files),
+        "touched_runtime_files": sorted(set(touched_runtime_files)),
         "allow_same_subsystem_tests": bool(source.get("allow_same_subsystem_tests", False)),
-        "test_prefixes": list(source.get("test_prefixes", [])),
-        "exact_files": list(source.get("exact_files", [])),
+        "test_prefixes": sorted(set(source.get("test_prefixes", []))),
+        "exact_files": sorted(set(source.get("exact_files", []))),
     }
 
 

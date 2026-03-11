@@ -48,6 +48,7 @@
         },
         "owned_prefixes": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -55,6 +56,7 @@
         },
         "owned_files": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -81,6 +83,7 @@
         },
         "test_prefixes": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -88,6 +91,7 @@
         },
         "exact_files": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -128,6 +132,7 @@
         },
         "match_prefixes": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -135,6 +140,7 @@
         },
         "match_files": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -145,6 +151,7 @@
         },
         "test_prefixes": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -152,6 +159,7 @@
         },
         "exact_files": {
           "type": "array",
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
