@@ -2,9 +2,10 @@ import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import {
   assertAPIResponseOK,
   arrayOrEmpty,
-  isAPIErrorStatus,
   objectArrayFieldOrEmpty,
   promoteLegacyAlertIdentifier,
+  withAPIErrorStatusFallback,
+  withAPIErrorStatusNull,
 } from './responseUtils';
 import { logger } from '@/utils/logger';
 import { consumeJSONEventStream } from './streaming';
@@ -210,18 +211,15 @@ export class AIAPI {
 
   // Remediation plans
   static async getRemediationPlans(): Promise<RemediationPlansResponse> {
-    try {
-      const data = (await apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`)) as {
-        plans?: RemediationPlan[];
-        executions?: unknown[];
-      };
-      return { plans: objectArrayFieldOrEmpty<RemediationPlan>(data, 'plans') };
-    } catch (error) {
-      if (isAPIErrorStatus(error, 402)) {
-        return { plans: [] };
-      }
-      throw error;
-    }
+    const data = (await withAPIErrorStatusFallback(
+      apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`),
+      402,
+      { plans: [] },
+    )) as {
+      plans?: RemediationPlan[];
+      executions?: unknown[];
+    };
+    return { plans: objectArrayFieldOrEmpty<RemediationPlan>(data, 'plans') };
   }
 
   static async getRemediationPlan(planId: string): Promise<RemediationPlan> {
@@ -265,17 +263,14 @@ export class AIAPI {
 
   // Get pending approval requests (investigation fixes waiting for user approval)
   static async getPendingApprovals(): Promise<ApprovalRequest[]> {
-    try {
-      const response = (await apiFetchJSON(`${this.baseUrl}/ai/approvals`)) as {
-        approvals: ApprovalRequest[];
-      };
-      return objectArrayFieldOrEmpty<ApprovalRequest>(response, 'approvals');
-    } catch (error) {
-      if (isAPIErrorStatus(error, 402)) {
-        return [];
-      }
-      throw error;
-    }
+    const response = (await withAPIErrorStatusFallback(
+      apiFetchJSON(`${this.baseUrl}/ai/approvals`),
+      402,
+      { approvals: [] },
+    )) as {
+      approvals: ApprovalRequest[];
+    };
+    return objectArrayFieldOrEmpty<ApprovalRequest>(response, 'approvals');
   }
 
   // Approve and execute an investigation fix
@@ -301,17 +296,10 @@ export class AIAPI {
 
   // Get investigation details for a finding (includes proposed fix)
   static async getInvestigation(findingId: string): Promise<InvestigationSession | null> {
-    try {
-      return (await apiFetchJSON(
-        `${this.baseUrl}/ai/findings/${encodeURIComponent(findingId)}/investigation`,
-      )) as InvestigationSession;
-    } catch (error) {
-      if (isAPIErrorStatus(error, 404)) {
-        return null;
-      }
-
-      throw error;
-    }
+    return (await withAPIErrorStatusNull(
+      apiFetchJSON(`${this.baseUrl}/ai/findings/${encodeURIComponent(findingId)}/investigation`),
+      404,
+    )) as InvestigationSession | null;
   }
 
   // Re-create an approval for an investigation fix (when original approval expired)

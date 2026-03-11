@@ -9,6 +9,8 @@ import {
   isAPIErrorStatus,
   objectArrayFieldOrEmpty,
   parseRequiredAPIResponse,
+  withAPIErrorStatusFallback,
+  withAPIErrorStatusNull,
 } from '../responseUtils';
 
 vi.mock('@/utils/apiClient', () => ({
@@ -24,6 +26,8 @@ vi.mock('../responseUtils', () => ({
   isAPIErrorStatus: vi.fn(),
   objectArrayFieldOrEmpty: vi.fn(),
   parseRequiredAPIResponse: vi.fn(),
+  withAPIErrorStatusFallback: vi.fn(),
+  withAPIErrorStatusNull: vi.fn(),
 }));
 
 describe('AgentProfilesAPI', () => {
@@ -36,6 +40,28 @@ describe('AgentProfilesAPI', () => {
     vi.mocked(assertAPIResponseOK).mockResolvedValue(undefined);
     vi.mocked(assertAPIResponseOKOrAllowedStatus).mockResolvedValue(undefined);
     vi.mocked(assertAPIResponseOKOrThrowStatus).mockResolvedValue(undefined);
+    vi.mocked(withAPIErrorStatusFallback).mockImplementation(
+      async (request, fallbackStatus, fallbackValue) => {
+        try {
+          return await request;
+        } catch (error) {
+          if ((error as { status?: number } | null)?.status === fallbackStatus) {
+            return fallbackValue;
+          }
+          throw error;
+        }
+      },
+    );
+    vi.mocked(withAPIErrorStatusNull).mockImplementation(async (request, nullStatus) => {
+      try {
+        return await request;
+      } catch (error) {
+        if ((error as { status?: number } | null)?.status === nullStatus) {
+          return null;
+        }
+        throw error;
+      }
+    });
     vi.mocked(objectArrayFieldOrEmpty).mockImplementation((value, field) => {
       if (!value || typeof value !== 'object') {
         return [];
@@ -56,6 +82,7 @@ describe('AgentProfilesAPI', () => {
       const result = await AgentProfilesAPI.listProfiles();
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/profiles/');
+      expect(withAPIErrorStatusFallback).toHaveBeenCalledWith(expect.any(Promise), 402, []);
       expect(result).toEqual(mockProfiles);
     });
 
@@ -98,6 +125,7 @@ describe('AgentProfilesAPI', () => {
       const result = await AgentProfilesAPI.getProfile('p1');
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/profiles/p1');
+      expect(withAPIErrorStatusNull).toHaveBeenCalledWith(expect.any(Promise), 404);
       expect(result).toEqual(mockProfile);
     });
 
@@ -183,6 +211,7 @@ describe('AgentProfilesAPI', () => {
       const result = await AgentProfilesAPI.listAssignments();
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/profiles/assignments');
+      expect(withAPIErrorStatusFallback).toHaveBeenCalledWith(expect.any(Promise), 402, []);
       expect(result).toEqual(mockAssignments);
     });
 

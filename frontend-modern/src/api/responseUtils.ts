@@ -185,6 +185,29 @@ export function isAPIErrorStatus(error: unknown, expectedStatus: number): boolea
   return apiErrorStatus(error) === expectedStatus;
 }
 
+export async function withAPIErrorStatusFallback<T>(
+  request: Promise<T>,
+  fallbackStatus: number,
+  fallbackValue: T,
+): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    if (isAPIErrorStatus(error, fallbackStatus)) {
+      return fallbackValue;
+    }
+
+    throw error;
+  }
+}
+
+export async function withAPIErrorStatusNull<T>(
+  request: Promise<T>,
+  nullStatus: number,
+): Promise<T | null> {
+  return withAPIErrorStatusFallback<T | null>(request as Promise<T | null>, nullStatus, null);
+}
+
 export function apiResponseStatus(response: APIResponseLike | null | undefined): number | null {
   if (!response || typeof response !== 'object') {
     return null;

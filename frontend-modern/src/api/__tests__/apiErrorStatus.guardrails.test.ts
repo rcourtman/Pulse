@@ -26,6 +26,8 @@ describe('API error-status guardrails', () => {
   it('keeps canonical API error status helpers in responseUtils', () => {
     expect(responseUtilsSource).toContain('export function apiErrorStatus');
     expect(responseUtilsSource).toContain('export function isAPIErrorStatus');
+    expect(responseUtilsSource).toContain('export async function withAPIErrorStatusFallback');
+    expect(responseUtilsSource).toContain('export async function withAPIErrorStatusNull');
     expect(responseUtilsSource).toContain('export function apiResponseStatus');
     expect(responseUtilsSource).toContain('export function isAPIResponseStatus');
     expect(responseUtilsSource).toContain('export async function assertAPIResponseOK');
@@ -63,12 +65,14 @@ describe('API error-status guardrails', () => {
   });
 
   it('routes canonical status and JSON parsing through responseUtils', () => {
-    expect(aiSource).toContain('isAPIErrorStatus(error, 402)');
-    expect(aiSource).toContain('isAPIErrorStatus(error, 404)');
+    expect(aiSource).toContain('withAPIErrorStatusFallback');
+    expect(aiSource).toContain('withAPIErrorStatusNull');
     expect(aiSource).toContain('assertAPIResponseOK(response,');
     expect(aiSource).toContain('consumeJSONEventStream<AIStreamEvent>(response,');
     expect(aiSource).toContain('promoteLegacyAlertIdentifier(');
     expect(aiSource).not.toContain("message.includes('402')");
+    expect(aiSource).not.toContain('isAPIErrorStatus(error, 402)');
+    expect(aiSource).not.toContain('isAPIErrorStatus(error, 404)');
     expect(aiSource).not.toContain('JSON.parse(');
     expect(aiSource).not.toContain('TextDecoder');
     expect(aiSource).not.toContain('getReader(');
@@ -88,14 +92,16 @@ describe('API error-status guardrails', () => {
     expect(aiChatSource).not.toContain('private static encodeSegment(');
     expect(aiChatSource).not.toContain('readAPIErrorMessage(');
 
-    expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 402)');
-    expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 404)');
+    expect(agentProfilesSource).toContain('withAPIErrorStatusFallback');
+    expect(agentProfilesSource).toContain('withAPIErrorStatusNull');
     expect(agentProfilesSource).toContain('assertAPIResponseOKOrAllowedStatus(');
     expect(agentProfilesSource).toContain('assertAPIResponseOKOrThrowStatus(');
     expect(agentProfilesSource).toContain('parseRequiredAPIResponse(');
     expect(agentProfilesSource).toContain('assertAPIResponseOK(response,');
     expect(agentProfilesSource).not.toContain("message.includes('402')");
     expect(agentProfilesSource).not.toContain("message.includes('404')");
+    expect(agentProfilesSource).not.toContain('isAPIErrorStatus(err, 402)');
+    expect(agentProfilesSource).not.toContain('isAPIErrorStatus(err, 404)');
     expect(agentProfilesSource).not.toContain('response.status !== 204');
     expect(agentProfilesSource).not.toContain('if (!isAPIResponseStatus(response, 204))');
     expect(agentProfilesSource).not.toContain('response.status === 503');
@@ -200,7 +206,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, raw duplicated SSE stream readers, raw monitoring allowed-status branches, raw agent-profile 204 success branches, raw custom-status error branches, raw monitoring success-envelope fallbacks, and discovery route alias drift', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, raw duplicated SSE stream readers, raw monitoring allowed-status branches, raw agent-profile 204 success branches, raw custom-status error branches, raw monitoring success-envelope fallbacks, raw apiFetchJSON status-fallback catches, and discovery route alias drift', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -297,6 +303,11 @@ describe('API error-status guardrails', () => {
     );
     const rawMonitoringSuccessEnvelopePattern =
       /parseOptionalAPIResponse\(\s*response,\s*\{\s*success:\s*true\s*\}/;
+    const governedFetchJSONFallbackEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:ai|agentProfiles)\.ts$/.test(path),
+    );
+    const rawFetchJSONStatusFallbackPattern =
+      /isAPIErrorStatus\((?:error|err),\s*(?:402|404)\)/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -412,6 +423,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const rawFetchJSONStatusFallbackOffenders = governedFetchJSONFallbackEntries
+      .filter(([, source]) => rawFetchJSONStatusFallbackPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -432,6 +448,7 @@ describe('API error-status guardrails', () => {
     expect(rawAgentProfileAllowedStatusOffenders).toEqual([]);
     expect(rawCustomStatusErrorOffenders).toEqual([]);
     expect(rawMonitoringSuccessEnvelopeOffenders).toEqual([]);
+    expect(rawFetchJSONStatusFallbackOffenders).toEqual([]);
     expect(discoveryRouteAliasOffenders).toEqual([]);
   });
 });

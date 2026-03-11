@@ -31,6 +31,8 @@ import {
   stringRecordOrUndefined,
   stringArray,
   trimmedString,
+  withAPIErrorStatusFallback,
+  withAPIErrorStatusNull,
 } from '@/api/responseUtils';
 
 describe('readAPIErrorMessage', () => {
@@ -567,6 +569,51 @@ describe('isAPIErrorStatus', () => {
     const error = Object.assign(new Error('Not Found'), { status: 404 });
     expect(isAPIErrorStatus(error, 404)).toBe(true);
     expect(isAPIErrorStatus(error, 402)).toBe(false);
+  });
+});
+
+describe('withAPIErrorStatusFallback', () => {
+  it('returns the original result for successful requests', async () => {
+    await expect(withAPIErrorStatusFallback(Promise.resolve(['a']), 402, [])).resolves.toEqual([
+      'a',
+    ]);
+  });
+
+  it('returns the fallback for matching API error statuses', async () => {
+    await expect(
+      withAPIErrorStatusFallback(
+        Promise.reject(Object.assign(new Error('Payment Required'), { status: 402 })),
+        402,
+        [],
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it('rethrows non-matching errors', async () => {
+    await expect(
+      withAPIErrorStatusFallback(
+        Promise.reject(Object.assign(new Error('Not Found'), { status: 404 })),
+        402,
+        [],
+      ),
+    ).rejects.toThrow('Not Found');
+  });
+});
+
+describe('withAPIErrorStatusNull', () => {
+  it('returns null for matching API error statuses', async () => {
+    await expect(
+      withAPIErrorStatusNull(
+        Promise.reject(Object.assign(new Error('Not Found'), { status: 404 })),
+        404,
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it('returns the successful result for non-error requests', async () => {
+    await expect(withAPIErrorStatusNull(Promise.resolve({ id: 'a' }), 404)).resolves.toEqual({
+      id: 'a',
+    });
   });
 });
 

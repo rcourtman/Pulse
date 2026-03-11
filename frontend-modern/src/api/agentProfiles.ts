@@ -4,9 +4,10 @@ import {
   assertAPIResponseOKOrAllowedStatus,
   assertAPIResponseOKOrThrowStatus,
   arrayOrEmpty,
-  isAPIErrorStatus,
   objectArrayFieldOrEmpty,
   parseRequiredAPIResponse,
+  withAPIErrorStatusFallback,
+  withAPIErrorStatusNull,
 } from './responseUtils';
 
 /**
@@ -105,29 +106,22 @@ export class AgentProfilesAPI {
    * List all agent profiles.
    */
   static async listProfiles(): Promise<AgentProfile[]> {
-    try {
-      const response = await apiFetchJSON<AgentProfile[]>(`${this.baseUrl}/`);
-      return arrayOrEmpty<AgentProfile>(response);
-    } catch (err) {
-      if (isAPIErrorStatus(err, 402)) {
-        return [];
-      }
-      throw err;
-    }
+    const response = await withAPIErrorStatusFallback<AgentProfile[]>(
+      apiFetchJSON<AgentProfile[]>(`${this.baseUrl}/`),
+      402,
+      [],
+    );
+    return arrayOrEmpty<AgentProfile>(response);
   }
 
   /**
    * Get a single profile by ID.
    */
   static async getProfile(id: string): Promise<AgentProfile | null> {
-    try {
-      return await apiFetchJSON<AgentProfile>(`${this.baseUrl}/${encodeURIComponent(id)}`);
-    } catch (err) {
-      if (isAPIErrorStatus(err, 404)) {
-        return null;
-      }
-      throw err;
-    }
+    return withAPIErrorStatusNull<AgentProfile>(
+      apiFetchJSON<AgentProfile>(`${this.baseUrl}/${encodeURIComponent(id)}`),
+      404,
+    );
   }
 
   /**
@@ -192,15 +186,12 @@ export class AgentProfilesAPI {
    * List all profile assignments.
    */
   static async listAssignments(): Promise<AgentProfileAssignment[]> {
-    try {
-      const response = await apiFetchJSON<AgentProfileAssignment[]>(`${this.baseUrl}/assignments`);
-      return arrayOrEmpty<AgentProfileAssignment>(response);
-    } catch (err) {
-      if (isAPIErrorStatus(err, 402)) {
-        return [];
-      }
-      throw err;
-    }
+    const response = await withAPIErrorStatusFallback<AgentProfileAssignment[]>(
+      apiFetchJSON<AgentProfileAssignment[]>(`${this.baseUrl}/assignments`),
+      402,
+      [],
+    );
+    return arrayOrEmpty<AgentProfileAssignment>(response);
   }
 
   /**
