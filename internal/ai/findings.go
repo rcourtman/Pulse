@@ -122,8 +122,8 @@ type Finding struct {
 	ResolveReason  string          `json:"resolve_reason,omitempty"` // Why the finding was resolved (e.g., "No longer detected by patrol")
 	AcknowledgedAt *time.Time      `json:"acknowledged_at,omitempty"`
 	SnoozedUntil   *time.Time      `json:"snoozed_until,omitempty"` // Finding hidden until this time
-	// Link to alert if this finding was triggered by or attached to an alert
-	AlertID string `json:"-"`
+	// Link to alert if this finding was triggered by or attached to an alert.
+	AlertIdentifier string `json:"-"`
 
 	// User feedback fields - enables LLM "memory" by tracking how users respond
 	// This helps prevent the LLM from repeatedly raising the same dismissed issues
@@ -166,7 +166,7 @@ type findingJSON struct {
 	AcknowledgedAt         *time.Time              `json:"acknowledged_at,omitempty"`
 	SnoozedUntil           *time.Time              `json:"snoozed_until,omitempty"`
 	AlertIdentifier        string                  `json:"alert_identifier,omitempty"`
-	AlertID                string                  `json:"alert_id,omitempty"`
+	LegacyAlertID          string                  `json:"alert_id,omitempty"`
 	DismissedReason        string                  `json:"dismissed_reason,omitempty"`
 	UserNote               string                  `json:"user_note,omitempty"`
 	TimesRaised            int                     `json:"times_raised"`
@@ -183,7 +183,7 @@ type findingJSON struct {
 }
 
 func (f Finding) MarshalJSON() ([]byte, error) {
-	alertIdentifier := strings.TrimSpace(f.AlertID)
+	alertIdentifier := strings.TrimSpace(f.AlertIdentifier)
 	return json.Marshal(findingJSON{
 		ID:                     f.ID,
 		Key:                    f.Key,
@@ -230,7 +230,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 
 	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
 	if alertIdentifier == "" {
-		alertIdentifier = strings.TrimSpace(payload.AlertID)
+		alertIdentifier = strings.TrimSpace(payload.LegacyAlertID)
 	}
 
 	*f = Finding{
@@ -254,7 +254,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		ResolveReason:          payload.ResolveReason,
 		AcknowledgedAt:         payload.AcknowledgedAt,
 		SnoozedUntil:           payload.SnoozedUntil,
-		AlertID:                alertIdentifier,
+		AlertIdentifier:        alertIdentifier,
 		DismissedReason:        payload.DismissedReason,
 		UserNote:               payload.UserNote,
 		TimesRaised:            payload.TimesRaised,

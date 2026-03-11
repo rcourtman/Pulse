@@ -25,14 +25,14 @@ func TestNewFindingsPersistenceAdapter(t *testing.T) {
 
 func TestFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	finding := Finding{
-		ID:         "finding-1",
-		Severity:   FindingSeverityWarning,
-		Category:   FindingCategoryPerformance,
-		ResourceID: "res-1",
-		Title:      "High CPU",
-		AlertID:    "instance:node:100::metric/cpu",
-		DetectedAt: time.Now(),
-		LastSeenAt: time.Now(),
+		ID:              "finding-1",
+		Severity:        FindingSeverityWarning,
+		Category:        FindingCategoryPerformance,
+		ResourceID:      "res-1",
+		Title:           "High CPU",
+		AlertIdentifier: "instance:node:100::metric/cpu",
+		DetectedAt:      time.Now(),
+		LastSeenAt:      time.Now(),
 	}
 
 	raw, err := json.Marshal(finding)
@@ -64,8 +64,8 @@ func TestFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	}`), &decodedCanonical); err != nil {
 		t.Fatalf("unmarshal canonical finding: %v", err)
 	}
-	if decodedCanonical.AlertID != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertID)
+	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
 	}
 
 	var decodedLegacy Finding
@@ -81,8 +81,8 @@ func TestFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	}`), &decodedLegacy); err != nil {
 		t.Fatalf("unmarshal legacy finding: %v", err)
 	}
-	if decodedLegacy.AlertID != "legacy-alert-id" {
-		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertID)
+	if decodedLegacy.AlertIdentifier != "legacy-alert-id" {
+		t.Fatalf("expected legacy alert_id to load, got %q", decodedLegacy.AlertIdentifier)
 	}
 }
 
@@ -110,21 +110,21 @@ func TestFindingsPersistenceAdapter_SaveAndLoad(t *testing.T) {
 			LastSeenAt:     now,
 		},
 		"finding-2": {
-			ID:             "finding-2",
-			Key:            "high-memory",
-			Severity:       FindingSeverityCritical,
-			Category:       FindingCategoryCapacity,
-			ResourceID:     "node1-101",
-			ResourceName:   "test-container",
-			ResourceType:   "container",
-			Node:           "node1",
-			Title:          "High Memory Usage",
-			Description:    "Memory is at 90%",
-			Recommendation: "Increase memory allocation",
-			Evidence:       "Memory: 90%",
-			DetectedAt:     now.Add(-time.Hour),
-			LastSeenAt:     now,
-			AlertID:        "alert-123",
+			ID:              "finding-2",
+			Key:             "high-memory",
+			Severity:        FindingSeverityCritical,
+			Category:        FindingCategoryCapacity,
+			ResourceID:      "node1-101",
+			ResourceName:    "test-container",
+			ResourceType:    "container",
+			Node:            "node1",
+			Title:           "High Memory Usage",
+			Description:     "Memory is at 90%",
+			Recommendation:  "Increase memory allocation",
+			Evidence:        "Memory: 90%",
+			DetectedAt:      now.Add(-time.Hour),
+			LastSeenAt:      now,
+			AlertIdentifier: "alert-123",
 		},
 	}
 
@@ -167,8 +167,8 @@ func TestFindingsPersistenceAdapter_SaveAndLoad(t *testing.T) {
 	if f2 == nil {
 		t.Fatal("finding-2 not found")
 	}
-	if f2.AlertID != "alert-123" {
-		t.Errorf("expected alert ID 'alert-123', got %q", f2.AlertID)
+	if f2.AlertIdentifier != "alert-123" {
+		t.Errorf("expected alert identifier 'alert-123', got %q", f2.AlertIdentifier)
 	}
 }
 
@@ -244,7 +244,7 @@ func TestFindingsPersistenceAdapter_PreservesAllFields(t *testing.T) {
 		AutoResolved:    true,
 		AcknowledgedAt:  &acked,
 		SnoozedUntil:    &snoozed,
-		AlertID:         "alert-456",
+		AlertIdentifier: "alert-456",
 		DismissedReason: "expected_behavior",
 		UserNote:        "This is intentional for Frigate recordings",
 		TimesRaised:     5,
@@ -287,8 +287,8 @@ func TestFindingsPersistenceAdapter_PreservesAllFields(t *testing.T) {
 	if f.AutoResolved != originalFinding.AutoResolved {
 		t.Errorf("AutoResolved mismatch: got %v", f.AutoResolved)
 	}
-	if f.AlertID != originalFinding.AlertID {
-		t.Errorf("AlertID mismatch: got %q", f.AlertID)
+	if f.AlertIdentifier != originalFinding.AlertIdentifier {
+		t.Errorf("AlertIdentifier mismatch: got %q", f.AlertIdentifier)
 	}
 	if f.ResolvedAt == nil {
 		t.Error("ResolvedAt should not be nil")

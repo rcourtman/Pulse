@@ -216,20 +216,20 @@ func (a *alertFindingRecorderAdapter) RecordAlertFinding(f *aicontracts.AlertAna
 		return
 	}
 	a.ps.recordFinding(&Finding{
-		ID:             f.ID,
-		Key:            f.Key,
-		Severity:       FindingSeverity(f.Severity),
-		Category:       FindingCategory(f.Category),
-		ResourceID:     f.ResourceID,
-		ResourceName:   f.ResourceName,
-		ResourceType:   f.ResourceType,
-		Title:          f.Title,
-		Description:    f.Description,
-		Recommendation: f.Recommendation,
-		Evidence:       f.Evidence,
-		AlertID:        f.AlertID,
-		DetectedAt:     f.DetectedAt,
-		LastSeenAt:     f.LastSeenAt,
+		ID:              f.ID,
+		Key:             f.Key,
+		Severity:        FindingSeverity(f.Severity),
+		Category:        FindingCategory(f.Category),
+		ResourceID:      f.ResourceID,
+		ResourceName:    f.ResourceName,
+		ResourceType:    f.ResourceType,
+		Title:           f.Title,
+		Description:     f.Description,
+		Recommendation:  f.Recommendation,
+		Evidence:        f.Evidence,
+		AlertIdentifier: f.AlertID,
+		DetectedAt:      f.DetectedAt,
+		LastSeenAt:      f.LastSeenAt,
 	})
 }
 

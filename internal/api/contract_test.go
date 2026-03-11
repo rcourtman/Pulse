@@ -47,7 +47,7 @@ func TestContract_FindingJSONSnapshot(t *testing.T) {
 		ResolveReason:          "No longer detected",
 		AcknowledgedAt:         &ackAt,
 		SnoozedUntil:           &snoozedUntil,
-		AlertID:                "alert-1",
+		AlertIdentifier:        "alert-1",
 		DismissedReason:        "expected_behavior",
 		UserNote:               "Runs nightly batch",
 		TimesRaised:            4,
