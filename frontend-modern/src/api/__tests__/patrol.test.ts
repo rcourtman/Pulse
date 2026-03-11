@@ -56,15 +56,21 @@ describe('patrol api', () => {
         error_count: 0,
         status: 'healthy',
         tool_call_count: 0,
-        alert_id: 'canonical-alert-1',
+        alert_identifier: 'canonical-alert-1',
+        legacy_alert_id: 'legacy-alert-1',
+        alert_id: 'legacy-alert-1',
       },
     ] as any);
 
     const result = await getPatrolRunHistory();
 
     expect(result[0]).toMatchObject({
+      alertIdentifier: 'canonical-alert-1',
+      legacyAlertId: 'legacy-alert-1',
+      alertId: 'legacy-alert-1',
       alert_identifier: 'canonical-alert-1',
-      alert_id: 'canonical-alert-1',
+      legacy_alert_id: 'legacy-alert-1',
+      alert_id: 'legacy-alert-1',
     });
   });
 });

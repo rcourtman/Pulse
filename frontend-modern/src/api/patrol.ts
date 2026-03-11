@@ -33,6 +33,9 @@ export interface Finding {
   auto_resolved: boolean;
   acknowledged_at?: string;
   snoozed_until?: string; // Finding hidden until this time
+  alertIdentifier?: string;
+  legacyAlertId?: string;
+  alertId?: string;
   alert_identifier?: string;
   legacy_alert_id?: string;
   alert_id?: string;
@@ -396,6 +399,9 @@ export interface PatrolRunRecord {
   scope_resource_ids?: string[];
   scope_resource_types?: string[];
   scope_context?: string;
+  alertIdentifier?: string;
+  legacyAlertId?: string;
+  alertId?: string;
   alert_identifier?: string;
   legacy_alert_id?: string;
   alert_id?: string;
@@ -438,9 +444,14 @@ function normalizeHistoryLimit(limit: number): number {
 
 function normalizePatrolRunRecord(run: PatrolRunRecord): PatrolRunRecord {
   const alertIdentifier = run.alert_identifier ?? run.alert_id;
+  const legacyAlertId = run.legacy_alert_id ?? run.alert_id ?? alertIdentifier;
   return {
     ...run,
+    ...(alertIdentifier ? { alertIdentifier } : {}),
+    ...(legacyAlertId ? { legacyAlertId } : {}),
+    ...(run.alertId ?? run.alert_id ?? alertIdentifier ? { alertId: run.alertId ?? run.alert_id ?? alertIdentifier } : {}),
     ...(alertIdentifier ? { alert_identifier: alertIdentifier } : {}),
+    ...(run.legacy_alert_id ?? legacyAlertId ? { legacy_alert_id: run.legacy_alert_id ?? legacyAlertId } : {}),
     ...(run.alert_id ?? alertIdentifier ? { alert_id: run.alert_id ?? alertIdentifier } : {}),
   };
 }
