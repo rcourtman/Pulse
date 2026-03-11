@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -55,6 +56,13 @@ func newBenchMetricsStore(b *testing.B) *metrics.Store {
 	}
 	b.Cleanup(func() { store.Close() })
 	return store
+}
+
+func syncBenchResourceStore(b *testing.B, monitor *monitoring.Monitor, state *models.State) {
+	b.Helper()
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(state.GetSnapshot())
+	setBenchUnexportedField(b, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
 }
 
 // seedBenchMetricsMulti writes numResources × numPoints × len(metricTypes)
@@ -284,6 +292,169 @@ func BenchmarkHandleMetricsHistory_MemoryFallback(b *testing.B) {
 			}
 		}
 	})
+}
+
+// BenchmarkHandleWorkloadCharts_StoreBacked measures the workloads charts
+// endpoint under a store-backed 4h range. This is the workloads summary
+// sparkline hot path and should avoid per-workload N+1 queries.
+func BenchmarkHandleWorkloadCharts_StoreBacked(b *testing.B) {
+	suppressBenchLogs(b)
+
+	store := newBenchMetricsStore(b)
+	monitor := &monitoring.Monitor{}
+	state := models.NewState()
+	setBenchUnexportedField(b, monitor, "state", state)
+	setBenchUnexportedField(b, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setBenchUnexportedField(b, monitor, "metricsStore", store)
+
+	const (
+		vmCount           = 30
+		containerCount    = 20
+		dockerHostCount   = 10
+		containersPerHost = 2
+		pointsPerMetric   = 240
+	)
+	base := time.Now().Add(-4 * time.Hour).UTC().Truncate(time.Second)
+
+	nodes := make([]models.Node, 5)
+	for i := range nodes {
+		nodes[i] = models.Node{
+			ID:       fmt.Sprintf("node-bench-%d", i),
+			Name:     fmt.Sprintf("node-%d", i),
+			Instance: "pve1",
+			Status:   "online",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 64 << 30, Used: 32 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 500 << 30, Used: 250 << 30},
+		}
+	}
+	state.UpdateNodesForInstance("pve1", nodes)
+
+	vms := make([]models.VM, vmCount)
+	vmIDs := make([]string, vmCount)
+	for i := range vms {
+		vmIDs[i] = fmt.Sprintf("vm-bench-%d", i)
+		vms[i] = models.VM{
+			ID:       vmIDs[i],
+			VMID:     100 + i,
+			Name:     fmt.Sprintf("vm-%d", i),
+			Node:     nodes[i%len(nodes)].Name,
+			Instance: "pve1",
+			Status:   "running",
+			Type:     "qemu",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 4 << 30, Used: 2 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 50 << 30, Used: 25 << 30},
+		}
+	}
+	state.UpdateVMsForInstance("pve1", vms)
+
+	containers := make([]models.Container, containerCount)
+	containerIDs := make([]string, containerCount)
+	for i := range containers {
+		containerIDs[i] = fmt.Sprintf("ct-bench-%d", i)
+		containers[i] = models.Container{
+			ID:       containerIDs[i],
+			VMID:     200 + i,
+			Name:     fmt.Sprintf("ct-%d", i),
+			Node:     nodes[i%len(nodes)].Name,
+			Instance: "pve1",
+			Status:   "running",
+			Type:     "lxc",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 2 << 30, Used: 1 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 20 << 30, Used: 10 << 30},
+		}
+	}
+	state.UpdateContainersForInstance("pve1", containers)
+
+	dockerHosts := make([]models.DockerHost, dockerHostCount)
+	dockerContainerIDs := make([]string, 0, dockerHostCount*containersPerHost)
+	for i := range dockerHosts {
+		hostID := fmt.Sprintf("docker-host-bench-%d", i)
+		hostContainers := make([]models.DockerContainer, containersPerHost)
+		for j := range hostContainers {
+			containerID := fmt.Sprintf("docker-container-bench-%d-%d", i, j)
+			dockerContainerIDs = append(dockerContainerIDs, containerID)
+			hostContainers[j] = models.DockerContainer{
+				ID:            containerID,
+				Name:          fmt.Sprintf("docker-%d-%d", i, j),
+				State:         "running",
+				Status:        "running",
+				CPUPercent:    float64((i+j)%80 + 10),
+				MemoryPercent: float64((i+j)%60 + 20),
+				NetInRate:     float64((i+j)%50 + 5),
+				NetOutRate:    float64((i+j)%50 + 7),
+			}
+		}
+		dockerHosts[i] = models.DockerHost{
+			ID:         hostID,
+			AgentID:    hostID,
+			Hostname:   nodes[i%len(nodes)].Name,
+			Runtime:    "docker",
+			Status:     "online",
+			CPUUsage:   float64(i%80 + 10),
+			Memory:     models.Memory{Usage: float64(i%60 + 20), Total: 32 << 30, Used: 16 << 30},
+			Disks:      []models.Disk{{Usage: float64(i%40 + 30), Total: 200 << 30, Used: 100 << 30}},
+			Containers: hostContainers,
+		}
+	}
+	state.DockerHosts = dockerHosts
+	syncBenchResourceStore(b, monitor, state)
+
+	seedSeries := func(resourceType string, ids []string, metricTypes []string) {
+		batch := make([]metrics.WriteMetric, 0, len(ids)*len(metricTypes)*pointsPerMetric)
+		for r, id := range ids {
+			for _, mt := range metricTypes {
+				for p := 0; p < pointsPerMetric; p++ {
+					batch = append(batch, metrics.WriteMetric{
+						ResourceType: resourceType,
+						ResourceID:   id,
+						MetricType:   mt,
+						Value:        float64((r + p) % 100),
+						Timestamp:    base.Add(time.Duration(p) * time.Minute),
+						Tier:         metrics.TierMinute,
+					})
+				}
+			}
+		}
+		store.WriteBatchSync(batch)
+	}
+
+	seedSeries("vm", vmIDs, []string{"cpu", "memory", "disk", "netin", "netout"})
+	seedSeries("container", containerIDs, []string{"cpu", "memory", "disk", "netin", "netout"})
+	seedSeries("dockerContainer", dockerContainerIDs, []string{"cpu", "memory", "disk", "netin", "netout"})
+
+	router := &Router{monitor: monitor}
+	url := "/api/charts/workloads?range=4h&maxPoints=120"
+
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadCharts(rec, req)
+	if rec.Code != http.StatusOK {
+		b.Fatalf("sanity check failed: expected 200, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+	var check WorkloadChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &check); err != nil {
+		b.Fatalf("sanity check: unmarshal failed: %v", err)
+	}
+	if len(check.ChartData) != vmCount+containerCount {
+		b.Fatalf("expected %d guest chart entries, got %d", vmCount+containerCount, len(check.ChartData))
+	}
+	if len(check.DockerData) != len(dockerContainerIDs) {
+		b.Fatalf("expected %d docker chart entries, got %d", len(dockerContainerIDs), len(check.DockerData))
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+		router.handleWorkloadCharts(rec, req)
+		if rec.Code != http.StatusOK {
+			b.Fatalf("unexpected status %d", rec.Code)
+		}
+	}
 }
 
 // BenchmarkHandleMetricsStoreStats measures latency of the /api/metrics-store/stats
