@@ -80,16 +80,20 @@ func (c Claims) EffectiveCapabilities() []string {
 
 // EffectiveLimits returns explicit limits when present; otherwise limits derived from legacy fields.
 func (c Claims) EffectiveLimits() map[string]int64 {
-	if c.Limits != nil && len(c.Limits) > 0 {
-		return c.Limits
+	limits := cloneInt64Map(c.Limits)
+	if len(limits) == 0 {
+		limits = make(map[string]int64)
+		if c.MaxAgents > 0 {
+			limits["max_agents"] = int64(c.MaxAgents)
+		}
+		if c.MaxGuests > 0 {
+			limits["max_guests"] = int64(c.MaxGuests)
+		}
 	}
-
-	limits := make(map[string]int64)
-	if c.MaxAgents > 0 {
-		limits["max_agents"] = int64(c.MaxAgents)
-	}
-	if c.MaxGuests > 0 {
-		limits["max_guests"] = int64(c.MaxGuests)
+	if (c.Tier == TierCloud || c.Tier == TierMSP) && c.PlanVersion != "" {
+		if limit, known := CloudPlanAgentLimits[CanonicalizePlanVersion(c.PlanVersion)]; known {
+			limits["max_agents"] = int64(limit)
+		}
 	}
 	return limits
 }
@@ -107,7 +111,7 @@ func (c *Claims) EntitlementPlanVersion() string {
 	if c == nil {
 		return ""
 	}
-	return c.PlanVersion
+	return CanonicalizePlanVersion(c.PlanVersion)
 }
 
 // EntitlementSubscriptionState returns normalized subscription state for evaluator sources.

@@ -16,6 +16,23 @@ import (
 	"testing"
 )
 
+func TestCloudClaimPlanVersionNormalizationContract(t *testing.T) {
+	claims := Claims{
+		Tier:        TierCloud,
+		PlanVersion: "cloud_v1",
+		Limits: map[string]int64{
+			"max_agents": 999,
+		},
+	}
+
+	if got := claims.EntitlementPlanVersion(); got != "cloud_starter" {
+		t.Fatalf("EntitlementPlanVersion() = %q, want %q", got, "cloud_starter")
+	}
+	if got := claims.EffectiveLimits()["max_agents"]; got != 10 {
+		t.Fatalf("EffectiveLimits()[max_agents] = %d, want %d", got, 10)
+	}
+}
+
 // grantContractJSONTags lists the JSON field names that MUST exist with
 // identical types in both pulse/pkg/licensing.GrantClaims and
 // pulse-pro/relay-server.RelayGrantClaims.

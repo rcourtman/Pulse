@@ -114,3 +114,25 @@ func TestServiceActivate_RejectsMalformedLegacyKeyOutsideDevMode(t *testing.T) {
 		t.Fatalf("expected activation-key guidance error, got %q", err.Error())
 	}
 }
+
+func TestServiceStatusCanonicalizesJWTCloudPlanVersionAndLimits(t *testing.T) {
+	svc := NewService()
+	svc.license = &License{
+		Claims: Claims{
+			Tier:        TierCloud,
+			PlanVersion: "cloud_v1",
+			Limits: map[string]int64{
+				"max_agents": 999,
+			},
+			SubState: SubStateActive,
+		},
+	}
+
+	status := svc.Status()
+	if status.PlanVersion != "cloud_starter" {
+		t.Fatalf("status.PlanVersion=%q, want %q", status.PlanVersion, "cloud_starter")
+	}
+	if status.MaxAgents != 10 {
+		t.Fatalf("status.MaxAgents=%d, want %d", status.MaxAgents, 10)
+	}
+}

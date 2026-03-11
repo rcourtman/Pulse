@@ -638,7 +638,7 @@ func (s *Service) Status() *LicenseStatus {
 
 	status.Email = s.license.Claims.Email
 	status.Tier = s.license.Claims.Tier
-	status.PlanVersion = s.license.Claims.PlanVersion
+	status.PlanVersion = s.license.Claims.EntitlementPlanVersion()
 	status.IsLifetime = s.license.IsLifetime()
 	status.DaysRemaining = s.license.DaysRemaining()
 	status.Features = s.license.AllFeatures()

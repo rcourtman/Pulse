@@ -55,3 +55,7 @@ The control-plane registry is also canonical: tenant and Stripe-account
 `plan_version` rows must canonicalize recognized Cloud aliases on read and
 write so stored legacy values cannot re-enter provisioning, entitlement, or
 limit-enforcement fallbacks.
+JWT-backed entitlement claims are also canonical: when runtime evaluation uses
+claim `plan_version` and `limits`, recognized Cloud plan aliases must
+canonicalize and `max_agents` must reconcile to the authoritative per-plan
+contract instead of trusting stale embedded claim values.

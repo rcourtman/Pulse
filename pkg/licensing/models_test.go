@@ -171,6 +171,13 @@ func TestClaims_EntitlementPlanVersion(t *testing.T) {
 			expected: "v2",
 		},
 		{
+			name: "canonicalizes_cloud_alias",
+			claims: &Claims{
+				PlanVersion: " cloud_v1 ",
+			},
+			expected: "cloud_starter",
+		},
+		{
 			name: "empty_plan_version_returns_empty",
 			claims: &Claims{
 				PlanVersion: "",
@@ -187,6 +194,39 @@ func TestClaims_EntitlementPlanVersion(t *testing.T) {
 				t.Fatalf("EntitlementPlanVersion() = %q, want %q", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestClaims_EffectiveLimitsCanonicalizesCloudPlanLimits(t *testing.T) {
+	claims := Claims{
+		Tier:        TierCloud,
+		PlanVersion: "cloud-v1",
+		Limits: map[string]int64{
+			"max_agents": 999,
+			"max_guests": 5,
+		},
+	}
+
+	limits := claims.EffectiveLimits()
+	if got := limits["max_agents"]; got != 10 {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, 10)
+	}
+	if got := limits["max_guests"]; got != 5 {
+		t.Fatalf("EffectiveLimits()[max_guests]=%d, want %d", got, 5)
+	}
+}
+
+func TestClaims_EffectiveLimitsPreservesNonCloudPlanLimits(t *testing.T) {
+	claims := Claims{
+		PlanVersion: "pro-v2",
+		Limits: map[string]int64{
+			"max_agents": 42,
+		},
+	}
+
+	limits := claims.EffectiveLimits()
+	if got := limits["max_agents"]; got != 42 {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, 42)
 	}
 }
 
