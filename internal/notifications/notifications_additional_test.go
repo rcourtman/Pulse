@@ -177,6 +177,9 @@ func TestSendResolvedWebhookHTTP(t *testing.T) {
 	if payload["event"] != "resolved" {
 		t.Fatalf("expected event resolved, got %v", payload["event"])
 	}
+	if payload["alertIdentifier"] != "a1" {
+		t.Fatalf("expected alertIdentifier a1, got %v", payload["alertIdentifier"])
+	}
 	if payload["alertId"] != "a1" {
 		t.Fatalf("expected alertId a1, got %v", payload["alertId"])
 	}

@@ -152,16 +152,17 @@ type TestNodeInfo struct {
 
 // WebhookDelivery tracks webhook delivery attempts for debugging
 type WebhookDelivery struct {
-	WebhookName   string    `json:"webhookName"`
-	WebhookURL    string    `json:"webhookUrl"`
-	Service       string    `json:"service"`
-	AlertID       string    `json:"alertId"`
-	Timestamp     time.Time `json:"timestamp"`
-	StatusCode    int       `json:"statusCode"`
-	Success       bool      `json:"success"`
-	ErrorMessage  string    `json:"errorMessage,omitempty"`
-	RetryAttempts int       `json:"retryAttempts"`
-	PayloadSize   int       `json:"payloadSize"`
+	WebhookName     string    `json:"webhookName"`
+	WebhookURL      string    `json:"webhookUrl"`
+	Service         string    `json:"service"`
+	AlertIdentifier string    `json:"alertIdentifier,omitempty"`
+	AlertID         string    `json:"alertId"`
+	Timestamp       time.Time `json:"timestamp"`
+	StatusCode      int       `json:"statusCode"`
+	Success         bool      `json:"success"`
+	ErrorMessage    string    `json:"errorMessage,omitempty"`
+	RetryAttempts   int       `json:"retryAttempts"`
+	PayloadSize     int       `json:"payloadSize"`
 }
 
 // webhookRateLimit tracks rate limiting for webhook deliveries
@@ -2124,6 +2125,7 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 		}
 
 		if len(alertList) == 1 {
+			payload["alertIdentifier"] = alert.ID
 			payload["alertId"] = alert.ID
 		}
 
@@ -3057,6 +3059,13 @@ func (n *NotificationManager) isIPInAllowlist(ip net.IP) bool {
 func (n *NotificationManager) addWebhookDelivery(delivery WebhookDelivery) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	if strings.TrimSpace(delivery.AlertIdentifier) == "" {
+		delivery.AlertIdentifier = strings.TrimSpace(delivery.AlertID)
+	}
+	if strings.TrimSpace(delivery.AlertID) == "" {
+		delivery.AlertID = delivery.AlertIdentifier
+	}
 
 	// Add to history
 	n.webhookHistory = append(n.webhookHistory, delivery)

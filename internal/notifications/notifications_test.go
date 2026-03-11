@@ -3614,6 +3614,9 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		if payload["event"] != "resolved" {
 			t.Errorf("expected event 'resolved', got %v", payload["event"])
 		}
+		if payload["alertIdentifier"] != testAlert.ID {
+			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
+		}
 		if payload["alertId"] != testAlert.ID {
 			t.Errorf("expected alertId %q, got %v", testAlert.ID, payload["alertId"])
 		}
@@ -3650,6 +3653,9 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		}
 		if payload["event"] != "resolved" {
 			t.Errorf("expected event 'resolved', got %v", payload["event"])
+		}
+		if payload["alertIdentifier"] != testAlert.ID {
+			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
 		}
 		if payload["alertId"] != testAlert.ID {
 			t.Errorf("expected alertId %q, got %v", testAlert.ID, payload["alertId"])
