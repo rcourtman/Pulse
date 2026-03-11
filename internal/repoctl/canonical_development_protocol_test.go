@@ -334,19 +334,20 @@ func TestStatusJSONSourcePrecedenceIncludesCanonicalGovernanceFiles(t *testing.T
 		got = append(got, value)
 	}
 
-	wantPrefix := []string{
+	want := []string{
 		"docs/release-control/v6/SOURCE_OF_TRUTH.md",
 		"docs/release-control/v6/status.json",
 		"docs/release-control/v6/status.schema.json",
 		"docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"docs/release-control/v6/subsystems/registry.json",
+		"docs/release-control/v6/subsystems/registry.schema.json",
 	}
-	if len(got) < len(wantPrefix) {
-		t.Fatalf("status.json source_precedence too short: %v", got)
+	if len(got) != len(want) {
+		t.Fatalf("status.json source_precedence = %v, want %v", got, want)
 	}
-	for i, want := range wantPrefix {
-		if got[i] != want {
-			t.Fatalf("status.json source_precedence[%d] = %q, want %q", i, got[i], want)
+	for i, expected := range want {
+		if got[i] != expected {
+			t.Fatalf("status.json source_precedence[%d] = %q, want %q", i, got[i], expected)
 		}
 	}
 }

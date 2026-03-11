@@ -22,12 +22,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 STATUS_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.json"
 STATUS_SCHEMA_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.schema.json"
 SOURCE_OF_TRUTH_FILE = "docs/release-control/v6/SOURCE_OF_TRUTH.md"
-REQUIRED_SOURCE_PRECEDENCE_PREFIX = [
+REQUIRED_SOURCE_PRECEDENCE = [
     SOURCE_OF_TRUTH_FILE,
     "docs/release-control/v6/status.json",
     "docs/release-control/v6/status.schema.json",
     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
     "docs/release-control/v6/subsystems/registry.json",
+    "docs/release-control/v6/subsystems/registry.schema.json",
 ]
 DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
@@ -154,14 +155,11 @@ def validate_scope(payload: dict[str, Any], errors: list[str]) -> tuple[list[str
 
 def validate_source_precedence(payload: dict[str, Any], errors: list[str]) -> None:
     precedence = _require_string_list(payload, "source_precedence", errors, context="status.json")
-    if len(precedence) < len(REQUIRED_SOURCE_PRECEDENCE_PREFIX):
-        errors.append("status.json source_precedence is shorter than required governance prefix")
+    if precedence != REQUIRED_SOURCE_PRECEDENCE:
+        errors.append(
+            f"status.json source_precedence = {precedence!r}, want {REQUIRED_SOURCE_PRECEDENCE!r}"
+        )
         return
-    for index, expected in enumerate(REQUIRED_SOURCE_PRECEDENCE_PREFIX):
-        if precedence[index] != expected:
-            errors.append(
-                f"status.json source_precedence[{index}] = {precedence[index]!r}, want {expected!r}"
-            )
 
 
 def validate_priority_engine(payload: dict[str, Any], errors: list[str]) -> None:

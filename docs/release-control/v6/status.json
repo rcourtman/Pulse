@@ -19,13 +19,7 @@
     "docs/release-control/v6/status.schema.json",
     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
     "docs/release-control/v6/subsystems/registry.json",
-    "docs/release-control/v6/CONSOLIDATION_MAP.md",
-    "docs/release-control/v6/LEGACY_HOST_CLASSIFICATION_2026-03-05.md",
-    "docs/release-control/v6/RETIREMENT_AUDIT_2026-02-27.md",
-    "docs/architecture/release-readiness-guiding-light-2026-02.md",
-    "docs/architecture/v6-pricing-and-tiering.md",
-    "docs/architecture/ENTITLEMENT_MATRIX.md",
-    "docs/architecture/v6-acceptance-tests.md"
+    "docs/release-control/v6/subsystems/registry.schema.json"
   ],
   "execution_model": "direct-repo-sessions",
   "evidence_reference_policy": {

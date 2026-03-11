@@ -31,6 +31,7 @@ class StatusAuditTest(unittest.TestCase):
                     "docs/release-control/v6/status.schema.json",
                     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
                     "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
                 ],
                 "priority_engine": {
                     "formula": "gap-first",
@@ -122,6 +123,7 @@ class StatusAuditTest(unittest.TestCase):
                     "docs/release-control/v6/status.schema.json",
                     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
                     "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
                 ],
                 "priority_engine": {
                     "formula": "gap-first",
@@ -217,6 +219,7 @@ class StatusAuditTest(unittest.TestCase):
                     "docs/release-control/v6/status.schema.json",
                     "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
                     "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
                 ],
                 "priority_engine": {
                     "formula": "gap-first",

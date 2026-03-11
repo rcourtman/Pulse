@@ -31,11 +31,35 @@
     },
     "source_precedence": {
       "type": "array",
-      "minItems": 4,
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/status.json"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/status.schema.json"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/subsystems/registry.json"
+        },
+        {
+          "type": "string",
+          "const": "docs/release-control/v6/subsystems/registry.schema.json"
+        }
+      ],
+      "items": false
     },
     "execution_model": {
       "type": "string",
