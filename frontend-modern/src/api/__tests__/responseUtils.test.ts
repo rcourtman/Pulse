@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   apiErrorStatus,
+  apiResponseStatus,
   isAPIErrorStatus,
+  isAPIResponseStatus,
   parseOptionalJSON,
   readAPIErrorMessage,
 } from '@/api/responseUtils';
@@ -126,5 +128,26 @@ describe('isAPIErrorStatus', () => {
     const error = Object.assign(new Error('Not Found'), { status: 404 });
     expect(isAPIErrorStatus(error, 404)).toBe(true);
     expect(isAPIErrorStatus(error, 402)).toBe(false);
+  });
+});
+
+describe('apiResponseStatus', () => {
+  it('returns null for missing or invalid response statuses', () => {
+    expect(apiResponseStatus(null)).toBeNull();
+    expect(apiResponseStatus({})).toBeNull();
+    expect(apiResponseStatus({ status: '404' })).toBeNull();
+    expect(apiResponseStatus({ status: 99 })).toBeNull();
+  });
+
+  it('returns canonical numeric response status', () => {
+    expect(apiResponseStatus(new Response('', { status: 404 }))).toBe(404);
+  });
+});
+
+describe('isAPIResponseStatus', () => {
+  it('matches canonical status-bearing responses', () => {
+    const response = new Response(null, { status: 204 });
+    expect(isAPIResponseStatus(response, 204)).toBe(true);
+    expect(isAPIResponseStatus(response, 404)).toBe(false);
   });
 });

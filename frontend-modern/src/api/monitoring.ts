@@ -6,7 +6,11 @@ import type {
   AgentLookupResponse,
 } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
-import { parseOptionalJSON, readAPIErrorMessage } from './responseUtils';
+import {
+  isAPIResponseStatus,
+  parseOptionalJSON,
+  readAPIErrorMessage,
+} from './responseUtils';
 
 export class MonitoringAPI {
   private static baseUrl = '/api';
@@ -43,14 +47,14 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         return {};
       }
 
       throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
-    if (response.status === 204) {
+    if (isAPIResponseStatus(response, 204)) {
       return {};
     }
 
@@ -65,7 +69,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         // Resource already gone; treat as success
         return;
       }
@@ -82,7 +86,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         // Resource already gone; treat as success
         return;
       }
@@ -103,7 +107,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         throw new Error('Container runtime not found');
       }
 
@@ -133,14 +137,14 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         return {};
       }
 
       throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
-    if (response.status === 204) {
+    if (isAPIResponseStatus(response, 204)) {
       return {};
     }
 
@@ -155,7 +159,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         return;
       }
 
@@ -171,7 +175,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         return;
       }
 
@@ -194,7 +198,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (isAPIResponseStatus(response, 404)) {
         throw new Error('Kubernetes cluster not found');
       }
 
@@ -292,7 +296,7 @@ export class MonitoringAPI {
     const url = `${this.baseUrl}/agents/agent/lookup?${search.toString()}`;
     const response = await apiFetch(url);
 
-    if (response.status === 404) {
+    if (isAPIResponseStatus(response, 404)) {
       return null;
     }
 

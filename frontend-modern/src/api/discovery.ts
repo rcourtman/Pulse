@@ -1,5 +1,5 @@
 import { apiFetch } from '@/utils/apiClient';
-import { readAPIErrorMessage } from './responseUtils';
+import { isAPIResponseStatus, readAPIErrorMessage } from './responseUtils';
 import type {
   ResourceType,
   ResourceDiscovery,
@@ -111,7 +111,7 @@ export async function getDiscovery(
     const response = await apiFetch(
       `${collectionBasePath}/${encodeURIComponent(resolvedAgentId)}/${encodeURIComponent(resolvedAgentDiscovery.resource_id)}`,
     );
-    if (response.status === 404) {
+    if (isAPIResponseStatus(response, 404)) {
       return null;
     }
     if (!response.ok) {
@@ -124,7 +124,7 @@ export async function getDiscovery(
   const response = await apiFetch(
     `${API_BASE}/${encodeURIComponent(apiResourceType)}/${encodeURIComponent(targetId)}/${encodeURIComponent(resourceId)}`,
   );
-  if (response.status === 404) {
+  if (isAPIResponseStatus(response, 404)) {
     return null;
   }
   if (!response.ok) {

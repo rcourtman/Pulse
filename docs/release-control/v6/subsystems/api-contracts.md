@@ -38,7 +38,7 @@ Own canonical runtime payload shapes between backend and frontend.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes
 3. Add dedicated contract tests for new stable payloads
-4. Route frontend API-client status normalization through `frontend-modern/src/api/responseUtils.ts`
+4. Route frontend API-client error and response status normalization through `frontend-modern/src/api/responseUtils.ts`
 
 ## Forbidden Paths
 
@@ -46,6 +46,7 @@ Own canonical runtime payload shapes between backend and frontend.
 2. Untracked compatibility aliases becoming permanent runtime contracts
 3. Frontend-only payload assumptions that are not owned in backend contracts
 4. Frontend API clients inferring canonical HTTP status from `Error.message` text
+5. Frontend API clients branching on raw `response.status === 404` instead of the shared response-status helpers
 
 ## Completion Obligations
 
@@ -69,3 +70,6 @@ does not become a transport error path during page bootstrap.
 That frontend status handling must now route through the shared
 `frontend-modern/src/api/responseUtils.ts` status helpers rather than through
 message-text heuristics in individual API modules.
+Optional not-found response handling in frontend API clients must now also use
+those shared response-status helpers rather than open-coded `response.status`
+branches in each module.

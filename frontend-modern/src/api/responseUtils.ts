@@ -7,6 +7,10 @@ type APIErrorLike = {
   status?: unknown;
 };
 
+type APIResponseLike = {
+  status?: unknown;
+};
+
 function extractErrorMessage(payload: APIErrorPayload): string | null {
   if (typeof payload.error === 'string' && payload.error.trim()) {
     return payload.error.trim();
@@ -60,6 +64,26 @@ export function apiErrorStatus(error: unknown): number | null {
 
 export function isAPIErrorStatus(error: unknown, expectedStatus: number): boolean {
   return apiErrorStatus(error) === expectedStatus;
+}
+
+export function apiResponseStatus(response: APIResponseLike | null | undefined): number | null {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  const status = response.status;
+  if (typeof status !== 'number' || !Number.isInteger(status) || status < 100 || status > 599) {
+    return null;
+  }
+
+  return status;
+}
+
+export function isAPIResponseStatus(
+  response: APIResponseLike | null | undefined,
+  expectedStatus: number,
+): boolean {
+  return apiResponseStatus(response) === expectedStatus;
 }
 
 export async function parseOptionalJSON<T>(
