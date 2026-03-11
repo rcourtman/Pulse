@@ -18,7 +18,7 @@ export class AIAPI {
   }
 
   private static normalizeUnifiedFinding(finding: UnifiedFindingRecord): UnifiedFindingRecord {
-    const alertIdentifier = finding.alert_identifier ?? finding.alert_id;
+    const alertIdentifier = finding.alert_identifier;
     const {
       alert_identifier: _alertIdentifier,
       legacy_alert_id: _legacyAlertId,

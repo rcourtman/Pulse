@@ -57,31 +57,4 @@ describe('aiIntelligenceStore', () => {
       alertIdentifier: 'instance:node:100::metric/cpu',
     });
   });
-
-  it('falls back to compatibility alert_id when canonical identifier is absent', async () => {
-    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
-      findings: [
-        {
-          id: 'finding-2',
-          source: 'ai-patrol',
-          severity: 'info',
-          category: 'ops',
-          resource_id: 'agent:node-1',
-          resource_name: 'node-1',
-          resource_type: 'host',
-          title: 'Observed issue',
-          description: 'details',
-          detected_at: '2026-03-01T00:00:00Z',
-          alert_id: 'legacy-alert-id',
-        },
-      ],
-      count: 1,
-    });
-
-    await aiIntelligenceStore.loadFindings();
-
-    expect(aiIntelligenceStore.findings[0]).toMatchObject({
-      alertIdentifier: 'legacy-alert-id',
-    });
-  });
 });

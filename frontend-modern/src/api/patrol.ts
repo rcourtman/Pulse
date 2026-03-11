@@ -34,11 +34,6 @@ export interface Finding {
   acknowledged_at?: string;
   snoozed_until?: string; // Finding hidden until this time
   alertIdentifier?: string;
-  legacyAlertId?: string;
-  alertId?: string;
-  alert_identifier?: string;
-  legacy_alert_id?: string;
-  alert_id?: string;
   // User feedback fields (LLM memory system)
   dismissed_reason?: 'not_an_issue' | 'expected_behavior' | 'will_fix_later';
   user_note?: string;
