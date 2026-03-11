@@ -13,7 +13,9 @@ import {
   objectArrayFieldOrEmpty,
   parseJSONSafe,
   parseJSONTextSafe,
+  parseOptionalAPIResponse,
   parseOptionalJSON,
+  parseRequiredAPIResponse,
   parseRequiredJSON,
   promoteLegacyAlertIdentifier,
   readAPIErrorMessage,
@@ -100,6 +102,38 @@ describe('assertAPIResponseOK', () => {
     await expect(
       assertAPIResponseOK(new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 }), 'Fallback'),
     ).rejects.toThrow('Bad request');
+  });
+});
+
+describe('parseRequiredAPIResponse', () => {
+  it('asserts ok and parses valid JSON payloads', async () => {
+    const response = new Response(JSON.stringify({ ok: true }), { status: 200 });
+    await expect(
+      parseRequiredAPIResponse<{ ok: boolean }>(response, 'Request failed', 'Parse failed'),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it('throws the request error when the response is not ok', async () => {
+    const response = new Response(JSON.stringify({ error: 'Request failed' }), { status: 500 });
+    await expect(
+      parseRequiredAPIResponse(response, 'Request failed', 'Parse failed'),
+    ).rejects.toThrow('Request failed');
+  });
+});
+
+describe('parseOptionalAPIResponse', () => {
+  it('asserts ok and returns emptyValue for empty payloads', async () => {
+    const response = new Response('', { status: 200 });
+    await expect(
+      parseOptionalAPIResponse(response, [], 'Request failed', 'Parse failed'),
+    ).resolves.toEqual([]);
+  });
+
+  it('throws the request error when the response is not ok', async () => {
+    const response = new Response(JSON.stringify({ error: 'Request failed' }), { status: 500 });
+    await expect(
+      parseOptionalAPIResponse(response, [], 'Request failed', 'Parse failed'),
+    ).rejects.toThrow('Request failed');
   });
 });
 

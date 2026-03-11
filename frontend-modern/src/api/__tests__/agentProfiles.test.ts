@@ -7,7 +7,7 @@ import {
   isAPIErrorStatus,
   isAPIResponseStatus,
   objectArrayFieldOrEmpty,
-  parseRequiredJSON,
+  parseRequiredAPIResponse,
 } from '../responseUtils';
 
 vi.mock('@/utils/apiClient', () => ({
@@ -21,7 +21,7 @@ vi.mock('../responseUtils', () => ({
   isAPIErrorStatus: vi.fn(),
   isAPIResponseStatus: vi.fn(),
   objectArrayFieldOrEmpty: vi.fn(),
-  parseRequiredJSON: vi.fn(),
+  parseRequiredAPIResponse: vi.fn(),
 }));
 
 describe('AgentProfilesAPI', () => {
@@ -42,7 +42,7 @@ describe('AgentProfilesAPI', () => {
       const record = value as Record<string, unknown>;
       return Array.isArray(record[field]) ? (record[field] as unknown[]) : [];
     });
-    vi.mocked(parseRequiredJSON).mockReset();
+    vi.mocked(parseRequiredAPIResponse).mockReset();
   });
 
   describe('listProfiles', () => {
@@ -113,10 +113,11 @@ describe('AgentProfilesAPI', () => {
     it('creates a new profile', async () => {
       const mockResponse = {
         ok: true,
+        status: 200,
         text: () => Promise.resolve(JSON.stringify({ id: 'p1' })),
       } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
-      vi.mocked(parseRequiredJSON).mockResolvedValueOnce({ id: 'p1' } as AgentProfile);
+      vi.mocked(parseRequiredAPIResponse).mockResolvedValueOnce({ id: 'p1' } as AgentProfile);
 
       await AgentProfilesAPI.createProfile('New Profile', { key: 'value' }, 'Description');
 
@@ -124,13 +125,17 @@ describe('AgentProfilesAPI', () => {
         '/api/admin/profiles/',
         expect.objectContaining({ method: 'POST' }),
       );
-      expect(parseRequiredJSON).toHaveBeenCalledWith(mockResponse, 'Failed to parse created profile');
+      expect(parseRequiredAPIResponse).toHaveBeenCalledWith(
+        mockResponse,
+        'Failed to create profile: 200',
+        'Failed to parse created profile',
+      );
     });
 
     it('throws on failure', async () => {
       const mockResponse = { ok: false, status: 400 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
-      vi.mocked(assertAPIResponseOK).mockRejectedValueOnce(new Error('Bad request'));
+      vi.mocked(parseRequiredAPIResponse).mockRejectedValueOnce(new Error('Bad request'));
 
       await expect(AgentProfilesAPI.createProfile('Name', {})).rejects.toThrow('Bad request');
     });
@@ -224,11 +229,12 @@ describe('AgentProfilesAPI', () => {
     it('gets AI suggestion', async () => {
       const mockResponse = {
         ok: true,
+        status: 200,
         text: () =>
           Promise.resolve(JSON.stringify({ name: 'Suggested', description: '', config: {}, rationale: [] })),
       } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
-      vi.mocked(parseRequiredJSON).mockResolvedValueOnce({
+      vi.mocked(parseRequiredAPIResponse).mockResolvedValueOnce({
         name: 'Suggested',
         description: '',
         config: {},
@@ -241,8 +247,9 @@ describe('AgentProfilesAPI', () => {
         '/api/admin/profiles/suggestions',
         expect.objectContaining({ method: 'POST' }),
       );
-      expect(parseRequiredJSON).toHaveBeenCalledWith(
+      expect(parseRequiredAPIResponse).toHaveBeenCalledWith(
         mockResponse,
+        'Failed to get suggestion: 200',
         'Failed to parse profile suggestion',
       );
     });
@@ -269,7 +276,7 @@ describe('AgentProfilesAPI', () => {
     it('fails closed when the suggestion success payload is invalid JSON', async () => {
       const mockResponse = { ok: true, status: 200 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
-      vi.mocked(parseRequiredJSON).mockRejectedValueOnce(
+      vi.mocked(parseRequiredAPIResponse).mockRejectedValueOnce(
         new Error('Failed to parse profile suggestion'),
       );
 

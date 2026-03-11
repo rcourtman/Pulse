@@ -59,6 +59,25 @@ export async function assertAPIResponseOK(response: Response, fallback: string):
   throw new Error(await readAPIErrorMessage(response, fallback));
 }
 
+export async function parseRequiredAPIResponse<T>(
+  response: Response,
+  requestErrorMessage: string,
+  parseErrorMessage: string,
+): Promise<T> {
+  await assertAPIResponseOK(response, requestErrorMessage);
+  return parseRequiredJSON(response, parseErrorMessage);
+}
+
+export async function parseOptionalAPIResponse<T>(
+  response: Response,
+  emptyValue: T,
+  requestErrorMessage: string,
+  parseErrorMessage: string,
+): Promise<T> {
+  await assertAPIResponseOK(response, requestErrorMessage);
+  return parseOptionalJSON(response, emptyValue, parseErrorMessage);
+}
+
 export function apiErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== 'object') {
     return null;

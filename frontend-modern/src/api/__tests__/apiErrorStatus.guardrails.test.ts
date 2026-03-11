@@ -25,6 +25,8 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function apiResponseStatus');
     expect(responseUtilsSource).toContain('export function isAPIResponseStatus');
     expect(responseUtilsSource).toContain('export async function assertAPIResponseOK');
+    expect(responseUtilsSource).toContain('export async function parseRequiredAPIResponse');
+    expect(responseUtilsSource).toContain('export async function parseOptionalAPIResponse');
     expect(responseUtilsSource).toContain('export async function parseRequiredJSON');
     expect(responseUtilsSource).toContain('export async function parseJSONSafe');
     expect(responseUtilsSource).toContain('export function parseJSONTextSafe');
@@ -69,23 +71,25 @@ describe('API error-status guardrails', () => {
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 404)');
     expect(agentProfilesSource).toContain('isAPIResponseStatus(response, 204)');
     expect(agentProfilesSource).toContain('isAPIResponseStatus(response, 503)');
+    expect(agentProfilesSource).toContain('parseRequiredAPIResponse(');
     expect(agentProfilesSource).toContain('assertAPIResponseOK(response,');
-    expect(agentProfilesSource).toContain('parseRequiredJSON(response,');
     expect(agentProfilesSource).not.toContain("message.includes('402')");
     expect(agentProfilesSource).not.toContain("message.includes('404')");
     expect(agentProfilesSource).not.toContain('response.status !== 204');
     expect(agentProfilesSource).not.toContain('response.status === 503');
     expect(agentProfilesSource).not.toContain('return response.json()');
+    expect(agentProfilesSource).not.toContain('parseRequiredJSON(response,');
     expect(agentProfilesSource).not.toContain('readAPIErrorMessage(');
 
+    expect(monitoringSource).toContain('parseOptionalAPIResponse(');
     expect(monitoringSource).toContain('assertAPIResponseOK(response,');
     expect(monitoringSource).toContain('isAPIResponseStatus(response, 404)');
-    expect(monitoringSource).toContain('parseOptionalJSON<AgentLookupResponse | null>(');
+    expect(monitoringSource).toContain('parseOptionalAPIResponse<AgentLookupResponse | null>(');
     expect(monitoringSource).toContain('coerceTimestampMillis(identity.lastSeen, Date.now())');
     expect(monitoringSource).toContain("'Failed to parse agent lookup response'");
     expect(discoverySource).toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).toContain('assertAPIResponseOK(response,');
-    expect(discoverySource).toContain('parseRequiredJSON(response,');
+    expect(discoverySource).toContain('parseRequiredAPIResponse(');
     expect(discoverySource).toContain('buildTypedDiscoveryPath(');
     expect(discoverySource).toContain('buildAgentDiscoveryCollectionPath(');
     expect(discoverySource).toContain('buildAgentDiscoveryDetailPath(');
@@ -98,6 +102,7 @@ describe('API error-status guardrails', () => {
     expect(discoverySource).not.toContain('return response.json()');
     expect(discoverySource).not.toContain('const isAgentResourceType =');
     expect(discoverySource).not.toContain('const agentCollectionBasePath =');
+    expect(discoverySource).not.toContain('parseRequiredJSON(response,');
     expect(discoverySource).not.toContain('readAPIErrorMessage(');
 
     expect(hostedSignupSource).toContain('parseJSONSafe<');
@@ -165,7 +170,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, and discovery route alias drift', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, and discovery route alias drift', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -220,6 +225,11 @@ describe('API error-status guardrails', () => {
     );
     const rawParsedErrorThrowPattern =
       /(?:readAPIErrorMessage\(|throw\s+new\s+Error\(\s*await\s+readAPIErrorMessage\()/;
+    const governedAssertParseEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:agentProfiles|discovery|monitoring)\.ts$/.test(path),
+    );
+    const rawAssertThenParsePattern =
+      /assertAPIResponseOK\((response|agentListResponse),[\s\S]{0,160}?parse(?:Required|Optional)JSON\(\1,/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -291,6 +301,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const rawAssertThenParseOffenders = governedAssertParseEntries
+      .filter(([, source]) => rawAssertThenParsePattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -303,6 +318,7 @@ describe('API error-status guardrails', () => {
     expect(duplicateAlertIdentifierOffenders).toEqual([]);
     expect(noOpAiAliasOffenders).toEqual([]);
     expect(rawParsedErrorThrowOffenders).toEqual([]);
+    expect(rawAssertThenParseOffenders).toEqual([]);
     expect(discoveryRouteAliasOffenders).toEqual([]);
   });
 });

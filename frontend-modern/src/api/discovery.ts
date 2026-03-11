@@ -1,5 +1,9 @@
 import { apiFetch } from '@/utils/apiClient';
-import { assertAPIResponseOK, isAPIResponseStatus, parseRequiredJSON } from './responseUtils';
+import {
+  assertAPIResponseOK,
+  isAPIResponseStatus,
+  parseRequiredAPIResponse,
+} from './responseUtils';
 import type {
   ResourceType,
   ResourceDiscovery,
@@ -46,8 +50,11 @@ const buildAgentDiscoveryDetailPath = (agentId: string, resourceId: string): str
  */
 export async function listDiscoveries(): Promise<DiscoveryListResponse> {
   const response = await apiFetch(API_BASE);
-  await assertAPIResponseOK(response, 'Failed to list discoveries');
-  return parseRequiredJSON(response, 'Failed to parse discoveries');
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to list discoveries',
+    'Failed to parse discoveries',
+  );
 }
 
 /**
@@ -57,8 +64,11 @@ export async function listDiscoveriesByType(
   resourceType: ResourceType,
 ): Promise<DiscoveryListResponse> {
   const response = await apiFetch(buildDiscoveryTypePath(resourceType));
-  await assertAPIResponseOK(response, `Failed to list discoveries for type ${resourceType}`);
-  return parseRequiredJSON(response, `Failed to parse discoveries for type ${resourceType}`);
+  return parseRequiredAPIResponse(
+    response,
+    `Failed to list discoveries for type ${resourceType}`,
+    `Failed to parse discoveries for type ${resourceType}`,
+  );
 }
 
 /**
@@ -66,8 +76,11 @@ export async function listDiscoveriesByType(
  */
 export async function listDiscoveriesByAgent(agentId: string): Promise<DiscoveryListResponse> {
   const response = await apiFetch(buildAgentDiscoveryCollectionPath(agentId));
-  await assertAPIResponseOK(response, `Failed to list discoveries for agent ${agentId}`);
-  return parseRequiredJSON(response, `Failed to parse discoveries for agent ${agentId}`);
+  return parseRequiredAPIResponse(
+    response,
+    `Failed to list discoveries for agent ${agentId}`,
+    `Failed to parse discoveries for agent ${agentId}`,
+  );
 }
 
 /**
@@ -82,10 +95,9 @@ export async function getDiscovery(
     // Agent discovery is frequently absent before first scan. Resolve via list endpoint
     // first to avoid noisy 404s for expected "not discovered yet" states.
     const agentListResponse = await apiFetch(buildAgentDiscoveryCollectionPath(targetId));
-    await assertAPIResponseOK(agentListResponse, 'Failed to list agent discoveries');
-
-    const agentList = await parseRequiredJSON<DiscoveryListResponse>(
+    const agentList = await parseRequiredAPIResponse<DiscoveryListResponse>(
       agentListResponse,
+      'Failed to list agent discoveries',
       'Failed to parse agent discoveries',
     );
     if (!agentList.discoveries || agentList.discoveries.length === 0) {
@@ -116,16 +128,14 @@ export async function getDiscovery(
     if (isAPIResponseStatus(response, 404)) {
       return null;
     }
-    await assertAPIResponseOK(response, 'Failed to get discovery');
-    return parseRequiredJSON(response, 'Failed to parse discovery');
+    return parseRequiredAPIResponse(response, 'Failed to get discovery', 'Failed to parse discovery');
   }
 
   const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId));
   if (isAPIResponseStatus(response, 404)) {
     return null;
   }
-  await assertAPIResponseOK(response, 'Failed to get discovery');
-  return parseRequiredJSON(response, 'Failed to parse discovery');
+  return parseRequiredAPIResponse(response, 'Failed to get discovery', 'Failed to parse discovery');
 }
 
 /**
@@ -144,8 +154,11 @@ export async function triggerDiscovery(
     },
     body: JSON.stringify(options || {}),
   });
-  await assertAPIResponseOK(response, 'Discovery failed');
-  return parseRequiredJSON(response, 'Failed to parse discovery trigger response');
+  return parseRequiredAPIResponse(
+    response,
+    'Discovery failed',
+    'Failed to parse discovery trigger response',
+  );
 }
 
 /**
@@ -159,8 +172,11 @@ export async function getDiscoveryProgress(
   const response = await apiFetch(
     buildTypedDiscoverySubresourcePath(resourceType, targetId, resourceId, 'progress'),
   );
-  await assertAPIResponseOK(response, 'Failed to get discovery progress');
-  return parseRequiredJSON(response, 'Failed to parse discovery progress');
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get discovery progress',
+    'Failed to parse discovery progress',
+  );
 }
 
 /**
@@ -182,8 +198,11 @@ export async function updateDiscoveryNotes(
       body: JSON.stringify(notes),
     },
   );
-  await assertAPIResponseOK(response, 'Failed to update notes');
-  return parseRequiredJSON(response, 'Failed to parse updated discovery notes');
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to update notes',
+    'Failed to parse updated discovery notes',
+  );
 }
 
 /**
@@ -205,8 +224,11 @@ export async function deleteDiscovery(
  */
 export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
   const response = await apiFetch(`${API_BASE}/status`);
-  await assertAPIResponseOK(response, 'Failed to get discovery status');
-  return parseRequiredJSON(response, 'Failed to parse discovery status');
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get discovery status',
+    'Failed to parse discovery status',
+  );
 }
 
 /**
@@ -214,8 +236,11 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
  */
 export async function getDiscoveryInfo(resourceType: ResourceType): Promise<DiscoveryInfo> {
   const response = await apiFetch(buildDiscoveryInfoPath(resourceType));
-  await assertAPIResponseOK(response, 'Failed to get discovery info');
-  return parseRequiredJSON(response, 'Failed to parse discovery info');
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get discovery info',
+    'Failed to parse discovery info',
+  );
 }
 
 /**
@@ -296,6 +321,9 @@ export interface ConnectedAgent {
  */
 export async function getConnectedAgents(): Promise<{ count: number; agents: ConnectedAgent[] }> {
   const response = await apiFetch('/api/ai/agents');
-  await assertAPIResponseOK(response, 'Failed to get connected agents');
-  return parseRequiredJSON(response, 'Failed to parse connected agents');
+  return parseRequiredAPIResponse(
+    response,
+    'Failed to get connected agents',
+    'Failed to parse connected agents',
+  );
 }

@@ -10,7 +10,7 @@ import {
   assertAPIResponseOK,
   coerceTimestampMillis,
   isAPIResponseStatus,
-  parseOptionalJSON,
+  parseOptionalAPIResponse,
 } from './responseUtils';
 
 export class MonitoringAPI {
@@ -59,7 +59,12 @@ export class MonitoringAPI {
       return {};
     }
 
-    return parseOptionalJSON(response, {}, 'Failed to parse delete container runtime response');
+    return parseOptionalAPIResponse(
+      response,
+      {},
+      `Failed with status ${response.status}`,
+      'Failed to parse delete container runtime response',
+    );
   }
 
   static async unhideDockerRuntime(agentId: string): Promise<void> {
@@ -147,7 +152,12 @@ export class MonitoringAPI {
       return {};
     }
 
-    return parseOptionalJSON(response, {}, 'Failed to parse delete kubernetes cluster response');
+    return parseOptionalAPIResponse(
+      response,
+      {},
+      `Failed with status ${response.status}`,
+      'Failed to parse delete kubernetes cluster response',
+    );
   }
 
   static async unhideKubernetesCluster(clusterId: string): Promise<void> {
@@ -293,9 +303,10 @@ export class MonitoringAPI {
 
     await assertAPIResponseOK(response, `Lookup failed with status ${response.status}`);
 
-    const data = await parseOptionalJSON<AgentLookupResponse | null>(
+    const data = await parseOptionalAPIResponse<AgentLookupResponse | null>(
       response,
       null,
+      `Lookup failed with status ${response.status}`,
       'Failed to parse agent lookup response',
     );
     if (!data) {
@@ -332,11 +343,10 @@ export class MonitoringAPI {
       body: JSON.stringify({ agentId, containerId, containerName }),
     });
 
-    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-
-    return parseOptionalJSON(
+    return parseOptionalAPIResponse(
       response,
       { success: true },
+      `Failed with status ${response.status}`,
       'Failed to parse update container response',
     );
   }
@@ -353,9 +363,12 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-
-    return parseOptionalJSON(response, { success: true }, 'Failed to parse check updates response');
+    return parseOptionalAPIResponse(
+      response,
+      { success: true },
+      `Failed with status ${response.status}`,
+      'Failed to parse check updates response',
+    );
   }
 
   /**
@@ -370,9 +383,12 @@ export class MonitoringAPI {
       method: 'POST',
     });
 
-    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
-
-    return parseOptionalJSON(response, { success: true }, 'Failed to parse update all response');
+    return parseOptionalAPIResponse(
+      response,
+      { success: true },
+      `Failed with status ${response.status}`,
+      'Failed to parse update all response',
+    );
   }
 }
 

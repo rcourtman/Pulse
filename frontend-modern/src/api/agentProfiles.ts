@@ -5,7 +5,7 @@ import {
   isAPIErrorStatus,
   isAPIResponseStatus,
   objectArrayFieldOrEmpty,
-  parseRequiredJSON,
+  parseRequiredAPIResponse,
 } from './responseUtils';
 
 /**
@@ -143,9 +143,11 @@ export class AgentProfilesAPI {
       body: JSON.stringify({ name, description, config }),
     });
 
-    await assertAPIResponseOK(response, `Failed to create profile: ${response.status}`);
-
-    return parseRequiredJSON(response, 'Failed to parse created profile');
+    return parseRequiredAPIResponse(
+      response,
+      `Failed to create profile: ${response.status}`,
+      'Failed to parse created profile',
+    );
   }
 
   /**
@@ -163,9 +165,11 @@ export class AgentProfilesAPI {
       body: JSON.stringify({ id, name, description, config }),
     });
 
-    await assertAPIResponseOK(response, `Failed to update profile: ${response.status}`);
-
-    return parseRequiredJSON(response, 'Failed to parse updated profile');
+    return parseRequiredAPIResponse(
+      response,
+      `Failed to update profile: ${response.status}`,
+      'Failed to parse updated profile',
+    );
   }
 
   /**
@@ -242,7 +246,11 @@ export class AgentProfilesAPI {
       await assertAPIResponseOK(response, `Failed to get suggestion: ${response.status}`);
     }
 
-    return parseRequiredJSON(response, 'Failed to parse profile suggestion');
+    return parseRequiredAPIResponse(
+      response,
+      `Failed to get suggestion: ${response.status}`,
+      'Failed to parse profile suggestion',
+    );
   }
 
   /**
