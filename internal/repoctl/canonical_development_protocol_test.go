@@ -636,6 +636,9 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 	assertContainsAll(t, "scripts/release_control/subsystem_lookup.py", lookup, []string{
 		"lookup_paths",
 		"verification_requirement",
+		"lane_context",
+		"status_summary",
+		"open_decisions",
 		"--files-from-stdin",
 		"subsystem_matches_path",
 	})

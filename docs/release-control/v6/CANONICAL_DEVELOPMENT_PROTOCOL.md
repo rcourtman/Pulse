@@ -147,8 +147,8 @@ If those answers are not obvious in under a minute, the subsystem still needs
 architectural hardening.
 
 Use `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]`
-to ask the repo which subsystem, contract, and proof route applies to a file
-set before editing.
+to ask the repo which subsystem, contract, proof route, live lane context, and
+relevant decision records apply to a file set before editing.
 
 ## Boundary Rule
 

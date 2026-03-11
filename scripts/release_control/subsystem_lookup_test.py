@@ -10,10 +10,15 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(["internal/api/resources.go"])
         impacted = {entry["subsystem"] for entry in result["impacted_subsystems"]}
         self.assertEqual(impacted, {"api-contracts", "unified-resources"})
+        self.assertEqual(result["status_audit_errors"], [])
+        self.assertEqual(result["status_summary"]["lane_count"], 12)
 
         file_entry = result["files"][0]
         matches = {match["subsystem"] for match in file_entry["matches"]}
         self.assertEqual(matches, {"api-contracts", "unified-resources"})
+        for match in file_entry["matches"]:
+            self.assertEqual(match["lane_context"]["lane_id"], "L6")
+            self.assertEqual(match["lane_context"]["lane"]["id"], "L6")
 
     def test_lookup_paths_classifies_tests_without_runtime_matches(self) -> None:
         result = lookup_paths(["internal/api/contract_test.go"])
@@ -33,6 +38,20 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(["docs/release-control/v6/status.json"])
         self.assertEqual(result["files"][0]["classification"], "ignored")
         self.assertEqual(result["files"][0]["matches"], [])
+
+    def test_lookup_paths_includes_relevant_open_decisions_for_lane(self) -> None:
+        result = lookup_paths(["pkg/licensing/features.go"])
+        match = next(
+            item
+            for item in result["files"][0]["matches"]
+            if item["subsystem"] == "cloud-paid"
+        )
+        lane_context = match["lane_context"]
+        self.assertEqual(lane_context["lane_id"], "L3")
+        self.assertEqual(
+            {decision["id"] for decision in lane_context["open_decisions"]},
+            {"cloud-msp-stripe-prices", "cloud-msp-price-id-propagation"},
+        )
 
 
 if __name__ == "__main__":

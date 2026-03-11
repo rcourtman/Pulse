@@ -18,6 +18,7 @@ from canonical_completion_guard import (
     load_subsystem_rules,
     subsystem_matches_path,
 )
+from status_audit import audit_status_payload, load_status_payload
 
 
 def normalize_input_path(raw: str) -> str:
@@ -34,9 +35,35 @@ def verification_requirement_for_path(rule: dict[str, Any], path: str) -> dict[s
     return build_verification_requirements(rule, [path])[0]
 
 
+def lane_context_for_rule(rule: dict[str, Any], status_report: dict[str, Any]) -> dict[str, Any] | None:
+    lane_id = str(rule.get("lane", "")).strip()
+    if not lane_id:
+        return None
+
+    lane = next((entry for entry in status_report.get("lanes", []) if entry.get("id") == lane_id), None)
+    open_decisions = [
+        decision
+        for decision in status_report.get("open_decisions", [])
+        if lane_id in decision.get("lane_ids", [])
+    ]
+    resolved_decisions = [
+        decision
+        for decision in status_report.get("resolved_decisions", [])
+        if lane_id in decision.get("lane_ids", [])
+    ]
+    return {
+        "lane_id": lane_id,
+        "lane": lane,
+        "open_decisions": open_decisions,
+        "resolved_decisions": resolved_decisions,
+    }
+
+
 def lookup_paths(paths: list[str]) -> dict[str, Any]:
     normalized = [normalize_input_path(path) for path in paths if path.strip()]
     rules = load_subsystem_rules()
+    rules_by_id = {str(rule["id"]): rule for rule in rules}
+    status_report = audit_status_payload(load_status_payload())
     impacted = infer_impacted_subsystems(normalized)
     path_entries: list[dict[str, Any]] = []
     unowned: list[str] = []
@@ -58,6 +85,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
                     {
                         "subsystem": rule["id"],
                         "contract": rule["contract"],
+                        "lane_context": lane_context_for_rule(rule, status_report),
                         "contract_update_required": True,
                         "proof_update_required": True,
                         "verification_requirement": requirement,
@@ -78,16 +106,20 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
 
     impacted_summary = []
     for subsystem_id, data in sorted(impacted.items()):
+        rule = rules_by_id[subsystem_id]
         impacted_summary.append(
             {
                 "subsystem": subsystem_id,
                 "contract": data["contract"],
+                "lane_context": lane_context_for_rule(rule, status_report),
                 "touched_runtime_files": data["touched_runtime_files"],
                 "verification_requirements": data["verification_requirements"],
             }
         )
 
     return {
+        "status_summary": status_report.get("summary", {}),
+        "status_audit_errors": status_report.get("errors", []),
         "files": path_entries,
         "impacted_subsystems": impacted_summary,
         "unowned_runtime_files": unowned,
@@ -116,14 +148,26 @@ def render_pretty(result: dict[str, Any]) -> str:
         lines.append(f"{entry['path']}: {entry['classification']}")
         for match in entry["matches"]:
             requirement = match["verification_requirement"]
+            lane_context = match["lane_context"]
             lines.append(
                 f"  - {match['subsystem']} -> {match['contract']} "
                 f"[{requirement['id']}: {requirement['label']}]"
             )
+            if lane_context and lane_context.get("lane"):
+                lane = lane_context["lane"]
+                lines.append(
+                    f"    lane {lane_context['lane_id']} "
+                    f"gap={lane['gap']:.0f} derived={lane['derived_status']} "
+                    f"open_decisions={len(lane_context['open_decisions'])}"
+                )
         if entry["classification"] == "runtime" and not entry["matches"]:
             lines.append("  - no owning subsystem rule matched")
     for path in result["unowned_runtime_files"]:
         lines.append(f"unowned: {path}")
+    if result.get("status_audit_errors"):
+        lines.append("status audit errors:")
+        for err in result["status_audit_errors"]:
+            lines.append(f"  - {err}")
     return "\n".join(lines)
 
 

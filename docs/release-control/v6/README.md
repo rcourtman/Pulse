@@ -18,7 +18,7 @@ Supporting governance file:
 Useful helper tools:
 
 - `python3 scripts/release_control/status_audit.py --check`
-- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]`
+- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, and relevant decision records
 
 The old release-control orchestrator and loop tooling are retired. Direct,
 repo-aware sessions are now the only supported v6 execution path.
