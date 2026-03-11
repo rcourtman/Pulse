@@ -1127,7 +1127,6 @@ func (h *Hub) BroadcastAlertResolved(alertID string) {
 		Type: "alertResolved",
 		Data: map[string]string{
 			"alertIdentifier": alertID,
-			"alertId":         alertID,
 		},
 	}
 	h.BroadcastMessage(msg)
@@ -1172,7 +1171,6 @@ func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
 		Type: "alertResolved",
 		Data: map[string]string{
 			"alertIdentifier": alertID,
-			"alertId":         alertID,
 		},
 	}
 	if h.isStopping() {

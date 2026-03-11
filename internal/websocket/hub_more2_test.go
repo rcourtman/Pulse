@@ -50,9 +50,6 @@ func TestBroadcastAlertResolvedAndCustom(t *testing.T) {
 		if payload["alertIdentifier"] != "alert-1" {
 			t.Fatalf("unexpected alertIdentifier: %v", payload["alertIdentifier"])
 		}
-		if payload["alertId"] != "alert-1" {
-			t.Fatalf("unexpected alertId: %v", payload["alertId"])
-		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("expected alertResolved broadcast")
 	}

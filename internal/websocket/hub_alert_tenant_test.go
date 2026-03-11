@@ -120,9 +120,6 @@ func TestAlertResolvedBroadcastTenantIsolation(t *testing.T) {
 	if payload["alertIdentifier"] != "alert-1" {
 		t.Fatalf("expected alertIdentifier alert-1, got %v", payload["alertIdentifier"])
 	}
-	if payload["alertId"] != "alert-1" {
-		t.Fatalf("expected alertId alert-1, got %v", payload["alertId"])
-	}
 
 	assertNoClientMessage(t, orgBClient, 200*time.Millisecond)
 }
@@ -173,9 +170,6 @@ func TestAlertResolvedEmptyOrgTargetsDefaultTenantOnly(t *testing.T) {
 	}
 	if payload["alertIdentifier"] != "alert-default" {
 		t.Fatalf("expected alertIdentifier alert-default, got %v", payload["alertIdentifier"])
-	}
-	if payload["alertId"] != "alert-default" {
-		t.Fatalf("expected alertId alert-default, got %v", payload["alertId"])
 	}
 	assertNoClientMessage(t, orgAClient, 200*time.Millisecond)
 	assertNoClientMessage(t, orgBClient, 200*time.Millisecond)

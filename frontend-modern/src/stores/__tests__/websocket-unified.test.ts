@@ -186,7 +186,6 @@ describe('websocket store unified resource contract', () => {
         type: 'alertResolved',
         data: {
           alertIdentifier: 'instance:node:100::metric/cpu',
-          alertId: 'instance:node:100::metric/cpu',
         },
       });
 
