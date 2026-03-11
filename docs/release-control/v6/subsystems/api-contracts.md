@@ -165,6 +165,11 @@ The docker-runtime and kubernetes-cluster managed-resource clients in
 allowed-missing mutation, and display-name transport mechanics through
 canonical local helpers in that file rather than duplicating the same
 fetch-and-assert stacks across runtime and cluster variants.
+The same monitoring managed-resource clients must now also route shared
+no-body `POST` actions and success-envelope command triggers through canonical
+local helpers in `frontend-modern/src/api/monitoring.ts` rather than
+duplicating identical `POST` transport logic across reenroll and runtime
+command endpoints.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local

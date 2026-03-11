@@ -63,6 +63,31 @@ async function setManagedResourceDisplayName(
   );
 }
 
+async function runManagedResourceAction(url: string): Promise<void> {
+  const response = await apiFetch(url, {
+    method: 'POST',
+  });
+
+  await assertAPIResponseOK(response, `Failed with status ${response.status}`);
+}
+
+async function triggerManagedResourceCommand<T>(
+  url: string,
+  parseErrorMessage: string,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await apiFetch(url, {
+    method: 'POST',
+    ...init,
+  });
+
+  return parseOptionalSuccessAPIResponse<T>(
+    response,
+    `Failed with status ${response.status}`,
+    parseErrorMessage,
+  );
+}
+
 export class MonitoringAPI {
   private static baseUrl = '/api';
 
@@ -120,12 +145,7 @@ export class MonitoringAPI {
 
   static async allowDockerRuntimeReenroll(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/allow-reenroll`;
-
-    const response = await apiFetch(url, {
-      method: 'POST',
-    });
-
-    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
+    await runManagedResourceAction(url);
   }
 
   static async deleteKubernetesCluster(
@@ -162,12 +182,7 @@ export class MonitoringAPI {
 
   static async allowKubernetesClusterReenroll(clusterId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/allow-reenroll`;
-
-    const response = await apiFetch(url, {
-      method: 'POST',
-    });
-
-    await assertAPIResponseOK(response, `Failed with status ${response.status}`);
+    await runManagedResourceAction(url);
   }
 
   static async deleteAgent(agentId: string): Promise<void> {
@@ -273,19 +288,15 @@ export class MonitoringAPI {
     containerName: string,
   ): Promise<UpdateDockerContainerResponse> {
     const url = `${this.baseUrl}/agents/docker/containers/update`;
-
-    const response = await apiFetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ agentId, containerId, containerName }),
-    });
-
-    return parseOptionalSuccessAPIResponse<UpdateDockerContainerResponse>(
-      response,
-      `Failed with status ${response.status}`,
+    return triggerManagedResourceCommand<UpdateDockerContainerResponse>(
+      url,
       'Failed to parse update container response',
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ agentId, containerId, containerName }),
+      },
     );
   }
 
@@ -296,14 +307,8 @@ export class MonitoringAPI {
     agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/check-updates`;
-
-    const response = await apiFetch(url, {
-      method: 'POST',
-    });
-
-    return parseOptionalSuccessAPIResponse<{ success: boolean; commandId?: string }>(
-      response,
-      `Failed with status ${response.status}`,
+    return triggerManagedResourceCommand<{ success: boolean; commandId?: string }>(
+      url,
       'Failed to parse check updates response',
     );
   }
@@ -315,14 +320,8 @@ export class MonitoringAPI {
     agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/update-all`;
-
-    const response = await apiFetch(url, {
-      method: 'POST',
-    });
-
-    return parseOptionalSuccessAPIResponse<{ success: boolean; commandId?: string }>(
-      response,
-      `Failed with status ${response.status}`,
+    return triggerManagedResourceCommand<{ success: boolean; commandId?: string }>(
+      url,
       'Failed to parse update all response',
     );
   }

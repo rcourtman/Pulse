@@ -174,6 +174,19 @@ describe('MonitoringAPI', () => {
     });
   });
 
+  describe('allowDockerRuntimeReenroll', () => {
+    it('allows docker runtime reenroll', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
+
+      await MonitoringAPI.allowDockerRuntimeReenroll('agent-1');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/docker/runtimes/agent-1/allow-reenroll',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
   describe('updateDockerContainer', () => {
     it('returns canonical success when the backend omits a payload body', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce(new Response('', { status: 200 }));
@@ -402,6 +415,19 @@ describe('MonitoringAPI', () => {
       await expect(
         MonitoringAPI.setKubernetesClusterDisplayName('cluster-1', 'New Name'),
       ).rejects.toThrow('Kubernetes cluster not found');
+    });
+  });
+
+  describe('allowKubernetesClusterReenroll', () => {
+    it('allows kubernetes cluster reenroll', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
+
+      await MonitoringAPI.allowKubernetesClusterReenroll('cluster-1');
+
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/agents/kubernetes/clusters/cluster-1/allow-reenroll',
+        expect.objectContaining({ method: 'POST' }),
+      );
     });
   });
 
