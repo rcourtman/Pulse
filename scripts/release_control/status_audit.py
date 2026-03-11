@@ -15,6 +15,8 @@ import re
 import sys
 from typing import Any
 
+from canonical_completion_guard import load_subsystem_rules
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATUS_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.json"
@@ -260,6 +262,11 @@ def audit_lanes(
             errors.append(f"{context} current_score {current:g} exceeds target_score {target:g}")
         if status not in VALID_LANE_STATUSES:
             errors.append(f"{context} has invalid status {status!r}")
+        subsystems = _require_string_list(raw_lane, "subsystems", errors, context=context)
+        if len(subsystems) != len(set(subsystems)):
+            errors.append(f"{context}.subsystems must not contain duplicates")
+        if subsystems != sorted(subsystems):
+            errors.append(f"{context}.subsystems must be sorted lexicographically")
 
         raw_evidence = raw_lane.get("evidence")
         if not isinstance(raw_evidence, list) or not raw_evidence:
@@ -332,6 +339,7 @@ def audit_lanes(
                 "gap": max(0.0, target - current),
                 "at_target": at_target,
                 "status": status,
+                "subsystems": subsystems,
                 "derived_status": derived_status,
                 "all_evidence_present": all_evidence_present,
                 "evidence_count": len(resolved_evidence),
@@ -340,6 +348,39 @@ def audit_lanes(
         )
 
     return lane_reports, lane_ids
+
+
+def validate_lane_subsystem_bindings(lane_reports: list[dict[str, Any]], errors: list[str]) -> None:
+    rules = load_subsystem_rules()
+    expected_by_lane: dict[str, list[str]] = {}
+    for rule in rules:
+        lane_id = str(rule.get("lane", "")).strip()
+        subsystem_id = str(rule.get("id", "")).strip()
+        if not lane_id or not subsystem_id:
+            continue
+        expected_by_lane.setdefault(lane_id, []).append(subsystem_id)
+
+    for lane_id in list(expected_by_lane):
+        expected_by_lane[lane_id] = sorted(expected_by_lane[lane_id])
+
+    lane_ids = {lane["id"] for lane in lane_reports}
+    for lane_id in expected_by_lane:
+        if lane_id not in lane_ids:
+            errors.append(f"status.json missing lane {lane_id} required by subsystem registry")
+
+    known_subsystems = {subsystem_id for subsystem_ids in expected_by_lane.values() for subsystem_id in subsystem_ids}
+
+    for lane in lane_reports:
+        lane_id = lane["id"]
+        declared = list(lane.get("subsystems", []))
+        for subsystem_id in declared:
+            if subsystem_id not in known_subsystems:
+                errors.append(f"lanes[{lane_id}].subsystems references unknown subsystem {subsystem_id!r}")
+        expected = expected_by_lane.get(lane_id, [])
+        if declared != expected:
+            errors.append(
+                f"lanes[{lane_id}].subsystems = {declared!r}, want {expected!r} from subsystem registry"
+            )
 
 
 def validate_open_decisions(
@@ -477,6 +518,7 @@ def audit_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
         errors=errors,
         warnings=warnings,
     )
+    validate_lane_subsystem_bindings(lane_reports, errors)
     open_decisions = validate_open_decisions(payload, lane_ids=lane_ids, errors=errors)
     resolved_decisions = validate_resolved_decisions(payload, lane_ids=lane_ids, errors=errors)
 
@@ -527,7 +569,8 @@ def render_pretty(report: dict[str, Any]) -> str:
     for lane in report.get("lanes", []):
         lines.append(
             f"{lane['id']}: gap={lane['gap']:.0f} status={lane['status']} "
-            f"derived={lane['derived_status']} evidence_count={lane['evidence_count']}"
+            f"derived={lane['derived_status']} evidence_count={lane['evidence_count']} "
+            f"subsystems={','.join(lane['subsystems']) or '-'}"
         )
         for missing in lane["missing_evidence"]:
             lines.append(f"  missing {missing}")

@@ -204,6 +204,7 @@
         "target_score",
         "current_score",
         "status",
+        "subsystems",
         "evidence"
       ],
       "properties": {
@@ -233,6 +234,14 @@
             "target-met",
             "blocked"
           ]
+        },
+        "subsystems": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "evidence": {
           "type": "array",
