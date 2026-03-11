@@ -153,7 +153,7 @@ func TestService_RecordIncidentRunbook(t *testing.T) {
 	// Case 3: Valid
 	svc.RecordIncidentRunbook("alert1", "rb1", "title", memory.OutcomeResolved, true, "msg")
 
-	timeline := svc.incidentStore.GetTimelineByAlertID("alert1")
+	timeline := svc.incidentStore.GetTimelineByAlertIdentifier("alert1")
 	if timeline == nil {
 		t.Fatal("expected incident timeline to be created")
 	}

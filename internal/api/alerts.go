@@ -490,7 +490,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		if !startedAt.IsZero() {
 			incident = store.GetTimelineByAlertAt(alertID, startedAt)
 		} else {
-			incident = store.GetTimelineByAlertID(alertID)
+			incident = store.GetTimelineByAlertIdentifier(alertID)
 		}
 		if err := utils.WriteJSONResponse(w, exportIncident(incident)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident timeline response")
@@ -612,7 +612,7 @@ func exportIncident(incident *memory.Incident) *incidentView {
 			Details:   event.Details,
 		})
 	}
-	alertIdentifier := strings.TrimSpace(incident.AlertID)
+	alertIdentifier := strings.TrimSpace(incident.AlertIdentifier)
 	return &incidentView{
 		ID:              incident.ID,
 		AlertIdentifier: alertIdentifier,

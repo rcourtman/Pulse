@@ -280,7 +280,7 @@ func TestNewIncidentStore_LoadsFromDisk(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, incidentFileName)
 	incidents := []*Incident{
-		{ID: "inc-1", AlertID: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
+		{ID: "inc-1", AlertIdentifier: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
 	}
 	data, err := json.Marshal(incidents)
 	if err != nil {
@@ -325,7 +325,7 @@ func TestIncidentStore_RecordAlertFired_Existing(t *testing.T) {
 	alert.Message = "updated"
 	store.RecordAlertFired(alert)
 
-	timeline := store.GetTimelineByAlertID(alert.ID)
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil {
 		t.Fatalf("expected timeline")
 	}
@@ -349,7 +349,7 @@ func TestIncidentStore_RecordAlertAcknowledged_WithAckTime(t *testing.T) {
 	store.RecordAlertAcknowledged(nil, "user")
 	store.RecordAlertAcknowledged(alert, "user")
 
-	timeline := store.GetTimelineByAlertID(alert.ID)
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil {
 		t.Fatalf("expected timeline")
 	}
@@ -371,7 +371,7 @@ func TestIncidentStore_RecordAlertResolved_ZeroTime(t *testing.T) {
 	store.RecordAlertResolved(nil, time.Time{})
 	store.RecordAlertResolved(alert, time.Time{})
 
-	timeline := store.GetTimelineByAlertID(alert.ID)
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
 	if timeline == nil || timeline.ClosedAt == nil {
 		t.Fatalf("expected closed incident")
 	}
@@ -382,7 +382,7 @@ func TestIncidentStore_RecordAnalysis_CommandDetails(t *testing.T) {
 	store.RecordAnalysis("", "", nil)
 	store.RecordAnalysis("alert-analysis", "", nil)
 
-	timeline := store.GetTimelineByAlertID("alert-analysis")
+	timeline := store.GetTimelineByAlertIdentifier("alert-analysis")
 	if timeline == nil {
 		t.Fatalf("expected timeline")
 	}
@@ -393,7 +393,7 @@ func TestIncidentStore_RecordAnalysis_CommandDetails(t *testing.T) {
 	store.RecordCommand("", "", false, "", nil)
 	store.RecordCommand("alert-cmd", "echo test", false, "", nil)
 
-	cmdTimeline := store.GetTimelineByAlertID("alert-cmd")
+	cmdTimeline := store.GetTimelineByAlertIdentifier("alert-cmd")
 	if cmdTimeline == nil || len(cmdTimeline.Events) == 0 {
 		t.Fatalf("expected command event")
 	}
@@ -404,7 +404,7 @@ func TestIncidentStore_RecordAnalysis_CommandDetails(t *testing.T) {
 
 func TestIncidentStore_Timelines_EmptyAndZeroTime(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{})
-	if got := store.GetTimelineByAlertID(""); got != nil {
+	if got := store.GetTimelineByAlertIdentifier(""); got != nil {
 		t.Fatalf("expected nil for empty alert ID")
 	}
 	if got := store.GetTimelineByAlertAt("", time.Now()); got != nil {
@@ -424,11 +424,11 @@ func TestIncidentStore_Timelines_EmptyAndZeroTime(t *testing.T) {
 	store.RecordAlertFired(alert)
 
 	timeline := store.GetTimelineByAlertAt(alert.ID, time.Time{})
-	if timeline == nil || timeline.AlertID != alert.ID {
+	if timeline == nil || timeline.AlertIdentifier != alert.ID {
 		t.Fatalf("expected timeline for zero start time")
 	}
 	timeline = store.GetTimelineByAlertAt(alert.ID, alert.StartTime.Add(5*time.Minute))
-	if timeline == nil || timeline.AlertID != alert.ID {
+	if timeline == nil || timeline.AlertIdentifier != alert.ID {
 		t.Fatalf("expected timeline for later start time")
 	}
 }
@@ -437,13 +437,13 @@ func TestIncidentStore_GetTimelineByAlertAt_SkipsMismatched(t *testing.T) {
 	store := &IncidentStore{
 		incidents: []*Incident{
 			nil,
-			{ID: "inc-a", AlertID: "alert-a", OpenedAt: time.Now().Add(-10 * time.Minute)},
-			{ID: "inc-b", AlertID: "alert-b", OpenedAt: time.Now().Add(-5 * time.Minute)},
+			{ID: "inc-a", AlertIdentifier: "alert-a", OpenedAt: time.Now().Add(-10 * time.Minute)},
+			{ID: "inc-b", AlertIdentifier: "alert-b", OpenedAt: time.Now().Add(-5 * time.Minute)},
 		},
 	}
 
 	timeline := store.GetTimelineByAlertAt("alert-b", time.Now())
-	if timeline == nil || timeline.AlertID != "alert-b" {
+	if timeline == nil || timeline.AlertIdentifier != "alert-b" {
 		t.Fatalf("expected timeline for alert-b")
 	}
 }
@@ -451,20 +451,20 @@ func TestIncidentStore_GetTimelineByAlertAt_SkipsMismatched(t *testing.T) {
 func TestIncidentStore_FormatForPatrol_MessageFallback(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{})
 	store.incidents = append(store.incidents, &Incident{
-		ID:       "inc-message",
-		AlertID:  "alert-message",
-		Status:   IncidentStatusOpen,
-		OpenedAt: time.Now(),
-		Message:  "fallback message",
+		ID:              "inc-message",
+		AlertIdentifier: "alert-message",
+		Status:          IncidentStatusOpen,
+		OpenedAt:        time.Now(),
+		Message:         "fallback message",
 	})
 	store.incidents = append(store.incidents, &Incident{
-		ID:           "inc-ack",
-		AlertID:      "alert-ack",
-		Status:       IncidentStatusOpen,
-		OpenedAt:     time.Now().Add(1 * time.Minute),
-		Acknowledged: true,
-		ResourceName: "vm-ack",
-		AlertType:    "cpu",
+		ID:              "inc-ack",
+		AlertIdentifier: "alert-ack",
+		Status:          IncidentStatusOpen,
+		OpenedAt:        time.Now().Add(1 * time.Minute),
+		Acknowledged:    true,
+		ResourceName:    "vm-ack",
+		AlertType:       "cpu",
 	})
 	store.incidents = append(store.incidents, nil)
 
@@ -514,10 +514,10 @@ func TestIncidentStore_HelperPaths(t *testing.T) {
 	}
 
 	store.incidents = append([]*Incident{nil}, store.incidents...)
-	if store.findOpenIncidentByAlertIDLocked("") != nil {
+	if store.findOpenIncidentByAlertIdentifierLocked("") != nil {
 		t.Fatalf("expected nil for empty alert ID")
 	}
-	if store.findLatestIncidentByAlertIDLocked("") != nil {
+	if store.findLatestIncidentByAlertIdentifierLocked("") != nil {
 		t.Fatalf("expected nil for empty alert ID")
 	}
 	if store.findIncidentByIDLocked("") != nil {
@@ -527,10 +527,10 @@ func TestIncidentStore_HelperPaths(t *testing.T) {
 	oldClosed := time.Now().Add(-2 * time.Hour)
 	store.incidents = []*Incident{
 		nil,
-		{ID: "old-open", AlertID: "old", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-2 * time.Hour)},
-		{ID: "old-closed", AlertID: "oldc", Status: IncidentStatusResolved, OpenedAt: time.Now().Add(-3 * time.Hour), ClosedAt: &oldClosed},
-		{ID: "recent", AlertID: "recent", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-5 * time.Minute)},
-		{ID: "recent2", AlertID: "recent2", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-4 * time.Minute)},
+		{ID: "old-open", AlertIdentifier: "old", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-2 * time.Hour)},
+		{ID: "old-closed", AlertIdentifier: "oldc", Status: IncidentStatusResolved, OpenedAt: time.Now().Add(-3 * time.Hour), ClosedAt: &oldClosed},
+		{ID: "recent", AlertIdentifier: "recent", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-5 * time.Minute)},
+		{ID: "recent2", AlertIdentifier: "recent2", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-4 * time.Minute)},
 	}
 	store.trimLocked()
 	if len(store.incidents) != 1 || store.incidents[0].ID != "recent2" {
@@ -542,7 +542,7 @@ func TestIncidentStore_SaveAsyncAndPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := &IncidentStore{
 		incidents: []*Incident{
-			{ID: "inc-1", AlertID: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
+			{ID: "inc-1", AlertIdentifier: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
 		},
 		dataDir:  tmpDir,
 		filePath: filepath.Join(tmpDir, incidentFileName),
@@ -571,7 +571,7 @@ func TestIncidentStore_SaveAsync_Error(t *testing.T) {
 
 	store := &IncidentStore{
 		incidents: []*Incident{
-			{ID: "inc-err", AlertID: "alert-err", Status: IncidentStatusOpen, OpenedAt: time.Now()},
+			{ID: "inc-err", AlertIdentifier: "alert-err", Status: IncidentStatusOpen, OpenedAt: time.Now()},
 		},
 		dataDir:  badDir,
 		filePath: filepath.Join(badDir, incidentFileName),
@@ -624,10 +624,10 @@ func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {
 		store := &IncidentStore{
 			incidents: []*Incident{
 				{
-					ID:       "inc-1",
-					AlertID:  "alert-1",
-					Status:   IncidentStatusOpen,
-					OpenedAt: time.Now(),
+					ID:              "inc-1",
+					AlertIdentifier: "alert-1",
+					Status:          IncidentStatusOpen,
+					OpenedAt:        time.Now(),
 					Events: []IncidentEvent{
 						{
 							ID:        "evt-1",
@@ -655,7 +655,7 @@ func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {
 		}
 		store := &IncidentStore{
 			incidents: []*Incident{
-				{ID: "inc-1", AlertID: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
+				{ID: "inc-1", AlertIdentifier: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
 			},
 			dataDir:  tmpDir,
 			filePath: filePath,
@@ -670,10 +670,10 @@ func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {
 		store := &IncidentStore{
 			incidents: []*Incident{
 				{
-					ID:       "inc-1",
-					AlertID:  "alert-1",
-					Status:   IncidentStatusOpen,
-					OpenedAt: time.Now(),
+					ID:              "inc-1",
+					AlertIdentifier: "alert-1",
+					Status:          IncidentStatusOpen,
+					OpenedAt:        time.Now(),
 					Events: []IncidentEvent{
 						{ID: "evt-1", Type: IncidentEventNote, Timestamp: time.Now(), Summary: "note", Details: map[string]interface{}{"k": "v"}},
 					},
@@ -779,17 +779,17 @@ func TestIncidentStore_LoadFromDisk_Scenarios(t *testing.T) {
 		closed := time.Now().Add(-90 * time.Minute)
 		incidents := []*Incident{
 			{
-				ID:       "inc-a",
-				AlertID:  "alert-a",
-				Status:   IncidentStatusResolved,
-				OpenedAt: time.Now().Add(-2 * time.Hour),
-				ClosedAt: &closed,
+				ID:              "inc-a",
+				AlertIdentifier: "alert-a",
+				Status:          IncidentStatusResolved,
+				OpenedAt:        time.Now().Add(-2 * time.Hour),
+				ClosedAt:        &closed,
 			},
 			{
-				ID:       "inc-b",
-				AlertID:  "alert-b",
-				Status:   IncidentStatusOpen,
-				OpenedAt: time.Now().Add(-10 * time.Minute),
+				ID:              "inc-b",
+				AlertIdentifier: "alert-b",
+				Status:          IncidentStatusOpen,
+				OpenedAt:        time.Now().Add(-10 * time.Minute),
 			},
 		}
 		data, err := json.Marshal(incidents)
@@ -822,12 +822,12 @@ func TestCloneIncident(t *testing.T) {
 	ack := now.Add(-5 * time.Minute)
 	closed := now.Add(-2 * time.Minute)
 	incident := &Incident{
-		ID:       "inc-1",
-		AlertID:  "alert-1",
-		Status:   IncidentStatusResolved,
-		OpenedAt: now.Add(-10 * time.Minute),
-		AckTime:  &ack,
-		ClosedAt: &closed,
+		ID:              "inc-1",
+		AlertIdentifier: "alert-1",
+		Status:          IncidentStatusResolved,
+		OpenedAt:        now.Add(-10 * time.Minute),
+		AckTime:         &ack,
+		ClosedAt:        &closed,
 		Events: []IncidentEvent{
 			{
 				ID:        "evt-1",
