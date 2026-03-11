@@ -164,7 +164,7 @@ func (b *AlertBridge) syncExistingAlerts() {
 		_, isNew := b.store.AddFromAlert(alert)
 		if isNew {
 			log.Debug().
-				Str("alert_identifier", alert.GetAlertID()).
+				Str("alert_identifier", alert.GetAlertIdentifier()).
 				Str("resource", alert.GetResourceName()).
 				Msg("Synced existing alert to unified store")
 		}
@@ -192,7 +192,7 @@ func (b *AlertBridge) handleNewAlert(alert AlertAdapter) {
 	if isNew {
 		log.Info().
 			Str("finding_id", finding.ID).
-			Str("alert_identifier", alert.GetAlertID()).
+			Str("alert_identifier", alert.GetAlertIdentifier()).
 			Str("resource", finding.ResourceName).
 			Str("category", string(finding.Category)).
 			Str("severity", string(finding.Severity)).
@@ -316,21 +316,21 @@ type BridgeStats struct {
 
 // SimpleAlertAdapter wraps basic alert data to implement AlertAdapter
 type SimpleAlertAdapter struct {
-	AlertID      string
-	AlertType    string
-	AlertLevel   string
-	ResourceID   string
-	ResourceName string
-	Node         string
-	Message      string
-	Value        float64
-	Threshold    float64
-	StartTime    time.Time
-	LastSeen     time.Time
-	Metadata     map[string]interface{}
+	AlertIdentifier string
+	AlertType       string
+	AlertLevel      string
+	ResourceID      string
+	ResourceName    string
+	Node            string
+	Message         string
+	Value           float64
+	Threshold       float64
+	StartTime       time.Time
+	LastSeen        time.Time
+	Metadata        map[string]interface{}
 }
 
-func (a *SimpleAlertAdapter) GetAlertID() string                  { return a.AlertID }
+func (a *SimpleAlertAdapter) GetAlertIdentifier() string          { return a.AlertIdentifier }
 func (a *SimpleAlertAdapter) GetAlertType() string                { return a.AlertType }
 func (a *SimpleAlertAdapter) GetAlertLevel() string               { return a.AlertLevel }
 func (a *SimpleAlertAdapter) GetResourceID() string               { return a.ResourceID }

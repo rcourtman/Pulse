@@ -17,7 +17,7 @@ func (s *stubAlertProvider) GetActiveAlerts() []AlertAdapter {
 
 func (s *stubAlertProvider) GetAlert(alertID string) AlertAdapter {
 	for _, alert := range s.alerts {
-		if alert.GetAlertID() == alertID {
+		if alert.GetAlertIdentifier() == alertID {
 			return alert
 		}
 	}
@@ -37,15 +37,15 @@ func TestAlertBridge_StartStopAndSync(t *testing.T) {
 	bridge := NewAlertBridge(store, DefaultBridgeConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	provider := &stubAlertProvider{alerts: []AlertAdapter{alert}}
 	bridge.SetAlertProvider(provider)
@@ -87,15 +87,15 @@ func TestAlertBridge_HandleNewAlertAndEnhance(t *testing.T) {
 	})
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 
 	bridge.handleNewAlert(alert)
@@ -129,20 +129,20 @@ func TestAlertBridge_HandleAlertResolved(t *testing.T) {
 	})
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 	bridge.pendingEnhancements[finding.ID] = time.AfterFunc(time.Second, func() {})
 
-	bridge.handleAlertResolved(alert.AlertID)
+	bridge.handleAlertResolved(alert.AlertIdentifier)
 
 	select {
 	case reason := <-patrolCh:
@@ -163,15 +163,15 @@ func TestAlertBridge_ScheduleEnhancementInactiveFinding(t *testing.T) {
 	bridge := NewAlertBridge(store, DefaultBridgeConfig())
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := store.AddFromAlert(alert)
 	store.Resolve(finding.ID)

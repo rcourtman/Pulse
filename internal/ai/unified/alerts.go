@@ -327,8 +327,8 @@ func DefaultAlertToFindingConfig() AlertToFindingConfig {
 
 // AlertAdapter provides the interface for reading alert data
 type AlertAdapter interface {
-	// GetAlertID returns the alert's unique identifier
-	GetAlertID() string
+	// GetAlertIdentifier returns the alert's unique identifier
+	GetAlertIdentifier() string
 	// GetAlertType returns the type of alert (cpu, memory, etc.)
 	GetAlertType() string
 	// GetAlertLevel returns the severity level
@@ -442,7 +442,7 @@ func (s *UnifiedStore) SetOnFindingEnhanced(cb func(f *UnifiedFinding)) {
 
 // ConvertAlert converts a threshold alert to a unified finding
 func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
-	alertID := alert.GetAlertID()
+	alertIdentifier := alert.GetAlertIdentifier()
 	alertType := alert.GetAlertType()
 
 	// Determine category
@@ -461,7 +461,7 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 	resourceType := determineResourceType(alertType, alert.GetMetadata())
 
 	// Generate finding ID
-	findingID := fmt.Sprintf("alert-%s-%d", alertID, time.Now().UnixNano()%1000000)
+	findingID := fmt.Sprintf("alert-%s-%d", alertIdentifier, time.Now().UnixNano()%1000000)
 
 	// Create the finding
 	finding := &UnifiedFinding{
@@ -475,7 +475,7 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 		Node:            alert.GetNode(),
 		Title:           generateTitle(alertType, alert.GetResourceName(), alert.GetValue(), alert.GetThreshold()),
 		Description:     alert.GetMessage(),
-		AlertIdentifier: alertID,
+		AlertIdentifier: alertIdentifier,
 		AlertType:       alertType,
 		Value:           alert.GetValue(),
 		Threshold:       alert.GetThreshold(),
@@ -499,12 +499,12 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 
 // AddFromAlert creates a unified finding from an alert
 func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) {
-	alertID := alert.GetAlertID()
+	alertIdentifier := alert.GetAlertIdentifier()
 
 	s.mu.Lock()
 
 	// Check if we already have a finding for this alert
-	if existingID, ok := s.byAlertIdentifier[alertID]; ok {
+	if existingID, ok := s.byAlertIdentifier[alertIdentifier]; ok {
 		if existing := s.findings[existingID]; existing != nil {
 			// Update existing finding
 			existing.LastSeenAt = alert.GetLastSeen()
@@ -516,7 +516,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 				existing.ResolvedAt = nil
 				log.Debug().
 					Str("finding_id", existing.ID).
-					Str("alert_identifier", alertID).
+					Str("alert_identifier", alertIdentifier).
 					Msg("Re-opened resolved finding due to alert re-firing")
 			}
 
@@ -539,7 +539,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 	finding := s.ConvertAlert(alert)
 	s.findings[finding.ID] = finding
 	s.byResource[finding.ResourceID] = append(s.byResource[finding.ResourceID], finding.ID)
-	s.byAlertIdentifier[alertID] = finding.ID
+	s.byAlertIdentifier[alertIdentifier] = finding.ID
 	s.bySource[SourceThreshold] = append(s.bySource[SourceThreshold], finding.ID)
 
 	callback := s.onNewFinding
@@ -554,7 +554,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 
 	log.Debug().
 		Str("finding_id", finding.ID).
-		Str("alert_identifier", alertID).
+		Str("alert_identifier", alertIdentifier).
 		Str("resource", finding.ResourceName).
 		Str("category", string(finding.Category)).
 		Msg("Created unified finding from alert")

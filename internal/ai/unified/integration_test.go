@@ -191,15 +191,15 @@ func TestIntegration_SummaryAndSnapshots(t *testing.T) {
 	integration := NewIntegration(DefaultIntegrationConfig(t.TempDir()))
 
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "critical",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        95,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "critical",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           95,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	finding, _ := integration.store.AddFromAlert(alert)
 	integration.store.EnhanceWithAI(finding.ID, "context", 0.8, "", nil)
@@ -225,15 +225,15 @@ func TestIntegration_SummaryAndSnapshots(t *testing.T) {
 func TestIntegration_GetContextForPatrol(t *testing.T) {
 	integration := NewIntegration(DefaultIntegrationConfig(t.TempDir()))
 	alert := &SimpleAlertAdapter{
-		AlertID:      "alert-1",
-		AlertType:    "cpu",
-		AlertLevel:   "warning",
-		ResourceID:   "vm-1",
-		ResourceName: "web",
-		Value:        90,
-		Threshold:    80,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-1",
+		ResourceName:    "web",
+		Value:           90,
+		Threshold:       80,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
 	}
 	integration.store.AddFromAlert(alert)
 

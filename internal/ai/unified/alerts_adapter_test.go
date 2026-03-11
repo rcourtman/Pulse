@@ -79,7 +79,7 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 	if len(active) != 1 {
 		t.Fatalf("expected 1 active alert, got %d", len(active))
 	}
-	if active[0].GetAlertID() != alert.ID {
+	if active[0].GetAlertIdentifier() != alert.ID {
 		t.Fatalf("expected alert ID %s", alert.ID)
 	}
 	if active[0].GetAlertLevel() != string(alert.Level) {
@@ -87,7 +87,7 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 	}
 
 	found := adapter.GetAlert(alert.ID)
-	if found == nil || found.GetAlertID() != alert.ID {
+	if found == nil || found.GetAlertIdentifier() != alert.ID {
 		t.Fatalf("expected to find alert %s", alert.ID)
 	}
 	if adapter.GetAlert("missing") != nil {
@@ -96,7 +96,7 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 
 	alertCh := make(chan string, 1)
 	adapter.SetAlertCallback(func(ad AlertAdapter) {
-		alertCh <- ad.GetAlertID()
+		alertCh <- ad.GetAlertIdentifier()
 	})
 	onAlert := getUnexportedField(t, manager, "onAlert").Interface().(func(alert *alerts.Alert))
 	onAlert(alert)
@@ -127,7 +127,7 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 
 func TestAlertWrapper_NilAlert(t *testing.T) {
 	wrapper := &alertWrapper{}
-	if wrapper.GetAlertID() != "" {
+	if wrapper.GetAlertIdentifier() != "" {
 		t.Fatalf("expected empty ID")
 	}
 	if wrapper.GetAlertType() != "" {
