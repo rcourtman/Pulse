@@ -30,6 +30,8 @@ For governed runtime changes, the completion guard also requires any staged
 contract update to touch a substantive contract section such as `Purpose`,
 `Canonical Files`, `Shared Boundaries`, `Extension Points`, `Forbidden Paths`,
 `Completion Obligations`, or `Current State`, not just metadata.
+Local pre-commit formatting is intentionally scoped to staged files so unrelated
+dirty worktree files are not mutated during commit.
 
 The old release-control orchestrator and loop tooling are retired. Direct,
 repo-aware sessions are now the only supported v6 execution path.

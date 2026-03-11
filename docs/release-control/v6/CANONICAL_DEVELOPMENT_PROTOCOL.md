@@ -121,6 +121,8 @@ guard in `scripts/release_control/canonical_completion_guard.py` and by the
 governance guardrail tests in `internal/repoctl`.
 Local pre-commit governance checks must evaluate staged v6 control-file content
 rather than unstaged working-tree noise.
+Local formatter steps must also stay scoped to staged files so the hook does not
+mutate unrelated dirty worktree state.
 
 For runtime subsystem changes, the same commit must now include:
 

@@ -88,8 +88,12 @@ python3 scripts/release_control/subsystem_lookup_test.py
 
 
 # Run Go formatting
-echo "Running Go formatter..."
-gofmt -w -s .
+if git diff --cached --name-only --diff-filter=ACMR -- '*.go' | grep -q .; then
+    echo "Running Go formatter on staged Go files..."
+    git diff --cached --name-only --diff-filter=ACMR -z -- '*.go' | xargs -0 -r gofmt -w -s
+else
+    echo "Skipping Go formatter (no staged Go files)."
+fi
 
 # Run Go linting (if golangci-lint is available)
 if command -v golangci-lint >/dev/null 2>&1; then
