@@ -4,11 +4,6 @@ import {
   type EntitlementLegacyConnections,
   type LicenseEntitlements,
 } from '@/api/license';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
 import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
 
@@ -237,7 +232,4 @@ export {
   loading as licenseLoading,
   loaded as licenseLoaded,
   loadError as licenseLoadError,
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
 };

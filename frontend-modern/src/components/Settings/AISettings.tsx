@@ -46,6 +46,8 @@ import {
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
+} from '@/utils/upgradePresentation';
+import {
   getUpgradeActionUrlOrFallback,
   hasFeature,
   loadLicenseStatus,
