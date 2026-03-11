@@ -332,6 +332,63 @@ func TestSaveAlertIncidentNote(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+func TestGetAlertIncidentTimeline_ExportsCanonicalAlertIdentifier(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	mockMonitor.On("GetIncidentStore").Return(mockStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alert := &alerts.Alert{
+		ID:           "canonical:a1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Message:      "test",
+		StartTime:    time.Now(),
+	}
+	mockStore.RecordAlertFired(alert)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alert_identifier=canonical:a1", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var incident map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&incident)
+	assert.Equal(t, "canonical:a1", incident["alertIdentifier"])
+	assert.Equal(t, "canonical:a1", incident["alertId"])
+}
+
+func TestGetAlertIncidentTimeline_ListExportsCanonicalAlertIdentifier(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	mockMonitor.On("GetIncidentStore").Return(mockStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alert := &alerts.Alert{
+		ID:           "canonical:a1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Message:      "test",
+		StartTime:    time.Now(),
+	}
+	mockStore.RecordAlertFired(alert)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?resource_id=resource-1", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var incidents []map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&incidents)
+	assert.Len(t, incidents, 1)
+	assert.Equal(t, "canonical:a1", incidents[0]["alertIdentifier"])
+	assert.Equal(t, "canonical:a1", incidents[0]["alertId"])
+}
+
 func TestBulkAcknowledgeAlerts(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)

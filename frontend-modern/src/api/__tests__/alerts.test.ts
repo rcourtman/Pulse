@@ -177,10 +177,56 @@ describe('AlertsAPI', () => {
         '/api/alerts/bulk/acknowledge',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ alertIds: ['alert-1', 'alert-2'], user: 'user1' }),
+          body: JSON.stringify({ alertIdentifiers: ['alert-1', 'alert-2'], user: 'user1' }),
         }),
       );
       expect(result).toEqual(results);
+    });
+  });
+
+  describe('incident normalization', () => {
+    it('normalizes a single incident alert identifier', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        id: 'incident-1',
+        alertId: 'canonical:a1',
+        alertType: 'cpu',
+        level: 'warning',
+        resourceId: 'resource-1',
+        resourceName: 'resource-1',
+        status: 'open',
+        openedAt: '2026-03-01T00:00:00Z',
+        acknowledged: false,
+      });
+
+      const result = await AlertsAPI.getIncidentTimeline('canonical:a1');
+
+      expect(result).toMatchObject({
+        alertIdentifier: 'canonical:a1',
+        alertId: 'canonical:a1',
+      });
+    });
+
+    it('normalizes incident lists for resources', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce([
+        {
+          id: 'incident-1',
+          alertId: 'canonical:a1',
+          alertType: 'cpu',
+          level: 'warning',
+          resourceId: 'resource-1',
+          resourceName: 'resource-1',
+          status: 'open',
+          openedAt: '2026-03-01T00:00:00Z',
+          acknowledged: false,
+        },
+      ]);
+
+      const result = await AlertsAPI.getIncidentsForResource('resource-1');
+
+      expect(result[0]).toMatchObject({
+        alertIdentifier: 'canonical:a1',
+        alertId: 'canonical:a1',
+      });
     });
   });
 });

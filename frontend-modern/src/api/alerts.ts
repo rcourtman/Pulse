@@ -5,6 +5,22 @@ import { apiFetchJSON } from '@/utils/apiClient';
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
 
+  private static normalizeIncident(incident: Incident | null): Incident | null {
+    if (!incident) {
+      return null;
+    }
+    const alertIdentifier = incident.alertIdentifier ?? incident.alertId;
+    return {
+      ...incident,
+      ...(alertIdentifier ? { alertIdentifier } : {}),
+      ...(incident.alertId ?? alertIdentifier ? { alertId: incident.alertId ?? alertIdentifier } : {}),
+    };
+  }
+
+  private static normalizeIncidents(incidents: Incident[]): Incident[] {
+    return incidents.map((incident) => this.normalizeIncident(incident) as Incident);
+  }
+
   static async getActive(): Promise<Alert[]> {
     return apiFetchJSON(`${this.baseUrl}/active`);
   }
@@ -34,15 +50,19 @@ export class AlertsAPI {
     if (startedAt) {
       query.set('started_at', startedAt);
     }
-    return apiFetchJSON(
+    const incident = (await apiFetchJSON(
       `${this.baseUrl}/incidents?${query.toString()}`,
-    ) as Promise<Incident | null>;
+    )) as Incident | null;
+    return this.normalizeIncident(incident);
   }
 
   static async getIncidentsForResource(resourceId: string, limit?: number): Promise<Incident[]> {
     const query = new URLSearchParams({ resource_id: resourceId });
     if (limit) query.set('limit', String(limit));
-    return apiFetchJSON(`${this.baseUrl}/incidents?${query.toString()}`) as Promise<Incident[]>;
+    const incidents = (await apiFetchJSON(
+      `${this.baseUrl}/incidents?${query.toString()}`,
+    )) as Incident[];
+    return this.normalizeIncidents(incidents || []);
   }
 
   static async addIncidentNote(params: {

@@ -495,7 +495,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 		} else {
 			incident = store.GetTimelineByAlertID(alertID)
 		}
-		if err := utils.WriteJSONResponse(w, incident); err != nil {
+		if err := utils.WriteJSONResponse(w, exportIncident(incident)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident timeline response")
 		}
 		return
@@ -507,7 +507,7 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			return
 		}
 		incidents := store.ListIncidentsByResource(resourceID, limit)
-		if err := utils.WriteJSONResponse(w, incidents); err != nil {
+		if err := utils.WriteJSONResponse(w, exportIncidents(incidents)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident list response")
 		}
 		return
@@ -576,6 +576,86 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write incident note response")
 	}
+}
+
+type incidentEventView struct {
+	ID        string                   `json:"id"`
+	Type      memory.IncidentEventType `json:"type"`
+	Timestamp time.Time                `json:"timestamp"`
+	Summary   string                   `json:"summary"`
+	Details   map[string]interface{}   `json:"details,omitempty"`
+}
+
+type incidentView struct {
+	ID              string                `json:"id"`
+	AlertIdentifier string                `json:"alertIdentifier"`
+	LegacyAlertID   string                `json:"legacyAlertId,omitempty"`
+	AlertID         string                `json:"alertId"`
+	AlertType       string                `json:"alertType"`
+	Level           string                `json:"level"`
+	ResourceID      string                `json:"resourceId"`
+	ResourceName    string                `json:"resourceName"`
+	ResourceType    string                `json:"resourceType,omitempty"`
+	Node            string                `json:"node,omitempty"`
+	Instance        string                `json:"instance,omitempty"`
+	Message         string                `json:"message,omitempty"`
+	Status          memory.IncidentStatus `json:"status"`
+	OpenedAt        time.Time             `json:"openedAt"`
+	ClosedAt        *time.Time            `json:"closedAt,omitempty"`
+	Acknowledged    bool                  `json:"acknowledged"`
+	AckUser         string                `json:"ackUser,omitempty"`
+	AckTime         *time.Time            `json:"ackTime,omitempty"`
+	Events          []incidentEventView   `json:"events,omitempty"`
+}
+
+func exportIncident(incident *memory.Incident) *incidentView {
+	if incident == nil {
+		return nil
+	}
+	events := make([]incidentEventView, 0, len(incident.Events))
+	for _, event := range incident.Events {
+		events = append(events, incidentEventView{
+			ID:        event.ID,
+			Type:      event.Type,
+			Timestamp: event.Timestamp,
+			Summary:   event.Summary,
+			Details:   event.Details,
+		})
+	}
+	alertIdentifier := strings.TrimSpace(incident.AlertID)
+	return &incidentView{
+		ID:              incident.ID,
+		AlertIdentifier: alertIdentifier,
+		AlertID:         alertIdentifier,
+		AlertType:       incident.AlertType,
+		Level:           incident.Level,
+		ResourceID:      incident.ResourceID,
+		ResourceName:    incident.ResourceName,
+		ResourceType:    incident.ResourceType,
+		Node:            incident.Node,
+		Instance:        incident.Instance,
+		Message:         incident.Message,
+		Status:          incident.Status,
+		OpenedAt:        incident.OpenedAt,
+		ClosedAt:        incident.ClosedAt,
+		Acknowledged:    incident.Acknowledged,
+		AckUser:         incident.AckUser,
+		AckTime:         incident.AckTime,
+		Events:          events,
+	}
+}
+
+func exportIncidents(incidents []*memory.Incident) []*incidentView {
+	if len(incidents) == 0 {
+		return []*incidentView{}
+	}
+	exported := make([]*incidentView, 0, len(incidents))
+	for _, incident := range incidents {
+		if view := exportIncident(incident); view != nil {
+			exported = append(exported, view)
+		}
+	}
+	return exported
 }
 
 // ClearAlertHistory clears all alert history
