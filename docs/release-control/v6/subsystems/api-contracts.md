@@ -105,6 +105,10 @@ now also route through shared collection-normalization helpers in
 That rule now also covers patrol run history responses so malformed or legacy
 run collections collapse through the shared helper instead of per-module
 fallback lists.
+The `/api/ai/patrol/runs` frontend history clients must now also route their
+shared fetch plus run-normalization pipeline through one canonical local helper
+in `frontend-modern/src/api/patrol.ts` rather than duplicating the same
+endpoint-specific stack across each history variant.
 The same rule now also covers optional nested node cluster endpoint collections
 so `frontend-modern/src/api/nodes.ts` does not own its own
 `Array.isArray(node.clusterEndpoints)` response-shape branch.

@@ -433,6 +433,13 @@ function normalizeHistoryLimit(limit: number): number {
   return normalized;
 }
 
+async function fetchPatrolRunHistory(search: URLSearchParams): Promise<PatrolRunRecord[]> {
+  const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
+  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) =>
+    promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string }),
+  );
+}
+
 /**
  * Get patrol run history
  * @param limit Maximum number of runs to return (default: 30)
@@ -441,10 +448,7 @@ export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRun
   const search = new URLSearchParams({
     limit: String(normalizeHistoryLimit(limit)),
   });
-  const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) =>
-    promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string }),
-  );
+  return fetchPatrolRunHistory(search);
 }
 
 /**
@@ -458,10 +462,7 @@ export async function getPatrolRunHistoryWithToolCalls(
     include: 'tool_calls',
     limit: String(normalizeHistoryLimit(limit)),
   });
-  const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
-  return arrayOrEmpty<PatrolRunRecord>(runs).map((run) =>
-    promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string }),
-  );
+  return fetchPatrolRunHistory(search);
 }
 
 /** SSE event from /api/ai/patrol/stream */

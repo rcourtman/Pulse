@@ -175,8 +175,18 @@ describe('API error-status guardrails', () => {
 
     expect(patrolSource).toContain('arrayOrEmpty<PatrolRunRecord>(runs)');
     expect(patrolSource).toContain('promoteLegacyAlertIdentifier(');
+    expect(patrolSource).toContain('async function fetchPatrolRunHistory(search: URLSearchParams)');
     expect(patrolSource).not.toContain('runs || []');
     expect(patrolSource).not.toContain('normalizePatrolRunRecord(');
+    expect(
+      patrolSource.match(
+        /apiFetchJSON<PatrolRunRecord\[\]>\(`\/api\/ai\/patrol\/runs\?\$\{search\.toString\(\)\}`\)/g,
+      ) ?? [],
+    ).toHaveLength(1);
+    expect(patrolSource.match(/arrayOrEmpty<PatrolRunRecord>\(runs\)\.map\(/g) ?? []).toHaveLength(
+      1,
+    );
+    expect(patrolSource.match(/return fetchPatrolRunHistory\(search\);/g) ?? []).toHaveLength(2);
 
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfile>(response)');
     expect(agentProfilesSource).toContain('arrayOrEmpty<AgentProfileAssignment>(response)');
