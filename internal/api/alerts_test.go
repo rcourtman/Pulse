@@ -377,6 +377,33 @@ func TestGetAlertIncidentTimeline_ExportsCanonicalAlertIdentifier(t *testing.T) 
 	assert.Equal(t, "canonical:a1", incident["alertId"])
 }
 
+func TestGetAlertIncidentTimeline_AcceptsCamelCaseAlertIdentifierQuery(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	mockMonitor.On("GetIncidentStore").Return(mockStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alert := &alerts.Alert{
+		ID:           "canonical:a1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Message:      "test",
+		StartTime:    time.Now(),
+	}
+	mockStore.RecordAlertFired(alert)
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alertIdentifier=canonical:a1", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var incident map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&incident)
+	assert.Equal(t, "canonical:a1", incident["alertIdentifier"])
+}
+
 func TestGetAlertIncidentTimeline_ListExportsCanonicalAlertIdentifier(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
@@ -467,7 +494,7 @@ func TestHandleAlerts(t *testing.T) {
 		{"GET", "/api/alerts/history", func() {
 			mockManager.On("GetAlertHistory", mock.MatchedBy(func(int) bool { return true })).Return([]alerts.Alert{}).Once()
 		}},
-		{"GET", "/api/alerts/incidents?alert_id=a1", func() {
+		{"GET", "/api/alerts/incidents?alertIdentifier=a1", func() {
 			mockMonitor.On("GetIncidentStore").Return(memory.NewIncidentStore(memory.IncidentStoreConfig{})).Once()
 		}},
 		{"POST", "/api/alerts/incidents/note", func() {

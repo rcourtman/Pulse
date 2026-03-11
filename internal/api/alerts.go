@@ -458,7 +458,10 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 	}
 
 	query := r.URL.Query()
-	alertID := strings.TrimSpace(query.Get("alert_identifier"))
+	alertID := strings.TrimSpace(query.Get("alertIdentifier"))
+	if alertID == "" {
+		alertID = strings.TrimSpace(query.Get("alert_identifier"))
+	}
 	if alertID == "" {
 		alertID = strings.TrimSpace(query.Get("alert_id"))
 	}
