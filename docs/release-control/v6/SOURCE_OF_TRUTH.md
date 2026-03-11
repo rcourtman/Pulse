@@ -42,6 +42,11 @@ Recent locked release decision:
   `pkg/licensing/hosted_subscription.go` now require dedicated proof routes,
   and `pkg/licensing/token_source.go` now has direct coverage instead of being
   implicitly trusted through broader package tests.
+- 2026-03-11: Cloud/MSP JWT claim handling now fails closed when `plan_version`
+  is missing and no explicit `max_agents` limit is present. Runtime still
+  preserves the missing `plan_version` metadata, but claim evaluation and
+  `Service.Status()` no longer fall through to the unlimited Cloud/MSP tier
+  default in that case.
 - 2026-03-11: Canonical governance now runs in both local hooks and CI.
   `scripts/release_control/canonical_completion_guard.py` can validate either
   staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`

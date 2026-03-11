@@ -90,9 +90,12 @@ func (c Claims) EffectiveLimits() map[string]int64 {
 			limits["max_guests"] = int64(c.MaxGuests)
 		}
 	}
-	if (c.Tier == TierCloud || c.Tier == TierMSP) && c.PlanVersion != "" {
+	if c.Tier == TierCloud || c.Tier == TierMSP {
 		if limit, known := CloudPlanAgentLimits[CanonicalizePlanVersion(c.PlanVersion)]; known {
 			limits["max_agents"] = int64(limit)
+		}
+		if _, hasAgents := limits["max_agents"]; !hasAgents {
+			limits["max_agents"] = int64(UnknownPlanDefaultAgentLimit)
 		}
 	}
 	return limits

@@ -230,6 +230,33 @@ func TestClaims_EffectiveLimitsPreservesNonCloudPlanLimits(t *testing.T) {
 	}
 }
 
+func TestClaims_EffectiveLimitsMissingCloudPlanFailsClosed(t *testing.T) {
+	claims := Claims{
+		Tier:        TierCloud,
+		PlanVersion: "   ",
+	}
+
+	limits := claims.EffectiveLimits()
+	if got := limits["max_agents"]; got != int64(UnknownPlanDefaultAgentLimit) {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, UnknownPlanDefaultAgentLimit)
+	}
+}
+
+func TestClaims_EffectiveLimitsPreservesExplicitCustomCloudLimit(t *testing.T) {
+	claims := Claims{
+		Tier:        TierCloud,
+		PlanVersion: "custom_plan",
+		Limits: map[string]int64{
+			"max_agents": 42,
+		},
+	}
+
+	limits := claims.EffectiveLimits()
+	if got := limits["max_agents"]; got != 42 {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, 42)
+	}
+}
+
 func TestClaims_EntitlementSubscriptionState(t *testing.T) {
 	tests := []struct {
 		name     string

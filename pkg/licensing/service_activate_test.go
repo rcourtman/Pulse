@@ -136,3 +136,22 @@ func TestServiceStatusCanonicalizesJWTCloudPlanVersionAndLimits(t *testing.T) {
 		t.Fatalf("status.MaxAgents=%d, want %d", status.MaxAgents, 10)
 	}
 }
+
+func TestServiceStatusMissingJWTCloudPlanFailsClosed(t *testing.T) {
+	svc := NewService()
+	svc.license = &License{
+		Claims: Claims{
+			Tier:        TierCloud,
+			PlanVersion: "   ",
+			SubState:    SubStateActive,
+		},
+	}
+
+	status := svc.Status()
+	if status.PlanVersion != "" {
+		t.Fatalf("status.PlanVersion=%q, want empty", status.PlanVersion)
+	}
+	if status.MaxAgents != UnknownPlanDefaultAgentLimit {
+		t.Fatalf("status.MaxAgents=%d, want %d", status.MaxAgents, UnknownPlanDefaultAgentLimit)
+	}
+}

@@ -76,7 +76,10 @@ limit-enforcement fallbacks.
 JWT-backed entitlement claims are also canonical: when runtime evaluation uses
 claim `plan_version` and `limits`, recognized Cloud plan aliases must
 canonicalize and `max_agents` must reconcile to the authoritative per-plan
-contract instead of trusting stale embedded claim values.
+contract instead of trusting stale embedded claim values. When a Cloud/MSP
+claim arrives without a recognized plan label, runtime must preserve the
+missing/unknown `plan_version` metadata but still fail closed on `max_agents`
+instead of drifting to an unlimited tier default.
 Activation-grant translation is part of the same boundary: when relay/license
 server grants enter the local claims model, Cloud plan keys and lifecycle state
 must still resolve through the canonical entitlement claim accessors rather

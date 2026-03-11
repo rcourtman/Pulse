@@ -69,3 +69,17 @@ func TestTokenSourcePreservesMissingPlanVersionContract(t *testing.T) {
 		t.Fatalf("Limits()[max_agents]=%d, want %d", got, 42)
 	}
 }
+
+func TestCloudClaimsMissingPlanVersionFailClosedOnAgentLimit(t *testing.T) {
+	claims := &Claims{
+		Tier:        TierCloud,
+		PlanVersion: "   ",
+	}
+
+	if got := claims.EntitlementPlanVersion(); got != "" {
+		t.Fatalf("EntitlementPlanVersion()=%q, want empty", got)
+	}
+	if got := claims.EffectiveLimits()["max_agents"]; got != int64(UnknownPlanDefaultAgentLimit) {
+		t.Fatalf("EffectiveLimits()[max_agents]=%d, want %d", got, UnknownPlanDefaultAgentLimit)
+	}
+}
