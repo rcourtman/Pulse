@@ -117,17 +117,6 @@ func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
 		t.Fatalf("did not expect alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
-	var decodedCanonical config.PatrolRunRecord
-	if err := json.Unmarshal([]byte(`{
-		"id":"run-1",
-		"alert_identifier":"instance:node:100::metric/cpu"
-	}`), &decodedCanonical); err != nil {
-		t.Fatalf("unmarshal canonical patrol run: %v", err)
-	}
-	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected canonical alert identifier to load, got %q", decodedCanonical.AlertIdentifier)
-	}
-
 	var decoded config.PatrolRunRecord
 	if err := json.Unmarshal([]byte(`{
 		"id":"run-1",

@@ -181,10 +181,10 @@ func TestExtractAlertIdentifierPrefersCanonicalIdentifier(t *testing.T) {
 
 func TestExtractAlertIdentifierRequiresCanonicalIdentifier(t *testing.T) {
 	if got := extractAlertIdentifier(map[string]interface{}{"alertId": "legacy-alert-id"}); got != "" {
-		t.Fatalf("extractAlertIdentifier legacy alertId should be ignored, got %q", got)
+		t.Fatalf("extractAlertIdentifier should ignore alertId, got %q", got)
 	}
 	if got := extractAlertIdentifier(map[string]interface{}{"alert_id": "legacy-alert-id-2"}); got != "" {
-		t.Fatalf("extractAlertIdentifier legacy alert_id should be ignored, got %q", got)
+		t.Fatalf("extractAlertIdentifier should ignore alert_id, got %q", got)
 	}
 	if got := extractAlertIdentifier(nil); got != "" {
 		t.Fatalf("extractAlertIdentifier nil context = %q", got)

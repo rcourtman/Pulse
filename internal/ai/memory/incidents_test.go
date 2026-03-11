@@ -37,7 +37,7 @@ func TestIncidentJSONCanonicalOutput(t *testing.T) {
 		t.Fatalf("expected canonical alertIdentifier, got %#v", payload["alertIdentifier"])
 	}
 	if _, ok := payload["alertId"]; ok {
-		t.Fatalf("did not expect legacy alertId in canonical payload, got %#v", payload["alertId"])
+		t.Fatalf("did not expect alertId in canonical payload, got %#v", payload["alertId"])
 	}
 
 	var decoded Incident

@@ -37,24 +37,6 @@ func TestUnifiedFindingJSONCanonicalOutput(t *testing.T) {
 		t.Fatalf("did not expect legacy alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
-	var decodedCanonical UnifiedFinding
-	if err := json.Unmarshal([]byte(`{
-		"id":"f1",
-		"source":"threshold",
-		"severity":"warning",
-		"category":"performance",
-		"resource_id":"res-1",
-		"title":"High CPU",
-		"detected_at":"2026-03-11T00:00:00Z",
-		"last_seen_at":"2026-03-11T00:00:00Z",
-		"alert_identifier":"instance:node:100::metric/cpu"
-	}`), &decodedCanonical); err != nil {
-		t.Fatalf("unmarshal canonical unified finding: %v", err)
-	}
-	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
-	}
-
 	var decoded UnifiedFinding
 	if err := json.Unmarshal([]byte(`{
 		"id":"f1",

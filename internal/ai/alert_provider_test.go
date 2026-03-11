@@ -258,22 +258,6 @@ func TestAlertInvestigationRequestJSONCanonicalOutput(t *testing.T) {
 		t.Fatalf("did not expect legacy alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
-	var decodedCanonical AlertInvestigationRequest
-	if err := json.Unmarshal([]byte(`{
-		"alertIdentifier":"instance:node:100::metric/cpu",
-		"resource_id":"agent-1",
-		"resource_name":"node-1",
-		"resource_type":"node",
-		"alert_type":"cpu",
-		"level":"warning",
-		"message":"high cpu"
-	}`), &decodedCanonical); err != nil {
-		t.Fatalf("unmarshal canonical request: %v", err)
-	}
-	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected canonical alertIdentifier to load, got %q", decodedCanonical.AlertIdentifier)
-	}
-
 	var decoded AlertInvestigationRequest
 	if err := json.Unmarshal([]byte(`{
 		"alertIdentifier":"instance:node:100::metric/cpu",

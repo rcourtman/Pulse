@@ -64,16 +64,6 @@ func TestAIFindingRecordJSONCanonicalOutput(t *testing.T) {
 	_, hasLegacy := payload["alert_id"]
 	assert.False(t, hasLegacy)
 
-	var decodedCanonical AIFindingRecord
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"id":"finding-1",
-		"description":"analysis",
-		"detected_at":"2026-03-11T00:00:00Z",
-		"last_seen_at":"2026-03-11T00:00:00Z",
-		"alert_identifier":"instance:node:100::metric/cpu"
-	}`), &decodedCanonical))
-	assert.Equal(t, "instance:node:100::metric/cpu", decodedCanonical.AlertIdentifier)
-
 	var decoded AIFindingRecord
 	require.NoError(t, json.Unmarshal([]byte(`{
 		"id":"finding-1",
