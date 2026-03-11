@@ -29,7 +29,8 @@ cross-source deduplication.
 
 1. Update this contract when canonical resource identity or type rules change
 2. Update contract and guardrail tests when a new resource type is added
-3. Tighten banned-path tests when a compatibility bridge is removed
+3. Route runtime changes through the explicit unified-resource proof policies in `registry.json`; default fallback proof routing is not allowed
+4. Tighten banned-path tests when a compatibility bridge is removed
 
 ## Current State
 
@@ -71,3 +72,8 @@ Canonical physical-disk views now expose the full disk identity and SMART
 metadata needed by monitoring refresh paths, so physical-disk temperature and
 SMART merges can run from unified `ReadState` instead of from snapshot-owned
 disk arrays.
+
+Frontend/API consumers and backend support files now require explicit registry
+path-policy coverage, so new unified-resource-owned runtime files must be added
+to a concrete proof route instead of falling back to subsystem-default
+verification.

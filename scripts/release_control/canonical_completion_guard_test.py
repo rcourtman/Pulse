@@ -155,135 +155,107 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
 
     def test_unified_resource_api_change_requires_two_contracts(self):
         required = infer_impacted_subsystems(["internal/api/resources.go"])
+        self.assertEqual(set(required), {"api-contracts", "unified-resources"})
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(api_contracts["contract"], "docs/release-control/v6/subsystems/api-contracts.md")
+        self.assertEqual(api_contracts["touched_runtime_files"], ["internal/api/resources.go"])
         self.assertEqual(
-            required,
-            {
-                "api-contracts": {
-                    "id": "api-contracts",
-                    "contract": "docs/release-control/v6/subsystems/api-contracts.md",
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "backend-payload-contracts",
+                    "label": "backend API payload proof",
                     "touched_runtime_files": ["internal/api/resources.go"],
-                    "verification": {
-                        "allow_same_subsystem_tests": False,
-                        "test_prefixes": ["frontend-modern/src/api/__tests__/"],
-                        "exact_files": ["internal/api/contract_test.go"],
-                        "path_policies": [
-                            {
-                                "id": "backend-payload-contracts",
-                                "label": "backend API payload proof",
-                                "match_prefixes": ["internal/api/"],
-                                "match_files": [],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": ["frontend-modern/src/api/__tests__/"],
-                                "exact_files": [
-                                    "internal/api/contract_test.go",
-                                    "frontend-modern/src/types/api.ts",
-                                ],
-                            },
-                            {
-                                "id": "frontend-api-clients",
-                                "label": "frontend API client proof",
-                                "match_prefixes": ["frontend-modern/src/api/"],
-                                "match_files": [],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": ["frontend-modern/src/api/__tests__/"],
-                                "exact_files": ["frontend-modern/src/types/api.ts"],
-                            },
-                            {
-                                "id": "frontend-api-types",
-                                "label": "frontend API type sync proof",
-                                "match_prefixes": [],
-                                "match_files": ["frontend-modern/src/types/api.ts"],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": ["frontend-modern/src/api/__tests__/"],
-                                "exact_files": ["frontend-modern/src/types/api.ts"],
-                            },
-                        ],
-                    },
-                    "verification_requirements": [
-                        {
-                            "id": "backend-payload-contracts",
-                            "label": "backend API payload proof",
-                            "touched_runtime_files": ["internal/api/resources.go"],
-                            "allow_same_subsystem_tests": False,
-                            "test_prefixes": ["frontend-modern/src/api/__tests__/"],
-                            "exact_files": [
-                                "internal/api/contract_test.go",
-                                "frontend-modern/src/types/api.ts",
-                            ],
-                        }
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": ["frontend-modern/src/api/__tests__/"],
+                    "exact_files": [
+                        "internal/api/contract_test.go",
+                        "frontend-modern/src/types/api.ts",
                     ],
-                },
-                "unified-resources": {
-                    "id": "unified-resources",
-                    "contract": "docs/release-control/v6/subsystems/unified-resources.md",
+                }
+            ],
+        )
+
+        unified_resources = required["unified-resources"]
+        self.assertEqual(
+            unified_resources["contract"],
+            "docs/release-control/v6/subsystems/unified-resources.md",
+        )
+        self.assertEqual(
+            unified_resources["touched_runtime_files"],
+            ["internal/api/resources.go"],
+        )
+        self.assertTrue(
+            unified_resources["verification"]["require_explicit_path_policy_coverage"]
+        )
+        self.assertEqual(
+            unified_resources["verification_requirements"],
+            [
+                {
+                    "id": "resource-consumers",
+                    "label": "unified resource consumer proof",
                     "touched_runtime_files": ["internal/api/resources.go"],
-                    "verification": {
-                        "allow_same_subsystem_tests": True,
-                        "test_prefixes": [],
-                        "exact_files": [
-                            "internal/unifiedresources/code_standards_test.go",
-                            "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-                        ],
-                        "path_policies": [
-                            {
-                                "id": "identity-canonicalization",
-                                "label": "canonical identity proof",
-                                "match_prefixes": [],
-                                "match_files": [
-                                    "internal/unifiedresources/canonical_identity.go",
-                                    "internal/unifiedresources/identity.go",
-                                    "internal/unifiedresources/ids.go",
-                                    "internal/unifiedresources/legacy_aliases.go",
-                                    "internal/unifiedresources/physical_disk_ids.go",
-                                    "internal/unifiedresources/types.go",
-                                ],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": [],
-                                "exact_files": [
-                                    "internal/unifiedresources/canonical_ids_types_test.go",
-                                    "internal/unifiedresources/canonical_identity_test.go",
-                                    "internal/unifiedresources/code_standards_test.go",
-                                    "internal/unifiedresources/identity_test.go",
-                                    "internal/unifiedresources/ids_test.go",
-                                ],
-                            },
-                            {
-                                "id": "read-state-views",
-                                "label": "read-state and adapter proof",
-                                "match_prefixes": [],
-                                "match_files": [
-                                    "internal/unifiedresources/adapters.go",
-                                    "internal/unifiedresources/monitor_adapter.go",
-                                    "internal/unifiedresources/read_state.go",
-                                    "internal/unifiedresources/views.go",
-                                ],
-                                "allow_same_subsystem_tests": False,
-                                "test_prefixes": [],
-                                "exact_files": [
-                                    "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-                                    "internal/unifiedresources/adapter_coverage_test.go",
-                                    "internal/unifiedresources/adapters_test.go",
-                                    "internal/unifiedresources/monitor_adapter_read_state_test.go",
-                                    "internal/unifiedresources/views_test.go",
-                                ],
-                            },
-                        ],
-                    },
-                    "verification_requirements": [
-                        {
-                            "id": "default",
-                            "label": "default subsystem verification",
-                            "touched_runtime_files": ["internal/api/resources.go"],
-                            "allow_same_subsystem_tests": True,
-                            "test_prefixes": [],
-                            "exact_files": [
-                                "internal/unifiedresources/code_standards_test.go",
-                                "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-                            ],
-                        }
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
+                        "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
+                        "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
+                        "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
+                        "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
+                        "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+                        "frontend-modern/src/types/__tests__/resource.test.ts",
+                        "internal/unifiedresources/code_standards_test.go",
                     ],
-                },
-            },
+                }
+            ],
+        )
+
+    def test_alerts_owned_runtime_has_no_default_fallback(self):
+        alerts_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "alerts")
+        self.assertTrue(alerts_rule["verification"]["require_explicit_path_policy_coverage"])
+        self.assertEqual(unmatched_owned_runtime_files(alerts_rule), [])
+
+    def test_unified_resources_owned_runtime_has_no_default_fallback(self):
+        unified_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "unified-resources")
+        self.assertTrue(unified_rule["verification"]["require_explicit_path_policy_coverage"])
+        self.assertEqual(unmatched_owned_runtime_files(unified_rule), [])
+
+    def test_alerts_frontend_page_uses_explicit_surface_guardrails(self):
+        alerts_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "alerts")
+        requirements = build_verification_requirements(
+            alerts_rule,
+            ["frontend-modern/src/pages/Alerts.tsx"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "alerts-frontend-surface",
+                    "label": "alerts frontend surface proof",
+                    "touched_runtime_files": ["frontend-modern/src/pages/Alerts.tsx"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Alerts/EmailProviderSelect.test.tsx",
+                        "frontend-modern/src/components/Alerts/ResourceTable.test.tsx",
+                        "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
+                        "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
+                        "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
+                        "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
+                        "frontend-modern/src/components/Alerts/Thresholds/hooks/__tests__/useCollapsedSections.test.ts",
+                        "frontend-modern/src/components/Alerts/Thresholds/sections/__tests__/CollapsibleSection.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
+                        "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
+                        "frontend-modern/src/features/alerts/identity.test.ts",
+                        "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
+                        "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
+                    ],
+                }
+            ],
         )
 
     def test_test_only_changes_do_not_require_contract_updates(self):
@@ -1008,7 +980,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         }
         self.assertEqual(
             set(explicit_rules),
-            {"monitoring", "cloud-paid", "frontend-primitives"},
+            {
+                "alerts",
+                "monitoring",
+                "unified-resources",
+                "cloud-paid",
+                "frontend-primitives",
+            },
         )
         for subsystem_id, rule in explicit_rules.items():
             self.assertEqual(

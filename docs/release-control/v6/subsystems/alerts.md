@@ -29,10 +29,16 @@ notification behavior for live runtime alerts.
 
 1. Update alert spec/evaluator tests when a new rule kind is added
 2. Update this contract if alert truth or identity rules change
-3. Tighten or add guardrails when an old alert path is removed
+3. Route runtime changes through the explicit alert proof policies in `registry.json`; default fallback proof routing is not allowed
+4. Tighten or add guardrails when an old alert path is removed
 
 ## Current State
 
 Canonical alert identity and evaluation are the live runtime model. Remaining
 legacy references should exist only in explicit migration or negative test
 boundaries.
+
+Frontend alert surfaces and backend alert-support files now require explicit
+registry path-policy coverage, so new alert-owned runtime files must be mapped
+to a concrete proof route instead of silently inheriting subsystem-default
+verification.

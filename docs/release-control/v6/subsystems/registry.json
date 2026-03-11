@@ -21,6 +21,7 @@
           "internal/alerts/specs/evaluator_test.go",
           "internal/alerts/specs/types_test.go"
         ],
+        "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
             "id": "alert-specs",
@@ -55,6 +56,57 @@
               "internal/alerts/unified_eval_parity_test.go",
               "internal/alerts/unified_eval_test.go",
               "internal/alerts/unified_incidents_test.go"
+            ]
+          },
+          {
+            "id": "alerts-frontend-surface",
+            "label": "alerts frontend surface proof",
+            "match_prefixes": [
+              "frontend-modern/src/features/alerts/",
+              "frontend-modern/src/components/Alerts/"
+            ],
+            "match_files": [
+              "frontend-modern/src/pages/Alerts.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Alerts/EmailProviderSelect.test.tsx",
+              "frontend-modern/src/components/Alerts/ResourceTable.test.tsx",
+              "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
+              "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
+              "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
+              "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
+              "frontend-modern/src/components/Alerts/Thresholds/hooks/__tests__/useCollapsedSections.test.ts",
+              "frontend-modern/src/components/Alerts/Thresholds/sections/__tests__/CollapsibleSection.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
+              "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
+              "frontend-modern/src/features/alerts/identity.test.ts",
+              "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
+              "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts"
+            ]
+          },
+          {
+            "id": "alerts-runtime-support",
+            "label": "alerts runtime support proof",
+            "match_prefixes": [
+              "internal/alerts/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/alerts_test.go",
+              "internal/alerts/callback_config_coverage_test.go",
+              "internal/alerts/config_validation_test.go",
+              "internal/alerts/filter_evaluation_test.go",
+              "internal/alerts/guest_snapshot_test.go",
+              "internal/alerts/history_concurrency_test.go",
+              "internal/alerts/history_test.go",
+              "internal/alerts/threshold_resolution_shared_test.go",
+              "internal/alerts/update_alerts_test.go"
             ]
           }
         ]
@@ -129,6 +181,7 @@
           "internal/unifiedresources/code_standards_test.go",
           "frontend-modern/src/stores/__tests__/websocket-unified.test.ts"
         ],
+        "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
             "id": "identity-canonicalization",
@@ -170,6 +223,54 @@
               "internal/unifiedresources/adapters_test.go",
               "internal/unifiedresources/monitor_adapter_read_state_test.go",
               "internal/unifiedresources/views_test.go"
+            ]
+          },
+          {
+            "id": "resource-consumers",
+            "label": "unified resource consumer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/resources.go",
+              "frontend-modern/src/types/resource.ts",
+              "frontend-modern/src/hooks/useUnifiedResources.ts",
+              "frontend-modern/src/pages/Infrastructure.tsx",
+              "frontend-modern/src/hooks/useDashboardTrends.ts",
+              "frontend-modern/src/routing/resourceLinks.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
+              "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
+              "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
+              "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
+              "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/types/__tests__/resource.test.ts",
+              "internal/unifiedresources/code_standards_test.go"
+            ]
+          },
+          {
+            "id": "unified-resource-runtime-support",
+            "label": "unified resource runtime support proof",
+            "match_prefixes": [
+              "internal/unifiedresources/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/code_standards_test.go",
+              "internal/unifiedresources/kubernetes_registry_test.go",
+              "internal/unifiedresources/metrics_targets_test.go",
+              "internal/unifiedresources/metrics_test.go",
+              "internal/unifiedresources/pbs_pmg_registry_test.go",
+              "internal/unifiedresources/registry_merge_policy_test.go",
+              "internal/unifiedresources/registry_test.go",
+              "internal/unifiedresources/resolve_test.go",
+              "internal/unifiedresources/resolved_host_set_test.go",
+              "internal/unifiedresources/snapshot_source_filter_test.go",
+              "internal/unifiedresources/store_test.go"
             ]
           }
         ]
