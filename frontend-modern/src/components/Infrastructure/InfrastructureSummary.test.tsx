@@ -446,7 +446,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
   });
 
-  it('maps agentData by agentId from unified platform data when websocket agents are unavailable', async () => {
+  it('keeps the network card visible from canonical agent facets without source hints', async () => {
     mockGetCharts.mockReset();
     const now = Date.now();
     mockGetCharts.mockResolvedValueOnce({
@@ -457,14 +457,8 @@ describe('InfrastructureSummary range behavior', () => {
           cpu: [],
           memory: [],
           disk: [],
-          netin: [
-            { timestamp: now - 60_000, value: 1024 },
-            { timestamp: now, value: 2048 },
-          ],
-          netout: [
-            { timestamp: now - 60_000, value: 512 },
-            { timestamp: now, value: 1536 },
-          ],
+          netin: [],
+          netout: [],
         },
       },
       timestamp: now,
@@ -484,7 +478,6 @@ describe('InfrastructureSummary range behavior', () => {
       status: 'online',
       lastSeen: now,
       platformData: {
-        sources: ['agent'],
         agent: {
           agentId: 'agent-host-1',
           hostname: 'unraid-node',
@@ -501,11 +494,9 @@ describe('InfrastructureSummary range behavior', () => {
     });
 
     await waitFor(() => {
-      const networkChart = container.querySelector('svg.cursor-crosshair');
-      expect(networkChart).toBeTruthy();
+      expect(container.textContent).toContain('Network');
+      expect(container.textContent).not.toContain('Workloads');
     });
-
-    expect(container.textContent).toContain('Network');
   });
 
   it('maps agentData by top-level resource.agent.agentId when platformData is absent', async () => {

@@ -194,6 +194,17 @@ describe('agentResources', () => {
     expect(
       hasAgentFacet(
         makeResource({
+          type: 'agent',
+          platformData: {
+            linkedAgentId: 'agent-linked',
+          },
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      hasAgentFacet(
+        makeResource({
           type: 'docker-host',
           platformData: {
             docker: { hostSourceId: 'docker-1' },

@@ -526,11 +526,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   // Keep the network card visible when we have capability but limited history.
   const hasNetworkCapability = createMemo(() =>
     props.resources.some((resource) => {
-      const platformData = getPlatformDataRecord(resource);
-      const sources = (Array.isArray(platformData?.sources) ? platformData.sources : [])
-        .map((source) => (typeof source === 'string' ? source.toLowerCase() : ''))
-        .filter(Boolean);
-      if (sources.includes('agent')) return true;
+      if (resource.type === 'docker-host' || hasAgentFacet(resource)) return true;
 
       // If current-rate metrics are present, treat as network-capable.
       const rx = resource.network?.rxBytes ?? 0;
