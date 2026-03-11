@@ -43,3 +43,7 @@ Persisted billing state is now also part of that canonical boundary: when a
 recognized Cloud/MSP plan version is loaded or saved, the stored `plan_version`
 must canonicalize and `limits.max_agents` must reconcile to the authoritative
 per-plan contract rather than preserving stale ad hoc values.
+Stripe control-plane fallback paths are also part of the boundary: when
+subscription or workspace provisioning logic reuses an already stored
+`plan_version`, it must canonicalize that value before persisting tenant,
+Stripe-account, or billing-state updates.

@@ -639,9 +639,13 @@ func applyStripeAccountGraceWindow(sa *registry.StripeAccount, subState pkglicen
 
 func planVersionFromMetadata(metadata map[string]string, fallback string) string {
 	if derived := DerivePlanVersion(metadata, ""); derived != "" && derived != "stripe" {
-		return derived
+		return pkglicensing.CanonicalizePlanVersion(derived)
 	}
-	return strings.TrimSpace(fallback)
+	return canonicalizeProvisionedPlanVersion(fallback)
+}
+
+func canonicalizeProvisionedPlanVersion(planVersion string) string {
+	return pkglicensing.CanonicalizePlanVersion(strings.TrimSpace(planVersion))
 }
 
 // ProvisionWorkspace provisions a new workspace (tenant) under an account, without Stripe checkout.
@@ -692,7 +696,7 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	}
 	planVersion := "msp_hosted_v1"
 	if sa != nil && strings.TrimSpace(sa.PlanVersion) != "" {
-		planVersion = strings.TrimSpace(sa.PlanVersion)
+		planVersion = canonicalizeProvisionedPlanVersion(sa.PlanVersion)
 	} else {
 		reason := "no_billing_record"
 		if sa != nil {
@@ -787,8 +791,9 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 	if (planVersion == "" || planVersion == "stripe" || strings.HasPrefix(planVersion, "stripe_price:")) &&
 		strings.TrimSpace(tenant.PlanVersion) != "" &&
 		(priceID == "" || priceID == strings.TrimSpace(tenant.StripePriceID)) {
-		planVersion = strings.TrimSpace(tenant.PlanVersion)
+		planVersion = canonicalizeProvisionedPlanVersion(tenant.PlanVersion)
 	}
+	planVersion = canonicalizeProvisionedPlanVersion(planVersion)
 
 	// Update registry
 	tenant.StripeSubscriptionID = strings.TrimSpace(sub.ID)
@@ -931,6 +936,7 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 	if planVersion == "" {
 		planVersion = "msp_hosted_v1"
 	}
+	planVersion = canonicalizeProvisionedPlanVersion(planVersion)
 
 	// Persist account-level Stripe state.
 	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)

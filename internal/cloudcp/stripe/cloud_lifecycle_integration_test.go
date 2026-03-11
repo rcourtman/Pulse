@@ -514,6 +514,90 @@ func TestCloudLifecycle_PriceIDResolution(t *testing.T) {
 	}
 }
 
+func TestCloudLifecycle_SubscriptionUpdateCanonicalizesStoredFallbackPlan(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
+
+	session := CheckoutSession{
+		Customer:      "cus_legacy_fallback",
+		Subscription:  "sub_legacy_fallback",
+		CustomerEmail: "legacy@example.com",
+		Metadata:      map[string]string{"plan_version": "cloud-v1"},
+	}
+	if err := provisioner.HandleCheckout(context.Background(), session); err != nil {
+		t.Fatalf("HandleCheckout: %v", err)
+	}
+
+	tenant, err := reg.GetByStripeCustomerID(session.Customer)
+	if err != nil || tenant == nil {
+		t.Fatalf("lookup tenant: %v", err)
+	}
+
+	tenant.PlanVersion = "cloud_v1"
+	tenant.StripePriceID = "price_1T5kflBrHBocJIGHUqPv1dzV"
+	if err := reg.Update(tenant); err != nil {
+		t.Fatalf("Update tenant: %v", err)
+	}
+
+	sa, err := reg.GetStripeAccountByCustomerID(session.Customer)
+	if err != nil || sa == nil {
+		t.Fatalf("GetStripeAccountByCustomerID: %v", err)
+	}
+	sa.PlanVersion = "cloud_v1"
+	if err := reg.UpdateStripeAccount(sa); err != nil {
+		t.Fatalf("UpdateStripeAccount: %v", err)
+	}
+
+	sub := Subscription{
+		ID:       session.Subscription,
+		Customer: session.Customer,
+		Status:   "active",
+	}
+	sub.Items.Data = []struct {
+		Price struct {
+			ID       string            `json:"id"`
+			Metadata map[string]string `json:"metadata"`
+		} `json:"price"`
+	}{
+		{Price: struct {
+			ID       string            `json:"id"`
+			Metadata map[string]string `json:"metadata"`
+		}{ID: "price_1T5kflBrHBocJIGHUqPv1dzV"}},
+	}
+	if err := provisioner.HandleSubscriptionUpdated(context.Background(), sub); err != nil {
+		t.Fatalf("HandleSubscriptionUpdated: %v", err)
+	}
+
+	tenant, err = reg.GetByStripeCustomerID(session.Customer)
+	if err != nil || tenant == nil {
+		t.Fatalf("lookup tenant after update: %v", err)
+	}
+	if tenant.PlanVersion != "cloud_starter" {
+		t.Fatalf("tenant.PlanVersion = %q, want %q", tenant.PlanVersion, "cloud_starter")
+	}
+
+	sa, err = reg.GetStripeAccountByCustomerID(session.Customer)
+	if err != nil || sa == nil {
+		t.Fatalf("GetStripeAccountByCustomerID after update: %v", err)
+	}
+	if sa.PlanVersion != "cloud_starter" {
+		t.Fatalf("stripe account PlanVersion = %q, want %q", sa.PlanVersion, "cloud_starter")
+	}
+
+	store := config.NewFileBillingStore(provisioner.tenantDataDir(tenant.ID))
+	bs, err := store.GetBillingState("default")
+	if err != nil || bs == nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if bs.PlanVersion != "cloud_starter" {
+		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "cloud_starter")
+	}
+	if bs.Limits["max_agents"] != 10 {
+		t.Fatalf("billing.Limits[max_agents] = %d, want 10", bs.Limits["max_agents"])
+	}
+}
+
 // TestCloudLifecycle_WorkspaceLimitEnforcement verifies that Cloud individual
 // accounts are limited to 1 workspace (as per CloudPlanWorkspaceLimits).
 // After checkout creates the first workspace, attempting a second via the

@@ -606,6 +606,7 @@ func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 		{"msp_growth", "msp_growth", 150},
 		{"msp_scale", "msp_scale", 400},
 		{"legacy_msp_hosted_v1", "msp_hosted_v1", 50},
+		{"canonicalized_cloud_alias", "cloud_v1", 10},
 	}
 
 	for _, tc := range tests {
@@ -633,8 +634,9 @@ func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ProvisionWorkspace: %v", err)
 			}
-			if ws.PlanVersion != tc.planVersion {
-				t.Fatalf("workspace.PlanVersion = %q, want %q", ws.PlanVersion, tc.planVersion)
+			wantPlanVersion := pkglicensing.CanonicalizePlanVersion(tc.planVersion)
+			if ws.PlanVersion != wantPlanVersion {
+				t.Fatalf("workspace.PlanVersion = %q, want %q", ws.PlanVersion, wantPlanVersion)
 			}
 
 			store := config.NewFileBillingStore(provisioner.tenantDataDir(ws.ID))
@@ -645,8 +647,8 @@ func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 			if bs == nil {
 				t.Fatal("billing state is nil")
 			}
-			if bs.PlanVersion != tc.planVersion {
-				t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, tc.planVersion)
+			if bs.PlanVersion != wantPlanVersion {
+				t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, wantPlanVersion)
 			}
 			if bs.Limits["max_agents"] != tc.wantAgents {
 				t.Fatalf("billing.Limits[max_agents] = %d, want %d", bs.Limits["max_agents"], tc.wantAgents)
