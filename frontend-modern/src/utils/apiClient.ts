@@ -52,6 +52,13 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   skipOrgContext?: boolean;
 }
 
+type APIErrorShape = Error & {
+  detail?: string;
+  feature?: string;
+  upgrade_url?: string;
+  status?: number;
+};
+
 function createAbortError(): Error {
   if (typeof DOMException !== 'undefined') {
     return new DOMException('The operation was aborted.', 'AbortError');
@@ -615,6 +622,8 @@ class ApiClient {
 
       // First try to parse as JSON (our API returns structured errors like {error, message, feature, upgrade_url})
       let errorDetail: string | undefined;
+      let errorFeature: string | undefined;
+      let errorUpgradeUrl: string | undefined;
       try {
         const jsonError = JSON.parse(text);
         if (jsonError.message) {
@@ -626,6 +635,8 @@ class ApiClient {
         if (typeof jsonError.detail === 'string') {
           errorDetail = jsonError.detail;
         }
+        errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
+        errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
       } catch {
         // Not JSON, try other formats
 
@@ -644,9 +655,16 @@ class ApiClient {
         }
       }
 
-      const err = new Error(errorMessage || `Request failed with status ${response.status}`);
+      const err = new Error(errorMessage || `Request failed with status ${response.status}`) as APIErrorShape;
+      err.status = response.status;
       if (errorDetail) {
-        (err as Error & { detail?: string }).detail = errorDetail;
+        err.detail = errorDetail;
+      }
+      if (errorFeature) {
+        err.feature = errorFeature;
+      }
+      if (errorUpgradeUrl) {
+        err.upgrade_url = errorUpgradeUrl;
       }
       throw err;
     }

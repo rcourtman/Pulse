@@ -17,6 +17,14 @@ export class AIAPI {
     return encodeURIComponent(value);
   }
 
+  private static isPaymentRequiredError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+    const status = (error as Error & { status?: number }).status;
+    return status === 402 || error.message.includes('402');
+  }
+
   private static normalizeUnifiedFinding(finding: UnifiedFindingRecord): UnifiedFindingRecord {
     const alertIdentifier = finding.alert_identifier;
     const { alert_identifier: _alertIdentifier, ...rest } = finding as UnifiedFindingRecord & {
@@ -278,17 +286,24 @@ export class AIAPI {
 
   // Remediation plans
   static async getRemediationPlans(): Promise<RemediationPlansResponse> {
-    const data = (await apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`)) as {
-      plans?: RemediationPlan[];
-      executions?: unknown[];
-    };
-    if (Array.isArray(data?.plans)) {
-      return { plans: data.plans };
-    }
-    if (Array.isArray(data?.executions)) {
+    try {
+      const data = (await apiFetchJSON(`${this.baseUrl}/ai/remediation/plans`)) as {
+        plans?: RemediationPlan[];
+        executions?: unknown[];
+      };
+      if (Array.isArray(data?.plans)) {
+        return { plans: data.plans };
+      }
+      if (Array.isArray(data?.executions)) {
+        return { plans: [] };
+      }
       return { plans: [] };
+    } catch (error) {
+      if (this.isPaymentRequiredError(error)) {
+        return { plans: [] };
+      }
+      throw error;
     }
-    return { plans: [] };
   }
 
   static async getRemediationPlan(planId: string): Promise<RemediationPlan> {
@@ -332,10 +347,17 @@ export class AIAPI {
 
   // Get pending approval requests (investigation fixes waiting for user approval)
   static async getPendingApprovals(): Promise<ApprovalRequest[]> {
-    const response = (await apiFetchJSON(`${this.baseUrl}/ai/approvals`)) as {
-      approvals: ApprovalRequest[];
-    };
-    return response.approvals || [];
+    try {
+      const response = (await apiFetchJSON(`${this.baseUrl}/ai/approvals`)) as {
+        approvals: ApprovalRequest[];
+      };
+      return response.approvals || [];
+    } catch (error) {
+      if (this.isPaymentRequiredError(error)) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   // Approve and execute an investigation fix

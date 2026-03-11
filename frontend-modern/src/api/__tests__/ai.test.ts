@@ -104,6 +104,18 @@ describe('AIAPI', () => {
     });
   });
 
+  it('treats 402 responses from optional AI paywalled collections as empty state', async () => {
+    const paymentRequiredError = Object.assign(new Error('Approval management requires Pulse Pro'), {
+      status: 402,
+    });
+
+    apiFetchJSONMock.mockRejectedValueOnce(paymentRequiredError);
+    await expect(AIAPI.getPendingApprovals()).resolves.toEqual([]);
+
+    apiFetchJSONMock.mockRejectedValueOnce(paymentRequiredError);
+    await expect(AIAPI.getRemediationPlans()).resolves.toEqual({ plans: [] });
+  });
+
   it('sanitizes runCommand payload consistently', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ output: 'ok', success: true } as any);
     await AIAPI.runCommand({

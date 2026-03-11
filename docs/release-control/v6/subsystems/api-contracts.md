@@ -52,3 +52,6 @@ aggregate workload charts must preserve stable guest counts while batching
 store-backed metric reads across workload types, with no payload shape change.
 That endpoint now also carries an explicit API p95 budget under the same
 store-backed mixed-workload fixture used to verify the batched hot path.
+Frontend AI API clients now also normalize `402 Payment Required` responses for
+optional paywalled collections into explicit empty states, so Pulse Pro gating
+does not become a transport error path during page bootstrap.
