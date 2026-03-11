@@ -19,7 +19,9 @@ Use:
 8. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations for a change
 
 For governed runtime changes, a staged subsystem contract only counts if its
-diff updates a substantive contract section rather than metadata alone.
+diff updates a substantive contract section such as `Purpose`, `Canonical Files`,
+`Shared Boundaries`, `Extension Points`, `Forbidden Paths`,
+`Completion Obligations`, or `Current State`, rather than metadata alone.
 
 All other documents are supporting references unless explicitly required for evidence.
 

@@ -35,6 +35,7 @@ REQUIRED_PATH_POLICY_FIELDS: tuple[str, ...] = (
 SUBSTANTIVE_CONTRACT_SECTIONS: tuple[str, ...] = (
     "## Purpose",
     "## Canonical Files",
+    "## Shared Boundaries",
     "## Extension Points",
     "## Forbidden Paths",
     "## Completion Obligations",
@@ -387,7 +388,7 @@ def format_missing_requirements(
             f"- subsystem {data['subsystem']}: contract {contract_path} is staged but does not include a substantive section update"
         )
         lines.append(
-            "  update one of: Purpose, Canonical Files, Extension Points, Forbidden Paths, Completion Obligations, or Current State"
+            "  update one of: Purpose, Canonical Files, Shared Boundaries, Extension Points, Forbidden Paths, Completion Obligations, or Current State"
         )
         for path in sorted(data["touched_runtime_files"]):
             lines.append(f"  touched by {path}")
@@ -434,7 +435,7 @@ def format_missing_requirements(
             "If a canonical subsystem changes, its contract under",
             "`docs/release-control/v6/subsystems/` must be updated in the same commit.",
             "If a touched runtime path is also named in another subsystem contract's",
-            "`Canonical Files` or `Extension Points`, that dependent contract must be updated too.",
+            "`Canonical Files`, `Shared Boundaries`, or `Extension Points`, that dependent contract must be updated too.",
             "A staged contract file only counts if its staged diff changes a substantive contract section,",
             "not just `Contract Metadata` or cosmetic noise.",
             "Each touched runtime path must also satisfy the first matching",

@@ -30,6 +30,10 @@ Own example truth.
 
 1. `internal/example/runtime.go`
 
+## Shared Boundaries
+
+1. `internal/shared/runtime.go` shared with `other-subsystem`: shared runtime boundary.
+
 ## Extension Points
 
 1. Add new adapters in `internal/example/`
@@ -54,6 +58,7 @@ Stable.
             parsed["path_references"],
             [
                 {"heading": "## Canonical Files", "path": "internal/example/runtime.go"},
+                {"heading": "## Shared Boundaries", "path": "internal/shared/runtime.go"},
                 {"heading": "## Extension Points", "path": "internal/example/"},
             ],
         )
@@ -85,6 +90,10 @@ Own example truth.
 
 1. `internal/example/runtime.go`
 
+## Shared Boundaries
+
+1. `internal/shared/runtime.go` shared with `other-subsystem`: shared runtime boundary.
+
 ## Extension Points
 
 1. Add new adapters in `internal/example/`
@@ -112,6 +121,16 @@ Stable.
             [
                 {"heading": "## Canonical Files", "path": "internal/example/runtime.go"},
                 {"heading": "## Extension Points", "path": "internal/example/"},
+            ],
+        )
+
+        shared_matches = referenced_contracts_for_path("internal/shared/runtime.go", contract_graph)
+        self.assertEqual(len(shared_matches), 1)
+        self.assertEqual(shared_matches[0]["subsystem_id"], "example")
+        self.assertEqual(
+            shared_matches[0]["matched_references"],
+            [
+                {"heading": "## Shared Boundaries", "path": "internal/shared/runtime.go"},
             ],
         )
 

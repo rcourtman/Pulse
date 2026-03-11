@@ -16,6 +16,7 @@ REQUIRED_SECTIONS = [
     "## Contract Metadata",
     "## Purpose",
     "## Canonical Files",
+    "## Shared Boundaries",
     "## Extension Points",
     "## Forbidden Paths",
     "## Completion Obligations",
@@ -23,6 +24,7 @@ REQUIRED_SECTIONS = [
 ]
 LIST_SECTIONS = {
     "## Canonical Files",
+    "## Shared Boundaries",
     "## Extension Points",
     "## Forbidden Paths",
     "## Completion Obligations",
@@ -122,7 +124,7 @@ def parse_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
         metadata, metadata_errors = parse_contract_metadata(section_body(lines, "## Contract Metadata"))
         errors.extend(f"{rel} {error}" for error in metadata_errors)
 
-    for heading in ("## Canonical Files", "## Extension Points"):
+    for heading in ("## Canonical Files", "## Shared Boundaries", "## Extension Points"):
         if heading not in heading_positions:
             continue
         body = section_body(lines, heading)

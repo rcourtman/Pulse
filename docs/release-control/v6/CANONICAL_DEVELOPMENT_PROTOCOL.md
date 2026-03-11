@@ -123,11 +123,11 @@ governance guardrail tests in `internal/repoctl`.
 For runtime subsystem changes, the same commit must now include:
 
 1. the matching subsystem contract update
-2. any dependent subsystem contract whose `Canonical Files` or `Extension Points` explicitly reference a touched runtime path
+2. any dependent subsystem contract whose `Canonical Files`, `Shared Boundaries`, or `Extension Points` explicitly reference a touched runtime path
 3. at least one matching verification artifact update
 
 A staged contract file only counts when the staged diff changes a substantive
-contract section such as `Purpose`, `Canonical Files`, `Extension Points`,
+contract section such as `Purpose`, `Canonical Files`, `Shared Boundaries`, `Extension Points`,
 `Forbidden Paths`, `Completion Obligations`, or `Current State`. Metadata-only
 edits are not sufficient completion proof for runtime changes.
 
@@ -138,8 +138,8 @@ approved test-prefix matches, non-test contract/type files, or same-subsystem
 tests only when the registry explicitly allows them.
 
 Cross-subsystem contract dependencies are not advisory. If a touched runtime
-path is named in another subsystem contract's `Canonical Files` or
-`Extension Points`, the canonical completion guard now requires that dependent
+path is named in another subsystem contract's `Canonical Files`,
+`Shared Boundaries`, or `Extension Points`, the canonical completion guard now requires that dependent
 contract to be staged in the same slice.
 
 `status.json` evidence references must use repo-qualified relative paths.

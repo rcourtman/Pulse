@@ -292,6 +292,19 @@ index 1111111..2222222 100644
 """
         self.assertTrue(contract_patch_has_substantive_change(patch))
 
+    def test_contract_patch_shared_boundaries_change_is_substantive(self):
+        patch = """diff --git a/docs/release-control/v6/subsystems/api-contracts.md b/docs/release-control/v6/subsystems/api-contracts.md
+index 1111111..2222222 100644
+--- a/docs/release-control/v6/subsystems/api-contracts.md
++++ b/docs/release-control/v6/subsystems/api-contracts.md
+@@ -18,7 +18,7 @@
+ ## Shared Boundaries
+
+-1. `internal/api/resources.go` shared with `unified-resources`: old shared rationale.
++1. `internal/api/resources.go` shared with `unified-resources`: new shared rationale.
+"""
+        self.assertTrue(contract_patch_has_substantive_change(patch))
+
     def test_alerts_owned_runtime_has_no_default_fallback(self):
         alerts_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "alerts")
         self.assertTrue(alerts_rule["verification"]["require_explicit_path_policy_coverage"])
