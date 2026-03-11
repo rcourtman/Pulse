@@ -66,6 +66,85 @@ type Incident struct {
 	Events       []IncidentEvent `json:"events,omitempty"`
 }
 
+type incidentJSON struct {
+	ID              string          `json:"id"`
+	AlertIdentifier string          `json:"alertIdentifier"`
+	AlertID         string          `json:"alertId,omitempty"`
+	AlertType       string          `json:"alertType"`
+	Level           string          `json:"level"`
+	ResourceID      string          `json:"resourceId"`
+	ResourceName    string          `json:"resourceName"`
+	ResourceType    string          `json:"resourceType,omitempty"`
+	Node            string          `json:"node,omitempty"`
+	Instance        string          `json:"instance,omitempty"`
+	Message         string          `json:"message,omitempty"`
+	Status          IncidentStatus  `json:"status"`
+	OpenedAt        time.Time       `json:"openedAt"`
+	ClosedAt        *time.Time      `json:"closedAt,omitempty"`
+	Acknowledged    bool            `json:"acknowledged"`
+	AckUser         string          `json:"ackUser,omitempty"`
+	AckTime         *time.Time      `json:"ackTime,omitempty"`
+	Events          []IncidentEvent `json:"events,omitempty"`
+}
+
+func (i Incident) MarshalJSON() ([]byte, error) {
+	alertIdentifier := strings.TrimSpace(i.AlertID)
+	return json.Marshal(incidentJSON{
+		ID:              i.ID,
+		AlertIdentifier: alertIdentifier,
+		AlertID:         alertIdentifier,
+		AlertType:       i.AlertType,
+		Level:           i.Level,
+		ResourceID:      i.ResourceID,
+		ResourceName:    i.ResourceName,
+		ResourceType:    i.ResourceType,
+		Node:            i.Node,
+		Instance:        i.Instance,
+		Message:         i.Message,
+		Status:          i.Status,
+		OpenedAt:        i.OpenedAt,
+		ClosedAt:        i.ClosedAt,
+		Acknowledged:    i.Acknowledged,
+		AckUser:         i.AckUser,
+		AckTime:         i.AckTime,
+		Events:          i.Events,
+	})
+}
+
+func (i *Incident) UnmarshalJSON(data []byte) error {
+	if i == nil {
+		return nil
+	}
+	var payload incidentJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+	alertIdentifier := strings.TrimSpace(payload.AlertIdentifier)
+	if alertIdentifier == "" {
+		alertIdentifier = strings.TrimSpace(payload.AlertID)
+	}
+	*i = Incident{
+		ID:           payload.ID,
+		AlertID:      alertIdentifier,
+		AlertType:    payload.AlertType,
+		Level:        payload.Level,
+		ResourceID:   payload.ResourceID,
+		ResourceName: payload.ResourceName,
+		ResourceType: payload.ResourceType,
+		Node:         payload.Node,
+		Instance:     payload.Instance,
+		Message:      payload.Message,
+		Status:       payload.Status,
+		OpenedAt:     payload.OpenedAt,
+		ClosedAt:     payload.ClosedAt,
+		Acknowledged: payload.Acknowledged,
+		AckUser:      payload.AckUser,
+		AckTime:      payload.AckTime,
+		Events:       payload.Events,
+	}
+	return nil
+}
+
 // IncidentStoreConfig configures incident retention and persistence.
 type IncidentStoreConfig struct {
 	DataDir              string

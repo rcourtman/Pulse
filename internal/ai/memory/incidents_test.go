@@ -1,12 +1,62 @@
 package memory
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+func TestIncidentJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC().Truncate(time.Second)
+	incident := Incident{
+		ID:           "incident-1",
+		AlertID:      "instance:node:100::metric/cpu",
+		AlertType:    "cpu",
+		Level:        "warning",
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Status:       IncidentStatusOpen,
+		OpenedAt:     now,
+	}
+
+	data, err := json.Marshal(incident)
+	if err != nil {
+		t.Fatalf("marshal incident: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["alertIdentifier"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected canonical alertIdentifier, got %#v", payload["alertIdentifier"])
+	}
+	if payload["alertId"] != "instance:node:100::metric/cpu" {
+		t.Fatalf("expected compatibility alertId, got %#v", payload["alertId"])
+	}
+
+	var decoded Incident
+	if err := json.Unmarshal([]byte(`{
+		"id":"incident-2",
+		"alertId":"legacy-alert-id",
+		"alertType":"cpu",
+		"level":"warning",
+		"resourceId":"resource-2",
+		"resourceName":"resource-2",
+		"status":"open",
+		"openedAt":"2026-03-01T00:00:00Z"
+	}`), &decoded); err != nil {
+		t.Fatalf("decode legacy incident: %v", err)
+	}
+	if decoded.AlertID != "legacy-alert-id" {
+		t.Fatalf("expected legacy alertId to load, got %q", decoded.AlertID)
+	}
+}
 
 func TestIncidentStore_RecordTimeline(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{

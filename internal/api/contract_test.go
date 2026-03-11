@@ -589,6 +589,7 @@ func TestContract_IncidentJSONSnapshot(t *testing.T) {
 
 		const want = `{
 			"id":"incident-1",
+			"alertIdentifier":"cluster/qemu/100-cpu",
 			"alertId":"cluster/qemu/100-cpu",
 			"alertType":"cpu",
 			"level":"warning",
@@ -662,6 +663,7 @@ func TestContract_IncidentJSONSnapshot(t *testing.T) {
 
 		const want = `{
 			"id":"incident-1",
+			"alertIdentifier":"cluster/qemu/100-cpu",
 			"alertId":"cluster/qemu/100-cpu",
 			"alertType":"cpu",
 			"level":"warning",
