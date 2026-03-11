@@ -80,6 +80,7 @@ go test ./internal/repoctl -count=1
 echo "Running release-control helper unit tests..."
 python3 scripts/release_control/canonical_completion_guard_test.py
 python3 scripts/release_control/contract_audit_test.py
+python3 scripts/release_control/format_staged_go_test.py
 python3 scripts/release_control/registry_audit_test.py
 python3 scripts/release_control/repo_file_io_test.py
 python3 scripts/release_control/status_audit_test.py
@@ -88,12 +89,7 @@ python3 scripts/release_control/subsystem_lookup_test.py
 
 
 # Run Go formatting
-if git diff --cached --name-only --diff-filter=ACMR -- '*.go' | grep -q .; then
-    echo "Running Go formatter on staged Go files..."
-    git diff --cached --name-only --diff-filter=ACMR -z -- '*.go' | xargs -0 -r gofmt -w -s
-else
-    echo "Skipping Go formatter (no staged Go files)."
-fi
+python3 scripts/release_control/format_staged_go.py
 
 # Run Go linting (if golangci-lint is available)
 if command -v golangci-lint >/dev/null 2>&1; then
@@ -112,10 +108,5 @@ if [ -f frontend-modern/package.json ]; then
         echo "Skipping frontend lint (no staged frontend changes)."
     fi
 fi
-
-# Re-stage only files that were already staged (to pick up formatter changes)
-# This avoids accidentally committing unrelated work-in-progress files
-# Filter out deleted files (D status) — they can't be re-added
-git diff --cached --diff-filter=d --name-only -z | xargs -0 -r git add
 
 echo "Pre-commit checks passed!"

@@ -92,6 +92,9 @@ jobs:
       - name: Run contract audit unit tests
         run: python3 scripts/release_control/contract_audit_test.py
 
+      - name: Run staged Go formatter unit tests
+        run: python3 scripts/release_control/format_staged_go_test.py
+
       - name: Run registry audit unit tests
         run: python3 scripts/release_control/registry_audit_test.py
 

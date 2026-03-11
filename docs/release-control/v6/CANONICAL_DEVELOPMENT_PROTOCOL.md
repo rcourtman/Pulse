@@ -123,6 +123,8 @@ Local pre-commit governance checks must evaluate staged v6 control-file content
 rather than unstaged working-tree noise.
 Local formatter steps must also stay scoped to staged files so the hook does not
 mutate unrelated dirty worktree state.
+When formatting staged Go files, the formatter must operate on staged blobs in
+the git index rather than rewriting the whole repo or restaging whole files.
 
 For runtime subsystem changes, the same commit must now include:
 

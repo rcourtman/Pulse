@@ -650,15 +650,15 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"go test ./internal/repoctl -count=1",
 		"canonical_completion_guard_test.py",
 		"contract_audit_test.py",
+		"format_staged_go_test.py",
 		"registry_audit_test.py",
 		"status_audit_test.py",
 		"subsystem_lookup_test.py",
-		"Running Go formatter on staged Go files...",
-		"Skipping Go formatter (no staged Go files).",
-		"git diff --cached --name-only --diff-filter=ACMR -z -- '*.go' | xargs -0 -r gofmt -w -s",
+		"format_staged_go.py",
 	})
 	assertContainsNone(t, ".husky/pre-commit", hook, []string{
 		"gofmt -w -s .",
+		"git diff --cached --diff-filter=d --name-only -z | xargs -0 -r git add",
 	})
 
 	script := readRepoFile(t, "scripts/release_control/canonical_completion_guard.py")

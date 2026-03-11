@@ -32,6 +32,8 @@ contract update to touch a substantive contract section such as `Purpose`,
 `Completion Obligations`, or `Current State`, not just metadata.
 Local pre-commit formatting is intentionally scoped to staged files so unrelated
 dirty worktree files are not mutated during commit.
+The staged Go formatter updates the git index directly and avoids broad
+restaging, so partially staged files do not silently absorb unrelated hunks.
 
 The old release-control orchestrator and loop tooling are retired. Direct,
 repo-aware sessions are now the only supported v6 execution path.
