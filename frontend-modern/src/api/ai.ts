@@ -1,5 +1,11 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { isAPIErrorStatus, parseJSONTextSafe, readAPIErrorMessage } from './responseUtils';
+import {
+  arrayOrEmpty,
+  isAPIErrorStatus,
+  objectArrayFieldOrEmpty,
+  parseJSONTextSafe,
+  readAPIErrorMessage,
+} from './responseUtils';
 import { logger } from '@/utils/logger';
 import type {
   AISettings,
@@ -116,7 +122,9 @@ export class AIAPI {
     )) as UnifiedFindingsResponse;
     return {
       ...response,
-      findings: (response.findings || []).map((finding) => this.normalizeUnifiedFinding(finding)),
+      findings: arrayOrEmpty<UnifiedFindingRecord>(response.findings).map((finding) =>
+        this.normalizeUnifiedFinding(finding),
+      ),
     };
   }
 
@@ -289,13 +297,7 @@ export class AIAPI {
         plans?: RemediationPlan[];
         executions?: unknown[];
       };
-      if (Array.isArray(data?.plans)) {
-        return { plans: data.plans };
-      }
-      if (Array.isArray(data?.executions)) {
-        return { plans: [] };
-      }
-      return { plans: [] };
+      return { plans: objectArrayFieldOrEmpty<RemediationPlan>(data, 'plans') };
     } catch (error) {
       if (this.isPaymentRequiredError(error)) {
         return { plans: [] };
@@ -349,7 +351,7 @@ export class AIAPI {
       const response = (await apiFetchJSON(`${this.baseUrl}/ai/approvals`)) as {
         approvals: ApprovalRequest[];
       };
-      return response.approvals || [];
+      return objectArrayFieldOrEmpty<ApprovalRequest>(response, 'approvals');
     } catch (error) {
       if (this.isPaymentRequiredError(error)) {
         return [];

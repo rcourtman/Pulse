@@ -1,6 +1,7 @@
 import type { Alert, Incident } from '@/types/api';
 import type { AlertConfig } from '@/types/alerts';
 import { apiFetchJSON } from '@/utils/apiClient';
+import { arrayOrEmpty } from './responseUtils';
 
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
@@ -69,7 +70,7 @@ export class AlertsAPI {
     const incidents = (await apiFetchJSON(
       `${this.baseUrl}/incidents?${query.toString()}`,
     )) as Incident[];
-    return this.normalizeIncidents(incidents || []);
+    return this.normalizeIncidents(arrayOrEmpty<Incident>(incidents));
   }
 
   static async addIncidentNote(params: {
@@ -147,7 +148,11 @@ export class AlertsAPI {
     };
     return {
       ...response,
-      results: (response.results || []).map((result) => this.normalizeAlertResult(result)),
+      results: arrayOrEmpty<{
+        alertIdentifier: string;
+        success: boolean;
+        error?: string;
+      }>(response.results).map((result) => this.normalizeAlertResult(result)),
     };
   }
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  arrayOrEmpty,
   apiErrorStatus,
   apiResponseStatus,
   isAPIErrorStatus,
   isAPIResponseStatus,
+  objectArrayFieldOrEmpty,
   parseJSONSafe,
   parseJSONTextSafe,
   parseOptionalJSON,
@@ -161,6 +163,28 @@ describe('parseJSONTextSafe', () => {
 
   it('returns null for invalid JSON text', () => {
     expect(parseJSONTextSafe('not valid json')).toBeNull();
+  });
+});
+
+describe('arrayOrEmpty', () => {
+  it('returns arrays unchanged', () => {
+    expect(arrayOrEmpty<string>(['a', 'b'])).toEqual(['a', 'b']);
+  });
+
+  it('returns empty array for non-array values', () => {
+    expect(arrayOrEmpty<string>(null)).toEqual([]);
+    expect(arrayOrEmpty<string>({ items: ['a'] })).toEqual([]);
+  });
+});
+
+describe('objectArrayFieldOrEmpty', () => {
+  it('returns object array fields unchanged', () => {
+    expect(objectArrayFieldOrEmpty<string>({ items: ['a', 'b'] }, 'items')).toEqual(['a', 'b']);
+  });
+
+  it('returns empty array for missing or invalid object fields', () => {
+    expect(objectArrayFieldOrEmpty<string>(null, 'items')).toEqual([]);
+    expect(objectArrayFieldOrEmpty<string>({ items: 'bad' }, 'items')).toEqual([]);
   });
 });
 

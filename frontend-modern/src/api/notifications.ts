@@ -1,4 +1,5 @@
 import { apiFetchJSON } from '@/utils/apiClient';
+import { arrayOrEmpty } from './responseUtils';
 
 export interface EmailProvider {
   id?: string;
@@ -161,7 +162,7 @@ export class NotificationsAPI {
   // Webhook management
   static async getWebhooks(): Promise<Webhook[]> {
     const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`);
-    return Array.isArray(data) ? data : [];
+    return arrayOrEmpty<Webhook>(data);
   }
 
   static async createWebhook(webhook: Omit<Webhook, 'id'>): Promise<Webhook> {

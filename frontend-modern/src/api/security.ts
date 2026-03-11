@@ -1,5 +1,6 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
+import { objectArrayFieldOrEmpty } from './responseUtils';
 
 export interface APITokenRecord {
   id: string;
@@ -23,7 +24,7 @@ export class SecurityAPI {
 
   static async listTokens(): Promise<APITokenRecord[]> {
     const response = await apiFetchJSON<{ tokens: APITokenRecord[] }>('/api/security/tokens');
-    return response.tokens ?? [];
+    return objectArrayFieldOrEmpty<APITokenRecord>(response, 'tokens');
   }
 
   static async createToken(name?: string, scopes?: string[]): Promise<CreateAPITokenResponse> {

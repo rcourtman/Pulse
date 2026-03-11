@@ -1,7 +1,9 @@
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
+  arrayOrEmpty,
   isAPIErrorStatus,
   isAPIResponseStatus,
+  objectArrayFieldOrEmpty,
   parseRequiredJSON,
   readAPIErrorMessage,
 } from './responseUtils';
@@ -104,7 +106,7 @@ export class AgentProfilesAPI {
   static async listProfiles(): Promise<AgentProfile[]> {
     try {
       const response = await apiFetchJSON<AgentProfile[]>(`${this.baseUrl}/`);
-      return response || [];
+      return arrayOrEmpty<AgentProfile>(response);
     } catch (err) {
       if (isAPIErrorStatus(err, 402)) {
         return [];
@@ -195,7 +197,7 @@ export class AgentProfilesAPI {
   static async listAssignments(): Promise<AgentProfileAssignment[]> {
     try {
       const response = await apiFetchJSON<AgentProfileAssignment[]>(`${this.baseUrl}/assignments`);
-      return response || [];
+      return arrayOrEmpty<AgentProfileAssignment>(response);
     } catch (err) {
       if (isAPIErrorStatus(err, 402)) {
         return [];
@@ -266,7 +268,7 @@ export class AgentProfilesAPI {
    */
   static async getConfigSchema(): Promise<ConfigKeyDefinition[]> {
     const response = await apiFetchJSON<ConfigKeyDefinitionResponse[]>(`${this.baseUrl}/schema`);
-    const defs = response || [];
+    const defs = arrayOrEmpty<ConfigKeyDefinitionResponse>(response);
     return defs.map((def) => ({
       key: def.Key,
       type: def.Type,
@@ -299,8 +301,12 @@ export class AgentProfilesAPI {
 
     return {
       valid: response.Valid,
-      errors: (response.Errors || []).map((err) => ({ key: err.Key, message: err.Message })),
-      warnings: (response.Warnings || []).map((err) => ({ key: err.Key, message: err.Message })),
+      errors: objectArrayFieldOrEmpty<ConfigValidationErrorResponse>(response, 'Errors').map(
+        (err) => ({ key: err.Key, message: err.Message }),
+      ),
+      warnings: objectArrayFieldOrEmpty<ConfigValidationErrorResponse>(response, 'Warnings').map(
+        (err) => ({ key: err.Key, message: err.Message }),
+      ),
     };
   }
 }

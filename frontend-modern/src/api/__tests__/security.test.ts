@@ -53,6 +53,14 @@ describe('SecurityAPI', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('returns empty array when tokens is malformed', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ tokens: 'bad' } as any);
+
+      const result = await SecurityAPI.listTokens();
+
+      expect(result).toEqual([]);
+    });
   });
 
   describe('createToken', () => {

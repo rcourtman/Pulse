@@ -123,6 +123,22 @@ describe('AIAPI', () => {
     await expect(AIAPI.getPendingApprovals()).rejects.toThrow('402');
   });
 
+  it('normalizes missing or malformed approval collections to empty arrays', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ approvals: 'bad' } as any);
+
+    await expect(AIAPI.getPendingApprovals()).resolves.toEqual([]);
+  });
+
+  it('normalizes remediation plans from optional or legacy collection payloads', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ plans: [{ id: 'plan-1' }] } as any);
+    await expect(AIAPI.getRemediationPlans()).resolves.toEqual({
+      plans: [{ id: 'plan-1' }],
+    });
+
+    apiFetchJSONMock.mockResolvedValueOnce({ executions: [{ id: 'exec-1' }] } as any);
+    await expect(AIAPI.getRemediationPlans()).resolves.toEqual({ plans: [] });
+  });
+
   it('sanitizes runCommand payload consistently', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ output: 'ok', success: true } as any);
     await AIAPI.runCommand({

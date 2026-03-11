@@ -11,6 +11,8 @@ type APIResponseLike = {
   status?: unknown;
 };
 
+type APIRecordLike = Record<string, unknown>;
+
 function extractErrorMessage(payload: APIErrorPayload): string | null {
   if (typeof payload.error === 'string' && payload.error.trim()) {
     return payload.error.trim();
@@ -84,6 +86,18 @@ export function isAPIResponseStatus(
   expectedStatus: number,
 ): boolean {
   return apiResponseStatus(response) === expectedStatus;
+}
+
+export function arrayOrEmpty<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+export function objectArrayFieldOrEmpty<T>(value: unknown, field: string): T[] {
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  return arrayOrEmpty<T>((value as APIRecordLike)[field]);
 }
 
 export function parseJSONTextSafe<T>(text: string): T | null {

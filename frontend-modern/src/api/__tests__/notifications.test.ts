@@ -78,4 +78,13 @@ describe('NotificationsAPI', () => {
       rateLimit: undefined,
     });
   });
+
+  it('normalizes malformed webhook collections to empty arrays', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ webhooks: [] } as any);
+
+    const result = await NotificationsAPI.getWebhooks();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks');
+    expect(result).toEqual([]);
+  });
 });

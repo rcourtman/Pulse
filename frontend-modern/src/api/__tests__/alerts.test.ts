@@ -228,5 +228,23 @@ describe('AlertsAPI', () => {
         alertIdentifier: 'canonical:a1',
       });
     });
+
+    it('normalizes malformed incident lists to empty arrays', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(null);
+
+      const result = await AlertsAPI.getIncidentsForResource('resource-1');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('collection normalization', () => {
+    it('normalizes missing bulk acknowledge results to empty arrays', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      const result = await AlertsAPI.bulkAcknowledge(['alert-1']);
+
+      expect(result).toEqual({ success: true, results: [] });
+    });
   });
 });

@@ -48,6 +48,7 @@ Own canonical runtime payload shapes between backend and frontend.
 4. Frontend API clients inferring canonical HTTP status from `Error.message` text
 5. Frontend API clients branching on raw `response.status` checks for governed status handling instead of the shared response-status helpers
 6. Frontend API clients parsing governed success or stream payloads with raw `response.json()`, ad hoc `response.text()` + `JSON.parse(...)`, or per-module `JSON.parse(...)` stream decoding instead of the shared response parsing helpers
+7. Frontend API clients normalizing nullable or legacy collection payloads with module-local `|| []`, `?? []`, or ad hoc `Array.isArray(...)` fallbacks instead of shared collection helpers
 
 ## Completion Obligations
 
@@ -85,3 +86,7 @@ responses that may legitimately return an empty body but must not use ad hoc
 Investigation and AI chat SSE event payload parsing must now also route through
 the shared text-to-JSON helper in `frontend-modern/src/api/responseUtils.ts`
 rather than through per-module `JSON.parse(...)` stream decoding.
+Nullable or legacy collection payloads in governed frontend API clients must
+now also route through shared collection-normalization helpers in
+`frontend-modern/src/api/responseUtils.ts` rather than through module-local
+`|| []`, `?? []`, or `Array.isArray(...)` fallback branches.

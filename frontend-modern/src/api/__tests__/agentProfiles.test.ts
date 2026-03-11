@@ -2,8 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '../agentProfiles';
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import {
+  arrayOrEmpty,
   isAPIErrorStatus,
   isAPIResponseStatus,
+  objectArrayFieldOrEmpty,
   parseRequiredJSON,
   readAPIErrorMessage,
 } from '../responseUtils';
@@ -14,9 +16,11 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 vi.mock('../responseUtils', () => ({
+  arrayOrEmpty: vi.fn(),
   readAPIErrorMessage: vi.fn().mockResolvedValue('Error'),
   isAPIErrorStatus: vi.fn(),
   isAPIResponseStatus: vi.fn(),
+  objectArrayFieldOrEmpty: vi.fn(),
   parseRequiredJSON: vi.fn(),
 }));
 
@@ -28,6 +32,14 @@ describe('AgentProfilesAPI', () => {
     });
     vi.mocked(isAPIResponseStatus).mockImplementation((response, expectedStatus) => {
       return (response as { status?: number } | null)?.status === expectedStatus;
+    });
+    vi.mocked(arrayOrEmpty).mockImplementation((value) => (Array.isArray(value) ? value : []));
+    vi.mocked(objectArrayFieldOrEmpty).mockImplementation((value, field) => {
+      if (!value || typeof value !== 'object') {
+        return [];
+      }
+      const record = value as Record<string, unknown>;
+      return Array.isArray(record[field]) ? (record[field] as unknown[]) : [];
     });
     vi.mocked(parseRequiredJSON).mockReset();
   });
@@ -55,6 +67,14 @@ describe('AgentProfilesAPI', () => {
 
     it('returns empty array when response is null', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(null);
+
+      const result = await AgentProfilesAPI.listProfiles();
+
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array when response is malformed', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ profiles: [] } as any);
 
       const result = await AgentProfilesAPI.listProfiles();
 
@@ -150,6 +170,14 @@ describe('AgentProfilesAPI', () => {
 
     it('returns empty array on 402', async () => {
       vi.mocked(apiFetchJSON).mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
+
+      const result = await AgentProfilesAPI.listAssignments();
+
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array when assignments response is malformed', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ assignments: [] } as any);
 
       const result = await AgentProfilesAPI.listAssignments();
 
@@ -269,6 +297,14 @@ describe('AgentProfilesAPI', () => {
         },
       ]);
     });
+
+    it('returns empty schema when payload is malformed', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ schema: [] } as any);
+
+      const result = await AgentProfilesAPI.getConfigSchema();
+
+      expect(result).toEqual([]);
+    });
   });
 
   describe('validateConfig', () => {
@@ -287,6 +323,22 @@ describe('AgentProfilesAPI', () => {
       const result = await AgentProfilesAPI.validateConfig({});
 
       expect(result.valid).toBe(true);
+    });
+
+    it('normalizes malformed validation arrays to empty arrays', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        Valid: false,
+        Errors: 'bad',
+        Warnings: null,
+      } as any);
+
+      const result = await AgentProfilesAPI.validateConfig({});
+
+      expect(result).toEqual({
+        valid: false,
+        errors: [],
+        warnings: [],
+      });
     });
   });
 
