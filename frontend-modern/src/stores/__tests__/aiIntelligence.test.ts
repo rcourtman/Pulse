@@ -45,8 +45,6 @@ describe('aiIntelligenceStore', () => {
           description: 'CPU usage is high',
           detected_at: '2026-03-01T00:00:00Z',
           alert_identifier: 'instance:node:100::metric/cpu',
-          legacy_alert_id: 'guest-cpu-instance-node-100',
-          alert_id: 'guest-cpu-instance-node-100',
         },
       ],
       count: 1,
@@ -57,8 +55,6 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.findings).toHaveLength(1);
     expect(aiIntelligenceStore.findings[0]).toMatchObject({
       alertIdentifier: 'instance:node:100::metric/cpu',
-      legacyAlertId: 'guest-cpu-instance-node-100',
-      alertId: 'guest-cpu-instance-node-100',
     });
   });
 
@@ -86,8 +82,6 @@ describe('aiIntelligenceStore', () => {
 
     expect(aiIntelligenceStore.findings[0]).toMatchObject({
       alertIdentifier: 'legacy-alert-id',
-      legacyAlertId: 'legacy-alert-id',
-      alertId: 'legacy-alert-id',
     });
   });
 });

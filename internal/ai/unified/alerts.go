@@ -182,7 +182,6 @@ func (f UnifiedFinding) MarshalJSON() ([]byte, error) {
 		Recommendation:         f.Recommendation,
 		Evidence:               f.Evidence,
 		AlertIdentifier:        alertIdentifier,
-		AlertID:                alertIdentifier,
 		AlertType:              f.AlertType,
 		Value:                  f.Value,
 		Threshold:              f.Threshold,

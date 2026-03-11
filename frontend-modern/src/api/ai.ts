@@ -19,19 +19,19 @@ export class AIAPI {
 
   private static normalizeUnifiedFinding(finding: UnifiedFindingRecord): UnifiedFindingRecord {
     const alertIdentifier = finding.alert_identifier ?? finding.alert_id;
-    const legacyAlertId = finding.legacy_alert_id ?? finding.alert_id ?? alertIdentifier;
+    const {
+      alert_identifier: _alertIdentifier,
+      legacy_alert_id: _legacyAlertId,
+      alert_id: _alertId,
+      ...rest
+    } = finding as UnifiedFindingRecord & {
+      alert_identifier?: string;
+      legacy_alert_id?: string;
+      alert_id?: string;
+    };
     return {
-      ...finding,
+      ...rest,
       ...(alertIdentifier ? { alertIdentifier } : {}),
-      ...(legacyAlertId ? { legacyAlertId } : {}),
-      ...(finding.alertId ?? finding.alert_id ?? alertIdentifier
-        ? { alertId: finding.alertId ?? finding.alert_id ?? alertIdentifier }
-        : {}),
-      ...(alertIdentifier ? { alert_identifier: alertIdentifier } : {}),
-      ...(finding.legacy_alert_id ?? legacyAlertId
-        ? { legacy_alert_id: finding.legacy_alert_id ?? legacyAlertId }
-        : {}),
-      ...(finding.alert_id ?? alertIdentifier ? { alert_id: finding.alert_id ?? alertIdentifier } : {}),
     };
   }
 
@@ -399,11 +399,6 @@ export interface UnifiedFindingRecord {
   recommendation?: string;
   evidence?: string;
   alertIdentifier?: string;
-  legacyAlertId?: string;
-  alertId?: string;
-  alert_identifier?: string;
-  legacy_alert_id?: string;
-  alert_id?: string;
   alert_type?: string;
   value?: number;
   threshold?: number;

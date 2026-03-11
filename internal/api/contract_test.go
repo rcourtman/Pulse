@@ -102,7 +102,6 @@ func TestContract_FindingJSONSnapshot(t *testing.T) {
 		"acknowledged_at":"2026-02-08T13:25:15Z",
 		"snoozed_until":"2026-02-08T13:26:15Z",
 		"alert_identifier":"alert-1",
-		"alert_id":"alert-1",
 		"dismissed_reason":"expected_behavior",
 		"user_note":"Runs nightly batch",
 		"times_raised":4,

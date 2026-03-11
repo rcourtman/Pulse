@@ -1132,8 +1132,6 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 		Recommendation  string     `json:"recommendation,omitempty"`
 		Evidence        string     `json:"evidence,omitempty"`
 		AlertIdentifier string     `json:"alert_identifier,omitempty"`
-		LegacyAlertID   string     `json:"legacy_alert_id,omitempty"`
-		AlertID         string     `json:"alert_id,omitempty"`
 		AlertType       string     `json:"alert_type,omitempty"`
 		Value           float64    `json:"value,omitempty"`
 		Threshold       float64    `json:"threshold,omitempty"`
@@ -1211,7 +1209,6 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			Recommendation:         f.Recommendation,
 			Evidence:               f.Evidence,
 			AlertIdentifier:        f.AlertID,
-			AlertID:                f.AlertID,
 			AlertType:              f.AlertType,
 			Value:                  f.Value,
 			Threshold:              f.Threshold,

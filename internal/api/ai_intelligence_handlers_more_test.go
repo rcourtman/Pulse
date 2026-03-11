@@ -243,7 +243,7 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	if finding["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", finding["alert_identifier"])
 	}
-	if finding["alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alert_id, got %#v", finding["alert_id"])
+	if _, ok := finding["alert_id"]; ok {
+		t.Fatalf("did not expect alert_id in findings response, got %#v", finding["alert_id"])
 	}
 }

@@ -206,7 +206,6 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		AcknowledgedAt:         f.AcknowledgedAt,
 		SnoozedUntil:           f.SnoozedUntil,
 		AlertIdentifier:        alertIdentifier,
-		AlertID:                alertIdentifier,
 		DismissedReason:        f.DismissedReason,
 		UserNote:               f.UserNote,
 		TimesRaised:            f.TimesRaised,

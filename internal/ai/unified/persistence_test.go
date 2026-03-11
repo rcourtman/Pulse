@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestUnifiedFindingJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+func TestUnifiedFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	finding := UnifiedFinding{
 		ID:         "f1",
 		Source:     SourceThreshold,
@@ -33,8 +33,8 @@ func TestUnifiedFindingJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
 	}
-	if payload["alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alert_id, got %#v", payload["alert_id"])
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect legacy alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
 	var decodedCanonical UnifiedFinding

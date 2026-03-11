@@ -23,7 +23,7 @@ func TestNewFindingsPersistenceAdapter(t *testing.T) {
 	}
 }
 
-func TestFindingJSONCanonicalAndLegacyCompatibility(t *testing.T) {
+func TestFindingJSONCanonicalOutputAndLegacyInputCompatibility(t *testing.T) {
 	finding := Finding{
 		ID:         "finding-1",
 		Severity:   FindingSeverityWarning,
@@ -47,8 +47,8 @@ func TestFindingJSONCanonicalAndLegacyCompatibility(t *testing.T) {
 	if payload["alert_identifier"] != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier, got %#v", payload["alert_identifier"])
 	}
-	if payload["alert_id"] != "instance:node:100::metric/cpu" {
-		t.Fatalf("expected compatibility alert_id, got %#v", payload["alert_id"])
+	if _, ok := payload["alert_id"]; ok {
+		t.Fatalf("did not expect legacy alert_id in canonical payload, got %#v", payload["alert_id"])
 	}
 
 	var decodedCanonical Finding

@@ -91,8 +91,6 @@ export interface UnifiedFinding {
   resourceName: string;
   resourceType: string;
   alertIdentifier?: string;
-  legacyAlertId?: string;
-  alertId?: string;
   alertType?: string;
   isThreshold?: boolean;
   category: string;
@@ -212,8 +210,6 @@ export const aiIntelligenceStore = {
           resourceName: item.resource_name || item.resource_id,
           resourceType: item.resource_type || 'unknown',
           alertIdentifier,
-          legacyAlertId: item.legacy_alert_id ?? alertIdentifier,
-          alertId: item.alert_id ?? alertIdentifier,
           isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
           category: item.category || 'general',
           severity: validateSeverity(item.severity),
