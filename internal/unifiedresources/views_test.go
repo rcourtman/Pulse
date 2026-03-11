@@ -64,16 +64,27 @@ func TestView_VMViewAccessors(t *testing.T) {
 		ParentID: &parentID,
 		Identity: ResourceIdentity{IPAddresses: []string{"10.0.0.10", "fd00::10"}},
 		Proxmox: &ProxmoxData{
-			SourceID:   "vm-source-1",
-			NodeName:   "pve-a",
-			Instance:   "lab",
-			VMID:       101,
-			CPUs:       4,
-			Uptime:     1234,
-			Template:   false,
-			LastBackup: lastBackup,
-			Disks:      []DiskInfo{{Device: "vda", Filesystem: "ext4", Total: 100, Used: 60, Free: 40, Mountpoint: "/"}},
-			Lock:       "backup",
+			SourceID:         "vm-source-1",
+			NodeName:         "pve-a",
+			Instance:         "lab",
+			VMID:             101,
+			CPUs:             4,
+			Uptime:           1234,
+			Template:         false,
+			LastBackup:       lastBackup,
+			DiskStatusReason: "guest agent offline",
+			OSName:           "Ubuntu",
+			OSVersion:        "24.04",
+			AgentVersion:     "8.1.2",
+			NetworkInterfaces: []NetworkInterface{{
+				Name:      "eth0",
+				MAC:       "52:54:00:12:34:56",
+				Addresses: []string{"10.0.0.10/24"},
+				RXBytes:   123,
+				TXBytes:   456,
+			}},
+			Disks: []DiskInfo{{Device: "vda", Filesystem: "ext4", Total: 100, Used: 60, Free: 40, Mountpoint: "/"}},
+			Lock:  "backup",
 		},
 		Metrics: &ResourceMetrics{
 			CPU:       &MetricValue{Percent: 12.5},
@@ -120,6 +131,12 @@ func TestView_VMViewAccessors(t *testing.T) {
 	}
 	if !v.LastBackup().Equal(lastBackup) {
 		t.Fatalf("expected LastBackup %v, got %v", lastBackup, v.LastBackup())
+	}
+	if v.DiskStatusReason() != "guest agent offline" || v.OSName() != "Ubuntu" || v.OSVersion() != "24.04" || v.AgentVersion() != "8.1.2" {
+		t.Fatalf("expected guest metadata accessors to match, got diskReason=%q os=%q osVersion=%q agent=%q", v.DiskStatusReason(), v.OSName(), v.OSVersion(), v.AgentVersion())
+	}
+	if ifaces := v.NetworkInterfaces(); len(ifaces) != 1 || ifaces[0].Name != "eth0" || ifaces[0].MAC != "52:54:00:12:34:56" {
+		t.Fatalf("expected guest network interfaces to match, got %+v", ifaces)
 	}
 	if disks := v.Disks(); len(disks) != 1 || disks[0].Device != "vda" || disks[0].Filesystem != "ext4" {
 		t.Fatalf("expected disks to match, got %+v", disks)
@@ -265,8 +282,19 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			Uptime:        888,
 			Template:      true,
 			LastBackup:    lastBackup,
-			Disks:         []DiskInfo{{Device: "mp0", Filesystem: "xfs", Total: 200, Used: 25, Free: 175, Mountpoint: "/data"}},
-			Lock:          "migrate",
+			OSName:        "Debian",
+			NetworkInterfaces: []NetworkInterface{{
+				Name:      "eth0",
+				MAC:       "52:54:00:65:43:21",
+				Addresses: []string{"10.0.0.20/24"},
+				RXBytes:   321,
+				TXBytes:   654,
+			}},
+			OSTemplate:      "docker:postgres:17",
+			HasDocker:       true,
+			DockerCheckedAt: &now,
+			Disks:           []DiskInfo{{Device: "mp0", Filesystem: "xfs", Total: 200, Used: 25, Free: 175, Mountpoint: "/data"}},
+			Lock:            "migrate",
 		},
 		Metrics: &ResourceMetrics{
 			CPU:       &MetricValue{Percent: 3},
@@ -295,6 +323,12 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 	}
 	if !v.LastBackup().Equal(lastBackup) {
 		t.Fatalf("expected LastBackup %v, got %v", lastBackup, v.LastBackup())
+	}
+	if v.OSName() != "Debian" || v.OSTemplate() != "docker:postgres:17" || !v.HasDocker() || !v.DockerCheckedAt().Equal(now) {
+		t.Fatalf("expected canonical container metadata, got os=%q template=%q hasDocker=%v checkedAt=%v", v.OSName(), v.OSTemplate(), v.HasDocker(), v.DockerCheckedAt())
+	}
+	if ifaces := v.NetworkInterfaces(); len(ifaces) != 1 || ifaces[0].Name != "eth0" || ifaces[0].MAC != "52:54:00:65:43:21" {
+		t.Fatalf("expected guest network interfaces to match, got %+v", ifaces)
 	}
 	if disks := v.Disks(); len(disks) != 1 || disks[0].Device != "mp0" || disks[0].Filesystem != "xfs" {
 		t.Fatalf("expected disks to match, got %+v", disks)

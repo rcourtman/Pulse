@@ -52,3 +52,8 @@ path.
 Docker host export is now derived from canonical `ReadState.DockerHosts()`
 instead of `GetState().DockerHosts`; `models.DockerHost` is treated as a
 boundary artifact for that path.
+
+VM and container export are now derived from canonical `ReadState.VMs()` and
+`ReadState.Containers()` instead of `GetState().VMs`/`GetState().Containers`;
+`models.VM` and `models.Container` are treated as boundary artifacts for those
+paths.

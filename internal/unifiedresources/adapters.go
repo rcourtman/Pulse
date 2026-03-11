@@ -1009,19 +1009,24 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 	metrics := metricsFromVM(vm)
 	proxmox := &ProxmoxData{
-		SourceID:   vm.ID,
-		NodeName:   vm.Node,
-		Instance:   vm.Instance,
-		VMID:       vm.VMID,
-		CPUs:       vm.CPUs,
-		Uptime:     vm.Uptime,
-		Template:   vm.Template,
-		LastBackup: vm.LastBackup,
-		Disks:      convertDisks(vm.Disks),
-		SwapUsed:   vm.Memory.SwapUsed,
-		SwapTotal:  vm.Memory.SwapTotal,
-		Balloon:    vm.Memory.Balloon,
-		Lock:       vm.Lock,
+		SourceID:          vm.ID,
+		NodeName:          vm.Node,
+		Instance:          vm.Instance,
+		VMID:              vm.VMID,
+		CPUs:              vm.CPUs,
+		Uptime:            vm.Uptime,
+		Template:          vm.Template,
+		LastBackup:        vm.LastBackup,
+		DiskStatusReason:  vm.DiskStatusReason,
+		OSName:            vm.OSName,
+		OSVersion:         vm.OSVersion,
+		AgentVersion:      vm.AgentVersion,
+		NetworkInterfaces: convertGuestInterfaces(vm.NetworkInterfaces),
+		Disks:             convertDisks(vm.Disks),
+		SwapUsed:          vm.Memory.SwapUsed,
+		SwapTotal:         vm.Memory.SwapTotal,
+		Balloon:           vm.Memory.Balloon,
+		Lock:              vm.Lock,
 	}
 	resource := Resource{
 		Type:       ResourceTypeVM,
@@ -1044,21 +1049,26 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 	metrics := metricsFromContainer(ct)
 	proxmox := &ProxmoxData{
-		SourceID:      ct.ID,
-		NodeName:      ct.Node,
-		Instance:      ct.Instance,
-		VMID:          ct.VMID,
-		ContainerType: ct.Type,
-		IsOCI:         ct.IsOCI,
-		CPUs:          ct.CPUs,
-		Uptime:        ct.Uptime,
-		Template:      ct.Template,
-		LastBackup:    ct.LastBackup,
-		Disks:         convertDisks(ct.Disks),
-		SwapUsed:      ct.Memory.SwapUsed,
-		SwapTotal:     ct.Memory.SwapTotal,
-		Balloon:       ct.Memory.Balloon,
-		Lock:          ct.Lock,
+		SourceID:          ct.ID,
+		NodeName:          ct.Node,
+		Instance:          ct.Instance,
+		VMID:              ct.VMID,
+		ContainerType:     ct.Type,
+		IsOCI:             ct.IsOCI,
+		CPUs:              ct.CPUs,
+		Uptime:            ct.Uptime,
+		Template:          ct.Template,
+		LastBackup:        ct.LastBackup,
+		OSName:            ct.OSName,
+		NetworkInterfaces: convertGuestInterfaces(ct.NetworkInterfaces),
+		OSTemplate:        ct.OSTemplate,
+		HasDocker:         ct.HasDocker,
+		DockerCheckedAt:   timePtr(ct.DockerCheckedAt),
+		Disks:             convertDisks(ct.Disks),
+		SwapUsed:          ct.Memory.SwapUsed,
+		SwapTotal:         ct.Memory.SwapTotal,
+		Balloon:           ct.Memory.Balloon,
+		Lock:              ct.Lock,
 	}
 	resource := Resource{
 		Type:       ResourceTypeSystemContainer,
@@ -1076,6 +1086,32 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		IPAddresses: uniqueStrings(ct.IPAddresses),
 	}
 	return resource, identity
+}
+
+func convertGuestInterfaces(in []models.GuestNetworkInterface) []NetworkInterface {
+	if len(in) == 0 {
+		return nil
+	}
+
+	out := make([]NetworkInterface, 0, len(in))
+	for _, iface := range in {
+		out = append(out, NetworkInterface{
+			Name:      strings.TrimSpace(iface.Name),
+			MAC:       strings.TrimSpace(iface.MAC),
+			Addresses: uniqueStrings(iface.Addresses),
+			RXBytes:   uint64(max(0, iface.RXBytes)),
+			TXBytes:   uint64(max(0, iface.TXBytes)),
+		})
+	}
+	return out
+}
+
+func timePtr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	copy := t
+	return &copy
 }
 
 func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {

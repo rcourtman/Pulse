@@ -2567,7 +2567,24 @@ func (m *Monitor) VMsSnapshot() []models.VM {
 	if m == nil {
 		return nil
 	}
-	return m.GetState().VMs
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	vmViews := readState.VMs()
+	if len(vmViews) == 0 {
+		return nil
+	}
+
+	vms := make([]models.VM, 0, len(vmViews))
+	for _, vm := range vmViews {
+		if vm == nil {
+			continue
+		}
+		vms = append(vms, vmFromReadStateView(vm))
+	}
+	return vms
 }
 
 // ContainersSnapshot returns the current system containers.
@@ -2575,7 +2592,24 @@ func (m *Monitor) ContainersSnapshot() []models.Container {
 	if m == nil {
 		return nil
 	}
-	return m.GetState().Containers
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	containerViews := readState.Containers()
+	if len(containerViews) == 0 {
+		return nil
+	}
+
+	containers := make([]models.Container, 0, len(containerViews))
+	for _, container := range containerViews {
+		if container == nil {
+			continue
+		}
+		containers = append(containers, containerFromReadStateView(container))
+	}
+	return containers
 }
 
 // NodesSnapshot returns the current Proxmox nodes.
@@ -2788,6 +2822,127 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		LinkedVMID:        view.LinkedVMID(),
 		LinkedContainerID: view.LinkedContainerID(),
 	}
+}
+
+func vmFromReadStateView(view *unifiedresources.VMView) models.VM {
+	if view == nil {
+		return models.VM{}
+	}
+
+	totalMemory := view.MemoryTotal()
+	usedMemory := view.MemoryUsed()
+	totalDisk := view.DiskTotal()
+	usedDisk := view.DiskUsed()
+
+	return models.VM{
+		ID:                firstNonEmptyString(view.SourceID(), view.ID()),
+		VMID:              view.VMID(),
+		Name:              view.Name(),
+		Node:              view.Node(),
+		Instance:          view.Instance(),
+		Status:            string(view.Status()),
+		Type:              "qemu",
+		CPU:               view.CPUPercent(),
+		CPUs:              view.CPUs(),
+		Memory:            models.Memory{Total: totalMemory, Used: usedMemory, Free: maxInt64(0, totalMemory-usedMemory), Usage: view.MemoryPercent()},
+		Disk:              models.Disk{Used: usedDisk, Total: totalDisk, Free: maxInt64(0, totalDisk-usedDisk), Usage: view.DiskPercent()},
+		Disks:             guestDisksFromReadStateView(view.Disks()),
+		DiskStatusReason:  view.DiskStatusReason(),
+		IPAddresses:       view.IPAddresses(),
+		OSName:            view.OSName(),
+		OSVersion:         view.OSVersion(),
+		AgentVersion:      view.AgentVersion(),
+		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		NetworkIn:         maxInt64(0, int64(view.NetIn())),
+		NetworkOut:        maxInt64(0, int64(view.NetOut())),
+		DiskRead:          maxInt64(0, int64(view.DiskRead())),
+		DiskWrite:         maxInt64(0, int64(view.DiskWrite())),
+		Uptime:            view.Uptime(),
+		Template:          view.Template(),
+		LastBackup:        view.LastBackup(),
+		Tags:              view.Tags(),
+		Lock:              view.Lock(),
+		LastSeen:          view.LastSeen(),
+	}
+}
+
+func containerFromReadStateView(view *unifiedresources.ContainerView) models.Container {
+	if view == nil {
+		return models.Container{}
+	}
+
+	totalMemory := view.MemoryTotal()
+	usedMemory := view.MemoryUsed()
+	totalDisk := view.DiskTotal()
+	usedDisk := view.DiskUsed()
+
+	return models.Container{
+		ID:                firstNonEmptyString(view.SourceID(), view.ID()),
+		VMID:              view.VMID(),
+		Name:              view.Name(),
+		Node:              view.Node(),
+		Instance:          view.Instance(),
+		Status:            string(view.Status()),
+		Type:              firstNonEmptyString(view.ContainerType(), "lxc"),
+		CPU:               view.CPUPercent(),
+		CPUs:              view.CPUs(),
+		Memory:            models.Memory{Total: totalMemory, Used: usedMemory, Free: maxInt64(0, totalMemory-usedMemory), Usage: view.MemoryPercent()},
+		Disk:              models.Disk{Used: usedDisk, Total: totalDisk, Free: maxInt64(0, totalDisk-usedDisk), Usage: view.DiskPercent()},
+		Disks:             guestDisksFromReadStateView(view.Disks()),
+		NetworkIn:         maxInt64(0, int64(view.NetIn())),
+		NetworkOut:        maxInt64(0, int64(view.NetOut())),
+		DiskRead:          maxInt64(0, int64(view.DiskRead())),
+		DiskWrite:         maxInt64(0, int64(view.DiskWrite())),
+		Uptime:            view.Uptime(),
+		Template:          view.Template(),
+		LastBackup:        view.LastBackup(),
+		Tags:              view.Tags(),
+		Lock:              view.Lock(),
+		LastSeen:          view.LastSeen(),
+		IPAddresses:       view.IPAddresses(),
+		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		OSName:            view.OSName(),
+		IsOCI:             view.IsOCI(),
+		OSTemplate:        view.OSTemplate(),
+		HasDocker:         view.HasDocker(),
+		DockerCheckedAt:   view.DockerCheckedAt(),
+	}
+}
+
+func guestDisksFromReadStateView(disks []unifiedresources.DiskInfo) []models.Disk {
+	if len(disks) == 0 {
+		return nil
+	}
+	out := make([]models.Disk, 0, len(disks))
+	for _, disk := range disks {
+		out = append(out, models.Disk{
+			Total:      disk.Total,
+			Used:       disk.Used,
+			Free:       disk.Free,
+			Usage:      disk.Usage,
+			Mountpoint: disk.Mountpoint,
+			Type:       disk.Filesystem,
+			Device:     disk.Device,
+		})
+	}
+	return out
+}
+
+func guestNetworkInterfacesFromReadStateView(interfaces []unifiedresources.NetworkInterface) []models.GuestNetworkInterface {
+	if len(interfaces) == 0 {
+		return nil
+	}
+	out := make([]models.GuestNetworkInterface, 0, len(interfaces))
+	for _, iface := range interfaces {
+		out = append(out, models.GuestNetworkInterface{
+			Name:      iface.Name,
+			MAC:       iface.MAC,
+			Addresses: append([]string(nil), iface.Addresses...),
+			RXBytes:   maxInt64(0, int64(iface.RXBytes)),
+			TXBytes:   maxInt64(0, int64(iface.TXBytes)),
+		})
+	}
+	return out
 }
 
 func hostMemoryFromReadStateView(view *unifiedresources.HostView) models.Memory {

@@ -921,24 +921,126 @@ func TestMonitorWorkloadSnapshots(t *testing.T) {
 
 	t.Run("returns current vm and container snapshots", func(t *testing.T) {
 		state := models.NewState()
-		state.UpdateVMsForInstance("pve", []models.VM{{ID: "vm-1", Name: "vm-1"}})
-		state.UpdateContainersForInstance("pve", []models.Container{{ID: "ct-1", Name: "ct-1"}})
-		m := &Monitor{state: state}
+		state.UpdateVMsForInstance("pve", []models.VM{{ID: "legacy-vm", Name: "legacy-vm"}})
+		state.UpdateContainersForInstance("pve", []models.Container{{ID: "legacy-ct", Name: "legacy-ct"}})
+
+		dockerCheckedAt := time.Date(2026, 3, 10, 15, 4, 5, 0, time.UTC)
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(models.StateSnapshot{
+			VMs: []models.VM{{
+				ID:               "vm-1",
+				VMID:             101,
+				Name:             "vm-1",
+				Node:             "pve-a",
+				Instance:         "pve",
+				Status:           "running",
+				CPU:              12.5,
+				CPUs:             4,
+				Memory:           models.Memory{Total: 8192, Used: 4096, SwapUsed: 512, SwapTotal: 1024, Balloon: 2048},
+				Disk:             models.Disk{Total: 1000, Used: 250, Free: 750, Usage: 25},
+				Disks:            []models.Disk{{Device: "scsi0", Type: "ext4", Total: 1000, Used: 250, Free: 750, Usage: 25, Mountpoint: "/"}},
+				DiskStatusReason: "guest agent offline",
+				IPAddresses:      []string{"10.0.0.11"},
+				OSName:           "Ubuntu",
+				OSVersion:        "24.04",
+				AgentVersion:     "8.1.2",
+				NetworkInterfaces: []models.GuestNetworkInterface{{
+					Name:      "eth0",
+					MAC:       "52:54:00:12:34:56",
+					Addresses: []string{"10.0.0.11/24"},
+					RXBytes:   111,
+					TXBytes:   222,
+				}},
+				NetworkIn:  333,
+				NetworkOut: 444,
+				DiskRead:   555,
+				DiskWrite:  666,
+				Uptime:     777,
+				LastBackup: time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC),
+				Tags:       []string{"prod"},
+				Lock:       "backup",
+				LastSeen:   time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
+			}},
+			Containers: []models.Container{{
+				ID:          "ct-1",
+				VMID:        201,
+				Name:        "ct-1",
+				Node:        "pve-b",
+				Instance:    "pve",
+				Status:      "running",
+				Type:        "oci",
+				CPU:         7.5,
+				CPUs:        2,
+				Memory:      models.Memory{Total: 4096, Used: 1024, SwapUsed: 64, SwapTotal: 128, Balloon: 0},
+				Disk:        models.Disk{Total: 2000, Used: 500, Free: 1500, Usage: 25},
+				Disks:       []models.Disk{{Device: "rootfs", Type: "xfs", Total: 2000, Used: 500, Free: 1500, Usage: 25, Mountpoint: "/"}},
+				IPAddresses: []string{"10.0.0.21"},
+				NetworkInterfaces: []models.GuestNetworkInterface{{
+					Name:      "eth0",
+					MAC:       "52:54:00:65:43:21",
+					Addresses: []string{"10.0.0.21/24"},
+					RXBytes:   11,
+					TXBytes:   22,
+				}},
+				NetworkIn:       33,
+				NetworkOut:      44,
+				DiskRead:        55,
+				DiskWrite:       66,
+				Uptime:          77,
+				LastBackup:      time.Date(2026, 3, 8, 0, 0, 0, 0, time.UTC),
+				Tags:            []string{"db"},
+				Lock:            "migrate",
+				LastSeen:        time.Date(2026, 3, 10, 12, 1, 0, 0, time.UTC),
+				OSName:          "Debian",
+				IsOCI:           true,
+				OSTemplate:      "docker:postgres:17",
+				HasDocker:       true,
+				DockerCheckedAt: dockerCheckedAt,
+			}},
+		})
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		}
 
 		vms := m.VMsSnapshot()
 		if len(vms) != 1 {
 			t.Fatalf("expected one VM in snapshot, got %d", len(vms))
 		}
-		if vms[0].ID != "vm-1" {
-			t.Fatalf("unexpected vm id: %q", vms[0].ID)
+		if vms[0].ID != "vm-1" || vms[0].OSName != "Ubuntu" || vms[0].AgentVersion != "8.1.2" || vms[0].DiskStatusReason != "guest agent offline" {
+			t.Fatalf("expected canonical vm snapshot, got %+v", vms[0])
+		}
+		if len(vms[0].NetworkInterfaces) != 1 || vms[0].NetworkInterfaces[0].Name != "eth0" {
+			t.Fatalf("expected canonical vm interfaces, got %+v", vms[0].NetworkInterfaces)
 		}
 
 		containers := m.ContainersSnapshot()
 		if len(containers) != 1 {
 			t.Fatalf("expected one container in snapshot, got %d", len(containers))
 		}
-		if containers[0].ID != "ct-1" {
-			t.Fatalf("unexpected container id: %q", containers[0].ID)
+		if containers[0].ID != "ct-1" || containers[0].OSName != "Debian" || !containers[0].IsOCI || !containers[0].HasDocker || !containers[0].DockerCheckedAt.Equal(dockerCheckedAt) {
+			t.Fatalf("expected canonical container snapshot, got %+v", containers[0])
+		}
+		if len(containers[0].NetworkInterfaces) != 1 || containers[0].NetworkInterfaces[0].Name != "eth0" {
+			t.Fatalf("expected canonical container interfaces, got %+v", containers[0].NetworkInterfaces)
+		}
+	})
+
+	t.Run("does not fall back to stale workload snapshot when live read state is empty", func(t *testing.T) {
+		state := models.NewState()
+		state.UpdateVMsForInstance("pve", []models.VM{{ID: "legacy-vm", Name: "legacy-vm"}})
+		state.UpdateContainersForInstance("pve", []models.Container{{ID: "legacy-ct", Name: "legacy-ct"}})
+
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		}
+
+		if got := m.VMsSnapshot(); len(got) != 0 {
+			t.Fatalf("expected empty VMs from live canonical read-state, got %#v", got)
+		}
+		if got := m.ContainersSnapshot(); len(got) != 0 {
+			t.Fatalf("expected empty containers from live canonical read-state, got %#v", got)
 		}
 	})
 }

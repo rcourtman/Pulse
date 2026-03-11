@@ -55,3 +55,9 @@ as display-name identity, CPU/memory sizing, interval/load averages, raw
 container membership, and host I/O rates so monitoring can derive
 `models.DockerHost` from unified views without depending on legacy snapshot
 ownership.
+
+Canonical Proxmox guest metadata now carries workload boundary fields such as
+guest OS identity, guest agent version, guest network interfaces, VM disk
+status reason, and container OCI/Docker-detection metadata so monitoring can
+derive `models.VM` and `models.Container` from unified views without depending
+on legacy snapshot ownership.

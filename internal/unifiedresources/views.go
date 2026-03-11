@@ -151,6 +151,41 @@ func (v VMView) LastBackup() time.Time {
 	return v.r.Proxmox.LastBackup
 }
 
+func (v VMView) DiskStatusReason() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.DiskStatusReason
+}
+
+func (v VMView) OSName() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSName
+}
+
+func (v VMView) OSVersion() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSVersion
+}
+
+func (v VMView) AgentVersion() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.AgentVersion
+}
+
+func (v VMView) NetworkInterfaces() []NetworkInterface {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneNetworkInterfaces(v.r.Proxmox.NetworkInterfaces)
+}
+
 func (v VMView) Disks() []DiskInfo {
 	if v.r == nil || v.r.Proxmox == nil {
 		return nil
@@ -371,6 +406,38 @@ func (v ContainerView) LastBackup() time.Time {
 		return time.Time{}
 	}
 	return v.r.Proxmox.LastBackup
+}
+
+func (v ContainerView) OSName() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSName
+}
+
+func (v ContainerView) NetworkInterfaces() []NetworkInterface {
+	if v.r == nil || v.r.Proxmox == nil {
+		return nil
+	}
+	return cloneNetworkInterfaces(v.r.Proxmox.NetworkInterfaces)
+}
+
+func (v ContainerView) OSTemplate() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return v.r.Proxmox.OSTemplate
+}
+
+func (v ContainerView) HasDocker() bool {
+	return v.r != nil && v.r.Proxmox != nil && v.r.Proxmox.HasDocker
+}
+
+func (v ContainerView) DockerCheckedAt() time.Time {
+	if v.r == nil || v.r.Proxmox == nil || v.r.Proxmox.DockerCheckedAt == nil {
+		return time.Time{}
+	}
+	return *v.r.Proxmox.DockerCheckedAt
 }
 
 func (v ContainerView) Disks() []DiskInfo {

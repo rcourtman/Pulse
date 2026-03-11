@@ -33,7 +33,9 @@ package unifiedresources
 //     internal/websocket/: Exempt (producer/wire-format packages).
 //     Monitoring remains a producer package, but snapshot-shaped export
 //     helpers are progressively derived from ReadState-backed canonical data
-//     rather than treated as state-owned truth.
+//     rather than treated as state-owned truth. Workload export helpers
+//     (VMsSnapshot/ContainersSnapshot) now also derive from ReadState-backed
+//     canonical data instead of from StateSnapshot-owned guest arrays.
 //
 //   - All state.* field access patterns and GetState() calls are
 //     enforced as hard bans (SRC-04b). Migration is complete — zero

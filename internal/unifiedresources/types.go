@@ -212,6 +212,14 @@ type ProxmoxData struct {
 	KernelVersion                string              `json:"kernelVersion,omitempty"`
 	Uptime                       int64               `json:"uptime,omitempty"`
 	LastBackup                   time.Time           `json:"lastBackup,omitempty"`
+	DiskStatusReason             string              `json:"diskStatusReason,omitempty"`
+	OSName                       string              `json:"osName,omitempty"`
+	OSVersion                    string              `json:"osVersion,omitempty"`
+	AgentVersion                 string              `json:"agentVersion,omitempty"`
+	NetworkInterfaces            []NetworkInterface  `json:"networkInterfaces,omitempty"`
+	OSTemplate                   string              `json:"osTemplate,omitempty"`
+	HasDocker                    bool                `json:"hasDocker,omitempty"`
+	DockerCheckedAt              *time.Time          `json:"dockerCheckedAt,omitempty"`
 	CPUInfo                      *CPUInfo            `json:"cpuInfo,omitempty"`
 	LoadAverage                  []float64           `json:"loadAverage,omitempty"`
 	PendingUpdates               int                 `json:"pendingUpdates,omitempty"`
