@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from canonical_completion_guard import (
     REPO_ROOT,
@@ -18,11 +19,21 @@ from canonical_completion_guard import (
 
 def owned_runtime_files(rule: dict) -> list[str]:
     owned: set[str] = set()
+    search_roots: set[Path] = set()
 
     for prefix in rule.get("owned_prefixes", []):
         root = REPO_ROOT / prefix
-        if not root.exists():
+        if root.exists():
+            search_roots.add(root if root.is_dir() else root.parent)
             continue
+
+        parent = root.parent
+        while parent != REPO_ROOT and not parent.exists():
+            parent = parent.parent
+        if parent.exists():
+            search_roots.add(parent)
+
+    for root in search_roots:
         for path in root.rglob("*"):
             if not path.is_file():
                 continue
@@ -51,6 +62,13 @@ def unmatched_owned_runtime_files(rule: dict) -> list[str]:
         for rel in owned_runtime_files(rule)
         if not any(path_policy_matches(policy, rel) for policy in policies)
     ]
+
+
+def first_matching_policy_id(rule: dict, rel: str) -> str:
+    for policy in rule.get("verification", {}).get("path_policies", []):
+        if path_policy_matches(policy, rel):
+            return str(policy["id"])
+    return "DEFAULT"
 
 
 class CanonicalCompletionGuardTest(unittest.TestCase):
@@ -773,6 +791,189 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_cloud_paid_feature_and_limit_primitives_use_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/agent_limit.go", "pkg/licensing/feature_map.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "feature-and-limit-primitives",
+                    "label": "feature and limit primitive proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/agent_limit.go",
+                        "pkg/licensing/feature_map.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/agent_limit_test.go",
+                        "pkg/licensing/capability_aliases_test.go",
+                        "pkg/licensing/feature_map_test.go",
+                        "pkg/licensing/user_limit_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_billing_and_entitlement_types_use_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/billing_store.go", "pkg/licensing/subscription_transitions.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "billing-and-entitlement-types",
+                    "label": "billing and entitlement type proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/billing_store.go",
+                        "pkg/licensing/subscription_transitions.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/contract_test.go",
+                        "pkg/licensing/entitlement_payload_test.go",
+                        "pkg/licensing/grant_claims_contract_test.go",
+                        "pkg/licensing/subscription_test.go",
+                        "pkg/licensing/trial_start_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_commercial_migration_and_trial_flow_use_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/commercial_migration.go", "pkg/licensing/trial_start.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "commercial-migration-and-trial-flow",
+                    "label": "commercial migration and trial flow proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/commercial_migration.go",
+                        "pkg/licensing/trial_start.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/commercial_migration_test.go",
+                        "pkg/licensing/http_test.go",
+                        "pkg/licensing/quickstart_credits_test.go",
+                        "pkg/licensing/trial_start_test.go",
+                        "pkg/licensing/upgrade_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_conversion_pipeline_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/conversion_store.go", "pkg/licensing/metering/aggregator.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "conversion-telemetry-pipeline",
+                    "label": "conversion telemetry pipeline proof",
+                    "touched_runtime_files": [
+                        "pkg/licensing/conversion_store.go",
+                        "pkg/licensing/metering/aggregator.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/conversion_api_helpers_test.go",
+                        "pkg/licensing/conversion_config_test.go",
+                        "pkg/licensing/conversion_events_test.go",
+                        "pkg/licensing/conversion_metrics_test.go",
+                        "pkg/licensing/conversion_quality_test.go",
+                        "pkg/licensing/conversion_recorder_test.go",
+                        "pkg/licensing/conversion_store_queryplan_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_public_key_and_build_modes_use_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["pkg/licensing/public_key.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "public-key-and-build-modes",
+                    "label": "public key and build mode proof",
+                    "touched_runtime_files": ["pkg/licensing/public_key.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/licensing/license_server_client_test.go",
+                        "pkg/licensing/public_key_test.go",
+                        "pkg/licensing/service_activate_test.go",
+                        "pkg/licensing/trial_activation_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_api_boundary_uses_specific_guardrails(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        requirements = build_verification_requirements(
+            rule,
+            ["internal/api/licensing_handlers.go", "internal/api/payments_webhook_handlers.go"],
+        )
+        self.assertEqual(
+            requirements,
+            [
+                {
+                    "id": "cloud-paid-api-boundary",
+                    "label": "cloud paid API boundary proof",
+                    "touched_runtime_files": [
+                        "internal/api/licensing_handlers.go",
+                        "internal/api/payments_webhook_handlers.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
+                        "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
+                        "internal/api/billing_state_handlers_test.go",
+                        "internal/api/contract_test.go",
+                        "internal/api/licensing_handlers_auto_migrate_test.go",
+                        "internal/api/licensing_handlers_self_hosted_fallback_test.go",
+                        "internal/api/stripe_webhook_handlers_additional_test.go",
+                        "internal/api/stripe_webhook_handlers_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_cloud_paid_has_no_pkg_licensing_catch_all_policy(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        for policy in rule["verification"]["path_policies"]:
+            self.assertNotIn(
+                "pkg/licensing/",
+                policy.get("match_prefixes", []),
+                msg="cloud-paid must not regain a package-wide pkg/licensing fallback policy",
+            )
+
     def test_api_backend_runtime_can_use_types_file_as_proof(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "api-contracts")
         requirement = build_verification_requirements(
@@ -815,6 +1016,19 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 [],
                 msg=f"{subsystem_id} has runtime files that still rely on default verification fallback",
             )
+
+    def test_cloud_paid_owned_runtime_files_do_not_resolve_to_pkg_licensing_fallback(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
+        fallback_matched = [
+            rel
+            for rel in owned_runtime_files(rule)
+            if first_matching_policy_id(rule, rel) == "cloud-runtime-canonicalization"
+        ]
+        self.assertEqual(
+            fallback_matched,
+            [],
+            msg="cloud-paid runtime files must not resolve to the removed pkg/licensing fallback policy",
+        )
 
 
 if __name__ == "__main__":

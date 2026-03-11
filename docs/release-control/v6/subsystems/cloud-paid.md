@@ -127,3 +127,8 @@ to `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`,
 `pkg/licensing/persistence.go`, `pkg/licensing/activation_store.go`, and
 `pkg/licensing/trial_activation.go` should carry their dedicated proof files
 instead of relying only on the generic cloud runtime policy.
+The remaining cloud-paid runtime families now follow the same rule as well:
+feature/limit primitives, billing and entitlement type shapes, commercial
+migration and trial flow, conversion telemetry, host lifecycle tracking, and
+public-key/build-mode boundaries should all resolve through explicit proof
+routes rather than a package-wide `pkg/licensing/` fallback.

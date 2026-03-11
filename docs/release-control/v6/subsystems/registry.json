@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "subsystems": [
     {
       "id": "alerts",
@@ -401,6 +401,121 @@
             ]
           },
           {
+            "id": "feature-and-limit-primitives",
+            "label": "feature and limit primitive proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/agent_limit.go",
+              "pkg/licensing/capability_aliases.go",
+              "pkg/licensing/feature_map.go",
+              "pkg/licensing/user_limit.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/agent_limit_test.go",
+              "pkg/licensing/capability_aliases_test.go",
+              "pkg/licensing/feature_map_test.go",
+              "pkg/licensing/user_limit_test.go"
+            ]
+          },
+          {
+            "id": "billing-and-entitlement-types",
+            "label": "billing and entitlement type proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/billing_store.go",
+              "pkg/licensing/contracts.go",
+              "pkg/licensing/entitlement_source.go",
+              "pkg/licensing/entitlements.go",
+              "pkg/licensing/subscription_state.go",
+              "pkg/licensing/subscription_transitions.go",
+              "pkg/licensing/types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "pkg/licensing/entitlement_payload_test.go",
+              "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/subscription_test.go",
+              "pkg/licensing/trial_start_test.go"
+            ]
+          },
+          {
+            "id": "commercial-migration-and-trial-flow",
+            "label": "commercial migration and trial flow proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/commercial_migration.go",
+              "pkg/licensing/http.go",
+              "pkg/licensing/quickstart_credits.go",
+              "pkg/licensing/trial_start.go",
+              "pkg/licensing/upgrade.go",
+              "pkg/licensing/upgrade_reasons.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/commercial_migration_test.go",
+              "pkg/licensing/http_test.go",
+              "pkg/licensing/quickstart_credits_test.go",
+              "pkg/licensing/trial_start_test.go",
+              "pkg/licensing/upgrade_test.go"
+            ]
+          },
+          {
+            "id": "conversion-telemetry-pipeline",
+            "label": "conversion telemetry pipeline proof",
+            "match_prefixes": [
+              "pkg/licensing/conversion_",
+              "pkg/licensing/metering/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/conversion_api_helpers_test.go",
+              "pkg/licensing/conversion_config_test.go",
+              "pkg/licensing/conversion_events_test.go",
+              "pkg/licensing/conversion_metrics_test.go",
+              "pkg/licensing/conversion_quality_test.go",
+              "pkg/licensing/conversion_recorder_test.go",
+              "pkg/licensing/conversion_store_queryplan_test.go"
+            ]
+          },
+          {
+            "id": "host-lifecycle-tracking",
+            "label": "host lifecycle tracking proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/host_lifecycle.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/host_lifecycle_test.go"
+            ]
+          },
+          {
+            "id": "public-key-and-build-modes",
+            "label": "public key and build mode proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/dev_mode_dev.go",
+              "pkg/licensing/dev_mode_release.go",
+              "pkg/licensing/public_key.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/license_server_client_test.go",
+              "pkg/licensing/public_key_test.go",
+              "pkg/licensing/service_activate_test.go",
+              "pkg/licensing/trial_activation_test.go"
+            ]
+          },
+          {
             "id": "hosted-trial-activation",
             "label": "hosted trial activation proof",
             "match_prefixes": [],
@@ -411,6 +526,28 @@
             "test_prefixes": [],
             "exact_files": [
               "pkg/licensing/trial_activation_test.go"
+            ]
+          },
+          {
+            "id": "cloud-paid-api-boundary",
+            "label": "cloud paid API boundary proof",
+            "match_prefixes": [
+              "internal/api/licensing_",
+              "internal/api/payments_",
+              "internal/api/stripe_"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
+              "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
+              "internal/api/billing_state_handlers_test.go",
+              "internal/api/contract_test.go",
+              "internal/api/licensing_handlers_auto_migrate_test.go",
+              "internal/api/licensing_handlers_self_hosted_fallback_test.go",
+              "internal/api/stripe_webhook_handlers_additional_test.go",
+              "internal/api/stripe_webhook_handlers_test.go"
             ]
           },
           {
@@ -427,28 +564,6 @@
               "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
               "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
               "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx"
-            ]
-          },
-          {
-            "id": "cloud-runtime-canonicalization",
-            "label": "cloud runtime canonicalization proof",
-            "match_prefixes": [
-              "pkg/licensing/",
-              "internal/api/licensing_",
-              "internal/api/payments_",
-              "internal/api/stripe_"
-            ],
-            "match_files": [],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "pkg/licensing/billing_state_normalization_test.go",
-              "pkg/licensing/cloud_paid_guardrails_test.go",
-              "pkg/licensing/database_source_test.go",
-              "pkg/licensing/grant_claims_contract_test.go",
-              "pkg/licensing/stripe_subscription_test.go",
-              "internal/api/billing_state_handlers_test.go",
-              "internal/api/contract_test.go"
             ]
           }
         ]

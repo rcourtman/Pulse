@@ -60,6 +60,11 @@ Recent locked release decision:
   `pkg/licensing/activation_store.go`, and `pkg/licensing/trial_activation.go`
   now require dedicated proof routes instead of falling through the generic
   cloud runtime policy.
+- 2026-03-11: Cloud-paid governance no longer relies on a package-wide
+  `pkg/licensing/` verification fallback. The remaining licensing/runtime
+  families and the cloud-paid API boundary now sit behind explicit proof
+  routes, and the coverage guard now resolves file-prefix ownership under
+  `internal/api/` instead of silently skipping it.
 - 2026-03-11: Canonical governance now runs in both local hooks and CI.
   `scripts/release_control/canonical_completion_guard.py` can validate either
   staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`
