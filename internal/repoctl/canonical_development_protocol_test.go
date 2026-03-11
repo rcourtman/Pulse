@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -165,6 +166,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	assertContainsAll(t, "docs/release-control/v6/README.md", readme, []string{
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"subsystems/*.md",
+		"structured evidence references",
 	})
 
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
@@ -172,6 +174,31 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"docs/release-control/v6/subsystems/",
 		"## Development Governance",
+	})
+}
+
+func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
+	rel := "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+	content := readRepoFile(t, rel)
+	assertContainsAll(t, rel, content, []string{
+		"## Purpose",
+		"## Canonical Control Files",
+		"## Scope",
+		"## Release Definition",
+		"## Non-Negotiable Release Gates",
+		"## Locked Decisions",
+		"## Development Governance",
+		"## Source Domains",
+		"It is not a live progress dashboard.",
+		"Current lane scores, evidence references, and open operational decisions live",
+	})
+	assertContainsNone(t, rel, content, []string{
+		"## Priority Engine",
+		"### Lane Scoring Rubrics",
+		"## Session Contract",
+		"## Current Lane Snapshot",
+		"| Lane ID | Lane | Target |",
+		"Evidence:",
 	})
 }
 
@@ -218,6 +245,135 @@ func TestStatusJSONSourcePrecedenceIncludesCanonicalGovernanceFiles(t *testing.T
 	for i, want := range wantPrefix {
 		if got[i] != want {
 			t.Fatalf("status.json source_precedence[%d] = %q, want %q", i, got[i], want)
+		}
+	}
+}
+
+func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
+	status := statusJSON(t)
+
+	scope, ok := status["scope"].(map[string]any)
+	if !ok {
+		t.Fatalf("status.json missing scope object")
+	}
+
+	rawRepos, ok := scope["active_repos"].([]any)
+	if !ok {
+		t.Fatalf("status.json scope missing active_repos list")
+	}
+
+	activeRepos := make(map[string]struct{}, len(rawRepos))
+	for _, raw := range rawRepos {
+		repo, ok := raw.(string)
+		if !ok {
+			t.Fatalf("status.json active_repos contains non-string entry")
+		}
+		activeRepos[repo] = struct{}{}
+	}
+
+	policy, ok := status["evidence_reference_policy"].(map[string]any)
+	if !ok {
+		t.Fatalf("status.json missing evidence_reference_policy object")
+	}
+	if got, ok := policy["format"].(string); !ok || got != "repo-qualified-relative-paths" {
+		t.Fatalf("status.json evidence_reference_policy.format = %#v, want %q", policy["format"], "repo-qualified-relative-paths")
+	}
+	if got, ok := policy["local_repo"].(string); !ok || got != "pulse" {
+		t.Fatalf("status.json evidence_reference_policy.local_repo = %#v, want %q", policy["local_repo"], "pulse")
+	}
+
+	rawKinds, ok := policy["allowed_kinds"].([]any)
+	if !ok {
+		t.Fatalf("status.json evidence_reference_policy.allowed_kinds missing list")
+	}
+	var allowedKinds []string
+	for _, raw := range rawKinds {
+		kind, ok := raw.(string)
+		if !ok {
+			t.Fatalf("status.json evidence_reference_policy.allowed_kinds contains non-string entry")
+		}
+		allowedKinds = append(allowedKinds, kind)
+	}
+
+	lanes, ok := status["lanes"].([]any)
+	if !ok || len(lanes) == 0 {
+		t.Fatalf("status.json missing lanes list")
+	}
+
+	seenIDs := make(map[string]struct{}, len(lanes))
+	for _, rawLane := range lanes {
+		lane, ok := rawLane.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json lanes contains non-object entry")
+		}
+
+		laneID, ok := lane["id"].(string)
+		if !ok || laneID == "" {
+			t.Fatalf("status.json lane missing id")
+		}
+		if _, exists := seenIDs[laneID]; exists {
+			t.Fatalf("status.json lane id %q duplicated", laneID)
+		}
+		seenIDs[laneID] = struct{}{}
+
+		rawEvidence, ok := lane["evidence"].([]any)
+		if !ok || len(rawEvidence) == 0 {
+			t.Fatalf("status.json lane %q missing evidence list", laneID)
+		}
+
+		for _, rawEvidenceRef := range rawEvidence {
+			ref, ok := rawEvidenceRef.(map[string]any)
+			if !ok {
+				t.Fatalf("status.json lane %q contains legacy non-object evidence entry", laneID)
+			}
+
+			repo, ok := ref["repo"].(string)
+			if !ok || repo == "" {
+				t.Fatalf("status.json lane %q evidence missing repo", laneID)
+			}
+			if _, ok := activeRepos[repo]; !ok {
+				t.Fatalf("status.json lane %q evidence repo %q is not in active_repos", laneID, repo)
+			}
+
+			path, ok := ref["path"].(string)
+			if !ok || path == "" {
+				t.Fatalf("status.json lane %q evidence missing path", laneID)
+			}
+			if filepath.IsAbs(path) {
+				t.Fatalf("status.json lane %q evidence path %q must not be absolute", laneID, path)
+			}
+			cleaned := filepath.ToSlash(filepath.Clean(path))
+			if cleaned != path {
+				t.Fatalf("status.json lane %q evidence path %q must be clean relative path %q", laneID, path, cleaned)
+			}
+			if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") {
+				t.Fatalf("status.json lane %q evidence path %q must not escape repo root", laneID, path)
+			}
+
+			kind, ok := ref["kind"].(string)
+			if !ok || !slices.Contains(allowedKinds, kind) {
+				t.Fatalf("status.json lane %q evidence kind %#v not allowed", laneID, ref["kind"])
+			}
+
+			if repo != "pulse" {
+				continue
+			}
+
+			fullPath := filepath.Join("..", "..", path)
+			info, err := os.Stat(fullPath)
+			if err != nil {
+				t.Fatalf("status.json lane %q evidence path %q missing in pulse repo: %v", laneID, path, err)
+			}
+			switch kind {
+			case "file":
+				if !info.Mode().IsRegular() {
+					t.Fatalf("status.json lane %q evidence path %q should be file", laneID, path)
+				}
+			case "dir":
+				if !info.IsDir() {
+					t.Fatalf("status.json lane %q evidence path %q should be dir", laneID, path)
+				}
+			}
 		}
 	}
 }

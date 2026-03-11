@@ -9,8 +9,8 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 For Pulse v6 build/release execution work, do not start from this broad docs index.
 Use:
 
-1. `docs/release-control/v6/SOURCE_OF_TRUTH.md`
-2. `docs/release-control/v6/status.json`
+1. `docs/release-control/v6/SOURCE_OF_TRUTH.md` for stable human governance and locked decisions
+2. `docs/release-control/v6/status.json` for live lane state, structured evidence references, and open operational decisions
 
 All other documents are supporting references unless explicitly required for evidence.
 

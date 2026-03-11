@@ -26,7 +26,11 @@ For v6 work, agents must treat these files as the execution entry point:
 5. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
 
 The first two files answer release priority and current lane state.
-The protocol, subsystem registry, and subsystem contracts answer how work must be done.
+`SOURCE_OF_TRUTH.md` owns stable governance, scope, and locked decisions.
+`status.json` owns live lane state, structured evidence references, and open
+operational decisions.
+The protocol, subsystem registry, and subsystem contracts answer how work must
+be done.
 
 ## Subsystem Contracts
 
@@ -61,13 +65,15 @@ Every substantial task must finish by checking these questions:
 
 1. Did I change a canonical contract?
    If yes: update the relevant subsystem contract.
-2. Did I change lane status or lock a new architectural decision?
-   If yes: update `SOURCE_OF_TRUTH.md` and, when materially required, `status.json`.
-3. Did I replace an old path with a new canonical path?
+2. Did I change live lane state, evidence references, or open operational decisions?
+   If yes: update `status.json`.
+3. Did I change stable governance, scope, or lock a new architectural/release decision?
+   If yes: update `SOURCE_OF_TRUTH.md`.
+4. Did I replace an old path with a new canonical path?
    If yes: add or tighten a guardrail so the old path cannot silently return.
-4. Did I add a new extension point?
+5. Did I add a new extension point?
    If yes: record exactly where future work must attach to it.
-5. Did I leave compatibility code in runtime paths?
+6. Did I leave compatibility code in runtime paths?
    If yes: either remove it now or explicitly classify it as a boundary-only exception.
 
 This is the minimum update set for canonical work:
@@ -91,6 +97,9 @@ defined in `docs/release-control/v6/subsystems/registry.json` and may include
 explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,
 approved test-prefix matches, non-test contract/type files, or same-subsystem
 tests only when the registry explicitly allows them.
+
+`status.json` evidence references must use repo-qualified relative paths.
+Absolute machine-local paths are forbidden.
 
 When a subsystem defines ordered `path_policies`, each touched runtime file must
 satisfy the first matching proof policy for that file. Files that match no

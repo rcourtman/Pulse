@@ -26,6 +26,16 @@
     "docs/architecture/ENTITLEMENT_MATRIX.md",
     "docs/architecture/v6-acceptance-tests.md"
   ],
+  "execution_model": "direct-repo-sessions",
+  "evidence_reference_policy": {
+    "format": "repo-qualified-relative-paths",
+    "allowed_kinds": [
+      "file",
+      "dir"
+    ],
+    "absolute_paths_forbidden": true,
+    "local_repo": "pulse"
+  },
   "priority_engine": {
     "formula": "behind_score = (max(0,target-current)*4) + criticality + staleness + dependency + blocker_bonus",
     "floor_rule": {
@@ -58,7 +68,11 @@
       "current_score": 9,
       "status": "partial",
       "evidence": [
-        "docs/architecture/v6-acceptance-tests.md"
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/v6-acceptance-tests.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -68,9 +82,21 @@
       "current_score": 9,
       "status": "partial",
       "evidence": [
-        "docs/architecture/release-readiness-guiding-light-2026-02.md",
-        "docs/architecture/conversion-operations-runbook.md",
-        "/Volumes/Development/pulse/repos/pulse-pro/V6_LAUNCH_CHECKLIST.md"
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/release-readiness-guiding-light-2026-02.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/conversion-operations-runbook.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "V6_LAUNCH_CHECKLIST.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -80,7 +106,11 @@
       "current_score": 7,
       "status": "partial",
       "evidence": [
-        "docs/architecture/v6-pricing-and-tiering.md"
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/v6-pricing-and-tiering.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -90,7 +120,11 @@
       "current_score": 6,
       "status": "partial",
       "evidence": [
-        "docs/architecture/release-readiness-guiding-light-2026-02.md"
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/release-readiness-guiding-light-2026-02.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -100,8 +134,16 @@
       "current_score": 7,
       "status": "partial",
       "evidence": [
-        "/Volumes/Development/pulse/repos/pulse-pro/V6_LAUNCH_CHECKLIST.md",
-        "/Volumes/Development/pulse/repos/pulse-mobile/store/listing.md"
+        {
+          "repo": "pulse-pro",
+          "path": "V6_LAUNCH_CHECKLIST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "store/listing.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -111,8 +153,16 @@
       "current_score": 7,
       "status": "partial",
       "evidence": [
-        "docs/architecture/state-read-consolidation-progress-2026-02.md",
-        "/Volumes/Development/pulse/repos/pulse-enterprise/docs/V6_REPO_REALIGNMENT.md"
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/state-read-consolidation-progress-2026-02.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-enterprise",
+          "path": "docs/V6_REPO_REALIGNMENT.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -122,10 +172,26 @@
       "current_score": 9,
       "status": "partial",
       "evidence": [
-        "/Volumes/Development/pulse/repos/pulse-pro/relay-server/",
-        "internal/relay/",
-        "/Volumes/Development/pulse/repos/pulse-mobile/src/relay/",
-        "docs/RELAY.md"
+        {
+          "repo": "pulse-pro",
+          "path": "relay-server",
+          "kind": "dir"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/relay",
+          "kind": "dir"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/relay",
+          "kind": "dir"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/RELAY.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -135,9 +201,21 @@
       "current_score": 8,
       "status": "partial",
       "evidence": [
-        "frontend/src/pages/setup/",
-        "frontend/src/pages/settings/",
-        "tests/integration/"
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/steps/CompleteStep.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/Settings.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/11-first-session.spec.ts",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -147,10 +225,26 @@
       "current_score": 8,
       "status": "partial",
       "evidence": [
-        "docs/",
-        "docs/releases/RELEASE_NOTES_v6.md",
-        "README.md",
-        "/Volumes/Development/pulse/repos/pulse-pro/landing-page/"
+        {
+          "repo": "pulse",
+          "path": "docs",
+          "kind": "dir"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/releases/RELEASE_NOTES_v6.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "README.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "landing-page",
+          "kind": "dir"
+        }
       ]
     },
     {
@@ -160,10 +254,26 @@
       "current_score": 6,
       "status": "partial",
       "evidence": [
-        "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
-        "tests/integration/02-navigation-perf.spec.ts",
-        "internal/api/http_metrics.go",
-        "pkg/metrics/store.go"
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/02-navigation-perf.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/http_metrics.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/metrics/store.go",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -173,16 +283,56 @@
       "current_score": 8,
       "status": "partial",
       "evidence": [
-        "tests/migration/v5_full_upgrade_test.go",
-        "tests/migration/v5_commercial_migration_test.go",
-        "tests/integration/tests/12-v5-commercial-migration.spec.ts",
-        "internal/api/frontend_embed_sync_test.go",
-        "frontend-modern/scripts/sync-embed-dist.mjs",
-        "tests/migration/v5_to_v6_test.go",
-        "tests/migration/v5_session_db_test.go",
-        "docs/UPGRADE_v6.md",
-        "docs/release-control/v6/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md",
-        "docs/release-control/v6/LEGACY_HOST_CLASSIFICATION_2026-03-05.md"
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_full_upgrade_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_commercial_migration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/12-v5-commercial-migration.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/frontend_embed_sync_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/scripts/sync-embed-dist.mjs",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_to_v6_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/migration/v5_session_db_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/UPGRADE_v6.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/LEGACY_HOST_CLASSIFICATION_2026-03-05.md",
+          "kind": "file"
+        }
       ]
     },
     {
@@ -192,7 +342,11 @@
       "current_score": 8,
       "status": "partial",
       "evidence": [
-        "tests/integration/tests/journeys/"
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/journeys",
+          "kind": "dir"
+        }
       ]
     }
   ],
@@ -201,16 +355,17 @@
     "Populate Cloud/MSP price_* IDs in pulse-pro operations docs, launch checklist, and runtime env mappings."
   ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
-  "execution_model": "direct-repo-sessions",
   "resolved_decisions": [
     "2026-02-27: staged release policy locked; L4 Hosted MSP full portal is post-GA and not a GA floor gate.",
     "2026-02-27: MSP pricing locked at Starter/Growth/Scale = $149/$249/$399 monthly (10/25/50 workspace breakpoints).",
     "2026-02-27: Cloud/MSP Stripe mapping contract locked; concrete price IDs are operational fill-in tasks.",
     "2026-03-05: host-type migration audit completed; release can proceed because remaining host references are compatibility boundaries, internal shims, or non-resource terminology.",
     "2026-03-06: v5-to-v6 license migration bridge landed; persisted v5 Pro/Lifetime licenses auto-exchange on upgrade startup, valid v5 Pro/Lifetime keys are accepted as migration input in activation, and public migration guidance is now aligned without requiring a public CHANGELOG.md.",
+    "2026-03-06: trial authority for v6 is SaaS-controlled; /api/license/trial/start initiates hosted signup only and local runtime may redeem signed trial activations but must not mint local trial state directly.",
     "2026-03-07: v5 commercial migration truth table is now owned by v6 release-control, unresolved paid-license migration states persist in v6 billing/entitlements, and the migration suite covers startup failure classes that must block trial start while preserving downgrade safety.",
     "2026-03-07: browser-level proof exists for unresolved v5 commercial migration states via tests/integration/tests/12-v5-commercial-migration.spec.ts against an upgraded fixture.",
     "2026-03-07: embedded frontend drift protection landed; frontend-modern build now syncs internal/api/frontend-modern/dist, internal/api/frontend_embed_sync_test.go enforces parity, and the disposable CT now proves migration UI states on native embedded assets without PULSE_FRONTEND_DIR.",
-    "2026-03-11: v6 release-control orchestration tooling was retired; direct repo-aware sessions plus governance files and commit/CI guardrails are now the only supported execution path."
+    "2026-03-11: v6 release-control orchestration tooling was retired; direct repo-aware sessions plus governance files and commit/CI guardrails are now the only supported execution path.",
+    "2026-03-11: SOURCE_OF_TRUTH.md now owns only stable human governance and locked decisions; live lane state and evidence references live only in status.json."
   ]
 }
