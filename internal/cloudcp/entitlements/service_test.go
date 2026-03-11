@@ -48,7 +48,7 @@ func TestIssueTenantBillingStateReturnsLeaseOnlyState(t *testing.T) {
 	if err := reg.CreateStripeAccount(&registry.StripeAccount{
 		AccountID:         accountID,
 		StripeCustomerID:  "cus_paid_service",
-		PlanVersion:       "cloud_v1",
+		PlanVersion:       "cloud_starter",
 		SubscriptionState: "active",
 	}); err != nil {
 		t.Fatalf("CreateStripeAccount: %v", err)
@@ -60,7 +60,7 @@ func TestIssueTenantBillingStateReturnsLeaseOnlyState(t *testing.T) {
 		Email:            "owner@example.com",
 		State:            registry.TenantStateActive,
 		StripeCustomerID: "cus_paid_service",
-		PlanVersion:      "cloud_v1",
+		PlanVersion:      "cloud_starter",
 	}
 	if err := reg.Create(tenant); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -69,7 +69,7 @@ func TestIssueTenantBillingStateReturnsLeaseOnlyState(t *testing.T) {
 	now := time.Unix(1710000000, 0).UTC()
 	svc.SetNow(func() time.Time { return now })
 
-	state, err := svc.IssueTenantBillingState(tenant, pkglicensing.SubStateActive, "cloud_v1", "cus_paid_service", "sub_paid_service", "price_paid_service")
+	state, err := svc.IssueTenantBillingState(tenant, pkglicensing.SubStateActive, "cloud_starter", "cus_paid_service", "sub_paid_service", "price_paid_service")
 	if err != nil {
 		t.Fatalf("IssueTenantBillingState: %v", err)
 	}
@@ -87,11 +87,46 @@ func TestIssueTenantBillingStateReturnsLeaseOnlyState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
 	}
-	if claims.PlanVersion != "cloud_v1" {
-		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_v1")
+	if claims.PlanVersion != "cloud_starter" {
+		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_starter")
 	}
 	if claims.SubscriptionState != pkglicensing.SubStateActive {
 		t.Fatalf("claims.SubscriptionState=%q, want %q", claims.SubscriptionState, pkglicensing.SubStateActive)
+	}
+}
+
+func TestIssueTenantBillingStateDefaultsIndividualCloudPlanToStarter(t *testing.T) {
+	svc, pub, reg := newTestService(t)
+
+	tenant := &registry.Tenant{
+		ID:    "t-SERVICE04",
+		Email: "owner@example.com",
+		State: registry.TenantStateActive,
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	now := time.Unix(1710000100, 0).UTC()
+	svc.SetNow(func() time.Time { return now })
+
+	state, err := svc.IssueTenantBillingState(tenant, pkglicensing.SubStateActive, "", "", "", "")
+	if err != nil {
+		t.Fatalf("IssueTenantBillingState: %v", err)
+	}
+	if state == nil {
+		t.Fatal("expected billing state")
+	}
+
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(state.EntitlementJWT, pub, "t-SERVICE04.cloud.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.PlanVersion != "cloud_starter" {
+		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_starter")
+	}
+	if got := claims.Limits["max_agents"]; got != 10 {
+		t.Fatalf("claims.Limits[max_agents]=%d, want 10", got)
 	}
 }
 

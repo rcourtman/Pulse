@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const defaultCloudPlanVersion = "cloud_v1"
+const defaultCloudPlanVersion = "cloud_starter"
 
 var (
 	ErrHostedEntitlementNotFound       = errors.New("hosted entitlement not found")

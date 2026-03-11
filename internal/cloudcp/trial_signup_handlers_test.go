@@ -951,7 +951,7 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 	if err := reg.CreateStripeAccount(&registry.StripeAccount{
 		AccountID:         accountID,
 		StripeCustomerID:  "cus_paid_refresh",
-		PlanVersion:       "cloud_v1",
+		PlanVersion:       "cloud_starter",
 		SubscriptionState: "active",
 	}); err != nil {
 		t.Fatalf("CreateStripeAccount: %v", err)
@@ -962,7 +962,7 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 		Email:            "owner@example.com",
 		State:            registry.TenantStateActive,
 		StripeCustomerID: "cus_paid_refresh",
-		PlanVersion:      "cloud_v1",
+		PlanVersion:      "cloud_starter",
 	}
 	if err := reg.Create(tenant); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -995,8 +995,8 @@ func TestTrialSignupHandleRefreshReturnsPaidTenantLease(t *testing.T) {
 	if claims.SubscriptionState != pkglicensing.SubStateActive {
 		t.Fatalf("claims.SubscriptionState=%q, want %q", claims.SubscriptionState, pkglicensing.SubStateActive)
 	}
-	if claims.PlanVersion != "cloud_v1" {
-		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_v1")
+	if claims.PlanVersion != "cloud_starter" {
+		t.Fatalf("claims.PlanVersion=%q, want %q", claims.PlanVersion, "cloud_starter")
 	}
 	if len(claims.Capabilities) == 0 {
 		t.Fatal("expected paid capabilities in refreshed lease")
