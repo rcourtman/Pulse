@@ -434,8 +434,8 @@ func TestAlertTriggeredPatrolScope(t *testing.T) {
 	if len(scope.ResourceIDs) != 1 || scope.ResourceIDs[0] != "res-1" {
 		t.Errorf("expected resource res-1, got %v", scope.ResourceIDs)
 	}
-	if scope.AlertID != "alert-1" {
-		t.Errorf("expected alertID alert-1, got %s", scope.AlertID)
+	if scope.AlertIdentifier != "alert-1" {
+		t.Errorf("expected alertIdentifier alert-1, got %s", scope.AlertIdentifier)
 	}
 	if scope.Depth != PatrolDepthQuick {
 		t.Errorf("expected quick depth, got %v", scope.Depth)
@@ -468,8 +468,8 @@ func TestAlertClearedPatrolScope(t *testing.T) {
 	if scope.Priority != triggerPriorityAlertCleared {
 		t.Errorf("expected priority %d, got %d", triggerPriorityAlertCleared, scope.Priority)
 	}
-	if scope.AlertID != "alert-2" {
-		t.Errorf("expected alertID alert-2, got %s", scope.AlertID)
+	if scope.AlertIdentifier != "alert-2" {
+		t.Errorf("expected alertIdentifier alert-2, got %s", scope.AlertIdentifier)
 	}
 }
 

@@ -562,7 +562,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runRecord.ScopeResourceIDs = scope.ResourceIDs
 		runRecord.ScopeResourceTypes = scope.ResourceTypes
 		runRecord.ScopeContext = scope.Context
-		runRecord.AlertID = scope.AlertID
+		runRecord.AlertIdentifier = scope.AlertIdentifier
 		runRecord.FindingID = scope.FindingID
 	}
 
@@ -896,7 +896,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		EffectiveScopeResourceIDs: effectiveScopeIDs,
 		ScopeResourceTypes:        scope.ResourceTypes,
 		ScopeContext:              scope.Context,
-		AlertID:                   scope.AlertID,
+		AlertIdentifier:           scope.AlertIdentifier,
 		FindingID:                 scope.FindingID,
 		ResourcesChecked:          runStats.resourceCount,
 		NodesChecked:              runStats.nodesChecked,

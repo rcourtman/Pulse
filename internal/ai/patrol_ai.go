@@ -1374,8 +1374,8 @@ func buildScopeSection(scope *PatrolScope, effectiveScopeIDs []string) string {
 			seedCountLabel(len(effectiveScopeIDs), "resource", "resources"),
 			seedTruncateOutlierList(effectiveScopeIDs, 8)))
 	}
-	if scope.AlertID != "" {
-		sb.WriteString(fmt.Sprintf("Alert ID: %s\n", scope.AlertID))
+	if scope.AlertIdentifier != "" {
+		sb.WriteString(fmt.Sprintf("Alert Identifier: %s\n", scope.AlertIdentifier))
 	}
 	if scope.FindingID != "" {
 		sb.WriteString(fmt.Sprintf("Finding ID: %s\n", scope.FindingID))
@@ -1451,7 +1451,7 @@ func (p *PatrolService) buildScopedSetForRuntime(scope *PatrolScope, snap patrol
 	if len(scope.ResourceIDs) > 0 {
 		return p.buildScopedSet(scope)
 	}
-	if len(scope.ResourceTypes) == 0 && scope.AlertID == "" && scope.FindingID == "" && strings.TrimSpace(scope.Context) == "" {
+	if len(scope.ResourceTypes) == 0 && scope.AlertIdentifier == "" && scope.FindingID == "" && strings.TrimSpace(scope.Context) == "" {
 		return nil
 	}
 

@@ -49,8 +49,8 @@ type PatrolScope struct {
 	Context string
 	// Priority indicates relative urgency (higher = more urgent)
 	Priority int
-	// AlertID is the ID of the alert that triggered this patrol (if applicable)
-	AlertID string
+	// AlertIdentifier is the canonical ID of the alert that triggered this patrol (if applicable)
+	AlertIdentifier string
 	// FindingID is the ID of the finding that triggered this patrol (if applicable)
 	FindingID string
 	// NoStream skips streaming updates (phase, content, subscriber notifications).
@@ -536,28 +536,28 @@ func patrolScopeResourceTypes(resourceType string) []string {
 }
 
 // AlertTriggeredPatrolScope creates a patrol scope for an alert that fired
-func AlertTriggeredPatrolScope(alertID, resourceID, resourceType, alertType string) PatrolScope {
+func AlertTriggeredPatrolScope(alertIdentifier, resourceID, resourceType, alertType string) PatrolScope {
 	return PatrolScope{
-		ResourceIDs:   []string{resourceID},
-		ResourceTypes: patrolScopeResourceTypes(resourceType),
-		Depth:         PatrolDepthQuick,
-		Reason:        TriggerReasonAlertFired,
-		Context:       "Alert: " + alertType,
-		Priority:      triggerPriorityAlertFired,
-		AlertID:       alertID,
+		ResourceIDs:     []string{resourceID},
+		ResourceTypes:   patrolScopeResourceTypes(resourceType),
+		Depth:           PatrolDepthQuick,
+		Reason:          TriggerReasonAlertFired,
+		Context:         "Alert: " + alertType,
+		Priority:        triggerPriorityAlertFired,
+		AlertIdentifier: alertIdentifier,
 	}
 }
 
 // AlertClearedPatrolScope creates a patrol scope for an alert that cleared
-func AlertClearedPatrolScope(alertID, resourceID, resourceType string) PatrolScope {
+func AlertClearedPatrolScope(alertIdentifier, resourceID, resourceType string) PatrolScope {
 	return PatrolScope{
-		ResourceIDs:   []string{resourceID},
-		ResourceTypes: patrolScopeResourceTypes(resourceType),
-		Depth:         PatrolDepthQuick,
-		Reason:        TriggerReasonAlertCleared,
-		Context:       "Verify resolution",
-		Priority:      triggerPriorityAlertCleared,
-		AlertID:       alertID,
+		ResourceIDs:     []string{resourceID},
+		ResourceTypes:   patrolScopeResourceTypes(resourceType),
+		Depth:           PatrolDepthQuick,
+		Reason:          TriggerReasonAlertCleared,
+		Context:         "Verify resolution",
+		Priority:        triggerPriorityAlertCleared,
+		AlertIdentifier: alertIdentifier,
 	}
 }
 

@@ -38,13 +38,13 @@ func TestPatrolService_buildSeedContext_QuietSummary(t *testing.T) {
 func TestPatrolService_buildSeedContext_ScopeSection(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	scope := &PatrolScope{
-		Reason:        TriggerReasonAlertFired,
-		Context:       "CPU alert",
-		ResourceIDs:   []string{"node-1"},
-		ResourceTypes: []string{"node"},
-		AlertID:       "alert-123",
-		FindingID:     "finding-456",
-		Depth:         PatrolDepthQuick,
+		Reason:          TriggerReasonAlertFired,
+		Context:         "CPU alert",
+		ResourceIDs:     []string{"node-1"},
+		ResourceTypes:   []string{"node"},
+		AlertIdentifier: "alert-123",
+		FindingID:       "finding-456",
+		Depth:           PatrolDepthQuick,
 	}
 
 	seed, _ := ps.buildSeedContextState(patrolRuntimeStateForTest(ps, models.StateSnapshot{}), scope, nil)
@@ -66,8 +66,8 @@ func TestPatrolService_buildSeedContext_ScopeSection(t *testing.T) {
 	if !strings.Contains(seed, "Effective scope: 1 resource (node-1)") {
 		t.Fatalf("expected effective scope in scope section, got:\n%s", seed)
 	}
-	if !strings.Contains(seed, "Alert ID: alert-123") {
-		t.Fatalf("expected alert ID in scope section, got:\n%s", seed)
+	if !strings.Contains(seed, "Alert Identifier: alert-123") {
+		t.Fatalf("expected alert identifier in scope section, got:\n%s", seed)
 	}
 	if !strings.Contains(seed, "Finding ID: finding-456") {
 		t.Fatalf("expected finding ID in scope section, got:\n%s", seed)
