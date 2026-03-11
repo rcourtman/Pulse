@@ -22,6 +22,7 @@ import (
 //   - WriteBatchSync(100): ~2ms   → SLO 20ms
 //   - Query(1000 pts):     ~400µs → SLO 5ms
 //   - QueryAll(4×500 pts): ~1.8ms → SLO 15ms
+//   - QueryAllBatch(50×4×100): ~18ms → SLO 40ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
 const (
 	// SLOWriteBatchP95 is the p95 target for WriteBatchSync with 100 metrics —
@@ -35,6 +36,10 @@ const (
 	// SLOQueryAllP95 is the p95 target for QueryAll (4 metric types × 500
 	// points each) — dashboard loading all metrics for one resource.
 	SLOQueryAllP95 = 15 * time.Millisecond
+
+	// SLOQueryAllBatchP95 is the p95 target for QueryAllBatch (50 resources ×
+	// 4 metric types × 100 points each) — the batched dashboard chart path.
+	SLOQueryAllBatchP95 = 40 * time.Millisecond
 
 	// SLOQueryManyResourcesP95 is the p95 target for Query with 100 resources
 	// in the table — validates that index isolation prevents full table scans.
@@ -268,6 +273,70 @@ func TestSLO_QueryAll(t *testing.T) {
 
 	if p95 > SLOQueryAllP95 {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOQueryAllP95)
+	}
+}
+
+// TestSLO_QueryAllBatch validates that QueryAllBatch meets the dashboard
+// multi-resource latency budget and stays on the anti-N+1 path.
+func TestSLO_QueryAllBatch(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newSLOStore(t)
+	base := time.Now().Add(-2 * time.Hour)
+
+	const numResources = 50
+	const pointsPerMetric = 100
+	metricTypes := []string{"cpu", "memory", "disk_read", "disk_write"}
+
+	batch := make([]WriteMetric, 0, numResources*len(metricTypes)*pointsPerMetric)
+	resourceIDs := make([]string, numResources)
+	for r := 0; r < numResources; r++ {
+		resourceIDs[r] = fmt.Sprintf("vm-batch-%d", r)
+		for _, mt := range metricTypes {
+			for p := 0; p < pointsPerMetric; p++ {
+				batch = append(batch, WriteMetric{
+					ResourceType: "vm",
+					ResourceID:   resourceIDs[r],
+					MetricType:   mt,
+					Value:        float64((r + p) % 100),
+					Timestamp:    base.Add(time.Duration(p) * 72 * time.Second),
+					Tier:         TierRaw,
+				})
+			}
+		}
+	}
+	store.WriteBatchSync(batch)
+
+	start := base.Add(-time.Second)
+	end := base.Add(time.Duration(pointsPerMetric) * 72 * time.Second)
+
+	result, err := store.QueryAllBatch("vm", resourceIDs, start, end, 0)
+	if err != nil {
+		t.Fatalf("sanity QueryAllBatch: %v", err)
+	}
+	if len(result) != numResources {
+		t.Fatalf("sanity: expected %d resources, got %d", numResources, len(result))
+	}
+	for _, id := range resourceIDs {
+		if len(result[id]) != len(metricTypes) {
+			t.Fatalf("sanity: expected %d metric types for %s, got %d", len(metricTypes), id, len(result[id]))
+		}
+	}
+
+	latencies := measureLatencies(t, func() {
+		_, err := store.QueryAllBatch("vm", resourceIDs, start, end, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+	})
+
+	p95 := pct(latencies, 0.95)
+	t.Logf("QueryAllBatch(50×4×100) p50=%v p95=%v p99=%v SLO=%v",
+		pct(latencies, 0.50), p95, pct(latencies, 0.99), SLOQueryAllBatchP95)
+
+	if p95 > SLOQueryAllBatchP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOQueryAllBatchP95)
 	}
 }
 

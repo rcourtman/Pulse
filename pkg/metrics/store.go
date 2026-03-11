@@ -750,34 +750,40 @@ func (s *Store) QueryAllBatch(resourceType string, resourceIDs []string, start, 
 	}
 
 	result := make(map[string]map[string][]MetricPoint, len(unique))
+	unresolved := unique
 
 	for _, tier := range tiers {
+		if len(unresolved) == 0 {
+			break
+		}
+
+		nextUnresolved := make([]string, 0, len(unresolved))
+
 		// Process in chunks to stay within SQLite parameter limits.
-		for lo := 0; lo < len(unique); lo += queryAllBatchChunkSize {
+		for lo := 0; lo < len(unresolved); lo += queryAllBatchChunkSize {
 			hi := lo + queryAllBatchChunkSize
-			if hi > len(unique) {
-				hi = len(unique)
+			if hi > len(unresolved) {
+				hi = len(unresolved)
 			}
-			tierResult, err := s.queryAllBatchWithTier(resourceType, unique[lo:hi], start, end, stepSecs, tier)
+			chunk := unresolved[lo:hi]
+			tierResult, err := s.queryAllBatchWithTier(resourceType, chunk, start, end, stepSecs, tier)
 			if err != nil {
 				return nil, err
 			}
 
-			// Merge in metrics per resource, preferring earlier (coarser) tiers.
-			for resID, metricMap := range tierResult {
-				if _, exists := result[resID]; !exists {
-					result[resID] = make(map[string][]MetricPoint)
+			// Match QueryAll semantics per resource: once any tier returns data
+			// for a resource, stop falling back for that resource.
+			for _, resID := range chunk {
+				metricMap, found := tierResult[resID]
+				if !found || len(metricMap) == 0 {
+					nextUnresolved = append(nextUnresolved, resID)
+					continue
 				}
-				for metric, points := range metricMap {
-					if len(points) == 0 {
-						continue
-					}
-					if _, exists := result[resID][metric]; !exists {
-						result[resID][metric] = points
-					}
-				}
+				result[resID] = metricMap
 			}
 		}
+
+		unresolved = nextUnresolved
 	}
 
 	return result, nil

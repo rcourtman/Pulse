@@ -526,4 +526,41 @@ func TestQueryAllBatch(t *testing.T) {
 			t.Fatalf("disk-2 smart_temp: expected 1 point after dedup, got %d", got)
 		}
 	})
+
+	t.Run("per-resource fallback stops at first non-empty tier like QueryAll", func(t *testing.T) {
+		tsMinute := ts.Add(-24 * time.Hour)
+		store.writeBatch([]bufferedMetric{
+			{resourceType: "disk", resourceID: "disk-raw", metricType: "smart_temp", value: 41, timestamp: ts, tier: TierRaw},
+			{resourceType: "disk", resourceID: "disk-raw", metricType: "smart_temp", value: 39, timestamp: tsMinute, tier: TierMinute},
+			{resourceType: "disk", resourceID: "disk-raw", metricType: "smart_power_on_hours", value: 1234, timestamp: tsMinute, tier: TierMinute},
+			{resourceType: "disk", resourceID: "disk-minute", metricType: "smart_temp", value: 37, timestamp: tsMinute, tier: TierMinute},
+		})
+
+		rangeStart := ts.Add(-90 * time.Minute)
+		rangeEnd := ts.Add(time.Minute)
+
+		batch, err := store.QueryAllBatch("disk", []string{"disk-raw", "disk-minute"}, rangeStart, rangeEnd, 0)
+		if err != nil {
+			t.Fatalf("QueryAllBatch: %v", err)
+		}
+
+		singleRaw, err := store.QueryAll("disk", "disk-raw", rangeStart, rangeEnd, 0)
+		if err != nil {
+			t.Fatalf("QueryAll(disk-raw): %v", err)
+		}
+		singleMinute, err := store.QueryAll("disk", "disk-minute", rangeStart, rangeEnd, 0)
+		if err != nil {
+			t.Fatalf("QueryAll(disk-minute): %v", err)
+		}
+
+		if got := len(batch["disk-raw"]["smart_temp"]); got != len(singleRaw["smart_temp"]) {
+			t.Fatalf("disk-raw smart_temp points = %d, want %d", got, len(singleRaw["smart_temp"]))
+		}
+		if _, exists := batch["disk-raw"]["smart_power_on_hours"]; exists {
+			t.Fatalf("disk-raw unexpectedly merged minute-tier metrics: %+v", batch["disk-raw"])
+		}
+		if got := len(batch["disk-minute"]["smart_temp"]); got != len(singleMinute["smart_temp"]) {
+			t.Fatalf("disk-minute smart_temp points = %d, want %d", got, len(singleMinute["smart_temp"]))
+		}
+	})
 }
