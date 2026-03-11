@@ -71,12 +71,13 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 	rel := "docs/release-control/v6/subsystems/registry.json"
 	content := readRepoFile(t, rel)
 	assertContainsAll(t, rel, content, []string{
-		"\"version\": 2",
+		"\"version\": 3",
 		"\"subsystems\":",
 		"\"verification\":",
 		"\"allow_same_subsystem_tests\":",
 		"\"test_prefixes\":",
 		"\"exact_files\":",
+		"\"path_policies\":",
 		"docs/release-control/v6/subsystems/alerts.md",
 		"docs/release-control/v6/subsystems/monitoring.md",
 		"docs/release-control/v6/subsystems/unified-resources.md",
@@ -113,8 +114,10 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 	assertContainsAll(t, "scripts/release_control/canonical_completion_guard.py", script, []string{
 		"SUBSYSTEM_REGISTRY",
 		"load_subsystem_rules",
+		"build_verification_requirements",
 		"check_staged_contracts",
 		"verification",
+		"path_policies",
 		"test_prefixes",
 		"docs/release-control/v6/subsystems/",
 	})

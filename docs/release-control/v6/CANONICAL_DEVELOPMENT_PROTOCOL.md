@@ -88,8 +88,12 @@ For runtime subsystem changes, the same commit must now include:
 Verification artifacts are subsystem-specific. The allowed proof classes are
 defined in `docs/release-control/v6/subsystems/registry.json` and may include
 explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,
-approved test-prefix matches, or same-subsystem tests only when the registry
-explicitly allows them.
+approved test-prefix matches, non-test contract/type files, or same-subsystem
+tests only when the registry explicitly allows them.
+
+When a subsystem defines ordered `path_policies`, each touched runtime file must
+satisfy the first matching proof policy for that file. Files that match no
+explicit path policy fall back to the subsystem default verification policy.
 
 ## Guardrails
 

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "subsystems": [
     {
       "id": "alerts",
@@ -20,6 +20,43 @@
           "internal/alerts/migration_characterization_test.go",
           "internal/alerts/specs/evaluator_test.go",
           "internal/alerts/specs/types_test.go"
+        ],
+        "path_policies": [
+          {
+            "id": "alert-specs",
+            "label": "alert spec proof",
+            "match_prefixes": [
+              "internal/alerts/specs/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/specs/evaluator_test.go",
+              "internal/alerts/specs/types_test.go",
+              "internal/alerts/specs/unified_resource_builder_test.go"
+            ]
+          },
+          {
+            "id": "canonical-alert-runtime",
+            "label": "canonical alert runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/alerts/canonical_identity.go",
+              "internal/alerts/canonical_lifecycle.go",
+              "internal/alerts/canonical_metric.go",
+              "internal/alerts/unified_eval.go",
+              "internal/alerts/unified_incidents.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/migration_characterization_test.go",
+              "internal/alerts/unified_eval_parity_test.go",
+              "internal/alerts/unified_eval_test.go",
+              "internal/alerts/unified_incidents_test.go"
+            ]
+          }
         ]
       }
     },
@@ -36,6 +73,22 @@
         "test_prefixes": [],
         "exact_files": [
           "internal/unifiedresources/code_standards_test.go"
+        ],
+        "path_policies": [
+          {
+            "id": "metrics-hot-path",
+            "label": "monitoring metrics hot-path proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/monitor_metrics.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
+              "internal/monitoring/monitor_metrics_slo_test.go"
+            ]
+          }
         ]
       }
     },
@@ -60,6 +113,50 @@
         "exact_files": [
           "internal/unifiedresources/code_standards_test.go",
           "frontend-modern/src/stores/__tests__/websocket-unified.test.ts"
+        ],
+        "path_policies": [
+          {
+            "id": "identity-canonicalization",
+            "label": "canonical identity proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/canonical_identity.go",
+              "internal/unifiedresources/identity.go",
+              "internal/unifiedresources/ids.go",
+              "internal/unifiedresources/legacy_aliases.go",
+              "internal/unifiedresources/physical_disk_ids.go",
+              "internal/unifiedresources/types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/canonical_ids_types_test.go",
+              "internal/unifiedresources/canonical_identity_test.go",
+              "internal/unifiedresources/code_standards_test.go",
+              "internal/unifiedresources/identity_test.go",
+              "internal/unifiedresources/ids_test.go"
+            ]
+          },
+          {
+            "id": "read-state-views",
+            "label": "read-state and adapter proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/adapters.go",
+              "internal/unifiedresources/monitor_adapter.go",
+              "internal/unifiedresources/read_state.go",
+              "internal/unifiedresources/views.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "internal/unifiedresources/adapter_coverage_test.go",
+              "internal/unifiedresources/adapters_test.go",
+              "internal/unifiedresources/monitor_adapter_read_state_test.go",
+              "internal/unifiedresources/views_test.go"
+            ]
+          }
         ]
       }
     },
@@ -83,6 +180,24 @@
         "exact_files": [
           "pkg/licensing/grant_claims_contract_test.go",
           "internal/api/contract_test.go"
+        ],
+        "path_policies": [
+          {
+            "id": "pricing-pages",
+            "label": "pricing page proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/pages/CloudPricing.tsx",
+              "frontend-modern/src/pages/HostedSignup.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
+              "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
+              "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx"
+            ]
+          }
         ]
       }
     },
@@ -104,6 +219,54 @@
         ],
         "exact_files": [
           "internal/api/contract_test.go"
+        ],
+        "path_policies": [
+          {
+            "id": "backend-payload-contracts",
+            "label": "backend API payload proof",
+            "match_prefixes": [
+              "internal/api/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-api-clients",
+            "label": "frontend API client proof",
+            "match_prefixes": [
+              "frontend-modern/src/api/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-api-types",
+            "label": "frontend API type sync proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/types/api.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts"
+            ]
+          }
         ]
       }
     },
@@ -121,6 +284,61 @@
         "exact_files": [
           "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
           "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+        ],
+        "path_policies": [
+          {
+            "id": "page-controls-and-filters",
+            "label": "page controls and filter proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/shared/FilterToolbar.tsx",
+              "frontend-modern/src/components/shared/PageControls.tsx",
+              "frontend-modern/src/components/shared/SettingsPanel.tsx",
+              "frontend-modern/src/components/shared/Subtabs.tsx",
+              "frontend-modern/src/components/shared/Toggle.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
+              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+              "frontend-modern/src/components/shared/PageControls.test.tsx"
+            ]
+          },
+          {
+            "id": "search-inputs",
+            "label": "search input proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/shared/CollapsibleSearchInput.tsx",
+              "frontend-modern/src/components/shared/SearchField.tsx",
+              "frontend-modern/src/components/shared/SearchInput.tsx",
+              "frontend-modern/src/components/shared/SearchInputEnhancements.tsx",
+              "frontend-modern/src/components/shared/useSearchInputEnhancements.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx"
+            ]
+          },
+          {
+            "id": "data-grid-and-summary",
+            "label": "data grid and summary proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/shared/InfrastructureSummaryTable.tsx",
+              "frontend-modern/src/components/shared/PulseDataGrid.tsx",
+              "frontend-modern/src/components/shared/Table.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx"
+            ]
+          }
         ]
       }
     },
@@ -146,6 +364,36 @@
           "internal/api/slo_bench_test.go",
           "internal/api/router_bench_test.go",
           "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx"
+        ],
+        "path_policies": [
+          {
+            "id": "metrics-store-hot-paths",
+            "label": "metrics store hot-path proof",
+            "match_prefixes": [
+              "pkg/metrics/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/metrics/store_bench_test.go",
+              "pkg/metrics/store_query_plan_test.go",
+              "pkg/metrics/store_slo_test.go"
+            ]
+          },
+          {
+            "id": "api-history-slo",
+            "label": "API history SLO proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/slo.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/slo_bench_test.go"
+            ]
+          }
         ]
       }
     }
