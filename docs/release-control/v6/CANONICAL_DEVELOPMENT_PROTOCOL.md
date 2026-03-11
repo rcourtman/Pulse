@@ -77,8 +77,9 @@ This is the minimum update set for canonical work:
 3. contract update
 4. guardrail/ratchet update when an old path is retired
 
-This protocol is enforced at commit time by the canonical completion guard in
-`scripts/release_control/canonical_completion_guard.py`.
+This protocol is enforced locally at commit time by the canonical completion
+guard in `scripts/release_control/canonical_completion_guard.py` and by the
+governance guardrail tests in `internal/repoctl`.
 
 For runtime subsystem changes, the same commit must now include:
 
@@ -111,6 +112,8 @@ Documentation alone is not sufficient when a rule can be made executable.
 
 The canonical completion guard is the default repo-level enforcement point for
 subsystem contract updates and proof-of-change verification updates.
+That enforcement must run both in local hooks and in CI; bypassable local-only
+governance is not sufficient.
 
 ## How To Extend Pulse
 

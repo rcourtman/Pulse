@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # Block pushing version tags directly — releases must go through the GitHub Actions workflow
 # (workflow_dispatch on create-release.yml). Pushing tags manually bypasses the release
 # pipeline which builds binaries, Docker images, and validates assets.

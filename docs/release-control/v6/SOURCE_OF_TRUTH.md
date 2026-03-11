@@ -11,6 +11,12 @@ Machine companion:
 
 Recent locked release decision:
 
+- 2026-03-11: Canonical governance now runs in both local hooks and CI.
+  `scripts/release_control/canonical_completion_guard.py` can validate either
+  staged changes or an explicit diff file list, `.github/workflows/canonical-governance.yml`
+  now runs the guard against PR/push diffs, and `internal/repoctl` now fails if
+  `SOURCE_OF_TRUTH.md` and `status.json` drift on update date or source
+  precedence.
 - 2026-03-11: Canonical development protocol is now part of v6 governance.
   Substantial subsystem work must follow
   `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md` and update the

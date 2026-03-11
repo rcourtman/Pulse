@@ -8,6 +8,7 @@ staged in the same commit.
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 import subprocess
@@ -72,13 +73,17 @@ IGNORED_PREFIXES: tuple[str, ...] = (
 
 def git_staged_files() -> List[str]:
     result = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMRD"],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
         text=True,
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def stdin_files(stdin: Sequence[str]) -> List[str]:
+    return [line.strip() for line in stdin if line.strip()]
 
 
 def is_test_or_fixture(path: str) -> bool:
@@ -289,8 +294,25 @@ def check_staged_contracts(staged_files: Sequence[str]) -> int:
     return 1
 
 
+def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Enforce canonical subsystem contract and proof-of-change updates for "
+            "staged files or an explicit changed-file list."
+        )
+    )
+    parser.add_argument(
+        "--files-from-stdin",
+        action="store_true",
+        help="Read newline-delimited changed files from standard input instead of git staged files.",
+    )
+    return parser.parse_args(list(argv))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    _ = argv
+    args = parse_args(list(argv or ()))
+    if args.files_from_stdin:
+        return check_staged_contracts(stdin_files(sys.stdin))
     return check_staged_contracts(git_staged_files())
 
 

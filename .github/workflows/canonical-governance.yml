@@ -1,0 +1,58 @@
+name: Canonical Governance
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Determine governance diff range
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            range="${{ github.event.before }}...${{ github.sha }}"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            range="HEAD^...HEAD"
+          else
+            range=""
+          fi
+          echo "range=${range}" >> "$GITHUB_OUTPUT"
+
+      - name: Run canonical completion guard against changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ steps.diff.outputs.range }}" ]; then
+            git diff --name-only "${{ steps.diff.outputs.range }}" \
+              | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
+          else
+            printf '' | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
+          fi
+
+      - name: Run canonical completion guard unit tests
+        run: python3 scripts/release_control/canonical_completion_guard_test.py
+
+      - name: Run repo governance guardrail tests
+        run: go test ./internal/repoctl -count=1

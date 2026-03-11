@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # Pre-commit hook to prevent committing restricted or sensitive data
 RESTRICTED_FILES="active_subs.json charges.json customers.json subscriptions.json"
 
@@ -63,6 +60,10 @@ echo "Sensitivity check passed."
 # Enforce canonical subsystem completion discipline
 echo "Running canonical completion guard..."
 python3 scripts/release_control/canonical_completion_guard.py
+
+# Enforce release-control and governance file integrity locally too
+echo "Running governance guardrail tests..."
+go test ./internal/repoctl -count=1
 
 
 # Run Go formatting

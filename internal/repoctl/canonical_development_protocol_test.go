@@ -1,8 +1,10 @@
 package repoctl
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -25,6 +27,28 @@ func assertContainsAll(t *testing.T, rel string, content string, required []stri
 			t.Fatalf("%s missing required content %q", rel, item)
 		}
 	}
+}
+
+func sourceOfTruthLastUpdated(t *testing.T, content string) string {
+	t.Helper()
+
+	re := regexp.MustCompile(`(?m)^Last updated: ([0-9]{4}-[0-9]{2}-[0-9]{2})$`)
+	match := re.FindStringSubmatch(content)
+	if len(match) != 2 {
+		t.Fatalf("SOURCE_OF_TRUTH.md missing parsable Last updated line")
+	}
+	return match[1]
+}
+
+func statusJSON(t *testing.T) map[string]any {
+	t.Helper()
+
+	content := readRepoFile(t, "docs/release-control/v6/status.json")
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(content), &payload); err != nil {
+		t.Fatalf("failed to parse status.json: %v", err)
+	}
+	return payload
 }
 
 func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
@@ -103,11 +127,60 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	})
 }
 
+func TestStatusJSONStaysInSyncWithSourceOfTruth(t *testing.T) {
+	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
+	sourceUpdated := sourceOfTruthLastUpdated(t, source)
+	status := statusJSON(t)
+
+	updatedAt, ok := status["updated_at"].(string)
+	if !ok {
+		t.Fatalf("status.json missing string updated_at")
+	}
+	if updatedAt != sourceUpdated {
+		t.Fatalf("status.json updated_at = %q, want %q", updatedAt, sourceUpdated)
+	}
+}
+
+func TestStatusJSONSourcePrecedenceIncludesCanonicalGovernanceFiles(t *testing.T) {
+	status := statusJSON(t)
+
+	raw, ok := status["source_precedence"].([]any)
+	if !ok {
+		t.Fatalf("status.json missing source_precedence list")
+	}
+
+	var got []string
+	for _, entry := range raw {
+		value, ok := entry.(string)
+		if !ok {
+			t.Fatalf("status.json source_precedence contains non-string entry")
+		}
+		got = append(got, value)
+	}
+
+	wantPrefix := []string{
+		"docs/release-control/v6/SOURCE_OF_TRUTH.md",
+		"docs/release-control/v6/status.json",
+		"docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+		"docs/release-control/v6/subsystems/registry.json",
+	}
+	if len(got) < len(wantPrefix) {
+		t.Fatalf("status.json source_precedence too short: %v", got)
+	}
+	for i, want := range wantPrefix {
+		if got[i] != want {
+			t.Fatalf("status.json source_precedence[%d] = %q, want %q", i, got[i], want)
+		}
+	}
+}
+
 func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 	hook := readRepoFile(t, ".husky/pre-commit")
 	assertContainsAll(t, ".husky/pre-commit", hook, []string{
 		"canonical_completion_guard.py",
 		"Running canonical completion guard...",
+		"Running governance guardrail tests...",
+		"go test ./internal/repoctl -count=1",
 	})
 
 	script := readRepoFile(t, "scripts/release_control/canonical_completion_guard.py")
@@ -120,5 +193,15 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"path_policies",
 		"test_prefixes",
 		"docs/release-control/v6/subsystems/",
+	})
+}
+
+func TestCanonicalGovernanceRunsInCI(t *testing.T) {
+	workflow := readRepoFile(t, ".github/workflows/canonical-governance.yml")
+	assertContainsAll(t, ".github/workflows/canonical-governance.yml", workflow, []string{
+		"name: Canonical Governance",
+		"python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin",
+		"go test ./internal/repoctl -count=1",
+		"python3 scripts/release_control/canonical_completion_guard_test.py",
 	})
 }

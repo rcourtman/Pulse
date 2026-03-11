@@ -5,7 +5,9 @@ from canonical_completion_guard import (
     build_verification_requirements,
     infer_impacted_subsystems,
     load_subsystem_rules,
+    parse_args,
     staged_verification_files_for_requirement,
+    stdin_files,
 )
 
 
@@ -217,6 +219,10 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(required, {})
 
+    def test_deleted_runtime_path_still_requires_contract_updates(self):
+        required = infer_impacted_subsystems(["internal/monitoring/monitor_metrics.go"])
+        self.assertIn("monitoring", required)
+
     def test_exact_verification_file_counts_as_verification_artifact(self):
         monitoring_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "monitoring")
         requirement = build_verification_requirements(
@@ -345,6 +351,19 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ["frontend-modern/src/types/api.ts"],
         )
         self.assertEqual(matches, ["frontend-modern/src/types/api.ts"])
+
+    def test_stdin_files_strips_empty_lines(self):
+        self.assertEqual(
+            stdin_files(["internal/api/resources.go\n", "\n", "docs/release-control/v6/SOURCE_OF_TRUTH.md"]),
+            [
+                "internal/api/resources.go",
+                "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+            ],
+        )
+
+    def test_parse_args_supports_files_from_stdin(self):
+        args = parse_args(["--files-from-stdin"])
+        self.assertTrue(args.files_from_stdin)
 
 
 if __name__ == "__main__":
