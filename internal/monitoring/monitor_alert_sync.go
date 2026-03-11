@@ -19,6 +19,31 @@ func (m *Monitor) syncAlertsToState() {
 		}
 	}
 
+	modelAlerts := m.activeAlertsSnapshot()
+	for _, alert := range modelAlerts {
+		if alert.Acknowledged && logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("syncing acknowledged alert")
+		}
+	}
+	m.state.UpdateActiveAlerts(modelAlerts)
+
+	recentlyResolved := m.alertManager.GetRecentlyResolved()
+	if len(recentlyResolved) > 0 {
+		log.Info().Int("count", len(recentlyResolved)).Msg("syncing recently resolved alerts")
+	}
+	m.state.UpdateRecentlyResolved(recentlyResolved)
+}
+
+// SyncAlertState is the exported wrapper used by APIs that mutate alerts outside the poll loop.
+func (m *Monitor) SyncAlertState() {
+	m.syncAlertsToState()
+}
+
+func (m *Monitor) activeAlertsSnapshot() []models.Alert {
+	if m == nil || m.alertManager == nil {
+		return nil
+	}
+
 	activeAlerts := m.alertManager.GetActiveAlerts()
 	modelAlerts := make([]models.Alert, 0, len(activeAlerts))
 	for _, alert := range activeAlerts {
@@ -39,22 +64,8 @@ func (m *Monitor) syncAlertsToState() {
 			AckTime:         alert.AckTime,
 			AckUser:         alert.AckUser,
 		})
-		if alert.Acknowledged && logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("syncing acknowledged alert")
-		}
 	}
-	m.state.UpdateActiveAlerts(modelAlerts)
-
-	recentlyResolved := m.alertManager.GetRecentlyResolved()
-	if len(recentlyResolved) > 0 {
-		log.Info().Int("count", len(recentlyResolved)).Msg("syncing recently resolved alerts")
-	}
-	m.state.UpdateRecentlyResolved(recentlyResolved)
-}
-
-// SyncAlertState is the exported wrapper used by APIs that mutate alerts outside the poll loop.
-func (m *Monitor) SyncAlertState() {
-	m.syncAlertsToState()
+	return modelAlerts
 }
 
 func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.Resource) {

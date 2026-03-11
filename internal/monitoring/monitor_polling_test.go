@@ -481,6 +481,56 @@ func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) 
 	}
 }
 
+func TestBuildBroadcastFrontendStatePrefersLiveAlertManagerOverSnapshotAlerts(t *testing.T) {
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer alertManager.Stop()
+
+	alertManager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{{
+		ID:      "agent:truenas-main",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "truenas-main",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-main"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "truenas",
+			NativeID: "alert-live-1",
+			Code:     "truenas_volume_status",
+			Severity: storagehealth.RiskCritical,
+			Summary:  "Pool tank is FAULTED",
+		}},
+	}})
+
+	monitor := &Monitor{
+		state:        models.NewState(),
+		alertManager: alertManager,
+	}
+
+	staleSnapshot := models.StateSnapshot{
+		ActiveAlerts: []models.Alert{{
+			ID:           "snapshot-stale-1",
+			Type:         "offline",
+			ResourceID:   "stale-resource",
+			ResourceName: "stale-resource",
+			Message:      "stale snapshot alert",
+		}},
+	}
+
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(staleSnapshot)
+
+	if len(frontend.ActiveAlerts) != 1 {
+		t.Fatalf("expected 1 live active alert in frontend state, got %d", len(frontend.ActiveAlerts))
+	}
+	if got := frontend.ActiveAlerts[0].ID; got == "snapshot-stale-1" || got == "" {
+		t.Fatalf("expected live alert manager id, got %q", got)
+	}
+	if got := frontend.ActiveAlerts[0].Type; got != "storage-incident" {
+		t.Fatalf("alert type = %q, want storage-incident", got)
+	}
+	if got := frontend.ActiveAlerts[0].Message; got == "stale snapshot alert" {
+		t.Fatalf("expected live alert manager payload, got stale snapshot message %q", got)
+	}
+}
+
 func TestRecordTaskResult_Success(t *testing.T) {
 	m := &Monitor{
 		pollStatusMap:   make(map[string]*pollStatus),

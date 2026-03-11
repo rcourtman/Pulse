@@ -2614,8 +2614,8 @@ func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateF
 func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
 	m.updateResourceStore(snapshot)
-	if currentState := m.GetState(); len(currentState.ActiveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
-		frontendState.ActiveAlerts = currentState.ActiveAlerts
+	if liveAlerts := m.activeAlertsSnapshot(); len(liveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
+		frontendState.ActiveAlerts = liveAlerts
 	}
 	frontendState.Resources = m.getResourcesForBroadcast()
 	if freshness := m.currentUnifiedResourceFreshness(); !freshness.IsZero() {
