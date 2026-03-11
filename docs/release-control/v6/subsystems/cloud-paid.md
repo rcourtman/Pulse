@@ -35,3 +35,7 @@ agreement, and cloud-specific enforcement rules.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.
+Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
+contract not only when Stripe metadata is parsed, but also when persisted plan
+versions are consumed at hosted entitlement and workspace-limit enforcement
+boundaries.

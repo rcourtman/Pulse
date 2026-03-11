@@ -410,6 +410,33 @@ func TestCreateWorkspace_MSPGrowthHigherLimit(t *testing.T) {
 	}
 }
 
+func TestCreateWorkspace_LegacyCloudAliasUsesCanonicalWorkspaceLimit(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, provisioner := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Legacy Cloud User"}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, accountID, "cloud-v1")
+
+	if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Primary Workspace"); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"display_name":"Blocked Workspace"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
 func TestCreateWorkspace_BlockedWhenSubscriptionCanceled(t *testing.T) {
 	reg := newTestRegistry(t)
 	tenantsDir := t.TempDir()

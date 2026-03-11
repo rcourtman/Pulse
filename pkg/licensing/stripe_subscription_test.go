@@ -117,3 +117,28 @@ func TestDeriveStripePlanVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestCanonicalizePlanVersion(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"cloud-v1", "cloud_starter"},
+		{" cloud_v1 ", "cloud_starter"},
+		{"starter", "cloud_starter"},
+		{"power", "cloud_power"},
+		{"max", "cloud_max"},
+		{"founding", "cloud_founding"},
+		{"msp_growth", "msp_growth"},
+		{"custom_plan", "custom_plan"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			if got := CanonicalizePlanVersion(tt.raw); got != tt.want {
+				t.Fatalf("CanonicalizePlanVersion(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}

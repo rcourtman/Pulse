@@ -429,10 +429,10 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 	ctx := &tenantLeaseContext{
 		tenant:            tenant,
 		subscriptionState: requestedSubState,
-		planVersion:       strings.TrimSpace(requestedPlanVersion),
+		planVersion:       pkglicensing.CanonicalizePlanVersion(requestedPlanVersion),
 	}
 	if ctx.planVersion == "" {
-		ctx.planVersion = strings.TrimSpace(tenant.PlanVersion)
+		ctx.planVersion = pkglicensing.CanonicalizePlanVersion(tenant.PlanVersion)
 	}
 
 	if strings.TrimSpace(tenant.AccountID) != "" {
@@ -442,7 +442,7 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 		}
 		ctx.stripeAccount = stripeAccount
 		if ctx.planVersion == "" && stripeAccount != nil && strings.TrimSpace(stripeAccount.PlanVersion) != "" {
-			ctx.planVersion = strings.TrimSpace(stripeAccount.PlanVersion)
+			ctx.planVersion = pkglicensing.CanonicalizePlanVersion(stripeAccount.PlanVersion)
 		}
 		if ctx.subscriptionState == "" && stripeAccount != nil {
 			ctx.subscriptionState = pkglicensing.MapStripeSubscriptionStatusToState(stripeAccount.SubscriptionState)

@@ -225,7 +225,7 @@ func enforceWorkspaceLimit(reg *registry.TenantRegistry, account *registry.Accou
 	}
 
 	// Determine workspace limit from plan version.
-	planVersion := sa.PlanVersion
+	planVersion := pkglicensing.CanonicalizePlanVersion(sa.PlanVersion)
 	limit, known := pkglicensing.WorkspaceLimitForPlan(planVersion)
 	if !known {
 		// Unknown plan → fail-closed with safe default.
