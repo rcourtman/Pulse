@@ -467,6 +467,176 @@ func TestSLO_InfrastructureCharts(t *testing.T) {
 	}
 }
 
+// TestSLO_WorkloadCharts validates the workload charts endpoint that powers
+// workload summary sparklines. The workload forces the store-backed batch path
+// across VMs, system containers, and docker containers.
+func TestSLO_WorkloadCharts(t *testing.T) {
+	skipUnderRace(t)
+	suppressTestLogs(t)
+
+	store := newTestMetricsStore(t)
+	const (
+		vmCount           = 30
+		containerCount    = 20
+		dockerHostCount   = 10
+		containersPerHost = 2
+		pointsPerMetric   = 240
+	)
+	base := time.Now().Add(-4 * time.Hour).UTC().Truncate(time.Second)
+
+	seedBatchMetrics := func(resourceType string, ids []string, metricTypes []string) {
+		batch := make([]metrics.WriteMetric, 0, len(ids)*len(metricTypes)*pointsPerMetric)
+		for idx, id := range ids {
+			for _, mt := range metricTypes {
+				for p := 0; p < pointsPerMetric; p++ {
+					batch = append(batch, metrics.WriteMetric{
+						ResourceType: resourceType,
+						ResourceID:   id,
+						MetricType:   mt,
+						Value:        float64((idx + p) % 100),
+						Timestamp:    base.Add(time.Duration(p) * time.Minute),
+						Tier:         metrics.TierMinute,
+					})
+				}
+			}
+		}
+		store.WriteBatchSync(batch)
+	}
+
+	monitor := &monitoring.Monitor{}
+	state := models.NewState()
+	setTestUnexportedField(t, monitor, "state", state)
+	setTestUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setTestUnexportedField(t, monitor, "metricsStore", store)
+
+	nodes := make([]models.Node, 5)
+	for i := range nodes {
+		nodes[i] = models.Node{
+			ID:       fmt.Sprintf("node-slo-%d", i),
+			Name:     fmt.Sprintf("node-%d", i),
+			Instance: "pve1",
+			Status:   "online",
+		}
+	}
+	state.UpdateNodesForInstance("pve1", nodes)
+
+	vms := make([]models.VM, vmCount)
+	vmIDs := make([]string, vmCount)
+	for i := range vms {
+		vmIDs[i] = fmt.Sprintf("vm-slo-%d", i)
+		vms[i] = models.VM{
+			ID:       vmIDs[i],
+			VMID:     100 + i,
+			Name:     fmt.Sprintf("vm-%d", i),
+			Node:     nodes[i%len(nodes)].Name,
+			Instance: "pve1",
+			Status:   "running",
+			Type:     "qemu",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 4 << 30, Used: 2 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 50 << 30, Used: 25 << 30},
+		}
+	}
+	state.UpdateVMsForInstance("pve1", vms)
+
+	containers := make([]models.Container, containerCount)
+	containerIDs := make([]string, containerCount)
+	for i := range containers {
+		containerIDs[i] = fmt.Sprintf("ct-slo-%d", i)
+		containers[i] = models.Container{
+			ID:       containerIDs[i],
+			VMID:     200 + i,
+			Name:     fmt.Sprintf("ct-%d", i),
+			Node:     nodes[i%len(nodes)].Name,
+			Instance: "pve1",
+			Status:   "running",
+			Type:     "lxc",
+			CPU:      float64(i%80+10) / 100.0,
+			Memory:   models.Memory{Usage: float64(i%60 + 20), Total: 2 << 30, Used: 1 << 30},
+			Disk:     models.Disk{Usage: float64(i%40 + 30), Total: 20 << 30, Used: 10 << 30},
+		}
+	}
+	state.UpdateContainersForInstance("pve1", containers)
+
+	dockerHosts := make([]models.DockerHost, dockerHostCount)
+	dockerContainerIDs := make([]string, 0, dockerHostCount*containersPerHost)
+	for i := range dockerHosts {
+		hostID := fmt.Sprintf("docker-host-slo-%d", i)
+		hostContainers := make([]models.DockerContainer, containersPerHost)
+		for j := range hostContainers {
+			containerID := fmt.Sprintf("docker-container-slo-%d-%d", i, j)
+			dockerContainerIDs = append(dockerContainerIDs, containerID)
+			hostContainers[j] = models.DockerContainer{
+				ID:            containerID,
+				Name:          fmt.Sprintf("docker-%d-%d", i, j),
+				State:         "running",
+				Status:        "running",
+				CPUPercent:    float64((i+j)%80 + 10),
+				MemoryPercent: float64((i+j)%60 + 20),
+				NetInRate:     float64((i+j)%50 + 5),
+				NetOutRate:    float64((i+j)%50 + 7),
+			}
+		}
+		dockerHosts[i] = models.DockerHost{
+			ID:         hostID,
+			AgentID:    hostID,
+			Hostname:   nodes[i%len(nodes)].Name,
+			Runtime:    "docker",
+			Status:     "online",
+			CPUUsage:   float64(i%80 + 10),
+			Memory:     models.Memory{Usage: float64(i%60 + 20), Total: 32 << 30, Used: 16 << 30},
+			Disks:      []models.Disk{{Usage: float64(i%40 + 30), Total: 200 << 30, Used: 100 << 30}},
+			Containers: hostContainers,
+		}
+	}
+	state.DockerHosts = dockerHosts
+	syncTestResourceStore(t, monitor, state)
+
+	seedBatchMetrics("vm", vmIDs, []string{"cpu", "memory", "disk", "netin", "netout"})
+	seedBatchMetrics("container", containerIDs, []string{"cpu", "memory", "disk", "netin", "netout"})
+	seedBatchMetrics("dockerContainer", dockerContainerIDs, []string{"cpu", "memory", "disk", "netin", "netout"})
+
+	router := &Router{monitor: monitor}
+	url := "/api/charts/workloads?range=4h&maxPoints=120"
+
+	sanityReq := httptest.NewRequest(http.MethodGet, url, nil)
+	sanityRec := httptest.NewRecorder()
+	router.handleWorkloadCharts(sanityRec, sanityReq)
+	if sanityRec.Code != http.StatusOK {
+		t.Fatalf("sanity check failed: status %d body=%s", sanityRec.Code, sanityRec.Body.String())
+	}
+	var sanityResp WorkloadChartsResponse
+	if err := json.Unmarshal(sanityRec.Body.Bytes(), &sanityResp); err != nil {
+		t.Fatalf("sanity unmarshal: %v", err)
+	}
+	if len(sanityResp.ChartData) != vmCount+containerCount {
+		t.Fatalf("sanity: expected %d guest chart entries, got %d", vmCount+containerCount, len(sanityResp.ChartData))
+	}
+	if len(sanityResp.DockerData) != len(dockerContainerIDs) {
+		t.Fatalf("sanity: expected %d docker chart entries, got %d", len(dockerContainerIDs), len(sanityResp.DockerData))
+	}
+	if sanityResp.Stats.PrimarySourceHint != "store_or_memory_fallback" {
+		t.Fatalf("sanity: expected store-backed source hint, got %q", sanityResp.Stats.PrimarySourceHint)
+	}
+
+	latencies := measureEndpointLatencies(t, func() {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		rec := httptest.NewRecorder()
+		router.handleWorkloadCharts(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unexpected status %d", rec.Code)
+		}
+	})
+
+	p95 := percentile(latencies, 0.95)
+	t.Logf("charts/workloads p50=%v p95=%v p99=%v SLO=%v",
+		percentile(latencies, 0.50), p95, percentile(latencies, 0.99), SLOWorkloadChartsP95)
+
+	if p95 > SLOWorkloadChartsP95 {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOWorkloadChartsP95)
+	}
+}
+
 // --- Test helpers ---
 
 // skipUnderRace skips the test when the race detector is enabled, since the
