@@ -26,6 +26,10 @@ cross-source deduplication.
 4. `internal/unifiedresources/adapters.go`
 5. `internal/unifiedresources/monitor_adapter.go`
 
+## Shared Boundaries
+
+1. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+
 ## Extension Points
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`

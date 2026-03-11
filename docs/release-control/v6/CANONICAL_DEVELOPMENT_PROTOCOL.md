@@ -51,7 +51,8 @@ reachability under first-match precedence.
 `scripts/release_control/contract_audit.py --check` is the machine audit entry
 point for validating structured contract metadata, section presence/order,
 registry/status linkage, explicit cross-subsystem dependency declarations, and
-canonical path references inside subsystem contracts.
+canonical path references and shared-boundary declarations inside subsystem
+contracts.
 
 ## Subsystem Contracts
 
@@ -60,10 +61,11 @@ Each major subsystem contract must define:
 1. `Contract Metadata`
 2. `Purpose`
 3. `Canonical Files`
-4. `Extension Points`
-5. `Forbidden Paths`
-6. `Completion Obligations`
-7. `Current State`
+4. `Shared Boundaries`
+5. `Extension Points`
+6. `Forbidden Paths`
+7. `Completion Obligations`
+8. `Current State`
 
 Current required subsystem contracts:
 
@@ -85,8 +87,9 @@ to its registry subsystem id, owning lane in `status.json`, and exact declared
 cross-subsystem dependencies implied by its canonical-file and extension-point
 references.
 If a runtime file is intentionally owned by multiple subsystems, that overlap
-must be declared explicitly in `registry.json`; accidental overlap is not an
-allowed registry state.
+must be declared explicitly in `registry.json` and mirrored in the contract's
+`Shared Boundaries` section; accidental overlap is not an allowed registry
+state.
 
 ## Task Completion Protocol
 

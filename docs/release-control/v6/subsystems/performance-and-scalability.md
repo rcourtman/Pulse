@@ -27,6 +27,10 @@ regression protection.
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
 
+## Shared Boundaries
+
+1. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+
 ## Extension Points
 
 1. Add performance budgets through SLO or contract tests

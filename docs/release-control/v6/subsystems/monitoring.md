@@ -28,6 +28,10 @@ truth for live infrastructure data.
 4. `internal/unifiedresources/monitor_adapter.go`
 5. `internal/unifiedresources/views.go`
 
+## Shared Boundaries
+
+1. None.
+
 ## Extension Points
 
 1. Add pollers/providers through `internal/monitoring/`

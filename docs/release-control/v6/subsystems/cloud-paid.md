@@ -42,6 +42,12 @@ agreement, and cloud-specific enforcement rules.
 20. `internal/cloudcp/stripe/provisioner.go`
 21. `frontend-modern/src/pages/CloudPricing.tsx`
 
+## Shared Boundaries
+
+1. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+2. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+3. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+
 ## Extension Points
 
 1. Add or change limits through `pkg/licensing/`

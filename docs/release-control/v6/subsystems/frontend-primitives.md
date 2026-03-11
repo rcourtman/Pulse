@@ -25,6 +25,10 @@ extends shared components instead of creating new local variants.
 3. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
 4. `frontend-modern/src/features/`
 
+## Shared Boundaries
+
+1. None.
+
 ## Extension Points
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`

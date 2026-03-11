@@ -26,6 +26,10 @@ notification behavior for live runtime alerts.
 4. `internal/alerts/canonical_lifecycle.go`
 5. `internal/alerts/unified_incidents.go`
 
+## Shared Boundaries
+
+1. None.
+
 ## Extension Points
 
 1. Add new alert rule kinds in `internal/alerts/specs/`

@@ -145,6 +145,7 @@ func TestSubsystemContractsExistWithRequiredSections(t *testing.T) {
 		"## Contract Metadata",
 		"## Purpose",
 		"## Canonical Files",
+		"## Shared Boundaries",
 		"## Extension Points",
 		"## Forbidden Paths",
 		"## Completion Obligations",

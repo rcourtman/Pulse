@@ -23,6 +23,11 @@ State what this subsystem owns and what it explicitly does not own.
 
 List the files that contain the subsystem truth.
 
+## Shared Boundaries
+
+List any runtime files intentionally shared with other subsystems.
+If none exist, write `1. None.`
+
 ## Extension Points
 
 List the only approved places to extend the subsystem.

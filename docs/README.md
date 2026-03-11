@@ -15,7 +15,7 @@ Use:
 4. `docs/release-control/v6/subsystems/registry.json` and `docs/release-control/v6/subsystems/registry.schema.json` for subsystem ownership, explicit shared-ownership exceptions, and proof-routing rules
 5. `python3 scripts/release_control/status_audit.py --check` if you need a machine-derived evidence health audit
 6. `python3 scripts/release_control/registry_audit.py --check` if you need a machine-derived subsystem registry audit
-7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit, including explicit cross-subsystem dependency checks
+7. `python3 scripts/release_control/contract_audit.py --check` if you need a machine-derived subsystem contract audit, including explicit cross-subsystem dependency and shared-boundary checks
 8. `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` if you need subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations for a change
 
 For governed runtime changes, a staged subsystem contract only counts if its

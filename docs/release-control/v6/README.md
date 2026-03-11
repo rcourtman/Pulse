@@ -15,11 +15,11 @@ Supporting governance file:
 - `CONSOLIDATION_MAP.md` (legacy-doc demotion and archival map)
 - `RETIREMENT_AUDIT_2026-02-27.md` (file-by-file audited retirement decisions)
 - `CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
-- `subsystems/*.md` (per-subsystem contracts: truth, extension points, forbidden paths, completion obligations)
+- `subsystems/*.md` (per-subsystem contracts: truth, shared boundaries, extension points, forbidden paths, completion obligations)
 
 Useful helper tools:
 
-- `python3 scripts/release_control/contract_audit.py --check` for structured subsystem contract metadata, explicit cross-subsystem dependency declarations, required sections, and canonical path references
+- `python3 scripts/release_control/contract_audit.py --check` for structured subsystem contract metadata, explicit cross-subsystem dependency declarations, shared-boundary declarations, required sections, and canonical path references
 - `python3 scripts/release_control/status_audit.py --check`
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations

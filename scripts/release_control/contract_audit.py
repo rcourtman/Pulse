@@ -23,6 +23,7 @@ REQUIRED_SECTIONS = [
     "## Contract Metadata",
     "## Purpose",
     "## Canonical Files",
+    "## Shared Boundaries",
     "## Extension Points",
     "## Forbidden Paths",
     "## Completion Obligations",
@@ -30,6 +31,7 @@ REQUIRED_SECTIONS = [
 ]
 LIST_SECTIONS = {
     "## Canonical Files",
+    "## Shared Boundaries",
     "## Extension Points",
     "## Forbidden Paths",
     "## Completion Obligations",
@@ -158,6 +160,7 @@ def parse_contract_metadata(body_lines: list[str]) -> tuple[dict[str, Any] | Non
 def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     path_references: list[dict[str, str]] = []
+    section_items: dict[str, list[str]] = {}
     lines = content.splitlines()
     if not lines or not lines[0].startswith("# "):
         errors.append(f"{rel} must start with a level-1 heading")
@@ -195,6 +198,7 @@ def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
             if not items:
                 errors.append(f"{rel} section {heading!r} must contain a numbered list")
                 continue
+            section_items[heading] = [item for _, item in items]
             if heading == "## Canonical Files":
                 for _, item in items:
                     path_tokens = [token for token in re.findall(r"`([^`]+)`", item) if looks_like_repo_path(token)]
@@ -215,6 +219,7 @@ def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
         "title": lines[0].strip() if lines else "",
         "metadata": metadata,
         "path_references": path_references,
+        "section_items": section_items,
     }, errors
 
 
@@ -225,6 +230,22 @@ def path_owner_ids(registry_subsystems: list[dict[str, Any]], path: str) -> list
         if isinstance(subsystem, dict)
         if subsystem_matches_path(subsystem, path)
     ]
+
+
+def expected_shared_boundaries(
+    registry_payload: dict[str, Any],
+    subsystem_id: str,
+) -> list[dict[str, Any]]:
+    shared_ownerships = registry_payload.get("shared_ownerships", [])
+    if not isinstance(shared_ownerships, list):
+        return []
+    entries = [
+        entry
+        for entry in shared_ownerships
+        if isinstance(entry, dict)
+        if subsystem_id in entry.get("subsystems", [])
+    ]
+    return sorted(entries, key=lambda entry: str(entry.get("path", "")).casefold())
 
 
 def audit_contract_payload(
@@ -298,6 +319,7 @@ def audit_contract_payload(
         status_file = str(metadata.get("status_file", "")).strip()
         registry_file = str(metadata.get("registry_file", "")).strip()
         dependency_subsystem_ids = metadata.get("dependency_subsystem_ids")
+        shared_boundary_items = list(parsed.get("section_items", {}).get("## Shared Boundaries", []))
 
         normalized_dependencies: list[str] = []
         if not isinstance(dependency_subsystem_ids, list):
@@ -365,6 +387,58 @@ def audit_contract_payload(
             errors.append(
                 f"{rel} contract metadata dependency_subsystem_ids = {normalized_dependencies!r}, want {expected_dependencies!r}"
             )
+
+        expected_shared = expected_shared_boundaries(registry_payload, subsystem_id)
+        expected_shared_paths = [
+            str(entry.get("path", "")).strip()
+            for entry in expected_shared
+            if isinstance(entry.get("path"), str) and str(entry.get("path", "")).strip()
+        ]
+        if not expected_shared_paths:
+            if shared_boundary_items != ["None."]:
+                errors.append(
+                    f"{rel} section '## Shared Boundaries' must contain exactly `1. None.` when no registry shared ownership entries exist"
+                )
+        else:
+            actual_shared_paths: list[str] = []
+            seen_shared_paths: set[str] = set()
+            for item in shared_boundary_items:
+                tokens = re.findall(r"`([^`]+)`", item)
+                path_tokens = [token for token in tokens if looks_like_repo_path(token)]
+                if len(path_tokens) != 1:
+                    errors.append(
+                        f"{rel} section '## Shared Boundaries' entries must include exactly one repo path"
+                    )
+                    continue
+                shared_path = path_tokens[0]
+                validate_repo_path_token(shared_path, rel=rel, heading="## Shared Boundaries", errors=errors)
+                actual_shared_paths.append(shared_path)
+                if shared_path in seen_shared_paths:
+                    errors.append(
+                        f"{rel} section '## Shared Boundaries' must not repeat shared path {shared_path!r}"
+                    )
+                    continue
+                seen_shared_paths.add(shared_path)
+                expected_entry = next(
+                    (entry for entry in expected_shared if entry.get("path") == shared_path),
+                    None,
+                )
+                if expected_entry is None:
+                    continue
+                partner_ids = [
+                    other_id
+                    for other_id in expected_entry.get("subsystems", [])
+                    if isinstance(other_id, str) and other_id != subsystem_id
+                ]
+                for partner_id in partner_ids:
+                    if partner_id not in tokens:
+                        errors.append(
+                            f"{rel} shared boundary {shared_path!r} must mention partner subsystem {partner_id!r} in backticks"
+                        )
+            if actual_shared_paths != expected_shared_paths:
+                errors.append(
+                    f"{rel} section '## Shared Boundaries' paths = {actual_shared_paths!r}, want {expected_shared_paths!r}"
+                )
 
         contract_summaries.append(
             {
