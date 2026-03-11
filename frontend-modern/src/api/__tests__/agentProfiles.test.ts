@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '../agentProfiles';
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { isAPIErrorStatus, readAPIErrorMessage } from '../responseUtils';
+import { isAPIErrorStatus, isAPIResponseStatus, readAPIErrorMessage } from '../responseUtils';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
@@ -11,6 +11,7 @@ vi.mock('@/utils/apiClient', () => ({
 vi.mock('../responseUtils', () => ({
   readAPIErrorMessage: vi.fn().mockResolvedValue('Error'),
   isAPIErrorStatus: vi.fn(),
+  isAPIResponseStatus: vi.fn(),
 }));
 
 describe('AgentProfilesAPI', () => {
@@ -18,6 +19,9 @@ describe('AgentProfilesAPI', () => {
     vi.clearAllMocks();
     vi.mocked(isAPIErrorStatus).mockImplementation((error, expectedStatus) => {
       return (error as { status?: number } | null)?.status === expectedStatus;
+    });
+    vi.mocked(isAPIResponseStatus).mockImplementation((response, expectedStatus) => {
+      return (response as { status?: number } | null)?.status === expectedStatus;
     });
   });
 
@@ -114,6 +118,12 @@ describe('AgentProfilesAPI', () => {
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
+
+    it('treats canonical 204 delete responses as success even when ok is false-like', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 204 } as unknown as Response);
+
+      await expect(AgentProfilesAPI.deleteProfile('p1')).resolves.toBeUndefined();
+    });
   });
 
   describe('listAssignments', () => {
@@ -164,6 +174,12 @@ describe('AgentProfilesAPI', () => {
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
+
+    it('treats canonical 204 unassign responses as success even when ok is false-like', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 204 } as unknown as Response);
+
+      await expect(AgentProfilesAPI.unassignProfile('agent-1')).resolves.toBeUndefined();
+    });
   });
 
   describe('suggestProfile', () => {
@@ -189,6 +205,16 @@ describe('AgentProfilesAPI', () => {
 
       await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow(
         'Pulse Assistant service is not available',
+      );
+    });
+
+    it('does not infer service-unavailable status from arbitrary responses', async () => {
+      const mockResponse = { ok: false, status: 500 } as unknown as Response;
+      vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
+      vi.mocked(readAPIErrorMessage).mockResolvedValueOnce('Server error');
+
+      await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow(
+        'Server error',
       );
     });
   });

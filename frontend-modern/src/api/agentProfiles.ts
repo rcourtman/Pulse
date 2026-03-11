@@ -1,5 +1,5 @@
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
-import { isAPIErrorStatus, readAPIErrorMessage } from './responseUtils';
+import { isAPIErrorStatus, isAPIResponseStatus, readAPIErrorMessage } from './responseUtils';
 
 /**
  * Agent profile for centralized configuration management.
@@ -177,7 +177,7 @@ export class AgentProfilesAPI {
       method: 'DELETE',
     });
 
-    if (!response.ok && response.status !== 204) {
+    if (!response.ok && !isAPIResponseStatus(response, 204)) {
       throw new Error(
         await readAPIErrorMessage(response, `Failed to delete profile: ${response.status}`),
       );
@@ -224,7 +224,7 @@ export class AgentProfilesAPI {
       method: 'DELETE',
     });
 
-    if (!response.ok && response.status !== 204) {
+    if (!response.ok && !isAPIResponseStatus(response, 204)) {
       throw new Error(
         await readAPIErrorMessage(response, `Failed to unassign profile: ${response.status}`),
       );
@@ -243,7 +243,7 @@ export class AgentProfilesAPI {
     });
 
     if (!response.ok) {
-      if (response.status === 503) {
+      if (isAPIResponseStatus(response, 503)) {
         throw new Error(
           'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
         );

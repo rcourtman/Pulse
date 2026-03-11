@@ -46,7 +46,7 @@ Own canonical runtime payload shapes between backend and frontend.
 2. Untracked compatibility aliases becoming permanent runtime contracts
 3. Frontend-only payload assumptions that are not owned in backend contracts
 4. Frontend API clients inferring canonical HTTP status from `Error.message` text
-5. Frontend API clients branching on raw `response.status === 404` instead of the shared response-status helpers
+5. Frontend API clients branching on raw `response.status` checks for governed status handling instead of the shared response-status helpers
 
 ## Completion Obligations
 
@@ -73,3 +73,5 @@ message-text heuristics in individual API modules.
 Optional not-found response handling in frontend API clients must now also use
 those shared response-status helpers rather than open-coded `response.status`
 branches in each module.
+The same rule now applies to no-content and service-unavailable handling in
+governed frontend API clients.

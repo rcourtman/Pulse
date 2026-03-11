@@ -27,8 +27,12 @@ describe('API error-status guardrails', () => {
 
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 402)');
     expect(agentProfilesSource).toContain('isAPIErrorStatus(err, 404)');
+    expect(agentProfilesSource).toContain('isAPIResponseStatus(response, 204)');
+    expect(agentProfilesSource).toContain('isAPIResponseStatus(response, 503)');
     expect(agentProfilesSource).not.toContain("message.includes('402')");
     expect(agentProfilesSource).not.toContain("message.includes('404')");
+    expect(agentProfilesSource).not.toContain('response.status !== 204');
+    expect(agentProfilesSource).not.toContain('response.status === 503');
 
     expect(monitoringSource).toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).toContain('isAPIResponseStatus(response, 404)');
@@ -36,24 +40,24 @@ describe('API error-status guardrails', () => {
     expect(discoverySource).not.toContain('response.status === 404');
   });
 
-  it('bans raw message-based 402/404 heuristics and raw 404 response checks in runtime API modules', () => {
+  it('bans raw message-based 402/404 heuristics and raw governed response-status checks in runtime API modules', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
     const rawStatusHeuristicPattern = /message\.includes\((['"])40[24]\1\)/;
-    const rawResponse404Pattern = /response\.status === 404/;
+    const rawGovernedResponseStatusPattern = /response\.status\s*(?:===|!==)\s*(?:204|404|503)/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
       .map(([path]) => path)
       .sort();
 
-    const response404Offenders = runtimeEntries
-      .filter(([, source]) => rawResponse404Pattern.test(source))
+    const responseStatusOffenders = runtimeEntries
+      .filter(([, source]) => rawGovernedResponseStatusPattern.test(source))
       .map(([path]) => path)
       .sort();
 
     expect(heuristicOffenders).toEqual([]);
-    expect(response404Offenders).toEqual([]);
+    expect(responseStatusOffenders).toEqual([]);
   });
 });
