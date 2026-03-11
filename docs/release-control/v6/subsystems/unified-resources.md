@@ -35,3 +35,7 @@ cross-source deduplication.
 
 The unified resource core is strong and canonical, but monitoring and some
 frontend/API consumers are still being tightened around it.
+
+Canonical storage metadata now carries runtime `enabled` and `active` flags so
+monitoring and API export paths can derive `models.Storage` from unified views
+without depending on legacy snapshot ownership.

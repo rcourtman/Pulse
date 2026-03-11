@@ -36,3 +36,7 @@ truth for live infrastructure data.
 Consumer packages already use `ReadState`, but the monitoring core still has
 dual truth between unified resources and `StateSnapshot`. This is the main
 remaining architecture-coherence lane.
+
+Storage export is now derived from canonical `ReadState.StoragePools()`
+instead of `GetState().Storage`; `models.Storage` is treated as a boundary
+artifact for that path.

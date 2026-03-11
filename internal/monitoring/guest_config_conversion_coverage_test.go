@@ -723,6 +723,81 @@ func TestMonitorStorageSnapshot(t *testing.T) {
 			t.Fatalf("unexpected storage id: %q", storage[0].ID)
 		}
 	})
+
+	t.Run("prefers canonical read state storage over legacy snapshot", func(t *testing.T) {
+		canonicalState := models.StateSnapshot{
+			Storage: []models.Storage{{
+				ID:       "store-canonical",
+				Name:     "Canonical Store",
+				Node:     "cluster",
+				Instance: "lab",
+				Nodes:    []string{"pve-a", "pve-b"},
+				Type:     "zfspool",
+				Status:   "warning",
+				Path:     "/mnt/pve/store-canonical",
+				Total:    100,
+				Used:     70,
+				Free:     30,
+				Usage:    70,
+				Content:  "images,iso",
+				Shared:   true,
+				Enabled:  true,
+				Active:   true,
+				ZFSPool: &models.ZFSPool{
+					Name:           "Canonical Store",
+					State:          "DEGRADED",
+					ReadErrors:     1,
+					WriteErrors:    2,
+					ChecksumErrors: 3,
+				},
+			}},
+		}
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestSnapshot(canonicalState)
+
+		legacyState := models.NewState()
+		legacyState.Storage = []models.Storage{{
+			ID:   "store-legacy",
+			Name: "Legacy Store",
+		}}
+
+		m := &Monitor{
+			state:         legacyState,
+			resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		}
+
+		storage := m.StorageSnapshot()
+		if len(storage) != 1 {
+			t.Fatalf("expected one storage entry from read-state, got %d", len(storage))
+		}
+		if storage[0].ID != "store-canonical" || storage[0].Name != "Canonical Store" {
+			t.Fatalf("expected canonical storage entry, got %#v", storage[0])
+		}
+		if got := storage[0].NodeIDs; len(got) != 2 || got[0] != "lab-pve-a" || got[1] != "lab-pve-b" {
+			t.Fatalf("expected derived node IDs [lab-pve-a lab-pve-b], got %v", got)
+		}
+		if storage[0].ZFSPool == nil || storage[0].ZFSPool.State != "DEGRADED" || storage[0].ZFSPool.ReadErrors != 1 {
+			t.Fatalf("expected canonical ZFS pool details, got %#v", storage[0].ZFSPool)
+		}
+		if !storage[0].Enabled || !storage[0].Active {
+			t.Fatalf("expected enabled and active flags from canonical read-state, got enabled=%v active=%v", storage[0].Enabled, storage[0].Active)
+		}
+	})
+
+	t.Run("does not fall back to stale snapshot when live read state is empty", func(t *testing.T) {
+		state := models.NewState()
+		state.Storage = []models.Storage{{ID: "store-legacy", Name: "Legacy Store"}}
+
+		m := &Monitor{
+			state:         state,
+			resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		}
+
+		storage := m.StorageSnapshot()
+		if len(storage) != 0 {
+			t.Fatalf("expected empty storage from live canonical read-state, got %#v", storage)
+		}
+	})
 }
 
 func decodePlatformDataPayload(t *testing.T, raw json.RawMessage) map[string]interface{} {

@@ -227,6 +227,8 @@ type StorageMeta struct {
 	Content               string                `json:"content,omitempty"`
 	ContentTypes          []string              `json:"contentTypes,omitempty"`
 	Shared                bool                  `json:"shared"`
+	Enabled               bool                  `json:"enabled"`
+	Active                bool                  `json:"active"`
 	IsCeph                bool                  `json:"isCeph"`
 	IsZFS                 bool                  `json:"isZfs"`
 	Platform              string                `json:"platform,omitempty"`

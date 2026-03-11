@@ -1461,6 +1461,20 @@ func (v StoragePoolView) Shared() bool {
 	return v.r.Storage.Shared
 }
 
+func (v StoragePoolView) Enabled() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.Enabled
+}
+
+func (v StoragePoolView) Active() bool {
+	if v.r == nil || v.r.Storage == nil {
+		return false
+	}
+	return v.r.Storage.Active
+}
+
 func (v StoragePoolView) IsCeph() bool {
 	if v.r == nil || v.r.Storage == nil {
 		return false

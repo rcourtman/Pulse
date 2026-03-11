@@ -2576,7 +2576,108 @@ func (m *Monitor) StorageSnapshot() []models.Storage {
 	if m == nil {
 		return nil
 	}
-	return m.GetState().Storage
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	storagePools := readState.StoragePools()
+	if len(storagePools) == 0 {
+		return nil
+	}
+
+	storage := make([]models.Storage, 0, len(storagePools))
+	for _, pool := range storagePools {
+		if pool == nil {
+			continue
+		}
+		storage = append(storage, storageFromReadStateView(pool))
+	}
+	return storage
+}
+
+func storageFromReadStateView(view *unifiedresources.StoragePoolView) models.Storage {
+	if view == nil {
+		return models.Storage{}
+	}
+
+	storageID := strings.TrimSpace(view.SourceID())
+	if storageID == "" {
+		storageID = strings.TrimSpace(view.ID())
+	}
+
+	nodes := view.AccessibleNodes()
+	nodeIDs := storageNodeIDsFromReadState(view.Instance(), nodes)
+	total := view.DiskTotal()
+	used := view.DiskUsed()
+	free := total - used
+	if free < 0 {
+		free = 0
+	}
+
+	return models.Storage{
+		ID:        storageID,
+		Name:      view.Name(),
+		Node:      view.Node(),
+		Instance:  view.Instance(),
+		Nodes:     nodes,
+		NodeIDs:   nodeIDs,
+		NodeCount: len(nodes),
+		Type:      view.StorageType(),
+		Status:    string(view.Status()),
+		Path:      view.Path(),
+		Total:     total,
+		Used:      used,
+		Free:      free,
+		Usage:     view.DiskPercent(),
+		Content:   view.Content(),
+		Shared:    view.Shared(),
+		Enabled:   view.Enabled(),
+		Active:    view.Active(),
+		ZFSPool:   storageZFSPoolFromReadStateView(view),
+	}
+}
+
+func storageZFSPoolFromReadStateView(view *unifiedresources.StoragePoolView) *models.ZFSPool {
+	if view == nil {
+		return nil
+	}
+
+	state := strings.TrimSpace(view.ZFSPoolState())
+	if !view.IsZFS() && state == "" && view.ZFSReadErrors() == 0 && view.ZFSWriteErrors() == 0 && view.ZFSChecksumErrors() == 0 {
+		return nil
+	}
+
+	return &models.ZFSPool{
+		Name:           view.Name(),
+		State:          state,
+		ReadErrors:     view.ZFSReadErrors(),
+		WriteErrors:    view.ZFSWriteErrors(),
+		ChecksumErrors: view.ZFSChecksumErrors(),
+	}
+}
+
+func storageNodeIDsFromReadState(instance string, nodes []string) []string {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	nodeIDs := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		node = strings.TrimSpace(node)
+		if node == "" {
+			continue
+		}
+		if instance == "" {
+			nodeIDs = append(nodeIDs, node)
+			continue
+		}
+		nodeIDs = append(nodeIDs, instance+"-"+node)
+	}
+	if len(nodeIDs) == 0 {
+		return nil
+	}
+	return nodeIDs
 }
 
 // ActiveAlertsSnapshot returns the current active alerts.

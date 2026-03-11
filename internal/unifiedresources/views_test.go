@@ -755,6 +755,8 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 			Content:               "images,iso",
 			ContentTypes:          []string{"images", "iso"},
 			Shared:                false,
+			Enabled:               true,
+			Active:                true,
 			IsCeph:                false,
 			IsZFS:                 true,
 			RiskSummary:           "ZFS pool local-zfs is DEGRADED",
@@ -790,8 +792,8 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	if v.StorageType() != "zfspool" || v.Content() != "images,iso" || !reflect.DeepEqual(v.ContentTypes(), []string{"images", "iso"}) {
 		t.Fatalf("expected storage meta to match, got type=%q content=%q contentTypes=%v", v.StorageType(), v.Content(), v.ContentTypes())
 	}
-	if v.Shared() != false || v.IsCeph() != false || v.IsZFS() != true {
-		t.Fatalf("expected shared/ceph/zfs false/false/true, got %v/%v/%v", v.Shared(), v.IsCeph(), v.IsZFS())
+	if v.Shared() != false || !v.Enabled() || !v.Active() || v.IsCeph() != false || v.IsZFS() != true {
+		t.Fatalf("expected shared/enabled/active/ceph/zfs false/true/true/false/true, got %v/%v/%v/%v/%v", v.Shared(), v.Enabled(), v.Active(), v.IsCeph(), v.IsZFS())
 	}
 	if v.ZFSPoolState() != "ONLINE" || v.ZFSReadErrors() != 1 || v.ZFSWriteErrors() != 2 || v.ZFSChecksumErrors() != 3 {
 		t.Fatalf("expected ZFS fields to match, got state=%q read=%d write=%d cksum=%d", v.ZFSPoolState(), v.ZFSReadErrors(), v.ZFSWriteErrors(), v.ZFSChecksumErrors())
