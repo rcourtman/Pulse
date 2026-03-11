@@ -40,9 +40,12 @@ describe('API error-status guardrails', () => {
     expect(agentProfilesSource).not.toContain('return response.json()');
 
     expect(monitoringSource).toContain('isAPIResponseStatus(response, 404)');
+    expect(monitoringSource).toContain('parseOptionalJSON<AgentLookupResponse | null>(');
+    expect(monitoringSource).toContain("'Failed to parse agent lookup response'");
     expect(discoverySource).toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).toContain('parseRequiredJSON(response,');
     expect(monitoringSource).not.toContain('response.status === 404');
+    expect(monitoringSource).not.toContain('JSON.parse(');
     expect(discoverySource).not.toContain('response.status === 404');
     expect(discoverySource).not.toContain('return response.json()');
 
@@ -57,9 +60,10 @@ describe('API error-status guardrails', () => {
     const rawStatusHeuristicPattern = /message\.includes\((['"])40[24]\1\)/;
     const rawGovernedResponseStatusPattern = /response\.status\s*(?:===|!==)\s*(?:204|404|503)/;
     const governedParsingEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:agentProfiles|discovery|hostedSignup)\.ts$/.test(path),
+      /\/(?:agentProfiles|discovery|hostedSignup|monitoring)\.ts$/.test(path),
     );
     const rawResponseJSONPattern = /(?:return\s+)?(?:await\s+)?response\.json\(/;
+    const rawManualJSONParsePattern = /JSON\.parse\(/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -76,8 +80,14 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const manualJSONParseOffenders = governedParsingEntries
+      .filter(([, source]) => rawManualJSONParsePattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
+    expect(manualJSONParseOffenders).toEqual([]);
   });
 });

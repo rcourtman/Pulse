@@ -306,12 +306,15 @@ export class MonitoringAPI {
       );
     }
 
-    const text = await response.text();
-    if (!text?.trim()) {
+    const data = await parseOptionalJSON<AgentLookupResponse | null>(
+      response,
+      null,
+      'Failed to parse agent lookup response',
+    );
+    if (!data) {
       return null;
     }
 
-    const data = JSON.parse(text) as AgentLookupResponse;
     const identity = data?.agent as AgentLookupResponse['agent'];
     if (!identity) {
       return null;

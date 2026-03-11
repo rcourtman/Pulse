@@ -219,6 +219,22 @@ describe('MonitoringAPI', () => {
       expect(typeof result?.agent?.lastSeen).toBe('number');
     });
 
+    it('returns null for empty lookup responses', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(new Response('', { status: 200 }));
+
+      const result = await MonitoringAPI.lookupAgent({ id: 'agent-3' });
+
+      expect(result).toBeNull();
+    });
+
+    it('fails with a canonical parse error for invalid lookup payloads', async () => {
+      vi.mocked(apiFetch).mockResolvedValueOnce(new Response('not valid json', { status: 200 }));
+
+      await expect(MonitoringAPI.lookupAgent({ id: 'agent-4' })).rejects.toThrow(
+        'Failed to parse agent lookup response',
+      );
+    });
+
     it('unlinks agent using canonical agentId', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
 
