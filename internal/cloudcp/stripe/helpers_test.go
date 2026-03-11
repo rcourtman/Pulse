@@ -91,11 +91,12 @@ func TestPlanVersionFromMetadata(t *testing.T) {
 		fallback string
 		want     string
 	}{
-		{"canonicalizes legacy cloud alias", map[string]string{"plan_version": "cloud-v1"}, "msp_hosted_v1", "cloud_starter"},
-		{"uses canonicalized shorthand", map[string]string{"plan": "max"}, "msp_hosted_v1", "cloud_max"},
+		{"canonicalizes legacy cloud alias", map[string]string{"plan_version": "cloud-v1"}, "msp_starter", "cloud_starter"},
+		{"uses canonicalized shorthand", map[string]string{"plan": "max"}, "msp_starter", "cloud_max"},
 		{"falls back when metadata missing", nil, "msp_growth", "msp_growth"},
 		{"canonicalizes legacy fallback alias", nil, "cloud_v1", "cloud_starter"},
-		{"falls back when metadata resolves generic stripe", nil, "msp_hosted_v1", "msp_hosted_v1"},
+		{"canonicalizes legacy msp fallback alias", nil, "msp_hosted_v1", "msp_starter"},
+		{"falls back when metadata resolves generic stripe", nil, "msp_starter", "msp_starter"},
 	}
 
 	for _, tt := range tests {
@@ -115,6 +116,7 @@ func TestCanonicalizeProvisionedPlanVersion(t *testing.T) {
 	}{
 		{" cloud_v1 ", "cloud_starter"},
 		{"starter", "cloud_starter"},
+		{" msp_hosted_v1 ", "msp_starter"},
 		{"msp_growth", "msp_growth"},
 		{"stripe_price:price_123", "stripe_price:price_123"},
 	}

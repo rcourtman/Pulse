@@ -33,6 +33,18 @@ func TestCloudClaimPlanVersionNormalizationContract(t *testing.T) {
 	}
 }
 
+func TestMSPPlanAliasCanonicalizationContract(t *testing.T) {
+	if got := CanonicalizePlanVersion("msp_hosted_v1"); got != "msp_starter" {
+		t.Fatalf("CanonicalizePlanVersion(msp_hosted_v1) = %q, want %q", got, "msp_starter")
+	}
+	if limits, known := LimitsForCloudPlan("msp_hosted_v1"); !known || limits["max_agents"] != 50 {
+		t.Fatalf("LimitsForCloudPlan(msp_hosted_v1) = (%v, %v), want max_agents=50 and known=true", limits, known)
+	}
+	if limit, known := WorkspaceLimitForPlan("msp_hosted_v1"); !known || limit != 10 {
+		t.Fatalf("WorkspaceLimitForPlan(msp_hosted_v1) = (%d, %v), want (10, true)", limit, known)
+	}
+}
+
 // grantContractJSONTags lists the JSON field names that MUST exist with
 // identical types in both pulse/pkg/licensing.GrantClaims and
 // pulse-pro/relay-server.RelayGrantClaims.

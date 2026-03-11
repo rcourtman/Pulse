@@ -66,7 +66,7 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	if err := reg.CreateStripeAccount(&registry.StripeAccount{
 		AccountID:        accountID,
 		StripeCustomerID: "cus_msp_lifecycle_test",
-		PlanVersion:      "msp_hosted_v1",
+		PlanVersion:      "msp_starter",
 	}); err != nil {
 		t.Fatalf("CreateStripeAccount: %v", err)
 	}
@@ -90,8 +90,8 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		if ws.State != registry.TenantStateActive {
 			t.Fatalf("workspace %s: State = %q, want %q", ws.ID, ws.State, registry.TenantStateActive)
 		}
-		if ws.PlanVersion != "msp_hosted_v1" {
-			t.Fatalf("workspace %s: PlanVersion = %q, want %q", ws.ID, ws.PlanVersion, "msp_hosted_v1")
+		if ws.PlanVersion != "msp_starter" {
+			t.Fatalf("workspace %s: PlanVersion = %q, want %q", ws.ID, ws.PlanVersion, "msp_starter")
 		}
 
 		// Verify billing state was written.
@@ -103,8 +103,8 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		if bs == nil {
 			t.Fatalf("workspace %s: billing state is nil", ws.ID)
 		}
-		if bs.PlanVersion != "msp_hosted_v1" {
-			t.Fatalf("workspace %s: billing PlanVersion = %q, want %q", ws.ID, bs.PlanVersion, "msp_hosted_v1")
+		if bs.PlanVersion != "msp_starter" {
+			t.Fatalf("workspace %s: billing PlanVersion = %q, want %q", ws.ID, bs.PlanVersion, "msp_starter")
 		}
 		if bs.SubscriptionState != pkglicensing.SubStateActive {
 			t.Fatalf("workspace %s: SubscriptionState = %q, want %q", ws.ID, bs.SubscriptionState, pkglicensing.SubStateActive)
@@ -163,8 +163,8 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 		if bs == nil {
 			t.Fatalf("ws3: billing state is nil after API creation")
 		}
-		if bs.PlanVersion != "msp_hosted_v1" {
-			t.Fatalf("ws3: billing PlanVersion = %q, want %q", bs.PlanVersion, "msp_hosted_v1")
+		if bs.PlanVersion != "msp_starter" {
+			t.Fatalf("ws3: billing PlanVersion = %q, want %q", bs.PlanVersion, "msp_starter")
 		}
 		if bs.SubscriptionState != pkglicensing.SubStateActive {
 			t.Fatalf("ws3: SubscriptionState = %q, want %q", bs.SubscriptionState, pkglicensing.SubStateActive)
@@ -322,8 +322,8 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	if sa.StripeSubscriptionID != "sub_msp_lifecycle_test" {
 		t.Fatalf("StripeAccount.StripeSubscriptionID = %q, want %q", sa.StripeSubscriptionID, "sub_msp_lifecycle_test")
 	}
-	if sa.PlanVersion != "msp_hosted_v1" {
-		t.Fatalf("StripeAccount.PlanVersion = %q, want %q", sa.PlanVersion, "msp_hosted_v1")
+	if sa.PlanVersion != "msp_starter" {
+		t.Fatalf("StripeAccount.PlanVersion = %q, want %q", sa.PlanVersion, "msp_starter")
 	}
 	// past_due → grace window should have been started.
 	if sa.GraceStartedAt == nil || *sa.GraceStartedAt <= 0 {
@@ -658,7 +658,7 @@ func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 }
 
 // TestMSPLifecycle_PlanVersionFallback verifies that ProvisionWorkspace falls
-// back to msp_hosted_v1 when no StripeAccount exists for the account.
+// back to msp_starter when no StripeAccount exists for the account.
 func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
@@ -676,13 +676,13 @@ func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
-	// No StripeAccount created — should fall back to msp_hosted_v1.
+	// No StripeAccount created — should fall back to msp_starter.
 	ws, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client")
 	if err != nil {
 		t.Fatalf("ProvisionWorkspace: %v", err)
 	}
-	if ws.PlanVersion != "msp_hosted_v1" {
-		t.Fatalf("workspace.PlanVersion = %q, want %q (fallback)", ws.PlanVersion, "msp_hosted_v1")
+	if ws.PlanVersion != "msp_starter" {
+		t.Fatalf("workspace.PlanVersion = %q, want %q (fallback)", ws.PlanVersion, "msp_starter")
 	}
 
 	store := config.NewFileBillingStore(provisioner.tenantDataDir(ws.ID))
@@ -693,11 +693,11 @@ func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
 	if bs == nil {
 		t.Fatal("billing state is nil")
 	}
-	if bs.PlanVersion != "msp_hosted_v1" {
-		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "msp_hosted_v1")
+	if bs.PlanVersion != "msp_starter" {
+		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "msp_starter")
 	}
 	if bs.Limits["max_agents"] != 50 {
-		t.Fatalf("billing.Limits[max_agents] = %d, want 50 (msp_hosted_v1 default)", bs.Limits["max_agents"])
+		t.Fatalf("billing.Limits[max_agents] = %d, want 50 (msp_starter default)", bs.Limits["max_agents"])
 	}
 }
 

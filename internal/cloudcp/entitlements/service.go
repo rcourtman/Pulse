@@ -456,7 +456,7 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 				return nil, fmt.Errorf("load account for tenant %s: %w", tenant.ID, err)
 			}
 			if account != nil && account.Kind == registry.AccountKindMSP {
-				ctx.planVersion = "msp_hosted_v1"
+				ctx.planVersion = "msp_starter"
 			}
 		}
 	}

@@ -689,12 +689,12 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 
 	// Look up the account's actual plan version from its Stripe billing record.
 	// Fail on DB errors (consistent with enforceWorkspaceLimit). Fall back to
-	// msp_hosted_v1 (lowest MSP tier) only when no billing record exists.
+	// msp_starter (lowest MSP tier) only when no billing record exists.
 	sa, saErr := p.registry.GetStripeAccount(accountID)
 	if saErr != nil {
 		return nil, fmt.Errorf("look up billing record for account %s: %w", accountID, saErr)
 	}
-	planVersion := "msp_hosted_v1"
+	planVersion := "msp_starter"
 	if sa != nil && strings.TrimSpace(sa.PlanVersion) != "" {
 		planVersion = canonicalizeProvisionedPlanVersion(sa.PlanVersion)
 	} else {
@@ -934,7 +934,7 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 
 	planVersion := planVersionFromMetadata(sub.Metadata, sa.PlanVersion)
 	if planVersion == "" {
-		planVersion = "msp_hosted_v1"
+		planVersion = "msp_starter"
 	}
 	planVersion = canonicalizeProvisionedPlanVersion(planVersion)
 

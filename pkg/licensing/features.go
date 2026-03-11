@@ -80,10 +80,9 @@ var CloudPlanAgentLimits = map[string]int{
 	"cloud_founding": 10, // Founding rate = Starter limits
 
 	// MSP tiers — host pool limits from pricing spec
-	"msp_hosted_v1": 50,  // Legacy MSP default = Starter pool
-	"msp_starter":   50,  // MSP Starter: 10 clients, 50 host pool
-	"msp_growth":    150, // MSP Growth: 25 clients, 150 host pool
-	"msp_scale":     400, // MSP Scale: 50 clients, 400 host pool
+	"msp_starter": 50,  // MSP Starter: 10 clients, 50 host pool
+	"msp_growth":  150, // MSP Growth: 25 clients, 150 host pool
+	"msp_scale":   400, // MSP Scale: 50 clients, 400 host pool
 }
 
 // PriceIDToPlanVersion maps Stripe price IDs to canonical plan version strings.
@@ -142,10 +141,9 @@ var CloudPlanWorkspaceLimits = map[string]int{
 	"cloud_founding": 1,
 
 	// MSP tiers — client caps from pricing spec
-	"msp_hosted_v1": 10, // Legacy MSP default = Starter client cap
-	"msp_starter":   10, // MSP Starter: up to 10 clients
-	"msp_growth":    25, // MSP Growth: up to 25 clients
-	"msp_scale":     50, // MSP Scale: up to 50 clients
+	"msp_starter": 10, // MSP Starter: up to 10 clients
+	"msp_growth":  25, // MSP Growth: up to 25 clients
+	"msp_scale":   50, // MSP Scale: up to 50 clients
 }
 
 // UnknownPlanDefaultWorkspaceLimit is the safe-default workspace limit applied
@@ -157,6 +155,7 @@ const UnknownPlanDefaultWorkspaceLimit = 1
 // cloud plan version and whether the plan was recognized. If unrecognized,
 // returns a safe default (1) and known=false.
 func WorkspaceLimitForPlan(planVersion string) (limit int, known bool) {
+	planVersion = CanonicalizePlanVersion(planVersion)
 	if l, ok := CloudPlanWorkspaceLimits[planVersion]; ok {
 		return l, true
 	}
@@ -169,6 +168,7 @@ func WorkspaceLimitForPlan(planVersion string) (limit int, known bool) {
 // a safe default limit (fail-closed) and known=false so callers can decide
 // whether to reject, quarantine, or proceed with restricted access.
 func LimitsForCloudPlan(planVersion string) (limits map[string]int64, known bool) {
+	planVersion = CanonicalizePlanVersion(planVersion)
 	if limit, ok := CloudPlanAgentLimits[planVersion]; ok {
 		return map[string]int64{"max_agents": int64(limit)}, true
 	}

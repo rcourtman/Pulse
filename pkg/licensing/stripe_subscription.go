@@ -56,6 +56,8 @@ func CanonicalizePlanVersion(raw string) string {
 	switch strings.ToLower(trimmed) {
 	case "cloud", "starter", "cloud-v1", "cloud_v1", "cloud-starter", "cloud_starter":
 		return "cloud_starter"
+	case "msp", "msp-hosted-v1", "msp_hosted_v1", "msp-starter", "msp_starter":
+		return "msp_starter"
 	case "power", "cloud-power", "cloud_power":
 		return "cloud_power"
 	case "max", "cloud-max", "cloud_max":

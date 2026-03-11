@@ -360,8 +360,8 @@ func TestLimitsForCloudPlan_KnownPlans(t *testing.T) {
 		{"cloud_power", 30},
 		{"cloud_max", 75},
 		{"cloud_founding", 10},
-		{"msp_hosted_v1", 50},
 		{"msp_starter", 50},
+		{"msp_hosted_v1", 50},
 		{"msp_growth", 150},
 		{"msp_scale", 400},
 	}
@@ -412,7 +412,7 @@ func TestLimitsForCloudPlan_UnknownPlanFailsClosed(t *testing.T) {
 func TestLimitsForCloudPlan_NeverReturnsEmptyMap(t *testing.T) {
 	// This test ensures the fail-closed invariant: LimitsForCloudPlan must
 	// ALWAYS return a map with "max_agents" set, regardless of input.
-	inputs := []string{"cloud_starter", "stripe", "", "garbage", "msp_hosted_v1"}
+	inputs := []string{"cloud_starter", "stripe", "", "garbage", "msp_starter", "msp_hosted_v1"}
 	for _, plan := range inputs {
 		limits, _ := LimitsForCloudPlan(plan)
 		if _, ok := limits["max_agents"]; !ok {
@@ -443,8 +443,8 @@ func TestWorkspaceLimitForPlan_KnownPlans(t *testing.T) {
 		{"cloud_power", 1},
 		{"cloud_max", 1},
 		{"cloud_founding", 1},
-		{"msp_hosted_v1", 10},
 		{"msp_starter", 10},
+		{"msp_hosted_v1", 10},
 		{"msp_growth", 25},
 		{"msp_scale", 50},
 	}

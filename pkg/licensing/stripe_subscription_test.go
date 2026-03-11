@@ -126,6 +126,8 @@ func TestCanonicalizePlanVersion(t *testing.T) {
 		{"cloud-v1", "cloud_starter"},
 		{" cloud_v1 ", "cloud_starter"},
 		{"starter", "cloud_starter"},
+		{"msp_hosted_v1", "msp_starter"},
+		{"msp-starter", "msp_starter"},
 		{"power", "cloud_power"},
 		{"max", "cloud_max"},
 		{"founding", "cloud_founding"},
