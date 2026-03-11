@@ -156,7 +156,7 @@ type WebhookDelivery struct {
 	WebhookURL      string    `json:"webhookUrl"`
 	Service         string    `json:"service"`
 	AlertIdentifier string    `json:"alertIdentifier,omitempty"`
-	AlertID         string    `json:"alertId"`
+	AlertID         string    `json:"-"`
 	Timestamp       time.Time `json:"timestamp"`
 	StatusCode      int       `json:"statusCode"`
 	Success         bool      `json:"success"`
@@ -2126,7 +2126,6 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 
 		if len(alertList) == 1 {
 			payload["alertIdentifier"] = alert.ID
-			payload["alertId"] = alert.ID
 		}
 
 		jsonData, err = json.Marshal(payload)

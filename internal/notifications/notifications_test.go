@@ -3648,8 +3648,8 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		if payload["alertIdentifier"] != testAlert.ID {
 			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
 		}
-		if payload["alertId"] != testAlert.ID {
-			t.Errorf("expected alertId %q, got %v", testAlert.ID, payload["alertId"])
+		if _, ok := payload["alertId"]; ok {
+			t.Errorf("did not expect legacy alertId in generic payload, got %v", payload["alertId"])
 		}
 	})
 
@@ -3688,8 +3688,8 @@ func TestSendResolvedWebhookServiceTemplates(t *testing.T) {
 		if payload["alertIdentifier"] != testAlert.ID {
 			t.Errorf("expected alertIdentifier %q, got %v", testAlert.ID, payload["alertIdentifier"])
 		}
-		if payload["alertId"] != testAlert.ID {
-			t.Errorf("expected alertId %q, got %v", testAlert.ID, payload["alertId"])
+		if _, ok := payload["alertId"]; ok {
+			t.Errorf("did not expect legacy alertId in generic explicit payload, got %v", payload["alertId"])
 		}
 	})
 
