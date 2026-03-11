@@ -16,6 +16,7 @@ from canonical_completion_guard import (
     is_ignored_runtime_file,
     is_test_or_fixture,
     load_subsystem_rules,
+    required_contract_updates,
     subsystem_matches_path,
 )
 from status_audit import audit_status_payload, load_status_payload
@@ -68,6 +69,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
     rules_by_id = {str(rule["id"]): rule for rule in rules}
     status_report = audit_status_payload(load_status_payload())
     impacted = infer_impacted_subsystems(normalized)
+    contract_updates = required_contract_updates(normalized, impacted)
     path_entries: list[dict[str, Any]] = []
     unowned: list[str] = []
 
@@ -102,6 +104,12 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
                 "path": path,
                 "classification": classification,
                 "matches": matches,
+                "dependent_contract_updates": [
+                    contract
+                    for contract in contract_updates.values()
+                    if contract["reason"] == "dependent-reference"
+                    if path in contract["touched_runtime_files"]
+                ],
                 "contract_update_required": classification == "runtime" and bool(matches),
                 "proof_update_required": classification == "runtime" and bool(matches),
             }
@@ -125,6 +133,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
         "status_audit_errors": status_report.get("errors", []),
         "files": path_entries,
         "impacted_subsystems": impacted_summary,
+        "required_contract_updates": list(contract_updates.values()),
         "unowned_runtime_files": unowned,
     }
 
@@ -163,6 +172,12 @@ def render_pretty(result: dict[str, Any]) -> str:
                     f"gap={lane['gap']:.0f} derived={lane['derived_status']} "
                     f"open_decisions={len(lane_context['open_decisions'])}"
                 )
+        for contract in entry.get("dependent_contract_updates", []):
+            lines.append(
+                f"  - also update {contract['subsystem']} contract -> {contract['contract']}"
+            )
+            for reference in contract.get("matched_references", []):
+                lines.append(f"    referenced by {reference}")
         if entry["classification"] == "runtime" and not entry["matches"]:
             lines.append("  - no owning subsystem rule matched")
     for path in result["unowned_runtime_files"]:

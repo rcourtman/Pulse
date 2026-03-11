@@ -214,6 +214,8 @@ scripts/release_control/*
 !scripts/release_control/registry_audit_test.py
 !scripts/release_control/status_audit.py
 !scripts/release_control/status_audit_test.py
+!scripts/release_control/subsystem_contracts.py
+!scripts/release_control/subsystem_contracts_test.py
 !scripts/release_control/subsystem_lookup.py
 !scripts/release_control/subsystem_lookup_test.py
 .agent/

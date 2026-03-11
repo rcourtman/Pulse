@@ -115,13 +115,19 @@ governance guardrail tests in `internal/repoctl`.
 For runtime subsystem changes, the same commit must now include:
 
 1. the matching subsystem contract update
-2. at least one matching verification artifact update
+2. any dependent subsystem contract whose `Canonical Files` or `Extension Points` explicitly reference a touched runtime path
+3. at least one matching verification artifact update
 
 Verification artifacts are subsystem-specific. The allowed proof classes are
 defined in `docs/release-control/v6/subsystems/registry.json` and may include
 explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,
 approved test-prefix matches, non-test contract/type files, or same-subsystem
 tests only when the registry explicitly allows them.
+
+Cross-subsystem contract dependencies are not advisory. If a touched runtime
+path is named in another subsystem contract's `Canonical Files` or
+`Extension Points`, the canonical completion guard now requires that dependent
+contract to be staged in the same slice.
 
 `status.json` evidence references must use repo-qualified relative paths.
 Absolute machine-local paths are forbidden.
@@ -166,8 +172,9 @@ If those answers are not obvious in under a minute, the subsystem still needs
 architectural hardening.
 
 Use `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]`
-to ask the repo which subsystem, contract, proof route, live lane context, and
-relevant decision records apply to a file set before editing.
+to ask the repo which subsystem, contract, proof route, live lane context,
+relevant decision records, and dependent contract-update obligations apply to a
+file set before editing.
 
 ## Boundary Rule
 

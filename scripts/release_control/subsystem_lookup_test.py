@@ -67,6 +67,18 @@ class SubsystemLookupTest(unittest.TestCase):
             {"host-type-migration-boundary-audit", "orchestrator-retired", "top-level-governance-split"},
         )
 
+    def test_lookup_paths_reports_dependent_contract_updates_for_shared_canonical_file(self) -> None:
+        result = lookup_paths(["internal/unifiedresources/views.go"])
+        file_entry = result["files"][0]
+        self.assertEqual(
+            {contract["subsystem"] for contract in file_entry["dependent_contract_updates"]},
+            {"monitoring"},
+        )
+        self.assertEqual(
+            {contract["subsystem"] for contract in result["required_contract_updates"]},
+            {"monitoring", "unified-resources"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

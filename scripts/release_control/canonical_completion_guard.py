@@ -15,6 +15,8 @@ import subprocess
 import sys
 from typing import Dict, List, Sequence, Set
 
+from subsystem_contracts import load_contract_graph, referenced_contracts_for_path
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUBSYSTEM_REGISTRY = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems" / "registry.json"
@@ -232,6 +234,59 @@ def infer_impacted_subsystems(staged_files: Sequence[str]) -> Dict[str, dict]:
     return impacted
 
 
+def required_contract_updates(
+    staged_files: Sequence[str],
+    impacted: Dict[str, dict] | None = None,
+) -> Dict[str, dict]:
+    impacted_subsystems = impacted if impacted is not None else infer_impacted_subsystems(staged_files)
+    required: Dict[str, dict] = {}
+    contract_graph = load_contract_graph()
+
+    for subsystem_id, data in impacted_subsystems.items():
+        required[data["contract"]] = {
+            "subsystem": subsystem_id,
+            "contract": data["contract"],
+            "reason": "owner",
+            "touched_runtime_files": sorted(set(data["touched_runtime_files"])),
+            "matched_references": [],
+        }
+
+    touched_runtime_files = sorted(
+        {
+            path
+            for data in impacted_subsystems.values()
+            for path in data.get("touched_runtime_files", [])
+        }
+    )
+    for path in touched_runtime_files:
+        for contract in referenced_contracts_for_path(path, contract_graph):
+            contract_path = str(contract["contract"])
+            entry = required.setdefault(
+                contract_path,
+                {
+                    "subsystem": str(contract["subsystem_id"]),
+                    "contract": contract_path,
+                    "reason": "dependent-reference",
+                    "touched_runtime_files": [],
+                    "matched_references": [],
+                },
+            )
+            if entry["reason"] == "owner":
+                continue
+            if path not in entry["touched_runtime_files"]:
+                entry["touched_runtime_files"].append(path)
+            for reference in contract.get("matched_references", []):
+                descriptor = f"{reference['heading']}: {reference['path']}"
+                if descriptor not in entry["matched_references"]:
+                    entry["matched_references"].append(descriptor)
+
+    for data in required.values():
+        data["touched_runtime_files"] = sorted(set(data["touched_runtime_files"]))
+        data["matched_references"] = sorted(set(data["matched_references"]), key=str.casefold)
+
+    return dict(sorted(required.items()))
+
+
 def staged_verification_files_for_requirement(rule: dict, requirement: dict, staged_files: Sequence[str]) -> List[str]:
     exact_files = set(requirement.get("exact_files", []))
     test_prefixes = tuple(requirement.get("test_prefixes", []))
@@ -258,10 +313,21 @@ def format_missing_requirements(missing_contracts: Dict[str, dict], missing_veri
         "Stage the required subsystem file(s) in the same commit:",
     ]
 
-    for subsystem_id, data in sorted(missing_contracts.items()):
-        lines.append(f"- subsystem {subsystem_id}: missing contract {data['contract']}")
+    for contract_path, data in sorted(missing_contracts.items()):
+        if data.get("reason") == "dependent-reference":
+            lines.append(
+                f"- dependent subsystem {data['subsystem']}: missing contract {contract_path}"
+            )
+            lines.append(
+                "  touched runtime files are canonical references in that dependent subsystem contract"
+            )
+        else:
+            lines.append(f"- subsystem {data['subsystem']}: missing contract {contract_path}")
         for path in sorted(data["touched_runtime_files"]):
             lines.append(f"  touched by {path}")
+        if data.get("reason") == "dependent-reference":
+            for reference in data.get("matched_references", []):
+                lines.append(f"  referenced by {reference}")
 
     for subsystem_id, data in sorted(missing_verification.items()):
         for requirement in data["missing_requirements"]:
@@ -301,6 +367,8 @@ def format_missing_requirements(missing_contracts: Dict[str, dict], missing_veri
             "Rule:",
             "If a canonical subsystem changes, its contract under",
             "`docs/release-control/v6/subsystems/` must be updated in the same commit.",
+            "If a touched runtime path is also named in another subsystem contract's",
+            "`Canonical Files` or `Extension Points`, that dependent contract must be updated too.",
             "Each touched runtime path must also satisfy the first matching",
             "verification policy from that subsystem's registry entry.",
         ]
@@ -311,10 +379,11 @@ def format_missing_requirements(missing_contracts: Dict[str, dict], missing_veri
 def check_staged_contracts(staged_files: Sequence[str]) -> int:
     staged_set: Set[str] = set(staged_files)
     impacted = infer_impacted_subsystems(staged_files)
+    required_contracts = required_contract_updates(staged_files, impacted)
     missing_contracts = {
-        subsystem_id: data
-        for subsystem_id, data in impacted.items()
-        if data["contract"] not in staged_set
+        contract_path: data
+        for contract_path, data in required_contracts.items()
+        if contract_path not in staged_set
     }
     missing_verification: Dict[str, dict] = {}
     for subsystem_id, data in impacted.items():

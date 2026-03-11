@@ -22,7 +22,7 @@ Useful helper tools:
 - `python3 scripts/release_control/contract_audit.py --check` for structured subsystem contract metadata, explicit cross-subsystem dependency declarations, required sections, and canonical path references
 - `python3 scripts/release_control/status_audit.py --check`
 - `python3 scripts/release_control/registry_audit.py --check`
-- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, and relevant decision records
+- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations
 
 The old release-control orchestrator and loop tooling are retired. Direct,
 repo-aware sessions are now the only supported v6 execution path.

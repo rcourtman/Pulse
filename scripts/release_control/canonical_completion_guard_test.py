@@ -11,6 +11,7 @@ from canonical_completion_guard import (
     load_subsystem_rules,
     path_policy_matches,
     parse_args,
+    required_contract_updates,
     staged_verification_files_for_requirement,
     stdin_files,
     subsystem_matches_path,
@@ -214,6 +215,46 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                 }
             ],
+        )
+
+    def test_shared_canonical_file_requires_dependent_contract_update(self):
+        required = required_contract_updates(["internal/unifiedresources/views.go"])
+        self.assertEqual(
+            set(required),
+            {
+                "docs/release-control/v6/subsystems/monitoring.md",
+                "docs/release-control/v6/subsystems/unified-resources.md",
+            },
+        )
+        self.assertEqual(
+            required["docs/release-control/v6/subsystems/unified-resources.md"]["reason"],
+            "owner",
+        )
+        self.assertEqual(
+            required["docs/release-control/v6/subsystems/monitoring.md"]["reason"],
+            "dependent-reference",
+        )
+        self.assertEqual(
+            required["docs/release-control/v6/subsystems/monitoring.md"]["matched_references"],
+            [
+                "## Canonical Files: internal/unifiedresources/views.go",
+                "## Extension Points: internal/unifiedresources/views.go",
+            ],
+        )
+
+    def test_monitoring_owned_runtime_does_not_require_unified_resources_contract(self):
+        required = required_contract_updates(["internal/monitoring/monitor.go"])
+        self.assertEqual(
+            required,
+            {
+                "docs/release-control/v6/subsystems/monitoring.md": {
+                    "subsystem": "monitoring",
+                    "contract": "docs/release-control/v6/subsystems/monitoring.md",
+                    "reason": "owner",
+                    "touched_runtime_files": ["internal/monitoring/monitor.go"],
+                    "matched_references": [],
+                }
+            },
         )
 
     def test_alerts_owned_runtime_has_no_default_fallback(self):

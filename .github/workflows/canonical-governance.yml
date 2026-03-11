@@ -98,6 +98,9 @@ jobs:
       - name: Run status audit unit tests
         run: python3 scripts/release_control/status_audit_test.py
 
+      - name: Run subsystem contract helper unit tests
+        run: python3 scripts/release_control/subsystem_contracts_test.py
+
       - name: Run subsystem lookup unit tests
         run: python3 scripts/release_control/subsystem_lookup_test.py
 

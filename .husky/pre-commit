@@ -82,6 +82,7 @@ python3 scripts/release_control/canonical_completion_guard_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/registry_audit_test.py
 python3 scripts/release_control/status_audit_test.py
+python3 scripts/release_control/subsystem_contracts_test.py
 python3 scripts/release_control/subsystem_lookup_test.py
 
 
