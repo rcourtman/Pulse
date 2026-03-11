@@ -43,7 +43,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// For each node, get storage and check content
 	for _, node := range nodes {
 		if nodeEffectiveStatus[node.Node] != "online" {
-			for _, storageName := range storageNamesForNode(instanceName, node.Node, snapshot) {
+			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
 				storagePreserveNeeded[storageName] = struct{}{}
 			}
 			continue
@@ -79,7 +79,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
-			for _, storageName := range storageNamesForNode(instanceName, node.Node, snapshot) {
+			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
 				storagePreserveNeeded[storageName] = struct{}{}
 			}
 			storageQueryErrors++
@@ -305,29 +305,29 @@ func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
 	return false
 }
 
-func storageNamesForNode(instanceName, nodeName string, snapshot models.StateSnapshot) []string {
-	if nodeName == "" {
+func storageNamesForNode(readState unifiedresources.ReadState, instanceName, nodeName string) []string {
+	if readState == nil || nodeName == "" {
 		return nil
 	}
 
 	var storages []string
-	for _, storage := range snapshot.Storage {
-		if storage.Instance != instanceName {
+	for _, storage := range readState.StoragePools() {
+		if storage == nil || storage.Instance() != instanceName {
 			continue
 		}
-		if storage.Name == "" {
+		if storage.Name() == "" {
 			continue
 		}
-		if !strings.Contains(storage.Content, "backup") {
+		if !strings.Contains(storage.Content(), "backup") {
 			continue
 		}
-		if storage.Node == nodeName {
-			storages = append(storages, storage.Name)
+		if storage.Node() == nodeName {
+			storages = append(storages, storage.Name())
 			continue
 		}
-		for _, node := range storage.Nodes {
+		for _, node := range storage.AccessibleNodes() {
 			if node == nodeName {
-				storages = append(storages, storage.Name)
+				storages = append(storages, storage.Name())
 				break
 			}
 		}
@@ -460,12 +460,6 @@ func populateGuestNodeMapFromReadState(readState unifiedresources.ReadState, ins
 		}
 		guestNodeMap[ct.VMID()] = ct.Node()
 	}
-}
-
-func buildGuestLookups(snapshot models.StateSnapshot, metadataStore *config.GuestMetadataStore) (map[string]alerts.GuestLookup, map[string][]alerts.GuestLookup) {
-	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(snapshot)
-	return buildGuestLookupsFromReadState(registry, metadataStore)
 }
 
 // enrichWithPersistedMetadata adds entries from the metadata store for guests

@@ -81,6 +81,55 @@ func TestPopulateGuestNodeMapFromReadState_UsesCanonicalWorkloads(t *testing.T) 
 	}
 }
 
+func TestStorageNamesForNode_UsesCanonicalStoragePools(t *testing.T) {
+	readState := backupReadState([]unifiedresources.Resource{
+		{
+			ID:     "storage-local",
+			Type:   unifiedresources.ResourceTypeStorage,
+			Name:   "local",
+			Status: unifiedresources.StatusOnline,
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance: "pve1",
+				NodeName: "node1",
+			},
+			Storage: &unifiedresources.StorageMeta{
+				Content: "images,backup",
+			},
+		},
+		{
+			ID:     "storage-shared",
+			Type:   unifiedresources.ResourceTypeStorage,
+			Name:   "shared",
+			Status: unifiedresources.StatusOnline,
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance: "pve1",
+			},
+			Storage: &unifiedresources.StorageMeta{
+				Content: "backup",
+				Nodes:   []string{"node2", "node3"},
+			},
+		},
+		{
+			ID:     "storage-no-backup",
+			Type:   unifiedresources.ResourceTypeStorage,
+			Name:   "fast",
+			Status: unifiedresources.StatusOnline,
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance: "pve1",
+				NodeName: "node2",
+			},
+			Storage: &unifiedresources.StorageMeta{
+				Content: "images",
+			},
+		},
+	})
+
+	got := storageNamesForNode(readState, "pve1", "node2")
+	if len(got) != 1 || got[0] != "shared" {
+		t.Fatalf("expected canonical backup storage names [shared], got %+v", got)
+	}
+}
+
 func TestMonitorCalculateBackupOperationTimeout_UsesCanonicalReadState(t *testing.T) {
 	resources := make([]unifiedresources.Resource, 0, 61)
 	for i := 0; i < 61; i++ {

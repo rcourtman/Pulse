@@ -77,3 +77,8 @@ name, and type context from canonical `ReadState` instead of from
 snapshot-owned VM/container arrays, so storage backup polling, guest snapshot
 polling, timeout sizing, PBS recovery candidate assembly, and Proxmox recovery
 ingest all follow unified runtime truth when a live resource registry exists.
+
+Storage-backup preservation now also derives node-to-storage membership from
+canonical `ReadState.StoragePools()` instead of from snapshot-owned storage
+arrays, leaving only persisted backup/cache payloads in this path on direct
+snapshot state.
