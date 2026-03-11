@@ -34,20 +34,20 @@ func IsNilAlertPayload(p AlertPayload) bool {
 // AlertAnalyzerFinding is the contract type passed from the enterprise
 // AlertTriggeredAnalyzer back to the OSS FindingRecorder adapter.
 type AlertAnalyzerFinding struct {
-	ID             string
-	Key            string
-	Severity       string
-	Category       string
-	ResourceID     string
-	ResourceName   string
-	ResourceType   string
-	Title          string
-	Description    string
-	Recommendation string
-	Evidence       string
-	AlertID        string
-	DetectedAt     time.Time
-	LastSeenAt     time.Time
+	ID              string
+	Key             string
+	Severity        string
+	Category        string
+	ResourceID      string
+	ResourceName    string
+	ResourceType    string
+	Title           string
+	Description     string
+	Recommendation  string
+	Evidence        string
+	AlertIdentifier string
+	DetectedAt      time.Time
+	LastSeenAt      time.Time
 }
 
 // FindingRecorder records alert-triggered findings through the patrol pipeline.
@@ -60,7 +60,7 @@ type FindingRecorder interface {
 // IncidentRecorder records AI analysis events for alerts.
 // The OSS binary provides an adapter that delegates to Service.RecordIncidentAnalysis().
 type IncidentRecorder interface {
-	RecordIncidentAnalysis(alertID, summary string, details map[string]interface{})
+	RecordIncidentAnalysis(alertIdentifier, summary string, details map[string]interface{})
 }
 
 // AlertAnalyzerDeps bundles the dependencies that the enterprise

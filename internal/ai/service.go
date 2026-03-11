@@ -227,7 +227,7 @@ func (a *alertFindingRecorderAdapter) RecordAlertFinding(f *aicontracts.AlertAna
 		Description:     f.Description,
 		Recommendation:  f.Recommendation,
 		Evidence:        f.Evidence,
-		AlertIdentifier: f.AlertID,
+		AlertIdentifier: f.AlertIdentifier,
 		DetectedAt:      f.DetectedAt,
 		LastSeenAt:      f.LastSeenAt,
 	})
