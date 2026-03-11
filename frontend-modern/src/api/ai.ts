@@ -4,10 +4,10 @@ import {
   arrayOrEmpty,
   isAPIErrorStatus,
   objectArrayFieldOrEmpty,
-  parseJSONTextSafe,
   promoteLegacyAlertIdentifier,
 } from './responseUtils';
 import { logger } from '@/utils/logger';
+import { consumeJSONEventStream } from './streaming';
 import type {
   AISettings,
   AISettingsUpdateRequest,
@@ -195,78 +195,17 @@ export class AIAPI {
 
     await assertAPIResponseOK(response, `Request failed with status ${response.status}`);
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-    // 5 minutes timeout - Opus models can take a long time
-    const STREAM_TIMEOUT_MS = 300000;
-    let lastEventTime = Date.now();
-    const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      try {
-        return await Promise.race([
-          reader.read(),
-          new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
-          }),
-        ]);
-      } finally {
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-      }
-    };
-
-    try {
-      for (;;) {
-        if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
-          logger.warn('[AI] Alert investigation stream timeout');
-          break;
-        }
-
-        let result: ReadableStreamReadResult<Uint8Array>;
-        try {
-          result = await readWithTimeout();
-        } catch (e) {
-          if ((e as Error).message === 'Read timeout') break;
-          throw e;
-        }
-
-        const { done, value } = result;
-        if (done) break;
-
-        lastEventTime = Date.now();
-        buffer += decoder.decode(value, { stream: true });
-
-        const normalizedBuffer = buffer.replace(/\r\n/g, '\n');
-        const messages = normalizedBuffer.split('\n\n');
-        buffer = messages.pop() || '';
-
-        for (const message of messages) {
-          if (!message.trim() || message.trim().startsWith(':')) continue;
-
-          const dataLines = message.split('\n').filter((line) => line.startsWith('data: '));
-          for (const line of dataLines) {
-            const jsonStr = line.slice(6);
-            if (!jsonStr.trim()) continue;
-
-            const data = parseJSONTextSafe<AIStreamEvent>(jsonStr);
-            if (!data) {
-              logger.error('[AI] Failed to parse investigation event:', { line });
-              continue;
-            }
-
-            onEvent(data);
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
+    await consumeJSONEventStream<AIStreamEvent>(response, {
+      onEvent: (event) => {
+        onEvent(event);
+      },
+      onParseError: (line) => {
+        logger.error('[AI] Failed to parse investigation event:', { line });
+      },
+      onTimeout: () => {
+        logger.warn('[AI] Alert investigation stream timeout');
+      },
+    });
   }
 
   // Remediation plans

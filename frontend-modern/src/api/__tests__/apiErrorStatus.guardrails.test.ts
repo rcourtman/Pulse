@@ -14,6 +14,7 @@ import guestMetadataSource from '@/api/guestMetadata.ts?raw';
 import metadataClientSource from '@/api/metadataClient.ts?raw';
 import responseUtilsSource from '@/api/responseUtils.ts?raw';
 import securitySource from '@/api/security.ts?raw';
+import streamingSource from '@/api/streaming.ts?raw';
 
 const apiSources = import.meta.glob('../*.ts', {
   query: '?raw',
@@ -50,6 +51,7 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function promoteLegacyAlertIdentifier');
     expect(metadataClientSource).toContain('export function buildMetadataAPI');
     expect(metadataClientSource).toContain('export interface ResourceMetadataRecord');
+    expect(streamingSource).toContain('export async function consumeJSONEventStream');
     expect(responseUtilsSource).toContain('(error as APIErrorLike).status');
     expect(responseUtilsSource).toContain('response.status');
   });
@@ -58,10 +60,13 @@ describe('API error-status guardrails', () => {
     expect(aiSource).toContain('isAPIErrorStatus(error, 402)');
     expect(aiSource).toContain('isAPIErrorStatus(error, 404)');
     expect(aiSource).toContain('assertAPIResponseOK(response,');
-    expect(aiSource).toContain('parseJSONTextSafe<AIStreamEvent>(');
+    expect(aiSource).toContain('consumeJSONEventStream<AIStreamEvent>(response,');
     expect(aiSource).toContain('promoteLegacyAlertIdentifier(');
     expect(aiSource).not.toContain("message.includes('402')");
     expect(aiSource).not.toContain('JSON.parse(');
+    expect(aiSource).not.toContain('TextDecoder');
+    expect(aiSource).not.toContain('getReader(');
+    expect(aiSource).not.toContain('STREAM_TIMEOUT_MS');
     expect(aiSource).not.toContain('private static encodeSegment(');
     expect(aiSource).not.toContain('private static isPaymentRequiredError(');
     expect(aiSource).not.toContain('readAPIErrorMessage(');
@@ -69,8 +74,11 @@ describe('API error-status guardrails', () => {
     expect(aiSource).not.toContain('normalizeUnifiedFinding(');
 
     expect(aiChatSource).toContain('assertAPIResponseOK(response,');
-    expect(aiChatSource).toContain('parseJSONTextSafe<StreamEvent>(');
+    expect(aiChatSource).toContain('consumeJSONEventStream<StreamEvent>(response,');
     expect(aiChatSource).not.toContain('JSON.parse(');
+    expect(aiChatSource).not.toContain('TextDecoder');
+    expect(aiChatSource).not.toContain('getReader(');
+    expect(aiChatSource).not.toContain('STREAM_TIMEOUT_MS');
     expect(aiChatSource).not.toContain('private static encodeSegment(');
     expect(aiChatSource).not.toContain('readAPIErrorMessage(');
 
@@ -183,7 +191,7 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, and discovery route alias drift', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, raw duplicated SSE stream readers, and discovery route alias drift', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -253,6 +261,11 @@ describe('API error-status guardrails', () => {
     );
     const rawMetadataCrudPattern =
       /(?:apiFetchJSON\(|private static baseUrl = '\/api\/(?:agents|guests)\/metadata')/;
+    const governedStreamEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:ai|aiChat)\.ts$/.test(path),
+    );
+    const rawStreamReaderPattern =
+      /(?:TextDecoder|getReader\(|STREAM_TIMEOUT_MS|Read timeout|split\('\n\n'\)|startsWith\('data: '\))/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -339,6 +352,11 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const rawStreamReaderOffenders = governedStreamEntries
+      .filter(([, source]) => rawStreamReaderPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
@@ -354,6 +372,7 @@ describe('API error-status guardrails', () => {
     expect(rawAssertThenParseOffenders).toEqual([]);
     expect(rawNullLookupOffenders).toEqual([]);
     expect(rawMetadataCrudOffenders).toEqual([]);
+    expect(rawStreamReaderOffenders).toEqual([]);
     expect(discoveryRouteAliasOffenders).toEqual([]);
   });
 });

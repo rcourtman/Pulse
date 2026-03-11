@@ -1,7 +1,8 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
-import { assertAPIResponseOK, parseJSONTextSafe } from './responseUtils';
+import { assertAPIResponseOK } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type { AIChatStreamEvent } from './generated/aiChatEvents';
+import { consumeJSONEventStream } from './streaming';
 
 // AI Chat API - Simplified AI interface
 
@@ -225,97 +226,24 @@ export class AIChatAPI {
 
     await assertAPIResponseOK(response, `Request failed with status ${response.status}`);
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let lastEventTime = Date.now();
-    const STREAM_TIMEOUT_MS = 300000; // 5 minutes
-    const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      try {
-        return await Promise.race([
-          reader.read(),
-          new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
-          }),
-        ]);
-      } finally {
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-      }
-    };
-
-    try {
-      for (;;) {
-        if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
-          logger.warn('[AI Chat] Stream timeout');
-          break;
-        }
-
-        let result: ReadableStreamReadResult<Uint8Array>;
-        try {
-          result = await readWithTimeout();
-        } catch (e) {
-          if ((e as Error).message === 'Read timeout') break;
-          throw e;
-        }
-
-        const { done, value } = result;
-        if (done) break;
-
-        lastEventTime = Date.now();
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-
-        // Process SSE messages
-        const normalizedBuffer = buffer.replace(/\r\n/g, '\n');
-        const messages = normalizedBuffer.split('\n\n');
-        buffer = messages.pop() || '';
-
-        for (const message of messages) {
-          if (!message.trim() || message.trim().startsWith(':')) continue;
-
-          const dataLines = message.split('\n').filter((line) => line.startsWith('data: '));
-          for (const line of dataLines) {
-            const jsonStr = line.slice(6);
-            if (!jsonStr.trim()) continue;
-
-            const event = parseJSONTextSafe<StreamEvent>(jsonStr);
-            if (!event) {
-              logger.error('[AI Chat] Failed to parse event', { line });
-              continue;
-            }
-
-            logger.debug('[AI Chat] Event', { type: event.type });
-            onEvent(event);
-
-            if (event.type === 'done' || event.type === 'error') {
-              return;
-            }
-          }
-        }
-      }
-
-      // Process remaining buffer
-      if (buffer.trim() && buffer.trim().startsWith('data: ')) {
-        const jsonStr = buffer.slice(6);
-        const event = parseJSONTextSafe<StreamEvent>(jsonStr);
-        if (event) {
-          onEvent(event);
-        } else {
-          logger.warn('[AI Chat] Could not parse remaining buffer');
-        }
-      }
-
-      // Ensure done event
-      onEvent({ type: 'done' });
-    } finally {
-      reader.releaseLock();
-    }
+    await consumeJSONEventStream<StreamEvent>(response, {
+      onEvent: (event) => {
+        logger.debug('[AI Chat] Event', { type: event.type });
+        onEvent(event);
+        return event.type === 'done' || event.type === 'error';
+      },
+      onParseError: (line) => {
+        logger.error('[AI Chat] Failed to parse event', { line });
+      },
+      onTrailingParseError: () => {
+        logger.warn('[AI Chat] Could not parse remaining buffer');
+      },
+      onTimeout: () => {
+        logger.warn('[AI Chat] Stream timeout');
+      },
+      onComplete: () => {
+        onEvent({ type: 'done' });
+      },
+    });
   }
 }
