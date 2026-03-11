@@ -172,6 +172,9 @@ describe('resourceIdentity', () => {
       displayName: 'Tower',
       status: 'online',
       lastSeen: Date.now(),
+      canonicalIdentity: {
+        hostname: 'tower.canonical',
+      },
       platformData: {
         linkedAgentId: 'agent-linked',
         agent: {
@@ -187,10 +190,11 @@ describe('resourceIdentity', () => {
     } as unknown as Agent;
 
     expect(getAgentLikeIdentityAliases(agent)).toEqual([
-      'agent-explicit',
       'agent-discovery',
-      'agent-linked',
       'agent-platform',
+      'agent-linked',
+      'agent-explicit',
+      'tower.canonical',
       'tower.local',
       'tower.internal',
     ]);
@@ -217,10 +221,10 @@ describe('resourceIdentity', () => {
     } as unknown as Agent;
 
     expect(getAgentLikeMetadataIds(agent)).toEqual([
-      'agent-explicit',
       'agent-discovery',
-      'agent-linked',
       'agent-platform',
+      'agent-linked',
+      'agent-explicit',
     ]);
   });
 
@@ -242,6 +246,40 @@ describe('resourceIdentity', () => {
     expect(getInfrastructureMetadataId(node)).toBe('agent-linked');
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('pve1.local');
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' })).toBe('pve1');
+  });
+
+  it('prefers canonical discovery metadata over raw agent ids for infrastructure helpers', () => {
+    const node = {
+      id: 'node-1',
+      name: 'pve1',
+      linkedAgentId: 'agent-linked',
+    } as Pick<Node, 'id' | 'name' | 'linkedAgentId'>;
+
+    const agent = {
+      id: 'agent-unified-id',
+      hostname: 'legacy-host.local',
+      status: 'online',
+      lastSeen: Date.now(),
+      canonicalIdentity: {
+        hostname: 'canonical-host.local',
+      },
+      discoveryTarget: {
+        resourceType: 'agent',
+        resourceId: 'agent-discovery',
+        agentId: 'agent-discovery',
+        hostname: 'discovery-host.local',
+      },
+      platformData: {
+        linkedAgentId: 'agent-linked',
+        agent: {
+          agentId: 'agent-platform',
+          hostname: 'platform-host.local',
+        },
+      },
+    } as unknown as Agent;
+
+    expect(getInfrastructureMetadataId(node, agent)).toBe('agent-discovery');
+    expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('canonical-host.local');
   });
 
   it('resolves configured node labels with display-first precedence', () => {

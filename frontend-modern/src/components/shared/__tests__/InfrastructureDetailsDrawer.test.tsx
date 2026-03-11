@@ -141,15 +141,15 @@ describe('InfrastructureDetailsDrawer', () => {
     ));
 
     expect(webInterfaceUrlFieldMock).toHaveBeenCalledWith(
-      expect.objectContaining({ metadataId: 'agent-explicit-1' }),
+      expect.objectContaining({ metadataId: 'agent-linked-1' }),
     );
 
     await fireEvent.click(screen.getByRole('button', { name: 'Discovery' }));
 
     expect(discoveryTabMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentId: 'agent-explicit-1',
-        resourceId: 'agent-explicit-1',
+        agentId: 'agent-linked-1',
+        resourceId: 'agent-linked-1',
         hostname: 'pve1.explicit',
       }),
     );

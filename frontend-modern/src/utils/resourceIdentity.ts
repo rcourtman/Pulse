@@ -152,14 +152,16 @@ export const getAgentLikeIdentityAliases = (agent: Agent): string[] => {
   const discoveryTarget = agentRecord.discoveryTarget as Record<string, unknown> | undefined;
   const platformData = agentRecord.platformData as Record<string, unknown> | undefined;
   const platformAgent = platformData?.agent as Record<string, unknown> | undefined;
+  const canonical = agentRecord.canonicalIdentity as Record<string, unknown> | undefined;
 
   return dedupeTrimmedValues([
-    asTrimmedString(agent.id),
     asTrimmedString(discoveryTarget?.resourceId),
     asTrimmedString(discoveryTarget?.agentId),
-    asTrimmedString(platformData?.linkedAgentId),
     asTrimmedString(platformAgent?.agentId),
     asTrimmedString(platformData?.agentId),
+    asTrimmedString(platformData?.linkedAgentId),
+    asTrimmedString(agent.id),
+    asTrimmedString(canonical?.hostname),
     asTrimmedString(agent.hostname),
     asTrimmedString(platformAgent?.hostname),
   ]);
@@ -172,13 +174,29 @@ export const getAgentLikeMetadataIds = (agent: Agent): string[] => {
   const platformAgent = platformData?.agent as Record<string, unknown> | undefined;
 
   return dedupeTrimmedValues([
-    asTrimmedString(agent.id),
     asTrimmedString(discoveryTarget?.resourceId),
     asTrimmedString(discoveryTarget?.agentId),
-    asTrimmedString(platformData?.linkedAgentId),
     asTrimmedString(platformAgent?.agentId),
     asTrimmedString(platformData?.agentId),
+    asTrimmedString(platformData?.linkedAgentId),
+    asTrimmedString(agent.id),
   ]);
+};
+
+const getAgentLikeDiscoveryHostname = (agent?: Agent): string | undefined => {
+  if (!agent) return undefined;
+  const agentRecord = agent as unknown as Record<string, unknown>;
+  const canonical = agentRecord.canonicalIdentity as Record<string, unknown> | undefined;
+  const discoveryTarget = agentRecord.discoveryTarget as Record<string, unknown> | undefined;
+  const platformData = agentRecord.platformData as Record<string, unknown> | undefined;
+  const platformAgent = platformData?.agent as Record<string, unknown> | undefined;
+
+  return (
+    asTrimmedString(canonical?.hostname) ||
+    asTrimmedString(discoveryTarget?.hostname) ||
+    asTrimmedString(agent.hostname) ||
+    asTrimmedString(platformAgent?.hostname)
+  );
 };
 
 export const getInfrastructureMetadataId = (
@@ -192,7 +210,7 @@ export const getInfrastructureMetadataId = (
 export const getInfrastructureDiscoveryHostname = (
   node: Pick<Node, 'name'>,
   agent?: Pick<Agent, 'hostname'>,
-): string => asTrimmedString(agent?.hostname) || node.name;
+): string => getAgentLikeDiscoveryHostname(agent as Agent | undefined) || node.name;
 
 export const getPreferredConfiguredNodeLabel = (
   node: Pick<NodeConfig, 'displayName' | 'name' | 'host' | 'id'>,
