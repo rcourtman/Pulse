@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Canonical subsystem completion guard.
 
-Blocks commits when staged source changes touch a canonical subsystem but the
-matching subsystem contract file is not staged in the same commit.
+Blocks commits when staged runtime changes touch a canonical subsystem but the
+matching subsystem contract file and verification artifact are not staged in the
+same commit.
 """
 
 from __future__ import annotations
@@ -57,8 +58,14 @@ def is_ignored_runtime_file(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in IGNORED_PREFIXES)
 
 
-def infer_required_contracts(staged_files: Sequence[str]) -> Dict[str, List[str]]:
-    required: Dict[str, List[str]] = {}
+def subsystem_matches_path(rule: dict, path: str) -> bool:
+    prefixes = tuple(rule.get("owned_prefixes", []))
+    exact_files = tuple(rule.get("owned_files", []))
+    return any(path.startswith(prefix) for prefix in prefixes) or path in exact_files
+
+
+def infer_impacted_subsystems(staged_files: Sequence[str]) -> Dict[str, dict]:
+    impacted: Dict[str, dict] = {}
     rules = load_subsystem_rules()
 
     for path in staged_files:
@@ -66,29 +73,57 @@ def infer_required_contracts(staged_files: Sequence[str]) -> Dict[str, List[str]
             continue
 
         for rule in rules:
-            prefixes = tuple(rule.get("owned_prefixes", []))
-            exact_files = tuple(rule.get("owned_files", []))
-            contract = str(rule["contract"])
-            matches_prefix = any(path.startswith(prefix) for prefix in prefixes)
-            matches_exact = path in exact_files
-            if not matches_prefix and not matches_exact:
+            if not subsystem_matches_path(rule, path):
                 continue
-            required.setdefault(contract, []).append(path)
+            impacted.setdefault(
+                str(rule["id"]),
+                {
+                    "id": str(rule["id"]),
+                    "contract": str(rule["contract"]),
+                    "touched_runtime_files": [],
+                    "guardrail_files": list(rule.get("guardrail_files", [])),
+                },
+            )["touched_runtime_files"].append(path)
 
-    return required
+    return impacted
 
 
-def format_missing_contracts(missing: Dict[str, List[str]]) -> str:
+def staged_verification_files_for_subsystem(rule: dict, staged_files: Sequence[str]) -> List[str]:
+    guardrail_files = set(rule.get("guardrail_files", []))
+    matches: List[str] = []
+    for path in staged_files:
+        if path in guardrail_files:
+            matches.append(path)
+            continue
+        if not is_test_or_fixture(path):
+            continue
+        if subsystem_matches_path(rule, path):
+            matches.append(path)
+    return sorted(set(matches))
+
+
+def format_missing_requirements(
+    missing_contracts: Dict[str, dict], missing_verification: Dict[str, dict]
+) -> str:
     lines = [
-        "BLOCKED: canonical subsystem changes require matching contract updates.",
+        "BLOCKED: canonical subsystem changes require matching contract and verification updates.",
         "",
-        "Stage the required subsystem contract file(s) in the same commit:",
+        "Stage the required subsystem file(s) in the same commit:",
     ]
 
-    for contract, files in sorted(missing.items()):
-        lines.append(f"- missing {contract}")
-        for path in sorted(files):
+    for subsystem_id, data in sorted(missing_contracts.items()):
+        lines.append(f"- subsystem {subsystem_id}: missing contract {data['contract']}")
+        for path in sorted(data["touched_runtime_files"]):
             lines.append(f"  touched by {path}")
+
+    for subsystem_id, data in sorted(missing_verification.items()):
+        lines.append(f"- subsystem {subsystem_id}: missing verification artifact")
+        for path in sorted(data["touched_runtime_files"]):
+            lines.append(f"  touched by {path}")
+        if data["guardrail_files"]:
+            lines.append("  acceptable guardrail files include:")
+            for path in sorted(data["guardrail_files"]):
+                lines.append(f"    {path}")
 
     lines.extend(
         [
@@ -96,8 +131,9 @@ def format_missing_contracts(missing: Dict[str, List[str]]) -> str:
             "Rule:",
             "If a canonical subsystem changes, its contract under",
             "`docs/release-control/v6/subsystems/` must be updated in the same commit.",
-            "If the change truly does not affect the contract, add a brief no-op update",
-            "to the contract's Current State or Completion Obligations section.",
+            "Runtime subsystem changes must also stage at least one matching",
+            "verification artifact: a subsystem guardrail, contract test,",
+            "benchmark/SLO test, or subsystem-owned test/spec file.",
         ]
     )
     return "\n".join(lines)
@@ -105,16 +141,21 @@ def format_missing_contracts(missing: Dict[str, List[str]]) -> str:
 
 def check_staged_contracts(staged_files: Sequence[str]) -> int:
     staged_set: Set[str] = set(staged_files)
-    required = infer_required_contracts(staged_files)
-    missing = {
-        contract: files
-        for contract, files in required.items()
-        if contract not in staged_set
+    impacted = infer_impacted_subsystems(staged_files)
+    missing_contracts = {
+        subsystem_id: data
+        for subsystem_id, data in impacted.items()
+        if data["contract"] not in staged_set
     }
-    if not missing:
+    missing_verification = {
+        subsystem_id: data
+        for subsystem_id, data in impacted.items()
+        if not staged_verification_files_for_subsystem(data, staged_files)
+    }
+    if not missing_contracts and not missing_verification:
         return 0
 
-    print(format_missing_contracts(missing), file=sys.stderr)
+    print(format_missing_requirements(missing_contracts, missing_verification), file=sys.stderr)
     return 1
 
 

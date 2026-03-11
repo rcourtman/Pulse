@@ -80,6 +80,14 @@ This is the minimum update set for canonical work:
 This protocol is enforced at commit time by the canonical completion guard in
 `scripts/release_control/canonical_completion_guard.py`.
 
+For runtime subsystem changes, the same commit must now include:
+
+1. the matching subsystem contract update
+2. at least one matching verification artifact update
+
+Verification artifacts may be subsystem guardrail tests, contract tests,
+benchmark/SLO tests, or subsystem-owned test/spec files.
+
 ## Guardrails
 
 Canonical architecture is not considered real until the repo can enforce it.
@@ -95,7 +103,7 @@ Preferred guardrail types:
 Documentation alone is not sufficient when a rule can be made executable.
 
 The canonical completion guard is the default repo-level enforcement point for
-subsystem contract updates.
+subsystem contract updates and proof-of-change verification updates.
 
 ## How To Extend Pulse
 
