@@ -3,6 +3,7 @@ import {
   arrayOrEmpty,
   apiErrorStatus,
   apiResponseStatus,
+  finiteNumberOrUndefined,
   isAPIErrorStatus,
   isAPIResponseStatus,
   objectArrayFieldOrEmpty,
@@ -11,6 +12,11 @@ import {
   parseOptionalJSON,
   parseRequiredJSON,
   readAPIErrorMessage,
+  optionalTrimmedString,
+  strictBoolean,
+  strictString,
+  stringArray,
+  trimmedString,
 } from '@/api/responseUtils';
 
 describe('readAPIErrorMessage', () => {
@@ -185,6 +191,61 @@ describe('objectArrayFieldOrEmpty', () => {
   it('returns empty array for missing or invalid object fields', () => {
     expect(objectArrayFieldOrEmpty<string>(null, 'items')).toEqual([]);
     expect(objectArrayFieldOrEmpty<string>({ items: 'bad' }, 'items')).toEqual([]);
+  });
+});
+
+describe('trimmedString', () => {
+  it('trims string input and coerces non-null values', () => {
+    expect(trimmedString('  value  ')).toBe('value');
+    expect(trimmedString(42)).toBe('42');
+    expect(trimmedString(null)).toBe('');
+  });
+});
+
+describe('optionalTrimmedString', () => {
+  it('returns undefined for empty normalized strings', () => {
+    expect(optionalTrimmedString('   ')).toBeUndefined();
+    expect(optionalTrimmedString(null)).toBeUndefined();
+  });
+
+  it('returns normalized string when present', () => {
+    expect(optionalTrimmedString(' value ')).toBe('value');
+  });
+});
+
+describe('strictString', () => {
+  it('returns strings unchanged and falls back for non-strings', () => {
+    expect(strictString('value')).toBe('value');
+    expect(strictString(42)).toBe('');
+    expect(strictString(42, 'fallback')).toBe('fallback');
+  });
+});
+
+describe('strictBoolean', () => {
+  it('returns booleans unchanged and falls back for non-booleans', () => {
+    expect(strictBoolean(true)).toBe(true);
+    expect(strictBoolean(false)).toBe(false);
+    expect(strictBoolean('true')).toBe(false);
+    expect(strictBoolean('true', true)).toBe(true);
+  });
+});
+
+describe('finiteNumberOrUndefined', () => {
+  it('returns finite numbers and rejects invalid values', () => {
+    expect(finiteNumberOrUndefined(0)).toBe(0);
+    expect(finiteNumberOrUndefined(1.5)).toBe(1.5);
+    expect(finiteNumberOrUndefined('1')).toBeUndefined();
+    expect(finiteNumberOrUndefined(Number.NaN)).toBeUndefined();
+  });
+});
+
+describe('stringArray', () => {
+  it('returns only string entries from array values', () => {
+    expect(stringArray(['a', 1, 'b', null])).toEqual(['a', 'b']);
+  });
+
+  it('returns empty array for non-array values', () => {
+    expect(stringArray('a')).toEqual([]);
   });
 });
 

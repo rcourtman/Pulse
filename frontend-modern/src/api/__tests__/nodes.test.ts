@@ -69,6 +69,45 @@ describe('NodesAPI', () => {
       });
       expect(endpoint.pulseReachable).toBeUndefined();
     });
+
+    it('uses canonical scalar coercion for non-string and invalid cluster endpoint fields', async () => {
+      const mockNodes = [
+        {
+          id: 'pve-2',
+          type: 'pve',
+          name: 'PVE 2',
+          clusterEndpoints: [
+            {
+              nodeId: 22,
+              nodeName: null,
+              host: ' https://pve-2.local:8006 ',
+              guestURL: '   ',
+              ip: 10,
+              online: 'true',
+              lastSeen: undefined,
+              pulseReachable: false,
+            },
+          ],
+        } as NodeConfig,
+      ];
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockNodes);
+
+      const result = await NodesAPI.getNodes();
+      const endpoint = (
+        result[0] as NodeConfig & { clusterEndpoints: Array<Record<string, unknown>> }
+      ).clusterEndpoints[0];
+
+      expect(endpoint).toMatchObject({
+        nodeId: '22',
+        nodeName: '',
+        host: 'https://pve-2.local:8006',
+        guestURL: undefined,
+        ip: '10',
+        online: false,
+        lastSeen: '',
+        pulseReachable: false,
+      });
+    });
   });
 
   describe('addNode', () => {

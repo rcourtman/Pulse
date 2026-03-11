@@ -38,7 +38,7 @@ Own canonical runtime payload shapes between backend and frontend.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes
 3. Add dedicated contract tests for new stable payloads
-4. Route frontend API-client error, response status, and shared JSON parsing through `frontend-modern/src/api/responseUtils.ts`
+4. Route frontend API-client error, response status, shared JSON parsing, collection normalization, and scalar payload coercion through `frontend-modern/src/api/responseUtils.ts`
 
 ## Forbidden Paths
 
@@ -50,6 +50,7 @@ Own canonical runtime payload shapes between backend and frontend.
 6. Frontend API clients parsing governed success or stream payloads with raw `response.json()`, ad hoc `response.text()` + `JSON.parse(...)`, or per-module `JSON.parse(...)` stream decoding instead of the shared response parsing helpers
 7. Frontend API clients normalizing nullable or legacy collection payloads with module-local `|| []`, `?? []`, or ad hoc `Array.isArray(...)` fallbacks instead of shared collection helpers
 8. Frontend API clients swallowing non-not-found API failures behind broad `catch { return null; }` fallbacks instead of routing only canonical `404` cases through explicit status checks
+9. Frontend API clients coercing governed backend payload fields through module-local scalar helper stacks instead of shared scalar coercion helpers
 
 ## Completion Obligations
 
@@ -94,6 +95,10 @@ now also route through shared collection-normalization helpers in
 That rule now also covers patrol run history responses so malformed or legacy
 run collections collapse through the shared helper instead of per-module
 fallback lists.
+Notifications email config parsing and node cluster endpoint normalization must
+now also route through shared scalar coercion helpers in
+`frontend-modern/src/api/responseUtils.ts` rather than through per-module
+string/boolean/number helper stacks.
 Not-found detail lookups in governed frontend API clients must now also route
 through explicit status-based `404` handling rather than through broad
 catch-all `null` fallbacks that hide real backend failures.

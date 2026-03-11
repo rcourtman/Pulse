@@ -1,5 +1,11 @@
 import { apiFetchJSON } from '@/utils/apiClient';
-import { arrayOrEmpty } from './responseUtils';
+import {
+  arrayOrEmpty,
+  finiteNumberOrUndefined,
+  strictBoolean,
+  strictString,
+  stringArray,
+} from './responseUtils';
 
 export interface EmailProvider {
   id?: string;
@@ -81,25 +87,6 @@ export interface NotificationTestRequest {
 
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
-  private static readString(value: unknown, fallback = ''): string {
-    return typeof value === 'string' ? value : fallback;
-  }
-
-  private static readBoolean(value: unknown, fallback = false): boolean {
-    return typeof value === 'boolean' ? value : fallback;
-  }
-
-  private static readNumber(value: unknown): number | undefined {
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-  }
-
-  private static readStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-
-    return value.filter((item): item is string => typeof item === 'string');
-  }
 
   static async getAppriseConfig(): Promise<AppriseConfig> {
     return apiFetchJSON(`${this.baseUrl}/apprise`);
@@ -115,21 +102,21 @@ export class NotificationsAPI {
   // Email configuration
   static async getEmailConfig(): Promise<EmailConfig> {
     const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
-    const port = this.readNumber(backendConfig.port);
+    const port = finiteNumberOrUndefined(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
     return {
-      enabled: this.readBoolean(backendConfig.enabled),
-      provider: this.readString(backendConfig.provider),
-      server: this.readString(backendConfig.server),
+      enabled: strictBoolean(backendConfig.enabled),
+      provider: strictString(backendConfig.provider),
+      server: strictString(backendConfig.server),
       port: port ?? 587,
-      username: this.readString(backendConfig.username),
-      password: this.readString(backendConfig.password),
-      from: this.readString(backendConfig.from),
-      to: this.readStringArray(backendConfig.to),
-      tls: this.readBoolean(backendConfig.tls),
-      startTLS: this.readBoolean(backendConfig.startTLS),
-      rateLimit: this.readNumber(backendConfig.rateLimit),
+      username: strictString(backendConfig.username),
+      password: strictString(backendConfig.password),
+      from: strictString(backendConfig.from),
+      to: stringArray(backendConfig.to),
+      tls: strictBoolean(backendConfig.tls),
+      startTLS: strictBoolean(backendConfig.startTLS),
+      rateLimit: finiteNumberOrUndefined(backendConfig.rateLimit),
     };
   }
 

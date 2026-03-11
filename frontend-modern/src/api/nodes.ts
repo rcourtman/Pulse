@@ -1,31 +1,26 @@
 import type { ClusterEndpoint, NodeConfig } from '../types/nodes';
 import { apiFetchJSON } from '@/utils/apiClient';
+import {
+  optionalTrimmedString,
+  strictBoolean,
+  trimmedString,
+} from './responseUtils';
 
 type RawClusterEndpoint = Partial<ClusterEndpoint>;
 
-const asString = (value: unknown): string =>
-  typeof value === 'string' ? value.trim() : value == null ? '' : String(value).trim();
-
-const asOptionalString = (value: unknown): string | undefined => {
-  const normalized = asString(value);
-  return normalized.length > 0 ? normalized : undefined;
-};
-
-const asBoolean = (value: unknown): boolean => value === true;
-
 const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint => ({
-  nodeId: asString(endpoint.nodeId),
-  nodeName: asString(endpoint.nodeName),
-  host: asString(endpoint.host),
-  guestURL: asOptionalString(endpoint.guestURL),
-  ip: asString(endpoint.ip),
-  ipOverride: asOptionalString(endpoint.ipOverride),
-  fingerprint: asOptionalString(endpoint.fingerprint),
-  online: asBoolean(endpoint.online),
-  lastSeen: asString(endpoint.lastSeen),
+  nodeId: trimmedString(endpoint.nodeId),
+  nodeName: trimmedString(endpoint.nodeName),
+  host: trimmedString(endpoint.host),
+  guestURL: optionalTrimmedString(endpoint.guestURL),
+  ip: trimmedString(endpoint.ip),
+  ipOverride: optionalTrimmedString(endpoint.ipOverride),
+  fingerprint: optionalTrimmedString(endpoint.fingerprint),
+  online: strictBoolean(endpoint.online),
+  lastSeen: trimmedString(endpoint.lastSeen),
   pulseReachable: endpoint.pulseReachable ?? undefined,
-  lastPulseCheck: asOptionalString(endpoint.lastPulseCheck),
-  pulseError: asOptionalString(endpoint.pulseError),
+  lastPulseCheck: optionalTrimmedString(endpoint.lastPulseCheck),
+  pulseError: optionalTrimmedString(endpoint.pulseError),
 });
 
 const normalizeNodeConfig = (node: NodeConfig): NodeConfig => {

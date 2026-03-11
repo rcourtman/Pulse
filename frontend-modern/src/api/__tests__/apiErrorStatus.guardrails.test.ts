@@ -7,6 +7,7 @@ import discoverySource from '@/api/discovery.ts?raw';
 import hostedSignupSource from '@/api/hostedSignup.ts?raw';
 import monitoringSource from '@/api/monitoring.ts?raw';
 import notificationsSource from '@/api/notifications.ts?raw';
+import nodesSource from '@/api/nodes.ts?raw';
 import patrolSource from '@/api/patrol.ts?raw';
 import responseUtilsSource from '@/api/responseUtils.ts?raw';
 import securitySource from '@/api/security.ts?raw';
@@ -28,6 +29,12 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function parseJSONTextSafe');
     expect(responseUtilsSource).toContain('export function arrayOrEmpty');
     expect(responseUtilsSource).toContain('export function objectArrayFieldOrEmpty');
+    expect(responseUtilsSource).toContain('export function trimmedString');
+    expect(responseUtilsSource).toContain('export function optionalTrimmedString');
+    expect(responseUtilsSource).toContain('export function strictString');
+    expect(responseUtilsSource).toContain('export function strictBoolean');
+    expect(responseUtilsSource).toContain('export function finiteNumberOrUndefined');
+    expect(responseUtilsSource).toContain('export function stringArray');
     expect(responseUtilsSource).toContain('(error as APIErrorLike).status');
     expect(responseUtilsSource).toContain('response.status');
   });
@@ -99,7 +106,25 @@ describe('API error-status guardrails', () => {
     expect(agentProfilesSource).not.toContain('response.Errors || []');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, and module-local collection fallbacks', () => {
+  it('routes canonical scalar coercion through responseUtils', () => {
+    expect(nodesSource).toContain('trimmedString(endpoint.nodeId)');
+    expect(nodesSource).toContain('optionalTrimmedString(endpoint.guestURL)');
+    expect(nodesSource).toContain('strictBoolean(endpoint.online)');
+    expect(nodesSource).not.toContain('const asString =');
+    expect(nodesSource).not.toContain('const asOptionalString =');
+    expect(nodesSource).not.toContain('const asBoolean =');
+
+    expect(notificationsSource).toContain('strictString(backendConfig.provider)');
+    expect(notificationsSource).toContain('strictBoolean(backendConfig.enabled)');
+    expect(notificationsSource).toContain('finiteNumberOrUndefined(backendConfig.port)');
+    expect(notificationsSource).toContain('stringArray(backendConfig.to)');
+    expect(notificationsSource).not.toContain('private static readString(');
+    expect(notificationsSource).not.toContain('private static readBoolean(');
+    expect(notificationsSource).not.toContain('private static readNumber(');
+    expect(notificationsSource).not.toContain('private static readStringArray(');
+  });
+
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, and module-local scalar helper stacks', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
@@ -115,6 +140,11 @@ describe('API error-status guardrails', () => {
     );
     const rawArrayFallbackPattern = /(?:\|\||\?\?)\s*\[\]/;
     const rawArrayIsArrayFallbackPattern = /Array\.isArray\(.+\)\s*\?\s*.+:\s*\[\]/;
+    const governedScalarEntries = runtimeEntries.filter(([path]) =>
+      /\/(?:nodes|notifications)\.ts$/.test(path),
+    );
+    const rawScalarHelperPattern =
+      /(?:const\s+asString\s*=|const\s+asOptionalString\s*=|const\s+asBoolean\s*=|private\s+static\s+readString\(|private\s+static\s+readBoolean\(|private\s+static\s+readNumber\(|private\s+static\s+readStringArray\()/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
@@ -144,10 +174,16 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
+    const scalarHelperOffenders = governedScalarEntries
+      .filter(([, source]) => rawScalarHelperPattern.test(source))
+      .map(([path]) => path)
+      .sort();
+
     expect(heuristicOffenders).toEqual([]);
     expect(responseStatusOffenders).toEqual([]);
     expect(responseJSONOffenders).toEqual([]);
     expect(manualJSONParseOffenders).toEqual([]);
     expect(arrayFallbackOffenders).toEqual([]);
+    expect(scalarHelperOffenders).toEqual([]);
   });
 });

@@ -100,6 +100,31 @@ export function objectArrayFieldOrEmpty<T>(value: unknown, field: string): T[] {
   return arrayOrEmpty<T>((value as APIRecordLike)[field]);
 }
 
+export function trimmedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : value == null ? '' : String(value).trim();
+}
+
+export function optionalTrimmedString(value: unknown): string | undefined {
+  const normalized = trimmedString(value);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+export function strictString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+export function strictBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+export function finiteNumberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+export function stringArray(value: unknown): string[] {
+  return arrayOrEmpty<unknown>(value).filter((item): item is string => typeof item === 'string');
+}
+
 export function parseJSONTextSafe<T>(text: string): T | null {
   if (!text.trim()) {
     return null;
