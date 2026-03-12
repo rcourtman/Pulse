@@ -60,31 +60,44 @@ result.
 
 - Why this is risky:
   This is where free-vs-paid drift becomes customer-visible. UI claims, API
-  enforcement, and entitlements all need to agree.
+  enforcement, entitlements, and agent-allocation accounting all need to
+  agree.
 - Primary runtime surfaces:
   `GET /api/license/entitlements`
+  `internal/api/agent_limit_enforcement.go`
+  `internal/api/subscription_entitlements.go`
   `frontend-modern/src/pages/AIIntelligence.tsx`
   `frontend-modern/src/pages/Alerts.tsx`
+  `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
   `frontend-modern/src/components/shared/AgentLimitWarningBanner.tsx`
   `internal/cloudcp/entitlements/service.go`
   `pkg/licensing/entitlements.go`
 - Automated proof:
   `go test ./internal/api -run 'TestEntitlementHandler_|TestRequireLicenseFeature_HostedEntitlements|TestLicenseGatedEmptyResponse_HostedEntitlements' -count=1`
+  `go test ./internal/api -run 'TestAgentCountNilMonitor|TestLegacyConnectionCountsFromReadState|TestLegacyConnectionCountsUsesSnapshotFallback|TestDeployReservedCount|TestHostAgentHandlers_HandleReport_EnforcesMaxAgentsForNewHostsOnly|TestHandleAddNode_NoLimitForConfigRegistration|TestHandleAutoRegister_NoLimitForConfigRegistration|TestDockerAgentHandlers_HandleReport_NoLimitForDockerReports|TestKubernetesAgentHandlers_HandleReport_NoLimitForK8sReports|TestTrueNASHandlers_HandleAdd_NoLimitForTrueNAS|TestBuildEntitlementPayloadWithUsage_CurrentValues' -count=1`
   `go test ./internal/license/... -count=1`
   `go test ./internal/cloudcp/... -count=1`
-  `cd frontend-modern && npx vitest run src/pages/__tests__/AIIntelligence.test.tsx src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx src/components/Settings/__tests__/RBACPaywallPanels.test.tsx src/components/shared/__tests__/AgentLimitWarningBanner.test.tsx src/utils/__tests__/licensePresentation.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
+  `cd frontend-modern && npx vitest run src/pages/__tests__/AIIntelligence.test.tsx src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx src/components/Settings/__tests__/RBACPaywallPanels.test.tsx src/components/shared/__tests__/AgentLimitWarningBanner.test.tsx src/utils/__tests__/licensePresentation.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
 - Manual scenario:
   1. Use a free/community entitlement state and confirm paid features are gated.
   2. Use a Pro/Cloud entitlement state and confirm the same surfaces unlock.
   3. Confirm the upgrade path shown in the UI matches the runtime capability.
   4. Confirm alert analysis, AI autonomy, RBAC-only areas, and cloud-only areas
      do not leak access for free users.
+  5. Confirm the active-agent count shown in settings and upgrade-warning
+     surfaces matches the installed v6 agent count and excludes API-only or
+     legacy connection surfaces that are not supposed to consume the cap.
+  6. Confirm adding a new v6 agent at limit is blocked while existing agents
+     continue to report and non-agent config/API registrations are not counted
+     against `max_agents`.
 - Pass when:
-  Free users are blocked consistently, paid users are admitted consistently, and
-  there is no UI/API disagreement.
+  Free users are blocked consistently, paid users are admitted consistently,
+  active-agent counts and caps stay coherent across UI and runtime, and there
+  is no UI/API disagreement.
 - Block release if:
   Any feature can be used without entitlement, or any paid user is blocked on a
-  correctly granted capability.
+  correctly granted capability, or agent counts/caps disagree across
+  enforcement and user-visible surfaces.
 
 ## Gate: `upgrade-state-and-entitlement-preservation`
 

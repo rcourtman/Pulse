@@ -406,6 +406,126 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA7",
+      "summary": "Agent allocation stays coherent across enforcement, entitlements, and UI: only installed v6 agents count toward max_agents, capped limits stay canonical, and users see the same active-agent usage that the runtime enforces.",
+      "kind": "invariant",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L6",
+        "L8",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "cloud-paid",
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [
+        "paid-feature-entitlement-gating"
+      ],
+      "proof_commands": [
+        {
+          "id": "agent-allocation-backend-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestAgentCountNilMonitor|TestLegacyConnectionCountsFromReadState|TestLegacyConnectionCountsUsesSnapshotFallback|TestDeployReservedCount|TestHostAgentHandlers_HandleReport_EnforcesMaxAgentsForNewHostsOnly|TestHandleAddNode_NoLimitForConfigRegistration|TestHandleAutoRegister_NoLimitForConfigRegistration|TestDockerAgentHandlers_HandleReport_NoLimitForDockerReports|TestKubernetesAgentHandlers_HandleReport_NoLimitForK8sReports|TestTrueNASHandlers_HandleAdd_NoLimitForTrueNAS|TestBuildEntitlementPayloadWithUsage_CurrentValues",
+            "-count=1"
+          ]
+        },
+        {
+          "cwd": "frontend-modern",
+          "id": "agent-allocation-frontend-tests",
+          "run": [
+            "npm",
+            "test",
+            "--",
+            "--run",
+            "src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
+            "src/components/shared/__tests__/AgentLimitWarningBanner.test.tsx"
+          ]
+        },
+        {
+          "id": "agent-allocation-limit-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./pkg/licensing",
+            "-run",
+            "TestExceedsAgentLimit|TestAgentCount|TestLimitsForCloudPlan_KnownPlans|TestLimitsForCloudPlan_UnknownPlanFailsClosed",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/__tests__/AgentLimitWarningBanner.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_limit_enforcement_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/config_handlers_add_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/config_handlers_auto_register_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/docker_agents_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/entitlement_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/host_agents_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/kubernetes_agents_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/truenas_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/agent_limit_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/features_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -886,7 +1006,7 @@
     },
     {
       "id": "paid-feature-entitlement-gating",
-      "summary": "Confirm free-versus-paid feature gating matches entitlements across UI, API, hosted, and upgrade surfaces.",
+      "summary": "Confirm free-versus-paid feature gating and agent allocation accounting match entitlements across UI, API, hosted, and upgrade surfaces.",
       "owner": "project-owner",
       "status": "pending",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
