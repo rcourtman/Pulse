@@ -166,6 +166,81 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/api/__tests__/orgs.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/agentModelGuardrails.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
+                "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_roles_panel_to_organization_settings(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/RolesPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"organization-settings"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"organization-settings"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/organization-settings.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "organization-settings-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/orgs.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/agentModelGuardrails.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
+                "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_user_assignments_panel_to_organization_settings(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"organization-settings"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"organization-settings"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/organization-settings.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "organization-settings-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/orgs.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/agentModelGuardrails.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",

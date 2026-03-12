@@ -18,8 +18,8 @@
 ## Purpose
 
 Own organization role/share semantics and the canonical settings surfaces that
-let users review organization metadata, manage membership, and create
-cross-organization shares.
+let users review organization metadata, manage membership, assign roles, and
+create cross-organization shares.
 
 ## Canonical Files
 
@@ -27,9 +27,11 @@ cross-organization shares.
 2. `frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx`
 3. `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx`
 4. `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`
-5. `frontend-modern/src/utils/orgUtils.ts`
-6. `frontend-modern/src/utils/organizationRolePresentation.ts`
-7. `frontend-modern/src/utils/organizationSettingsPresentation.ts`
+5. `frontend-modern/src/components/Settings/RolesPanel.tsx`
+6. `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`
+7. `frontend-modern/src/utils/orgUtils.ts`
+8. `frontend-modern/src/utils/organizationRolePresentation.ts`
+9. `frontend-modern/src/utils/organizationSettingsPresentation.ts`
 
 ## Shared Boundaries
 
@@ -38,28 +40,29 @@ cross-organization shares.
 ## Extension Points
 
 1. Add or change organization role and share semantics through `internal/models/organization.go`
-2. Add or change organization access, overview, or sharing presentation through `frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx`, and `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`
-3. Route organization transport changes through `frontend-modern/src/api/orgs.ts`
-4. Keep backend organization handler changes aligned through `internal/api/org_handlers.go` and `internal/api/org_lifecycle_handlers.go`
+2. Add or change organization access, overview, sharing, role-management, or user-assignment presentation through `frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`, `frontend-modern/src/components/Settings/RolesPanel.tsx`, and `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`
+3. Route organization transport changes through `frontend-modern/src/api/orgs.ts` and `frontend-modern/src/api/rbac.ts`
+4. Keep backend organization and RBAC handler changes aligned through `internal/api/org_handlers.go`, `internal/api/org_lifecycle_handlers.go`, and `internal/api/enterprise_extension_rbac_admin.go`
 
 ## Forbidden Paths
 
 1. Duplicating organization role normalization or badge styling outside the canonical organization presentation helpers
 2. Reintroducing organization settings copy, validation, or empty-state strings directly inside feature panels instead of the shared organization presentation helpers
-3. Letting share-role or membership semantics drift between `internal/models/organization.go` and the governed organization settings surfaces
+3. Letting share-role, RBAC role-assignment, or membership semantics drift between `internal/models/organization.go` and the governed organization settings surfaces
 
 ## Completion Obligations
 
 1. Update the organization model, settings surfaces, and proof files together when role/share semantics move
 2. Keep organization settings copy and validation inside the canonical organization presentation helpers
-3. Update this contract whenever a new organization settings entry point or organization-domain helper becomes canonical runtime surface area
+3. Update this contract whenever a new organization settings, role-management, or organization-domain helper entry point becomes canonical runtime surface area
 
 ## Current State
 
-Organization overview, access, and sharing had been sitting outside the
-governed subsystem map even though they define real runtime expectations around
-membership management and cross-organization resource sharing. This contract
-now makes that boundary explicit while leaving transport payload ownership in
+Organization overview, access, sharing, roles, and user-assignment surfaces had
+been sitting outside the governed subsystem map even though they define real
+runtime expectations around membership management, least-privilege role
+assignment, and cross-organization resource sharing. This contract now makes
+that boundary explicit while leaving transport payload ownership in
 `api-contracts`.
 Canonical organization role ordering is now part of that owned model as well:
 `owner` outranks `admin`, which outranks `editor`, which outranks `viewer`, and
