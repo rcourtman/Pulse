@@ -37,6 +37,79 @@ func issueHostedLifecycleTrialInitiationToken(t *testing.T, h *LicenseHandlers, 
 }
 
 func TestHostedLifecycle(t *testing.T) {
+	t.Run("Signup_SeedsTrialBillingState_ForBillingAdmin", func(t *testing.T) {
+		router, _, _, _, baseDir := newHostedSignupTestRouter(t, true)
+
+		rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("signup status=%d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+		}
+
+		var signupResp struct {
+			OrgID string `json:"org_id"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&signupResp); err != nil {
+			t.Fatalf("decode signup response: %v", err)
+		}
+		if signupResp.OrgID == "" {
+			t.Fatal("expected signup response org_id to be populated")
+		}
+
+		billingStore := config.NewFileBillingStore(baseDir)
+		stored, err := billingStore.GetBillingState(signupResp.OrgID)
+		if err != nil {
+			t.Fatalf("GetBillingState(%s) failed: %v", signupResp.OrgID, err)
+		}
+		if stored == nil {
+			t.Fatal("expected seeded billing state after hosted signup")
+		}
+		if stored.SubscriptionState != entitlements.SubStateTrial {
+			t.Fatalf("subscription_state=%q, want %q", stored.SubscriptionState, entitlements.SubStateTrial)
+		}
+		if stored.PlanVersion != "cloud_trial" {
+			t.Fatalf("plan_version=%q, want %q", stored.PlanVersion, "cloud_trial")
+		}
+		if stored.TrialStartedAt == nil {
+			t.Fatal("expected trial_started_at to be populated")
+		}
+		if stored.TrialEndsAt == nil {
+			t.Fatal("expected trial_ends_at to be populated")
+		}
+
+		expectedCaps := append([]string(nil), cloudCapabilitiesFromLicensing()...)
+		sort.Strings(expectedCaps)
+		gotCaps := append([]string(nil), stored.Capabilities...)
+		sort.Strings(gotCaps)
+		if !reflect.DeepEqual(gotCaps, expectedCaps) {
+			t.Fatalf("seeded capabilities mismatch\n got: %v\nwant: %v", gotCaps, expectedCaps)
+		}
+
+		billingHandlers := NewBillingStateHandlers(billingStore, true)
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/orgs/"+signupResp.OrgID+"/billing-state", nil)
+		req.SetPathValue("id", signupResp.OrgID)
+		rec2 := httptest.NewRecorder()
+		billingHandlers.HandleGetBillingState(rec2, req)
+		if rec2.Code != http.StatusOK {
+			t.Fatalf("billing-admin status=%d, want %d: %s", rec2.Code, http.StatusOK, rec2.Body.String())
+		}
+
+		var adminPayload entitlements.BillingState
+		if err := json.NewDecoder(rec2.Body).Decode(&adminPayload); err != nil {
+			t.Fatalf("decode billing-admin response: %v", err)
+		}
+		if adminPayload.SubscriptionState != entitlements.SubStateTrial {
+			t.Fatalf("billing-admin subscription_state=%q, want %q", adminPayload.SubscriptionState, entitlements.SubStateTrial)
+		}
+		if adminPayload.PlanVersion != "cloud_trial" {
+			t.Fatalf("billing-admin plan_version=%q, want %q", adminPayload.PlanVersion, "cloud_trial")
+		}
+		adminCaps := append([]string(nil), adminPayload.Capabilities...)
+		sort.Strings(adminCaps)
+		if !reflect.DeepEqual(adminCaps, expectedCaps) {
+			t.Fatalf("billing-admin capabilities mismatch\n got: %v\nwant: %v", adminCaps, expectedCaps)
+		}
+	})
+
 	t.Run("Signup_Billing_Entitlements_Flow", func(t *testing.T) {
 		router, mtp, _, _, baseDir := newHostedSignupTestRouter(t, true)
 

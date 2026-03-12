@@ -32,6 +32,7 @@ result.
   `internal/cloudcp/...`
   `internal/api/stripe_webhook_handlers*.go`
 - Automated proof:
+  `go test ./internal/api -run 'TestHostedLifecycle|TestHostedSignup' -count=1`
   `go test ./internal/api -run 'TestStripeWebhook_'`
   `go test ./internal/cloudcp/... -count=1`
   `go test ./internal/hosted/... -count=1`
