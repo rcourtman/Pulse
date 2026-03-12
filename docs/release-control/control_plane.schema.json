@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pulse.local/docs/release-control/control_plane.schema.json",
+  "title": "Pulse Release Control Plane Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "system",
+    "execution_model",
+    "control_plane_doc",
+    "control_plane_schema",
+    "active_profile_id",
+    "active_target_id",
+    "profiles",
+    "targets"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1"
+    },
+    "system": {
+      "type": "string",
+      "const": "pulse-release-control"
+    },
+    "execution_model": {
+      "type": "string",
+      "const": "direct-repo-sessions"
+    },
+    "control_plane_doc": {
+      "type": "string",
+      "const": "docs/release-control/CONTROL_PLANE.md"
+    },
+    "control_plane_schema": {
+      "type": "string",
+      "const": "docs/release-control/control_plane.schema.json"
+    },
+    "active_profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "active_target_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/profile"
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/target"
+      }
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "lifecycle",
+        "root",
+        "source_of_truth",
+        "status",
+        "status_schema",
+        "development_protocol",
+        "high_risk_matrix",
+        "subsystems_dir",
+        "registry",
+        "registry_schema",
+        "subsystem_contract_template"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive",
+            "retired"
+          ]
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_of_truth": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status_schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "development_protocol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "high_risk_matrix": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subsystems_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registry_schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subsystem_contract_template": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "profile_id",
+        "kind",
+        "status",
+        "summary",
+        "completion_rule"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "release",
+            "stabilization",
+            "polish",
+            "feature",
+            "maintenance"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "planned",
+            "completed",
+            "superseded"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completion_rule": {
+          "type": "string",
+          "enum": [
+            "release_ready",
+            "repo_ready",
+            "manual"
+          ]
+        }
+      }
+    }
+  }
+}

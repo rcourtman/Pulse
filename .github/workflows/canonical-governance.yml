@@ -80,6 +80,14 @@ jobs:
           PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
         run: python3 scripts/release_control/status_audit.py --check
 
+      - name: Run control plane audit
+        env:
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+        run: python3 scripts/release_control/control_plane_audit.py --check
+
       - name: Run registry audit
         run: python3 scripts/release_control/registry_audit.py --check
 
@@ -88,6 +96,9 @@ jobs:
 
       - name: Run canonical completion guard unit tests
         run: python3 scripts/release_control/canonical_completion_guard_test.py
+
+      - name: Run control plane audit unit tests
+        run: python3 scripts/release_control/control_plane_audit_test.py
 
       - name: Run contract audit unit tests
         run: python3 scripts/release_control/contract_audit_test.py

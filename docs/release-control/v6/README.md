@@ -1,18 +1,33 @@
 # Pulse v6 Release Control
 
-This folder is the canonical execution control layer for Pulse v6.
+This folder is the current active release profile under the evergreen Pulse
+release control plane.
+
+The evergreen control-plane files live one level up:
+
+1. `docs/release-control/CONTROL_PLANE.md`
+2. `docs/release-control/control_plane.json`
+3. `docs/release-control/control_plane.schema.json`
 
 ## Start With These Control Files
 
-1. `SOURCE_OF_TRUTH.md` (stable human governance, readiness-assertion design rules, and locked decisions)
-2. `status.json` (live lane state, readiness derivation rules, the active readiness assertion catalog, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
-3. `status.schema.json` (machine-readable contract for the `status.json` shape)
-4. `subsystems/registry.json` (machine-readable subsystem ownership, explicit shared-ownership exceptions, and proof routing)
-5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
+1. `../CONTROL_PLANE.md` (evergreen governance, active-profile selection, and active-target rules)
+2. `../control_plane.json` (machine-readable active profile and active target)
+3. `SOURCE_OF_TRUTH.md` (stable human governance, readiness-assertion design rules, and locked decisions)
+4. `status.json` (live lane state, readiness derivation rules, the active readiness assertion catalog, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
+5. `status.schema.json` (machine-readable contract for the `status.json` shape)
+6. `subsystems/registry.json` (machine-readable subsystem ownership, explicit shared-ownership exceptions, and proof routing)
+7. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
 
-`status.json` reporting every lane as `target-met` means the tracked v6 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or `release_gates` remain unresolved.
+`status.json` reporting every lane as `target-met` means the tracked v6
+repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or `release_gates` remain unresolved.
 Use `python3 scripts/release_control/status_audit.py --pretty` for the current derived repo/release readiness summary.
 Use `status.json.readiness_assertions` for the active required assertion set, its proof references, and any executable `proof_commands` that readiness assertion guardrails run.
+Use `docs/release-control/control_plane.json` for the active profile and active
+target that sit above this profile.
+Use `python3 scripts/release_control/control_plane_audit.py --check` to enforce
+that the active target stays current and does not remain active after its
+completion rule is already satisfied.
 
 Supporting governance file:
 
@@ -50,7 +65,10 @@ files, so working-tree-only governance changes cannot make local validation
 disagree with the committed tree.
 
 The old release-control orchestrator and loop tooling are retired. Direct,
-repo-aware sessions are now the only supported v6 execution path.
+repo-aware sessions are now the only supported control-plane execution path.
+Post-release work should keep using this same profile until the control plane
+promotes a new active target such as stabilization, polish, or a named feature
+initiative.
 
 ## Active Repo Scope
 
@@ -70,7 +88,8 @@ Ignored for v6 control:
 
 ## Lean-Mode Rule
 
-For v6 execution, agents must read only `SOURCE_OF_TRUTH.md` and `status.json` first.
+For v6 execution, agents must read `../CONTROL_PLANE.md` and
+`../control_plane.json` first, then `SOURCE_OF_TRUTH.md` and `status.json`.
 Open other docs only when direct evidence is needed for the active task.
 
 For canonical subsystem work, the next file to open after those two is

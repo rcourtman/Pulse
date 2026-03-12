@@ -15,12 +15,13 @@ import subprocess
 import sys
 from typing import Dict, List, Sequence, Set
 
+from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import load_repo_json
 from subsystem_contracts import load_contract_graph, referenced_contracts_for_path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUBSYSTEM_REGISTRY = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems" / "registry.json"
+SUBSYSTEM_REGISTRY = DEFAULT_CONTROL_PLANE["registry_path"]
 
 REQUIRED_VERIFICATION_FIELDS: tuple[str, ...] = (
     "allow_same_subsystem_tests",
@@ -88,7 +89,7 @@ def load_subsystem_rules(*, staged: bool = False) -> List[dict]:
     return rules
 
 IGNORED_PREFIXES: tuple[str, ...] = (
-    "docs/release-control/v6/",
+    DEFAULT_CONTROL_PLANE["profile_root_rel"] + "/",
     "internal/repoctl/",
     ".husky/",
     "scripts/release_control/",
@@ -416,9 +417,12 @@ def format_missing_requirements(
                 lines.append(f"  touched by {path}")
             if requirement.get("path_policy_gap"):
                 lines.append(
-                    "  update docs/release-control/v6/subsystems/registry.json so each touched path matches an explicit path policy"
+                    "  update "
+                    f"{DEFAULT_CONTROL_PLANE['registry_rel']} so each touched path matches an explicit path policy"
                 )
-                lines.append("  default subsystem verification is forbidden for governed v6 subsystems")
+                lines.append(
+                    f"  default subsystem verification is forbidden for governed {DEFAULT_CONTROL_PLANE['active_profile_id']} subsystems"
+                )
                 continue
             exact_files = sorted(requirement.get("exact_files", []))
             test_prefixes = sorted(requirement.get("test_prefixes", []))
@@ -439,7 +443,7 @@ def format_missing_requirements(
             "",
             "Rule:",
             "If a canonical subsystem changes, its contract under",
-            "`docs/release-control/v6/subsystems/` must be updated in the same commit.",
+            f"`{DEFAULT_CONTROL_PLANE['subsystems_dir_rel']}/` must be updated in the same commit.",
             "If a touched runtime path is also named in another subsystem contract's",
             "`Canonical Files`, `Shared Boundaries`, or `Extension Points`, that dependent contract must be updated too.",
             "A staged contract file only counts if its staged diff changes a substantive contract section,",

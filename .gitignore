@@ -191,6 +191,9 @@ docs/architecture/
 docs/release-control/
 !docs/release-control/
 docs/release-control/*
+!docs/release-control/CONTROL_PLANE.md
+!docs/release-control/control_plane.json
+!docs/release-control/control_plane.schema.json
 !docs/release-control/v6/
 docs/release-control/v6/*
 !docs/release-control/v6/PRE_RELEASE_CHECKLIST.md
@@ -207,6 +210,9 @@ docs/release-control/v6/*
 scripts/release_control/
 !scripts/release_control/
 scripts/release_control/*
+!scripts/release_control/control_plane.py
+!scripts/release_control/control_plane_audit.py
+!scripts/release_control/control_plane_audit_test.py
 !scripts/release_control/canonical_completion_guard.py
 !scripts/release_control/canonical_completion_guard_test.py
 !scripts/release_control/contract_audit.py

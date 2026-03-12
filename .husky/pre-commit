@@ -61,6 +61,10 @@ echo "Sensitivity check passed."
 echo "Running governance stage guard..."
 python3 scripts/release_control/governance_stage_guard.py
 
+# Enforce evergreen control-plane integrity and active target freshness
+echo "Running control plane audit..."
+python3 scripts/release_control/control_plane_audit.py --check --staged
+
 # Enforce canonical subsystem completion discipline
 echo "Running canonical completion guard..."
 python3 scripts/release_control/canonical_completion_guard.py
@@ -86,6 +90,7 @@ python3 scripts/release_control/readiness_assertion_guard.py --staged --blocking
 
 echo "Running release-control helper unit tests..."
 python3 scripts/release_control/canonical_completion_guard_test.py
+python3 scripts/release_control/control_plane_audit_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/format_staged_go_test.py
 python3 scripts/release_control/governance_stage_guard_test.py

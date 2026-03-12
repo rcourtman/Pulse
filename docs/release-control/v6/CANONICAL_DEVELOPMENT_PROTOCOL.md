@@ -1,5 +1,8 @@
 # Pulse v6 Canonical Development Protocol
 
+This is the canonical development protocol for the active v6 release profile.
+The evergreen Pulse control plane now lives in `docs/release-control/`.
+
 This protocol exists to make the repo constrained instead of interpretive.
 Future work should be difficult to do in the wrong shape.
 
@@ -19,18 +22,25 @@ If a subsystem does not satisfy those five properties, it is drift-prone.
 
 For v6 work, agents must treat these files as the execution entry point:
 
-1. `docs/release-control/v6/SOURCE_OF_TRUTH.md`
-2. `docs/release-control/v6/status.json`
-3. `docs/release-control/v6/status.schema.json`
-4. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
-5. `docs/release-control/v6/subsystems/registry.json`
-6. `docs/release-control/v6/subsystems/registry.schema.json`
-7. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
-8. `scripts/release_control/subsystem_lookup.py` when ownership or proof routing is not obvious
+1. `docs/release-control/CONTROL_PLANE.md`
+2. `docs/release-control/control_plane.json`
+3. `docs/release-control/v6/SOURCE_OF_TRUTH.md`
+4. `docs/release-control/v6/status.json`
+5. `docs/release-control/v6/status.schema.json`
+6. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
+7. `docs/release-control/v6/subsystems/registry.json`
+8. `docs/release-control/v6/subsystems/registry.schema.json`
+9. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
+10. `scripts/release_control/subsystem_lookup.py` when ownership or proof routing is not obvious
 
-The first two files answer release priority and current lane state.
-`SOURCE_OF_TRUTH.md` owns stable governance, scope, locked decisions, and the
-readiness-assertion design rules.
+The first four files answer active target, profile selection, release priority,
+and current lane state.
+`CONTROL_PLANE.md` and `control_plane.json` own the evergreen governance model
+and the active target.
+`scripts/release_control/control_plane_audit.py --check` is the stale-target
+guard for that evergreen layer.
+`SOURCE_OF_TRUTH.md` owns profile-specific governance, scope, locked decisions,
+and the readiness-assertion design rules.
 `status.json` owns live lane state, lane-to-subsystem ownership, the active
 readiness assertion catalog, readiness derivation rules, executable
 proof commands, structured evidence references, typed lane/subsystem

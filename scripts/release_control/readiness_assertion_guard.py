@@ -10,10 +10,11 @@ import subprocess
 import sys
 from typing import Any
 
+from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import REPO_ROOT, load_repo_json
 
 
-STATUS_REL = "docs/release-control/v6/status.json"
+STATUS_REL = DEFAULT_CONTROL_PLANE["status_rel"]
 
 
 def load_status_payload(*, staged: bool = False) -> dict[str, Any]:
@@ -37,7 +38,7 @@ def _clean_relative_dir(path: str) -> str:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run proof commands declared in docs/release-control/v6/status.json."
+        description="Run proof commands declared in the active release profile status.json."
     )
     parser.add_argument(
         "--blocking-level",

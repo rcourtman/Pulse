@@ -6,17 +6,21 @@ from __future__ import annotations
 import subprocess
 import sys
 
+from control_plane import CONTROL_PLANE_DOC_REL, CONTROL_PLANE_REL, CONTROL_PLANE_SCHEMA_REL, DEFAULT_CONTROL_PLANE
 from repo_file_io import REPO_ROOT
 
 
 WORKTREE_SENSITIVE_PREFIXES = (
-    "docs/release-control/v6/",
+    DEFAULT_CONTROL_PLANE["profile_root_rel"] + "/",
     "internal/repoctl/",
     "scripts/release_control/",
 )
 WORKTREE_SENSITIVE_EXACT_FILES = (
     ".github/workflows/canonical-governance.yml",
     ".husky/pre-commit",
+    CONTROL_PLANE_DOC_REL,
+    CONTROL_PLANE_REL,
+    CONTROL_PLANE_SCHEMA_REL,
 )
 
 

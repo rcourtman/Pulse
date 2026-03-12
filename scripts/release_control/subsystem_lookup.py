@@ -143,6 +143,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
         )
 
     return {
+        "control_plane": status_report.get("control_plane", {}),
         "scope": status_report.get("scope", {}),
         "status_summary": status_report.get("summary", {}),
         "status_audit_errors": status_report.get("errors", []),
@@ -171,6 +172,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def render_pretty(result: dict[str, Any]) -> str:
     lines: list[str] = []
+    control_plane = result.get("control_plane", {})
+    if control_plane:
+        active_target = control_plane.get("active_target", {})
+        lines.append(
+            "control_plane: "
+            f"profile={control_plane.get('active_profile_id') or '-'} "
+            f"target={active_target.get('id') or '-'} "
+            f"kind={active_target.get('kind') or '-'}"
+        )
     scope = result.get("scope", {})
     if scope:
         lines.append(

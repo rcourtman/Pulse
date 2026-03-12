@@ -3,8 +3,12 @@
 Last updated: 2026-03-12
 Status: ACTIVE
 
-This file is the stable human governance layer for Pulse v6.
-It is not a live progress dashboard.
+This file is the stable human governance layer for the active v6 release
+profile. It is not a live progress dashboard.
+
+Evergreen control-plane governance now lives in
+`docs/release-control/CONTROL_PLANE.md`, and the active profile plus active
+target are machine-selected by `docs/release-control/control_plane.json`.
 
 Current lane scores, evidence references, and typed operational decision
 records live only in `docs/release-control/v6/status.json`.
@@ -19,10 +23,11 @@ live in `status.json.readiness_assertions`.
 
 ## Purpose
 
-1. Define the stable execution model for v6 work.
-2. Lock repo scope, release definition, and no-go rules.
-3. Record only long-lived architectural and release decisions.
-4. Point agents to the files that own live state and subsystem truth.
+1. Define the stable execution model for the active v6 release profile.
+2. Lock profile-specific scope, release definition, and no-go rules.
+3. Record only long-lived architectural and release decisions for this profile.
+4. Point agents to the files that own live state and subsystem truth for this
+   profile.
 
 This file must not contain:
 
@@ -32,18 +37,25 @@ This file must not contain:
 
 ## Canonical Control Files
 
-1. `docs/release-control/v6/status.json`
+1. `docs/release-control/CONTROL_PLANE.md`
+   Evergreen governance for the permanent Pulse release control plane.
+2. `docs/release-control/control_plane.json`
+   Machine-readable control-plane state, including the active profile and
+   active target.
+3. `docs/release-control/control_plane.schema.json`
+   Machine-readable contract for `control_plane.json`.
+4. `docs/release-control/v6/status.json`
    Live lane state, structured evidence references, and typed operational
    decision records.
-2. `docs/release-control/v6/status.schema.json`
+5. `docs/release-control/v6/status.schema.json`
    Machine-readable contract for the `status.json` shape.
-3. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
+6. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
    Repo-wide change rules for canonical work.
-4. `docs/release-control/v6/subsystems/registry.json`
+7. `docs/release-control/v6/subsystems/registry.json`
    Machine-readable subsystem ownership and proof requirements.
-5. `docs/release-control/v6/subsystems/registry.schema.json`
+8. `docs/release-control/v6/subsystems/registry.schema.json`
    Machine-readable contract for the subsystem registry shape.
-6. `docs/release-control/v6/subsystems/*.md`
+9. `docs/release-control/v6/subsystems/*.md`
    Per-subsystem contracts: truth, extension points, forbidden paths, and
    completion obligations.
 
@@ -85,6 +97,11 @@ These assertions are durable release truths, not one-off launch checklist
 items.
 `status.json.readiness_assertions` owns the active assertion catalog, proof
 references, and executable proof commands for the active release line.
+`docs/release-control/control_plane.json` owns the active engineering target
+that this profile is currently pursuing.
+`python3 scripts/release_control/control_plane_audit.py --check` enforces that
+the active target cannot stay stale once its machine-derived completion rule is
+already satisfied.
 
 Assertion design rules:
 
@@ -95,6 +112,8 @@ Assertion design rules:
    docs.
 5. If repeated manual proof becomes expensive, automate it or demote it to a
    one-time migration item instead of keeping it in the evergreen set.
+6. After GA, keep using the same control plane and promote a new active target
+   instead of cloning a new governance stack.
 
 ## Non-Negotiable Release Gates
 
@@ -139,7 +158,9 @@ These contracts must not drift:
 
 For canonical subsystem work:
 
-1. Read this file and `docs/release-control/v6/status.json` first.
+1. Read `docs/release-control/CONTROL_PLANE.md`,
+   `docs/release-control/control_plane.json`, this file, and
+   `docs/release-control/v6/status.json` first.
    If the agent starts outside the `pulse` repo, resolve those files from
    `pulse/docs/release-control/v6/` under the shared workspace root rather than
    inventing a parallel control layer in the current repo.
@@ -154,6 +175,9 @@ For canonical subsystem work:
    the readiness-assertion design rules change.
 7. When a canonical path replaces an old path, add or tighten a guardrail so
    the old path cannot silently return.
+8. When the active target's machine-derived completion rule is satisfied,
+   update `docs/release-control/control_plane.json` in the same task or stop
+   and promote the next target before continuing under stale scope.
 
 For readiness assertion work:
 
@@ -179,7 +203,10 @@ If conflicts appear, resolve by domain:
    contract for `status.json`.
 4. `docs/release-control/v6/subsystems/registry.schema.json` owns the
    machine-readable shape contract for the subsystem registry.
-5. This file owns stable governance, repo scope, release gates, readiness
-   assertion design rules, and locked decisions.
-6. Supporting architecture and release docs are evidence only. They do not
+5. `docs/release-control/CONTROL_PLANE.md` and
+   `docs/release-control/control_plane.json` own evergreen governance, active
+   profile selection, and active target selection.
+6. This file owns profile-specific governance, repo scope, release gates,
+   readiness assertion design rules, and locked decisions for v6.
+7. Supporting architecture and release docs are evidence only. They do not
    override the files above.

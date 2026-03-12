@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Machine audit for v6 subsystem contracts."""
+"""Machine audit for active release profile subsystem contracts."""
 
 from __future__ import annotations
 
@@ -11,16 +11,17 @@ import sys
 from typing import Any
 
 from canonical_completion_guard import REPO_ROOT, subsystem_matches_path
+from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import load_repo_json
 from subsystem_contracts import tracked_contract_files
 
 
-CONTRACTS_DIR = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems"
-REGISTRY_PATH = CONTRACTS_DIR / "registry.json"
-STATUS_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.json"
-REGISTRY_REL = "docs/release-control/v6/subsystems/registry.json"
-STATUS_REL = "docs/release-control/v6/status.json"
-TEMPLATE_REL = "docs/release-control/v6/SUBSYSTEM_CONTRACT_TEMPLATE.md"
+CONTRACTS_DIR = DEFAULT_CONTROL_PLANE["subsystems_dir_path"]
+REGISTRY_PATH = DEFAULT_CONTROL_PLANE["registry_path"]
+STATUS_PATH = DEFAULT_CONTROL_PLANE["status_path"]
+REGISTRY_REL = DEFAULT_CONTROL_PLANE["registry_rel"]
+STATUS_REL = DEFAULT_CONTROL_PLANE["status_rel"]
+TEMPLATE_REL = DEFAULT_CONTROL_PLANE["subsystem_contract_template_rel"]
 REQUIRED_SECTIONS = [
     "## Contract Metadata",
     "## Purpose",
@@ -480,7 +481,7 @@ def audit_contract_payload(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit docs/release-control/v6/subsystems/*.md contracts.")
+    parser = argparse.ArgumentParser(description="Audit active release profile subsystem contracts.")
     parser.add_argument(
         "--check",
         action="store_true",

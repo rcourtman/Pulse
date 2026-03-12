@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Machine audit for the v6 subsystem registry."""
+"""Machine audit for the active release profile subsystem registry."""
 
 from __future__ import annotations
 
@@ -18,12 +18,13 @@ from canonical_completion_guard import (
     path_policy_matches,
     subsystem_matches_path,
 )
+from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import load_repo_json
 from status_audit import load_status_payload
 
 
-REGISTRY_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems" / "registry.json"
-REGISTRY_SCHEMA_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems" / "registry.schema.json"
+REGISTRY_PATH = DEFAULT_CONTROL_PLANE["registry_path"]
+REGISTRY_SCHEMA_PATH = DEFAULT_CONTROL_PLANE["registry_schema_path"]
 LANE_RE = re.compile(r"^L[0-9]+$")
 
 
@@ -552,7 +553,7 @@ def audit_registry_payload(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit docs/release-control/v6/subsystems/registry.json.")
+    parser = argparse.ArgumentParser(description="Audit the active release profile subsystem registry.")
     parser.add_argument(
         "--check",
         action="store_true",

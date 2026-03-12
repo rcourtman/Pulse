@@ -295,6 +295,7 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(base_payload(release_gate_status="pending"))
 
             pretty = render_pretty(report)
+            self.assertIn("control_plane: profile=v6 target=v6-release", pretty)
             self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
             self.assertIn("proof_commands=1", pretty)
             self.assertIn("release_gates:", pretty)

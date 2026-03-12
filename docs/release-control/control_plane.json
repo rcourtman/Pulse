@@ -1,0 +1,35 @@
+{
+  "version": "1",
+  "system": "pulse-release-control",
+  "execution_model": "direct-repo-sessions",
+  "control_plane_doc": "docs/release-control/CONTROL_PLANE.md",
+  "control_plane_schema": "docs/release-control/control_plane.schema.json",
+  "active_profile_id": "v6",
+  "active_target_id": "v6-release",
+  "profiles": [
+    {
+      "id": "v6",
+      "lifecycle": "active",
+      "root": "docs/release-control/v6",
+      "source_of_truth": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+      "status": "docs/release-control/v6/status.json",
+      "status_schema": "docs/release-control/v6/status.schema.json",
+      "development_protocol": "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+      "high_risk_matrix": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "subsystems_dir": "docs/release-control/v6/subsystems",
+      "registry": "docs/release-control/v6/subsystems/registry.json",
+      "registry_schema": "docs/release-control/v6/subsystems/registry.schema.json",
+      "subsystem_contract_template": "docs/release-control/v6/SUBSYSTEM_CONTRACT_TEMPLATE.md"
+    }
+  ],
+  "targets": [
+    {
+      "id": "v6-release",
+      "profile_id": "v6",
+      "kind": "release",
+      "status": "active",
+      "summary": "Drive Pulse v6 to release readiness with governed proof, cleared blockers, and cleared high-risk gates.",
+      "completion_rule": "release_ready"
+    }
+  ]
+}

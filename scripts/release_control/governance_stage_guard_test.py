@@ -15,6 +15,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
     def test_is_worktree_sensitive_governance_path_matches_expected_scope(self) -> None:
         self.assertTrue(is_worktree_sensitive_governance_path(".husky/pre-commit"))
         self.assertTrue(is_worktree_sensitive_governance_path(".github/workflows/canonical-governance.yml"))
+        self.assertTrue(is_worktree_sensitive_governance_path("docs/release-control/control_plane.json"))
         self.assertTrue(is_worktree_sensitive_governance_path("docs/release-control/v6/status.json"))
         self.assertTrue(is_worktree_sensitive_governance_path("internal/repoctl/canonical_development_protocol_test.go"))
         self.assertTrue(is_worktree_sensitive_governance_path("scripts/release_control/status_audit.py"))
@@ -24,6 +25,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
     def test_blocked_unstaged_governance_paths_filters_to_governance_scope(self) -> None:
         unstaged = [
             ".husky/pre-commit",
+            "docs/release-control/control_plane.json",
             "docs/release-control/v6/status.json",
             "internal/api/slo.go",
             "scripts/release_control/status_audit.py",
@@ -33,6 +35,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
             blocked_unstaged_governance_paths(unstaged),
             [
                 ".husky/pre-commit",
+                "docs/release-control/control_plane.json",
                 "docs/release-control/v6/status.json",
                 "scripts/release_control/status_audit.py",
             ],

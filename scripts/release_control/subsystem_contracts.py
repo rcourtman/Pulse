@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared parsing helpers for v6 subsystem contracts."""
+"""Shared parsing helpers for active release profile subsystem contracts."""
 
 from __future__ import annotations
 
@@ -9,10 +9,11 @@ import re
 import subprocess
 from typing import Any
 
+from control_plane import DEFAULT_CONTROL_PLANE
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONTRACTS_DIR = REPO_ROOT / "docs" / "release-control" / "v6" / "subsystems"
-TEMPLATE_REL = "docs/release-control/v6/SUBSYSTEM_CONTRACT_TEMPLATE.md"
+CONTRACTS_DIR = DEFAULT_CONTROL_PLANE["subsystems_dir_path"]
+TEMPLATE_REL = DEFAULT_CONTROL_PLANE["subsystem_contract_template_rel"]
 REQUIRED_SECTIONS = [
     "## Contract Metadata",
     "## Purpose",

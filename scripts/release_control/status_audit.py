@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Machine audit for v6 status.json.
+"""Machine audit for the active release profile status.json.
 
 Validates the live machine state schema, resolves evidence references across the
 active repos, and derives lane evidence health from actual proof presence.
@@ -16,14 +16,17 @@ import sys
 from typing import Any
 
 from canonical_completion_guard import load_subsystem_rules
+from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import load_repo_json
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-STATUS_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.json"
-STATUS_SCHEMA_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.schema.json"
-SOURCE_OF_TRUTH_FILE = "docs/release-control/v6/SOURCE_OF_TRUTH.md"
-HIGH_RISK_RELEASE_MATRIX = "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
+ACTIVE_PROFILE_ID = DEFAULT_CONTROL_PLANE["active_profile_id"]
+ACTIVE_TARGET = dict(DEFAULT_CONTROL_PLANE["active_target"])
+STATUS_PATH = DEFAULT_CONTROL_PLANE["status_path"]
+STATUS_SCHEMA_PATH = DEFAULT_CONTROL_PLANE["status_schema_path"]
+SOURCE_OF_TRUTH_FILE = DEFAULT_CONTROL_PLANE["source_of_truth_rel"]
+HIGH_RISK_RELEASE_MATRIX = DEFAULT_CONTROL_PLANE["high_risk_matrix_rel"]
 READINESS_ASSERTIONS_BLOCKER = (
     "Required readiness assertions remain pending or blocked in status.json.readiness_assertions."
 )
@@ -31,11 +34,11 @@ OPEN_DECISIONS_BLOCKER = "Open operational decisions remain in status.json.open_
 RELEASE_GATES_BLOCKER = "High-risk release gates remain pending or blocked in status.json.release_gates."
 REQUIRED_SOURCE_PRECEDENCE = [
     SOURCE_OF_TRUTH_FILE,
-    "docs/release-control/v6/status.json",
-    "docs/release-control/v6/status.schema.json",
-    "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
-    "docs/release-control/v6/subsystems/registry.json",
-    "docs/release-control/v6/subsystems/registry.schema.json",
+    DEFAULT_CONTROL_PLANE["status_rel"],
+    DEFAULT_CONTROL_PLANE["status_schema_rel"],
+    DEFAULT_CONTROL_PLANE["development_protocol_rel"],
+    DEFAULT_CONTROL_PLANE["registry_rel"],
+    DEFAULT_CONTROL_PLANE["registry_schema_rel"],
 ]
 DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
@@ -1203,9 +1206,32 @@ def audit_status_payload(
     if not release_gates_cleared:
         release_blockers.append(RELEASE_GATES_BLOCKER)
 
+    active_target_completion_met = False
+    completion_rule = str(ACTIVE_TARGET.get("completion_rule", "")).strip()
+    if completion_rule == "release_ready":
+        active_target_completion_met = release_ready_derived
+    elif completion_rule == "repo_ready":
+        active_target_completion_met = repo_ready_derived
+    elif completion_rule == "manual":
+        active_target_completion_met = False
+
+    if active_target_completion_met:
+        warnings.append(
+            "active target completion rule is already satisfied; "
+            "control_plane_audit.py --check will fail until the next target is promoted in "
+            "docs/release-control/control_plane.json"
+        )
+
     return {
         "errors": errors,
         "warnings": warnings,
+        "control_plane": {
+            "active_profile_id": ACTIVE_PROFILE_ID,
+            "active_target": {
+                **ACTIVE_TARGET,
+                "completion_met": active_target_completion_met,
+            },
+        },
         "summary": {
             "lane_count": len(lane_reports),
             "lanes_at_target": sum(1 for lane in lane_reports if lane["at_target"]),
@@ -1260,7 +1286,7 @@ def audit_status_payload(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit docs/release-control/v6/status.json.")
+    parser = argparse.ArgumentParser(description="Audit the active release profile status.json.")
     parser.add_argument(
         "--check",
         action="store_true",
@@ -1281,6 +1307,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def render_pretty(report: dict[str, Any]) -> str:
     lines: list[str] = []
+    control_plane = report.get("control_plane", {})
+    if control_plane:
+        active_target = control_plane.get("active_target", {})
+        lines.append(
+            "control_plane: "
+            f"profile={control_plane.get('active_profile_id') or '-'} "
+            f"target={active_target.get('id') or '-'} "
+            f"kind={active_target.get('kind') or '-'} "
+            f"completion_rule={active_target.get('completion_rule') or '-'} "
+            f"completion_met={active_target.get('completion_met')}"
+        )
+        if active_target.get("summary"):
+            lines.append(f"  target_summary={active_target['summary']}")
+
     scope = report.get("scope", {})
     repo_catalog = scope.get("repo_catalog", [])
     if scope:

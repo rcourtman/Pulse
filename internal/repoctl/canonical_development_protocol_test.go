@@ -341,9 +341,42 @@ func TestSubsystemRegistrySchemaExistsAndDeclaresOwnershipContract(t *testing.T)
 	})
 }
 
+func TestReleaseControlPlaneFilesExist(t *testing.T) {
+	docRel := "docs/release-control/CONTROL_PLANE.md"
+	doc := readRepoFile(t, docRel)
+	assertContainsAll(t, docRel, doc, []string{
+		"# Pulse Release Control Plane",
+		"control_plane.json",
+		"active target",
+		"v6 is the current active release profile",
+		"control_plane_audit.py --check",
+	})
+
+	jsonRel := "docs/release-control/control_plane.json"
+	jsonContent := readRepoFile(t, jsonRel)
+	assertContainsAll(t, jsonRel, jsonContent, []string{
+		"\"system\": \"pulse-release-control\"",
+		"\"active_profile_id\": \"v6\"",
+		"\"active_target_id\": \"v6-release\"",
+		"\"completion_rule\": \"release_ready\"",
+	})
+
+	schemaRel := "docs/release-control/control_plane.schema.json"
+	schemaContent := readRepoFile(t, schemaRel)
+	assertContainsAll(t, schemaRel, schemaContent, []string{
+		"\"title\": \"Pulse Release Control Plane Schema\"",
+		"\"active_profile_id\"",
+		"\"active_target_id\"",
+		"\"targets\"",
+		"\"completion_rule\"",
+	})
+}
+
 func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	readme := readRepoFile(t, "docs/release-control/v6/README.md")
 	assertContainsAll(t, "docs/release-control/v6/README.md", readme, []string{
+		"CONTROL_PLANE.md",
+		"control_plane.json",
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
 		"status.schema.json",
@@ -351,6 +384,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"subsystems/*.md",
 		"structured evidence references",
 		"does not, by itself, mean Pulse v6 is release-approved",
+		"control_plane_audit.py --check",
 		"status_audit.py --pretty",
 		"status.json.readiness_assertions",
 		"proof_commands",
@@ -358,6 +392,8 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
 	assertContainsAll(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md", source, []string{
+		"CONTROL_PLANE.md",
+		"control_plane.json",
 		"CANONICAL_DEVELOPMENT_PROTOCOL.md",
 		"HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
 		"status.schema.json",
@@ -366,6 +402,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"## Evergreen Readiness Assertions",
 		"## Development Governance",
 		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
+		"control_plane_audit.py --check",
 		"status_audit.py --pretty",
 		"status.json.readiness_assertions",
 	})
@@ -975,6 +1012,8 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 	assertContainsAll(t, ".husky/pre-commit", hook, []string{
 		"governance_stage_guard.py",
 		"Running governance stage guard...",
+		"Running control plane audit...",
+		"control_plane_audit.py --check --staged",
 		"canonical_completion_guard.py",
 		"Running canonical completion guard...",
 		"Running status audit...",
@@ -988,6 +1027,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"Running readiness assertion guard...",
 		"readiness_assertion_guard.py --staged --blocking-level repo-ready --proof-type automated",
 		"canonical_completion_guard_test.py",
+		"control_plane_audit_test.py",
 		"contract_audit_test.py",
 		"format_staged_go_test.py",
 		"governance_stage_guard_test.py",
@@ -1004,6 +1044,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 
 	script := readRepoFile(t, "scripts/release_control/canonical_completion_guard.py")
 	assertContainsAll(t, "scripts/release_control/canonical_completion_guard.py", script, []string{
+		"DEFAULT_CONTROL_PLANE",
 		"SUBSYSTEM_REGISTRY",
 		"load_subsystem_rules",
 		"build_verification_requirements",
@@ -1011,11 +1052,12 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"verification",
 		"path_policies",
 		"test_prefixes",
-		"docs/release-control/v6/subsystems/",
 	})
 
 	statusAudit := readRepoFile(t, "scripts/release_control/status_audit.py")
 	assertContainsAll(t, "scripts/release_control/status_audit.py", statusAudit, []string{
+		"ACTIVE_PROFILE_ID",
+		"ACTIVE_TARGET",
 		"STATUS_PATH",
 		"STATUS_SCHEMA_PATH",
 		"repo_root_for_name",
@@ -1029,8 +1071,18 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"--check",
 	})
 
+	controlPlaneAudit := readRepoFile(t, "scripts/release_control/control_plane_audit.py")
+	assertContainsAll(t, "scripts/release_control/control_plane_audit.py", controlPlaneAudit, []string{
+		"validate_control_plane_payload",
+		"current_status_report",
+		"completion_met",
+		"active target",
+		"--check",
+	})
+
 	assertionGuard := readRepoFile(t, "scripts/release_control/readiness_assertion_guard.py")
 	assertContainsAll(t, "scripts/release_control/readiness_assertion_guard.py", assertionGuard, []string{
+		"DEFAULT_CONTROL_PLANE",
 		"STATUS_REL",
 		"selected_proof_commands",
 		"run_selected_proof_commands",
@@ -1041,6 +1093,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 
 	registryAudit := readRepoFile(t, "scripts/release_control/registry_audit.py")
 	assertContainsAll(t, "scripts/release_control/registry_audit.py", registryAudit, []string{
+		"DEFAULT_CONTROL_PLANE",
 		"REGISTRY_PATH",
 		"REGISTRY_SCHEMA_PATH",
 		"audit_registry_payload",
@@ -1051,6 +1104,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 
 	contractAudit := readRepoFile(t, "scripts/release_control/contract_audit.py")
 	assertContainsAll(t, "scripts/release_control/contract_audit.py", contractAudit, []string{
+		"DEFAULT_CONTROL_PLANE",
 		"CONTRACTS_DIR",
 		"TEMPLATE_REL",
 		"Contract Metadata",
@@ -1073,9 +1127,9 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 
 	stageGuard := readRepoFile(t, "scripts/release_control/governance_stage_guard.py")
 	assertContainsAll(t, "scripts/release_control/governance_stage_guard.py", stageGuard, []string{
+		"CONTROL_PLANE_REL",
 		"WORKTREE_SENSITIVE_PREFIXES",
 		"WORKTREE_SENSITIVE_EXACT_FILES",
-		"docs/release-control/v6/",
 		"internal/repoctl/",
 		"scripts/release_control/",
 		".husky/pre-commit",
@@ -1097,12 +1151,14 @@ func TestCanonicalGovernanceRunsInCI(t *testing.T) {
 		"PULSE_REPO_ROOT_PULSE_MOBILE",
 		"python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin",
 		"python3 scripts/release_control/status_audit.py --check",
+		"python3 scripts/release_control/control_plane_audit.py --check",
 		"python3 scripts/release_control/registry_audit.py --check",
 		"python3 scripts/release_control/contract_audit.py --check",
 		"python3 scripts/release_control/readiness_assertion_guard.py --blocking-level repo-ready --proof-type automated",
 		"python3 scripts/release_control/readiness_assertion_guard.py --proof-type hybrid",
 		"go test ./internal/repoctl -count=1",
 		"python3 scripts/release_control/canonical_completion_guard_test.py",
+		"python3 scripts/release_control/control_plane_audit_test.py",
 		"python3 scripts/release_control/contract_audit_test.py",
 		"python3 scripts/release_control/governance_stage_guard_test.py",
 		"python3 scripts/release_control/registry_audit_test.py",
