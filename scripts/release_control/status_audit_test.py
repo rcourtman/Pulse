@@ -211,6 +211,7 @@ class StatusAuditTest(unittest.TestCase):
                 report["readiness"]["current_target_blockers"],
                 {"assertions": [], "open_decisions": [], "release_gates": []},
             )
+            self.assertEqual(report["readiness"]["current_target_workstreams"], [])
             self.assertEqual(report["lanes"][0]["derived_status"], "target-met")
             self.assertEqual(report["readiness_assertions"][0]["proof_command_count"], 1)
 
@@ -275,6 +276,7 @@ class StatusAuditTest(unittest.TestCase):
                 ],
             )
             self.assertEqual(report["readiness"]["current_target_blockers"]["open_decisions"], [])
+            self.assertEqual(report["readiness"]["current_target_workstreams"], [])
 
     def test_release_ready_gate_pending_blocks_only_release_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -307,6 +309,7 @@ class StatusAuditTest(unittest.TestCase):
                 report["readiness"]["current_target_blockers"],
                 {"assertions": [], "open_decisions": [], "release_gates": []},
             )
+            self.assertEqual(report["readiness"]["current_target_workstreams"], [])
 
     def test_current_target_blockers_include_subsystem_contract_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -360,6 +363,28 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(
                 report["readiness"]["current_target_blockers"]["release_gates"][0]["contract_paths"],
                 ["docs/release-control/v6/subsystems/frontend-primitives.md"],
+            )
+            self.assertEqual(
+                report["readiness"]["current_target_workstreams"],
+                [
+                    {
+                        "subsystem_id": "frontend-primitives",
+                        "contract_path": "docs/release-control/v6/subsystems/frontend-primitives.md",
+                        "assertion_ids": ["RA2"],
+                        "release_gate_ids": ["g1"],
+                        "open_decision_ids": [],
+                        "proof_command_ids": [],
+                        "lane_ids": ["L1"],
+                        "repo_ids": ["pulse"],
+                        "blocker_count": 2,
+                    }
+                ],
+            )
+            pretty = render_pretty(report)
+            self.assertIn("current_target_workstreams:", pretty)
+            self.assertIn(
+                "frontend-primitives blockers=2 assertions=RA2 gates=g1 decisions=- proofs=- repos=pulse",
+                pretty,
             )
 
     def test_repo_ready_assertion_failure_blocks_repo_ready(self) -> None:
@@ -491,6 +516,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("proof_commands=1", pretty)
             self.assertIn("release_gates:", pretty)
             self.assertIn("current_target_blockers:", pretty)
+            self.assertNotIn("current_target_workstreams:", pretty)
             self.assertIn("assertions:", pretty)
             self.assertIn(
                 "RA2 blocking=rc-ready derived=gates-pending gates=g1 proofs=- subsystems=-",

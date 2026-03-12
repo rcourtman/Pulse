@@ -1407,6 +1407,78 @@ def audit_status_payload(
         for decision in open_decisions
         if decision["blocking_level"] in active_target_level_set
     ]
+    current_target_workstreams_by_subsystem: dict[str, dict[str, Any]] = {}
+
+    def ensure_current_target_workstream(subsystem_id: str) -> dict[str, Any]:
+        workstream = current_target_workstreams_by_subsystem.get(subsystem_id)
+        if workstream is None:
+            workstream = {
+                "subsystem_id": subsystem_id,
+                "contract_path": subsystem_contracts.get(subsystem_id),
+                "assertion_ids": [],
+                "release_gate_ids": [],
+                "open_decision_ids": [],
+                "proof_command_ids": [],
+                "lane_ids": [],
+                "repo_ids": [],
+            }
+            current_target_workstreams_by_subsystem[subsystem_id] = workstream
+        return workstream
+
+    for assertion in current_target_assertion_blockers:
+        for subsystem_id in assertion["subsystem_ids"]:
+            workstream = ensure_current_target_workstream(subsystem_id)
+            if assertion["id"] not in workstream["assertion_ids"]:
+                workstream["assertion_ids"].append(assertion["id"])
+            for gate_id in assertion["release_gate_ids"]:
+                if gate_id not in workstream["release_gate_ids"]:
+                    workstream["release_gate_ids"].append(gate_id)
+            for proof_id in assertion["proof_command_ids"]:
+                if proof_id not in workstream["proof_command_ids"]:
+                    workstream["proof_command_ids"].append(proof_id)
+            for lane_id in assertion["lane_ids"]:
+                if lane_id not in workstream["lane_ids"]:
+                    workstream["lane_ids"].append(lane_id)
+            for repo_id in assertion["repo_ids"]:
+                if repo_id not in workstream["repo_ids"]:
+                    workstream["repo_ids"].append(repo_id)
+
+    for gate in current_target_release_gate_blockers:
+        for subsystem_id in gate["subsystem_ids"]:
+            workstream = ensure_current_target_workstream(subsystem_id)
+            if gate["id"] not in workstream["release_gate_ids"]:
+                workstream["release_gate_ids"].append(gate["id"])
+            for lane_id in gate["lane_ids"]:
+                if lane_id not in workstream["lane_ids"]:
+                    workstream["lane_ids"].append(lane_id)
+            for repo_id in gate["repo_ids"]:
+                if repo_id not in workstream["repo_ids"]:
+                    workstream["repo_ids"].append(repo_id)
+
+    for decision in current_target_open_decision_blockers:
+        for subsystem_id in decision["subsystem_ids"]:
+            workstream = ensure_current_target_workstream(subsystem_id)
+            if decision["id"] not in workstream["open_decision_ids"]:
+                workstream["open_decision_ids"].append(decision["id"])
+            for lane_id in decision["lane_ids"]:
+                if lane_id not in workstream["lane_ids"]:
+                    workstream["lane_ids"].append(lane_id)
+            for repo_id in decision["repo_ids"]:
+                if repo_id not in workstream["repo_ids"]:
+                    workstream["repo_ids"].append(repo_id)
+
+    current_target_workstreams = sorted(
+        (
+            {
+                **workstream,
+                "blocker_count": len(workstream["assertion_ids"])
+                + len(workstream["release_gate_ids"])
+                + len(workstream["open_decision_ids"]),
+            }
+            for workstream in current_target_workstreams_by_subsystem.values()
+        ),
+        key=lambda entry: (-entry["blocker_count"], str(entry["subsystem_id"]).casefold()),
+    )
     rc_blockers: list[str] = []
     if not repo_ready_derived:
         rc_blockers.append(REPO_READY_BLOCKER)
@@ -1535,6 +1607,7 @@ def audit_status_payload(
                 "open_decisions": current_target_open_decision_blockers,
                 "release_gates": current_target_release_gate_blockers,
             },
+            "current_target_workstreams": current_target_workstreams,
             "rc_blockers": rc_blockers,
             "release_blockers": release_blockers,
         },
@@ -1701,6 +1774,18 @@ def render_pretty(report: dict[str, Any]) -> str:
                     f"subsystems={','.join(subsystem_ids) or '-'} "
                     f"repos={','.join(gate['repo_ids']) or '-'}"
                 )
+    current_target_workstreams = readiness.get("current_target_workstreams", [])
+    if current_target_workstreams:
+        lines.append("current_target_workstreams:")
+        for workstream in current_target_workstreams:
+            lines.append(
+                f"  - {workstream['subsystem_id']} blockers={workstream['blocker_count']} "
+                f"assertions={','.join(workstream['assertion_ids']) or '-'} "
+                f"gates={','.join(workstream['release_gate_ids']) or '-'} "
+                f"decisions={','.join(workstream['open_decision_ids']) or '-'} "
+                f"proofs={','.join(workstream['proof_command_ids']) or '-'} "
+                f"repos={','.join(workstream['repo_ids']) or '-'}"
+            )
     if readiness.get("rc_blockers"):
         lines.append("rc_blockers:")
         for blocker in readiness["rc_blockers"]:
