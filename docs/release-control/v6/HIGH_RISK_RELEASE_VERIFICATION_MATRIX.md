@@ -131,9 +131,9 @@ result.
   `pulse-mobile/src/hooks/useRelay.ts`
   `pulse-mobile/src/api/client.ts`
 - Automated proof:
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/utils/__tests__/secureStorage.test.ts src/stores/__tests__/instanceStore.test.ts src/stores/__tests__/authStore.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/utils/__tests__/secureStorage.test.ts src/stores/__tests__/instanceStore.test.ts src/stores/__tests__/authStore.test.ts src/stores/__tests__/approvalStore.test.ts`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/stores/__tests__/approvalStore.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/api/__tests__/client.test.ts`
 - Manual scenario:
   1. Pair the mobile app to a real instance through the relay onboarding path.
   2. Kill and relaunch the app to confirm secure persistence and reconnect.
