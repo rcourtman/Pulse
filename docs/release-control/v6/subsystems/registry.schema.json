@@ -12,7 +12,7 @@
   "properties": {
     "version": {
       "type": "integer",
-      "const": 11
+      "const": 12
     },
     "shared_ownerships": {
       "type": "array",

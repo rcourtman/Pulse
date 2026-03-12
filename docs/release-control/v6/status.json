@@ -738,6 +738,8 @@
         "alerts",
         "api-contracts",
         "monitoring",
+        "organization-settings",
+        "patrol-intelligence",
         "unified-resources"
       ],
       "evidence": [

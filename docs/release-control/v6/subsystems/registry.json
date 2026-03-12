@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "shared_ownerships": [
     {
       "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
@@ -940,6 +940,192 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/monitoring.test.ts",
               "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "organization-settings",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/organization-settings.md",
+      "owned_prefixes": [],
+      "owned_files": [
+        "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
+        "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx",
+        "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+        "frontend-modern/src/utils/organizationRolePresentation.ts",
+        "frontend-modern/src/utils/organizationSettingsPresentation.ts",
+        "frontend-modern/src/utils/orgUtils.ts",
+        "internal/models/organization.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/api/__tests__/orgs.test.ts",
+          "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+          "internal/models/organization_additional_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "organization-domain-model",
+            "label": "organization domain model proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/models/organization.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/org_handlers_test.go",
+              "internal/api/org_lifecycle_handlers_test.go",
+              "internal/api/org_validation_test.go",
+              "internal/models/organization_additional_test.go"
+            ]
+          },
+          {
+            "id": "organization-settings-surface",
+            "label": "organization settings surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
+              "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx",
+              "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+              "frontend-modern/src/utils/organizationRolePresentation.ts",
+              "frontend-modern/src/utils/organizationSettingsPresentation.ts",
+              "frontend-modern/src/utils/orgUtils.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/orgs.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/agentModelGuardrails.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/orgUtils.test.ts"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "patrol-intelligence",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/subsystems/patrol-intelligence.md",
+      "owned_prefixes": [],
+      "owned_files": [
+        "frontend-modern/src/components/AI/FindingsPanel.tsx",
+        "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
+        "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
+        "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+        "frontend-modern/src/components/patrol/CountdownTimer.tsx",
+        "frontend-modern/src/components/patrol/index.ts",
+        "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+        "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+        "frontend-modern/src/components/patrol/PatrolStatusBar.tsx",
+        "frontend-modern/src/components/patrol/RemediationStatus.tsx",
+        "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
+        "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
+        "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+        "frontend-modern/src/pages/AIIntelligence.tsx",
+        "frontend-modern/src/stores/aiIntelligence.ts",
+        "frontend-modern/src/types/aiIntelligence.ts",
+        "frontend-modern/src/utils/aiFindingPresentation.ts",
+        "frontend-modern/src/utils/approvalRiskPresentation.ts",
+        "frontend-modern/src/utils/findingAlertIdentity.ts",
+        "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
+        "frontend-modern/src/utils/patrolFormat.ts",
+        "frontend-modern/src/utils/patrolRunPresentation.ts",
+        "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+          "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "patrol-page-and-state",
+            "label": "patrol page and state proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
+              "frontend-modern/src/components/patrol/index.ts",
+              "frontend-modern/src/pages/AIIntelligence.tsx",
+              "frontend-modern/src/stores/aiIntelligence.ts",
+              "frontend-modern/src/types/aiIntelligence.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/agentModelGuardrails.test.ts",
+              "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+              "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-findings-and-approvals",
+            "label": "patrol findings and approvals proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/AI/FindingsPanel.tsx",
+              "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
+              "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+              "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+              "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+              "frontend-modern/src/components/patrol/RemediationStatus.tsx",
+              "frontend-modern/src/utils/aiFindingPresentation.ts",
+              "frontend-modern/src/utils/approvalRiskPresentation.ts",
+              "frontend-modern/src/utils/findingAlertIdentity.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+              "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
+              "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
+              "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-history-and-summary",
+            "label": "patrol history and summary proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/patrol/CountdownTimer.tsx",
+              "frontend-modern/src/components/patrol/PatrolStatusBar.tsx",
+              "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
+              "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
+              "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+              "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
+              "frontend-modern/src/utils/patrolFormat.ts",
+              "frontend-modern/src/utils/patrolRunPresentation.ts",
+              "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/patrol/__tests__/PatrolStatusBar.test.tsx",
+              "frontend-modern/src/components/patrol/__tests__/RunHistoryEntry.test.tsx",
+              "frontend-modern/src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
+              "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolEmptyStatePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolFormat.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolRunPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolSummaryPresentation.test.ts"
             ]
           }
         ]

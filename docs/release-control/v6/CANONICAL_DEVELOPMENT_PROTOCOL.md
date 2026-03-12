@@ -101,12 +101,14 @@ Each major subsystem contract must define:
 Current required subsystem contracts:
 
 1. `docs/release-control/v6/subsystems/alerts.md`
-2. `docs/release-control/v6/subsystems/monitoring.md`
-3. `docs/release-control/v6/subsystems/unified-resources.md`
-4. `docs/release-control/v6/subsystems/cloud-paid.md`
-5. `docs/release-control/v6/subsystems/api-contracts.md`
-6. `docs/release-control/v6/subsystems/frontend-primitives.md`
-7. `docs/release-control/v6/subsystems/performance-and-scalability.md`
+2. `docs/release-control/v6/subsystems/api-contracts.md`
+3. `docs/release-control/v6/subsystems/cloud-paid.md`
+4. `docs/release-control/v6/subsystems/frontend-primitives.md`
+5. `docs/release-control/v6/subsystems/monitoring.md`
+6. `docs/release-control/v6/subsystems/organization-settings.md`
+7. `docs/release-control/v6/subsystems/patrol-intelligence.md`
+8. `docs/release-control/v6/subsystems/performance-and-scalability.md`
+9. `docs/release-control/v6/subsystems/unified-resources.md`
 
 If a major subsystem is refactored and does not have one of these files, the
 work is incomplete.

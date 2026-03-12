@@ -257,12 +257,14 @@ func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 func TestSubsystemContractsExistWithRequiredSections(t *testing.T) {
 	requiredContracts := []string{
 		"docs/release-control/v6/subsystems/alerts.md",
-		"docs/release-control/v6/subsystems/monitoring.md",
-		"docs/release-control/v6/subsystems/unified-resources.md",
-		"docs/release-control/v6/subsystems/cloud-paid.md",
 		"docs/release-control/v6/subsystems/api-contracts.md",
+		"docs/release-control/v6/subsystems/cloud-paid.md",
 		"docs/release-control/v6/subsystems/frontend-primitives.md",
+		"docs/release-control/v6/subsystems/monitoring.md",
+		"docs/release-control/v6/subsystems/organization-settings.md",
+		"docs/release-control/v6/subsystems/patrol-intelligence.md",
 		"docs/release-control/v6/subsystems/performance-and-scalability.md",
+		"docs/release-control/v6/subsystems/unified-resources.md",
 	}
 
 	requiredSections := []string{
@@ -286,7 +288,7 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 	rel := "docs/release-control/v6/subsystems/registry.json"
 	content := readRepoFile(t, rel)
 	assertContainsAll(t, rel, content, []string{
-		"\"version\": 11",
+		"\"version\": 12",
 		"\"shared_ownerships\":",
 		"\"subsystems\":",
 		"\"verification\":",
@@ -321,12 +323,14 @@ func TestSubsystemRegistryExistsAndReferencesContracts(t *testing.T) {
 		"internal/cloudcp/registry/registry.go",
 		"internal/cloudcp/stripe/provisioner.go",
 		"docs/release-control/v6/subsystems/alerts.md",
-		"docs/release-control/v6/subsystems/monitoring.md",
-		"docs/release-control/v6/subsystems/unified-resources.md",
-		"docs/release-control/v6/subsystems/cloud-paid.md",
 		"docs/release-control/v6/subsystems/api-contracts.md",
+		"docs/release-control/v6/subsystems/cloud-paid.md",
 		"docs/release-control/v6/subsystems/frontend-primitives.md",
+		"docs/release-control/v6/subsystems/monitoring.md",
+		"docs/release-control/v6/subsystems/organization-settings.md",
+		"docs/release-control/v6/subsystems/patrol-intelligence.md",
 		"docs/release-control/v6/subsystems/performance-and-scalability.md",
+		"docs/release-control/v6/subsystems/unified-resources.md",
 	})
 }
 

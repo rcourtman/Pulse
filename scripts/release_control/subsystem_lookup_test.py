@@ -110,6 +110,132 @@ class SubsystemLookupTest(unittest.TestCase):
             ["frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx"],
         )
 
+    def test_lookup_paths_assigns_organization_sharing_panel_to_organization_settings(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"organization-settings"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"organization-settings"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/organization-settings.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "organization-settings-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/orgs.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/agentModelGuardrails.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
+                "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_organization_model_to_organization_settings(self) -> None:
+        result = lookup_paths(["internal/models/organization.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"organization-settings"},
+        )
+        match = result["files"][0]["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/organization-settings.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "organization-domain-model",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "internal/api/org_handlers_test.go",
+                "internal/api/org_lifecycle_handlers_test.go",
+                "internal/api/org_validation_test.go",
+                "internal/models/organization_additional_test.go",
+            ],
+        )
+
+    def test_lookup_paths_assigns_ai_intelligence_page_to_patrol_intelligence(self) -> None:
+        result = lookup_paths(["frontend-modern/src/pages/AIIntelligence.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"patrol-intelligence"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-page-and-state",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/agentModelGuardrails.test.ts",
+                "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+                "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_findings_panel_to_patrol_intelligence(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/AI/FindingsPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        match = result["files"][0]["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-findings-and-approvals",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+                "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
+                "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
+                "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
     def test_lookup_paths_assigns_unified_agents_to_shared_monitoring_and_api_contracts(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/UnifiedAgents.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

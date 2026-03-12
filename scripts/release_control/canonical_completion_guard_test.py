@@ -82,12 +82,14 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ids,
             {
                 "alerts",
-                "monitoring",
-                "unified-resources",
-                "cloud-paid",
                 "api-contracts",
+                "cloud-paid",
                 "frontend-primitives",
+                "monitoring",
+                "organization-settings",
+                "patrol-intelligence",
                 "performance-and-scalability",
+                "unified-resources",
             },
         )
         for rule in rules:
@@ -1227,12 +1229,14 @@ index 1111111..2222222 100644
             set(explicit_rules),
             {
                 "alerts",
-                "monitoring",
-                "unified-resources",
-                "cloud-paid",
                 "api-contracts",
+                "cloud-paid",
                 "frontend-primitives",
+                "monitoring",
+                "organization-settings",
+                "patrol-intelligence",
                 "performance-and-scalability",
+                "unified-resources",
             },
         )
         for subsystem_id, rule in explicit_rules.items():
