@@ -176,6 +176,7 @@ result.
   wrong, automated access will bypass user intent.
 - Primary runtime surfaces:
   `internal/api/router.go`
+  `internal/api/router_routes_auth_security.go`
   `internal/api/security_tokens.go`
   `internal/api/system_settings_telemetry_test.go`
   `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
@@ -193,8 +194,8 @@ result.
   5. Confirm scoped agent/API-token flows fail with a clear message when the
      scope is insufficient.
 - Pass when:
-  Token create, use, scope enforcement, and revocation all behave exactly as
-  intended.
+  Token create, use, read/write/exec scope enforcement, and revocation all
+  behave exactly as intended.
 - Block release if:
   A token can outlive revocation, exceed assigned scope, or detach from the
   intended user/org identity.

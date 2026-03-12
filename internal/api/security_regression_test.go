@@ -536,7 +536,7 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	conn.Close()
 }
 
-func TestAgentExecRequiresAgentExecScope(t *testing.T) {
+func TestSecurityTokens_AgentExecRequiresAgentExecScope(t *testing.T) {
 	rawToken := "agent-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -573,7 +573,7 @@ func TestAgentExecRequiresAgentExecScope(t *testing.T) {
 	conn.Close()
 }
 
-func TestAgentExecRejectsLegacySingleAPIToken(t *testing.T) {
+func TestSecurityTokens_AgentExecRejectsLegacySingleAPIToken(t *testing.T) {
 	rawToken := "legacy-agent-token-123.12345678"
 	cfg := &config.Config{
 		DataPath:                     t.TempDir(),
