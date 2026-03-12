@@ -43,6 +43,8 @@ export function useSystemSettingsState({
   setDiscoveryEnabled,
   applySavedDiscoverySubnet,
 }: UseSystemSettingsStateParams) {
+  const normalizeAutoUpdateEnabled = (channel: 'stable' | 'rc', enabled: boolean) =>
+    channel === 'stable' && enabled;
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [pvePollingInterval, setPVEPollingInterval] = createSignal<number>(PVE_POLLING_MIN_SECONDS);
   const [pvePollingSelection, setPVEPollingSelection] = createSignal<number | 'custom'>(
@@ -168,13 +170,14 @@ export function useSystemSettingsState({
 
       const isPresetInterval = BACKUP_INTERVAL_OPTIONS.some((opt) => opt.value === intervalSeconds);
       setBackupPollingUseCustom(!isPresetInterval && intervalSeconds > 0);
-      setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
+      const savedUpdateChannel =
+        systemSettings.updateChannel === 'rc' ? ('rc' as const) : ('stable' as const);
+      setUpdateChannel(savedUpdateChannel);
+      setAutoUpdateEnabled(
+        normalizeAutoUpdateEnabled(savedUpdateChannel, systemSettings.autoUpdateEnabled || false),
+      );
       setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval ?? 24);
       setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
-
-      if (systemSettings.updateChannel) {
-        setUpdateChannel(systemSettings.updateChannel as 'stable' | 'rc');
-      }
 
       if (systemSettings.envOverrides) {
         setEnvOverrides(systemSettings.envOverrides);
@@ -217,7 +220,7 @@ export function useSystemSettingsState({
           pvePollingInterval: pvePollingInterval(),
           allowedOrigins: allowedOrigins(),
           updateChannel: updateChannel(),
-          autoUpdateEnabled: autoUpdateEnabled(),
+          autoUpdateEnabled: normalizeAutoUpdateEnabled(updateChannel(), autoUpdateEnabled()),
           autoUpdateCheckInterval: autoUpdateCheckInterval(),
           autoUpdateTime: autoUpdateTime(),
           backupPollingEnabled: backupPollingEnabled(),

@@ -553,6 +553,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 			Str("theme", settings.Theme).
 			Msg("Loaded system settings for API response")
 
+		settings.UpdateChannel = config.EffectiveUpdateChannel(settings.UpdateChannel, h.config.UpdateChannel)
 		// Always expose effective backup polling configuration
 		settings.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
 		settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
@@ -565,6 +566,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		// Expose effective telemetry value (respects env override)
 		effectiveTelemetry := h.config.TelemetryEnabled
 		settings.TelemetryEnabled = &effectiveTelemetry
+		settings.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
 	}
 
 	// Include env override information
@@ -767,6 +769,8 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["fullWidthMode"]; ok {
 		settings.FullWidthMode = updates.FullWidthMode
 	}
+	settings.UpdateChannel = config.EffectiveUpdateChannel(settings.UpdateChannel, h.config.UpdateChannel)
+	settings.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
 
 	// Pre-save validation (may return errors before anything is persisted)
 	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
@@ -835,10 +839,8 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.BackupPollingEnabled != nil {
 		h.config.EnableBackupPolling = *settings.BackupPollingEnabled
 	}
-	if settings.UpdateChannel != "" {
-		h.config.UpdateChannel = settings.UpdateChannel
-	}
-	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
+	h.config.UpdateChannel = settings.UpdateChannel
+	h.config.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
 	if settings.AutoUpdateCheckInterval > 0 {
 		h.config.AutoUpdateCheckInterval = time.Duration(settings.AutoUpdateCheckInterval) * time.Hour
 	}

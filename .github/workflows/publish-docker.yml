@@ -78,6 +78,32 @@ jobs:
             exit 1
           fi
 
+          if [ "$IS_PRERELEASE" != "true" ]; then
+            BASE_VERSION="${TAG#v}"
+            BASE_VERSION="${BASE_VERSION%%-*}"
+            mapfile -t RC_TAGS < <(git tag -l "v${BASE_VERSION}-rc.*" --sort=-version:refname)
+            if [ "${#RC_TAGS[@]}" -eq 0 ]; then
+              echo "::error::Stable tag ${TAG} has no matching RC tags for base version ${BASE_VERSION}."
+              exit 1
+            fi
+
+            MATCHED_RC=""
+            for rc_tag in "${RC_TAGS[@]}"; do
+              rc_commit="$(git rev-list -n1 "refs/tags/${rc_tag}")"
+              if git merge-base --is-ancestor "$rc_commit" "$TAG_COMMIT"; then
+                MATCHED_RC="$rc_tag"
+                break
+              fi
+            done
+
+            if [ -z "$MATCHED_RC" ]; then
+              echo "::error::Stable tag ${TAG} does not descend from any matching RC tag for base version ${BASE_VERSION}."
+              exit 1
+            fi
+
+            echo "[OK] ${TAG} descends from prerelease ${MATCHED_RC}"
+          fi
+
           echo "[OK] ${TAG} validated against release line ${REQUIRED_BRANCH}"
 
       - name: Set up QEMU

@@ -257,6 +257,23 @@ func TestLoad_Persistence(t *testing.T) {
 	assert.Equal(t, "debug", cfg.LogLevel)
 }
 
+func TestLoad_DisablesAutoUpdatesForRCChannel(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	p := NewConfigPersistence(tempDir)
+	require.NoError(t, p.SaveSystemSettings(SystemSettings{
+		UpdateChannel:     "rc",
+		AutoUpdateEnabled: true,
+	}))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, "rc", cfg.UpdateChannel)
+	assert.False(t, cfg.AutoUpdateEnabled)
+}
+
 func TestLoad_ReadErrors(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("Skipping permission tests as root")

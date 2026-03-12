@@ -209,3 +209,8 @@ boundary: `internal/api/public_signup_handlers.go` owns request/response and
 magic-link payload semantics, while `internal/hosted/provisioner.go` owns the
 shared org bootstrap and rollback mechanics that the hosted signup handler
 invokes.
+System settings API payloads now also carry an explicit v6 channel contract:
+`updateChannel` resolves to `stable` or `rc` with `stable` as the default, and
+`autoUpdateEnabled` must serialize as `false` whenever the effective channel is
+`rc`, even if stale persisted state or omitted request fields would otherwise
+leave unattended updates enabled.

@@ -94,6 +94,93 @@ func TestHandleGetSystemSettings(t *testing.T) {
 	}
 }
 
+func TestHandleGetSystemSettings_DisablesAutoUpdatesOnRC(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:          tempDir,
+		ConfigPath:        tempDir,
+		UpdateChannel:     "rc",
+		AutoUpdateEnabled: true,
+	}
+	persistence := config.NewConfigPersistence(tempDir)
+	monitor := &mockMonitor{}
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
+
+	initialSettings := config.DefaultSystemSettings()
+	initialSettings.UpdateChannel = "rc"
+	initialSettings.AutoUpdateEnabled = true
+	if err := persistence.SaveSystemSettings(*initialSettings); err != nil {
+		t.Fatalf("Failed to save initial settings: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system-settings", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var response struct {
+		UpdateChannel     string `json:"updateChannel"`
+		AutoUpdateEnabled bool   `json:"autoUpdateEnabled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if response.UpdateChannel != "rc" {
+		t.Fatalf("expected updateChannel rc, got %q", response.UpdateChannel)
+	}
+	if response.AutoUpdateEnabled {
+		t.Fatalf("expected autoUpdateEnabled to be normalized off on rc")
+	}
+}
+
+func TestHandleGetSystemSettings_UsesRuntimeRCWhenPersistedChannelMissing(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:          tempDir,
+		ConfigPath:        tempDir,
+		UpdateChannel:     "rc",
+		AutoUpdateEnabled: true,
+	}
+	persistence := config.NewConfigPersistence(tempDir)
+	monitor := &mockMonitor{}
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
+
+	initialSettings := config.DefaultSystemSettings()
+	initialSettings.AutoUpdateEnabled = true
+	if err := persistence.SaveSystemSettings(*initialSettings); err != nil {
+		t.Fatalf("Failed to save initial settings: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system-settings", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var response struct {
+		UpdateChannel     string `json:"updateChannel"`
+		AutoUpdateEnabled bool   `json:"autoUpdateEnabled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if response.UpdateChannel != "rc" {
+		t.Fatalf("expected runtime updateChannel rc, got %q", response.UpdateChannel)
+	}
+	if response.AutoUpdateEnabled {
+		t.Fatalf("expected autoUpdateEnabled to be normalized off on runtime rc")
+	}
+}
+
 func TestHandleGetSystemSettings_LoadError(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir}
@@ -172,6 +259,114 @@ func TestHandleUpdateSystemSettings_Basic(t *testing.T) {
 	// Verify config update
 	if cfg.PVEPollingInterval != 60*time.Second {
 		t.Errorf("Config was not updated. Expected 60s, got %v", cfg.PVEPollingInterval)
+	}
+}
+
+func TestHandleUpdateSystemSettings_DisablesAutoUpdatesWhenRCSelected(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+	persistence := config.NewConfigPersistence(tempDir)
+	monitor := &mockMonitor{}
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
+
+	tokenVal := "testtoken123"
+	tokenHash := internalauth.HashAPIToken(tokenVal)
+	cfg.APITokens = []config.APITokenRecord{
+		{
+			ID:   "token1",
+			Hash: tokenHash,
+			Name: "Test Token",
+		},
+	}
+
+	updates := map[string]interface{}{
+		"updateChannel":     "rc",
+		"autoUpdateEnabled": true,
+	}
+	body, _ := json.Marshal(updates)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", tokenVal)
+
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body: %s", rec.Code, rec.Body.String())
+	}
+
+	loaded, err := persistence.LoadSystemSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+	if loaded.UpdateChannel != "rc" {
+		t.Fatalf("expected saved updateChannel rc, got %q", loaded.UpdateChannel)
+	}
+	if loaded.AutoUpdateEnabled {
+		t.Fatalf("expected saved autoUpdateEnabled to be false on rc")
+	}
+	if cfg.AutoUpdateEnabled {
+		t.Fatalf("expected runtime autoUpdateEnabled to be false on rc")
+	}
+}
+
+func TestHandleUpdateSystemSettings_UsesRuntimeRCWhenChannelOmitted(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:      tempDir,
+		ConfigPath:    tempDir,
+		UpdateChannel: "rc",
+	}
+	persistence := config.NewConfigPersistence(tempDir)
+	monitor := &mockMonitor{}
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
+
+	tokenVal := "testtoken123"
+	tokenHash := internalauth.HashAPIToken(tokenVal)
+	cfg.APITokens = []config.APITokenRecord{
+		{
+			ID:   "token1",
+			Hash: tokenHash,
+			Name: "Test Token",
+		},
+	}
+
+	initialSettings := config.DefaultSystemSettings()
+	if err := persistence.SaveSystemSettings(*initialSettings); err != nil {
+		t.Fatalf("Failed to save initial settings: %v", err)
+	}
+
+	updates := map[string]interface{}{
+		"autoUpdateEnabled": true,
+	}
+	body, _ := json.Marshal(updates)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", tokenVal)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body: %s", rec.Code, rec.Body.String())
+	}
+
+	loaded, err := persistence.LoadSystemSettings()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
+	if loaded.UpdateChannel != "rc" {
+		t.Fatalf("expected saved updateChannel rc from runtime fallback, got %q", loaded.UpdateChannel)
+	}
+	if loaded.AutoUpdateEnabled {
+		t.Fatalf("expected saved autoUpdateEnabled to remain false on runtime rc")
+	}
+	if cfg.AutoUpdateEnabled {
+		t.Fatalf("expected runtime autoUpdateEnabled to remain false on runtime rc")
 	}
 }
 

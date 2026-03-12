@@ -50,6 +50,30 @@ var (
 	netInterfaceAddrs = net.InterfaceAddrs
 )
 
+// EffectiveUpdateChannel resolves the runtime update channel using persisted
+// settings first and a fallback runtime/config value second. v6 only supports
+// stable and rc, and defaults to stable when unset.
+func EffectiveUpdateChannel(channel string, fallback string) string {
+	switch {
+	case strings.EqualFold(channel, "rc"):
+		return "rc"
+	case strings.EqualFold(channel, "stable"):
+		return "stable"
+	case strings.EqualFold(fallback, "rc"):
+		return "rc"
+	case strings.EqualFold(fallback, "stable"):
+		return "stable"
+	default:
+		return "stable"
+	}
+}
+
+// EffectiveAutoUpdateEnabled enforces the v6 policy that unattended
+// auto-updates only run on the stable channel.
+func EffectiveAutoUpdateEnabled(channel string, enabled bool) bool {
+	return enabled && EffectiveUpdateChannel(channel, "") == "stable"
+}
+
 // IsPasswordHashed checks if a string looks like a bcrypt hash
 func IsPasswordHashed(password string) bool {
 	// Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
@@ -765,10 +789,8 @@ func Load() (*Config, error) {
 				cfg.AdaptivePollingMaxInterval = time.Duration(systemSettings.AdaptivePollingMaxInterval) * time.Second
 			}
 
-			if systemSettings.UpdateChannel != "" {
-				cfg.UpdateChannel = systemSettings.UpdateChannel
-			}
-			cfg.AutoUpdateEnabled = systemSettings.AutoUpdateEnabled
+			cfg.UpdateChannel = EffectiveUpdateChannel(systemSettings.UpdateChannel, cfg.UpdateChannel)
+			cfg.AutoUpdateEnabled = EffectiveAutoUpdateEnabled(cfg.UpdateChannel, systemSettings.AutoUpdateEnabled)
 			if systemSettings.AutoUpdateCheckInterval > 0 {
 				cfg.AutoUpdateCheckInterval = time.Duration(systemSettings.AutoUpdateCheckInterval) * time.Hour
 			}

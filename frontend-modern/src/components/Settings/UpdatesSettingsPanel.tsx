@@ -43,11 +43,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
   const latestVersion = () => props.updateInfo()?.latestVersion;
   const dockerImageTag = () => buildDockerImageTag(latestVersion());
   const systemdDownloadCommand = () => buildLinuxAmd64DownloadCommand(latestVersion());
+  const isPreviewChannel = () => props.updateChannel() === 'rc';
+  const autoUpdateLocked = () => Boolean(props.versionInfo()?.isSourceBuild || isPreviewChannel());
   const updateChannelOptions = (): SelectionCardOption<'stable' | 'rc'>[] => [
     {
       value: 'stable',
       title: 'Stable',
-      description: 'Production-ready releases',
+      description: 'Production-ready releases for paid and self-hosted environments',
       tone: 'success',
       disabled: props.versionInfo()?.isSourceBuild,
       icon: ({ active }) => (
@@ -69,7 +71,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
     {
       value: 'rc',
       title: 'Release Candidate',
-      description: 'Preview upcoming features (may include beta builds)',
+      description: 'Preview builds for staging, internal validation, and opt-in testers',
       tone: 'accent',
       disabled: props.versionInfo()?.isSourceBuild,
       icon: ({ active }) => (
@@ -741,11 +743,25 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               options={updateChannelOptions()}
               value={props.updateChannel()}
               onChange={(value) => {
+                if (value === 'rc') {
+                  props.setAutoUpdateEnabled(false);
+                }
                 props.setUpdateChannel(value);
                 props.setHasUnsavedChanges(true);
               }}
               variant="detail"
             />
+
+            <Show when={isPreviewChannel()}>
+              <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                <p class="font-medium">RC is a manual preview channel.</p>
+                <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                  Use this on staging or internal validation environments. Automatic
+                  stable updates stay disabled on RC so preview installs do not drift
+                  between channels unattended.
+                </p>
+              </div>
+            </Show>
 
             {/* Auto Update Toggle */}
             <div class="p-4 rounded-md border border-border bg-surface-alt">
@@ -768,10 +784,11 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   </div>
                   <div>
                     <label class="text-sm font-medium text-base-content">
-                      Automatic Update Checks
+                      Automatic Stable Updates
                     </label>
                     <p class="text-xs text-muted">
-                      Periodically check for new versions (installation is always manual)
+                      Supported host installs can automatically apply stable releases.
+                      RC preview validation always stays manual.
                     </p>
                   </div>
                 </div>
@@ -784,15 +801,22 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       props.setAutoUpdateEnabled(e.currentTarget.checked);
                       props.setHasUnsavedChanges(true);
                     }}
-                    disabled={props.versionInfo()?.isSourceBuild}
+                    disabled={autoUpdateLocked()}
                     class="sr-only peer"
                   />
                   <div class="w-11 h-6 bg-surface-alt peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
                 </label>
               </div>
 
+              <Show when={isPreviewChannel()}>
+                <p class="mt-3 text-xs text-amber-700 dark:text-amber-300">
+                  Automatic stable updates are unavailable while the RC preview
+                  channel is selected.
+                </p>
+              </Show>
+
               {/* Auto update options (shown when enabled) */}
-              <Show when={props.autoUpdateEnabled()}>
+              <Show when={props.autoUpdateEnabled() && !isPreviewChannel()}>
                 <div class="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Check Interval */}
                   <div class="space-y-2">

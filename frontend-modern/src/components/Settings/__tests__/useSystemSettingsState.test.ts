@@ -13,6 +13,7 @@ describe('useSystemSettingsState', () => {
   let useSystemSettingsState: UseSystemSettingsStateModule['useSystemSettingsState'];
   let getSystemSettingsMock: ReturnType<typeof vi.fn>;
   let getVersionMock: ReturnType<typeof vi.fn>;
+  let updateSystemSettingsMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -28,11 +29,12 @@ describe('useSystemSettingsState', () => {
       isDevelopment: false,
       deploymentType: 'systemd',
     });
+    updateSystemSettingsMock = vi.fn().mockResolvedValue(undefined);
 
     vi.doMock('@/api/settings', () => ({
       SettingsAPI: {
         getSystemSettings: getSystemSettingsMock,
-        updateSystemSettings: vi.fn(),
+        updateSystemSettings: updateSystemSettingsMock,
       },
     }));
 
@@ -225,6 +227,42 @@ describe('useSystemSettingsState', () => {
     await flushAsync();
 
     expect(hookState.autoUpdateCheckInterval()).toBe(0);
+    dispose();
+  });
+
+  it('normalizes persisted RC auto-updates off during initialization', async () => {
+    getSystemSettingsMock.mockResolvedValue({
+      updateChannel: 'rc',
+      autoUpdateEnabled: true,
+      autoUpdateCheckInterval: 24,
+      autoUpdateTime: '04:00',
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await hookState.initializeSystemSettingsState();
+    await flushAsync();
+
+    expect(hookState.updateChannel()).toBe('rc');
+    expect(hookState.autoUpdateEnabled()).toBe(false);
+    dispose();
+  });
+
+  it('forces autoUpdateEnabled off when saving RC channel settings', async () => {
+    const { hookState, dispose } = mountHook();
+
+    hookState.setUpdateChannel('rc');
+    hookState.setAutoUpdateEnabled(true);
+
+    await hookState.saveSettings();
+    await flushAsync();
+
+    expect(updateSystemSettingsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        updateChannel: 'rc',
+        autoUpdateEnabled: false,
+      }),
+    );
     dispose();
   });
 });

@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -221,6 +222,70 @@ func TestContract_BillingStateJSONSnapshot(t *testing.T) {
 		"stripe_customer_id":"cus_123",
 		"stripe_subscription_id":"sub_123",
 		"stripe_price_id":"price_123"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
+	payload := struct {
+		*config.SystemSettings
+		EnvOverrides map[string]bool `json:"envOverrides,omitempty"`
+	}{
+		SystemSettings: &config.SystemSettings{
+			PVEPollingInterval:           30,
+			PBSPollingInterval:           60,
+			PMGPollingInterval:           60,
+			BackupPollingInterval:        3600,
+			UpdateChannel:                "rc",
+			AutoUpdateEnabled:            false,
+			AutoUpdateCheckInterval:      24,
+			AutoUpdateTime:               "03:00",
+			DiscoveryEnabled:             true,
+			DiscoverySubnet:              "10.0.0.0/24",
+			DiscoveryConfig:              config.DefaultDiscoveryConfig(),
+			Theme:                        "dark",
+			TemperatureMonitoringEnabled: true,
+			DisableDockerUpdateActions:   true,
+		},
+		EnvOverrides: map[string]bool{
+			"PULSE_TELEMETRY": true,
+		},
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal system settings response: %v", err)
+	}
+
+	const want = `{
+		"pvePollingInterval":30,
+		"pbsPollingInterval":60,
+		"pmgPollingInterval":60,
+		"backupPollingInterval":3600,
+		"updateChannel":"rc",
+		"autoUpdateEnabled":false,
+		"autoUpdateCheckInterval":24,
+		"autoUpdateTime":"03:00",
+		"discoveryEnabled":true,
+		"discoverySubnet":"10.0.0.0/24",
+		"discoveryConfig":{
+			"environment_override":"auto",
+			"subnet_blocklist":["169.254.0.0/16"],
+			"max_hosts_per_scan":1024,
+			"max_concurrent":50,
+			"enable_reverse_dns":true,
+			"scan_gateways":true,
+			"dial_timeout_ms":1000,
+			"http_timeout_ms":2000
+		},
+		"theme":"dark",
+		"fullWidthMode":false,
+		"allowEmbedding":false,
+		"temperatureMonitoringEnabled":true,
+		"hideLocalLogin":false,
+		"disableDockerUpdateActions":true,
+		"envOverrides":{"PULSE_TELEMETRY":true}
 	}`
 
 	assertJSONSnapshot(t, got, want)

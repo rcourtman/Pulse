@@ -26,8 +26,13 @@ check_auto_updates_enabled() {
     # Check system.json for autoUpdateEnabled flag (note: no 's' - matches Go struct)
     if [[ -f "$CONFIG_DIR/system.json" ]]; then
         local enabled=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"autoUpdateEnabled"[[:space:]]*:[[:space:]]*true' || true)
+        local channel=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
         if [[ -z "$enabled" ]]; then
             log info "Auto-updates disabled in configuration"
+            exit 0
+        fi
+        if [[ "$channel" == "rc" ]]; then
+            log info "RC channel detected; unattended auto-updates run only on stable"
             exit 0
         fi
     fi
