@@ -57,7 +57,7 @@ else
 fi
 echo "Sensitivity check passed."
 
-# Block partially staged governance files that the local hook reads from the working tree
+# Block unstaged governance file changes that the local hook reads from the working tree
 echo "Running governance stage guard..."
 python3 scripts/release_control/governance_stage_guard.py
 

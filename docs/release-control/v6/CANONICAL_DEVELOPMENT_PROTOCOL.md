@@ -121,11 +121,12 @@ guard in `scripts/release_control/canonical_completion_guard.py` and by the
 governance guardrail tests in `internal/repoctl`.
 Local pre-commit governance checks must evaluate staged v6 control-file content
 rather than unstaged working-tree noise.
-Local pre-commit must also reject partial staging for hook-sensitive governance
-files under `docs/release-control/v6/`, `scripts/release_control/`,
-`internal/repoctl/`, `.husky/pre-commit`, and
+Local pre-commit must also reject any unstaged working-tree edits for
+hook-sensitive governance files under `docs/release-control/v6/`,
+`scripts/release_control/`, `internal/repoctl/`, `.husky/pre-commit`, and
 `.github/workflows/canonical-governance.yml`, because those local checks still
-execute or structurally read the working-tree versions.
+execute or structurally read the working-tree versions. Partial staging is one
+instance of this broader prohibition.
 Local formatter steps must also stay scoped to staged files so the hook does not
 mutate unrelated dirty worktree state.
 When formatting staged Go files, the formatter must operate on staged blobs in

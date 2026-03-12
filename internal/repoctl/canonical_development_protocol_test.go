@@ -730,7 +730,8 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"scripts/release_control/",
 		".husky/pre-commit",
 		".github/workflows/canonical-governance.yml",
-		"partially_staged_governance_paths",
+		"unstaged_governance_paths",
+		"BLOCKED: unstaged governance file changes detected.",
 	})
 }
 

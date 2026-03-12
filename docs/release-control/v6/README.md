@@ -35,6 +35,9 @@ Local pre-commit formatting is intentionally scoped to staged files so unrelated
 dirty worktree files are not mutated during commit.
 The staged Go formatter updates the git index directly and avoids broad
 restaging, so partially staged files do not silently absorb unrelated hunks.
+Local pre-commit also blocks any unstaged edits to hook-sensitive governance
+files, so working-tree-only governance changes cannot make local validation
+disagree with the committed tree.
 
 The old release-control orchestrator and loop tooling are retired. Direct,
 repo-aware sessions are now the only supported v6 execution path.

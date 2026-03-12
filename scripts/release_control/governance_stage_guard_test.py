@@ -5,9 +5,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from governance_stage_guard import (
-    blocked_partially_staged_paths,
+    blocked_unstaged_governance_paths,
     is_worktree_sensitive_governance_path,
-    partially_staged_governance_paths,
+    unstaged_governance_paths,
 )
 
 
@@ -21,28 +21,24 @@ class GovernanceStageGuardTest(unittest.TestCase):
         self.assertFalse(is_worktree_sensitive_governance_path("internal/api/slo.go"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/API.md"))
 
-    def test_blocked_partially_staged_paths_filters_to_partial_governance_files(self) -> None:
-        staged = [
-            ".husky/pre-commit",
-            "docs/release-control/v6/status.json",
-            "internal/api/slo.go",
-            "scripts/release_control/status_audit.py",
-        ]
+    def test_blocked_unstaged_governance_paths_filters_to_governance_scope(self) -> None:
         unstaged = [
+            ".husky/pre-commit",
             "docs/release-control/v6/status.json",
             "internal/api/slo.go",
             "scripts/release_control/status_audit.py",
         ]
 
         self.assertEqual(
-            blocked_partially_staged_paths(staged, unstaged),
+            blocked_unstaged_governance_paths(unstaged),
             [
+                ".husky/pre-commit",
                 "docs/release-control/v6/status.json",
                 "scripts/release_control/status_audit.py",
             ],
         )
 
-    def test_partially_staged_governance_paths_detects_real_partial_stage(self) -> None:
+    def test_unstaged_governance_paths_detects_real_unstaged_governance_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
             rel = "docs/release-control/v6/status.json"
@@ -56,9 +52,9 @@ class GovernanceStageGuardTest(unittest.TestCase):
             path.write_text('{"version":"working-tree"}\n', encoding="utf-8")
 
             with patch("governance_stage_guard.REPO_ROOT", repo_root):
-                self.assertEqual(partially_staged_governance_paths(), [rel])
+                self.assertEqual(unstaged_governance_paths(), [rel])
 
-    def test_partially_staged_governance_paths_ignores_partial_stage_outside_scope(self) -> None:
+    def test_unstaged_governance_paths_ignores_unstaged_changes_outside_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
             rel = "internal/api/slo.go"
@@ -72,7 +68,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
             path.write_text("package api\n\nvar x = 1\n", encoding="utf-8")
 
             with patch("governance_stage_guard.REPO_ROOT", repo_root):
-                self.assertEqual(partially_staged_governance_paths(), [])
+                self.assertEqual(unstaged_governance_paths(), [])
 
 
 if __name__ == "__main__":
