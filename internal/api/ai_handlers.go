@@ -6488,6 +6488,10 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 	}
 
 	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
+		return
+	}
 	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
@@ -6534,6 +6538,10 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 	}
 
 	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)
+		return
+	}
 	patrol := aiService.GetPatrolService()
 	if patrol == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Patrol service not initialized", nil)

@@ -79,6 +79,27 @@ func TestHandleGetInvestigation_NoPatrolService(t *testing.T) {
 	}
 }
 
+func TestHandleGetInvestigation_NoAIService(t *testing.T) {
+	handler := &AISettingsHandler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/findings/f-1/investigation", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetInvestigation(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for missing AI service, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error: %v", err)
+	}
+	if resp.Code != "not_initialized" {
+		t.Fatalf("expected code not_initialized, got %q", resp.Code)
+	}
+}
+
 func TestHandleGetInvestigation_NoOrchestrator(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
@@ -246,6 +267,27 @@ func TestHandleGetInvestigationMessages_NoPatrolService(t *testing.T) {
 	handler.HandleGetInvestigationMessages(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", rec.Code)
+	}
+}
+
+func TestHandleGetInvestigationMessages_NoAIService(t *testing.T) {
+	handler := &AISettingsHandler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/findings/f-1/investigation/messages", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetInvestigationMessages(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for missing AI service, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error: %v", err)
+	}
+	if resp.Code != "not_initialized" {
+		t.Fatalf("expected code not_initialized, got %q", resp.Code)
 	}
 }
 
