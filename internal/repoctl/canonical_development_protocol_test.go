@@ -115,6 +115,66 @@ func repoRootForEvidence(t *testing.T, repo string) string {
 	return filepath.Join(filepath.Dir(currentRoot), repo)
 }
 
+func validateEvidenceRefs(t *testing.T, activeRepos map[string]struct{}, allowedKinds []string, rawEvidence []any, context string) {
+	t.Helper()
+
+	for _, rawEvidenceRef := range rawEvidence {
+		ref, ok := rawEvidenceRef.(map[string]any)
+		if !ok {
+			t.Fatalf("%s contains legacy non-object evidence entry", context)
+		}
+
+		repo, ok := ref["repo"].(string)
+		if !ok || repo == "" {
+			t.Fatalf("%s evidence missing repo", context)
+		}
+		if _, ok := activeRepos[repo]; !ok {
+			t.Fatalf("%s evidence repo %q is not in active_repos", context, repo)
+		}
+
+		path, ok := ref["path"].(string)
+		if !ok || path == "" {
+			t.Fatalf("%s evidence missing path", context)
+		}
+		if filepath.IsAbs(path) {
+			t.Fatalf("%s evidence path %q must not be absolute", context, path)
+		}
+		cleaned := filepath.ToSlash(filepath.Clean(path))
+		if cleaned != path {
+			t.Fatalf("%s evidence path %q must be clean relative path %q", context, path, cleaned)
+		}
+		if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") {
+			t.Fatalf("%s evidence path %q must not escape repo root", context, path)
+		}
+
+		kind, ok := ref["kind"].(string)
+		if !ok || !slices.Contains(allowedKinds, kind) {
+			t.Fatalf("%s evidence kind %#v not allowed", context, ref["kind"])
+		}
+
+		repoRoot := repoRootForEvidence(t, repo)
+		if info, err := os.Stat(repoRoot); err != nil || !info.IsDir() {
+			t.Fatalf("%s evidence repo root for %q missing at %q (set %s to override): %v", context, repo, repoRoot, "PULSE_REPO_ROOT_"+strings.ToUpper(strings.ReplaceAll(repo, "-", "_")), err)
+		}
+
+		fullPath := filepath.Join(repoRoot, path)
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			t.Fatalf("%s evidence path %q missing in repo %q: %v", context, path, repo, err)
+		}
+		switch kind {
+		case "file":
+			if !info.Mode().IsRegular() {
+				t.Fatalf("%s evidence path %q in repo %q should be file", context, path, repo)
+			}
+		case "dir":
+			if !info.IsDir() {
+				t.Fatalf("%s evidence path %q in repo %q should be dir", context, path, repo)
+			}
+		}
+	}
+}
+
 func TestCanonicalDevelopmentProtocolExists(t *testing.T) {
 	rel := "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md"
 	content := readRepoFile(t, rel)
@@ -232,6 +292,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"does not, by itself, mean Pulse v6 is release-approved",
 		"status.json.readiness.repo_ready",
 		"status.json.readiness.release_ready",
+		"status.json.readiness_assertions",
 	})
 
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
@@ -241,10 +302,12 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"status.schema.json",
 		"registry.schema.json",
 		"docs/release-control/v6/subsystems/",
+		"## Evergreen Readiness Assertions",
 		"## Development Governance",
 		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
 		"status.json.readiness.repo_ready",
 		"status.json.readiness.release_ready",
+		"status.json.readiness_assertions",
 	})
 
 	matrix := readRepoFile(t, "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
@@ -256,6 +319,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"mobile-relay-auth-approvals",
 		"organization-user-scope-and-rbac",
 		"api-token-scope-and-assignment",
+		"upgrade-state-and-entitlement-preservation",
 	})
 }
 
@@ -266,8 +330,11 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"",
 		"\"title\": \"Pulse v6 Status Schema\"",
 		"\"readiness\"",
+		"\"readiness_assertion\"",
 		"\"repo_ready\"",
 		"\"release_ready\"",
+		"\"blocking_level\"",
+		"\"proof_type\"",
 		"\"open_decision\"",
 		"\"resolved_decision\"",
 		"\"lane_ids\"",
@@ -283,6 +350,7 @@ func TestSourceOfTruthStaysStableAndNonOperational(t *testing.T) {
 		"## Canonical Control Files",
 		"## Scope",
 		"## Release Definition",
+		"## Evergreen Readiness Assertions",
 		"## Non-Negotiable Release Gates",
 		"## Locked Decisions",
 		"## Development Governance",
@@ -342,14 +410,17 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	if _, ok := status["resolved_decisions"].([]any); !ok {
 		t.Fatalf("status.json missing resolved_decisions list")
 	}
+	if assertions, ok := status["readiness_assertions"].([]any); !ok || len(assertions) == 0 {
+		t.Fatalf("status.json readiness_assertions must be a non-empty list")
+	}
 	readiness, ok := status["readiness"].(map[string]any)
 	if !ok {
 		t.Fatalf("status.json missing readiness object")
 	}
 	if got, ok := readiness["repo_ready"].(bool); !ok {
 		t.Fatalf("status.json readiness.repo_ready missing bool")
-	} else if !got {
-		t.Fatalf("status.json readiness.repo_ready = %v, want true", got)
+	} else if got {
+		t.Fatalf("status.json readiness.repo_ready = %v, want false", got)
 	}
 	if got, ok := readiness["release_ready"].(bool); !ok {
 		t.Fatalf("status.json readiness.release_ready missing bool")
@@ -359,11 +430,11 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	if gates, ok := status["release_gates"].([]any); !ok || len(gates) == 0 {
 		t.Fatalf("status.json release_gates must be a non-empty list")
 	}
-	if got, ok := readiness["repo_ready_rule"].(string); !ok || got != "all lanes target-met and evidence-present" {
-		t.Fatalf("status.json readiness.repo_ready_rule = %#v, want %q", readiness["repo_ready_rule"], "all lanes target-met and evidence-present")
+	if got, ok := readiness["repo_ready_rule"].(string); !ok || got != "all lanes target-met and evidence-present plus all repo-ready assertions passed" {
+		t.Fatalf("status.json readiness.repo_ready_rule = %#v, want %q", readiness["repo_ready_rule"], "all lanes target-met and evidence-present plus all repo-ready assertions passed")
 	}
-	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "repo_ready plus zero open_decisions plus all release_gates passed" {
-		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "repo_ready plus zero open_decisions plus all release_gates passed")
+	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed" {
+		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed")
 	}
 	if blockers, ok := readiness["release_blockers"].([]any); !ok || len(blockers) == 0 {
 		t.Fatalf("status.json readiness.release_blockers must be a non-empty list while release_ready is false")
@@ -497,61 +568,158 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 			t.Fatalf("status.json lane %q has invalid status %#v", laneID, lane["status"])
 		}
 
-		for _, rawEvidenceRef := range rawEvidence {
-			ref, ok := rawEvidenceRef.(map[string]any)
-			if !ok {
-				t.Fatalf("status.json lane %q contains legacy non-object evidence entry", laneID)
-			}
+		validateEvidenceRefs(t, activeRepos, allowedKinds, rawEvidence, "status.json lane "+laneID)
+	}
+}
 
-			repo, ok := ref["repo"].(string)
-			if !ok || repo == "" {
-				t.Fatalf("status.json lane %q evidence missing repo", laneID)
-			}
-			if _, ok := activeRepos[repo]; !ok {
-				t.Fatalf("status.json lane %q evidence repo %q is not in active_repos", laneID, repo)
-			}
+func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
+	status := statusJSON(t)
+	laneIDs := statusLaneIDs(t, status)
 
-			path, ok := ref["path"].(string)
-			if !ok || path == "" {
-				t.Fatalf("status.json lane %q evidence missing path", laneID)
-			}
-			if filepath.IsAbs(path) {
-				t.Fatalf("status.json lane %q evidence path %q must not be absolute", laneID, path)
-			}
-			cleaned := filepath.ToSlash(filepath.Clean(path))
-			if cleaned != path {
-				t.Fatalf("status.json lane %q evidence path %q must be clean relative path %q", laneID, path, cleaned)
-			}
-			if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") {
-				t.Fatalf("status.json lane %q evidence path %q must not escape repo root", laneID, path)
-			}
+	scope, ok := status["scope"].(map[string]any)
+	if !ok {
+		t.Fatalf("status.json missing scope object")
+	}
+	rawRepos, ok := scope["active_repos"].([]any)
+	if !ok {
+		t.Fatalf("status.json scope missing active_repos list")
+	}
+	activeRepos := make(map[string]struct{}, len(rawRepos))
+	for _, raw := range rawRepos {
+		repo, ok := raw.(string)
+		if !ok {
+			t.Fatalf("status.json active_repos contains non-string entry")
+		}
+		activeRepos[repo] = struct{}{}
+	}
 
-			kind, ok := ref["kind"].(string)
-			if !ok || !slices.Contains(allowedKinds, kind) {
-				t.Fatalf("status.json lane %q evidence kind %#v not allowed", laneID, ref["kind"])
-			}
+	policy, ok := status["evidence_reference_policy"].(map[string]any)
+	if !ok {
+		t.Fatalf("status.json missing evidence_reference_policy object")
+	}
+	rawKinds, ok := policy["allowed_kinds"].([]any)
+	if !ok {
+		t.Fatalf("status.json evidence_reference_policy.allowed_kinds missing list")
+	}
+	var allowedKinds []string
+	for _, raw := range rawKinds {
+		kind, ok := raw.(string)
+		if !ok {
+			t.Fatalf("status.json evidence_reference_policy.allowed_kinds contains non-string entry")
+		}
+		allowedKinds = append(allowedKinds, kind)
+	}
 
-			repoRoot := repoRootForEvidence(t, repo)
-			if info, err := os.Stat(repoRoot); err != nil || !info.IsDir() {
-				t.Fatalf("status.json lane %q evidence repo root for %q missing at %q (set %s to override): %v", laneID, repo, repoRoot, "PULSE_REPO_ROOT_"+strings.ToUpper(strings.ReplaceAll(repo, "-", "_")), err)
-			}
+	rawGates, ok := status["release_gates"].([]any)
+	if !ok {
+		t.Fatalf("status.json missing release_gates list")
+	}
+	releaseGateIDs := make(map[string]struct{}, len(rawGates))
+	for _, raw := range rawGates {
+		gate, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json release_gates contains non-object entry")
+		}
+		id, ok := gate["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("status.json release_gate missing id")
+		}
+		releaseGateIDs[id] = struct{}{}
+	}
 
-			fullPath := filepath.Join(repoRoot, path)
-			info, err := os.Stat(fullPath)
-			if err != nil {
-				t.Fatalf("status.json lane %q evidence path %q missing in repo %q: %v", laneID, path, repo, err)
+	rawAssertions, ok := status["readiness_assertions"].([]any)
+	if !ok || len(rawAssertions) == 0 {
+		t.Fatalf("status.json readiness_assertions must be a non-empty list")
+	}
+
+	validKinds := []string{"invariant", "journey", "trust-gate"}
+	validBlockingLevels := []string{"repo-ready", "release-ready"}
+	validProofTypes := []string{"automated", "manual", "hybrid"}
+	validStatuses := []string{"pending", "partial", "blocked", "passed"}
+	seenIDs := make(map[string]struct{}, len(rawAssertions))
+
+	for _, rawAssertion := range rawAssertions {
+		assertion, ok := rawAssertion.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json readiness_assertions contains non-object entry")
+		}
+
+		id, ok := assertion["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("status.json readiness_assertion missing id")
+		}
+		if _, exists := seenIDs[id]; exists {
+			t.Fatalf("status.json readiness_assertion id %q duplicated", id)
+		}
+		seenIDs[id] = struct{}{}
+
+		if summary, ok := assertion["summary"].(string); !ok || strings.TrimSpace(summary) == "" {
+			t.Fatalf("status.json readiness_assertion %q missing summary", id)
+		}
+		if kind, ok := assertion["kind"].(string); !ok || !slices.Contains(validKinds, kind) {
+			t.Fatalf("status.json readiness_assertion %q has invalid kind %#v", id, assertion["kind"])
+		}
+		if blockingLevel, ok := assertion["blocking_level"].(string); !ok || !slices.Contains(validBlockingLevels, blockingLevel) {
+			t.Fatalf("status.json readiness_assertion %q has invalid blocking_level %#v", id, assertion["blocking_level"])
+		}
+		proofType, ok := assertion["proof_type"].(string)
+		if !ok || !slices.Contains(validProofTypes, proofType) {
+			t.Fatalf("status.json readiness_assertion %q has invalid proof_type %#v", id, assertion["proof_type"])
+		}
+		if statusValue, ok := assertion["status"].(string); !ok || !slices.Contains(validStatuses, statusValue) {
+			t.Fatalf("status.json readiness_assertion %q has invalid status %#v", id, assertion["status"])
+		}
+
+		rawLaneIDs, ok := assertion["lane_ids"].([]any)
+		if !ok || len(rawLaneIDs) == 0 {
+			t.Fatalf("status.json readiness_assertion %q missing lane_ids", id)
+		}
+		for _, rawLaneID := range rawLaneIDs {
+			laneID, ok := rawLaneID.(string)
+			if !ok || laneID == "" {
+				t.Fatalf("status.json readiness_assertion %q lane_ids contains invalid entry", id)
 			}
-			switch kind {
-			case "file":
-				if !info.Mode().IsRegular() {
-					t.Fatalf("status.json lane %q evidence path %q in repo %q should be file", laneID, path, repo)
-				}
-			case "dir":
-				if !info.IsDir() {
-					t.Fatalf("status.json lane %q evidence path %q in repo %q should be dir", laneID, path, repo)
-				}
+			if _, ok := laneIDs[laneID]; !ok {
+				t.Fatalf("status.json readiness_assertion %q references unknown lane_id %q", id, laneID)
 			}
 		}
+
+		rawSubsystemIDs, ok := assertion["subsystem_ids"].([]any)
+		if !ok {
+			t.Fatalf("status.json readiness_assertion %q missing subsystem_ids", id)
+		}
+		for _, rawSubsystemID := range rawSubsystemIDs {
+			subsystemID, ok := rawSubsystemID.(string)
+			if !ok || subsystemID == "" {
+				t.Fatalf("status.json readiness_assertion %q subsystem_ids contains invalid entry", id)
+			}
+		}
+
+		rawReleaseGateIDs, ok := assertion["release_gate_ids"].([]any)
+		if !ok {
+			t.Fatalf("status.json readiness_assertion %q missing release_gate_ids", id)
+		}
+		for _, rawReleaseGateID := range rawReleaseGateIDs {
+			releaseGateID, ok := rawReleaseGateID.(string)
+			if !ok || releaseGateID == "" {
+				t.Fatalf("status.json readiness_assertion %q release_gate_ids contains invalid entry", id)
+			}
+			if _, ok := releaseGateIDs[releaseGateID]; !ok {
+				t.Fatalf("status.json readiness_assertion %q references unknown release_gate_id %q", id, releaseGateID)
+			}
+		}
+		if proofType == "automated" && len(rawReleaseGateIDs) != 0 {
+			t.Fatalf("status.json readiness_assertion %q proof_type automated must not carry release_gate_ids", id)
+		}
+		if proofType != "automated" && len(rawReleaseGateIDs) == 0 {
+			t.Fatalf("status.json readiness_assertion %q proof_type %q must carry release_gate_ids", id, proofType)
+		}
+
+		rawEvidence, ok := assertion["evidence"].([]any)
+		if !ok || len(rawEvidence) == 0 {
+			t.Fatalf("status.json readiness_assertion %q missing evidence list", id)
+		}
+		validateEvidenceRefs(t, activeRepos, allowedKinds, rawEvidence, "status.json readiness_assertion "+id)
 	}
 }
 
@@ -730,6 +898,7 @@ func TestCanonicalCompletionGuardIsWiredIntoPreCommit(t *testing.T) {
 		"STATUS_SCHEMA_PATH",
 		"repo_root_for_name",
 		"audit_status_payload",
+		"readiness_assertions",
 		"release_gates",
 		"open_decisions",
 		"resolved_decisions",

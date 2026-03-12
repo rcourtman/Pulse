@@ -7,6 +7,34 @@ from unittest import mock
 from status_audit import audit_status_payload, parse_args
 
 
+REPO_READY_RULE = "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+RELEASE_READY_RULE = (
+    "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
+)
+ASSERTIONS_BLOCKER = (
+    "Required readiness assertions remain pending or blocked in status.json.readiness_assertions."
+)
+
+
+def passing_readiness_assertions(*, lane_id: str = "L1", path: str = "docs/proof.md") -> list[dict[str, object]]:
+    return [
+        {
+            "id": "RA1",
+            "summary": "Core readiness assertion",
+            "kind": "invariant",
+            "blocking_level": "repo-ready",
+            "proof_type": "automated",
+            "status": "passed",
+            "lane_ids": [lane_id],
+            "subsystem_ids": [],
+            "release_gate_ids": [],
+            "evidence": [
+                {"repo": "pulse", "path": path, "kind": "file"},
+            ],
+        }
+    ]
+
+
 class StatusAuditTest(unittest.TestCase):
     def test_parse_args_accepts_staged_flag(self) -> None:
         args = parse_args(["--check", "--staged"])
@@ -29,8 +57,8 @@ class StatusAuditTest(unittest.TestCase):
                 "readiness": {
                     "repo_ready": False,
                     "release_ready": False,
-                    "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
                     "release_blockers": [
                         "Open operational decisions remain in status.json.open_decisions.",
                         "High-risk release gates remain pending or blocked in status.json.release_gates.",
@@ -81,6 +109,7 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "readiness_assertions": passing_readiness_assertions(),
                 "release_gates": [
                     {
                         "id": "g1",
@@ -144,8 +173,8 @@ class StatusAuditTest(unittest.TestCase):
                 "readiness": {
                     "repo_ready": True,
                     "release_ready": False,
-                    "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
                     "release_blockers": [
                         "High-risk release gates remain pending or blocked in status.json.release_gates.",
                     ],
@@ -195,6 +224,7 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "readiness_assertions": passing_readiness_assertions(),
                 "release_gates": [
                     {
                         "id": "g1",
@@ -221,11 +251,125 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["summary"]["release_gate_count"], 1)
             self.assertEqual(report["summary"]["release_gates_passed"], 0)
 
+    def test_audit_status_payload_requires_readiness_assertions_to_clear_release_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pulse = root / "pulse"
+            pulse.mkdir()
+            (pulse / "docs").mkdir()
+            (pulse / "docs" / "proof.md").write_text("proof", encoding="utf-8")
+
+            payload = {
+                "version": "6.0",
+                "updated_at": "2026-03-12",
+                "execution_model": "direct-repo-sessions",
+                "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": True,
+                    "release_ready": False,
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
+                    "release_blockers": [
+                        ASSERTIONS_BLOCKER,
+                    ],
+                },
+                "scope": {
+                    "active_repos": ["pulse"],
+                    "ignored_repos": [],
+                },
+                "source_precedence": [
+                    "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                    "docs/release-control/v6/status.json",
+                    "docs/release-control/v6/status.schema.json",
+                    "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+                    "docs/release-control/v6/subsystems/registry.json",
+                    "docs/release-control/v6/subsystems/registry.schema.json",
+                ],
+                "priority_engine": {
+                    "formula": "gap-first",
+                    "floor_rule": {
+                        "release_critical_lanes": ["L1"],
+                        "minimum_score": 6,
+                    },
+                    "weights": {
+                        "gap_multiplier": 4,
+                        "blocker_bonus": 8,
+                        "criticality_range": "0-5",
+                        "staleness_range": "0-3",
+                        "dependency_range": "0-3",
+                    },
+                },
+                "evidence_reference_policy": {
+                    "format": "repo-qualified-relative-paths",
+                    "allowed_kinds": ["file", "dir"],
+                    "absolute_paths_forbidden": True,
+                    "local_repo": "pulse",
+                },
+                "lanes": [
+                    {
+                        "id": "L1",
+                        "name": "Lane 1",
+                        "target_score": 8,
+                        "current_score": 8,
+                        "status": "target-met",
+                        "subsystems": [],
+                        "evidence": [
+                            {"repo": "pulse", "path": "docs/proof.md", "kind": "file"},
+                        ],
+                    }
+                ],
+                "readiness_assertions": [
+                    *passing_readiness_assertions(),
+                    {
+                        "id": "RA2",
+                        "summary": "Release assertion",
+                        "kind": "journey",
+                        "blocking_level": "release-ready",
+                        "proof_type": "manual",
+                        "status": "partial",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                        "release_gate_ids": ["g1"],
+                        "evidence": [
+                            {"repo": "pulse", "path": "docs/proof.md", "kind": "file"},
+                        ],
+                    },
+                ],
+                "release_gates": [
+                    {
+                        "id": "g1",
+                        "summary": "Need manual verification",
+                        "owner": "project-owner",
+                        "status": "passed",
+                        "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+                        "lane_ids": ["L1"],
+                    }
+                ],
+                "open_decisions": [],
+                "resolved_decisions": [],
+            }
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["summary"]["readiness_assertion_count"], 2)
+            self.assertEqual(report["summary"]["readiness_assertions_passed"], 1)
+            self.assertFalse(report["readiness"]["release_ready_assertions_cleared"])
+            self.assertEqual(report["readiness"]["release_blockers"], [ASSERTIONS_BLOCKER])
+
     def test_audit_status_payload_reports_missing_cross_repo_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             pulse = root / "pulse"
             pulse.mkdir()
+            (pulse / "docs").mkdir()
+            (pulse / "docs" / "proof.md").write_text("proof", encoding="utf-8")
             pulse_pro = root / "pulse-pro"
             pulse_pro.mkdir()
 
@@ -237,8 +381,8 @@ class StatusAuditTest(unittest.TestCase):
                 "readiness": {
                     "repo_ready": False,
                     "release_ready": False,
-                    "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
                     "release_blockers": [
                         "Open operational decisions remain in status.json.open_decisions.",
                         "High-risk release gates remain pending or blocked in status.json.release_gates.",
@@ -289,6 +433,7 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "readiness_assertions": passing_readiness_assertions(lane_id="L2"),
                 "release_gates": [
                     {
                         "id": "g1",
@@ -356,8 +501,8 @@ class StatusAuditTest(unittest.TestCase):
                 "readiness": {
                     "repo_ready": False,
                     "release_ready": False,
-                    "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
                     "release_blockers": [
                         "Open operational decisions remain in status.json.open_decisions.",
                         "High-risk release gates remain pending or blocked in status.json.release_gates.",
@@ -408,6 +553,7 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "readiness_assertions": passing_readiness_assertions(lane_id="L6"),
                 "release_gates": [
                     {
                         "id": "g1",
@@ -453,8 +599,8 @@ class StatusAuditTest(unittest.TestCase):
                 "readiness": {
                     "repo_ready": False,
                     "release_ready": False,
-                    "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
                     "release_blockers": [
                         "Open operational decisions remain in status.json.open_decisions.",
                         "High-risk release gates remain pending or blocked in status.json.release_gates.",
@@ -505,6 +651,7 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "readiness_assertions": passing_readiness_assertions(lane_id="L3"),
                 "release_gates": [
                     {
                         "id": "g1",
@@ -565,8 +712,8 @@ class StatusAuditTest(unittest.TestCase):
                 "readiness": {
                     "repo_ready": False,
                     "release_ready": False,
-                    "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
                     "release_blockers": [
                         "Open operational decisions remain in status.json.open_decisions.",
                         "High-risk release gates remain pending or blocked in status.json.release_gates.",
@@ -629,6 +776,7 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     },
                 ],
+                "readiness_assertions": passing_readiness_assertions(lane_id="L2", path="docs/a.md"),
                 "release_gates": [
                     {
                         "id": "g2",
@@ -732,8 +880,8 @@ class StatusAuditTest(unittest.TestCase):
                 "readiness": {
                     "repo_ready": False,
                     "release_ready": False,
-                    "repo_ready_rule": "all lanes target-met and evidence-present",
-                    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+                    "repo_ready_rule": REPO_READY_RULE,
+                    "release_ready_rule": RELEASE_READY_RULE,
                     "release_blockers": [
                         "High-risk release gates remain pending or blocked in status.json.release_gates.",
                     ],
@@ -782,6 +930,7 @@ class StatusAuditTest(unittest.TestCase):
                         ],
                     }
                 ],
+                "readiness_assertions": passing_readiness_assertions(),
                 "release_gates": [
                     {
                         "id": "g1",

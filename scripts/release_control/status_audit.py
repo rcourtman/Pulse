@@ -24,6 +24,9 @@ STATUS_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.json"
 STATUS_SCHEMA_PATH = REPO_ROOT / "docs" / "release-control" / "v6" / "status.schema.json"
 SOURCE_OF_TRUTH_FILE = "docs/release-control/v6/SOURCE_OF_TRUTH.md"
 HIGH_RISK_RELEASE_MATRIX = "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
+READINESS_ASSERTIONS_BLOCKER = (
+    "Required readiness assertions remain pending or blocked in status.json.readiness_assertions."
+)
 OPEN_DECISIONS_BLOCKER = "Open operational decisions remain in status.json.open_decisions."
 RELEASE_GATES_BLOCKER = "High-risk release gates remain pending or blocked in status.json.release_gates."
 REQUIRED_SOURCE_PRECEDENCE = [
@@ -39,6 +42,13 @@ DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
 def _lane_sort_key(value: str) -> tuple[int, str]:
     match = re.match(r"^L([0-9]+)$", value)
+    if not match:
+        return (sys.maxsize, value)
+    return (int(match.group(1)), value)
+
+
+def _readiness_assertion_sort_key(value: str) -> tuple[int, str]:
+    match = re.match(r"^RA([0-9]+)$", value)
     if not match:
         return (sys.maxsize, value)
     return (int(match.group(1)), value)
@@ -73,6 +83,14 @@ def status_schema_contract(*, staged: bool = False) -> dict[str, Any]:
     return {
         "schema": schema,
         "valid_lane_statuses": schema_enum(schema, "lane", "status"),
+        "valid_readiness_assertion_blocking_levels": schema_enum(
+            schema, "readiness_assertion", "blocking_level"
+        ),
+        "valid_readiness_assertion_kinds": schema_enum(schema, "readiness_assertion", "kind"),
+        "valid_readiness_assertion_proof_types": schema_enum(
+            schema, "readiness_assertion", "proof_type"
+        ),
+        "valid_readiness_assertion_statuses": schema_enum(schema, "readiness_assertion", "status"),
         "valid_release_gate_statuses": schema_enum(schema, "release_gate", "status"),
         "valid_open_decision_statuses": schema_enum(schema, "open_decision", "status"),
         "valid_resolved_decision_kinds": schema_enum(schema, "resolved_decision", "kind"),
@@ -170,6 +188,92 @@ def _derived_lane_status(*, at_target: bool, all_evidence_present: bool) -> str:
     if at_target:
         return "target-met"
     return "behind-target"
+
+
+def _derived_readiness_assertion_status(
+    *,
+    status: str,
+    all_evidence_present: bool,
+    linked_release_gates_cleared: bool,
+) -> str:
+    if not all_evidence_present:
+        return "evidence-missing"
+    if not linked_release_gates_cleared:
+        return "gates-pending"
+    if status == "passed":
+        return "passed"
+    return "not-passed"
+
+
+def audit_evidence_refs(
+    raw_evidence: Any,
+    *,
+    context: str,
+    active_repos: set[str],
+    allowed_kinds: set[str],
+    errors: list[str],
+) -> dict[str, Any]:
+    if not isinstance(raw_evidence, list) or not raw_evidence:
+        errors.append(f"{context} missing non-empty evidence list")
+        raw_evidence = []
+
+    missing_evidence: list[str] = []
+    resolved_evidence: list[str] = []
+    evidence_refs: list[tuple[str, str, str]] = []
+
+    for evidence_index, raw_evidence_ref in enumerate(raw_evidence):
+        evidence_context = f"{context}.evidence[{evidence_index}]"
+        if not isinstance(raw_evidence_ref, dict):
+            errors.append(f"{evidence_context} must be an object")
+            continue
+
+        repo = _require_string(raw_evidence_ref, "repo", errors, context=evidence_context)
+        path = _require_string(raw_evidence_ref, "path", errors, context=evidence_context)
+        kind = _require_string(raw_evidence_ref, "kind", errors, context=evidence_context)
+        if repo is None or path is None or kind is None:
+            continue
+        evidence_refs.append((repo, path, kind))
+        if repo not in active_repos:
+            errors.append(f"{evidence_context} repo {repo!r} is not in active_repos")
+            continue
+        if kind not in allowed_kinds:
+            errors.append(f"{evidence_context} kind {kind!r} is not allowed")
+            continue
+
+        _validate_clean_relative_path(path, errors, context=evidence_context)
+
+        repo_root = repo_root_for_name(repo)
+        if not repo_root.exists() or not repo_root.is_dir():
+            errors.append(
+                f"{evidence_context} repo root for {repo!r} missing at {repo_root} "
+                f"(override with {env_key_for_repo(repo)})"
+            )
+            continue
+
+        resolved = repo_root / path
+        if not resolved.exists():
+            missing_ref = f"{repo}:{path}"
+            missing_evidence.append(missing_ref)
+            errors.append(f"{evidence_context} missing evidence {missing_ref}")
+            continue
+        if kind == "file" and not resolved.is_file():
+            errors.append(f"{evidence_context} expected file at {repo}:{path}")
+            continue
+        if kind == "dir" and not resolved.is_dir():
+            errors.append(f"{evidence_context} expected dir at {repo}:{path}")
+            continue
+        resolved_evidence.append(f"{repo}:{path}")
+
+    if len(evidence_refs) != len(set(evidence_refs)):
+        errors.append(f"{context}.evidence must not contain duplicate repo/path/kind references")
+    if evidence_refs != sorted(evidence_refs, key=_evidence_sort_key):
+        errors.append(f"{context}.evidence must be sorted by repo, path, then kind")
+
+    return {
+        "missing_evidence": missing_evidence,
+        "resolved_evidence": resolved_evidence,
+        "all_evidence_present": len(missing_evidence) == 0,
+    }
 
 
 def validate_scope(payload: dict[str, Any], errors: list[str]) -> tuple[list[str], list[str]]:
@@ -283,20 +387,25 @@ def validate_readiness(payload: dict[str, Any], errors: list[str]) -> dict[str, 
         errors.append("status.json readiness.release_ready must be boolean")
 
     repo_ready_rule = _require_string(readiness, "repo_ready_rule", errors, context="readiness")
-    if repo_ready_rule and repo_ready_rule != "all lanes target-met and evidence-present":
+    if (
+        repo_ready_rule
+        and repo_ready_rule
+        != "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+    ):
         errors.append(
-            "status.json readiness.repo_ready_rule must be 'all lanes target-met and evidence-present'"
+            "status.json readiness.repo_ready_rule must be "
+            "'all lanes target-met and evidence-present plus all repo-ready assertions passed'"
         )
 
     release_ready_rule = _require_string(readiness, "release_ready_rule", errors, context="readiness")
     if (
         release_ready_rule
         and release_ready_rule
-        != "repo_ready plus zero open_decisions plus all release_gates passed"
+        != "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
     ):
         errors.append(
             "status.json readiness.release_ready_rule must be "
-            "'repo_ready plus zero open_decisions plus all release_gates passed'"
+            "'repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed'"
         )
 
     release_blockers = readiness.get("release_blockers")
@@ -365,63 +474,16 @@ def audit_lanes(
             errors.append(f"{context}.subsystems must be sorted lexicographically")
 
         raw_evidence = raw_lane.get("evidence")
-        if not isinstance(raw_evidence, list) or not raw_evidence:
-            errors.append(f"{context} missing non-empty evidence list")
-            raw_evidence = []
-
-        missing_evidence: list[str] = []
-        resolved_evidence: list[str] = []
-        evidence_refs: list[tuple[str, str, str]] = []
-        for evidence_index, raw_evidence_ref in enumerate(raw_evidence):
-            evidence_context = f"{context}.evidence[{evidence_index}]"
-            if not isinstance(raw_evidence_ref, dict):
-                errors.append(f"{evidence_context} must be an object")
-                continue
-
-            repo = _require_string(raw_evidence_ref, "repo", errors, context=evidence_context)
-            path = _require_string(raw_evidence_ref, "path", errors, context=evidence_context)
-            kind = _require_string(raw_evidence_ref, "kind", errors, context=evidence_context)
-            if repo is None or path is None or kind is None:
-                continue
-            evidence_refs.append((repo, path, kind))
-            if repo not in active_repos:
-                errors.append(f"{evidence_context} repo {repo!r} is not in active_repos")
-                continue
-            if kind not in allowed_kinds:
-                errors.append(f"{evidence_context} kind {kind!r} is not allowed")
-                continue
-
-            _validate_clean_relative_path(path, errors, context=evidence_context)
-
-            repo_root = repo_root_for_name(repo)
-            if not repo_root.exists() or not repo_root.is_dir():
-                errors.append(
-                    f"{evidence_context} repo root for {repo!r} missing at {repo_root} "
-                    f"(override with {env_key_for_repo(repo)})"
-                )
-                continue
-
-            resolved = repo_root / path
-            if not resolved.exists():
-                missing_ref = f"{repo}:{path}"
-                missing_evidence.append(missing_ref)
-                errors.append(f"{evidence_context} missing evidence {missing_ref}")
-                continue
-            if kind == "file" and not resolved.is_file():
-                errors.append(f"{evidence_context} expected file at {repo}:{path}")
-                continue
-            if kind == "dir" and not resolved.is_dir():
-                errors.append(f"{evidence_context} expected dir at {repo}:{path}")
-                continue
-            resolved_evidence.append(f"{repo}:{path}")
-
-        if len(evidence_refs) != len(set(evidence_refs)):
-            errors.append(f"{context}.evidence must not contain duplicate repo/path/kind references")
-        if evidence_refs != sorted(evidence_refs, key=_evidence_sort_key):
-            errors.append(f"{context}.evidence must be sorted by repo, path, then kind")
+        evidence_report = audit_evidence_refs(
+            raw_evidence,
+            context=context,
+            active_repos=active_repos,
+            allowed_kinds=allowed_kinds,
+            errors=errors,
+        )
 
         at_target = current >= target
-        all_evidence_present = len(missing_evidence) == 0
+        all_evidence_present = evidence_report["all_evidence_present"]
         derived_status = _derived_lane_status(
             at_target=at_target,
             all_evidence_present=all_evidence_present,
@@ -445,8 +507,8 @@ def audit_lanes(
                 "subsystems": subsystems,
                 "derived_status": derived_status,
                 "all_evidence_present": all_evidence_present,
-                "evidence_count": len(resolved_evidence),
-                "missing_evidence": missing_evidence,
+                "evidence_count": len(evidence_report["resolved_evidence"]),
+                "missing_evidence": evidence_report["missing_evidence"],
             }
         )
 
@@ -579,6 +641,141 @@ def validate_release_gates(
         gate_ids = [record["id"] for record in records]
         if gate_ids != sorted(gate_ids):
             errors.append("status.json release_gates must be sorted by id")
+
+    return records
+
+
+def validate_readiness_assertions(
+    payload: dict[str, Any],
+    *,
+    lane_ids: set[str],
+    release_gates: list[dict[str, Any]],
+    subsystem_to_lane: dict[str, str],
+    active_repos: set[str],
+    allowed_kinds: set[str],
+    valid_readiness_assertion_statuses: set[str],
+    valid_readiness_assertion_kinds: set[str],
+    valid_readiness_assertion_blocking_levels: set[str],
+    valid_readiness_assertion_proof_types: set[str],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    assertions = _require_object_list(payload, "readiness_assertions", errors, context="status.json")
+    seen_ids: set[str] = set()
+    records: list[dict[str, Any]] = []
+    release_gate_statuses = {
+        str(gate["id"]).strip(): str(gate["status"]).strip()
+        for gate in release_gates
+        if str(gate.get("id", "")).strip()
+    }
+
+    for index, raw in enumerate(assertions):
+        context = f"readiness_assertions[{index}]"
+        assertion_id = _require_string(raw, "id", errors, context=context)
+        if assertion_id:
+            if assertion_id in seen_ids:
+                errors.append(f"{context} duplicates id {assertion_id}")
+            seen_ids.add(assertion_id)
+        summary = _require_string(raw, "summary", errors, context=context)
+        kind = _require_string(raw, "kind", errors, context=context)
+        blocking_level = _require_string(raw, "blocking_level", errors, context=context)
+        proof_type = _require_string(raw, "proof_type", errors, context=context)
+        status = _require_string(raw, "status", errors, context=context)
+        lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
+        subsystem_refs = _require_string_list(raw, "subsystem_ids", errors, context=context)
+        gate_refs = _require_string_list(raw, "release_gate_ids", errors, context=context)
+
+        if kind and kind not in valid_readiness_assertion_kinds:
+            errors.append(f"{context} has invalid kind {kind!r}")
+        if blocking_level and blocking_level not in valid_readiness_assertion_blocking_levels:
+            errors.append(f"{context} has invalid blocking_level {blocking_level!r}")
+        if proof_type and proof_type not in valid_readiness_assertion_proof_types:
+            errors.append(f"{context} has invalid proof_type {proof_type!r}")
+        if status and status not in valid_readiness_assertion_statuses:
+            errors.append(f"{context} has invalid status {status!r}")
+
+        if len(lane_refs) != len(set(lane_refs)):
+            errors.append(f"{context}.lane_ids must not contain duplicates")
+        if lane_refs != sorted(lane_refs, key=_lane_sort_key):
+            errors.append(f"{context}.lane_ids must be sorted by lane id")
+        for lane_id in lane_refs:
+            if lane_id not in lane_ids:
+                errors.append(f"{context} references unknown lane_id {lane_id!r}")
+
+        validate_decision_subsystems(
+            subsystem_ids=subsystem_refs,
+            lane_refs=lane_refs,
+            subsystem_to_lane=subsystem_to_lane,
+            errors=errors,
+            context=context,
+        )
+
+        if len(gate_refs) != len(set(gate_refs)):
+            errors.append(f"{context}.release_gate_ids must not contain duplicates")
+        if gate_refs != sorted(gate_refs):
+            errors.append(f"{context}.release_gate_ids must be sorted lexicographically")
+        for gate_id in gate_refs:
+            if gate_id not in release_gate_statuses:
+                errors.append(f"{context} references unknown release_gate_id {gate_id!r}")
+
+        if proof_type == "automated" and gate_refs:
+            errors.append(f"{context} proof_type automated must not declare release_gate_ids")
+        if proof_type in {"manual", "hybrid"} and not gate_refs:
+            errors.append(f"{context} proof_type {proof_type!r} must declare release_gate_ids")
+
+        evidence_report = audit_evidence_refs(
+            raw.get("evidence"),
+            context=context,
+            active_repos=active_repos,
+            allowed_kinds=allowed_kinds,
+            errors=errors,
+        )
+        linked_release_gates_cleared = all(
+            release_gate_statuses.get(gate_id) == "passed" for gate_id in gate_refs
+        )
+        derived_status = _derived_readiness_assertion_status(
+            status=status or "",
+            all_evidence_present=evidence_report["all_evidence_present"],
+            linked_release_gates_cleared=linked_release_gates_cleared,
+        )
+        derived_pass = derived_status == "passed"
+
+        if status == "passed" and not evidence_report["all_evidence_present"]:
+            errors.append(f"{context} cannot be passed while evidence is missing")
+        if status == "passed" and gate_refs and not linked_release_gates_cleared:
+            errors.append(f"{context} cannot be passed while linked release gates are not all passed")
+
+        if (
+            assertion_id
+            and summary
+            and kind
+            and blocking_level
+            and proof_type
+            and status
+        ):
+            records.append(
+                {
+                    "id": assertion_id,
+                    "summary": summary,
+                    "kind": kind,
+                    "blocking_level": blocking_level,
+                    "proof_type": proof_type,
+                    "status": status,
+                    "lane_ids": lane_refs,
+                    "subsystem_ids": subsystem_refs,
+                    "release_gate_ids": gate_refs,
+                    "derived_status": derived_status,
+                    "derived_pass": derived_pass,
+                    "all_evidence_present": evidence_report["all_evidence_present"],
+                    "evidence_count": len(evidence_report["resolved_evidence"]),
+                    "missing_evidence": evidence_report["missing_evidence"],
+                    "linked_release_gates_cleared": linked_release_gates_cleared,
+                }
+            )
+
+    if len(records) == len(assertions):
+        assertion_ids = [record["id"] for record in records]
+        if assertion_ids != sorted(assertion_ids, key=_readiness_assertion_sort_key):
+            errors.append("status.json readiness_assertions must be sorted by assertion id")
 
     return records
 
@@ -720,6 +917,10 @@ def audit_status_payload(
     contract = schema_contract or DEFAULT_STATUS_SCHEMA_CONTRACT
     required_top_level_fields = set(contract["required_top_level_fields"])
     valid_lane_statuses = set(contract["valid_lane_statuses"])
+    valid_readiness_assertion_blocking_levels = set(contract["valid_readiness_assertion_blocking_levels"])
+    valid_readiness_assertion_kinds = set(contract["valid_readiness_assertion_kinds"])
+    valid_readiness_assertion_proof_types = set(contract["valid_readiness_assertion_proof_types"])
+    valid_readiness_assertion_statuses = set(contract["valid_readiness_assertion_statuses"])
     valid_release_gate_statuses = set(contract["valid_release_gate_statuses"])
     valid_open_decision_statuses = set(contract["valid_open_decision_statuses"])
     valid_resolved_decision_kinds = set(contract["valid_resolved_decision_kinds"])
@@ -784,6 +985,19 @@ def audit_status_payload(
         valid_release_gate_statuses=valid_release_gate_statuses,
         errors=errors,
     )
+    readiness_assertions = validate_readiness_assertions(
+        payload,
+        lane_ids=lane_ids,
+        release_gates=release_gates,
+        subsystem_to_lane=subsystem_to_lane,
+        active_repos=active_repo_set,
+        allowed_kinds=allowed_kinds,
+        valid_readiness_assertion_statuses=valid_readiness_assertion_statuses,
+        valid_readiness_assertion_kinds=valid_readiness_assertion_kinds,
+        valid_readiness_assertion_blocking_levels=valid_readiness_assertion_blocking_levels,
+        valid_readiness_assertion_proof_types=valid_readiness_assertion_proof_types,
+        errors=errors,
+    )
     open_decisions = validate_open_decisions(
         payload,
         lane_ids=lane_ids,
@@ -799,9 +1013,27 @@ def audit_status_payload(
         errors=errors,
     )
 
-    repo_ready_derived = all(lane["at_target"] and lane["all_evidence_present"] for lane in lane_reports)
+    repo_ready_assertions_cleared = all(
+        assertion["derived_pass"]
+        for assertion in readiness_assertions
+        if assertion["blocking_level"] == "repo-ready"
+    )
+    release_ready_assertions_cleared = all(
+        assertion["derived_pass"]
+        for assertion in readiness_assertions
+        if assertion["blocking_level"] == "release-ready"
+    )
+    repo_ready_derived = (
+        all(lane["at_target"] and lane["all_evidence_present"] for lane in lane_reports)
+        and repo_ready_assertions_cleared
+    )
     release_gates_cleared = all(gate["status"] == "passed" for gate in release_gates)
-    release_ready_derived = repo_ready_derived and len(open_decisions) == 0 and release_gates_cleared
+    release_ready_derived = (
+        repo_ready_derived
+        and release_ready_assertions_cleared
+        and len(open_decisions) == 0
+        and release_gates_cleared
+    )
 
     if readiness:
         if readiness.get("repo_ready") is not repo_ready_derived:
@@ -819,6 +1051,8 @@ def audit_status_payload(
             errors.append("status.json readiness.release_blockers must be non-empty when release_ready is false")
         if not release_ready_derived:
             expected_blockers: list[str] = []
+            if not repo_ready_assertions_cleared or not release_ready_assertions_cleared:
+                expected_blockers.append(READINESS_ASSERTIONS_BLOCKER)
             if open_decisions:
                 expected_blockers.append(OPEN_DECISIONS_BLOCKER)
             if not release_gates_cleared:
@@ -835,6 +1069,24 @@ def audit_status_payload(
             "lanes_at_target": sum(1 for lane in lane_reports if lane["at_target"]),
             "lanes_missing_evidence": sum(1 for lane in lane_reports if not lane["all_evidence_present"]),
             "all_evidence_present": all(lane["all_evidence_present"] for lane in lane_reports),
+            "readiness_assertion_count": len(readiness_assertions),
+            "readiness_assertions_passed": sum(1 for assertion in readiness_assertions if assertion["derived_pass"]),
+            "repo_ready_assertion_count": sum(
+                1 for assertion in readiness_assertions if assertion["blocking_level"] == "repo-ready"
+            ),
+            "repo_ready_assertions_passed": sum(
+                1
+                for assertion in readiness_assertions
+                if assertion["blocking_level"] == "repo-ready" and assertion["derived_pass"]
+            ),
+            "release_ready_assertion_count": sum(
+                1 for assertion in readiness_assertions if assertion["blocking_level"] == "release-ready"
+            ),
+            "release_ready_assertions_passed": sum(
+                1
+                for assertion in readiness_assertions
+                if assertion["blocking_level"] == "release-ready" and assertion["derived_pass"]
+            ),
             "release_gate_count": len(release_gates),
             "release_gates_passed": sum(1 for gate in release_gates if gate["status"] == "passed"),
             "open_decision_count": len(open_decisions),
@@ -847,9 +1099,12 @@ def audit_status_payload(
             "repo_ready_derived": repo_ready_derived,
             "release_ready_declared": readiness.get("release_ready") if readiness else None,
             "release_ready_derived": release_ready_derived,
+            "repo_ready_assertions_cleared": repo_ready_assertions_cleared,
+            "release_ready_assertions_cleared": release_ready_assertions_cleared,
             "release_blockers": readiness.get("release_blockers", []) if readiness else [],
         },
         "lanes": lane_reports,
+        "readiness_assertions": readiness_assertions,
         "release_gates": release_gates,
         "open_decisions": open_decisions,
         "resolved_decisions": resolved_decisions,
@@ -885,6 +1140,8 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"lanes={summary['lane_count']} "
             f"at_target={summary['lanes_at_target']} "
             f"missing_evidence={summary['lanes_missing_evidence']} "
+            f"assertions={summary['readiness_assertion_count']} "
+            f"assertions_passed={summary['readiness_assertions_passed']} "
             f"release_gates={summary['release_gate_count']} "
             f"release_gates_passed={summary['release_gates_passed']} "
             f"open_decisions={summary['open_decision_count']} "
@@ -899,6 +1156,14 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"subsystems={','.join(lane['subsystems']) or '-'}"
         )
         for missing in lane["missing_evidence"]:
+            lines.append(f"  missing {missing}")
+    for assertion in report.get("readiness_assertions", []):
+        lines.append(
+            f"{assertion['id']}: status={assertion['status']} derived={assertion['derived_status']} "
+            f"blocking={assertion['blocking_level']} evidence_count={assertion['evidence_count']} "
+            f"subsystems={','.join(assertion['subsystem_ids']) or '-'}"
+        )
+        for missing in assertion["missing_evidence"]:
             lines.append(f"  missing {missing}")
     if report.get("warnings"):
         lines.append("warnings:")

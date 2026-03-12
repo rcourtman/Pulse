@@ -4,14 +4,15 @@ This folder is the canonical execution control layer for Pulse v6.
 
 ## Start With These Control Files
 
-1. `SOURCE_OF_TRUTH.md` (stable human governance and locked decisions)
-2. `status.json` (live lane state, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
+1. `SOURCE_OF_TRUTH.md` (stable human governance, evergreen readiness assertion definitions, and locked decisions)
+2. `status.json` (live lane state, live readiness assertion state, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
 3. `status.schema.json` (machine-readable contract for the `status.json` shape)
 4. `subsystems/registry.json` (machine-readable subsystem ownership, explicit shared-ownership exceptions, and proof routing)
 5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
 
 `status.json` reporting every lane as `target-met` means the tracked v6 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or `release_gates` remain unresolved.
 Use `status.json.readiness.repo_ready` for repo/governance readiness and `status.json.readiness.release_ready` for release approval state.
+Use `status.json.readiness_assertions` for the active required assertion set that sits on top of the governed subsystem surfaces.
 
 Supporting governance file:
 
@@ -28,6 +29,7 @@ Useful helper tools:
   Local pre-commit runs the v6 machine audits with staged control-file content so validation is based on the actual index content being committed.
   Local pre-commit also blocks partial staging for hook-sensitive governance files under `docs/release-control/v6/`, `scripts/release_control/`, `internal/repoctl/`, `.husky/pre-commit`, and `.github/workflows/canonical-governance.yml`, because those checks still execute or structurally read working-tree content locally.
 - `python3 scripts/release_control/status_audit.py --check`
+  Validates lane evidence, readiness assertions, release gates, decision records, and derived repo/release readiness.
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations
 

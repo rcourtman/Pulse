@@ -23,15 +23,252 @@
   ],
   "execution_model": "direct-repo-sessions",
   "readiness": {
-    "repo_ready": true,
+    "repo_ready": false,
     "release_ready": false,
-    "repo_ready_rule": "all lanes target-met and evidence-present",
-    "release_ready_rule": "repo_ready plus zero open_decisions plus all release_gates passed",
+    "repo_ready_rule": "all lanes target-met and evidence-present plus all repo-ready assertions passed",
+    "release_ready_rule": "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed",
     "release_blockers": [
+      "Required readiness assertions remain pending or blocked in status.json.readiness_assertions.",
       "Open operational decisions remain in status.json.open_decisions.",
       "High-risk release gates remain pending or blocked in status.json.release_gates."
     ]
   },
+  "readiness_assertions": [
+    {
+      "id": "RA1",
+      "summary": "Governed surfaces that should use the unified resource model do not keep shipping on legacy equivalents.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "status": "partial",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/architecture/state-read-consolidation-progress-2026-02.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/resources.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA2",
+      "summary": "New users can complete Pulse Pro Relay signup through paid activation without manual operator intervention or ambiguous provisioning steps.",
+      "kind": "journey",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "status": "partial",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L8",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "cloud-paid",
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [
+        "hosted-signup-billing-replay"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/hosted_lifecycle_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/hosted_signup_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hosted/provisioner_test.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA3",
+      "summary": "After first successful entitlement activation, Pulse preserves paid state across supported sessions and upgrades without repeated license entry.",
+      "kind": "invariant",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "status": "partial",
+      "lane_ids": [
+        "L3",
+        "L5",
+        "L8"
+      ],
+      "subsystem_ids": [
+        "cloud-paid",
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [
+        "paid-feature-entitlement-gating",
+        "upgrade-state-and-entitlement-preservation"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/hosted_lifecycle_integration_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/license_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/11-first-session.spec.ts",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA4",
+      "summary": "Typical end users cannot trivially unlock Pulse Pro features by stripping client-only checks while server and hosted entitlements still deny access.",
+      "kind": "trust-gate",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "status": "partial",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L6",
+        "L9",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "cloud-paid"
+      ],
+      "release_gate_ids": [
+        "paid-feature-entitlement-gating"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/license_handlers_test.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA5",
+      "summary": "Non-paid users do not see paid-only navigation or pages unless the surface is explicitly promotional.",
+      "kind": "invariant",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "status": "partial",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L8",
+        "L9",
+        "L12"
+      ],
+      "subsystem_ids": [
+        "cloud-paid",
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [
+        "paid-feature-entitlement-gating"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/Settings.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA6",
+      "summary": "Supported upgrades preserve core state, entitlements, and first-session continuity without manual repair steps.",
+      "kind": "journey",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "status": "partial",
+      "lane_ids": [
+        "L3",
+        "L5",
+        "L8"
+      ],
+      "subsystem_ids": [
+        "cloud-paid",
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [
+        "upgrade-state-and-entitlement-preservation"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/releases/RELEASE_NOTES_v6.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/11-first-session.spec.ts",
+          "kind": "file"
+        }
+      ]
+    }
+  ],
   "evidence_reference_policy": {
     "format": "repo-qualified-relative-paths",
     "allowed_kinds": [
@@ -532,6 +769,18 @@
         "L5",
         "L7",
         "L12"
+      ]
+    },
+    {
+      "id": "upgrade-state-and-entitlement-preservation",
+      "summary": "Confirm supported upgrades preserve state, entitlements, and first-session continuity without repair flows.",
+      "owner": "project-owner",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L3",
+        "L5",
+        "L8"
       ]
     }
   ],

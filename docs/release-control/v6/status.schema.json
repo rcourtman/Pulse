@@ -11,6 +11,7 @@
     "source_precedence",
     "execution_model",
     "readiness",
+    "readiness_assertions",
     "evidence_reference_policy",
     "priority_engine",
     "lanes",
@@ -69,6 +70,13 @@
     },
     "readiness": {
       "$ref": "#/$defs/readiness"
+    },
+    "readiness_assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/readiness_assertion"
+      }
     },
     "evidence_reference_policy": {
       "$ref": "#/$defs/evidence_reference_policy"
@@ -190,11 +198,11 @@
         },
         "repo_ready_rule": {
           "type": "string",
-          "const": "all lanes target-met and evidence-present"
+          "const": "all lanes target-met and evidence-present plus all repo-ready assertions passed"
         },
         "release_ready_rule": {
           "type": "string",
-          "const": "repo_ready plus zero open_decisions plus all release_gates passed"
+          "const": "repo_ready plus all release-ready assertions passed plus zero open_decisions plus all release_gates passed"
         },
         "release_blockers": {
           "type": "array",
@@ -353,6 +361,96 @@
             "file",
             "dir"
           ]
+        }
+      }
+    },
+    "readiness_assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "kind",
+        "blocking_level",
+        "proof_type",
+        "status",
+        "lane_ids",
+        "subsystem_ids",
+        "release_gate_ids",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^RA[0-9]+$"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "invariant",
+            "journey",
+            "trust-gate"
+          ]
+        },
+        "blocking_level": {
+          "type": "string",
+          "enum": [
+            "repo-ready",
+            "release-ready"
+          ]
+        },
+        "proof_type": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "hybrid"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "partial",
+            "blocked",
+            "passed"
+          ]
+        },
+        "lane_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^L[0-9]+$"
+          }
+        },
+        "subsystem_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "release_gate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
         }
       }
     },

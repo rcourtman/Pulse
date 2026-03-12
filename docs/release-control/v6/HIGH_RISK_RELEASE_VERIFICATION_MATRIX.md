@@ -86,6 +86,38 @@ result.
   Any feature can be used without entitlement, or any paid user is blocked on a
   correctly granted capability.
 
+## Gate: `upgrade-state-and-entitlement-preservation`
+
+- Why this is risky:
+  Upgrade pain is trust-breaking and easy to miss when clean-room tests start
+  from fresh installs. Paid continuity, onboarding continuity, and local state
+  preservation all have to survive a real upgrade path.
+- Primary runtime surfaces:
+  `pkg/licensing/...`
+  `internal/api/license_handlers*.go`
+  `internal/api/public_signup_handlers.go`
+  `frontend-modern/src/components/SetupWizard/...`
+  `frontend-modern/src/components/Settings/...`
+- Automated proof:
+  `go test ./internal/api -run 'TestHostedLifecycle|TestEntitlementHandler_|TestRequireLicenseFeature_HostedEntitlements' -count=1`
+  `go test ./pkg/licensing/... -count=1`
+  `cd frontend-modern && npx vitest run src/components/Settings/__tests__/RBACPaywallPanels.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx src/pages/__tests__/AIIntelligence.test.tsx`
+  `npx playwright test tests/integration/tests/11-first-session.spec.ts`
+- Manual scenario:
+  1. Start from the previous supported Pulse build with non-trivial local state
+     and an already-activated paid entitlement.
+  2. Upgrade directly to the candidate v6 build without deleting local state.
+  3. Confirm the app does not ask for the license again during normal startup.
+  4. Confirm first-session and setup surfaces do not reset or regress into
+     misleading upgrade prompts.
+  5. Confirm paid-only surfaces remain correctly gated after upgrade.
+- Pass when:
+  Upgrade keeps the user's local state, entitlements, and first-session
+  continuity intact without requiring manual repair or repeated activation.
+- Block release if:
+  Upgrade requires manual cleanup, repeated license entry, or leaves paid and
+  non-paid surfaces in an inconsistent state.
+
 ## Gate: `relay-registration-reconnect-drain`
 
 - Why this is risky:
