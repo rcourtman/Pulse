@@ -33,6 +33,10 @@ import {
   getAlertIncidentTimelineHeadingClass,
   getAlertIncidentTimelineMetaRowClass,
   getAlertIncidentTimelineOutputClass,
+  getAlertResourceIncidentCardClass,
+  getAlertResourceIncidentSummaryRowClass,
+  getAlertResourceIncidentToggleButtonClass,
+  getAlertResourceIncidentTruncatedEventsLabel,
 } from '@/utils/alertIncidentPresentation';
 import {
   getAlertQuietSuppressCardClass,
@@ -228,6 +232,19 @@ describe('incident timeline presentation helpers', () => {
       'mt-1 font-mono text-xs text-base-content',
     );
     expect(getAlertIncidentTimelineOutputClass()).toBe('mt-1 text-xs text-muted');
+  });
+
+  it('returns the resource incident panel presentation', () => {
+    expect(getAlertResourceIncidentCardClass()).toBe(
+      'rounded border border-border bg-surface p-3',
+    );
+    expect(getAlertResourceIncidentSummaryRowClass()).toBe(
+      'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted',
+    );
+    expect(getAlertResourceIncidentToggleButtonClass()).toBe(
+      'px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover',
+    );
+    expect(getAlertResourceIncidentTruncatedEventsLabel(6)).toBe('Showing last 6 events');
   });
 });
 

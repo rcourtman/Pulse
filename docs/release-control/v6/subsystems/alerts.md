@@ -80,3 +80,7 @@ Alert incident event meta rows and detail text treatments now also route
 through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
 keeping duplicate summary/detail typography inline in the alerts page and
 overview timelines.
+
+Resource incident panel cards, summary rows, and toggle-button presentation
+now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
+instead of remaining inline inside `frontend-modern/src/pages/Alerts.tsx`.

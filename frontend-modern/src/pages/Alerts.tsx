@@ -81,6 +81,7 @@ import {
   getAlertIncidentTimelineMetaRowClass,
   getAlertIncidentTimelineOutputClass,
   getAlertResourceIncidentAcknowledgedByLabel,
+  getAlertResourceIncidentCardClass,
   getAlertResourceIncidentCountLabel,
   getAlertResourceIncidentEmptyState,
   getAlertResourceIncidentFilteredEventsEmptyState,
@@ -93,8 +94,11 @@ import {
   getAlertResourceIncidentRecentEventsSummary,
   getAlertResourceIncidentRefreshLabel,
   getAlertResourceIncidentSaveNoteLabel,
+  getAlertResourceIncidentSummaryRowClass,
   getAlertResourceIncidentTimelineFailure,
   getAlertResourceIncidentToggleLabel,
+  getAlertResourceIncidentToggleButtonClass,
+  getAlertResourceIncidentTruncatedEventsLabel,
   getAlertResourceIncidentViewTitle,
   getAlertIncidentStatusPresentation,
 } from '@/utils/alertIncidentPresentation';
@@ -5024,9 +5028,9 @@ function HistoryTab(props: {
                             ? `${filteredEvents.length}/${events.length}`
                             : `${events.length}`;
                         return (
-                          <div class="rounded border border-border bg-surface p-3">
-                            <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                              <span class="font-medium text-base-content">
+                          <div class={getAlertResourceIncidentCardClass()}>
+                            <div class={getAlertIncidentTimelineMetaRowClass()}>
+                              <span class={getAlertIncidentTimelineHeadingClass()}>
                                 {incident.alertType}
                               </span>
                               <span class={getAlertIncidentLevelBadgeClass(incident.level)}>
@@ -5043,26 +5047,30 @@ function HistoryTab(props: {
                               </Show>
                             </div>
                             <Show when={incident.message}>
-                              <p class="mt-1 text-xs text-muted">{incident.message}</p>
+                              <p class={getAlertIncidentTimelineOutputClass()}>{incident.message}</p>
                             </Show>
                             <Show when={incident.acknowledged && incident.ackUser}>
-                              <p class="mt-1 text-xs text-muted">
+                              <p class={getAlertIncidentTimelineOutputClass()}>
                                 {getAlertResourceIncidentAcknowledgedByLabel(incident.ackUser)}
                               </p>
                             </Show>
                             <Show when={events.length > 0}>
-                              <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                              <div class={getAlertResourceIncidentSummaryRowClass()}>
                                 <span>
                                   <Show
                                     when={filteredEvents.length > 0}
-                                    fallback={<span>No events match filters</span>}
+                                    fallback={
+                                      <span>
+                                        {getAlertResourceIncidentFilteredEventsEmptyState().text}
+                                      </span>
+                                    }
                                   >
                                     Last event: {lastEvent?.summary}
                                   </Show>
                                 </span>
                                 <button
                                   type="button"
-                                  class="px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover"
+                                  class={getAlertResourceIncidentToggleButtonClass()}
                                   onClick={() => toggleResourceIncidentDetails(incident.id)}
                                 >
                                   {getAlertResourceIncidentToggleLabel(isExpanded, filteredLabel)}
@@ -5127,7 +5135,7 @@ function HistoryTab(props: {
                                   </For>
                                   <Show when={filteredEvents.length > recentEvents.length}>
                                     <p class="text-[10px] text-muted">
-                                      {getAlertResourceIncidentRecentEventsSummary(
+                                      {getAlertResourceIncidentTruncatedEventsLabel(
                                         recentEvents.length,
                                       )}
                                     </p>

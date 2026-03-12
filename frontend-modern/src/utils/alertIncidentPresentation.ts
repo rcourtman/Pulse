@@ -250,3 +250,19 @@ export function getAlertIncidentTimelineCommandClass(): string {
 export function getAlertIncidentTimelineOutputClass(): string {
   return 'mt-1 text-xs text-muted';
 }
+
+export function getAlertResourceIncidentCardClass(): string {
+  return 'rounded border border-border bg-surface p-3';
+}
+
+export function getAlertResourceIncidentSummaryRowClass(): string {
+  return 'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted';
+}
+
+export function getAlertResourceIncidentToggleButtonClass(): string {
+  return 'px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover';
+}
+
+export function getAlertResourceIncidentTruncatedEventsLabel(count: number): string {
+  return `Showing last ${count} events`;
+}

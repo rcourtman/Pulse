@@ -2054,6 +2054,10 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertIncidentTimelineDetailClass');
     expect(alertsPageSource).toContain('getAlertIncidentTimelineCommandClass');
     expect(alertsPageSource).toContain('getAlertIncidentTimelineOutputClass');
+    expect(alertsPageSource).toContain('getAlertResourceIncidentCardClass');
+    expect(alertsPageSource).toContain('getAlertResourceIncidentSummaryRowClass');
+    expect(alertsPageSource).toContain('getAlertResourceIncidentToggleButtonClass');
+    expect(alertsPageSource).toContain('getAlertResourceIncidentTruncatedEventsLabel');
     expect(alertsPageSource).toContain('getAlertBucketCountLabel');
     expect(alertsPageSource).toContain('getAlertHistorySearchPlaceholder');
     expect(alertsPageSource).toContain('getAlertsPageHeaderMeta');
@@ -2759,6 +2763,18 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertIncidentPresentationSource).toContain(
       'export function getAlertIncidentTimelineOutputClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertResourceIncidentCardClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertResourceIncidentSummaryRowClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertResourceIncidentToggleButtonClass',
+    );
+    expect(alertIncidentPresentationSource).toContain(
+      'export function getAlertResourceIncidentTruncatedEventsLabel',
     );
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertHistoryEmptyState',
