@@ -116,9 +116,9 @@ backend maximum, rather than letting invalid caller input widen the history
 payload unexpectedly.
 The same patrol run-history contract now also treats
 `effective_scope_resource_ids` as the canonical analyzed-resource scope when
-present, and frontend snapshot selection must treat an explicit empty
-`finding_ids` array as an empty snapshot rather than falling back to unrelated
-current findings.
+present, including when it is an explicit empty array, and frontend snapshot
+selection must treat an explicit empty `finding_ids` array as an empty snapshot
+rather than falling back to unrelated current findings.
 Patrol status payloads now also treat quickstart credit state as canonical API
 contract data: `/api/ai/patrol/status` must surface
 `quickstart_credits_remaining`, `quickstart_credits_total`, and

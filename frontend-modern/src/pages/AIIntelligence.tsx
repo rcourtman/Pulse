@@ -532,7 +532,7 @@ export function AIIntelligence() {
   const selectedRunScopeResourceIds = createMemo(() => {
     const run = selectedRun();
     if (!run) return undefined;
-    if (run.effective_scope_resource_ids && run.effective_scope_resource_ids.length > 0) {
+    if (run.effective_scope_resource_ids !== undefined) {
       return run.effective_scope_resource_ids;
     }
     return run.scope_resource_ids;
