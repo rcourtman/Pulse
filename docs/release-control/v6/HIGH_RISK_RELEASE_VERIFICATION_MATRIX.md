@@ -66,6 +66,38 @@ Companion drill:
   Any hosted checkout, org linkage, magic-link, billing-admin, or webhook
   replay path is unconfirmed or inconsistent.
 
+## Gate: `commercial-cancellation-reactivation`
+
+- Why this is risky:
+  Grandfathered recurring continuity, Stripe cancellation state, entitlement
+  revocation, and public checkout re-entry span multiple repos and billing
+  boundaries. This is exactly the kind of path that can look correct in unit
+  tests while still charging the wrong price or granting the wrong access in a
+  real customer journey.
+- Primary runtime surfaces:
+  `internal/api/payments_webhook_handlers.go`
+  `pkg/licensing/...`
+  `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+  `pulse-pro/license-server/v6_checkout.go`
+  Stripe customer portal / recurring subscription state
+- Automated proof:
+  Run the automated proof bundle in
+  `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`.
+- Manual scenario:
+  Execute `CCR-1` through `CCR-7` from
+  `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`
+  against a staging-like billing environment and write a dated record under
+  `docs/release-control/v6/records/`.
+- Pass when:
+  Active grandfathered subscribers keep their legacy recurring price while the
+  subscription remains continuous, completed cancellation revokes paid access,
+  and any later public re-entry lands on current public v6 pricing rather than
+  reviving the legacy recurring rate.
+- Block release if:
+  The scenario is unexercised, a returning canceled customer can re-enter on a
+  legacy recurring price, or cancellation/reactivation leaves pricing and
+  entitlement state inconsistent across Stripe, Pulse runtime, and customer UI.
+
 ## Gate: `paid-feature-entitlement-gating`
 
 - Why this is risky:

@@ -1156,6 +1156,20 @@
       ]
     },
     {
+      "id": "commercial-cancellation-reactivation",
+      "summary": "Confirm grandfathered v5 recurring continuity holds while active, completed cancellation revokes paid state, and re-entry after cancellation uses current public v6 pricing.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "status": "pending",
+      "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L11",
+        "L12"
+      ]
+    },
+    {
       "id": "hosted-signup-billing-replay",
       "summary": "Confirm hosted signup, org provisioning, billing-admin visibility, and webhook replay succeed in the real checkout path.",
       "owner": "project-owner",

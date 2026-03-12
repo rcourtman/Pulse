@@ -421,6 +421,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             {gate["id"] for gate in lane_context["release_gates"]},
             {
+                "commercial-cancellation-reactivation",
                 "hosted-signup-billing-replay",
                 "paid-feature-entitlement-gating",
                 "upgrade-state-and-entitlement-preservation",

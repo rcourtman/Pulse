@@ -12,6 +12,8 @@ portal actions, Stripe webhook state, v6 entitlement evaluation, and customer
 UI can all pass in isolation while the real cancellation/reactivation journey
 still drifts.
 
+Owning release gate: `commercial-cancellation-reactivation`.
+
 ## Governing Policy
 
 The locked v6 pricing rule is:
