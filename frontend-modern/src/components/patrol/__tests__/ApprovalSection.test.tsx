@@ -103,6 +103,7 @@ describe('ApprovalSection', () => {
     ));
 
     expect(await screen.findByText('Fix Pending Approval')).toBeInTheDocument();
+    expect(screen.getAllByText('Fix Pending Approval')).toHaveLength(1);
     expect(screen.getByText('details unavailable')).toBeInTheDocument();
     expect(
       screen.getByText(/original approval details are no longer available/i),
@@ -139,7 +140,8 @@ describe('ApprovalSection', () => {
 
     render(() => <ApprovalSection findingId="finding-2" investigationOutcome="fix_queued" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /re-approve & execute/i }));
+    expect(await screen.findAllByRole('button', { name: /re-approve & execute/i })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /re-approve & execute/i }));
 
     await waitFor(() => {
       expect(reapproveInvestigationFixMock).toHaveBeenCalledWith('finding-2');
