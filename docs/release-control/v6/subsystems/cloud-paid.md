@@ -150,6 +150,14 @@ ownership model. Changes to
 `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` must carry
 this contract and the dedicated relay frontend proof files instead of
 remaining unowned consumers of relay licensing and onboarding state.
+That relay pairing boundary now also includes ephemeral device-token lifecycle:
+when the settings surface generates a mobile pairing QR, it must mint a fresh
+scoped API token for that pairing attempt, fetch the onboarding payload through
+that token context, and tear down superseded or failed pairing tokens instead
+of accumulating long-lived hidden credentials.
+The same flow must fail closed if the pairing payload omits the authenticated
+relay token state needed by the mobile deep link; pairing UI cannot silently
+render a QR that bypasses governed auth ownership.
 Hosted signup provisioning now follows the same rule. Changes to
 `internal/api/public_signup_handlers.go` and `internal/hosted/provisioner.go`
 must carry this contract and the dedicated hosted-signup provisioning proof

@@ -61,3 +61,13 @@ governed subsystem map even though they define real runtime expectations around
 membership management and cross-organization resource sharing. This contract
 now makes that boundary explicit while leaving transport payload ownership in
 `api-contracts`.
+Canonical organization role ordering is now part of that owned model as well:
+`owner` outranks `admin`, which outranks `editor`, which outranks `viewer`, and
+runtime checks must resolve that ordering through shared organization-role
+comparison helpers rather than ad hoc equality checks scattered across model
+and handler code.
+That same hierarchy governs inbound share visibility and organization
+management gates: a user may only see or accept a share when their effective
+membership role satisfies the share's requested access role, and admin-capable
+operations must continue to derive from the canonical role comparator instead
+of duplicating owner/admin special cases.
