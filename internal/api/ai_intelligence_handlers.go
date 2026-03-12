@@ -86,6 +86,18 @@ func aiIntelligenceUpgradeURL() string {
 	return upgradeURLForFeatureFromLicensing(featureAIPatrolValue)
 }
 
+func writeIncidentDataUnavailableResponse(w http.ResponseWriter, resourceID, message string) {
+	w.WriteHeader(http.StatusServiceUnavailable)
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"resource_id":       resourceID,
+		"incidents":         []interface{}{},
+		"formatted_context": "",
+		"message":           message,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write incident data unavailable response")
+	}
+}
+
 // HandleGetPatterns returns detected failure patterns (GET /api/ai/intelligence/patterns)
 func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1505,20 +1517,20 @@ func (h *AISettingsHandler) HandleGetIncidentData(w http.ResponseWriter, r *http
 	// Get incident data from patrol service
 	svc := h.GetAIService(r.Context())
 	if svc == nil {
-		http.Error(w, "Pulse Patrol service not available", http.StatusServiceUnavailable)
+		writeIncidentDataUnavailableResponse(w, resourceID, "Pulse Patrol service not available")
 		return
 	}
 
 	patrol := svc.GetPatrolService()
 	if patrol == nil {
-		http.Error(w, "Patrol service not available", http.StatusServiceUnavailable)
+		writeIncidentDataUnavailableResponse(w, resourceID, "Patrol service not available")
 		return
 	}
 
 	// Get incidents from incident store
 	incidentStore := patrol.GetIncidentStore()
 	if incidentStore == nil {
-		http.Error(w, "Incident store not available", http.StatusServiceUnavailable)
+		writeIncidentDataUnavailableResponse(w, resourceID, "Incident store not available")
 		return
 	}
 

@@ -507,6 +507,65 @@ func TestHandleGetIncidentData_Errors(t *testing.T) {
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if payload["resource_id"] != "res-1" {
+			t.Fatalf("unexpected resource_id: %#v", payload["resource_id"])
+		}
+		if payload["message"] != "Pulse Patrol service not available" {
+			t.Fatalf("unexpected message: %#v", payload["message"])
+		}
+		if incidents, ok := payload["incidents"].([]interface{}); !ok || len(incidents) != 0 {
+			t.Fatalf("expected empty incidents, got %#v", payload["incidents"])
+		}
+		if payload["formatted_context"] != "" {
+			t.Fatalf("expected empty formatted_context, got %#v", payload["formatted_context"])
+		}
+	})
+
+	t.Run("no_patrol", func(t *testing.T) {
+		svc := newEnabledAIService(t)
+		setUnexportedField(t, svc, "patrolService", (*ai.PatrolService)(nil))
+		handler := &AISettingsHandler{defaultAIService: svc}
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/incidents/res-1", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleGetIncidentData(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if payload["message"] != "Patrol service not available" {
+			t.Fatalf("unexpected message: %#v", payload["message"])
+		}
+	})
+
+	t.Run("no_incident_store", func(t *testing.T) {
+		svc := newEnabledAIService(t)
+		handler := &AISettingsHandler{defaultAIService: svc}
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/incidents/res-1", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleGetIncidentData(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+		}
+
+		var payload map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if payload["message"] != "Incident store not available" {
+			t.Fatalf("unexpected message: %#v", payload["message"])
+		}
+		if payload["resource_id"] != "res-1" {
+			t.Fatalf("unexpected resource_id: %#v", payload["resource_id"])
+		}
 	})
 }
 
