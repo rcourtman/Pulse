@@ -17,6 +17,11 @@ import {
   ALERTS_EMPTY_STATE,
   ALERTS_THRESHOLD_HINT,
   getAlertListEmptyState,
+  getAlertOverviewAcknowledgedBadgeClass,
+  getAlertOverviewCardPresentation,
+  getAlertOverviewPrimaryActionClass,
+  getAlertOverviewSecondaryActionClass,
+  getAlertOverviewStartedAtClass,
   getAlertTimelineEmptyState,
   getAlertTimelineFailureState,
   getAlertTimelineFilterEmptyState,
@@ -507,31 +512,23 @@ export function OverviewTab(props: {
               </div>
             </Show>
             <For each={filteredAlerts()}>
-              {(alert) => (
-                <div
-                  id={`alert-${getCanonicalAlertId(alert)}`}
-                  class={`border rounded-md p-3 sm:p-4 transition-all ${
-                    processingAlerts().has(getCanonicalAlertId(alert)) ? 'opacity-50' : ''
-                  } ${
-                    alert.acknowledged
-                      ? 'opacity-60 border-border bg-surface-alt'
-                      : alert.level === 'critical'
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
-                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
-                  }`}
-                >
+              {(alert) => {
+                const alertCardPresentation = () =>
+                  getAlertOverviewCardPresentation(
+                    alert.level ?? 'warning',
+                    alert.acknowledged,
+                    processingAlerts().has(getCanonicalAlertId(alert)),
+                  );
+
+                return (
+                  <div
+                    id={`alert-${getCanonicalAlertId(alert)}`}
+                    class={alertCardPresentation().cardClassName}
+                  >
                   <div class="flex flex-col sm:flex-row sm:items-start">
                     <div class="flex items-start flex-1">
                       {/* Status icon */}
-                      <div
-                        class={`mr-3 mt-0.5 transition-all ${
-                          alert.acknowledged
-                            ? 'text-green-600 dark:text-green-400'
-                            : alert.level === 'critical'
-                              ? 'text-red-600 dark:text-red-400'
-                              : 'text-yellow-600 dark:text-yellow-400'
-                        }`}
-                      >
+                      <div class={alertCardPresentation().iconClassName}>
                         {alert.acknowledged ? (
                           // Checkmark for acknowledged
                           <svg
@@ -566,13 +563,7 @@ export function OverviewTab(props: {
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                          <span
-                            class={`text-sm font-medium truncate ${
-                              alert.level === 'critical'
-                                ? 'text-red-700 dark:text-red-400'
-                                : 'text-yellow-700 dark:text-yellow-400'
-                            }`}
-                          >
+                          <span class={alertCardPresentation().resourceClassName}>
                             {alert.resourceName}
                           </span>
                           <span class="text-xs text-muted">
@@ -584,24 +575,20 @@ export function OverviewTab(props: {
                             </span>
                           </Show>
                           <Show when={alert.acknowledged}>
-                            <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
+                            <span class={getAlertOverviewAcknowledgedBadgeClass()}>
                               Acknowledged
                             </span>
                           </Show>
                         </div>
                         <p class="text-sm text-base-content mt-1 break-words">{alert.message}</p>
-                        <p class="text-xs text-muted mt-1">
+                        <p class={getAlertOverviewStartedAtClass()}>
                           Started: {new Date(alert.startTime).toLocaleString()}
                         </p>
                       </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
                       <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                          alert.acknowledged
-                            ? ' text-base-content border-border hover:bg-surface-hover'
-                            : ' text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
-                        }`}
+                        class={getAlertOverviewPrimaryActionClass(alert.acknowledged)}
                         disabled={processingAlerts().has(getCanonicalAlertId(alert))}
                         onClick={async (e) => {
                           e.preventDefault();
@@ -671,7 +658,7 @@ export function OverviewTab(props: {
                             : 'Acknowledge'}
                       </button>
                       <button
-                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover"
+                        class={getAlertOverviewSecondaryActionClass()}
                         onClick={() => {
                           void toggleIncidentTimeline(getCanonicalAlertId(alert), alert.startTime);
                         }}
@@ -869,8 +856,9 @@ export function OverviewTab(props: {
                       </Show>
                     </div>
                   </Show>
-                </div>
-              )}
+                  </div>
+                );
+              }}
             </For>
           </div>
         </Show>

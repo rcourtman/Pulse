@@ -84,3 +84,8 @@ overview timelines.
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
 instead of remaining inline inside `frontend-modern/src/pages/Alerts.tsx`.
+
+Active alert card state, acknowledged badge, and primary/secondary action
+button presentation now route through
+`frontend-modern/src/utils/alertOverviewPresentation.ts` instead of remaining
+inline in `frontend-modern/src/features/alerts/OverviewTab.tsx`.

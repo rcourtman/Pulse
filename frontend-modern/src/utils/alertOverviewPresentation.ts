@@ -30,6 +30,12 @@ export const ALERTS_PAGE_HISTORY_TITLE = 'Alert History';
 export const ALERTS_PAGE_HISTORY_DESCRIPTION =
   'Review previously triggered alerts and their resolution timeline.';
 
+export interface AlertOverviewCardPresentation {
+  cardClassName: string;
+  iconClassName: string;
+  resourceClassName: string;
+}
+
 export function getAlertsPageHeaderMeta() {
   return {
     overview: {
@@ -113,4 +119,53 @@ export function getAlertHistoryLoadingState() {
 
 export function getAlertBucketCountLabel(count: number) {
   return count === 0 ? ALERT_BUCKET_EMPTY_LABEL : `${count} alert${count === 1 ? '' : 's'}`;
+}
+
+export function getAlertOverviewCardPresentation(
+  level: 'critical' | 'warning' | string,
+  acknowledged: boolean,
+  processing: boolean,
+): AlertOverviewCardPresentation {
+  const opacityClass = processing ? 'opacity-50' : acknowledged ? 'opacity-60' : '';
+  const stateClass = acknowledged
+    ? 'border-border bg-surface-alt'
+    : level === 'critical'
+      ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
+      : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900';
+  const iconClassName = acknowledged
+    ? 'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400'
+    : level === 'critical'
+      ? 'mr-3 mt-0.5 transition-all text-red-600 dark:text-red-400'
+      : 'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400';
+  const resourceClassName =
+    level === 'critical'
+      ? 'text-sm font-medium truncate text-red-700 dark:text-red-400'
+      : 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400';
+
+  return {
+    cardClassName: ['border rounded-md p-3 sm:p-4 transition-all', opacityClass, stateClass]
+      .filter(Boolean)
+      .join(' '),
+    iconClassName,
+    resourceClassName,
+  };
+}
+
+export function getAlertOverviewAcknowledgedBadgeClass(): string {
+  return 'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded';
+}
+
+export function getAlertOverviewStartedAtClass(): string {
+  return 'mt-1 text-xs text-muted';
+}
+
+export function getAlertOverviewPrimaryActionClass(acknowledged: boolean): string {
+  const stateClass = acknowledged
+    ? 'text-base-content border-border hover:bg-surface-hover'
+    : 'text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900';
+  return `px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${stateClass}`;
+}
+
+export function getAlertOverviewSecondaryActionClass(): string {
+  return 'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover';
 }

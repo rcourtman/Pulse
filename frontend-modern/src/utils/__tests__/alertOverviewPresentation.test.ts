@@ -25,6 +25,11 @@ import {
   ALERT_TIMELINE_RETRY_LABEL,
   ALERT_TIMELINE_UNAVAILABLE_STATE,
   ALERTS_THRESHOLD_HINT,
+  getAlertOverviewAcknowledgedBadgeClass,
+  getAlertOverviewCardPresentation,
+  getAlertOverviewPrimaryActionClass,
+  getAlertOverviewSecondaryActionClass,
+  getAlertOverviewStartedAtClass,
   getAlertHistoryEmptyState,
   getAlertHistoryLoadingState,
   getAlertHistorySearchPlaceholder,
@@ -135,5 +140,33 @@ describe('alertOverviewPresentation', () => {
       text: ALERT_TIMELINE_FAILURE_STATE,
       actionLabel: ALERT_TIMELINE_RETRY_LABEL,
     });
+  });
+
+  it('returns canonical active alert card presentation', () => {
+    expect(getAlertOverviewCardPresentation('critical', false, false)).toEqual({
+      cardClassName:
+        'border rounded-md p-3 sm:p-4 transition-all border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900',
+      iconClassName: 'mr-3 mt-0.5 transition-all text-red-600 dark:text-red-400',
+      resourceClassName: 'text-sm font-medium truncate text-red-700 dark:text-red-400',
+    });
+    expect(getAlertOverviewCardPresentation('warning', true, true)).toEqual({
+      cardClassName:
+        'border rounded-md p-3 sm:p-4 transition-all opacity-50 border-border bg-surface-alt',
+      iconClassName: 'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400',
+      resourceClassName: 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400',
+    });
+    expect(getAlertOverviewAcknowledgedBadgeClass()).toBe(
+      'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded',
+    );
+    expect(getAlertOverviewStartedAtClass()).toBe('mt-1 text-xs text-muted');
+    expect(getAlertOverviewPrimaryActionClass(true)).toBe(
+      'px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed text-base-content border-border hover:bg-surface-hover',
+    );
+    expect(getAlertOverviewPrimaryActionClass(false)).toBe(
+      'px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900',
+    );
+    expect(getAlertOverviewSecondaryActionClass()).toBe(
+      'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover',
+    );
   });
 });

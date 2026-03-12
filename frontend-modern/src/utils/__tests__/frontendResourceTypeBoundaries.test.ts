@@ -2703,6 +2703,11 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineDetailClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineCommandClass');
     expect(alertOverviewTabSource).toContain('getAlertIncidentTimelineOutputClass');
+    expect(alertOverviewTabSource).toContain('getAlertOverviewCardPresentation');
+    expect(alertOverviewTabSource).toContain('getAlertOverviewAcknowledgedBadgeClass');
+    expect(alertOverviewTabSource).toContain('getAlertOverviewStartedAtClass');
+    expect(alertOverviewTabSource).toContain('getAlertOverviewPrimaryActionClass');
+    expect(alertOverviewTabSource).toContain('getAlertOverviewSecondaryActionClass');
     expect(alertOverviewTabSource).not.toContain('Loading timeline...');
     expect(alertOverviewTabSource).not.toContain(
       'No timeline events match the selected filters.',
@@ -2727,6 +2732,21 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertHistorySearchPlaceholder',
+    );
+    expect(alertOverviewPresentationSource).toContain(
+      'export function getAlertOverviewCardPresentation',
+    );
+    expect(alertOverviewPresentationSource).toContain(
+      'export function getAlertOverviewAcknowledgedBadgeClass',
+    );
+    expect(alertOverviewPresentationSource).toContain(
+      'export function getAlertOverviewStartedAtClass',
+    );
+    expect(alertOverviewPresentationSource).toContain(
+      'export function getAlertOverviewPrimaryActionClass',
+    );
+    expect(alertOverviewPresentationSource).toContain(
+      'export function getAlertOverviewSecondaryActionClass',
     );
     expect(alertIncidentPresentationSource).toContain(
       'export function getAlertIncidentEventFilterContainerClass',

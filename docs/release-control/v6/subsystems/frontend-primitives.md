@@ -97,3 +97,8 @@ Resource incident panel card and summary-row presentation must also route
 through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
 maintaining page-local incident panel styling inside
 `frontend-modern/src/pages/Alerts.tsx`.
+
+Active alert card state and action-button presentation must also route through
+`frontend-modern/src/utils/alertOverviewPresentation.ts` instead of leaving
+feature-local alert card styling inside
+`frontend-modern/src/features/alerts/OverviewTab.tsx`.

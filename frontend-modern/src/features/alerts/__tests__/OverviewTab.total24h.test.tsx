@@ -148,4 +148,18 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     expect(statValue?.textContent).toBe('0');
   });
+
+  it('renders acknowledged alert cards through the canonical overview presentation path', () => {
+    const recentTime = new Date(Date.now() - 1_800_000).toISOString();
+
+    const activeAlerts: Record<string, Alert> = {
+      acknowledged: makeAlert('acknowledged', recentTime, true),
+    };
+
+    const { container } = render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
+
+    expect(screen.getByText('Unacknowledge')).toBeInTheDocument();
+    expect(screen.getAllByText('Acknowledged').length).toBeGreaterThan(0);
+    expect(container.querySelector('#alert-acknowledged.bg-surface-alt')).toBeTruthy();
+  });
 });
