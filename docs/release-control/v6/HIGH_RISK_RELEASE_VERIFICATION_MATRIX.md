@@ -95,6 +95,8 @@ result.
   Free users are blocked consistently, paid users are admitted consistently,
   active-agent counts and caps stay coherent across UI and runtime, and there
   is no UI/API disagreement.
+- Latest exercised record:
+  `docs/release-control/v6/records/paid-feature-entitlement-gating-2026-03-12.md`
 - Block release if:
   Any feature can be used without entitlement, or any paid user is blocked on a
   correctly granted capability, or agent counts/caps disagree across

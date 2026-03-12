@@ -1180,7 +1180,7 @@
       "summary": "Confirm free-versus-paid feature gating and agent allocation accounting match entitlements across UI, API, hosted, and upgrade surfaces.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
