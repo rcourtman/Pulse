@@ -185,6 +185,7 @@ Options:
   --enable-proxmox        Force enable Proxmox integration
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
+  --state-dir <path>      Override persistent state directory
   --disk-exclude <path>   Exclude mount point (repeatable)
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
@@ -544,6 +545,7 @@ while [[ $# -gt 0 ]]; do
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
+        --state-dir) STATE_DIR="$2"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;

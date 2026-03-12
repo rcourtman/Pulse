@@ -346,6 +346,27 @@ func extractInstallShellFunction(t *testing.T, name string) string {
 	return string(match)
 }
 
+func extractInstallShellSection(t *testing.T, startMarker string, endMarker string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(filepath.Join("..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	text := string(content)
+	start := strings.Index(text, startMarker)
+	if start == -1 {
+		t.Fatalf("could not find start marker %q in install.sh", startMarker)
+	}
+	end := strings.Index(text[start:], endMarker)
+	if end == -1 {
+		t.Fatalf("could not find end marker %q in install.sh", endMarker)
+	}
+
+	return text[start : start+end]
+}
+
 func TestPlainHTTPInstallAutoEnablesInsecure(t *testing.T) {
 	script := `
 		log_info() { :; }
@@ -423,5 +444,57 @@ func TestBuildExecArgsArrayPersistsInsecureForPlainHTTPInstall(t *testing.T) {
 	got := strings.TrimSpace(string(out))
 	if !strings.Contains(got, "--insecure") {
 		t.Fatalf("EXEC_ARGS_ARRAY missing --insecure: %s", got)
+	}
+}
+
+func TestStateDirFlagIsAcceptedByInstallerParser(t *testing.T) {
+	script := `
+		fail() { echo "FAIL:$1"; exit 99; }
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		ENABLE_HOST="true"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		UNINSTALL="false"
+		INSECURE="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		KUBECONFIG_PATH=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		NON_INTERACTIVE="false"
+		TOKEN_FILE_PATH=""
+		OUTPUT_FORMAT="text"
+		PREFLIGHT_ONLY="false"
+		set -- --state-dir /tmp/pulse-agent-state --non-interactive --url https://pulse.example.com --token deadbeef
+` + extractInstallShellSection(t, "# --- Parse Arguments ---", "# Read token from file if --token-file was provided") + `
+		printf 'STATE_DIR=%s\nNON_INTERACTIVE=%s\nPULSE_URL=%s\n' "$STATE_DIR" "$NON_INTERACTIVE" "$PULSE_URL"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := string(out)
+	if !strings.Contains(got, "STATE_DIR=/tmp/pulse-agent-state") {
+		t.Fatalf("STATE_DIR not parsed correctly:\n%s", got)
+	}
+	if !strings.Contains(got, "NON_INTERACTIVE=true") {
+		t.Fatalf("NON_INTERACTIVE not parsed correctly:\n%s", got)
+	}
+	if !strings.Contains(got, "PULSE_URL=https://pulse.example.com") {
+		t.Fatalf("PULSE_URL not parsed correctly:\n%s", got)
 	}
 }

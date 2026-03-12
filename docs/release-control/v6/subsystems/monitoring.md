@@ -86,6 +86,10 @@ The unified-agent installer in `scripts/install.sh` now also lives under this
 boundary. Plain `http://` Pulse URLs must persist update-safe runtime args
 automatically so lab or self-hosted installs do not silently disable agent
 update checks just because the operator used a non-TLS control-plane URL.
+That installer surface must also preserve input parity with the persisted
+service contract: explicitly supplied runtime flags like `--state-dir` cannot
+be written into service definitions without also being accepted on installer
+re-entry or upgrade paths.
 
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary
