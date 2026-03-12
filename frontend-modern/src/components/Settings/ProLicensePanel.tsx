@@ -24,6 +24,7 @@ import {
 import {
   formatLicensePlanVersion,
   getCommercialMigrationNotice,
+  getGrandfatheredPriceContinuityNotice,
   getLicenseFeatureLabel,
   getLicenseStatusLoadingState,
   getLicenseSubscriptionStatusPresentation,
@@ -200,6 +201,13 @@ export const ProLicensePanel: Component = () => {
     return getCommercialMigrationNotice(entitlements()?.commercial_migration);
   });
 
+  const grandfatheredPriceNotice = createMemo(() => {
+    return getGrandfatheredPriceContinuityNotice(
+      entitlements()?.plan_version,
+      entitlements()?.subscription_state,
+    );
+  });
+
   const hasPaidFeatures = createMemo(() => {
     const state = subscriptionState();
     return state === 'active' || state === 'trial' || state === 'grace';
@@ -270,6 +278,14 @@ export const ProLicensePanel: Component = () => {
           )}
         </Show>
         <Show when={commercialMigrationNotice()}>
+          {(notice) => (
+            <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
+              <p class="font-medium">{notice().title}</p>
+              <p class="mt-1 text-xs opacity-90">{notice().body}</p>
+            </div>
+          )}
+        </Show>
+        <Show when={grandfatheredPriceNotice()}>
           {(notice) => (
             <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
               <p class="font-medium">{notice().title}</p>

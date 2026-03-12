@@ -540,6 +540,105 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 
 		handlers.StopAllBackgroundLoops()
 	})
+
+	t.Run("PersistedV5RecurringLicenseAutoExchanges", func(t *testing.T) {
+		t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+		legacyLicense, err := pkglicensing.GenerateLicenseForTesting(
+			"legacy-monthly@example.com",
+			pkglicensing.TierPro,
+			365*24*time.Hour,
+		)
+		require.NoError(t, err)
+
+		persistence, err := pkglicensing.NewPersistence(dataDir)
+		require.NoError(t, err)
+		require.NoError(t, persistence.Save(legacyLicense))
+
+		grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+			LicenseID: "lic_v5_monthly_migrated",
+			Tier:      string(pkglicensing.TierPro),
+			PlanKey:   "v5_pro_monthly_grandfathered",
+			State:     "active",
+			Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
+			MaxAgents: pkglicensing.TierAgentLimits[pkglicensing.TierPro],
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+			Email:     "legacy-monthly@example.com",
+		})
+		require.NoError(t, err)
+		pkglicensing.SetPublicKey(grantPublicKey)
+		t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+		exchangeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			require.Equal(t, "/v1/licenses/exchange", r.URL.Path)
+
+			var req pkglicensing.ExchangeLegacyLicenseRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			assert.Equal(t, legacyLicense, req.LegacyLicenseKey)
+
+			w.WriteHeader(http.StatusCreated)
+			require.NoError(t, json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+				License: pkglicensing.ActivateResponseLicense{
+					LicenseID: "lic_v5_monthly_migrated",
+					State:     "active",
+					Tier:      string(pkglicensing.TierPro),
+					Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
+					MaxAgents: pkglicensing.TierAgentLimits[pkglicensing.TierPro],
+				},
+				Installation: pkglicensing.ActivateResponseInstallation{
+					InstallationID:    "inst_v5_monthly_migrated",
+					InstallationToken: "pit_live_v5_monthly_migrated",
+					Status:            "active",
+				},
+				Grant: pkglicensing.GrantEnvelope{
+					JWT:       grantJWT,
+					JTI:       "grant_v5_monthly_migrated",
+					ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+			}))
+		}))
+		defer exchangeServer.Close()
+		t.Setenv("PULSE_LICENSE_SERVER_URL", exchangeServer.URL)
+
+		mtp := config.NewMultiTenantPersistence(dataDir)
+		handlers := api.NewLicenseHandlers(mtp, false)
+		ctx := context.WithValue(context.Background(), api.OrgIDContextKey, "default")
+
+		svc := handlers.Service(ctx)
+		require.NotNil(t, svc)
+		require.True(t, svc.IsActivated(), "persisted v5 license must auto-exchange on v6 startup")
+
+		current := svc.Current()
+		require.NotNil(t, current)
+		assert.Equal(t, "lic_v5_monthly_migrated", current.Claims.LicenseID)
+		assert.Equal(t, pkglicensing.TierPro, current.Claims.Tier)
+		assert.Equal(t, "v5_pro_monthly_grandfathered", current.Claims.PlanVersion)
+
+		statusReq := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
+		statusRec := httptest.NewRecorder()
+		handlers.HandleLicenseStatus(statusRec, statusReq)
+		require.Equal(t, http.StatusOK, statusRec.Code)
+
+		var status pkglicensing.LicenseStatus
+		require.NoError(t, json.Unmarshal(statusRec.Body.Bytes(), &status))
+		assert.True(t, status.Valid)
+		assert.False(t, status.IsLifetime)
+		assert.Equal(t, "v5_pro_monthly_grandfathered", status.PlanVersion)
+
+		entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+		entRec := httptest.NewRecorder()
+		handlers.HandleEntitlements(entRec, entReq)
+		require.Equal(t, http.StatusOK, entRec.Code)
+
+		var entitlements api.EntitlementPayload
+		require.NoError(t, json.Unmarshal(entRec.Body.Bytes(), &entitlements))
+		assert.Equal(t, "v5_pro_monthly_grandfathered", entitlements.PlanVersion)
+		assert.False(t, entitlements.IsLifetime)
+		assert.Equal(t, "active", entitlements.SubscriptionState)
+
+		handlers.StopAllBackgroundLoops()
+	})
 }
 
 // TestV5DowngradeSafety verifies what happens when a v5-compatible config

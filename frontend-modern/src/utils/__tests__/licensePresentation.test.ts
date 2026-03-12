@@ -7,6 +7,7 @@ import {
   getBillingAdminTrialStatus,
   getCommercialMigrationNotice,
   getFeatureMinTierLabel,
+  getGrandfatheredPriceContinuityNotice,
   getLicenseFeatureLabel,
   getLicenseStatusLoadingState,
   getLicenseSubscriptionStatusPresentation,
@@ -68,6 +69,12 @@ describe('licensePresentation', () => {
     expect(formatLicensePlanVersion('pro_plus')).toBe('Pro Plus');
     expect(formatLicensePlanVersion('cloud_founding')).toBe('Cloud Starter (Founding)');
     expect(formatLicensePlanVersion('msp_growth')).toBe('MSP Growth');
+    expect(formatLicensePlanVersion('v5_pro_monthly_grandfathered')).toBe(
+      'V5 Pro Monthly (Grandfathered)',
+    );
+    expect(formatLicensePlanVersion('v5_pro_annual_grandfathered')).toBe(
+      'V5 Pro Annual (Grandfathered)',
+    );
     expect(
       getCommercialMigrationNotice({
         state: 'pending',
@@ -78,6 +85,20 @@ describe('licensePresentation', () => {
       title: 'v5 license migration pending',
       tone: expect.stringContaining('amber'),
     });
+  });
+
+  it('returns grandfathered recurring price continuity notices only for active recurring v5 plans', () => {
+    expect(
+      getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'active'),
+    ).toMatchObject({
+      title: 'Grandfathered v5 pricing',
+      tone: expect.stringContaining('green'),
+    });
+    expect(getGrandfatheredPriceContinuityNotice('v5_pro_annual_grandfathered', 'grace')).toMatchObject({
+      title: 'Grandfathered v5 pricing',
+    });
+    expect(getGrandfatheredPriceContinuityNotice('v5_lifetime_grandfathered', 'active')).toBeNull();
+    expect(getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'expired')).toBeNull();
   });
 
   it('returns canonical trial activation notices', () => {

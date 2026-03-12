@@ -63,6 +63,12 @@ export interface BillingAdminOrganizationBadge {
   badgeClass: string;
 }
 
+const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
+  v5_lifetime_grandfathered: 'V5 Lifetime Grandfathered',
+  v5_pro_monthly_grandfathered: 'V5 Pro Monthly (Grandfathered)',
+  v5_pro_annual_grandfathered: 'V5 Pro Annual (Grandfathered)',
+};
+
 const formatTitleCase = (value: string) =>
   value.replace(/[_-]/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
 
@@ -87,9 +93,35 @@ export const getFeatureMinTierLabel = (feature?: string | null): string => {
 export const formatLicensePlanVersion = (value?: string | null): string | null => {
   const normalized = (value || '').trim();
   if (!normalized) return null;
+  const grandfathered = GRANDFATHERED_V5_PLAN_LABELS[normalized.toLowerCase()];
+  if (grandfathered) return grandfathered;
   const canonical = CLOUD_PLAN_LABELS[normalized.toLowerCase()];
   if (canonical) return canonical;
   return formatTitleCase(normalized);
+};
+
+export const getGrandfatheredPriceContinuityNotice = (
+  planVersion?: string | null,
+  subscriptionState?: string | null,
+): LicenseInlineNotice | null => {
+  const normalizedPlan = (planVersion || '').trim().toLowerCase();
+  if (
+    normalizedPlan !== 'v5_pro_monthly_grandfathered' &&
+    normalizedPlan !== 'v5_pro_annual_grandfathered'
+  ) {
+    return null;
+  }
+
+  const normalizedState = (subscriptionState || '').trim().toLowerCase();
+  if (normalizedState !== 'active' && normalizedState !== 'grace') {
+    return null;
+  }
+
+  return {
+    tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+    title: 'Grandfathered v5 pricing',
+    body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. If you cancel and return later, current v6 pricing applies.',
+  };
 };
 
 export const getCommercialMigrationActionText = (action?: string): string => {

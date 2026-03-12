@@ -147,6 +147,32 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
   });
 
+  it('shows recurring grandfathered pricing continuity for migrated v5 Pro plans', async () => {
+    mockEntitlements = {
+      capabilities: ['ai_patrol'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'v5_pro_monthly_grandfathered',
+      licensed_email: 'owner@example.com',
+      is_lifetime: false,
+      trial_eligible: false,
+    };
+
+    render(() => <ProLicensePanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Plan Terms')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('V5 Pro Monthly (Grandfathered)')).toBeInTheDocument();
+    expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
+    expect(
+      screen.getByText(/keeps its existing recurring price until you cancel/i),
+    ).toBeInTheDocument();
+  });
+
   it('renders all capability strings as human-readable labels (no raw snake_case)', async () => {
     mockEntitlements = {
       capabilities: [

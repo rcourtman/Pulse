@@ -149,6 +149,10 @@ when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must
 preserve the customer's existing recurring price identity instead of silently
 rewriting them onto current v6 retail pricing.
+That Pro-license presentation rule is explicit UX, not only hidden metadata:
+when a migrated recurring v5 plan is active or in grace, the settings surface
+must render plan terms and a continuity notice that makes it clear the
+existing recurring price remains in force until cancellation.
 Cancellation is the explicit boundary for that policy. Once a grandfathered v5
 recurring subscription is canceled, any later return must resolve through the
 current v6 pricing contract rather than reviving the legacy recurring rate.
