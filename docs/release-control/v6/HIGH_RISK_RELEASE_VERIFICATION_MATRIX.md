@@ -313,6 +313,8 @@ result.
 - Pass when:
   Org membership, RBAC role assignment, and cross-org access all enforce the
   least privilege intended by the UI.
+- Latest exercised record:
+  `docs/release-control/v6/records/organization-user-scope-and-rbac-2026-03-12.md`
 - Block release if:
   A user can see or mutate data outside assigned org or role scope.
 
