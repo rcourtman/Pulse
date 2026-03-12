@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import { resolveComposeInvocation } from './compose-command.mjs';
 
 // Add signal handlers to debug unexpected termination
 const signals = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGPIPE', 'SIGQUIT'];
@@ -105,19 +106,11 @@ if (shouldSkipDocker) {
   process.exit(0);
 }
 
-const composeArgs = ['compose', '-f', 'docker-compose.test.yml', 'up', '-d'];
-const legacyComposeArgs = ['-f', 'docker-compose.test.yml', 'up', '-d'];
-const useDockerCompose = !(await canRun('docker', ['compose', 'version']));
-
 console.log('[pretest] Starting docker compose...');
 try {
-  if (useDockerCompose) {
-    console.log('[pretest] Using legacy docker-compose command');
-    await run('docker-compose', legacyComposeArgs);
-  } else {
-    console.log('[pretest] Using modern docker compose command');
-    await run('docker', composeArgs);
-  }
+  const compose = await resolveComposeInvocation(canRun);
+  console.log(`[pretest] Using ${compose.label} command`);
+  await run(compose.command, compose.args);
   console.log('[pretest] Docker compose completed successfully');
 } catch (error) {
   console.error('[pretest] Docker compose failed:', error.message);
