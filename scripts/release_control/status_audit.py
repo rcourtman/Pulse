@@ -643,8 +643,9 @@ def validate_lane_subsystem_bindings(
     errors: list[str],
     *,
     use_staged_registry: bool = False,
+    expected_by_lane: dict[str, list[str]] | None = None,
 ) -> None:
-    expected_by_lane = lane_subsystem_map(use_staged_registry=use_staged_registry)
+    expected_by_lane = expected_by_lane or lane_subsystem_map(use_staged_registry=use_staged_registry)
 
     lane_ids = {lane["id"] for lane in lane_reports}
     for lane_id in expected_by_lane:
@@ -681,6 +682,27 @@ def lane_subsystem_map(*, use_staged_registry: bool = False) -> dict[str, list[s
     for lane_id in list(expected_by_lane):
         expected_by_lane[lane_id] = sorted(expected_by_lane[lane_id])
     return expected_by_lane
+
+
+def subsystem_contract_map(*, use_staged_registry: bool = False) -> dict[str, str]:
+    return {
+        str(rule["id"]).strip(): str(rule["contract"]).strip()
+        for rule in load_subsystem_rules(staged=use_staged_registry)
+        if str(rule.get("id", "")).strip() and str(rule.get("contract", "")).strip()
+    }
+
+
+def contract_paths_for_subsystems(
+    subsystem_ids: list[str] | set[str],
+    *,
+    subsystem_contracts: dict[str, str],
+) -> list[str]:
+    ordered_subsystems = sorted({str(subsystem_id).strip() for subsystem_id in subsystem_ids if str(subsystem_id).strip()})
+    return [
+        subsystem_contracts[subsystem_id]
+        for subsystem_id in ordered_subsystems
+        if subsystem_id in subsystem_contracts
+    ]
 
 
 def validate_decision_subsystems(
@@ -1204,10 +1226,12 @@ def audit_status_payload(
         warnings=warnings,
     )
     subsystem_to_lane = subsystem_lane_map(use_staged_registry=use_staged_registry)
+    lane_to_subsystems = lane_subsystem_map(use_staged_registry=use_staged_registry)
+    subsystem_contracts = subsystem_contract_map(use_staged_registry=use_staged_registry)
     validate_lane_subsystem_bindings(
         lane_reports,
         errors,
-        use_staged_registry=use_staged_registry,
+        expected_by_lane=lane_to_subsystems,
     )
     for lane_id in release_critical_lanes:
         if lane_id not in lane_ids:
@@ -1308,6 +1332,10 @@ def audit_status_payload(
         for assertion in readiness_assertions
         if assertion["blocking_level"] in active_target_level_set
     ]
+    assertion_subsystems_by_id = {
+        str(assertion["id"]): list(assertion["subsystem_ids"])
+        for assertion in current_target_assertions
+    }
     gate_to_current_target_assertions: dict[str, list[str]] = {}
     for assertion in current_target_assertions:
         assertion_id = str(assertion["id"])
@@ -1324,6 +1352,10 @@ def audit_status_payload(
             "repo_ids": list(assertion["repo_ids"]),
             "lane_ids": list(assertion["lane_ids"]),
             "subsystem_ids": list(assertion["subsystem_ids"]),
+            "contract_paths": contract_paths_for_subsystems(
+                assertion["subsystem_ids"],
+                subsystem_contracts=subsystem_contracts,
+            ),
             "release_gate_ids": list(assertion["release_gate_ids"]),
             "proof_command_ids": [command["id"] for command in assertion["proof_commands"]],
         }
@@ -1334,12 +1366,44 @@ def audit_status_payload(
         {
             **_blocker_detail(gate, summary_key="summary", status_key="status"),
             "linked_assertion_ids": list(gate_to_current_target_assertions.get(gate["id"], [])),
+            "subsystem_ids": sorted(
+                {
+                    subsystem_id
+                    for lane_id in gate["lane_ids"]
+                    for subsystem_id in lane_to_subsystems.get(lane_id, [])
+                }
+                | {
+                    subsystem_id
+                    for assertion_id in gate_to_current_target_assertions.get(gate["id"], [])
+                    for subsystem_id in assertion_subsystems_by_id.get(assertion_id, [])
+                }
+            ),
+            "contract_paths": contract_paths_for_subsystems(
+                {
+                    subsystem_id
+                    for lane_id in gate["lane_ids"]
+                    for subsystem_id in lane_to_subsystems.get(lane_id, [])
+                }
+                | {
+                    subsystem_id
+                    for assertion_id in gate_to_current_target_assertions.get(gate["id"], [])
+                    for subsystem_id in assertion_subsystems_by_id.get(assertion_id, [])
+                },
+                subsystem_contracts=subsystem_contracts,
+            ),
         }
         for gate in release_gates
         if gate["blocking_level"] in active_target_level_set and gate["status"] != "passed"
     ]
     current_target_open_decision_blockers = [
-        _blocker_detail(decision, summary_key="summary", status_key="status")
+        {
+            **_blocker_detail(decision, summary_key="summary", status_key="status"),
+            "subsystem_ids": list(decision["subsystem_ids"]),
+            "contract_paths": contract_paths_for_subsystems(
+                decision["subsystem_ids"],
+                subsystem_contracts=subsystem_contracts,
+            ),
+        }
         for decision in open_decisions
         if decision["blocking_level"] in active_target_level_set
     ]
@@ -1606,29 +1670,35 @@ def render_pretty(report: dict[str, Any]) -> str:
             for assertion in current_target_blockers["assertions"]:
                 gate_ids = assertion.get("release_gate_ids", [])
                 proof_ids = assertion.get("proof_command_ids", [])
+                subsystem_ids = assertion.get("subsystem_ids", [])
                 lines.append(
                     f"    - {assertion['id']} blocking={assertion['blocking_level']} "
                     f"derived={assertion['derived_status']} "
                     f"gates={','.join(gate_ids) or '-'} "
                     f"proofs={','.join(proof_ids) or '-'} "
+                    f"subsystems={','.join(subsystem_ids) or '-'} "
                     f"repos={','.join(assertion['repo_ids']) or '-'}"
                 )
         if current_target_blockers.get("open_decisions"):
             lines.append("  open_decisions:")
             for decision in current_target_blockers["open_decisions"]:
+                subsystem_ids = decision.get("subsystem_ids", [])
                 lines.append(
                     f"    - {decision['id']} blocking={decision['blocking_level']} "
                     f"status={decision['status']} "
+                    f"subsystems={','.join(subsystem_ids) or '-'} "
                     f"repos={','.join(decision['repo_ids']) or '-'}"
                 )
         if current_target_blockers.get("release_gates"):
             lines.append("  release_gates:")
             for gate in current_target_blockers["release_gates"]:
                 linked_assertions = gate.get("linked_assertion_ids", [])
+                subsystem_ids = gate.get("subsystem_ids", [])
                 lines.append(
                     f"    - {gate['id']} blocking={gate['blocking_level']} "
                     f"status={gate['status']} "
                     f"assertions={','.join(linked_assertions) or '-'} "
+                    f"subsystems={','.join(subsystem_ids) or '-'} "
                     f"repos={','.join(gate['repo_ids']) or '-'}"
                 )
     if readiness.get("rc_blockers"):

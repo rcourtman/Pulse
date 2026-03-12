@@ -62,6 +62,7 @@ def hybrid_assertion(
     gate_id: str = "g1",
     evidence_path: str = "docs/hybrid_test.go",
     blocking_level: str = "rc-ready",
+    subsystem_ids: list[str] | None = None,
 ) -> dict[str, object]:
     return {
         "id": assertion_id,
@@ -70,7 +71,7 @@ def hybrid_assertion(
         "blocking_level": blocking_level,
         "proof_type": "hybrid",
         "lane_ids": [lane_id],
-        "subsystem_ids": [],
+        "subsystem_ids": list(subsystem_ids or []),
         "release_gate_ids": [gate_id],
         "evidence": [{"repo": "pulse", "path": evidence_path, "kind": "file"}],
     }
@@ -251,6 +252,7 @@ class StatusAuditTest(unittest.TestCase):
                         "repo_ids": ["pulse"],
                         "lane_ids": ["L1"],
                         "subsystem_ids": [],
+                        "contract_paths": [],
                         "release_gate_ids": ["g1"],
                         "proof_command_ids": [],
                     }
@@ -267,6 +269,8 @@ class StatusAuditTest(unittest.TestCase):
                         "repo_ids": ["pulse"],
                         "lane_ids": ["L1"],
                         "linked_assertion_ids": ["RA2"],
+                        "subsystem_ids": [],
+                        "contract_paths": [],
                     }
                 ],
             )
@@ -302,6 +306,60 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(
                 report["readiness"]["current_target_blockers"],
                 {"assertions": [], "open_decisions": [], "release_gates": []},
+            )
+
+    def test_current_target_blockers_include_subsystem_contract_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            rules = [
+                {
+                    "id": "frontend-primitives",
+                    "lane": "L1",
+                    "contract": "docs/release-control/v6/subsystems/frontend-primitives.md",
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": [],
+                        "require_explicit_path_policy_coverage": False,
+                        "path_policies": [],
+                    },
+                }
+            ]
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=rules,
+            ):
+                payload = base_payload(
+                    release_gate_status="pending",
+                    readiness_assertions=[
+                        automated_assertion(),
+                        hybrid_assertion(subsystem_ids=["frontend-primitives"]),
+                        hybrid_assertion(assertion_id="RA3", gate_id="g2", blocking_level="release-ready"),
+                    ],
+                )
+                payload["lanes"][0]["subsystems"] = ["frontend-primitives"]
+                report = audit_status_payload(
+                    payload
+                )
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(
+                report["readiness"]["current_target_blockers"]["assertions"][0]["contract_paths"],
+                ["docs/release-control/v6/subsystems/frontend-primitives.md"],
+            )
+            self.assertEqual(
+                report["readiness"]["current_target_blockers"]["release_gates"][0]["subsystem_ids"],
+                ["frontend-primitives"],
+            )
+            self.assertEqual(
+                report["readiness"]["current_target_blockers"]["release_gates"][0]["contract_paths"],
+                ["docs/release-control/v6/subsystems/frontend-primitives.md"],
             )
 
     def test_repo_ready_assertion_failure_blocks_repo_ready(self) -> None:
@@ -435,10 +493,10 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("current_target_blockers:", pretty)
             self.assertIn("assertions:", pretty)
             self.assertIn(
-                "RA2 blocking=rc-ready derived=gates-pending gates=g1 proofs=-",
+                "RA2 blocking=rc-ready derived=gates-pending gates=g1 proofs=- subsystems=-",
                 pretty,
             )
-            self.assertIn("g1 blocking=rc-ready status=pending assertions=RA2", pretty)
+            self.assertIn("g1 blocking=rc-ready status=pending assertions=RA2 subsystems=-", pretty)
             self.assertIn("rc_blockers:", pretty)
             self.assertIn("release_blockers:", pretty)
             self.assertIn(RC_RELEASE_GATES_BLOCKER, pretty)
