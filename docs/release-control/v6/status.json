@@ -142,10 +142,15 @@
       "id": "L5",
       "name": "Mobile go-live readiness",
       "target_score": 8,
-      "current_score": 7,
+      "current_score": 8,
       "status": "partial",
       "subsystems": [],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/PRE_RELEASE_CHECKLIST.md",
+          "kind": "file"
+        },
         {
           "repo": "pulse-mobile",
           "path": "store/listing.md",
