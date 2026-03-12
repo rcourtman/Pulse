@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import { resolveComposeInvocation } from './compose-command.mjs';
 import { applyRequestedEntitlementProfile } from './entitlement-bootstrap.mjs';
+import { startManagedLocalBackend } from './managed-local-backend.mjs';
+import { clearRuntimeState } from './runtime-state.mjs';
 
 // Add signal handlers to debug unexpected termination
 const signals = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGPIPE', 'SIGQUIT'];
@@ -29,6 +31,7 @@ const truthy = (value) => {
 
 const shouldSkipDocker = truthy(process.env.PULSE_E2E_SKIP_DOCKER);
 const shouldSkipPlaywrightInstall = truthy(process.env.PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL);
+const shouldUseManagedLocalBackend = truthy(process.env.PULSE_E2E_USE_LOCAL_BACKEND);
 
 const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef';
 if (!process.env.PULSE_E2E_BOOTSTRAP_TOKEN) {
@@ -100,6 +103,13 @@ if (truthy(process.env.PULSE_E2E_INSECURE_TLS)) {
 
 if (!shouldSkipPlaywrightInstall) {
   await run(npxCmd, ['playwright', 'install', 'chromium']);
+}
+
+await clearRuntimeState();
+
+if (shouldUseManagedLocalBackend) {
+  await startManagedLocalBackend();
+  process.exit(0);
 }
 
 if (shouldSkipDocker) {

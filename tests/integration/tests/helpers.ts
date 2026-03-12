@@ -2,7 +2,26 @@
  * Test helpers for Pulse update integration tests
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { Page, expect } from '@playwright/test';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const runtimeStatePath = path.resolve(__dirname, '..', '..', '..', 'tmp', 'e2e-runtime-state.json');
+
+const runtimeBaseURL = (): string | null => {
+  try {
+    const raw = fs.readFileSync(runtimeStatePath, 'utf8');
+    const parsed = JSON.parse(raw) as { baseURL?: string };
+    return typeof parsed.baseURL === 'string' && parsed.baseURL.trim() !== ''
+      ? parsed.baseURL.trim()
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Default admin credentials for testing
@@ -452,6 +471,7 @@ export async function apiRequest(page: Page, endpoint: string, options: any = {}
   const baseURL = (
     process.env.PULSE_BASE_URL ||
     process.env.PLAYWRIGHT_BASE_URL ||
+    runtimeBaseURL() ||
     'http://localhost:7655'
   ).replace(/\/+$/, '');
 

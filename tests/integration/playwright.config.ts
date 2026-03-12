@@ -1,4 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const runtimeStatePath = path.resolve(configDir, '..', '..', 'tmp', 'e2e-runtime-state.json');
+
+const loadRuntimeBaseURL = (): string | null => {
+  try {
+    const raw = fs.readFileSync(runtimeStatePath, 'utf8');
+    const parsed = JSON.parse(raw) as { baseURL?: string };
+    return typeof parsed.baseURL === 'string' && parsed.baseURL.trim() !== ''
+      ? parsed.baseURL.trim()
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Playwright configuration for Pulse update integration tests
@@ -35,7 +53,11 @@ export default defineConfig({
   /* Shared settings for all projects */
   use: {
     /* Base URL for all tests */
-    baseURL: process.env.PULSE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:7655',
+    baseURL:
+      process.env.PULSE_BASE_URL ||
+      process.env.PLAYWRIGHT_BASE_URL ||
+      loadRuntimeBaseURL() ||
+      'http://localhost:7655',
 
     /* Allow testing against self-signed TLS when explicitly enabled */
     ignoreHTTPSErrors: ['1', 'true', 'yes', 'on'].includes(

@@ -110,6 +110,16 @@ PULSE_E2E_PASSWORD='adminadminadmin' \
 npm test
 ```
 
+### Run Against A Managed Local Backend (No Docker, Deterministic)
+```bash
+cd tests/integration
+PULSE_E2E_USE_LOCAL_BACKEND=1 \
+PULSE_MULTI_TENANT_ENABLED=true \
+npm test -- tests/03-multi-tenant.spec.ts --project=chromium
+```
+
+This mode starts an isolated Pulse backend from the local repo binary in a temporary data directory under `tmp/integration-local-backend`, seeds the requested entitlement profile, writes runtime connection state for Playwright, and cleans everything up in `posttest`.
+
 For deterministic paid-feature runs against an existing instance, provide one of:
 - `PULSE_E2E_BILLING_STATE_PATH=/absolute/path/to/billing.json` to let the harness write the billing state file directly.
 - `PULSE_E2E_ENTITLEMENT_WRITE_COMMAND='ssh host "cat > /etc/pulse/billing.json"'` to pipe the billing JSON to a remote/local writer command.
