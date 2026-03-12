@@ -8,6 +8,9 @@ It is not a live progress dashboard.
 
 Current lane scores, evidence references, and typed operational decision
 records live only in `docs/release-control/v6/status.json`.
+`status.json.readiness.repo_ready` and `status.json.readiness.release_ready`
+are the canonical machine-visible distinction between repo readiness and
+release readiness.
 
 ## Purpose
 

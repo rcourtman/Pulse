@@ -26,6 +26,13 @@ class StatusAuditTest(unittest.TestCase):
                 "updated_at": "2026-03-11",
                 "execution_model": "direct-repo-sessions",
                 "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": False,
+                    "release_ready": False,
+                    "repo_ready_rule": "all lanes target-met and evidence-present",
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                },
                 "scope": {
                     "active_repos": ["pulse"],
                     "ignored_repos": [],
@@ -121,6 +128,13 @@ class StatusAuditTest(unittest.TestCase):
                 "updated_at": "2026-03-11",
                 "execution_model": "direct-repo-sessions",
                 "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": False,
+                    "release_ready": False,
+                    "repo_ready_rule": "all lanes target-met and evidence-present",
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                },
                 "scope": {
                     "active_repos": ["pulse", "pulse-pro"],
                     "ignored_repos": [],
@@ -220,6 +234,13 @@ class StatusAuditTest(unittest.TestCase):
                 "updated_at": "2026-03-11",
                 "execution_model": "direct-repo-sessions",
                 "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": False,
+                    "release_ready": False,
+                    "repo_ready_rule": "all lanes target-met and evidence-present",
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                },
                 "scope": {
                     "active_repos": ["pulse"],
                     "ignored_repos": [],
@@ -297,6 +318,13 @@ class StatusAuditTest(unittest.TestCase):
                 "updated_at": "2026-03-11",
                 "execution_model": "direct-repo-sessions",
                 "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": False,
+                    "release_ready": False,
+                    "repo_ready_rule": "all lanes target-met and evidence-present",
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                },
                 "scope": {
                     "active_repos": ["pulse"],
                     "ignored_repos": [],
@@ -389,6 +417,13 @@ class StatusAuditTest(unittest.TestCase):
                 "updated_at": "2026-03-11",
                 "execution_model": "direct-repo-sessions",
                 "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": False,
+                    "release_ready": False,
+                    "repo_ready_rule": "all lanes target-met and evidence-present",
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                },
                 "scope": {
                     "active_repos": ["pulse-pro", "pulse"],
                     "ignored_repos": ["pulse-refactor-streams", "pulse-5.1.x"],
@@ -526,6 +561,13 @@ class StatusAuditTest(unittest.TestCase):
                 "updated_at": "2026-03-11",
                 "execution_model": "direct-repo-sessions",
                 "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
+                "readiness": {
+                    "repo_ready": False,
+                    "release_ready": False,
+                    "repo_ready_rule": "all lanes target-met and evidence-present",
+                    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+                    "release_blockers": ["Open operational decisions remain in status.json.open_decisions."],
+                },
                 "scope": {
                     "active_repos": ["pulse"],
                     "ignored_repos": [],

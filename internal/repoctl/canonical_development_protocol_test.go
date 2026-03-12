@@ -229,6 +229,8 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"subsystems/*.md",
 		"structured evidence references",
 		"does not, by itself, mean Pulse v6 is release-approved",
+		"status.json.readiness.repo_ready",
+		"status.json.readiness.release_ready",
 	})
 
 	source := readRepoFile(t, "docs/release-control/v6/SOURCE_OF_TRUTH.md")
@@ -239,6 +241,8 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 		"docs/release-control/v6/subsystems/",
 		"## Development Governance",
 		"Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves",
+		"status.json.readiness.repo_ready",
+		"status.json.readiness.release_ready",
 	})
 }
 
@@ -248,6 +252,9 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 	assertContainsAll(t, rel, content, []string{
 		"\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"",
 		"\"title\": \"Pulse v6 Status Schema\"",
+		"\"readiness\"",
+		"\"repo_ready\"",
+		"\"release_ready\"",
 		"\"open_decision\"",
 		"\"resolved_decision\"",
 		"\"lane_ids\"",
@@ -321,6 +328,29 @@ func TestStatusJSONHasStrictTopLevelSchema(t *testing.T) {
 	}
 	if _, ok := status["resolved_decisions"].([]any); !ok {
 		t.Fatalf("status.json missing resolved_decisions list")
+	}
+	readiness, ok := status["readiness"].(map[string]any)
+	if !ok {
+		t.Fatalf("status.json missing readiness object")
+	}
+	if got, ok := readiness["repo_ready"].(bool); !ok {
+		t.Fatalf("status.json readiness.repo_ready missing bool")
+	} else if !got {
+		t.Fatalf("status.json readiness.repo_ready = %v, want true", got)
+	}
+	if got, ok := readiness["release_ready"].(bool); !ok {
+		t.Fatalf("status.json readiness.release_ready missing bool")
+	} else if got {
+		t.Fatalf("status.json readiness.release_ready = %v, want false", got)
+	}
+	if got, ok := readiness["repo_ready_rule"].(string); !ok || got != "all lanes target-met and evidence-present" {
+		t.Fatalf("status.json readiness.repo_ready_rule = %#v, want %q", readiness["repo_ready_rule"], "all lanes target-met and evidence-present")
+	}
+	if got, ok := readiness["release_ready_rule"].(string); !ok || got != "repo_ready plus zero open_decisions plus release checklist gates cleared" {
+		t.Fatalf("status.json readiness.release_ready_rule = %#v, want %q", readiness["release_ready_rule"], "repo_ready plus zero open_decisions plus release checklist gates cleared")
+	}
+	if blockers, ok := readiness["release_blockers"].([]any); !ok || len(blockers) == 0 {
+		t.Fatalf("status.json readiness.release_blockers must be a non-empty list while release_ready is false")
 	}
 }
 

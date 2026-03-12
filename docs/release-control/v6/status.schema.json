@@ -10,6 +10,7 @@
     "scope",
     "source_precedence",
     "execution_model",
+    "readiness",
     "evidence_reference_policy",
     "priority_engine",
     "lanes",
@@ -64,6 +65,9 @@
     "execution_model": {
       "type": "string",
       "const": "direct-repo-sessions"
+    },
+    "readiness": {
+      "$ref": "#/$defs/readiness"
     },
     "evidence_reference_policy": {
       "$ref": "#/$defs/evidence_reference_policy"
@@ -156,6 +160,40 @@
         "local_repo": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo_ready",
+        "release_ready",
+        "repo_ready_rule",
+        "release_ready_rule",
+        "release_blockers"
+      ],
+      "properties": {
+        "repo_ready": {
+          "type": "boolean"
+        },
+        "release_ready": {
+          "type": "boolean"
+        },
+        "repo_ready_rule": {
+          "type": "string",
+          "const": "all lanes target-met and evidence-present"
+        },
+        "release_ready_rule": {
+          "type": "string",
+          "const": "repo_ready plus zero open_decisions plus release checklist gates cleared"
+        },
+        "release_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },

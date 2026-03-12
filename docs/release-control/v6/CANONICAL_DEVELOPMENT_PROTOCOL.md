@@ -35,6 +35,9 @@ evidence references, and typed lane/subsystem decision records.
 Lane scores reaching target in `status.json` mean the tracked architecture and
 governance work for those lanes is at target; they are not, by themselves,
 release approval if `open_decisions` or checklist gates still remain.
+Use `status.json.readiness.repo_ready` for machine-visible repo/governance
+readiness and `status.json.readiness.release_ready` for machine-visible
+release approval state.
 `status.schema.json` owns the machine-readable status contract.
 `subsystems/registry.schema.json` owns the machine-readable subsystem registry
 contract, including explicit shared-runtime ownership declarations for

@@ -264,6 +264,53 @@ def validate_evidence_policy(payload: dict[str, Any], errors: list[str]) -> tupl
     return kinds, local_repo
 
 
+def validate_readiness(payload: dict[str, Any], errors: list[str]) -> dict[str, Any]:
+    readiness = payload.get("readiness")
+    if not isinstance(readiness, dict):
+        errors.append("status.json missing readiness object")
+        return {}
+
+    repo_ready = readiness.get("repo_ready")
+    if not isinstance(repo_ready, bool):
+        errors.append("status.json readiness.repo_ready must be boolean")
+
+    release_ready = readiness.get("release_ready")
+    if not isinstance(release_ready, bool):
+        errors.append("status.json readiness.release_ready must be boolean")
+
+    repo_ready_rule = _require_string(readiness, "repo_ready_rule", errors, context="readiness")
+    if repo_ready_rule and repo_ready_rule != "all lanes target-met and evidence-present":
+        errors.append(
+            "status.json readiness.repo_ready_rule must be 'all lanes target-met and evidence-present'"
+        )
+
+    release_ready_rule = _require_string(readiness, "release_ready_rule", errors, context="readiness")
+    if (
+        release_ready_rule
+        and release_ready_rule
+        != "repo_ready plus zero open_decisions plus release checklist gates cleared"
+    ):
+        errors.append(
+            "status.json readiness.release_ready_rule must be "
+            "'repo_ready plus zero open_decisions plus release checklist gates cleared'"
+        )
+
+    release_blockers = readiness.get("release_blockers")
+    if not isinstance(release_blockers, list) or any(
+        not isinstance(item, str) or not item.strip() for item in release_blockers
+    ):
+        errors.append("status.json readiness.release_blockers must be a list of non-empty strings")
+        release_blockers = []
+
+    return {
+        "repo_ready": repo_ready,
+        "release_ready": release_ready,
+        "repo_ready_rule": repo_ready_rule,
+        "release_ready_rule": release_ready_rule,
+        "release_blockers": release_blockers,
+    }
+
+
 def audit_lanes(
     payload: dict[str, Any],
     *,
@@ -646,6 +693,7 @@ def audit_status_payload(
 
     validate_source_precedence(payload, errors)
     release_critical_lanes = validate_priority_engine(payload, errors)
+    readiness = validate_readiness(payload, errors)
     allowed_kinds, local_repo = validate_evidence_policy(payload, errors)
     if local_repo and local_repo not in active_repo_set:
         errors.append("status.json evidence_reference_policy.local_repo must be present in active_repos")
@@ -682,6 +730,24 @@ def audit_status_payload(
         errors=errors,
     )
 
+    repo_ready_derived = all(lane["at_target"] and lane["all_evidence_present"] for lane in lane_reports)
+    release_ready_derived = repo_ready_derived and len(open_decisions) == 0
+
+    if readiness:
+        if readiness.get("repo_ready") is not repo_ready_derived:
+            errors.append(
+                f"status.json readiness.repo_ready = {readiness.get('repo_ready')!r}, want {repo_ready_derived!r}"
+            )
+        if readiness.get("release_ready") is not release_ready_derived:
+            errors.append(
+                f"status.json readiness.release_ready = {readiness.get('release_ready')!r}, want {release_ready_derived!r}"
+            )
+        release_blockers = readiness.get("release_blockers", [])
+        if release_ready_derived and release_blockers:
+            errors.append("status.json readiness.release_blockers must be empty when release_ready is true")
+        if not release_ready_derived and not release_blockers:
+            errors.append("status.json readiness.release_blockers must be non-empty when release_ready is false")
+
     return {
         "errors": errors,
         "warnings": warnings,
@@ -692,6 +758,15 @@ def audit_status_payload(
             "all_evidence_present": all(lane["all_evidence_present"] for lane in lane_reports),
             "open_decision_count": len(open_decisions),
             "resolved_decision_count": len(resolved_decisions),
+            "repo_ready": repo_ready_derived,
+            "release_ready": release_ready_derived,
+        },
+        "readiness": {
+            "repo_ready_declared": readiness.get("repo_ready") if readiness else None,
+            "repo_ready_derived": repo_ready_derived,
+            "release_ready_declared": readiness.get("release_ready") if readiness else None,
+            "release_ready_derived": release_ready_derived,
+            "release_blockers": readiness.get("release_blockers", []) if readiness else [],
         },
         "lanes": lane_reports,
         "open_decisions": open_decisions,
@@ -729,7 +804,9 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"at_target={summary['lanes_at_target']} "
             f"missing_evidence={summary['lanes_missing_evidence']} "
             f"open_decisions={summary['open_decision_count']} "
-            f"resolved_decisions={summary['resolved_decision_count']}"
+            f"resolved_decisions={summary['resolved_decision_count']} "
+            f"repo_ready={summary['repo_ready']} "
+            f"release_ready={summary['release_ready']}"
         )
     for lane in report.get("lanes", []):
         lines.append(

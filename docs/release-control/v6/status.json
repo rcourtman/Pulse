@@ -22,6 +22,16 @@
     "docs/release-control/v6/subsystems/registry.schema.json"
   ],
   "execution_model": "direct-repo-sessions",
+  "readiness": {
+    "repo_ready": true,
+    "release_ready": false,
+    "repo_ready_rule": "all lanes target-met and evidence-present",
+    "release_ready_rule": "repo_ready plus zero open_decisions plus release checklist gates cleared",
+    "release_blockers": [
+      "Open operational decisions remain in status.json.open_decisions.",
+      "Release checklist gates still require explicit completion."
+    ]
+  },
   "evidence_reference_policy": {
     "format": "repo-qualified-relative-paths",
     "allowed_kinds": [

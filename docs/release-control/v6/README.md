@@ -11,6 +11,7 @@ This folder is the canonical execution control layer for Pulse v6.
 5. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
 
 `status.json` reporting every lane as `target-met` means the tracked v6 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or release checklist gates remain unresolved.
+Use `status.json.readiness.repo_ready` for repo/governance readiness and `status.json.readiness.release_ready` for release approval state.
 
 Supporting governance file:
 
