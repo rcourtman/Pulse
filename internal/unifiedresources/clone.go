@@ -27,6 +27,7 @@ func cloneResource(in *Resource) Resource {
 	out.Identity = cloneResourceIdentity(in.Identity)
 	out.Metrics = cloneResourceMetrics(in.Metrics)
 	out.ParentID = cloneStringPtr(in.ParentID)
+	out.parentBySource = cloneParentBySourceMap(in.parentBySource)
 	out.Tags = cloneStringSlice(in.Tags)
 	out.Incidents = cloneResourceIncidentSlice(in.Incidents)
 	out.Proxmox = cloneProxmoxData(in.Proxmox)
@@ -40,6 +41,20 @@ func cloneResource(in *Resource) Resource {
 	out.Ceph = cloneCephMeta(in.Ceph)
 	out.TrueNAS = cloneTrueNASData(in.TrueNAS)
 	RefreshCanonicalIdentity(&out)
+	return out
+}
+
+func cloneParentBySourceMap(in map[DataSource]string) map[DataSource]string {
+	if len(in) == 0 {
+		if in == nil {
+			return nil
+		}
+		return map[DataSource]string{}
+	}
+	out := make(map[DataSource]string, len(in))
+	for source, parentID := range in {
+		out[source] = parentID
+	}
 	return out
 }
 

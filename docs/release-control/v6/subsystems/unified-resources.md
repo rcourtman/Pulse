@@ -116,3 +116,9 @@ responses. Re-reading `registry.List()` for the same `/api/resources` request
 is forbidden because it adds avoidable clone churn to the hot path and breaks
 the guarantee that aggregations describe the exact resource snapshot used to
 build the response.
+
+Canonical parent lineage is now source-tracked internal state, not sticky
+merged payload state. `parentId`, `parentName`, and `childCount` must be
+re-derived from the live per-source parent map on every ingest/build pass so
+same-source reparenting, orphaning, and parent removal clear old lineage
+instead of leaking stale topology into API and typed-view consumers.

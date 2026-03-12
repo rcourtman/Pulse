@@ -1135,3 +1135,91 @@ func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testi
 		t.Fatalf("expected vm parent name %q after reparent, got %q", "node-b", vm.ParentName)
 	}
 }
+
+func TestResourceRegistry_BuildChildCounts_SourceUpdateClearsRemovedParent(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 2, 12, 1, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{
+			SourceID: "node-a",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "node-a",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"node-a"}},
+		},
+		{
+			SourceID:       "vm-100",
+			ParentSourceID: "node-a",
+			Resource: Resource{
+				Type:     ResourceTypeVM,
+				Name:     "vm-100",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"vm-100"}},
+		},
+	})
+
+	parentID := rr.sourceSpecificID(ResourceTypeAgent, SourceProxmox, "node-a")
+	vmID := rr.sourceSpecificID(ResourceTypeVM, SourceProxmox, "vm-100")
+
+	parent, ok := rr.Get(parentID)
+	if !ok {
+		t.Fatalf("expected parent %q to exist", parentID)
+	}
+	vm, ok := rr.Get(vmID)
+	if !ok {
+		t.Fatalf("expected vm %q to exist", vmID)
+	}
+	if parent.ChildCount != 1 {
+		t.Fatalf("expected parent child count 1 before clearing parent, got %d", parent.ChildCount)
+	}
+	if vm.ParentID == nil || *vm.ParentID != parentID {
+		t.Fatalf("expected vm parent id %q before clearing parent, got %+v", parentID, vm.ParentID)
+	}
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{
+			SourceID: "node-a",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "node-a",
+				Status:   StatusOnline,
+				LastSeen: now.Add(30 * time.Second),
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"node-a"}},
+		},
+		{
+			SourceID: "vm-100",
+			Resource: Resource{
+				Type:     ResourceTypeVM,
+				Name:     "vm-100",
+				Status:   StatusOnline,
+				LastSeen: now.Add(30 * time.Second),
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"vm-100"}},
+		},
+	})
+
+	parent, ok = rr.Get(parentID)
+	if !ok {
+		t.Fatalf("expected parent %q to exist after clearing parent", parentID)
+	}
+	vm, ok = rr.Get(vmID)
+	if !ok {
+		t.Fatalf("expected vm %q to exist after clearing parent", vmID)
+	}
+	if parent.ChildCount != 0 {
+		t.Fatalf("expected parent child count 0 after clearing parent, got %d", parent.ChildCount)
+	}
+	if vm.ParentID != nil {
+		t.Fatalf("expected vm parent id to clear after source update, got %+v", vm.ParentID)
+	}
+	if vm.ParentName != "" {
+		t.Fatalf("expected vm parent name to clear after source update, got %q", vm.ParentName)
+	}
+}

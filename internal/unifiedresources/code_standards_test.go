@@ -61,6 +61,7 @@ package unifiedresources
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -248,6 +249,29 @@ func TestNoLegacyHostResourceTypeSymbol(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("failed to scan internal packages: %v", err)
+	}
+}
+
+func TestResourceParentBySourceStateRemainsInternal(t *testing.T) {
+	resourceType := reflect.TypeOf(Resource{})
+
+	parentIDField, ok := resourceType.FieldByName("ParentID")
+	if !ok {
+		t.Fatalf("expected Resource.ParentID field")
+	}
+	if got := parentIDField.Tag.Get("json"); got != "parentId,omitempty" {
+		t.Fatalf("Resource.ParentID json tag = %q, want %q", got, "parentId,omitempty")
+	}
+
+	parentBySourceField, ok := resourceType.FieldByName("parentBySource")
+	if !ok {
+		t.Fatalf("expected Resource.parentBySource field")
+	}
+	if parentBySourceField.IsExported() {
+		t.Fatalf("expected Resource.parentBySource to remain internal-only")
+	}
+	if got := parentBySourceField.Tag.Get("json"); got != "" {
+		t.Fatalf("expected Resource.parentBySource to have no JSON contract, got %q", got)
 	}
 }
 

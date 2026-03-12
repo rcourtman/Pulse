@@ -681,6 +681,8 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	resource.SourceStatus = map[DataSource]SourceStatus{
 		source: {Status: "online", LastSeen: resource.LastSeen},
 	}
+	resource.parentBySource = make(map[DataSource]string)
+	rr.setSourceParent(&resource, source, resource.ParentID)
 
 	if resource.LastSeen.IsZero() {
 		resource.LastSeen = time.Now().UTC()
@@ -858,6 +860,8 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		return
 	}
 
+	rr.setSourceParent(existing, source, incoming.ParentID)
+
 	// Merge identity
 	existing.Identity = mergeIdentity(existing.Identity, incoming.Identity)
 
@@ -912,6 +916,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		existing.LastSeen = incoming.LastSeen
 	}
 	existing.UpdatedAt = time.Now().UTC()
+	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source)
 	existing.Metrics = mergeMetrics(existing.Metrics, incoming.Metrics, source)
@@ -1109,6 +1114,14 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	if other == nil || primary == nil {
 		return
 	}
+	if other.parentBySource != nil {
+		if primary.parentBySource == nil {
+			primary.parentBySource = make(map[DataSource]string, len(other.parentBySource))
+		}
+		for source, parentID := range other.parentBySource {
+			primary.parentBySource[source] = parentID
+		}
+	}
 	primary.Identity = mergeIdentity(primary.Identity, other.Identity)
 	primary.Tags = uniqueStrings(append(primary.Tags, other.Tags...))
 	primary.Incidents = mergeResourceIncidents(primary.Incidents, other.Incidents)
@@ -1123,6 +1136,10 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 		primary.LastSeen = other.LastSeen
 	}
 	primary.UpdatedAt = time.Now().UTC()
+	if primary.ParentID == nil && other.ParentID != nil {
+		primary.ParentID = cloneStringPtr(other.ParentID)
+	}
+	primary.ParentID = rr.resolveCanonicalParentID(primary)
 
 	if primary.Proxmox == nil {
 		primary.Proxmox = other.Proxmox
@@ -1164,10 +1181,71 @@ func (rr *ResourceRegistry) updateSourceMappings(fromID, toID string) {
 	}
 }
 
+func (rr *ResourceRegistry) setSourceParent(resource *Resource, source DataSource, parentID *string) {
+	if resource == nil {
+		return
+	}
+	if resource.parentBySource == nil {
+		resource.parentBySource = make(map[DataSource]string)
+	}
+	if parentID == nil {
+		delete(resource.parentBySource, source)
+		return
+	}
+	canonicalParentID := CanonicalResourceID(strings.TrimSpace(*parentID))
+	if canonicalParentID == "" {
+		delete(resource.parentBySource, source)
+		return
+	}
+	resource.parentBySource[source] = canonicalParentID
+}
+
+func (rr *ResourceRegistry) resolveCanonicalParentID(resource *Resource) *string {
+	if resource == nil {
+		return nil
+	}
+
+	if resource.parentBySource == nil {
+		if resource.ParentID == nil {
+			return nil
+		}
+		canonicalParentID := CanonicalResourceID(strings.TrimSpace(*resource.ParentID))
+		if canonicalParentID == "" {
+			return nil
+		}
+		if _, ok := rr.resources[canonicalParentID]; !ok {
+			return nil
+		}
+		return &canonicalParentID
+	}
+
+	bestPriority := -1
+	bestParentID := ""
+	for source, parentID := range resource.parentBySource {
+		parentID = CanonicalResourceID(strings.TrimSpace(parentID))
+		if parentID == "" {
+			continue
+		}
+		if _, ok := rr.resources[parentID]; !ok {
+			continue
+		}
+		priority := sourcePriority(source)
+		if priority > bestPriority {
+			bestPriority = priority
+			bestParentID = parentID
+		}
+	}
+	if bestParentID == "" {
+		return nil
+	}
+	return &bestParentID
+}
+
 func (rr *ResourceRegistry) buildChildCounts() {
 	// ChildCount and ParentName are derived fields. Clear prior values before
 	// recomputing to prevent stale state after re-parenting or parent removal.
 	for _, r := range rr.resources {
+		r.ParentID = rr.resolveCanonicalParentID(r)
 		r.ChildCount = 0
 		r.ParentName = ""
 	}

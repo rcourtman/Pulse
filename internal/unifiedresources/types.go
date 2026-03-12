@@ -28,9 +28,10 @@ type Resource struct {
 	Identity ResourceIdentity `json:"identity,omitempty"`
 	Metrics  *ResourceMetrics `json:"metrics,omitempty"`
 
-	ParentID   *string `json:"parentId,omitempty"`
-	ParentName string  `json:"parentName,omitempty"`
-	ChildCount int     `json:"childCount,omitempty"`
+	ParentID       *string `json:"parentId,omitempty"`
+	ParentName     string  `json:"parentName,omitempty"`
+	ChildCount     int     `json:"childCount,omitempty"`
+	parentBySource map[DataSource]string
 
 	Tags                  []string                `json:"tags,omitempty"`
 	CustomURL             string                  `json:"customUrl,omitempty"`
