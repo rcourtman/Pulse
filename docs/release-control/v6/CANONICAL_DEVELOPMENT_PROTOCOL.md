@@ -162,6 +162,9 @@ guard in `scripts/release_control/canonical_completion_guard.py` and by the
 governance guardrail tests in `internal/repoctl`.
 Local pre-commit governance checks must evaluate staged v6 control-file content
 rather than unstaged working-tree noise.
+Executable readiness assertion proofs must also follow the active target phase
+from `docs/release-control/control_plane.json`; repo-ready proof runs alone are
+not sufficient once the active target advances to an RC or GA promotion phase.
 Local pre-commit must also reject any unstaged working-tree edits for
 hook-sensitive governance files under `docs/release-control/v6/`,
 `scripts/release_control/`, `internal/repoctl/`, `.husky/pre-commit`, and

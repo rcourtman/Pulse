@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import Any
 
-from control_plane import DEFAULT_CONTROL_PLANE
+from control_plane import DEFAULT_CONTROL_PLANE, active_target_blocking_levels
 from repo_file_io import REPO_ROOT, load_repo_json
 
 
@@ -43,8 +43,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--blocking-level",
         action="append",
-        choices=["repo-ready", "release-ready"],
+        choices=["repo-ready", "rc-ready", "release-ready"],
         help="Run only assertions matching the given blocking level. Repeat to allow multiple values.",
+    )
+    parser.add_argument(
+        "--active-target",
+        action="store_true",
+        help=(
+            "Resolve blocking levels from the active target completion rule in control_plane.json "
+            "and run only proofs relevant to the current target phase."
+        ),
     )
     parser.add_argument(
         "--proof-type",
@@ -197,9 +205,23 @@ def run_selected_proof_commands(commands: list[dict[str, Any]]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or []))
+    blocking_levels = set(args.blocking_level or [])
+    if args.active_target:
+        try:
+            active_levels = set(active_target_blocking_levels(staged=args.staged))
+        except ValueError as exc:
+            print(f"BLOCKED: {exc}")
+            return 1
+        if blocking_levels:
+            blocking_levels &= active_levels
+            if not blocking_levels:
+                print("BLOCKED: explicit --blocking-level filters do not overlap the active target phase")
+                return 1
+        else:
+            blocking_levels = active_levels
     commands, errors = selected_proof_commands(
         load_status_payload(staged=args.staged),
-        blocking_levels=set(args.blocking_level or []),
+        blocking_levels=blocking_levels,
         proof_types=set(args.proof_type or []),
         assertion_ids=set(args.assertion or []),
     )

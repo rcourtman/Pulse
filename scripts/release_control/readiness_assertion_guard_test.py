@@ -35,10 +35,20 @@ def base_payload() -> dict:
 class ReadinessAssertionGuardTest(unittest.TestCase):
     def test_parse_args_accepts_filters_and_staged(self) -> None:
         args = readiness_assertion_guard.parse_args(
-            ["--staged", "--blocking-level", "repo-ready", "--proof-type", "automated", "--assertion", "RA1"]
+            [
+                "--staged",
+                "--active-target",
+                "--blocking-level",
+                "rc-ready",
+                "--proof-type",
+                "automated",
+                "--assertion",
+                "RA1",
+            ]
         )
         self.assertTrue(args.staged)
-        self.assertEqual(args.blocking_level, ["repo-ready"])
+        self.assertTrue(args.active_target)
+        self.assertEqual(args.blocking_level, ["rc-ready"])
         self.assertEqual(args.proof_type, ["automated"])
         self.assertEqual(args.assertion, ["RA1"])
 
@@ -53,9 +63,15 @@ class ReadinessAssertionGuardTest(unittest.TestCase):
                 },
                 {
                     "id": "RA2",
-                    "blocking_level": "release-ready",
+                    "blocking_level": "rc-ready",
                     "proof_type": "hybrid",
                     "proof_commands": [{"id": "b", "run": ["python3", "-c", "print('b')"]}],
+                },
+                {
+                    "id": "RA3",
+                    "blocking_level": "release-ready",
+                    "proof_type": "hybrid",
+                    "proof_commands": [{"id": "c", "run": ["python3", "-c", "print('c')"]}],
                 },
             ]
         }
@@ -70,6 +86,73 @@ class ReadinessAssertionGuardTest(unittest.TestCase):
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0]["assertion_id"], "RA1")
         self.assertEqual(commands[0]["command_id"], "a")
+
+    def test_main_active_target_uses_control_plane_phase(self) -> None:
+        payload = {
+            "readiness_assertions": [
+                {
+                    "id": "RA1",
+                    "blocking_level": "repo-ready",
+                    "proof_type": "automated",
+                    "proof_commands": [{"id": "repo", "run": ["python3", "-c", "print('repo')"]}],
+                },
+                {
+                    "id": "RA2",
+                    "blocking_level": "rc-ready",
+                    "proof_type": "hybrid",
+                    "proof_commands": [{"id": "rc", "run": ["python3", "-c", "print('rc')"]}],
+                },
+                {
+                    "id": "RA8",
+                    "blocking_level": "release-ready",
+                    "proof_type": "hybrid",
+                    "proof_commands": [{"id": "ga", "run": ["python3", "-c", "print('ga')"]}],
+                },
+            ]
+        }
+
+        with mock.patch.object(readiness_assertion_guard, "load_status_payload", return_value=payload), mock.patch.object(
+            readiness_assertion_guard,
+            "active_target_blocking_levels",
+            return_value=("repo-ready", "rc-ready"),
+        ), mock.patch.object(readiness_assertion_guard, "run_selected_proof_commands", return_value=0) as runner:
+            exit_code = readiness_assertion_guard.main(["--active-target", "--proof-type", "hybrid"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            runner.call_args.args[0],
+            [
+                {
+                    "assertion_id": "RA2",
+                    "command_id": "rc",
+                    "cwd": ".",
+                    "run": ["python3", "-c", "print('rc')"],
+                }
+            ],
+        )
+
+    def test_main_blocks_conflicting_active_target_and_explicit_blocking_levels(self) -> None:
+        payload = {
+            "readiness_assertions": [
+                {
+                    "id": "RA8",
+                    "blocking_level": "release-ready",
+                    "proof_type": "hybrid",
+                    "proof_commands": [{"id": "ga", "run": ["python3", "-c", "print('ga')"]}],
+                }
+            ]
+        }
+
+        with mock.patch.object(readiness_assertion_guard, "load_status_payload", return_value=payload), mock.patch.object(
+            readiness_assertion_guard,
+            "active_target_blocking_levels",
+            return_value=("repo-ready", "rc-ready"),
+        ):
+            exit_code = readiness_assertion_guard.main(
+                ["--active-target", "--blocking-level", "release-ready", "--proof-type", "hybrid"]
+            )
+
+        self.assertEqual(exit_code, 1)
 
     def test_selected_proof_commands_blocks_automated_assertion_without_commands(self) -> None:
         commands, errors = readiness_assertion_guard.selected_proof_commands(

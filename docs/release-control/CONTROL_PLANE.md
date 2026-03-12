@@ -42,7 +42,11 @@ model that active and future release profiles reuse.
    When a machine-derivable target completion rule is satisfied,
    `control_plane_audit.py --check` must fail until the current target is
    marked complete and a new active target is promoted.
-8. Direction changes must be normalized.
+8. Executable proof runs must follow the active target.
+   Local hooks and CI should resolve readiness-assertion proof scope from the
+   active target completion rule instead of hard-coding only repo-ready or
+   future-phase release-ready proof surfaces.
+9. Direction changes must be normalized.
    When the user states a durable product truth or changes the current product
    priority, the agent must classify that direction as a readiness assertion,
    release gate, open decision, or active-target update instead of leaving it
@@ -101,6 +105,9 @@ the target text.
 For release targets, `rc_ready` means a governed prerelease candidate can be
 cut, while `release_ready` means stable or GA promotion readiness after RC
 validation.
+Executable readiness proof runs should follow that same phase boundary: the
+active target should pull in only the readiness blocking levels required for
+its completion rule, not future-phase proof suites by default.
 Do not wait for a special governance prompt before checking whether informal
 user language should update the control plane.
 

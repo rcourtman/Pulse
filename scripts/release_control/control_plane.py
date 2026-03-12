@@ -46,6 +46,11 @@ REQUIRED_TARGET_FIELDS = (
     "summary",
     "completion_rule",
 )
+COMPLETION_RULE_BLOCKING_LEVELS = {
+    "repo_ready": ("repo-ready",),
+    "rc_ready": ("repo-ready", "rc-ready"),
+    "release_ready": ("repo-ready", "rc-ready", "release-ready"),
+}
 
 
 def _clean_relative_path(path: str, *, context: str) -> str:
@@ -224,6 +229,20 @@ def validate_control_plane_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def active_control_plane(*, staged: bool = False) -> dict[str, Any]:
     return validate_control_plane_payload(load_control_plane(staged=staged))
+
+
+def blocking_levels_for_completion_rule(completion_rule: str) -> tuple[str, ...]:
+    if completion_rule == "manual":
+        raise ValueError("manual completion_rule does not map to derived readiness blocking levels")
+    try:
+        return COMPLETION_RULE_BLOCKING_LEVELS[completion_rule]
+    except KeyError as exc:
+        raise ValueError(f"unsupported completion_rule {completion_rule!r}") from exc
+
+
+def active_target_blocking_levels(*, staged: bool = False) -> tuple[str, ...]:
+    control_plane = active_control_plane(staged=staged)
+    return blocking_levels_for_completion_rule(str(control_plane["active_target"]["completion_rule"]))
 
 
 DEFAULT_CONTROL_PLANE = active_control_plane()

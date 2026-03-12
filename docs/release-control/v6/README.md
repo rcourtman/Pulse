@@ -51,10 +51,10 @@ Useful helper tools:
   Local pre-commit also blocks partial staging for hook-sensitive governance files under `docs/release-control/v6/`, `scripts/release_control/`, `internal/repoctl/`, `.husky/pre-commit`, and `.github/workflows/canonical-governance.yml`, because those checks still execute or structurally read working-tree content locally.
 - `python3 scripts/release_control/status_audit.py --check`
   Validates lane evidence, readiness assertions, release gates, decision records, and derived repo/release readiness.
-- `python3 scripts/release_control/readiness_assertion_guard.py --blocking-level repo-ready --proof-type automated`
-  Runs the machine-declared proof commands for automated repo-ready assertions straight from `status.json.readiness_assertions`.
-- `python3 scripts/release_control/readiness_assertion_guard.py --proof-type hybrid`
-  Runs any machine-declared executable proof commands attached to hybrid release assertions, without replacing the linked manual release gates.
+- `python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type automated`
+  Runs the machine-declared proof commands for automated assertions required by the active target phase straight from `status.json.readiness_assertions`.
+- `python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type hybrid`
+  Runs any executable hybrid proof commands required by the active target phase, without replacing the linked manual release gates.
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations
 

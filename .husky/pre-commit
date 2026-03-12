@@ -86,7 +86,7 @@ echo "Running governance guardrail tests..."
 go test ./internal/repoctl -count=1
 
 echo "Running readiness assertion guard..."
-python3 scripts/release_control/readiness_assertion_guard.py --staged --blocking-level repo-ready --proof-type automated
+python3 scripts/release_control/readiness_assertion_guard.py --staged --active-target --proof-type automated
 
 echo "Running release-control helper unit tests..."
 python3 scripts/release_control/canonical_completion_guard_test.py
