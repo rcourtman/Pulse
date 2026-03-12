@@ -68,6 +68,11 @@ run_suite() {
     export MOCK_RATE_LIMIT="$rate_limit"
     export MOCK_STALE_RELEASE="$stale_release"
     export PULSE_MULTI_TENANT_ENABLED="$multi_tenant_enabled"
+    if [ "$multi_tenant_enabled" = "true" ]; then
+        export PULSE_E2E_ENTITLEMENT_PROFILE="multi-tenant"
+    else
+        unset PULSE_E2E_ENTITLEMENT_PROFILE
+    fi
     local pulse_base_url="${PULSE_BASE_URL:-http://localhost:${PULSE_E2E_PORT:-7655}}"
     pulse_base_url="${pulse_base_url%/}"
     local health_url="${pulse_base_url}/api/health"
@@ -98,6 +103,13 @@ run_suite() {
     if [ "$health_ok" -ne 1 ] || [ "$pulse_running" != "true" ]; then
         echo -e "${RED}❌ Services failed to start${NC}"
         compose ps
+        compose logs
+        compose down -v
+        return 1
+    fi
+
+    if ! node ./scripts/apply-entitlement-profile.mjs; then
+        echo -e "${RED}❌ Failed to apply entitlement bootstrap${NC}"
         compose logs
         compose down -v
         return 1

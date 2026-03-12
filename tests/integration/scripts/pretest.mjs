@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import { resolveComposeInvocation } from './compose-command.mjs';
+import { applyRequestedEntitlementProfile } from './entitlement-bootstrap.mjs';
 
 // Add signal handlers to debug unexpected termination
 const signals = ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGPIPE', 'SIGQUIT'];
@@ -103,6 +104,7 @@ if (!shouldSkipPlaywrightInstall) {
 
 if (shouldSkipDocker) {
   console.log('[integration] PULSE_E2E_SKIP_DOCKER enabled, skipping docker compose up');
+  await applyRequestedEntitlementProfile();
   process.exit(0);
 }
 
@@ -129,6 +131,7 @@ console.log(`[pretest] Waiting for health check at ${baseURL}/api/health...`);
 try {
   await waitForHealth(`${baseURL}/api/health`);
   console.log('[pretest] Health check passed!');
+  await applyRequestedEntitlementProfile();
 } catch (error) {
   console.error('[pretest] Health check failed:', error.message);
   // Try to get container logs for debugging

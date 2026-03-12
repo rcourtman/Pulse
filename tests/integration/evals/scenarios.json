@@ -15,7 +15,8 @@
           "--retries=1"
         ],
         "env": {
-          "PULSE_MULTI_TENANT_ENABLED": "true"
+          "PULSE_MULTI_TENANT_ENABLED": "true",
+          "PULSE_E2E_ENTITLEMENT_PROFILE": "multi-tenant"
         }
       },
       "agentic": {

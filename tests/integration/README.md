@@ -89,6 +89,7 @@ Supported placeholders in `PULSE_EVAL_AGENT_COMMAND_TEMPLATE`:
 The docker-compose stack seeds a deterministic bootstrap token for first-run setup:
 - Override via `PULSE_E2E_BOOTSTRAP_TOKEN`
 - Default token value is defined in `tests/integration/docker-compose.test.yml`
+- When `PULSE_MULTI_TENANT_ENABLED=true`, the integration harness also seeds a deterministic Enterprise-eval billing state so the multi-tenant suite runs against a licensed surface instead of skipping.
 
 Credentials used by the E2E suite can be overridden:
 - `PULSE_E2E_USERNAME` (default `admin`)
@@ -108,6 +109,14 @@ PULSE_E2E_USERNAME='admin' \
 PULSE_E2E_PASSWORD='adminadminadmin' \
 npm test
 ```
+
+For deterministic paid-feature runs against an existing instance, provide one of:
+- `PULSE_E2E_BILLING_STATE_PATH=/absolute/path/to/billing.json` to let the harness write the billing state file directly.
+- `PULSE_E2E_ENTITLEMENT_WRITE_COMMAND='ssh host "cat > /etc/pulse/billing.json"'` to pipe the billing JSON to a remote/local writer command.
+
+The harness understands these profiles:
+- `PULSE_E2E_ENTITLEMENT_PROFILE=multi-tenant` for Enterprise/MSP multi-tenant coverage.
+- `PULSE_E2E_ENTITLEMENT_PROFILE=infra` for Pro/relay/reporting-style journeys.
 
 ### Snapshot-Clean Proxmox LXC Trial SAT
 For hosted trial initiation validation against a fresh LXC each run:

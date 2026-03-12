@@ -427,6 +427,7 @@ jobs:
           MOCK_RATE_LIMIT: "false"
           MOCK_STALE_RELEASE: "false"
           PULSE_MULTI_TENANT_ENABLED: "true"
+          PULSE_E2E_ENTITLEMENT_PROFILE: "multi-tenant"
           PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
         run: |
           docker compose -f docker-compose.test.yml up -d
@@ -445,6 +446,8 @@ jobs:
             fi
             sleep 2
           done
+
+          node scripts/apply-entitlement-profile.mjs
 
           echo "Running update API route smoke check..."
           STATUS=$(curl -s -o /tmp/update-status.json -w "%{http_code}" http://localhost:7655/api/updates/status || true)
