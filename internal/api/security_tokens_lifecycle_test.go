@@ -10,10 +10,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-// TestDeletedTokenFailsAuth verifies that after deleting an API token,
+// TestSecurityTokens_DeleteFailsAuthImmediately verifies that after deleting an API token,
 // subsequent requests using that token receive 401 Unauthorized.
 // Covers acceptance test checklist item 2.4: "Delete token — verify it no longer authenticates".
-func TestDeletedTokenFailsAuth(t *testing.T) {
+func TestSecurityTokens_DeleteFailsAuthImmediately(t *testing.T) {
 	rawToken := "lifecycle-delete-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 
@@ -70,11 +70,11 @@ func TestDeletedTokenFailsAuth(t *testing.T) {
 	}
 }
 
-// TestExpiredTokenRejectedAtHTTPLayer verifies that an API token whose
+// TestSecurityTokens_ExpiredTokenRejectedAtHTTPLayer verifies that an API token whose
 // ExpiresAt is in the past is rejected at the HTTP authentication layer
 // with 401 Unauthorized.
 // Covers acceptance test checklist item 2.4: "Expired token is rejected".
-func TestExpiredTokenRejectedAtHTTPLayer(t *testing.T) {
+func TestSecurityTokens_ExpiredTokenRejectedAtHTTPLayer(t *testing.T) {
 	rawToken := "lifecycle-expired-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 
@@ -112,10 +112,10 @@ func TestExpiredTokenRejectedAtHTTPLayer(t *testing.T) {
 	}
 }
 
-// TestValidTokenUpdatesLastUsedAt verifies that making an API call with a
+// TestSecurityTokens_ValidTokenUpdatesLastUsedAt verifies that making an API call with a
 // valid token updates the token's LastUsedAt timestamp in the config.
 // Covers acceptance test checklist item 2.4: "lastUsedAt updates after token is used".
-func TestValidTokenUpdatesLastUsedAt(t *testing.T) {
+func TestSecurityTokens_ValidTokenUpdatesLastUsedAt(t *testing.T) {
 	rawToken := "lifecycle-lastused-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -167,11 +167,11 @@ func TestValidTokenUpdatesLastUsedAt(t *testing.T) {
 	}
 }
 
-// TestNonExpiredTokenAllowedThenExpiredRejected verifies the lifecycle
+// TestSecurityTokens_NonExpiredTokenAllowedThenExpiredRejected verifies the lifecycle
 // transition: a token with a future expiration works, and once the
 // expiration passes, the same token is rejected.
 // Uses direct ExpiresAt mutation instead of time.Sleep to avoid slow/flaky tests.
-func TestNonExpiredTokenAllowedThenExpiredRejected(t *testing.T) {
+func TestSecurityTokens_NonExpiredTokenAllowedThenExpiredRejected(t *testing.T) {
 	rawToken := "lifecycle-expiry-window.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 
@@ -206,10 +206,10 @@ func TestNonExpiredTokenAllowedThenExpiredRejected(t *testing.T) {
 	}
 }
 
-// TestInvalidTokenHeaderReturns401 verifies that a completely wrong token
+// TestSecurityTokens_InvalidTokenHeaderReturns401 verifies that a completely wrong token
 // value in the X-API-Token header returns 401 with the correct error message.
 // Covers acceptance test checklist item 2.4: "API call with wrong token returns 401".
-func TestInvalidTokenHeaderReturns401(t *testing.T) {
+func TestSecurityTokens_InvalidTokenHeaderReturns401(t *testing.T) {
 	rawToken := "lifecycle-valid-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)

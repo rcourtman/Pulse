@@ -176,13 +176,14 @@ result.
   wrong, automated access will bypass user intent.
 - Primary runtime surfaces:
   `internal/api/router.go`
+  `internal/api/security_tokens.go`
   `internal/api/system_settings_telemetry_test.go`
   `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
   `frontend-modern/src/components/Settings/APITokenManager.tsx`
   `frontend-modern/src/utils/apiTokenPresentation.ts`
   `frontend-modern/src/utils/url.ts`
 - Automated proof:
-  `go test ./internal/api -run 'TestAPIToken|TestSystemSettings|TestMultiTenant'`
+  `go test ./internal/api -run 'Test(APIToken|SecurityTokens|SystemSettings|MultiTenant)' -count=1`
   `cd frontend-modern && npx vitest run src/components/Settings/__tests__/APITokenManager.test.tsx src/utils/__tests__/apiClient.org.test.ts src/utils/__tests__/apiTokenPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
 - Manual scenario:
   1. Generate a token for a specific user.
