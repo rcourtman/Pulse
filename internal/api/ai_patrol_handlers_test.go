@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -377,6 +378,60 @@ func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
 			legacyPatrolAlertIDField,
 			history[0][legacyPatrolAlertIDField],
 		)
+	}
+}
+
+func TestHandleGetPatrolRunHistory_InvalidOrOversizedLimitIsNormalized(t *testing.T) {
+	t.Parallel()
+
+	handler := createTestAIHandler(t)
+	patrol := &ai.PatrolService{}
+	store := ai.NewPatrolRunHistoryStore(200)
+	for i := 0; i < 120; i++ {
+		store.Add(ai.PatrolRunRecord{
+			ID:               fmt.Sprintf("run-%03d", i),
+			StartedAt:        time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Minute),
+			CompletedAt:      time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC).Add(time.Duration(i) * time.Minute),
+			DurationMs:       60000,
+			Type:             "patrol",
+			ResourcesChecked: 1,
+			FindingsSummary:  "ok",
+			FindingIDs:       []string{},
+			Status:           "healthy",
+		})
+	}
+	setUnexportedField(t, patrol, "runHistoryStore", store)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	tests := []struct {
+		name       string
+		query      string
+		wantLength int
+	}{
+		{name: "zero_uses_default", query: "?limit=0", wantLength: 50},
+		{name: "negative_uses_default", query: "?limit=-5", wantLength: 50},
+		{name: "cap_at_100", query: "?limit=250", wantLength: 100},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs"+tc.query, nil)
+			rec := httptest.NewRecorder()
+
+			handler.HandleGetPatrolRunHistory(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+			}
+
+			var history []map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &history); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+			if len(history) != tc.wantLength {
+				t.Fatalf("history length = %d, want %d", len(history), tc.wantLength)
+			}
+		})
 	}
 }
 

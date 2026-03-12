@@ -110,6 +110,10 @@ The `/api/ai/patrol/runs` frontend history clients must now also route their
 shared fetch plus run-normalization pipeline through one canonical local helper
 in `frontend-modern/src/api/patrol.ts` rather than duplicating the same
 endpoint-specific stack across each history variant.
+That patrol run-history contract now also treats non-positive or malformed
+`limit` query values as defaulted input and caps oversized requests to the
+backend maximum, rather than letting invalid caller input widen the history
+payload unexpectedly.
 Patrol status payloads now also treat quickstart credit state as canonical API
 contract data: `/api/ai/patrol/status` must surface
 `quickstart_credits_remaining`, `quickstart_credits_total`, and
