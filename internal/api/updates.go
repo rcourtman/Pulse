@@ -359,13 +359,6 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get updater for deployment type
-	updater, err := h.registry.Get(versionInfo.DeploymentType)
-	if err != nil {
-		http.Error(w, "No updater for deployment type", http.StatusNotFound)
-		return
-	}
-
 	// Get version from query
 	version := r.URL.Query().Get("version")
 	if version == "" {
@@ -375,6 +368,21 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 	channel, err := normalizeRequestedUpdateChannel(r.URL.Query().Get("channel"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get updater for deployment type. Some valid deployments intentionally do
+	// not support unattended updates; return a manual plan instead of surfacing
+	// a transport error to the UI.
+	updater, err := h.registry.Get(versionInfo.DeploymentType)
+	if err != nil {
+		if plan, ok := fallbackManualUpdatePlan(versionInfo.DeploymentType, version); ok {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(plan)
+			return
+		}
+
+		http.Error(w, "No updater for deployment type", http.StatusNotFound)
 		return
 	}
 
@@ -391,6 +399,67 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(plan)
+}
+
+func fallbackManualUpdatePlan(deploymentType string, version string) (*updates.UpdatePlan, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(deploymentType))
+
+	switch normalized {
+	case "manual":
+		return &updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RequiresRoot:    true,
+			RollbackSupport: true,
+			EstimatedTime:   "5-10 minutes",
+			Instructions: []string{
+				fmt.Sprintf("Download Pulse %s from the release assets for your platform.", version),
+				"Stop the running Pulse service or process.",
+				"Back up the current Pulse binary and data directory before replacing the binary.",
+				"Install the new binary, then start Pulse again.",
+			},
+			Prerequisites: []string{
+				"Shell access to the host running Pulse",
+				"Permission to replace the current Pulse binary",
+				"A backup path for rollback if the upgrade must be reverted",
+			},
+		}, true
+	case "development":
+		return &updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RequiresRoot:    false,
+			RollbackSupport: true,
+			EstimatedTime:   "5-10 minutes",
+			Instructions: []string{
+				fmt.Sprintf("Check out or build Pulse %s in your development workspace.", version),
+				"Stop the current development instance.",
+				"Restart Pulse with the rebuilt binary or release artifact against the existing data directory.",
+			},
+			Prerequisites: []string{
+				"A local development workspace for Pulse",
+				"Build tooling for the target version",
+				"A backup of the active data directory before replacing the binary",
+			},
+		}, true
+	case "source":
+		return &updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RequiresRoot:    false,
+			RollbackSupport: true,
+			EstimatedTime:   "5-15 minutes",
+			Instructions: []string{
+				fmt.Sprintf("Pull or check out the source for Pulse %s.", version),
+				"Build a new Pulse binary from source.",
+				"Stop the current instance, replace the binary, and restart Pulse against the existing data directory.",
+			},
+			Prerequisites: []string{
+				"A clean source checkout of Pulse",
+				"Go and frontend build tooling required for your environment",
+				"A backup of the current binary and data directory for rollback",
+			},
+		}, true
+	default:
+		return nil, false
+	}
 }
 
 // HandleListUpdateHistory returns update history

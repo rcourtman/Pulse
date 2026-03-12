@@ -171,6 +171,8 @@ result.
 - Pass when:
   Upgrade keeps the user's local state, entitlements, and first-session
   continuity intact without requiring manual repair or repeated activation.
+- Latest exercised record:
+  `docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md`
 - Block release if:
   Upgrade requires manual cleanup, repeated license entry, or leaves paid and
   non-paid surfaces in an inconsistent state.

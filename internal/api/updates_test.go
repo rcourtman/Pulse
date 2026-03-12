@@ -617,3 +617,30 @@ func TestHandleGetUpdatePlan_PrepareError(t *testing.T) {
 		t.Fatalf("Expected status 500, got %d", w.Code)
 	}
 }
+
+func TestHandleGetUpdatePlan_ManualFallback(t *testing.T) {
+	h := NewUpdateHandlers(nil, nil)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v6.0.0-rc.1", nil)
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var plan updates.UpdatePlan
+	if err := json.NewDecoder(w.Body).Decode(&plan); err != nil {
+		t.Fatalf("decode plan: %v", err)
+	}
+
+	if plan.CanAutoUpdate {
+		t.Fatalf("Expected manual fallback plan to disable auto updates")
+	}
+	if len(plan.Instructions) == 0 {
+		t.Fatalf("Expected manual fallback plan to include instructions")
+	}
+	if len(plan.Prerequisites) == 0 {
+		t.Fatalf("Expected manual fallback plan to include prerequisites")
+	}
+}

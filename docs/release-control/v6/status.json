@@ -208,6 +208,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/license_handlers_test.go",
           "kind": "file"
         },
@@ -381,6 +386,11 @@
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/records/upgrade-state-and-entitlement-preservation-2026-03-12.md",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "internal/api/csrf_store_test.go",
@@ -1235,7 +1245,7 @@
       "summary": "Confirm supported upgrades preserve state, entitlements, and first-session continuity without repair flows.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",

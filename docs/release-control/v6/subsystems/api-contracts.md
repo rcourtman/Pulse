@@ -90,6 +90,12 @@ contract: when `/install.sh` or `/install.ps1` cannot be served locally, the
 backend must proxy the install script asset from the exact GitHub release that
 matches `serverVersion` and must fail closed for dev or unreleased builds
 rather than serving branch-tip installer logic.
+The `/api/updates/plan` contract must also fail closed without becoming a
+transport error on supported non-auto-update deployments: `manual`,
+`development`, and `source` runtimes must return an explicit manual update
+plan payload instead of `404 No updater for deployment type`, so first-session
+and settings surfaces do not treat valid deployment modes as broken update
+transport.
 Those same install-command payloads now also carry a non-TLS continuity
 contract: when Pulse returns a plain `http://` base URL for a generated agent
 install command, the command must include `--insecure` so the installed agent

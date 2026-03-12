@@ -20,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -226,6 +227,41 @@ func TestContract_BillingStateJSONSnapshot(t *testing.T) {
 		"stripe_customer_id":"cus_123",
 		"stripe_subscription_id":"sub_123",
 		"stripe_price_id":"price_123"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_UpdatePlanManualFallbackJSONSnapshot(t *testing.T) {
+	payload := updates.UpdatePlan{
+		CanAutoUpdate:   false,
+		RequiresRoot:    false,
+		RollbackSupport: true,
+		EstimatedTime:   "5-10 minutes",
+		Instructions: []string{
+			"Check out or build Pulse 6.0.0-rc.1 in your development workspace.",
+			"Stop the current development instance.",
+			"Restart Pulse with the rebuilt binary or release artifact against the existing data directory.",
+		},
+		Prerequisites: []string{
+			"A local development workspace for Pulse",
+			"Build tooling for the target version",
+			"A backup of the active data directory before replacing the binary",
+		},
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal update plan: %v", err)
+	}
+
+	const want = `{
+		"canAutoUpdate":false,
+		"instructions":["Check out or build Pulse 6.0.0-rc.1 in your development workspace.","Stop the current development instance.","Restart Pulse with the rebuilt binary or release artifact against the existing data directory."],
+		"prerequisites":["A local development workspace for Pulse","Build tooling for the target version","A backup of the active data directory before replacing the binary"],
+		"estimatedTime":"5-10 minutes",
+		"requiresRoot":false,
+		"rollbackSupport":true
 	}`
 
 	assertJSONSnapshot(t, got, want)
