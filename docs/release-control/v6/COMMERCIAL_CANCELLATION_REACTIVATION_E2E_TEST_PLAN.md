@@ -225,5 +225,6 @@ Block release or rollout if any of these are observed:
 When this drill is executed for a candidate RC or release:
 
 1. Write a dated record under `docs/release-control/v6/records/`.
-2. Link that record from the relevant release ticket.
-3. If the exercise materially changes confidence for a release gate, update the matching `status.json.release_gates[*]` entry in the same slice.
+2. Start from `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_RECORD_TEMPLATE.md`.
+3. Link that record from the relevant release ticket.
+4. If the exercise materially changes confidence for a release gate, update the matching `status.json.release_gates[*]` entry in the same slice.
