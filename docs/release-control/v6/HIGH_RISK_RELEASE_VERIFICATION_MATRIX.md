@@ -207,6 +207,8 @@ result.
 - Pass when:
   Fresh register, reconnect, stale resume recovery, and disconnect/drain all
   behave predictably without hanging or spinning.
+- Latest exercised record:
+  `docs/release-control/v6/records/relay-registration-reconnect-drain-2026-03-12.md`
 - Block release if:
   The relay can strand the app/client in resume loops, dead sessions, or lost
   inflight work.

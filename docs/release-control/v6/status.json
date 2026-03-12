@@ -1224,7 +1224,7 @@
       "summary": "Confirm relay fresh registration, reconnect, stale-session recovery, and disconnect drain behavior hold under real pressure.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L5",
