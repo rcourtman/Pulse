@@ -162,7 +162,7 @@
       "id": "L6",
       "name": "Architecture coherence",
       "target_score": 8,
-      "current_score": 7,
+      "current_score": 8,
       "status": "partial",
       "subsystems": [
         "alerts",
@@ -178,6 +178,21 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/api/responseUtils.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/streaming.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/features/alerts/OverviewTab.tsx",
           "kind": "file"
         },
@@ -189,6 +204,11 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/utils/alertOverviewPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/resources.go",
           "kind": "file"
         },
         {
