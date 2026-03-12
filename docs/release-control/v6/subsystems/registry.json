@@ -259,6 +259,7 @@
         "pkg/licensing/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx",
         "internal/cloudcp/entitlements/service.go",
@@ -621,6 +622,19 @@
               "internal/api/licensing_handlers_self_hosted_fallback_test.go",
               "internal/api/stripe_webhook_handlers_additional_test.go",
               "internal/api/stripe_webhook_handlers_test.go"
+            ]
+          },
+          {
+            "id": "hosted-billing-admin-surface",
+            "label": "hosted billing admin surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/BillingAdminPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx"
             ]
           },
           {

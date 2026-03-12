@@ -100,7 +100,7 @@
       "id": "L3",
       "name": "Cloud paid readiness",
       "target_score": 8,
-      "current_score": 7,
+      "current_score": 8,
       "status": "partial",
       "subsystems": [
         "cloud-paid"
@@ -109,6 +109,16 @@
         {
           "repo": "pulse",
           "path": "docs/architecture/v6-pricing-and-tiering.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
           "kind": "file"
         }
       ]

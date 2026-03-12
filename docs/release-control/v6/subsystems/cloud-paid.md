@@ -40,7 +40,8 @@ agreement, and cloud-specific enforcement rules.
 18. `internal/cloudcp/entitlements/service.go`
 19. `internal/cloudcp/registry/registry.go`
 20. `internal/cloudcp/stripe/provisioner.go`
-21. `frontend-modern/src/pages/CloudPricing.tsx`
+21. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+22. `frontend-modern/src/pages/CloudPricing.tsx`
 
 ## Shared Boundaries
 
@@ -58,8 +59,9 @@ agreement, and cloud-specific enforcement rules.
 6. Add or change license-server transport through `pkg/licensing/license_server_client.go`
 7. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
 8. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
-9. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
-10. Add contract tests where runtime and pricing need to stay aligned
+9. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+10. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
+11. Add contract tests where runtime and pricing need to stay aligned
 
 ## Forbidden Paths
 
@@ -117,6 +119,11 @@ Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`
 or `suspended` into the canonical plan field.
+The hosted billing-admin settings surface is now part of the explicit
+cloud-paid ownership model as well. Changes to
+`frontend-modern/src/components/Settings/BillingAdminPanel.tsx` must carry this
+contract and the dedicated billing-admin proof file instead of remaining an
+unowned consumer of hosted billing state.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.
