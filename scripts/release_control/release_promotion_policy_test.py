@@ -67,12 +67,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             self.skipTest("staged governance inputs missing; see test_staged_governance_inputs_are_present")
 
     def test_staged_governance_inputs_are_present(self) -> None:
-        self.assertEqual(
-            STAGED_GOVERNANCE_INPUT_ERRORS,
-            (),
-            "staged promotion proof inputs are incomplete:\n- "
-            + "\n- ".join(STAGED_GOVERNANCE_INPUT_ERRORS),
-        )
+        if STAGED_GOVERNANCE_INPUT_ERRORS:
+            self.fail(
+                "staged promotion proof inputs are incomplete:\n- "
+                + "\n- ".join(STAGED_GOVERNANCE_INPUT_ERRORS)
+            )
 
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/RELEASE_PROMOTION_POLICY.md")
