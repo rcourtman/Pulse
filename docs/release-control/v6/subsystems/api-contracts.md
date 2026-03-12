@@ -237,6 +237,11 @@ no-body `POST` actions and success-envelope command triggers through canonical
 local helpers in `frontend-modern/src/api/monitoring.ts` rather than
 duplicating identical `POST` transport logic across reenroll and runtime
 command endpoints.
+Legacy persisted host-agent token scopes from v5 and early v6 installs must
+also canonicalize to the current `agent:*` scope identifiers at the backend
+contract boundary, so existing installed agents continue to satisfy
+`agent:report`, `agent:config:read`, `agent:manage`, and `agent:enroll`
+requirements without manual token replacement after upgrade.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local

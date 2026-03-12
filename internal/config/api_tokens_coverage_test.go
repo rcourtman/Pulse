@@ -97,11 +97,22 @@ func TestAPITokenScopesHelpers(t *testing.T) {
 		t.Fatalf("unexpected scope allowed")
 	}
 
+	record = &APITokenRecord{Scopes: []string{"host-agent:report"}}
+	if !record.HasScope(ScopeAgentReport) {
+		t.Fatalf("expected legacy host-agent:report alias to satisfy agent:report")
+	}
+	if record.HasScope(ScopeSettingsWrite) {
+		t.Fatalf("unexpected scope allowed through legacy alias")
+	}
+
 	if !IsKnownScope(ScopeWildcard) {
 		t.Fatalf("wildcard should be recognized as known scope")
 	}
 	if !IsKnownScope(ScopeMonitoringWrite) {
 		t.Fatalf("known scope should be recognized")
+	}
+	if !IsKnownScope("host-agent:config:read") {
+		t.Fatalf("legacy host-agent:config:read alias should be recognized")
 	}
 	if IsKnownScope("not:a:scope") {
 		t.Fatalf("unknown scope should not be recognized")

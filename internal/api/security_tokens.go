@@ -88,6 +88,7 @@ func normalizeRequestedScopes(raw *[]string) ([]string, error) {
 		if scope == "" {
 			return nil, fmt.Errorf("scope identifiers cannot be blank")
 		}
+		scope = canonicalizeRequestedScope(scope)
 		if scope == config.ScopeWildcard {
 			hasWildcard = true
 			continue
@@ -111,6 +112,21 @@ func normalizeRequestedScopes(raw *[]string) ([]string, error) {
 
 	sort.Strings(normalized)
 	return normalized, nil
+}
+
+func canonicalizeRequestedScope(scope string) string {
+	switch scope {
+	case "host-agent:report":
+		return config.ScopeAgentReport
+	case "host-agent:config:read":
+		return config.ScopeAgentConfigRead
+	case "host-agent:manage":
+		return config.ScopeAgentManage
+	case "host-agent:enroll":
+		return config.ScopeAgentEnroll
+	default:
+		return scope
+	}
 }
 
 // handleListAPITokens returns all configured API tokens (metadata only).

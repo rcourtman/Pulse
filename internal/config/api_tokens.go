@@ -57,6 +57,13 @@ var scopeLookup = func() map[string]struct{} {
 	return lookup
 }()
 
+var legacyScopeAliases = map[string]string{
+	"host-agent:report":      ScopeAgentReport,
+	"host-agent:config:read": ScopeAgentConfigRead,
+	"host-agent:manage":      ScopeAgentManage,
+	"host-agent:enroll":      ScopeAgentEnroll,
+}
+
 // ErrInvalidToken is returned when a token value is empty or malformed.
 var ErrInvalidToken = errors.New("invalid API token")
 
@@ -400,8 +407,16 @@ func normalizeScopes(scopes []string) []string {
 	if len(scopes) == 0 {
 		return []string{ScopeWildcard}
 	}
-	result := make([]string, len(scopes))
-	copy(result, scopes)
+	seen := make(map[string]struct{}, len(scopes))
+	result := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		scope = canonicalizeScope(scope)
+		if _, exists := seen[scope]; exists {
+			continue
+		}
+		seen[scope] = struct{}{}
+		result = append(result, scope)
+	}
 	return result
 }
 
@@ -410,9 +425,10 @@ func (r *APITokenRecord) HasScope(scope string) bool {
 	if scope == "" {
 		return true
 	}
+	scope = canonicalizeScope(scope)
 	r.ensureScopes()
 	for _, candidate := range r.Scopes {
-		if candidate == ScopeWildcard || candidate == scope {
+		if canonicalizeScope(candidate) == ScopeWildcard || canonicalizeScope(candidate) == scope {
 			return true
 		}
 	}
@@ -421,9 +437,18 @@ func (r *APITokenRecord) HasScope(scope string) bool {
 
 // IsKnownScope reports whether the provided string matches a supported scope identifier.
 func IsKnownScope(scope string) bool {
+	scope = canonicalizeScope(scope)
 	if scope == ScopeWildcard {
 		return true
 	}
 	_, ok := scopeLookup[scope]
 	return ok
+}
+
+func canonicalizeScope(scope string) string {
+	scope = strings.TrimSpace(scope)
+	if alias, ok := legacyScopeAliases[scope]; ok {
+		return alias
+	}
+	return scope
 }

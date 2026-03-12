@@ -2340,6 +2340,29 @@ func TestHostAgentEndpointsRequireHostReportScope(t *testing.T) {
 	}
 }
 
+func TestHostAgentEndpointsAcceptLegacyHostAgentReportScopeAlias(t *testing.T) {
+	rawToken := "legacy-host-report-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{"host-agent:report"}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	for _, path := range []string{
+		"/api/agents/agent/report",
+		"/api/agents/host/report",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("expected legacy host-agent:report scope alias to pass scope gate on %s, got 403: %s", path, rec.Body.String())
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected request to reach handler and fail on invalid JSON for %s, got %d", path, rec.Code)
+		}
+	}
+}
+
 func TestHostAgentConfigPatchRequiresHostManageScope(t *testing.T) {
 	rawToken := "host-config-manage-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentConfigRead}, nil)

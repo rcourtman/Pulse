@@ -268,6 +268,23 @@ func TestContract_APITokenDTOJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_APITokenScopeAliasNormalization(t *testing.T) {
+	raw := []string{"host-agent:report", "host-agent:config:read", "host-agent:enroll"}
+	got, err := normalizeRequestedScopes(&raw)
+	if err != nil {
+		t.Fatalf("normalize requested scopes: %v", err)
+	}
+
+	want := []string{
+		config.ScopeAgentConfigRead,
+		config.ScopeAgentEnroll,
+		config.ScopeAgentReport,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalized scopes = %#v, want %#v", got, want)
+	}
+}
+
 func TestContract_InstallScriptReleaseAssetURL(t *testing.T) {
 	router := &Router{serverVersion: "v6.0.0-rc.1"}
 
