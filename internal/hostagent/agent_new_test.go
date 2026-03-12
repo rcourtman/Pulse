@@ -191,6 +191,17 @@ func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
 	if report.Agent.UpdatedFrom != "5.1.14" {
 		t.Fatalf("report updated_from = %q, want %q", report.Agent.UpdatedFrom, "5.1.14")
 	}
+	if agent.updatedFrom != "" {
+		t.Fatalf("agent.updatedFrom after first build = %q, want empty string", agent.updatedFrom)
+	}
+
+	secondReport, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("second buildReport: %v", err)
+	}
+	if secondReport.Agent.UpdatedFrom != "" {
+		t.Fatalf("second report updated_from = %q, want empty string", secondReport.Agent.UpdatedFrom)
+	}
 }
 
 func TestNew_RejectsInvalidPulseURL(t *testing.T) {

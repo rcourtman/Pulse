@@ -72,7 +72,9 @@ Host-agent startup and first-report assembly now also live under this
 monitoring boundary. Changes to `internal/hostagent/agent.go` must preserve
 the one-shot update continuity contract: when the updater persists a previous
 agent version, the next unified agent start must surface that `updated_from`
-value exactly once in the first canonical v6 host report.
+value on the first freshly built canonical v6 host report only. Buffered
+retries may still carry that first report payload, but later freshly built
+reports from the same process must not repeat the field.
 The updater runtime in `internal/agentupdate/update.go` now also lives under
 this boundary. Changes there must preserve the same continuity contract across
 the public update flow: a successful check/download/install handoff must write

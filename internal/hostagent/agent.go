@@ -641,6 +641,13 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// would be capped by collectCtx's 10s timeout.
 	clusterSensors := a.collectClusterSensors(ctx)
 
+	// Carry updated_from on the first freshly built v6 report only. If that
+	// report is buffered, the buffered copy still retains the field for retry.
+	updatedFrom := a.updatedFrom
+	if updatedFrom != "" {
+		a.updatedFrom = ""
+	}
+
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
@@ -648,7 +655,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.interval / time.Second),
 			Hostname:        a.hostname,
-			UpdatedFrom:     a.updatedFrom,
+			UpdatedFrom:     updatedFrom,
 			CommandsEnabled: a.cfg.EnableCommands,
 			DiskExclude:     append([]string(nil), a.cfg.DiskExclude...),
 		},
