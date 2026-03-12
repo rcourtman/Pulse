@@ -154,9 +154,9 @@ result.
   `frontend-modern/src/components/Settings/RolesPanel.tsx`
   `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`
 - Automated proof:
-  `go test ./internal/api -run 'TestMultiTenant|TestResourceHandlers_NonDefaultOrg|TestSetMultiTenantMonitor_WiresHandlers'`
+  `go test ./internal/api -run 'TestOrgHandlers|TestMultiTenant|TestResourceHandlers_NonDefaultOrg|TestSetMultiTenantMonitor_WiresHandlers' -count=1`
   `go test ./internal/monitoring -run 'TestMultiTenantMonitor'`
-  `cd frontend-modern && npx vitest run src/utils/__tests__/rbacPermissions.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/organizationRolePresentation.test.ts src/utils/__tests__/organizationSettingsPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
+  `cd frontend-modern && npx vitest run src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx src/components/Settings/__tests__/RBACPaywallPanels.test.tsx src/utils/__tests__/rbacPermissions.test.ts src/utils/__tests__/rbacPresentation.test.ts src/utils/__tests__/organizationRolePresentation.test.ts src/utils/__tests__/organizationSettingsPresentation.test.ts src/utils/__tests__/frontendResourceTypeBoundaries.test.ts`
 - Manual scenario:
   1. Add a new user.
   2. Confirm the user only sees the orgs they belong to.
