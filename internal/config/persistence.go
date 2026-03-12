@@ -2124,16 +2124,21 @@ type PatrolRunRecord struct {
 	StorageChecked    int `json:"storage_checked"`
 	HostsChecked      int `json:"hosts_checked"`
 	PBSChecked        int `json:"pbs_checked"`
+	PMGChecked        int `json:"pmg_checked"`
 	KubernetesChecked int `json:"kubernetes_checked"`
 	// Findings from this run
 	NewFindings      int      `json:"new_findings"`
 	ExistingFindings int      `json:"existing_findings"`
+	RejectedFindings int      `json:"rejected_findings"`
 	ResolvedFindings int      `json:"resolved_findings"`
 	AutoFixCount     int      `json:"auto_fix_count,omitempty"`
 	FindingsSummary  string   `json:"findings_summary"`
-	FindingIDs       []string `json:"finding_ids,omitempty"`
+	FindingIDs       []string `json:"finding_ids"`
 	ErrorCount       int      `json:"error_count"`
 	Status           string   `json:"status"` // "healthy", "issues_found", "critical", "error"
+	// Triage stats
+	TriageFlags      int  `json:"triage_flags"`
+	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"`
 	// AI Analysis details
 	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
 	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
@@ -2150,9 +2155,9 @@ type patrolRunRecordJSON struct {
 	DurationMs                int64            `json:"duration_ms"`
 	Type                      string           `json:"type"`
 	TriggerReason             string           `json:"trigger_reason,omitempty"`
-	ScopeResourceIDs          []string         `json:"scope_resource_ids,omitempty"`
-	EffectiveScopeResourceIDs []string         `json:"effective_scope_resource_ids,omitempty"`
-	ScopeResourceTypes        []string         `json:"scope_resource_types,omitempty"`
+	ScopeResourceIDs          *[]string        `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs *[]string        `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        *[]string        `json:"scope_resource_types,omitempty"`
 	ScopeContext              string           `json:"scope_context,omitempty"`
 	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
 	FindingID                 string           `json:"finding_id,omitempty"`
@@ -2163,15 +2168,19 @@ type patrolRunRecordJSON struct {
 	StorageChecked            int              `json:"storage_checked"`
 	HostsChecked              int              `json:"hosts_checked"`
 	PBSChecked                int              `json:"pbs_checked"`
+	PMGChecked                int              `json:"pmg_checked"`
 	KubernetesChecked         int              `json:"kubernetes_checked"`
 	NewFindings               int              `json:"new_findings"`
 	ExistingFindings          int              `json:"existing_findings"`
+	RejectedFindings          int              `json:"rejected_findings"`
 	ResolvedFindings          int              `json:"resolved_findings"`
 	AutoFixCount              int              `json:"auto_fix_count,omitempty"`
 	FindingsSummary           string           `json:"findings_summary"`
-	FindingIDs                []string         `json:"finding_ids,omitempty"`
+	FindingIDs                []string         `json:"finding_ids"`
 	ErrorCount                int              `json:"error_count"`
 	Status                    string           `json:"status"`
+	TriageFlags               int              `json:"triage_flags"`
+	TriageSkippedLLM          bool             `json:"triage_skipped_llm,omitempty"`
 	AIAnalysis                string           `json:"ai_analysis,omitempty"`
 	InputTokens               int              `json:"input_tokens,omitempty"`
 	OutputTokens              int              `json:"output_tokens,omitempty"`
@@ -2183,9 +2192,32 @@ func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
 	return strings.TrimSpace(alertIdentifier)
 }
 
+func marshalOptionalPatrolStringSlice(values []string) *[]string {
+	if values == nil {
+		return nil
+	}
+	cloned := append([]string{}, values...)
+	return &cloned
+}
+
+func unmarshalOptionalPatrolStringSlice(values *[]string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string{}, (*values)...)
+}
+
+func canonicalPatrolFindingIDs(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+	return append([]string{}, ids...)
+}
+
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	alertIdentifier := canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	record.AlertIdentifier = alertIdentifier
+	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
 	return record
 }
 
@@ -2199,9 +2231,9 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		DurationMs:                normalized.DurationMs,
 		Type:                      normalized.Type,
 		TriggerReason:             normalized.TriggerReason,
-		ScopeResourceIDs:          normalized.ScopeResourceIDs,
-		EffectiveScopeResourceIDs: normalized.EffectiveScopeResourceIDs,
-		ScopeResourceTypes:        normalized.ScopeResourceTypes,
+		ScopeResourceIDs:          marshalOptionalPatrolStringSlice(normalized.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: marshalOptionalPatrolStringSlice(normalized.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        marshalOptionalPatrolStringSlice(normalized.ScopeResourceTypes),
 		ScopeContext:              normalized.ScopeContext,
 		AlertIdentifier:           alertIdentifier,
 		FindingID:                 normalized.FindingID,
@@ -2212,15 +2244,19 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		StorageChecked:            normalized.StorageChecked,
 		HostsChecked:              normalized.HostsChecked,
 		PBSChecked:                normalized.PBSChecked,
+		PMGChecked:                normalized.PMGChecked,
 		KubernetesChecked:         normalized.KubernetesChecked,
 		NewFindings:               normalized.NewFindings,
 		ExistingFindings:          normalized.ExistingFindings,
+		RejectedFindings:          normalized.RejectedFindings,
 		ResolvedFindings:          normalized.ResolvedFindings,
 		AutoFixCount:              normalized.AutoFixCount,
 		FindingsSummary:           normalized.FindingsSummary,
 		FindingIDs:                normalized.FindingIDs,
 		ErrorCount:                normalized.ErrorCount,
 		Status:                    normalized.Status,
+		TriageFlags:               normalized.TriageFlags,
+		TriageSkippedLLM:          normalized.TriageSkippedLLM,
 		AIAnalysis:                normalized.AIAnalysis,
 		InputTokens:               normalized.InputTokens,
 		OutputTokens:              normalized.OutputTokens,
@@ -2243,9 +2279,9 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		DurationMs:                payload.DurationMs,
 		Type:                      payload.Type,
 		TriggerReason:             payload.TriggerReason,
-		ScopeResourceIDs:          payload.ScopeResourceIDs,
-		EffectiveScopeResourceIDs: payload.EffectiveScopeResourceIDs,
-		ScopeResourceTypes:        payload.ScopeResourceTypes,
+		ScopeResourceIDs:          unmarshalOptionalPatrolStringSlice(payload.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: unmarshalOptionalPatrolStringSlice(payload.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        unmarshalOptionalPatrolStringSlice(payload.ScopeResourceTypes),
 		ScopeContext:              payload.ScopeContext,
 		AlertIdentifier:           alertIdentifier,
 		FindingID:                 payload.FindingID,
@@ -2256,15 +2292,19 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		StorageChecked:            payload.StorageChecked,
 		HostsChecked:              payload.HostsChecked,
 		PBSChecked:                payload.PBSChecked,
+		PMGChecked:                payload.PMGChecked,
 		KubernetesChecked:         payload.KubernetesChecked,
 		NewFindings:               payload.NewFindings,
 		ExistingFindings:          payload.ExistingFindings,
+		RejectedFindings:          payload.RejectedFindings,
 		ResolvedFindings:          payload.ResolvedFindings,
 		AutoFixCount:              payload.AutoFixCount,
 		FindingsSummary:           payload.FindingsSummary,
 		FindingIDs:                payload.FindingIDs,
 		ErrorCount:                payload.ErrorCount,
 		Status:                    payload.Status,
+		TriageFlags:               payload.TriageFlags,
+		TriageSkippedLLM:          payload.TriageSkippedLLM,
 		AIAnalysis:                payload.AIAnalysis,
 		InputTokens:               payload.InputTokens,
 		OutputTokens:              payload.OutputTokens,

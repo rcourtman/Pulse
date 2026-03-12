@@ -118,6 +118,11 @@ The frontend Patrol history clients in `frontend-modern/src/api/patrol.ts`
 must mirror that normalization before sending the request: invalid and
 non-positive caller input collapses back to the client default of `30`, and
 oversized requests clamp to the backend maximum of `100`.
+Patrol run-history serialization and persistence must also preserve full field
+parity across API responses and restart boundaries, including
+`pmg_checked`, `rejected_findings`, `triage_flags`, `triage_skipped_llm`, and
+explicit empty `finding_ids` or `effective_scope_resource_ids` arrays when a
+run represents an empty snapshot or an intentionally empty effective scope.
 The same patrol run-history contract now also treats
 `effective_scope_resource_ids` as the canonical analyzed-resource scope when
 present, including when it is an explicit empty array, and frontend snapshot

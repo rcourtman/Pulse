@@ -541,6 +541,75 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 	}
 }
 
+func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+
+	runs := []PatrolRunRecord{
+		{
+			ID:                        "run-empty",
+			StartedAt:                 time.Now().Add(-2 * time.Minute),
+			CompletedAt:               time.Now().Add(-1 * time.Minute),
+			Duration:                  time.Minute,
+			Type:                      "scoped",
+			TriggerReason:             "alert_fired",
+			ScopeResourceIDs:          []string{"seed-resource"},
+			EffectiveScopeResourceIDs: []string{},
+			ScopeResourceTypes:        []string{"vm"},
+			ResourcesChecked:          2,
+			GuestsChecked:             2,
+			PMGChecked:                1,
+			NewFindings:               0,
+			ExistingFindings:          1,
+			RejectedFindings:          1,
+			ResolvedFindings:          0,
+			FindingsSummary:           "Nothing matched",
+			FindingIDs:                []string{},
+			ErrorCount:                0,
+			Status:                    "healthy",
+			TriageFlags:               3,
+			TriageSkippedLLM:          true,
+		},
+	}
+
+	if err := adapter.SavePatrolRunHistory(runs); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected one loaded run, got %d", len(loaded))
+	}
+	if loaded[0].EffectiveScopeResourceIDs == nil {
+		t.Fatal("expected explicit empty effective scope ids to survive persistence")
+	}
+	if len(loaded[0].EffectiveScopeResourceIDs) != 0 {
+		t.Fatalf("expected empty effective scope ids, got %v", loaded[0].EffectiveScopeResourceIDs)
+	}
+	if loaded[0].FindingIDs == nil {
+		t.Fatal("expected explicit empty finding ids to survive persistence")
+	}
+	if len(loaded[0].FindingIDs) != 0 {
+		t.Fatalf("expected empty finding ids, got %v", loaded[0].FindingIDs)
+	}
+	if loaded[0].PMGChecked != 1 {
+		t.Fatalf("expected PMGChecked=1, got %d", loaded[0].PMGChecked)
+	}
+	if loaded[0].RejectedFindings != 1 {
+		t.Fatalf("expected RejectedFindings=1, got %d", loaded[0].RejectedFindings)
+	}
+	if loaded[0].TriageFlags != 3 {
+		t.Fatalf("expected TriageFlags=3, got %d", loaded[0].TriageFlags)
+	}
+	if !loaded[0].TriageSkippedLLM {
+		t.Fatal("expected TriageSkippedLLM to survive persistence")
+	}
+}
+
 func TestPatrolHistoryPersistenceAdapter_LoadError(t *testing.T) {
 	tmp := t.TempDir()
 	persistence := config.NewConfigPersistence(tmp)

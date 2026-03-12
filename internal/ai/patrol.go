@@ -151,9 +151,9 @@ type patrolRunRecordJSON struct {
 	DurationMs                int64            `json:"duration_ms"`
 	Type                      string           `json:"type"`
 	TriggerReason             string           `json:"trigger_reason,omitempty"`
-	ScopeResourceIDs          []string         `json:"scope_resource_ids,omitempty"`
-	EffectiveScopeResourceIDs []string         `json:"effective_scope_resource_ids,omitempty"`
-	ScopeResourceTypes        []string         `json:"scope_resource_types,omitempty"`
+	ScopeResourceIDs          *[]string        `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs *[]string        `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        *[]string        `json:"scope_resource_types,omitempty"`
 	ScopeContext              string           `json:"scope_context,omitempty"`
 	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
 	FindingID                 string           `json:"finding_id,omitempty"`
@@ -188,8 +188,31 @@ func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
 	return strings.TrimSpace(alertIdentifier)
 }
 
+func marshalOptionalPatrolStringSlice(values []string) *[]string {
+	if values == nil {
+		return nil
+	}
+	cloned := append([]string{}, values...)
+	return &cloned
+}
+
+func unmarshalOptionalPatrolStringSlice(values *[]string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string{}, (*values)...)
+}
+
+func canonicalPatrolFindingIDs(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+	return append([]string{}, ids...)
+}
+
 func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier)
+	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
 	return record
 }
 
@@ -202,9 +225,9 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		DurationMs:                normalized.DurationMs,
 		Type:                      normalized.Type,
 		TriggerReason:             normalized.TriggerReason,
-		ScopeResourceIDs:          normalized.ScopeResourceIDs,
-		EffectiveScopeResourceIDs: normalized.EffectiveScopeResourceIDs,
-		ScopeResourceTypes:        normalized.ScopeResourceTypes,
+		ScopeResourceIDs:          marshalOptionalPatrolStringSlice(normalized.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: marshalOptionalPatrolStringSlice(normalized.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        marshalOptionalPatrolStringSlice(normalized.ScopeResourceTypes),
 		ScopeContext:              normalized.ScopeContext,
 		AlertIdentifier:           normalized.AlertIdentifier,
 		FindingID:                 normalized.FindingID,
@@ -250,9 +273,9 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		DurationMs:                payload.DurationMs,
 		Type:                      payload.Type,
 		TriggerReason:             payload.TriggerReason,
-		ScopeResourceIDs:          payload.ScopeResourceIDs,
-		EffectiveScopeResourceIDs: payload.EffectiveScopeResourceIDs,
-		ScopeResourceTypes:        payload.ScopeResourceTypes,
+		ScopeResourceIDs:          unmarshalOptionalPatrolStringSlice(payload.ScopeResourceIDs),
+		EffectiveScopeResourceIDs: unmarshalOptionalPatrolStringSlice(payload.EffectiveScopeResourceIDs),
+		ScopeResourceTypes:        unmarshalOptionalPatrolStringSlice(payload.ScopeResourceTypes),
 		ScopeContext:              payload.ScopeContext,
 		AlertIdentifier:           canonicalPatrolAlertIdentifier(payload.AlertIdentifier),
 		FindingID:                 payload.FindingID,

@@ -354,6 +354,83 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_PatrolRunRecordJSONSnapshot(t *testing.T) {
+	startedAt := time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC)
+	completedAt := startedAt.Add(90 * time.Second)
+
+	payload := ai.PatrolRunRecord{
+		ID:                        "run-1",
+		StartedAt:                 startedAt,
+		CompletedAt:               completedAt,
+		DurationMs:                90000,
+		Type:                      "scoped",
+		TriggerReason:             "alert_fired",
+		ScopeResourceIDs:          []string{"seed-resource"},
+		EffectiveScopeResourceIDs: []string{},
+		ScopeResourceTypes:        []string{"vm"},
+		ResourcesChecked:          4,
+		NodesChecked:              0,
+		GuestsChecked:             2,
+		DockerChecked:             0,
+		StorageChecked:            0,
+		HostsChecked:              0,
+		PBSChecked:                0,
+		PMGChecked:                1,
+		KubernetesChecked:         1,
+		NewFindings:               0,
+		ExistingFindings:          2,
+		RejectedFindings:          1,
+		ResolvedFindings:          1,
+		AutoFixCount:              0,
+		FindingsSummary:           "All clear",
+		FindingIDs:                []string{},
+		ErrorCount:                0,
+		Status:                    "healthy",
+		TriageFlags:               3,
+		TriageSkippedLLM:          true,
+		ToolCallCount:             0,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal patrol run record: %v", err)
+	}
+
+	const want = `{
+		"id":"run-1",
+		"started_at":"2026-03-12T10:00:00Z",
+		"completed_at":"2026-03-12T10:01:30Z",
+		"duration_ms":90000,
+		"type":"scoped",
+		"trigger_reason":"alert_fired",
+		"scope_resource_ids":["seed-resource"],
+		"effective_scope_resource_ids":[],
+		"scope_resource_types":["vm"],
+		"resources_checked":4,
+		"nodes_checked":0,
+		"guests_checked":2,
+		"docker_checked":0,
+		"storage_checked":0,
+		"hosts_checked":0,
+		"pbs_checked":0,
+		"pmg_checked":1,
+		"kubernetes_checked":1,
+		"new_findings":0,
+		"existing_findings":2,
+		"rejected_findings":1,
+		"resolved_findings":1,
+		"findings_summary":"All clear",
+		"finding_ids":[],
+		"error_count":0,
+		"status":"healthy",
+		"triage_flags":3,
+		"triage_skipped_llm":true,
+		"tool_call_count":0
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 	cases := []struct {
 		name  string

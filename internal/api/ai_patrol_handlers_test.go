@@ -381,6 +381,74 @@ func TestHandleGetPatrolRunHistory_EmitsCanonicalAlertIdentifier(t *testing.T) {
 	}
 }
 
+func TestHandleGetPatrolRunHistory_PreservesExplicitEmptySnapshotCollections(t *testing.T) {
+	t.Parallel()
+
+	handler := createTestAIHandler(t)
+	patrol := &ai.PatrolService{}
+	store := ai.NewPatrolRunHistoryStore(10)
+	store.Add(ai.PatrolRunRecord{
+		ID:                        "run-1",
+		StartedAt:                 time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+		CompletedAt:               time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC),
+		DurationMs:                60000,
+		Type:                      "scoped",
+		TriggerReason:             "alert_fired",
+		ScopeResourceIDs:          []string{"seed-resource"},
+		EffectiveScopeResourceIDs: []string{},
+		ScopeResourceTypes:        []string{"vm"},
+		ResourcesChecked:          2,
+		PMGChecked:                1,
+		ExistingFindings:          1,
+		RejectedFindings:          1,
+		FindingsSummary:           "ok",
+		FindingIDs:                []string{},
+		Status:                    "healthy",
+		TriageFlags:               2,
+		TriageSkippedLLM:          true,
+		ToolCallCount:             0,
+	})
+	setUnexportedField(t, patrol, "runHistoryStore", store)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/runs", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolRunHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var history []map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &history); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected one history item, got %d", len(history))
+	}
+
+	run := history[0]
+	if values, ok := run["effective_scope_resource_ids"].([]interface{}); !ok || len(values) != 0 {
+		t.Fatalf("expected explicit empty effective_scope_resource_ids, got %#v", run["effective_scope_resource_ids"])
+	}
+	if values, ok := run["finding_ids"].([]interface{}); !ok || len(values) != 0 {
+		t.Fatalf("expected explicit empty finding_ids, got %#v", run["finding_ids"])
+	}
+	if got := run["pmg_checked"]; got != float64(1) {
+		t.Fatalf("expected pmg_checked=1, got %#v", got)
+	}
+	if got := run["rejected_findings"]; got != float64(1) {
+		t.Fatalf("expected rejected_findings=1, got %#v", got)
+	}
+	if got := run["triage_flags"]; got != float64(2) {
+		t.Fatalf("expected triage_flags=2, got %#v", got)
+	}
+	if got := run["triage_skipped_llm"]; got != true {
+		t.Fatalf("expected triage_skipped_llm=true, got %#v", got)
+	}
+}
+
 func TestHandleGetPatrolRunHistory_InvalidOrOversizedLimitIsNormalized(t *testing.T) {
 	t.Parallel()
 
