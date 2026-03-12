@@ -70,7 +70,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
       newFindingsToday: todayRuns.reduce((sum, r) => sum + (r.new_findings || 0), 0),
       lastRunTime: lastRunTime ? formatRelativeTime(lastRunTime, { compact: true }) : null,
       lastRunTrigger: formatTrigger(lastRun?.trigger_reason),
-      isHealthy: !lastRunHadErrors && lastRun?.status !== 'error',
+      isHealthy: !lastRunHadErrors && lastRun?.status === 'healthy',
     };
   });
 
