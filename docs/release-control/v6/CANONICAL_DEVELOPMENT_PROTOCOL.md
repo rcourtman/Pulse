@@ -33,12 +33,15 @@ The first two files answer release priority and current lane state.
 readiness-assertion design rules.
 `status.json` owns live lane state, lane-to-subsystem ownership, the active
 readiness assertion catalog, readiness derivation rules, executable
-proof commands, structured evidence references, and typed lane/subsystem
-decision records.
+proof commands, structured evidence references, typed lane/subsystem
+decision records, and the canonical machine-readable workspace repo catalog.
 Lane scores reaching target in `status.json` mean the tracked architecture and
 governance work for those lanes is at target; they are not, by themselves,
 release approval if readiness assertions, `open_decisions`, or `release_gates`
 still remain.
+When the agent starts from a sibling repo or the shared workspace root, these
+same files are still authoritative; resolve them from `pulse/docs/release-control/v6/`
+rather than recreating release control in the current repo.
 Use `python3 scripts/release_control/status_audit.py --pretty` for the current
 machine-derived repo/governance and release readiness summary. Use
 `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` as the

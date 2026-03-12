@@ -56,11 +56,17 @@ def lane_context_for_rule(rule: dict[str, Any], status_report: dict[str, Any]) -
         if lane_id in decision.get("lane_ids", [])
         if not decision.get("subsystem_ids") or subsystem_id in decision.get("subsystem_ids", [])
     ]
+    release_gates = [
+        gate
+        for gate in status_report.get("release_gates", [])
+        if lane_id in gate.get("lane_ids", [])
+    ]
     return {
         "lane_id": lane_id,
         "lane": lane,
         "open_decisions": open_decisions,
         "resolved_decisions": resolved_decisions,
+        "release_gates": release_gates,
     }
 
 
@@ -137,6 +143,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
         )
 
     return {
+        "scope": status_report.get("scope", {}),
         "status_summary": status_report.get("summary", {}),
         "status_audit_errors": status_report.get("errors", []),
         "files": path_entries,
@@ -164,6 +171,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def render_pretty(result: dict[str, Any]) -> str:
     lines: list[str] = []
+    scope = result.get("scope", {})
+    if scope:
+        lines.append(
+            "scope: "
+            f"control_plane={scope.get('control_plane_repo') or '-'} "
+            f"active_repos={','.join(scope.get('active_repos', [])) or '-'}"
+        )
     for entry in result["files"]:
         lines.append(f"{entry['path']}: {entry['classification']}")
         for match in entry["matches"]:
@@ -178,7 +192,9 @@ def render_pretty(result: dict[str, Any]) -> str:
                 lines.append(
                     f"    lane {lane_context['lane_id']} "
                     f"gap={lane['gap']:.0f} derived={lane['derived_status']} "
-                    f"open_decisions={len(lane_context['open_decisions'])}"
+                    f"repos={','.join(lane.get('repo_ids', [])) or '-'} "
+                    f"open_decisions={len(lane_context['open_decisions'])} "
+                    f"release_gates={len(lane_context['release_gates'])}"
                 )
         if entry.get("shared_ownership"):
             shared = entry["shared_ownership"]

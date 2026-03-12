@@ -54,10 +54,14 @@ repo-aware sessions are now the only supported v6 execution path.
 
 ## Active Repo Scope
 
-- `pulse`
-- `pulse-pro`
-- `pulse-enterprise`
-- `pulse-mobile`
+`status.json.scope.control_plane_repo` is `pulse`, and
+`status.json.scope.repo_catalog` is the canonical machine-readable repo map for
+the active workspace.
+
+- `pulse`: core desktop/runtime repo and canonical v6 release-control authority
+- `pulse-pro`: commercial operations, checkout, license-server, and relay-server
+- `pulse-enterprise`: closed-source enterprise and paid runtime features
+- `pulse-mobile`: mobile client, relay pairing, approvals, and local auth/state
 
 Ignored for v6 control:
 

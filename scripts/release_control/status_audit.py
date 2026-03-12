@@ -68,6 +68,10 @@ def _proof_command_sort_key(value: str) -> str:
     return value.casefold()
 
 
+def _repo_sort_key(value: str) -> str:
+    return value.casefold()
+
+
 def _decision_sort_key(value: tuple[str, str]) -> tuple[str, str]:
     date_value, decision_id = value
     return (date_value, decision_id.casefold())
@@ -293,22 +297,82 @@ def audit_evidence_refs(
     }
 
 
-def validate_scope(payload: dict[str, Any], errors: list[str]) -> tuple[list[str], list[str]]:
+def validate_scope(payload: dict[str, Any], errors: list[str]) -> dict[str, Any]:
     scope = payload.get("scope")
     if not isinstance(scope, dict):
         errors.append("status.json missing scope object")
-        return [], []
+        return {
+            "active_repos": [],
+            "control_plane_repo": None,
+            "ignored_repos": [],
+            "repo_catalog": [],
+        }
+
     active_repos = _require_string_list(scope, "active_repos", errors, context="scope")
+    control_plane_repo = _require_string(scope, "control_plane_repo", errors, context="scope")
     ignored_repos = _require_string_list(scope, "ignored_repos", errors, context="scope")
+    repo_catalog_raw = _require_object_list(scope, "repo_catalog", errors, context="scope")
+
     if len(active_repos) != len(set(active_repos)):
         errors.append("scope.active_repos must not contain duplicates")
-    if active_repos != sorted(active_repos):
+    if active_repos != sorted(active_repos, key=_repo_sort_key):
         errors.append("scope.active_repos must be sorted lexicographically")
     if len(ignored_repos) != len(set(ignored_repos)):
         errors.append("scope.ignored_repos must not contain duplicates")
-    if ignored_repos != sorted(ignored_repos):
+    if ignored_repos != sorted(ignored_repos, key=_repo_sort_key):
         errors.append("scope.ignored_repos must be sorted lexicographically")
-    return active_repos, ignored_repos
+    if control_plane_repo and control_plane_repo not in active_repos:
+        errors.append("scope.control_plane_repo must be present in scope.active_repos")
+
+    repo_catalog: list[dict[str, Any]] = []
+    seen_repo_ids: set[str] = set()
+    repo_catalog_ids: list[str] = []
+    for index, raw_repo in enumerate(repo_catalog_raw):
+        context = f"scope.repo_catalog[{index}]"
+        repo_id = _require_string(raw_repo, "id", errors, context=context)
+        purpose = _require_string(raw_repo, "purpose", errors, context=context)
+        visibility = _require_string(raw_repo, "visibility", errors, context=context)
+        if repo_id:
+            if repo_id in seen_repo_ids:
+                errors.append(f"{context} duplicates id {repo_id}")
+            seen_repo_ids.add(repo_id)
+            repo_catalog_ids.append(repo_id)
+        if visibility and visibility not in {"public", "private"}:
+            errors.append(f"{context} has invalid visibility {visibility!r}")
+        if repo_id and purpose and visibility:
+            repo_catalog.append(
+                {
+                    "id": repo_id,
+                    "purpose": purpose,
+                    "visibility": visibility,
+                }
+            )
+
+    if repo_catalog_ids != sorted(repo_catalog_ids, key=_repo_sort_key):
+        errors.append("scope.repo_catalog must be sorted by repo id")
+
+    if len(repo_catalog) == len(repo_catalog_raw):
+        catalog_repo_ids = [entry["id"] for entry in repo_catalog]
+        if catalog_repo_ids != active_repos:
+            errors.append("scope.repo_catalog ids must exactly match scope.active_repos in the same order")
+
+    return {
+        "active_repos": active_repos,
+        "control_plane_repo": control_plane_repo,
+        "ignored_repos": ignored_repos,
+        "repo_catalog": repo_catalog,
+    }
+
+
+def _derived_repo_ids_for_lane_refs(
+    lane_refs: list[str],
+    *,
+    lane_repo_ids: dict[str, list[str]],
+) -> list[str]:
+    derived: set[str] = set()
+    for lane_id in lane_refs:
+        derived.update(lane_repo_ids.get(lane_id, []))
+    return sorted(derived, key=_repo_sort_key)
 
 
 def validate_source_precedence(payload: dict[str, Any], errors: list[str]) -> None:
@@ -431,7 +495,7 @@ def audit_lanes(
     valid_lane_statuses: set[str],
     errors: list[str],
     warnings: list[str],
-) -> tuple[list[dict[str, Any]], set[str]]:
+) -> tuple[list[dict[str, Any]], set[str], dict[str, list[str]]]:
     lanes = payload.get("lanes")
     if not isinstance(lanes, list) or not lanes:
         errors.append("status.json missing non-empty lanes list")
@@ -441,6 +505,7 @@ def audit_lanes(
     seen_lane_ids: set[str] = set()
     lane_ids: set[str] = set()
     lane_order: list[str] = []
+    lane_repo_ids: dict[str, list[str]] = {}
 
     for index, raw_lane in enumerate(lanes):
         context = f"lanes[{index}]"
@@ -483,6 +548,8 @@ def audit_lanes(
 
         at_target = current >= target
         all_evidence_present = evidence_report["all_evidence_present"]
+        repo_ids = sorted({repo for repo, _, _ in evidence_report["evidence_refs"]}, key=_repo_sort_key)
+        lane_repo_ids[lane_id] = repo_ids
         derived_status = _derived_lane_status(
             at_target=at_target,
             all_evidence_present=all_evidence_present,
@@ -504,6 +571,8 @@ def audit_lanes(
                 "at_target": at_target,
                 "status": status,
                 "subsystems": subsystems,
+                "repo_ids": repo_ids,
+                "cross_repo": len(repo_ids) > 1,
                 "derived_status": derived_status,
                 "all_evidence_present": all_evidence_present,
                 "evidence_count": len(evidence_report["resolved_evidence"]),
@@ -514,7 +583,7 @@ def audit_lanes(
     if lane_order != sorted(lane_order, key=_lane_sort_key):
         errors.append("status.json lanes must be sorted by lane id")
 
-    return lane_reports, lane_ids
+    return lane_reports, lane_ids, lane_repo_ids
 
 
 def validate_lane_subsystem_bindings(
@@ -590,6 +659,7 @@ def validate_release_gates(
     payload: dict[str, Any],
     *,
     lane_ids: set[str],
+    lane_repo_ids: dict[str, list[str]],
     valid_release_gate_statuses: set[str],
     errors: list[str],
 ) -> list[dict[str, Any]]:
@@ -625,6 +695,7 @@ def validate_release_gates(
                 errors.append(f"{context} references unknown lane_id {lane_id!r}")
 
         if gate_id and summary and owner and status and verification_doc:
+            repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
             records.append(
                 {
                     "id": gate_id,
@@ -633,6 +704,8 @@ def validate_release_gates(
                     "status": status,
                     "verification_doc": verification_doc,
                     "lane_ids": lane_refs,
+                    "repo_ids": repo_ids,
+                    "cross_repo": len(repo_ids) > 1,
                 }
             )
 
@@ -719,6 +792,11 @@ def validate_readiness_assertions(
     records: list[dict[str, Any]] = []
     release_gate_statuses = {
         str(gate["id"]).strip(): str(gate["status"]).strip()
+        for gate in release_gates
+        if str(gate.get("id", "")).strip()
+    }
+    release_gate_repo_ids = {
+        str(gate["id"]).strip(): list(gate.get("repo_ids", []))
         for gate in release_gates
         if str(gate.get("id", "")).strip()
     }
@@ -814,6 +892,9 @@ def validate_readiness_assertions(
             and blocking_level
             and proof_type
         ):
+            repo_ids: set[str] = {repo for repo, _, _ in evidence_report["evidence_refs"]}
+            for gate_id in gate_refs:
+                repo_ids.update(release_gate_repo_ids.get(gate_id, []))
             records.append(
                 {
                     "id": assertion_id,
@@ -833,6 +914,8 @@ def validate_readiness_assertions(
                     "has_executable_proof": has_executable_proof,
                     "missing_evidence": evidence_report["missing_evidence"],
                     "linked_release_gates_cleared": linked_release_gates_cleared,
+                    "repo_ids": sorted(repo_ids, key=_repo_sort_key),
+                    "cross_repo": len(repo_ids) > 1,
                 }
             )
 
@@ -848,6 +931,7 @@ def validate_open_decisions(
     payload: dict[str, Any],
     *,
     lane_ids: set[str],
+    lane_repo_ids: dict[str, list[str]],
     subsystem_to_lane: dict[str, str],
     valid_open_decision_statuses: set[str],
     errors: list[str],
@@ -890,6 +974,7 @@ def validate_open_decisions(
         )
 
         if decision_id and summary and owner and opened_at and status:
+            repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
             records.append(
                 {
                     "id": decision_id,
@@ -899,6 +984,8 @@ def validate_open_decisions(
                     "opened_at": opened_at,
                     "lane_ids": lane_refs,
                     "subsystem_ids": subsystem_refs,
+                    "repo_ids": repo_ids,
+                    "cross_repo": len(repo_ids) > 1,
                 }
             )
 
@@ -913,6 +1000,7 @@ def validate_resolved_decisions(
     payload: dict[str, Any],
     *,
     lane_ids: set[str],
+    lane_repo_ids: dict[str, list[str]],
     subsystem_to_lane: dict[str, str],
     valid_resolved_decision_kinds: set[str],
     errors: list[str],
@@ -954,6 +1042,7 @@ def validate_resolved_decisions(
         )
 
         if decision_id and summary and kind and decided_at:
+            repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
             records.append(
                 {
                     "id": decision_id,
@@ -962,6 +1051,8 @@ def validate_resolved_decisions(
                     "decided_at": decided_at,
                     "lane_ids": lane_refs,
                     "subsystem_ids": subsystem_refs,
+                    "repo_ids": repo_ids,
+                    "cross_repo": len(repo_ids) > 1,
                 }
             )
 
@@ -1012,7 +1103,10 @@ def audit_status_payload(
             f"status.json source_of_truth_file must be {SOURCE_OF_TRUTH_FILE!r}, got {source_of_truth_file!r}"
         )
 
-    active_repos, ignored_repos = validate_scope(payload, errors)
+    scope_report = validate_scope(payload, errors)
+    active_repos = list(scope_report["active_repos"])
+    ignored_repos = list(scope_report["ignored_repos"])
+    control_plane_repo = scope_report["control_plane_repo"]
     active_repo_set = set(active_repos)
     ignored_repo_set = set(ignored_repos)
     if active_repo_set & ignored_repo_set:
@@ -1024,8 +1118,10 @@ def audit_status_payload(
     allowed_kinds, local_repo = validate_evidence_policy(payload, errors)
     if local_repo and local_repo not in active_repo_set:
         errors.append("status.json evidence_reference_policy.local_repo must be present in active_repos")
+    if local_repo and control_plane_repo and local_repo != control_plane_repo:
+        errors.append("status.json evidence_reference_policy.local_repo must match scope.control_plane_repo")
 
-    lane_reports, lane_ids = audit_lanes(
+    lane_reports, lane_ids, lane_repo_ids = audit_lanes(
         payload,
         active_repos=active_repo_set,
         allowed_kinds=allowed_kinds,
@@ -1045,6 +1141,7 @@ def audit_status_payload(
     release_gates = validate_release_gates(
         payload,
         lane_ids=lane_ids,
+        lane_repo_ids=lane_repo_ids,
         valid_release_gate_statuses=valid_release_gate_statuses,
         errors=errors,
     )
@@ -1063,6 +1160,7 @@ def audit_status_payload(
     open_decisions = validate_open_decisions(
         payload,
         lane_ids=lane_ids,
+        lane_repo_ids=lane_repo_ids,
         subsystem_to_lane=subsystem_to_lane,
         valid_open_decision_statuses=valid_open_decision_statuses,
         errors=errors,
@@ -1070,6 +1168,7 @@ def audit_status_payload(
     resolved_decisions = validate_resolved_decisions(
         payload,
         lane_ids=lane_ids,
+        lane_repo_ids=lane_repo_ids,
         subsystem_to_lane=subsystem_to_lane,
         valid_resolved_decision_kinds=valid_resolved_decision_kinds,
         errors=errors,
@@ -1146,6 +1245,12 @@ def audit_status_payload(
             "release_ready_assertions_cleared": release_ready_assertions_cleared,
             "release_blockers": release_blockers,
         },
+        "scope": {
+            "active_repos": active_repos,
+            "control_plane_repo": control_plane_repo,
+            "ignored_repos": ignored_repos,
+            "repo_catalog": scope_report["repo_catalog"],
+        },
         "lanes": lane_reports,
         "readiness_assertions": readiness_assertions,
         "release_gates": release_gates,
@@ -1176,6 +1281,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def render_pretty(report: dict[str, Any]) -> str:
     lines: list[str] = []
+    scope = report.get("scope", {})
+    repo_catalog = scope.get("repo_catalog", [])
+    if scope:
+        lines.append(
+            "scope: "
+            f"control_plane={scope.get('control_plane_repo') or '-'} "
+            f"active_repos={','.join(scope.get('active_repos', [])) or '-'}"
+        )
+        for repo in repo_catalog:
+            marker = " control-plane" if repo.get("id") == scope.get("control_plane_repo") else ""
+            lines.append(
+                f"  repo {repo['id']} visibility={repo['visibility']}{marker} "
+                f"purpose={repo['purpose']}"
+            )
+        ignored_repos = scope.get("ignored_repos", [])
+        if ignored_repos:
+            lines.append(f"  ignored_repos={','.join(ignored_repos)}")
+
     summary = report.get("summary", {})
     if summary:
         lines.append(
@@ -1196,6 +1319,7 @@ def render_pretty(report: dict[str, Any]) -> str:
         lines.append(
             f"{lane['id']}: gap={lane['gap']:.0f} status={lane['status']} "
             f"derived={lane['derived_status']} evidence_count={lane['evidence_count']} "
+            f"repos={','.join(lane['repo_ids']) or '-'} "
             f"subsystems={','.join(lane['subsystems']) or '-'}"
         )
         for missing in lane["missing_evidence"]:
@@ -1205,10 +1329,27 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"{assertion['id']}: derived={assertion['derived_status']} "
             f"blocking={assertion['blocking_level']} evidence_count={assertion['evidence_count']} "
             f"proof_commands={assertion['proof_command_count']} "
+            f"repos={','.join(assertion['repo_ids']) or '-'} "
             f"subsystems={','.join(assertion['subsystem_ids']) or '-'}"
         )
         for missing in assertion["missing_evidence"]:
             lines.append(f"  missing {missing}")
+    if report.get("open_decisions"):
+        lines.append("open_decisions:")
+        for decision in report["open_decisions"]:
+            lines.append(
+                f"  - {decision['id']} status={decision['status']} "
+                f"repos={','.join(decision['repo_ids']) or '-'} "
+                f"lanes={','.join(decision['lane_ids']) or '-'}"
+            )
+    if report.get("release_gates"):
+        lines.append("release_gates:")
+        for gate in report["release_gates"]:
+            lines.append(
+                f"  - {gate['id']} status={gate['status']} "
+                f"repos={','.join(gate['repo_ids']) or '-'} "
+                f"lanes={','.join(gate['lane_ids']) or '-'}"
+            )
     readiness = report.get("readiness", {})
     if readiness.get("release_blockers"):
         lines.append("release_blockers:")

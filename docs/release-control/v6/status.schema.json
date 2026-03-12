@@ -121,7 +121,9 @@
       "additionalProperties": false,
       "required": [
         "active_repos",
-        "ignored_repos"
+        "control_plane_repo",
+        "ignored_repos",
+        "repo_catalog"
       ],
       "properties": {
         "active_repos": {
@@ -133,6 +135,10 @@
             "minLength": 1
           }
         },
+        "control_plane_repo": {
+          "type": "string",
+          "minLength": 1
+        },
         "ignored_repos": {
           "type": "array",
           "uniqueItems": true,
@@ -140,6 +146,40 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "repo_catalog": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repo_catalog_entry"
+          }
+        }
+      }
+    },
+    "repo_catalog_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "purpose",
+        "visibility"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "private"
+          ]
         }
       }
     },

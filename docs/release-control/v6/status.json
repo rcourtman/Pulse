@@ -8,9 +8,32 @@
       "pulse-mobile",
       "pulse-pro"
     ],
+    "control_plane_repo": "pulse",
     "ignored_repos": [
       "pulse-5.1.x",
       "pulse-refactor-streams"
+    ],
+    "repo_catalog": [
+      {
+        "id": "pulse",
+        "purpose": "Core desktop/runtime repo and canonical Pulse v6 release-control authority.",
+        "visibility": "public"
+      },
+      {
+        "id": "pulse-enterprise",
+        "purpose": "Closed-source enterprise and paid runtime features that should not ship as open-source surfaces.",
+        "visibility": "private"
+      },
+      {
+        "id": "pulse-mobile",
+        "purpose": "Mobile client, mobile relay flows, approval UX, and device-local auth/state handling.",
+        "visibility": "private"
+      },
+      {
+        "id": "pulse-pro",
+        "purpose": "Financial, operational, checkout, license-server, and relay-server surfaces that back commercial flows.",
+        "visibility": "private"
+      }
     ]
   },
   "source_precedence": [

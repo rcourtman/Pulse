@@ -628,6 +628,66 @@ func TestStatusJSONLaneEvidenceReferencesAreStructured(t *testing.T) {
 	}
 }
 
+func TestStatusJSONScopeDeclaresControlPlaneAndRepoCatalog(t *testing.T) {
+	status := statusJSON(t)
+
+	scope, ok := status["scope"].(map[string]any)
+	if !ok {
+		t.Fatalf("status.json missing scope object")
+	}
+
+	rawActiveRepos, ok := scope["active_repos"].([]any)
+	if !ok || len(rawActiveRepos) == 0 {
+		t.Fatalf("status.json scope missing active_repos list")
+	}
+	var activeRepos []string
+	for _, raw := range rawActiveRepos {
+		repo, ok := raw.(string)
+		if !ok || strings.TrimSpace(repo) == "" {
+			t.Fatalf("status.json active_repos contains invalid entry")
+		}
+		activeRepos = append(activeRepos, repo)
+	}
+
+	controlPlaneRepo, ok := scope["control_plane_repo"].(string)
+	if !ok || controlPlaneRepo != "pulse" {
+		t.Fatalf("status.json scope.control_plane_repo = %#v, want %q", scope["control_plane_repo"], "pulse")
+	}
+
+	rawCatalog, ok := scope["repo_catalog"].([]any)
+	if !ok || len(rawCatalog) != len(activeRepos) {
+		t.Fatalf("status.json scope.repo_catalog must mirror active_repos")
+	}
+
+	var catalogIDs []string
+	for _, raw := range rawCatalog {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("status.json scope.repo_catalog contains non-object entry")
+		}
+		repoID, ok := entry["id"].(string)
+		if !ok || strings.TrimSpace(repoID) == "" {
+			t.Fatalf("status.json scope.repo_catalog entry missing id")
+		}
+		visibility, ok := entry["visibility"].(string)
+		if !ok || !slices.Contains([]string{"public", "private"}, visibility) {
+			t.Fatalf("status.json scope.repo_catalog %q has invalid visibility %#v", repoID, entry["visibility"])
+		}
+		purpose, ok := entry["purpose"].(string)
+		if !ok || strings.TrimSpace(purpose) == "" {
+			t.Fatalf("status.json scope.repo_catalog %q missing purpose", repoID)
+		}
+		catalogIDs = append(catalogIDs, repoID)
+	}
+
+	if !slices.Equal(activeRepos, catalogIDs) {
+		t.Fatalf("status.json scope.repo_catalog ids = %v, want %v", catalogIDs, activeRepos)
+	}
+	if !slices.Contains(catalogIDs, controlPlaneRepo) {
+		t.Fatalf("status.json scope.repo_catalog missing control-plane repo %q", controlPlaneRepo)
+	}
+}
+
 func TestStatusJSONReadinessAssertionsAreTypedRecords(t *testing.T) {
 	status := statusJSON(t)
 	laneIDs := statusLaneIDs(t, status)

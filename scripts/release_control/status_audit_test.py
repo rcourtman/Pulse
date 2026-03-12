@@ -87,7 +87,15 @@ def base_payload(
         },
         "scope": {
             "active_repos": ["pulse"],
+            "control_plane_repo": "pulse",
             "ignored_repos": [],
+            "repo_catalog": [
+                {
+                    "id": "pulse",
+                    "purpose": "Core repo and control plane.",
+                    "visibility": "public",
+                }
+            ],
         },
         "source_precedence": [
             "docs/release-control/v6/SOURCE_OF_TRUTH.md",
@@ -287,9 +295,72 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(base_payload(release_gate_status="pending"))
 
             pretty = render_pretty(report)
+            self.assertIn("scope: control_plane=pulse active_repos=pulse", pretty)
             self.assertIn("proof_commands=1", pretty)
+            self.assertIn("release_gates:", pretty)
             self.assertIn("release_blockers:", pretty)
             self.assertIn(RELEASE_GATES_BLOCKER, pretty)
+
+    def test_open_decisions_and_release_gates_derive_repo_scope_from_lane_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            pulse_pro = Path(tmp) / "pulse-pro"
+            pulse_pro.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse_pro, "docs/cross-repo-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload(
+                open_decisions=[
+                    {
+                        "id": "d1",
+                        "summary": "Cross-repo decision",
+                        "owner": "project-owner",
+                        "status": "open",
+                        "opened_at": "2026-03-12",
+                        "lane_ids": ["L1"],
+                        "subsystem_ids": [],
+                    }
+                ]
+            )
+            payload["scope"] = {
+                "active_repos": ["pulse", "pulse-pro"],
+                "control_plane_repo": "pulse",
+                "ignored_repos": [],
+                "repo_catalog": [
+                    {
+                        "id": "pulse",
+                        "purpose": "Core repo and control plane.",
+                        "visibility": "public",
+                    },
+                    {
+                        "id": "pulse-pro",
+                        "purpose": "Commercial operations repo.",
+                        "visibility": "private",
+                    },
+                ],
+            }
+            payload["lanes"][0]["evidence"] = [
+                {"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"},
+                {"repo": "pulse-pro", "path": "docs/cross-repo-proof.md", "kind": "file"},
+            ]
+
+            env = {
+                "PULSE_REPO_ROOT_PULSE": str(pulse),
+                "PULSE_REPO_ROOT_PULSE_PRO": str(pulse_pro),
+            }
+            with mock.patch.dict(os.environ, env, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["lanes"][0]["repo_ids"], ["pulse", "pulse-pro"])
+            self.assertEqual(report["open_decisions"][0]["repo_ids"], ["pulse", "pulse-pro"])
+            self.assertEqual(report["release_gates"][0]["repo_ids"], ["pulse", "pulse-pro"])
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ class SubsystemLookupTest(unittest.TestCase):
         impacted = {entry["subsystem"] for entry in result["impacted_subsystems"]}
         self.assertEqual(impacted, {"api-contracts", "unified-resources"})
         self.assertEqual(result["status_audit_errors"], [])
+        self.assertEqual(result["scope"]["control_plane_repo"], "pulse")
         self.assertEqual(result["status_summary"]["lane_count"], 12)
 
         file_entry = result["files"][0]
@@ -55,6 +56,14 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             {decision["id"] for decision in lane_context["open_decisions"]},
             {"cloud-msp-stripe-prices", "cloud-msp-price-id-propagation"},
+        )
+        self.assertEqual(
+            {gate["id"] for gate in lane_context["release_gates"]},
+            {
+                "hosted-signup-billing-replay",
+                "paid-feature-entitlement-gating",
+                "upgrade-state-and-entitlement-preservation",
+            },
         )
 
     def test_lookup_paths_keeps_cross_cutting_resolved_decisions_for_lane(self) -> None:

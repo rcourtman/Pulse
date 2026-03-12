@@ -49,12 +49,21 @@ This file must not contain:
 
 ## Scope
 
+`status.json.scope.control_plane_repo` is `pulse`.
+`status.json.scope.repo_catalog` is the canonical machine-readable repo map for
+the active Pulse workspace.
+
 Active repositories for v6:
 
 1. `pulse`
+   Core desktop/runtime repo and the canonical v6 release-control authority.
 2. `pulse-pro`
+   Financial, operational, checkout, license-server, and relay-server
+   surfaces.
 3. `pulse-enterprise`
+   Closed-source enterprise and paid runtime features.
 4. `pulse-mobile`
+   Mobile client, relay pairing, approvals, and device-local auth/state.
 
 Ignored for v6 control:
 
@@ -131,6 +140,9 @@ These contracts must not drift:
 For canonical subsystem work:
 
 1. Read this file and `docs/release-control/v6/status.json` first.
+   If the agent starts outside the `pulse` repo, resolve those files from
+   `pulse/docs/release-control/v6/` under the shared workspace root rather than
+   inventing a parallel control layer in the current repo.
 2. Then read `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`.
 3. Then read `docs/release-control/v6/subsystems/registry.json`.
 4. Then read the relevant subsystem contract under
