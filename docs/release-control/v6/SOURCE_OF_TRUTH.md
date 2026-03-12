@@ -158,6 +158,9 @@ Assertion design rules:
    `stable` must receive only promoted, already-validated builds, `rc` is the
    opt-in preview channel, and unattended auto-update exposure remains
    `stable`-only unless a new channel policy is explicitly adopted.
+8. Once v6 reaches stable or GA, v5 enters a 90-day maintenance-only window:
+   critical security issues, critical correctness/data-loss issues, and safe
+   migration blockers only. After that window, v5 is unsupported.
 
 ## Cross-Repo Contracts
 

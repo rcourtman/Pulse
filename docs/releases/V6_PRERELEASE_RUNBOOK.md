@@ -123,6 +123,10 @@ git push origin main
 3. Release `6.0.0` from `main` using `Pulse Release Pipeline`.
 
 4. Continue critical v5 fixes from `pulse/v5-maintenance` only.
+   - The support window lasts 90 calendar days from v6 GA.
+   - Only critical security issues, critical correctness/data-loss issues, and
+     migration blockers are eligible during that window.
+   - After that window, v5 is unsupported.
 
 ## Rollback Strategy
 

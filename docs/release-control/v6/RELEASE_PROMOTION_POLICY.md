@@ -50,6 +50,26 @@ Cloud, and self-hosted production users.
 3. Failed RCs are fixed forward and replaced with a new RC. They are never
    promoted as-is to `stable`.
 
+## v5 Maintenance Policy
+
+1. When Pulse v6 reaches `stable`, Pulse v5 immediately enters
+   maintenance-only support.
+2. The maintenance-only window lasts 90 calendar days from the v6 GA or stable
+   release date.
+3. During that window, v5 fixes are limited to:
+   - critical security issues
+   - critical correctness or data-loss issues
+   - migration blockers that prevent customers from reaching a safe v6 path
+4. v5 will not receive:
+   - new features
+   - normal bug-fix backports
+   - pricing-model exceptions
+   - entitlement-model parity work introduced for v6
+5. After the 90-day window ends, v5 may continue running for users who choose
+   to stay on it, but it is unsupported.
+6. The v6 GA announcement must publish the exact v5 end-of-support date
+   calculated from the GA publication date.
+
 ## Stable Promotion Rules
 
 1. A stable tag must be promoted from a commit that has already been exercised
@@ -63,8 +83,8 @@ Cloud, and self-hosted production users.
    - The previous stable rollback target and exact reinstall command recorded.
    - A live release-pipeline exercise already completed for the promoted RC,
      not only YAML lint or static workflow validation.
-   - A written v5 maintenance-only support policy and end-of-support window
-     ready to publish with the promotion.
+   - The locked 90-day v5 maintenance-only policy and exact end-of-support
+     notice ready to publish with the promotion.
 4. Normal stable promotions require a minimum 72-hour RC soak after the
    candidate is available to internal or staging-like users.
 5. Hotfix exception:

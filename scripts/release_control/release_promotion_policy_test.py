@@ -21,13 +21,22 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("live run of the release pipeline for the RC tag itself", content)
         self.assertIn("do not promote to `stable` until the active control-plane target", content)
         self.assertIn("A live release-pipeline exercise already completed for the promoted RC", content)
-        self.assertIn("written v5 maintenance-only support policy and end-of-support window", content)
+        self.assertIn("maintenance-only window lasts 90 calendar days", content)
+        self.assertIn("critical security issues", content)
+        self.assertIn("After the 90-day window ends, v5 may continue running", content)
 
     def test_pre_release_checklist_tracks_rc_to_ga_gate_inputs(self) -> None:
         content = read("docs/release-control/v6/PRE_RELEASE_CHECKLIST.md")
         self.assertIn("release pipeline has already been exercised on a real RC tag", content)
-        self.assertIn("v5 maintenance-only support window and end-of-support notice", content)
+        self.assertIn("90-day v5 maintenance-only policy", content)
         self.assertIn("rc-to-ga-promotion-readiness", content)
+
+    def test_release_notes_publish_v5_support_transition(self) -> None:
+        content = read("docs/releases/RELEASE_NOTES_v6.md")
+        self.assertIn("## Pulse v5 Support Transition", content)
+        self.assertIn("maintenance-only support immediately", content)
+        self.assertIn("90 calendar days from the v6 GA date", content)
+        self.assertIn("After the 90-day window ends, v5 may continue running", content)
 
     def test_release_workflow_enforces_rc_lineage_and_soak(self) -> None:
         content = read(".github/workflows/create-release.yml")

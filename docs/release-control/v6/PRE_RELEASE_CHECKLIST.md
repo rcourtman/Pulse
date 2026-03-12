@@ -22,7 +22,7 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - [ ] For stable promotion, confirm the candidate commit has already shipped on `rc`.
 - [ ] For stable promotion, confirm the RC soak window is at least 72 hours or document the hotfix exception explicitly.
 - [ ] For stable promotion, confirm paid production tenants are not being moved onto an unvalidated build.
-- [ ] For GA/stable promotion, write down the v5 maintenance-only support window and end-of-support notice that will ship with the promotion.
+- [ ] For GA/stable promotion, confirm the 90-day v5 maintenance-only policy is still the intended policy and write down the exact end-of-support date that will ship with the announcement.
 
 ## Scope
 - [x] Confirm whether there is a separate mobile app codebase.
@@ -256,4 +256,4 @@ Mark a Pulse v6 build stable-promotion ready only if all of the following are tr
 - [ ] Applicable items in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` are cleared.
 - [ ] The rollback target and exact reinstall command are recorded.
 - [ ] The release pipeline has already been exercised on the candidate RC path in a real run, not only statically validated.
-- [ ] The v5 maintenance-only support policy and end-of-support note are written and ready to publish.
+- [ ] The 90-day v5 maintenance-only policy and exact end-of-support note are written and ready to publish.

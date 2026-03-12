@@ -1129,17 +1129,6 @@
         "L3",
         "L4"
       ]
-    },
-    {
-      "id": "v5-maintenance-support-policy",
-      "summary": "Decide and publish the v5 maintenance-only support window and end-of-support notice that will apply once v6 reaches stable or GA.",
-      "owner": "project-owner",
-      "status": "open",
-      "opened_at": "2026-03-12",
-      "subsystem_ids": [],
-      "lane_ids": [
-        "L9"
-      ]
     }
   ],
   "source_of_truth_file": "docs/release-control/v6/SOURCE_OF_TRUTH.md",
@@ -1282,6 +1271,16 @@
         "L3",
         "L11",
         "L12"
+      ]
+    },
+    {
+      "id": "v5-maintenance-support-policy",
+      "summary": "Once v6 reaches stable or GA, v5 moves to a 90-day maintenance-only window for critical security issues, critical correctness/data-loss issues, and safe migration blockers only; after that window, v5 is unsupported.",
+      "kind": "release-policy",
+      "decided_at": "2026-03-12",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L9"
       ]
     }
   ]
