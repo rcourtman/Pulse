@@ -42,6 +42,11 @@ model that active and future release profiles reuse.
    When a machine-derivable target completion rule is satisfied,
    `control_plane_audit.py --check` must fail until the current target is
    marked complete and a new active target is promoted.
+8. Direction changes must be normalized.
+   When the user states a durable product truth or changes the current product
+   priority, the agent must classify that direction as a readiness assertion,
+   release gate, open decision, or active-target update instead of leaving it
+   as informal chat.
 
 ## Canonical Files
 
@@ -87,6 +92,9 @@ The target should change without rebuilding the governance system.
 Agents should update the active target when direction changes, and the audits
 should fail when a target with a machine-derivable completion rule is already
 complete but still marked active.
+Durable truths that are not target changes should be normalized into
+readiness assertions, release gates, or open decisions rather than copied into
+the target text.
 
 ## Current State
 

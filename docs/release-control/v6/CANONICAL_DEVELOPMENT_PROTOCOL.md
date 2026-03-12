@@ -139,6 +139,10 @@ Every substantial task must finish by checking these questions:
    If yes: record exactly where future work must attach to it.
 6. Did I leave compatibility code in runtime paths?
    If yes: either remove it now or explicitly classify it as a boundary-only exception.
+7. Did the user state a durable product truth or change the current priority?
+   If yes: classify it as a readiness assertion, release gate, open decision,
+   or active-target update and record it in the owning control file instead of
+   leaving it as chat.
 
 This is the minimum update set for canonical work:
 

@@ -114,6 +114,8 @@ Assertion design rules:
    one-time migration item instead of keeping it in the evergreen set.
 6. After GA, keep using the same control plane and promote a new active target
    instead of cloning a new governance stack.
+7. When a user states a durable product truth, normalize it into a readiness
+   assertion, release gate, or open decision rather than leaving it as chat.
 
 ## Non-Negotiable Release Gates
 
@@ -178,6 +180,9 @@ For canonical subsystem work:
 8. When the active target's machine-derived completion rule is satisfied,
    update `docs/release-control/control_plane.json` in the same task or stop
    and promote the next target before continuing under stale scope.
+9. When the user changes Pulse's priority or says what the product should focus
+   on next, classify that as an active-target update or another control-plane
+   change instead of leaving it as informal discussion.
 
 For readiness assertion work:
 
