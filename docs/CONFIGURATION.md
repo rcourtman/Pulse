@@ -300,6 +300,10 @@ These are stored in `system.json` and managed via the UI.
 | `autoUpdateTime` | Stored UI preference (systemd timer has its own schedule) | `03:00` |
 
 > **Note**: Update settings are stored in `system.json`. Legacy `.env` entries (`UPDATE_CHANNEL`, `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CHECK_INTERVAL`, `AUTO_UPDATE_TIME`) are kept in sync for backwards compatibility but are not read at runtime.
+>
+> `stable` is the default and recommended production channel. `rc` is an
+> opt-in preview channel. In v6, unattended systemd auto-updates remain
+> `stable`-only even when `updateChannel` is set to `rc`.
 
 ### Auto-Import (Bootstrap)
 

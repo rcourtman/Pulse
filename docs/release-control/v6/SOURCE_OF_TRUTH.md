@@ -58,6 +58,9 @@ This file must not contain:
 9. `docs/release-control/v6/subsystems/*.md`
    Per-subsystem contracts: truth, extension points, forbidden paths, and
    completion obligations.
+10. `docs/release-control/v6/RELEASE_PROMOTION_POLICY.md`
+    Canonical stable-versus-RC promotion rules, rollout criteria, and rollback
+    expectations for v6 and later release lines.
 
 ## Scope
 
@@ -144,6 +147,11 @@ Assertion design rules:
    and downgrade safety.
 5. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not
    architectural blockers.
+6. v6 and later releases use a promotion model, not a direct broad-rollout
+   model.
+   `stable` must receive only promoted, already-validated builds, `rc` is the
+   opt-in preview channel, and unattended auto-update exposure remains
+   `stable`-only unless a new channel policy is explicitly adopted.
 
 ## Cross-Repo Contracts
 

@@ -8,12 +8,19 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - If the mobile app is part of the release, run the mobile checks from `/Volumes/Development/pulse/repos/pulse-mobile`.
 - Record pass/fail notes inline in this file or in the release ticket as each section is completed.
 - Use `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` for the trust-critical hosted, relay, mobile, entitlement, org-scope, and API-token checks that must be manually confirmed before release.
+- Follow `RELEASE_PROMOTION_POLICY.md` for channel routing, RC soak, stable promotion, and rollback expectations.
 
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
 - Manual scenarios and staging-like end-to-end flows are still the main remaining release gate.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
 - High-risk release confidence now lives in `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
+
+## Promotion Policy
+- [ ] Record the previous stable tag and exact rollback pin command before publishing a new RC or stable release.
+- [ ] For stable promotion, confirm the candidate commit has already shipped on `rc`.
+- [ ] For stable promotion, confirm the RC soak window is at least 72 hours or document the hotfix exception explicitly.
+- [ ] For stable promotion, confirm paid production tenants are not being moved onto an unvalidated build.
 
 ## Scope
 - [x] Confirm whether there is a separate mobile app codebase.
@@ -238,3 +245,10 @@ Mark Pulse v6 pre-release ready only if all of the following are true:
 - [x] There is no separate unaudited mobile app.
 - [ ] There is no tracked dirty state.
 - [ ] No new high-severity regressions appear.
+
+## Stable Promotion Decision
+Mark a Pulse v6 build stable-promotion ready only if all of the following are true:
+- [ ] The candidate commit has already been exercised on `rc`.
+- [ ] The `Promotion Policy` section above is complete.
+- [ ] Applicable items in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` are cleared.
+- [ ] The rollback target and exact reinstall command are recorded.

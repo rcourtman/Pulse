@@ -1,6 +1,12 @@
 # Pulse v6 Prerelease Runbook
 
-This runbook is the operational path for shipping v6 safely while `main` continues to serve v5 releases.
+This runbook captures the branch-specific operational path that was used while
+`main` continued to serve v5 releases during the v6 prerelease period.
+
+Canonical customer-channel and promotion rules now live in
+`docs/release-control/v6/RELEASE_PROMOTION_POLICY.md`.
+If this historical runbook and the release-control policy disagree, the
+release-control policy wins.
 
 ## Branch Model (Current)
 

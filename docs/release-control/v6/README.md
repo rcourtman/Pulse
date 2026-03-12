@@ -14,10 +14,11 @@ The evergreen control-plane files live one level up:
 1. `../CONTROL_PLANE.md` (evergreen governance, active-profile selection, and active-target rules)
 2. `../control_plane.json` (machine-readable active profile and active target)
 3. `SOURCE_OF_TRUTH.md` (stable human governance, readiness-assertion design rules, and locked decisions)
-4. `status.json` (live lane state, readiness derivation rules, the active readiness assertion catalog, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
-5. `status.schema.json` (machine-readable contract for the `status.json` shape)
-6. `subsystems/registry.json` (machine-readable subsystem ownership, explicit shared-ownership exceptions, and proof routing)
-7. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
+4. `RELEASE_PROMOTION_POLICY.md` (canonical stable-versus-RC promotion rules, rollout criteria, and rollback expectations)
+5. `status.json` (live lane state, readiness derivation rules, the active readiness assertion catalog, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
+6. `status.schema.json` (machine-readable contract for the `status.json` shape)
+7. `subsystems/registry.json` (machine-readable subsystem ownership, explicit shared-ownership exceptions, and proof routing)
+8. `subsystems/registry.schema.json` (machine-readable contract for the subsystem registry shape, shared-ownership declarations, and unordered-list uniqueness)
 
 `status.json` reporting every lane as `target-met` means the tracked v6
 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is release-approved while `open_decisions` or `release_gates` remain unresolved.
@@ -34,6 +35,7 @@ Supporting governance file:
 - `CONSOLIDATION_MAP.md` (legacy-doc demotion and archival map)
 - `RETIREMENT_AUDIT_2026-02-27.md` (file-by-file audited retirement decisions)
 - `CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
+- `RELEASE_PROMOTION_POLICY.md` (customer-facing release-train contract for `stable` versus `rc`)
 - `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` (manual verification runbook for trust-critical release gates)
 - `subsystems/*.md` (per-subsystem contracts: truth, shared boundaries, extension points, forbidden paths, completion obligations)
 
