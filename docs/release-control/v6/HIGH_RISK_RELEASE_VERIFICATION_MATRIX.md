@@ -126,12 +126,16 @@ result.
   5. Confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the governing v5
      support policy and record the exact v6 GA date plus the exact v5
      end-of-support date that will ship with the stable or GA announcement.
-  6. Confirm the migration gate and other applicable high-risk gates are
+  6. Confirm the `Release Dry Run` workflow produced an
+     `rc-to-ga-rehearsal-summary` artifact and record the run URL in the
+     release ticket or rehearsal record.
+  7. Confirm the migration gate and other applicable high-risk gates are
      cleared for this same candidate before broad rollout.
 - Pass when:
   Stable or GA promotion is a governed handoff from an exercised RC with live
   release-pipeline proof, explicit rollback instructions, and the published v5
-  maintenance policy plus exact end-of-support date.
+  maintenance policy plus exact end-of-support date, with a linked rehearsal
+  run URL and dry-run artifact.
 - Block release if:
   Stable users would become the first real validation cohort, the rollback
   target is unclear, or the v5 maintenance-only policy is still undecided.

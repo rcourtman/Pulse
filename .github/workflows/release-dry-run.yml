@@ -3,6 +3,31 @@ name: Release Dry Run
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Optional version under rehearsal (e.g. 6.0.0-rc.2 or 6.0.0)'
+        required: false
+        type: string
+      promoted_from_tag:
+        description: 'Stable rehearsal only: RC tag being promoted (for example v6.0.0-rc.2)'
+        required: false
+        type: string
+      rollback_version:
+        description: 'Optional rollback stable version to rehearse (for example 5.1.14 or v5.1.14)'
+        required: false
+        type: string
+      v5_eos_date:
+        description: 'Stable v6.0.0 rehearsal only: Pulse v5 end-of-support date (YYYY-MM-DD)'
+        required: false
+        type: string
+      hotfix_exception:
+        description: 'Stable rehearsal only: bypass 72-hour RC soak for urgent customer harm'
+        required: false
+        type: boolean
+        default: false
+      hotfix_reason:
+        description: 'Stable rehearsal only: reason for hotfix soak exception'
+        required: false
+        type: string
       note:
         description: 'Optional note/reason for the dry run'
         required: false
@@ -16,6 +41,16 @@ jobs:
     permissions:
       contents: read
       packages: read
+    outputs:
+      version: ${{ steps.rehearsal.outputs.version }}
+      tag: ${{ steps.rehearsal.outputs.tag }}
+      is_prerelease: ${{ steps.rehearsal.outputs.is_prerelease }}
+      promoted_from_tag: ${{ steps.rehearsal.outputs.promoted_from_tag }}
+      rollback_tag: ${{ steps.rehearsal.outputs.rollback_tag }}
+      v5_eos_date: ${{ steps.rehearsal.outputs.v5_eos_date }}
+      soak_hours: ${{ steps.rehearsal.outputs.soak_hours }}
+      hotfix_exception: ${{ steps.rehearsal.outputs.hotfix_exception }}
+      hotfix_reason: ${{ steps.rehearsal.outputs.hotfix_reason }}
 
     steps:
       - name: Validate release branch
@@ -32,6 +67,145 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve rehearsal metadata
+        id: rehearsal
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+          PROMOTED_FROM_TAG_INPUT: ${{ inputs.promoted_from_tag }}
+          ROLLBACK_VERSION_INPUT: ${{ inputs.rollback_version }}
+          V5_EOS_DATE_INPUT: ${{ inputs.v5_eos_date }}
+          HOTFIX_EXCEPTION_INPUT: ${{ inputs.hotfix_exception }}
+          HOTFIX_REASON_INPUT: ${{ inputs.hotfix_reason }}
+        run: |
+          set -euo pipefail
+
+          normalize_tag() {
+            local value="${1:-}"
+            if [ -z "$value" ]; then
+              return 0
+            fi
+            if [[ "$value" == v* ]]; then
+              printf '%s\n' "$value"
+            else
+              printf 'v%s\n' "$value"
+            fi
+          }
+
+          VERSION="${VERSION_INPUT:-}"
+          if [ -z "$VERSION" ]; then
+            VERSION="$(tr -d '\r\n' < VERSION)"
+          fi
+
+          TAG="v${VERSION}"
+          IS_PRERELEASE="false"
+          if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
+            IS_PRERELEASE="true"
+          fi
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            REQUIRED_BRANCH="pulse/v6"
+          else
+            REQUIRED_BRANCH="main"
+          fi
+
+          if [ "${GITHUB_REF_NAME}" != "$REQUIRED_BRANCH" ]; then
+            echo "::error::Rehearsal version ${VERSION} requires branch ${REQUIRED_BRANCH}, but workflow ran on ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
+          FILE_VERSION="$(tr -d '\r\n' < VERSION)"
+          if [ "$FILE_VERSION" != "$VERSION" ]; then
+            echo "::error::VERSION file (${FILE_VERSION}) does not match rehearsal version (${VERSION})."
+            exit 1
+          fi
+
+          git fetch --prune origin main pulse/v6 --tags
+
+          ROLLBACK_TAG="$(normalize_tag "$ROLLBACK_VERSION_INPUT")"
+          if [ -n "$ROLLBACK_TAG" ]; then
+            if [[ "$ROLLBACK_TAG" =~ -rc\.[0-9]+$ ]] || [[ "$ROLLBACK_TAG" =~ -alpha\.[0-9]+$ ]] || [[ "$ROLLBACK_TAG" =~ -beta\.[0-9]+$ ]]; then
+              echo "::error::rollback_version must point to a stable release tag, not a prerelease (${ROLLBACK_TAG})."
+              exit 1
+            fi
+            if ! git rev-parse -q --verify "refs/tags/${ROLLBACK_TAG}" >/dev/null; then
+              echo "::error::rollback_version ${ROLLBACK_TAG} does not exist as a repository tag."
+              exit 1
+            fi
+          fi
+
+          HOTFIX_EXCEPTION="${HOTFIX_EXCEPTION_INPUT:-false}"
+          HOTFIX_REASON="$(printf '%s' "${HOTFIX_REASON_INPUT:-}" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')"
+          PROMOTED_FROM_TAG=""
+          SOAK_HOURS=""
+          V5_EOS_DATE="$(printf '%s' "${V5_EOS_DATE_INPUT:-}" | tr -d '[:space:]')"
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            if [ "$HOTFIX_EXCEPTION" = "true" ]; then
+              echo "::error::hotfix_exception applies only to stable rehearsals."
+              exit 1
+            fi
+          else
+            PROMOTED_FROM_TAG="$(normalize_tag "$PROMOTED_FROM_TAG_INPUT")"
+            if [ -z "$PROMOTED_FROM_TAG" ]; then
+              echo "::error::Stable rehearsal requires promoted_from_tag naming the RC being promoted."
+              exit 1
+            fi
+            if [[ ! "$PROMOTED_FROM_TAG" =~ ^v${VERSION}-rc\.[0-9]+$ ]]; then
+              echo "::error::promoted_from_tag must reference an RC tag for the same stable version (${VERSION}), got ${PROMOTED_FROM_TAG}."
+              exit 1
+            fi
+            if ! git rev-parse -q --verify "refs/tags/${PROMOTED_FROM_TAG}" >/dev/null; then
+              echo "::error::promoted_from_tag ${PROMOTED_FROM_TAG} does not exist as a repository tag."
+              exit 1
+            fi
+
+            PROMOTED_COMMIT="$(git rev-list -n1 "refs/tags/${PROMOTED_FROM_TAG}")"
+            if ! git merge-base --is-ancestor "$PROMOTED_COMMIT" HEAD; then
+              echo "::error::Stable rehearsal ${TAG} must descend from promoted RC tag ${PROMOTED_FROM_TAG}."
+              exit 1
+            fi
+
+            PROMOTED_TAG_TS="$(git for-each-ref --format='%(creatordate:unix)' "refs/tags/${PROMOTED_FROM_TAG}" | head -1)"
+            if [ -z "$PROMOTED_TAG_TS" ]; then
+              echo "::error::Could not determine creation time for promoted RC tag ${PROMOTED_FROM_TAG}."
+              exit 1
+            fi
+
+            NOW_TS="$(date +%s)"
+            SOAK_HOURS="$(( (NOW_TS - PROMOTED_TAG_TS) / 3600 ))"
+
+            if [ "$HOTFIX_EXCEPTION" = "true" ]; then
+              if [ -z "$HOTFIX_REASON" ]; then
+                echo "::error::hotfix_reason is required when hotfix_exception is true."
+                exit 1
+              fi
+            elif [ "$SOAK_HOURS" -lt 72 ]; then
+              echo "::error::Stable rehearsal ${TAG} has only ${SOAK_HOURS} hours of RC soak since ${PROMOTED_FROM_TAG}; minimum is 72 hours unless hotfix_exception is true."
+              exit 1
+            fi
+
+            if [ "$VERSION" = "6.0.0" ] && ! [[ "$V5_EOS_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "::error::Stable v6.0.0 rehearsal requires v5_eos_date in YYYY-MM-DD form."
+              exit 1
+            fi
+          fi
+
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "is_prerelease=${IS_PRERELEASE}"
+            echo "promoted_from_tag=${PROMOTED_FROM_TAG}"
+            echo "rollback_tag=${ROLLBACK_TAG}"
+            echo "v5_eos_date=${V5_EOS_DATE}"
+            echo "soak_hours=${SOAK_HOURS}"
+            echo "hotfix_exception=${HOTFIX_EXCEPTION}"
+            echo "hotfix_reason=${HOTFIX_REASON}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "[OK] Rehearsal metadata validated for ${TAG}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -131,3 +305,54 @@ jobs:
         if: always()
         working-directory: tests/integration
         run: docker compose -f docker-compose.test.yml down -v || true
+
+      - name: Write rehearsal summary
+        if: always()
+        env:
+          NOTE: ${{ inputs.note }}
+        run: |
+          mkdir -p release-dry-run
+          SUMMARY_FILE="release-dry-run/rc-to-ga-rehearsal-summary.md"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "# RC-to-GA Rehearsal Summary"
+            echo ""
+            echo "- Workflow run: ${RUN_URL}"
+            echo "- Branch: ${GITHUB_REF_NAME}"
+            echo "- Version: ${{ steps.rehearsal.outputs.version }}"
+            echo "- Tag: ${{ steps.rehearsal.outputs.tag }}"
+            echo "- Channel under rehearsal: ${{ steps.rehearsal.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}"
+            if [ -n "${{ steps.rehearsal.outputs.promoted_from_tag }}" ]; then
+              echo "- Promoted from RC: ${{ steps.rehearsal.outputs.promoted_from_tag }}"
+            fi
+            if [ -n "${{ steps.rehearsal.outputs.rollback_tag }}" ]; then
+              echo "- Rollback target: ${{ steps.rehearsal.outputs.rollback_tag }}"
+            fi
+            if [ -n "${{ steps.rehearsal.outputs.soak_hours }}" ]; then
+              echo "- RC soak hours at rehearsal time: ${{ steps.rehearsal.outputs.soak_hours }}"
+            fi
+            if [ -n "${{ steps.rehearsal.outputs.v5_eos_date }}" ]; then
+              echo "- Planned v5 EOS date: ${{ steps.rehearsal.outputs.v5_eos_date }}"
+            fi
+            echo "- Hotfix exception: ${{ steps.rehearsal.outputs.hotfix_exception }}"
+            if [ -n "${{ steps.rehearsal.outputs.hotfix_reason }}" ]; then
+              echo "- Hotfix reason: ${{ steps.rehearsal.outputs.hotfix_reason }}"
+            fi
+            if [ -n "${NOTE}" ]; then
+              echo "- Operator note: ${NOTE}"
+            fi
+            echo ""
+            echo "## Result"
+            echo ""
+            echo "This run exercised the non-publish release path and validated the current promotion contract on the selected branch."
+            echo "Record this run URL in the release ticket when clearing \`rc-to-ga-promotion-readiness\`."
+          } > "$SUMMARY_FILE"
+
+          cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload rehearsal summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc-to-ga-rehearsal-summary
+          path: release-dry-run/rc-to-ga-rehearsal-summary.md

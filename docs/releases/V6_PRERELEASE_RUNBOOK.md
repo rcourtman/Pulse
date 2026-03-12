@@ -68,7 +68,9 @@ git push origin pulse/v6
 2. Optional preflight dry run:
    - Run workflow: `Release Dry Run`
    - Ref: `pulse/v6`
-   - Input: optional note
+   - Inputs:
+     - `version`: `6.0.0-rc.1`
+     - optional `note`
 
 3. Create draft prerelease:
    - Run workflow: `Pulse Release Pipeline`
@@ -121,6 +123,14 @@ git push origin main
 ```
 
 3. Release `6.0.0` from `main` using `Pulse Release Pipeline`.
+   Before the real GA publish, run `Release Dry Run` from `main` with:
+   - `version`: `6.0.0`
+   - `promoted_from_tag`: exact RC tag being promoted
+   - `rollback_version`: prior stable
+   - `v5_eos_date`: exact published v5 end-of-support date
+   - optional `hotfix_exception` and `hotfix_reason`
+   Attach the `rc-to-ga-rehearsal-summary` artifact and run URL to the release
+   ticket.
 
 4. Publish the exact v6 GA date and v5 end-of-support date in the GA release
    notice using

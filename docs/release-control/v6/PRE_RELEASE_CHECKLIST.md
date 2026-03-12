@@ -23,6 +23,7 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - [ ] For stable promotion, confirm the RC soak window is at least 72 hours or document the hotfix exception explicitly.
 - [ ] For stable promotion, confirm paid production tenants are not being moved onto an unvalidated build.
 - [ ] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and write down the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
+- [ ] For GA/stable promotion, attach a `Release Dry Run` run URL and `rc-to-ga-rehearsal-summary` artifact to the release ticket.
 
 ## Scope
 - [x] Confirm whether there is a separate mobile app codebase.
@@ -257,3 +258,4 @@ Mark a Pulse v6 build stable-promotion ready only if all of the following are tr
 - [ ] The rollback target and exact reinstall command are recorded.
 - [ ] The release pipeline has already been exercised on the candidate RC path in a real run, not only statically validated.
 - [ ] The v5 maintenance-only support policy, exact GA/EOS dates, and release-note notice are written and ready to publish.
+- [ ] The RC-to-GA rehearsal record and dry-run artifact are linked from the release ticket.

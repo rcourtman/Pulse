@@ -151,6 +151,7 @@ fi
 
 ROLLBACK_VERSION=""
 PROMOTED_FROM_TAG=""
+V5_EOS_DATE=""
 HOTFIX_EXCEPTION="false"
 HOTFIX_REASON=""
 
@@ -185,6 +186,15 @@ if [ "$IS_PRERELEASE" != "true" ]; then
         exit 1
       fi
     fi
+
+    if [ "$VERSION" = "6.0.0" ]; then
+      echo ""
+      read -r -p "v5 end-of-support date to publish with GA (YYYY-MM-DD): " V5_EOS_DATE
+      if [[ ! "$V5_EOS_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        echo "❌ Error: v5 end-of-support date must be in YYYY-MM-DD form"
+        exit 1
+      fi
+    fi
 fi
 
 # Trigger the workflow
@@ -196,6 +206,7 @@ if [ -n "$NOTES_FILE" ]; then
     -f release_notes="$(cat "$NOTES_FILE")" \
     -f rollback_version="${ROLLBACK_VERSION}" \
     -f promoted_from_tag="${PROMOTED_FROM_TAG}" \
+    -f v5_eos_date="${V5_EOS_DATE}" \
     -f hotfix_exception="${HOTFIX_EXCEPTION}" \
     -f hotfix_reason="${HOTFIX_REASON}"
 else

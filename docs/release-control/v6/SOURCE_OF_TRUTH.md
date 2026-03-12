@@ -64,6 +64,8 @@ This file must not contain:
 11. `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md`
     Canonical v5 maintenance-only support window, release-line rules, and GA
     notice requirements for the v6 cutover.
+12. `docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md`
+    Canonical human record shape for the non-publish RC-to-GA rehearsal run.
 
 ## Scope
 

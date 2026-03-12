@@ -199,6 +199,7 @@ docs/release-control/v6/*
 !docs/release-control/v6/PRE_RELEASE_CHECKLIST.md
 !docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md
 !docs/release-control/v6/README.md
+!docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md
 !docs/release-control/v6/RELEASE_PROMOTION_POLICY.md
 !docs/release-control/v6/SOURCE_OF_TRUTH.md
 !docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md
