@@ -125,6 +125,18 @@ def normalize_base_url(url: str) -> str:
     return url.rstrip("/")
 
 
+def summarize_http_error_body(body: bytes) -> str:
+    message = body.decode("utf-8", errors="replace").strip()
+    if not message:
+        return "<empty response>"
+    first_line = message.splitlines()[0].strip()
+    if first_line.startswith("<!DOCTYPE html") or first_line.startswith("<html"):
+        return "<html error page omitted>"
+    if len(first_line) > 240:
+        return first_line[:237] + "..."
+    return first_line
+
+
 def build_auth_headers(args: argparse.Namespace) -> dict[str, str]:
     headers: dict[str, str] = {}
     if args.api_token:
@@ -147,7 +159,7 @@ def fetch_bytes(
             return body, headers
     except error.HTTPError as exc:
         body = exc.read()
-        message = body.decode("utf-8", errors="replace").strip()
+        message = summarize_http_error_body(body)
         raise RuntimeError(f"{url} returned HTTP {exc.code}: {message}") from exc
     except error.URLError as exc:
         raise RuntimeError(f"failed to fetch {url}: {exc.reason}") from exc

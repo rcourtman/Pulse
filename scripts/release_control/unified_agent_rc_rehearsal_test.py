@@ -17,6 +17,7 @@ from unified_agent_rc_rehearsal import (
     render_markdown_report,
     release_asset_url,
     run_rehearsal,
+    summarize_http_error_body,
 )
 
 
@@ -181,6 +182,10 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
             ]
         )
         self.assertEqual(exit_code, 1)
+
+    def test_summarize_http_error_body_omits_html_page(self) -> None:
+        body = b"<!DOCTYPE html>\n<html><body>missing</body></html>"
+        self.assertEqual(summarize_http_error_body(body), "<html error page omitted>")
 
     def test_check_update_info(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
