@@ -139,6 +139,42 @@ func TestRequirePermission(t *testing.T) {
 		}
 	})
 
+	t.Run("APITokenOwnerPrincipal", func(t *testing.T) {
+		cfg := &config.Config{}
+		cfg.AuthUser = "admin"
+		cfg.AuthPass = "password"
+
+		rawToken := "owner-token"
+		record, _ := config.NewAPITokenRecord(rawToken, "Owner Token", nil)
+		record.Metadata = map[string]string{
+			apiTokenMetadataOwnerUserID: "alice",
+		}
+		cfg.APITokens = append(cfg.APITokens, *record)
+
+		var capturedSubject string
+		customAuth := func(ctx context.Context, action string, resource string) (bool, error) {
+			capturedSubject = auth.GetUser(ctx)
+			return true, nil
+		}
+
+		handler := RequirePermission(cfg, &mockAuthorizerFn{fn: customAuth}, "read", "logs", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.Header.Set("X-API-Token", rawToken)
+
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status OK, got %d", rr.Code)
+		}
+		if capturedSubject != "alice" {
+			t.Errorf("Expected principal %q, got %q", "alice", capturedSubject)
+		}
+	})
+
 	t.Run("APITokenMissingIDAutoAssigned", func(t *testing.T) {
 		cfg := &config.Config{}
 		// Setup a token without an ID

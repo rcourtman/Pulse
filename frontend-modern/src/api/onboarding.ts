@@ -29,7 +29,12 @@ export interface OnboardingQRResponse {
 export class OnboardingAPI {
   private static baseUrl = '/api/onboarding';
 
-  static async getQRPayload(): Promise<OnboardingQRResponse> {
-    return apiFetchJSON(this.baseUrl + '/qr') as Promise<OnboardingQRResponse>;
+  static async getQRPayload(authToken?: string): Promise<OnboardingQRResponse> {
+    if (!authToken) {
+      return apiFetchJSON(this.baseUrl + '/qr') as Promise<OnboardingQRResponse>;
+    }
+    return apiFetchJSON(this.baseUrl + '/qr', {
+      headers: { 'X-API-Token': authToken },
+    }) as Promise<OnboardingQRResponse>;
   }
 }

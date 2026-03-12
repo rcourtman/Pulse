@@ -50,6 +50,33 @@ func TestOrganizationRoleNormalization(t *testing.T) {
 	}
 }
 
+func TestOrganizationRoleAtLeast(t *testing.T) {
+	testCases := []struct {
+		name     string
+		actual   OrganizationRole
+		required OrganizationRole
+		want     bool
+	}{
+		{name: "viewer satisfies viewer", actual: OrgRoleViewer, required: OrgRoleViewer, want: true},
+		{name: "viewer does not satisfy editor", actual: OrgRoleViewer, required: OrgRoleEditor, want: false},
+		{name: "editor satisfies viewer", actual: OrgRoleEditor, required: OrgRoleViewer, want: true},
+		{name: "editor satisfies editor", actual: OrgRoleEditor, required: OrgRoleEditor, want: true},
+		{name: "editor does not satisfy admin", actual: OrgRoleEditor, required: OrgRoleAdmin, want: false},
+		{name: "admin satisfies editor", actual: OrgRoleAdmin, required: OrgRoleEditor, want: true},
+		{name: "owner satisfies admin", actual: OrgRoleOwner, required: OrgRoleAdmin, want: true},
+		{name: "invalid actual is denied", actual: "member", required: OrgRoleViewer, want: false},
+		{name: "invalid required is denied", actual: OrgRoleOwner, required: "member", want: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := OrganizationRoleAtLeast(tc.actual, tc.required); got != tc.want {
+				t.Fatalf("OrganizationRoleAtLeast(%q, %q) = %v, want %v", tc.actual, tc.required, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeOrgStatus(t *testing.T) {
 	testCases := []struct {
 		name   string

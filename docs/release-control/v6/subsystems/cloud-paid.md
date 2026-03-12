@@ -155,6 +155,11 @@ when the settings surface generates a mobile pairing QR, it must mint a fresh
 scoped API token for that pairing attempt, fetch the onboarding payload through
 that token context, and tear down superseded or failed pairing tokens instead
 of accumulating long-lived hidden credentials.
+That same pairing fetch path must stay token-bound instead of ambient-session
+bound: the onboarding QR request must carry the freshly minted relay pairing
+token explicitly so the returned payload reflects the exact credential that the
+mobile device will bootstrap with, not whichever browser session happened to
+open the settings page.
 The same flow must fail closed if the pairing payload omits the authenticated
 relay token state needed by the mobile deep link; pairing UI cannot silently
 render a QR that bypasses governed auth ownership.
@@ -163,6 +168,11 @@ settings surface must label those transient credentials distinctly from
 long-lived automation tokens so operators can identify and revoke stale mobile
 pairing attempts without guessing which credential was created for device
 bootstrap.
+Relay pairing refresh behavior is part of that lifecycle contract too: a
+successful QR refresh must revoke the superseded pairing token once the new
+token-backed payload is ready, while a failed refresh must revoke only the new
+failed token and keep the previously valid QR visible instead of collapsing the
+operator back to an empty pairing state.
 Hosted signup provisioning now follows the same rule. Changes to
 `internal/api/public_signup_handlers.go` and `internal/hosted/provisioner.go`
 must carry this contract and the dedicated hosted-signup provisioning proof

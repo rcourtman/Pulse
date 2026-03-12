@@ -625,6 +625,7 @@ func (h *OrgHandlers) HandleListIncomingShares(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "User is not a member of the organization", nil)
 		return
 	}
+	targetRole := organizationRoleForUser(targetOrg, username)
 
 	orgs, err := h.persistence.ListOrganizations()
 	if err != nil {
@@ -639,6 +640,9 @@ func (h *OrgHandlers) HandleListIncomingShares(w http.ResponseWriter, r *http.Re
 		}
 		for _, share := range normalizeOrganizationShares(sourceOrg.SharedResources) {
 			if share.TargetOrgID != targetOrgID {
+				continue
+			}
+			if !models.OrganizationRoleAtLeast(targetRole, share.AccessRole) {
 				continue
 			}
 			incoming = append(incoming, incomingOrganizationShare{
@@ -874,6 +878,16 @@ func (h *OrgHandlers) canAccessOrg(username string, token *config.APITokenRecord
 		return true
 	}
 	return org.CanUserAccess(username)
+}
+
+func organizationRoleForUser(org *models.Organization, username string) models.OrganizationRole {
+	if org == nil || strings.TrimSpace(username) == "" {
+		return ""
+	}
+	if org.IsOwner(username) {
+		return models.OrgRoleOwner
+	}
+	return org.GetMemberRole(username)
 }
 
 func (h *OrgHandlers) writeLoadOrgError(w http.ResponseWriter, err error) {

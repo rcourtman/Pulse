@@ -179,6 +179,34 @@ func TestHandleUserRoleActions(t *testing.T) {
 			t.Errorf("Unexpected permissions: %+v", perms)
 		}
 	})
+
+	t.Run("Block self role mutation", func(t *testing.T) {
+		beforeAssignments := len(mock.assignments)
+		reqData := struct {
+			RoleIDs []string `json:"roleIds"`
+		}{RoleIDs: []string{"viewer"}}
+		body, _ := json.Marshal(reqData)
+		req := httptest.NewRequest("PUT", "/api/admin/users/admin/roles", bytes.NewReader(body))
+		req = req.WithContext(auth.WithUser(req.Context(), "AdMiN"))
+		rr := httptest.NewRecorder()
+
+		h.HandleUserRoleActions(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("Expected status Forbidden, got %d", rr.Code)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode error response: %v", err)
+		}
+		if payload["code"] != "self_modification_denied" {
+			t.Fatalf("expected self_modification_denied error, got %+v", payload)
+		}
+		if len(mock.assignments) != beforeAssignments {
+			t.Fatalf("self mutation should not write assignments, got %+v", mock.assignments)
+		}
+	})
 }
 
 func TestRBACHandlers_TenantScoped(t *testing.T) {
@@ -249,5 +277,118 @@ func TestRBACHandlers_TenantScoped(t *testing.T) {
 		if r.ID == roleID {
 			t.Fatalf("role %q from %s leaked into %s", roleID, orgA, orgB)
 		}
+	}
+}
+
+func TestMultiTenantRBACRoleUpdateChangesPermissions(t *testing.T) {
+	baseDir := t.TempDir()
+	orgA := "org-a"
+	orgB := "org-b"
+
+	for _, orgID := range []string{orgA, orgB} {
+		orgDir := filepath.Join(baseDir, "orgs", orgID)
+		if err := os.MkdirAll(orgDir, 0o700); err != nil {
+			t.Fatalf("failed to create org dir %s: %v", orgDir, err)
+		}
+	}
+
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() {
+		if err := provider.Close(); err != nil {
+			t.Errorf("provider close failed: %v", err)
+		}
+	})
+
+	handler := NewRBACHandlers(&config.Config{}, provider)
+
+	createRole := func(orgID string, role auth.Role) {
+		t.Helper()
+
+		body, err := json.Marshal(role)
+		if err != nil {
+			t.Fatalf("marshal role %s: %v", role.ID, err)
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/api/admin/roles", bytes.NewReader(body))
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		rr := httptest.NewRecorder()
+		handler.HandleRoles(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("create role %s in %s failed: %d %s", role.ID, orgID, rr.Code, rr.Body.String())
+		}
+	}
+
+	readerRole := auth.Role{
+		ID:          "tenant-reader",
+		Name:        "Tenant Reader",
+		Description: "Read-only access in org A",
+		Permissions: []auth.Permission{
+			{Action: "read", Resource: "nodes"},
+		},
+	}
+	writerRole := auth.Role{
+		ID:          "tenant-writer",
+		Name:        "Tenant Writer",
+		Description: "Write access in org A",
+		Permissions: []auth.Permission{
+			{Action: "write", Resource: "nodes"},
+		},
+	}
+
+	createRole(orgA, readerRole)
+	createRole(orgA, writerRole)
+
+	updateRoles := func(orgID string, username string, roleIDs []string) {
+		t.Helper()
+
+		payload, err := json.Marshal(struct {
+			RoleIDs []string `json:"roleIds"`
+		}{RoleIDs: roleIDs})
+		if err != nil {
+			t.Fatalf("marshal role update: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodPut, "/api/admin/users/"+username+"/roles", bytes.NewReader(payload))
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		rr := httptest.NewRecorder()
+		handler.HandleUserRoleActions(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("update roles for %s in %s failed: %d %s", username, orgID, rr.Code, rr.Body.String())
+		}
+	}
+
+	getPermissions := func(orgID string, username string) []auth.Permission {
+		t.Helper()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/users/"+username+"/permissions", nil)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		rr := httptest.NewRecorder()
+		handler.HandleUserRoleActions(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("get permissions for %s in %s failed: %d %s", username, orgID, rr.Code, rr.Body.String())
+		}
+
+		var perms []auth.Permission
+		if err := json.Unmarshal(rr.Body.Bytes(), &perms); err != nil {
+			t.Fatalf("decode permissions for %s in %s: %v", username, orgID, err)
+		}
+		return perms
+	}
+
+	updateRoles(orgA, "alice", []string{readerRole.ID})
+	permsAfterReader := getPermissions(orgA, "alice")
+	if len(permsAfterReader) != 1 || permsAfterReader[0].Action != "read" || permsAfterReader[0].Resource != "nodes" {
+		t.Fatalf("unexpected reader permissions in %s: %+v", orgA, permsAfterReader)
+	}
+
+	updateRoles(orgA, "alice", []string{writerRole.ID})
+	permsAfterWriter := getPermissions(orgA, "alice")
+	if len(permsAfterWriter) != 1 || permsAfterWriter[0].Action != "write" || permsAfterWriter[0].Resource != "nodes" {
+		t.Fatalf("unexpected writer permissions in %s: %+v", orgA, permsAfterWriter)
+	}
+
+	permsInOrgB := getPermissions(orgB, "alice")
+	if len(permsInOrgB) != 0 {
+		t.Fatalf("permissions leaked into %s: %+v", orgB, permsInOrgB)
 	}
 }

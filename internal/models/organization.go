@@ -69,6 +69,31 @@ func IsValidOrganizationRole(role OrganizationRole) bool {
 	}
 }
 
+func organizationRoleRank(role OrganizationRole) int {
+	switch NormalizeOrganizationRole(role) {
+	case OrgRoleViewer:
+		return 1
+	case OrgRoleEditor:
+		return 2
+	case OrgRoleAdmin:
+		return 3
+	case OrgRoleOwner:
+		return 4
+	default:
+		return 0
+	}
+}
+
+// OrganizationRoleAtLeast reports whether actualRole satisfies requiredRole.
+func OrganizationRoleAtLeast(actualRole, requiredRole OrganizationRole) bool {
+	actualRole = NormalizeOrganizationRole(actualRole)
+	requiredRole = NormalizeOrganizationRole(requiredRole)
+	if !IsValidOrganizationRole(actualRole) || !IsValidOrganizationRole(requiredRole) {
+		return false
+	}
+	return organizationRoleRank(actualRole) >= organizationRoleRank(requiredRole)
+}
+
 // OrganizationMember represents a user's membership in an organization.
 type OrganizationMember struct {
 	// UserID is the unique identifier of the member.
@@ -194,6 +219,5 @@ func (o *Organization) CanUserManage(userID string) bool {
 	if o.OwnerUserID == userID {
 		return true
 	}
-	role := o.GetMemberRole(userID)
-	return role == OrgRoleOwner || role == OrgRoleAdmin
+	return OrganizationRoleAtLeast(o.GetMemberRole(userID), OrgRoleAdmin)
 }

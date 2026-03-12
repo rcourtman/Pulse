@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { RolesPanel } from '../RolesPanel';
 import { UserAssignmentsPanel } from '../UserAssignmentsPanel';
@@ -163,5 +163,32 @@ describe('RBAC paywall settings panels', () => {
     expect(getRolesMock).toHaveBeenCalled();
     expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search users...')).not.toBeDisabled();
+  });
+
+  it('shows the canonical update error when self role modification is denied', async () => {
+    updateUserRolesMock.mockRejectedValueOnce(
+      Object.assign(new Error('Cannot modify your own role assignments'), { status: 403, code: 'self_modification_denied' }),
+    );
+
+    render(() => <UserAssignmentsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('alice')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Access' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(updateUserRolesMock).toHaveBeenCalledWith('alice', ['admin']);
+    });
+    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to update user roles');
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
   });
 });

@@ -318,6 +318,12 @@ semantics at the API boundary: `/api/orgs/{id}/shares/incoming` must hide
 shares whose `accessRole` exceeds the caller's effective role in the target
 organization instead of leaking share metadata that the caller cannot
 legitimately accept or use.
+Organization membership and authorization payloads now also follow an explicit
+live-role contract: `/api/orgs` must list only organizations the caller
+currently belongs to, and org-management endpoints must reflect member
+promotion or demotion immediately rather than continuing to authorize from
+stale owner/admin assumptions after the role change has already been
+persisted.
 System settings API payloads now also carry an explicit v6 channel contract:
 `updateChannel` resolves to `stable` or `rc` with `stable` as the default, and
 `autoUpdateEnabled` must serialize as `false` whenever the effective channel is

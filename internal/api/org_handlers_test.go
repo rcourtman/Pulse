@@ -450,6 +450,76 @@ func TestOrgHandlersShareLifecycle(t *testing.T) {
 	}
 }
 
+func TestOrgHandlersIncomingSharesPreserveAccessRole(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createSourceReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createSourceRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createSourceRec, createSourceReq)
+	if createSourceRec.Code != http.StatusCreated {
+		t.Fatalf("create source failed: %d %s", createSourceRec.Code, createSourceRec.Body.String())
+	}
+
+	createTargetReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createTargetRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createTargetRec, createTargetReq)
+	if createTargetRec.Code != http.StatusCreated {
+		t.Fatalf("create target failed: %d %s", createTargetRec.Code, createTargetRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"view","resourceId":"shared-view","resourceName":"Shared View","accessRole":"editor"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+	if createShareRec.Code != http.StatusCreated {
+		t.Fatalf("create share failed: %d %s", createShareRec.Code, createShareRec.Body.String())
+	}
+
+	var share models.OrganizationShare
+	if err := json.Unmarshal(createShareRec.Body.Bytes(), &share); err != nil {
+		t.Fatalf("decode share: %v", err)
+	}
+	if share.AccessRole != models.OrgRoleEditor {
+		t.Fatalf("share access_role=%q, want %q", share.AccessRole, models.OrgRoleEditor)
+	}
+
+	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
+	incomingReq.SetPathValue("id", "beta")
+	incomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(incomingRec, incomingReq)
+	if incomingRec.Code != http.StatusOK {
+		t.Fatalf("list incoming failed: %d %s", incomingRec.Code, incomingRec.Body.String())
+	}
+
+	var incoming []incomingOrganizationShare
+	if err := json.Unmarshal(incomingRec.Body.Bytes(), &incoming); err != nil {
+		t.Fatalf("decode incoming: %v", err)
+	}
+	if len(incoming) != 1 {
+		t.Fatalf("expected one incoming share, got %+v", incoming)
+	}
+	if incoming[0].SourceOrgID != "acme" {
+		t.Fatalf("incoming source_org_id=%q, want %q", incoming[0].SourceOrgID, "acme")
+	}
+	if incoming[0].AccessRole != models.OrgRoleEditor {
+		t.Fatalf("incoming access_role=%q, want %q", incoming[0].AccessRole, models.OrgRoleEditor)
+	}
+}
+
 func TestOrgHandlersCrossOrgIsolation(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	defer SetMultiTenantEnabled(false)

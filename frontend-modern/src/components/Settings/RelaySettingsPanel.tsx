@@ -17,6 +17,7 @@ import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics'
 import { showSuccess, showError } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
 import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
+import { SecurityAPI } from '@/api/security';
 import { logger } from '@/utils/logger';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import {
@@ -41,6 +42,10 @@ interface RelaySettingsPanelProps {
   canManage?: boolean;
 }
 
+function buildRelayPairingTokenName(now: Date): string {
+  return `Relay mobile device ${now.toISOString()}`;
+}
+
 export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) => {
   const [config, setConfig] = createSignal<RelayConfig | null>(null);
   const [status, setStatus] = createSignal<RelayStatus | null>(null);
@@ -51,6 +56,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   const [pairingLoading, setPairingLoading] = createSignal(false);
   const [pairingPayload, setPairingPayload] = createSignal<OnboardingQRResponse | null>(null);
   const [pairingQRCode, setPairingQRCode] = createSignal<string | null>(null);
+  const [pairingTokenId, setPairingTokenId] = createSignal<string | null>(null);
   const [startingTrial, setStartingTrial] = createSignal(false);
   const canManage = () => props.canManage !== false;
 
@@ -93,6 +99,16 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
     setPairingLoading(false);
     setPairingPayload(null);
     setPairingQRCode(null);
+    setPairingTokenId(null);
+  };
+
+  const deletePairingToken = async (tokenID: string | null) => {
+    if (!tokenID) return;
+    try {
+      await SecurityAPI.deleteToken(tokenID);
+    } catch (err) {
+      logger.warn('[RelaySettings] Failed to clean up relay pairing token', err);
+    }
   };
 
   const loadConfig = async () => {
@@ -189,19 +205,38 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
 
   const handlePairNewDevice = async () => {
     if (!canManage()) return;
+    const previousPayload = pairingPayload();
+    const previousQRCode = pairingQRCode();
+    const previousTokenId = pairingTokenId();
     setShowPairing(true);
     setPairingLoading(true);
+    let createdTokenId: string | null = null;
     try {
-      const payload = await OnboardingAPI.getQRPayload();
+      const createdToken = await SecurityAPI.createToken(buildRelayPairingTokenName(new Date()));
+      if (!createdToken.token) {
+        throw new Error('Failed to generate relay device token');
+      }
+      createdTokenId = createdToken.record.id;
+
+      const payload = await OnboardingAPI.getQRPayload(createdToken.token);
+      if (!payload.auth_token) {
+        throw new Error('Relay pairing payload is missing auth_token');
+      }
       const qrCodeDataUrl = await QRCode.toDataURL(payload.deep_link, {
         width: 256,
         margin: 2,
       });
       setPairingPayload(payload);
       setPairingQRCode(qrCodeDataUrl);
+      setPairingTokenId(createdTokenId);
+      if (previousTokenId && previousTokenId != createdTokenId) {
+        await deletePairingToken(previousTokenId);
+      }
     } catch (err) {
-      setPairingPayload(null);
-      setPairingQRCode(null);
+      await deletePairingToken(createdTokenId);
+      setPairingPayload(previousPayload);
+      setPairingQRCode(previousQRCode);
+      setPairingTokenId(previousTokenId);
       showError('Failed to generate pairing QR code');
       logger.error('[RelaySettings] Failed to generate onboarding QR', err);
     } finally {

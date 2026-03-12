@@ -76,3 +76,11 @@ as `CanUserManage` and any share-filtering logic must route through the shared
 organization-role ordering function so viewer/editor/admin/owner semantics stay
 identical across model checks, handler authorization, and settings-surface
 presentation.
+That same canonical comparator now governs live membership transitions too:
+promoting or demoting a member must immediately change whether that user can
+manage organization settings, and organization listing must not leak non-member
+tenants just because another org with the same user exists in the system.
+Incoming share visibility is part of that same boundary as well: a recipient
+must only see inbound shares whose requested `accessRole` is satisfied by the
+user's effective membership role in the target organization, using the shared
+role comparator instead of handler-local owner/admin shortcuts.
