@@ -288,6 +288,11 @@ zip -j "$RELEASE_DIR/pulse-agent-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-
 # Also copy bare binaries for /releases/latest/download/ redirect compatibility
 # These allow LXC/barebone installs to redirect to GitHub without needing versioned URLs
 echo "Copying bare binaries to release directory for redirect compatibility..."
+cp "$BUILD_DIR/pulse-agent-linux-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-linux-arm64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-linux-armv7" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-linux-armv6" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-agent-linux-386" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-windows-amd64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-windows-arm64.exe" "$RELEASE_DIR/"
 cp "$BUILD_DIR/pulse-agent-windows-386.exe" "$RELEASE_DIR/"

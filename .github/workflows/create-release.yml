@@ -673,6 +673,21 @@ jobs:
           if ls release/*.tgz 1> /dev/null 2>&1; then
             gh release upload "${TAG}" release/*.tgz --clobber
           fi
+          for bare_agent in \
+            release/pulse-agent-linux-amd64 \
+            release/pulse-agent-linux-arm64 \
+            release/pulse-agent-linux-armv7 \
+            release/pulse-agent-linux-armv6 \
+            release/pulse-agent-linux-386 \
+            release/pulse-agent-freebsd-amd64 \
+            release/pulse-agent-freebsd-arm64 \
+            release/pulse-agent-windows-amd64.exe \
+            release/pulse-agent-windows-arm64.exe \
+            release/pulse-agent-windows-386.exe; do
+            if [ -f "${bare_agent}" ]; then
+              gh release upload "${TAG}" "${bare_agent}" --clobber
+            fi
+          done
           gh release upload "${TAG}" release/install.sh --clobber
           if [ -f release/install.ps1 ]; then
             gh release upload "${TAG}" release/install.ps1 --clobber

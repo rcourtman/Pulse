@@ -17,6 +17,11 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	required := []string{
 		`cp scripts/install.sh "$RELEASE_DIR/install.sh"`,
 		`[ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$RELEASE_DIR/install.ps1"`,
+		`cp "$BUILD_DIR/pulse-agent-linux-amd64" "$RELEASE_DIR/"`,
+		`cp "$BUILD_DIR/pulse-agent-linux-arm64" "$RELEASE_DIR/"`,
+		`cp "$BUILD_DIR/pulse-agent-linux-armv7" "$RELEASE_DIR/"`,
+		`cp "$BUILD_DIR/pulse-agent-linux-armv6" "$RELEASE_DIR/"`,
+		`cp "$BUILD_DIR/pulse-agent-linux-386" "$RELEASE_DIR/"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -37,6 +42,16 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 
 	workflow := string(content)
 	required := []string{
+		`release/pulse-agent-linux-amd64`,
+		`release/pulse-agent-linux-arm64`,
+		`release/pulse-agent-linux-armv7`,
+		`release/pulse-agent-linux-armv6`,
+		`release/pulse-agent-linux-386`,
+		`release/pulse-agent-freebsd-amd64`,
+		`release/pulse-agent-freebsd-arm64`,
+		`release/pulse-agent-windows-amd64.exe`,
+		`release/pulse-agent-windows-arm64.exe`,
+		`release/pulse-agent-windows-386.exe`,
 		`gh release upload "${TAG}" release/install.sh --clobber`,
 		`if [ -f release/install.ps1 ]; then`,
 		`gh release upload "${TAG}" release/install.ps1 --clobber`,
