@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -109,6 +110,39 @@ func TestCheckAuth_AcceptsBearerToken(t *testing.T) {
 	}
 	if rr.Header().Get("X-Auth-Method") != "api_token" {
 		t.Fatalf("expected X-Auth-Method api_token, got %q", rr.Header().Get("X-Auth-Method"))
+	}
+}
+
+func TestCheckAuth_InvalidBearerDoesNotFallBackToSession(t *testing.T) {
+	record, err := config.NewAPITokenRecord("token-valid-123.12345678", "api", []string{config.ScopeMonitoringRead})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+	cfg := &config.Config{
+		APITokens: []config.APITokenRecord{*record},
+		AuthUser:  "admin",
+		AuthPass:  "$2a$10$dummy",
+	}
+
+	sessionToken := generateSessionToken()
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "alice")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer token-invalid-123.12345678")
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	rr := httptest.NewRecorder()
+
+	if CheckAuth(cfg, rr, req) {
+		t.Fatalf("expected CheckAuth to reject invalid bearer token even with a valid session")
+	}
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Invalid API token") {
+		t.Fatalf("expected invalid token response, got %q", rr.Body.String())
+	}
+	if rr.Header().Get("X-Auth-Method") == "session" {
+		t.Fatalf("did not expect session auth fallback for invalid bearer token")
 	}
 }
 

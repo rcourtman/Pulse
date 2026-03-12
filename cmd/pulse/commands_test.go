@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"testing"
 
@@ -60,4 +61,23 @@ func TestNormalizeImportPayload(t *testing.T) {
 	s, err = server.NormalizeImportPayload([]byte("!!"))
 	assert.NoError(t, err)
 	assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("!!")), s)
+}
+
+func TestResolveMetricsPortFromEnvPrefersPrefixedOverride(t *testing.T) {
+	t.Setenv("PULSE_METRICS_PORT", "0")
+	t.Setenv("METRICS_PORT", "9091")
+
+	if got := resolveMetricsPortFromEnv(nil, 7655); got != 0 {
+		t.Fatalf("resolveMetricsPortFromEnv() = %d, want 0", got)
+	}
+}
+
+func TestResolveMetricsPortFromEnvFallsBackOnInvalidValue(t *testing.T) {
+	t.Setenv("PULSE_METRICS_PORT", "not-a-port")
+
+	var stderr bytes.Buffer
+	if got := resolveMetricsPortFromEnv(&stderr, 9091); got != 9091 {
+		t.Fatalf("resolveMetricsPortFromEnv() = %d, want fallback 9091", got)
+	}
+	assert.Contains(t, stderr.String(), "Ignoring invalid PULSE_METRICS_PORT value")
 }

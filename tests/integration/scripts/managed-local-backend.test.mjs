@@ -1,16 +1,20 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
   buildManagedLocalBackendEnv,
   buildManagedLocalBackendState,
+  shouldBuildManagedLocalBackendBinary,
 } from './managed-local-backend.mjs';
 
 test('buildManagedLocalBackendState uses deterministic defaults', () => {
   const state = buildManagedLocalBackendState({});
   assert.equal(state.repoRoot.endsWith('/repos/pulse'), true);
   assert.equal(state.baseURL, 'http://127.0.0.1:8765');
+  assert.equal(state.metricsPort, '0');
   assert.equal(state.billingStatePath, path.join(state.rootDir, 'data', 'billing.json'));
   assert.equal(state.binaryPath, path.join(state.repoRoot, 'pulse'));
 });
@@ -30,6 +34,64 @@ test('buildManagedLocalBackendEnv seeds auth, bootstrap token, and billing path'
   assert.equal(env.PULSE_DATA_DIR, state.dataDir);
   assert.equal(env.PULSE_E2E_BILLING_STATE_PATH, state.billingStatePath);
   assert.equal(env.PULSE_E2E_BOOTSTRAP_TOKEN.length > 0, true);
+  assert.equal(env.PULSE_METRICS_PORT, '0');
+  assert.equal('ALLOW_ADMIN_BYPASS' in env, false);
   assert.equal(env.PULSE_MULTI_TENANT_ENABLED, 'true');
   assert.match(env.ALLOWED_ORIGINS, /5173/);
+});
+
+test('shouldBuildManagedLocalBackendBinary returns true when binary is missing', async () => {
+  const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-backend-'));
+  const state = {
+    repoRoot,
+    binaryPath: path.join(repoRoot, 'pulse'),
+  };
+
+  await fs.mkdir(path.join(repoRoot, 'cmd', 'pulse'), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, 'cmd', 'pulse', 'main.go'), 'package main\n');
+  await fs.writeFile(path.join(repoRoot, 'go.mod'), 'module example.com/pulse\n');
+
+  await assert.doesNotReject(async () => {
+    assert.equal(await shouldBuildManagedLocalBackendBinary(state), true);
+  });
+});
+
+test('shouldBuildManagedLocalBackendBinary detects stale source inputs', async () => {
+  const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-backend-'));
+  const binaryPath = path.join(repoRoot, 'pulse');
+  const mainPath = path.join(repoRoot, 'cmd', 'pulse', 'main.go');
+  const internalPath = path.join(repoRoot, 'internal', 'api', 'router.go');
+  await fs.mkdir(path.dirname(mainPath), { recursive: true });
+  await fs.mkdir(path.dirname(internalPath), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, 'go.mod'), 'module example.com/pulse\n');
+  await fs.writeFile(mainPath, 'package main\n');
+  await fs.writeFile(internalPath, 'package api\n');
+  await fs.writeFile(binaryPath, 'binary');
+
+  const older = new Date('2026-03-12T09:00:00Z');
+  const newer = new Date('2026-03-12T10:00:00Z');
+  await fs.utimes(binaryPath, older, older);
+  await fs.utimes(mainPath, older, older);
+  await fs.utimes(internalPath, newer, newer);
+
+  assert.equal(await shouldBuildManagedLocalBackendBinary({ repoRoot, binaryPath }), true);
+});
+
+test('shouldBuildManagedLocalBackendBinary skips rebuild when binary is fresh', async () => {
+  const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-backend-'));
+  const binaryPath = path.join(repoRoot, 'pulse');
+  const mainPath = path.join(repoRoot, 'cmd', 'pulse', 'main.go');
+  const goModPath = path.join(repoRoot, 'go.mod');
+  await fs.mkdir(path.dirname(mainPath), { recursive: true });
+  await fs.writeFile(goModPath, 'module example.com/pulse\n');
+  await fs.writeFile(mainPath, 'package main\n');
+  await fs.writeFile(binaryPath, 'binary');
+
+  const older = new Date('2026-03-12T09:00:00Z');
+  const newer = new Date('2026-03-12T10:00:00Z');
+  await fs.utimes(mainPath, older, older);
+  await fs.utimes(goModPath, older, older);
+  await fs.utimes(binaryPath, newer, newer);
+
+  assert.equal(await shouldBuildManagedLocalBackendBinary({ repoRoot, binaryPath }), false);
 });

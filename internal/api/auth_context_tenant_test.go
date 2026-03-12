@@ -40,9 +40,11 @@ func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
 	baseCfg.SortAPITokens()
 
 	// Ensure tenant monitor/config is initialized
-	if _, err := mtm.GetMonitor(tenantID); err != nil {
+	tenantMonitor, err := mtm.GetMonitor(tenantID)
+	if err != nil {
 		t.Fatalf("get tenant monitor: %v", err)
 	}
+	tenantMonitor.GetConfig().APITokens = nil
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("X-Pulse-Org-ID", tenantID)

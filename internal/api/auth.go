@@ -313,6 +313,59 @@ func ValidateAndExtendSession(token string) bool {
 	return GetSessionStore().ValidateAndExtendSession(token)
 }
 
+func explicitAPITokenFromRequest(r *http.Request) (string, bool) {
+	if r == nil {
+		return "", false
+	}
+
+	if values := r.Header.Values("X-API-Token"); len(values) > 0 {
+		return strings.TrimSpace(values[0]), true
+	}
+
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" && strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		return strings.TrimSpace(authHeader[7:]), true
+	}
+
+	if isWebSocketUpgrade(r) {
+		if values, ok := r.URL.Query()["token"]; ok && len(values) > 0 {
+			return strings.TrimSpace(values[0]), true
+		}
+	}
+
+	return "", false
+}
+
+func validateGlobalAPITokenLocked(cfg *config.Config, token string) (*config.APITokenRecord, bool) {
+	if cfg == nil || token == "" || !cfg.IsValidAPIToken(token) {
+		return nil, false
+	}
+
+	config.Mu.RUnlock()
+	config.Mu.Lock()
+	record, ok := cfg.ValidateAPIToken(token)
+	config.Mu.Unlock()
+	config.Mu.RLock()
+
+	if !ok {
+		return nil, false
+	}
+	return record, true
+}
+
+func validateAPITokenAgainstConfigsLocked(globalCfg, targetCfg *config.Config, token string) (*config.APITokenRecord, bool) {
+	if token == "" {
+		return nil, false
+	}
+
+	if targetCfg != nil && targetCfg != globalCfg {
+		if record, ok := targetCfg.ValidateAPIToken(token); ok {
+			return record, true
+		}
+	}
+
+	return validateGlobalAPITokenLocked(globalCfg, token)
+}
+
 // CheckProxyAuth validates proxy authentication headers
 func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	// Check if proxy auth is configured
@@ -429,40 +482,15 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 
 	// API-only mode: when only API token is configured (no password auth)
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
-		// Check if an API token was provided (via header, bearer, or query)
-		var providedToken string
-		if t := r.Header.Get("X-API-Token"); t != "" {
-			providedToken = t
-		} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-			providedToken = strings.TrimSpace(authHeader[7:])
-		} else if t := r.URL.Query().Get("token"); t != "" && isWebSocketUpgrade(r) {
-			providedToken = t
-		}
-
-		// If a token was provided, validate it
-		if providedToken != "" {
-			// Optimistically check validity with RLock to avoid write lock overhead for invalid tokens
-			if !cfg.IsValidAPIToken(providedToken) {
-				if w != nil {
-					http.Error(w, "Invalid API token", http.StatusUnauthorized)
-				}
-				return false
-			}
-
-			// Token appears valid, upgrade to Write lock to update stats
-			config.Mu.RUnlock()
-			config.Mu.Lock()
-			record, ok := cfg.ValidateAPIToken(providedToken)
-			config.Mu.Unlock()
-			config.Mu.RLock() // Restore Read lock for the defer at end of function
-
-			if ok {
+		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
+			if record, ok := validateGlobalAPITokenLocked(cfg, providedToken); ok {
 				attachAPITokenRecord(r, record)
-				w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", record.ID))
+				if authenticatedUser := apiTokenAuthenticatedUser(record); authenticatedUser != "" {
+					w.Header().Set("X-Authenticated-User", authenticatedUser)
+				}
 				w.Header().Set("X-Auth-Method", "api_token")
 				return true
 			}
-			// Should not happen if IsValidAPIToken returned true, unless race/expiration occurred
 			if w != nil {
 				http.Error(w, "Invalid API token", http.StatusUnauthorized)
 			}
@@ -484,50 +512,28 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		Str("url", r.URL.Path).
 		Msg("Checking authentication")
 
-	validateToken := func(token string) bool {
-		if token == "" {
-			return false
-		}
-		// Optimistically check validity with RLock
-		if !cfg.IsValidAPIToken(token) {
-			return false
-		}
-
-		// Upgrade to Write lock for stats update
-		config.Mu.RUnlock()
-		config.Mu.Lock()
-		record, ok := cfg.ValidateAPIToken(token)
-		config.Mu.Unlock()
-		config.Mu.RLock() // Restore Read lock
-
-		if ok {
+	authenticateToken := func(token string) bool {
+		if record, ok := validateGlobalAPITokenLocked(cfg, token); ok {
 			attachAPITokenRecord(r, record)
-			w.Header().Set("X-Authenticated-User", fmt.Sprintf("token:%s", record.ID))
+			if authenticatedUser := apiTokenAuthenticatedUser(record); authenticatedUser != "" {
+				w.Header().Set("X-Authenticated-User", authenticatedUser)
+			}
 			w.Header().Set("X-Auth-Method", "api_token")
 			return true
 		}
 		return false
 	}
 
-	// Check API tokens (header, bearer, query) before other auth methods
+	// Explicit token credentials always take precedence over session/basic auth.
 	if cfg.HasAPITokens() {
-		if validateToken(r.Header.Get("X-API-Token")) {
-			return true
-		}
-		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				if validateToken(strings.TrimSpace(authHeader[7:])) {
-					return true
-				}
+		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
+			if authenticateToken(providedToken) {
+				return true
 			}
-		}
-		// Check query parameter (only for WebSocket upgrades that can't send headers)
-		if isWebSocketUpgrade(r) {
-			if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-				if validateToken(queryToken) {
-					return true
-				}
+			if w != nil {
+				http.Error(w, "Invalid API token", http.StatusUnauthorized)
 			}
+			return false
 		}
 	}
 
@@ -1092,64 +1098,19 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			}
 		}
 
-		// Helper to validate against the selected config (and return updated request if valid)
 		validateToken := func(token string) (*http.Request, bool) {
-			if token == "" {
-				return nil, false
-			}
-
-			// If using global config, we need to handle locking carefully
-			if targetConfig == cfg {
-				// Optimistic check with RLock
-				if !cfg.IsValidAPIToken(token) {
-					return nil, false
-				}
-
-				// Upgrade to Write lock for stats update
-				config.Mu.RUnlock()
-				config.Mu.Lock()
-				record, ok := cfg.ValidateAPIToken(token)
-				config.Mu.Unlock()
-				config.Mu.RLock() // Restore Read lock
-
-				if ok {
-					attachAPITokenRecord(r, record)
-					return attachUserContext(r, fmt.Sprintf("token:%s", record.ID)), true
-				}
-				return nil, false
-			}
-
-			// For tenant configs or other non-global configs, assume they handle their own locking
-			// or don't use the global config.Mu
-			if record, ok := targetConfig.ValidateAPIToken(token); ok {
+			if record, ok := validateAPITokenAgainstConfigsLocked(cfg, targetConfig, token); ok {
 				attachAPITokenRecord(r, record)
-				return attachUserContext(r, fmt.Sprintf("token:%s", record.ID)), true
+				return attachUserContext(r, apiTokenAuthenticatedUser(record)), true
 			}
 			return nil, false
 		}
 
-		// Header
-		if token := r.Header.Get("X-API-Token"); token != "" {
-			if req, ok := validateToken(token); ok {
+		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
+			if req, ok := validateToken(providedToken); ok {
 				return req
 			}
-		}
-		// Bearer
-		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				token := strings.TrimSpace(authHeader[7:])
-				if req, ok := validateToken(token); ok {
-					return req
-				}
-			}
-		}
-		// Query param (only for WebSocket upgrades)
-		if isWebSocketUpgrade(r) {
-			if queryToken := r.URL.Query().Get("token"); queryToken != "" {
-				if req, ok := validateToken(queryToken); ok {
-					return req
-				}
-			}
+			return r
 		}
 	}
 
