@@ -53,6 +53,8 @@ result.
   config is missing, creates the correct org when enabled, webhook replay is
   fail-closed before linkage and succeeds after linkage, and the UI shows the
   resulting state coherently.
+- Latest exercised record:
+  `docs/release-control/v6/records/hosted-signup-billing-replay-2026-03-12.md`
 - Block release if:
   Any hosted checkout, org linkage, magic-link, billing-admin, or webhook
   replay path is unconfirmed or inconsistent.

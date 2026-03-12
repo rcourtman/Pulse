@@ -142,6 +142,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/records/hosted-signup-billing-replay-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx",
           "kind": "file"
         },
@@ -1150,7 +1155,7 @@
       "summary": "Confirm hosted signup, org provisioning, billing-admin visibility, and webhook replay succeed in the real checkout path.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
