@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-03-11",
+  "updated_at": "2026-03-12",
   "scope": {
     "active_repos": [
       "pulse",
@@ -164,6 +164,21 @@
         {
           "repo": "pulse",
           "path": "docs/architecture/state-read-consolidation-progress-2026-02.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/OverviewTab.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/alertIncidentPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/alertOverviewPresentation.ts",
           "kind": "file"
         },
         {
