@@ -37,6 +37,7 @@ result.
   `go test ./internal/cloudcp/... -count=1`
   `go test ./internal/hosted/... -count=1`
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx`
+  `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/07-trial-signup-return.spec.ts --project=chromium`
 - Manual scenario:
   1. Start a hosted signup from the self-hosted trial/upgrade path.
   2. Confirm a missing hosted public URL fails closed before any org or RBAC
@@ -156,7 +157,7 @@ result.
   `go test ./internal/api -run 'TestHostedLifecycle|TestEntitlementHandler_|TestRequireLicenseFeature_HostedEntitlements' -count=1`
   `go test ./pkg/licensing/... -count=1`
   `cd frontend-modern && npx vitest run src/components/Settings/__tests__/RBACPaywallPanels.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx src/pages/__tests__/AIIntelligence.test.tsx`
-  `npx playwright test tests/integration/tests/11-first-session.spec.ts`
+  `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/11-first-session.spec.ts --project=chromium`
 - Manual scenario:
   1. Start from the previous supported Pulse build with non-trivial local state
      and an already-activated paid entitlement.
